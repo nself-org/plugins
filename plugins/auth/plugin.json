@@ -1,0 +1,128 @@
+{
+  "name": "auth",
+  "version": "1.0.0",
+  "description": "Advanced authentication: OAuth, WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/auth",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "authentication",
+  "tags": ["auth", "oauth", "webauthn", "passkeys", "2fa", "totp", "magic-link", "device-code", "sso"],
+
+  "tables": [
+    "auth_oauth_providers",
+    "auth_passkeys",
+    "auth_mfa_enrollments",
+    "auth_device_codes",
+    "auth_magic_links",
+    "auth_sessions",
+    "auth_login_attempts"
+  ],
+
+  "webhooks": {
+    "auth.oauth.linked": "OAuth account linked",
+    "auth.oauth.unlinked": "OAuth account unlinked",
+    "auth.passkey.registered": "New passkey registered",
+    "auth.passkey.used": "Passkey authentication succeeded",
+    "auth.mfa.enrolled": "MFA enrollment completed",
+    "auth.mfa.verified": "MFA code verified during login",
+    "auth.magic_link.sent": "Magic link email sent",
+    "auth.magic_link.used": "Magic link verified",
+    "auth.device_code.initiated": "Device code flow started",
+    "auth.device_code.authorized": "Device code authorized by user",
+    "auth.device_code.denied": "Device code denied",
+    "auth.device_code.expired": "Device code expired",
+    "auth.session.created": "New session created",
+    "auth.session.revoked": "Session revoked (remote logout)",
+    "auth.login.success": "Successful login (any method)",
+    "auth.login.failure": "Failed login attempt",
+    "auth.login.blocked": "Login blocked (rate limit or policy)"
+  },
+
+  "actions": {
+    "init": "Initialize auth database schema",
+    "server": "Start auth HTTP server",
+    "sessions": "List active sessions for a user",
+    "revoke-session": "Revoke a specific session",
+    "revoke-all": "Revoke all sessions for a user",
+    "mfa-status": "Check MFA enrollment status",
+    "login-attempts": "View recent login attempts",
+    "oauth-connections": "List OAuth connections",
+    "cleanup-expired": "Clean up expired tokens and codes",
+    "stats": "Show auth plugin statistics"
+  },
+
+  "envVars": {
+    "required": ["AUTH_ENCRYPTION_KEY"],
+    "optional": [
+      "AUTH_PLUGIN_PORT",
+      "AUTH_PLUGIN_HOST",
+      "AUTH_LOG_LEVEL",
+      "AUTH_APP_IDS",
+      "AUTH_GOOGLE_CLIENT_ID",
+      "AUTH_GOOGLE_CLIENT_SECRET",
+      "AUTH_GOOGLE_SCOPES",
+      "AUTH_APPLE_CLIENT_ID",
+      "AUTH_APPLE_TEAM_ID",
+      "AUTH_APPLE_KEY_ID",
+      "AUTH_APPLE_PRIVATE_KEY",
+      "AUTH_FACEBOOK_APP_ID",
+      "AUTH_FACEBOOK_APP_SECRET",
+      "AUTH_GITHUB_CLIENT_ID",
+      "AUTH_GITHUB_CLIENT_SECRET",
+      "AUTH_MICROSOFT_CLIENT_ID",
+      "AUTH_MICROSOFT_CLIENT_SECRET",
+      "AUTH_WEBAUTHN_RP_NAME",
+      "AUTH_WEBAUTHN_RP_ID",
+      "AUTH_WEBAUTHN_ORIGIN",
+      "AUTH_TOTP_ISSUER",
+      "AUTH_TOTP_ALGORITHM",
+      "AUTH_TOTP_DIGITS",
+      "AUTH_TOTP_PERIOD",
+      "AUTH_TOTP_BACKUP_CODE_COUNT",
+      "AUTH_MAGIC_LINK_EXPIRY_SECONDS",
+      "AUTH_MAGIC_LINK_BASE_URL",
+      "AUTH_DEVICE_CODE_EXPIRY_SECONDS",
+      "AUTH_DEVICE_CODE_POLL_INTERVAL",
+      "AUTH_DEVICE_CODE_LENGTH",
+      "AUTH_SESSION_MAX_PER_USER",
+      "AUTH_SESSION_IDLE_TIMEOUT_HOURS",
+      "AUTH_SESSION_ABSOLUTE_TIMEOUT_HOURS",
+      "AUTH_LOGIN_MAX_ATTEMPTS",
+      "AUTH_LOGIN_LOCKOUT_MINUTES",
+      "AUTH_CLEANUP_CRON"
+    ]
+  },
+
+  "config": {
+    "port": 3014,
+    "webhookPath": "/webhooks/auth",
+    "magicLinkExpirySeconds": 600,
+    "deviceCodeExpirySeconds": 600,
+    "sessionMaxPerUser": 10,
+    "loginMaxAttempts": 5,
+    "loginLockoutMinutes": 15,
+    "totpDigits": 6,
+    "totpPeriod": 30
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["accounts.google.com", "appleid.apple.com", "graph.facebook.com", "github.com", "login.microsoftonline.com"],
+    "filesystem": ["logs"]
+  }
+}

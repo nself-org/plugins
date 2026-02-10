@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-01-30T12:30:00Z",
+  "lastUpdated": "2026-02-10T23:14:13Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -14,7 +14,12 @@
       "path": "plugins/stripe",
       "minNselfVersion": "0.4.8",
       "category": "billing",
-      "tags": ["payments", "billing", "subscriptions", "stripe"],
+      "tags": [
+        "payments",
+        "billing",
+        "subscriptions",
+        "stripe"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -158,58 +163,246 @@
         "payout.updated"
       ],
       "cliCommands": [
-        {"name": "sync", "description": "Sync all Stripe data to database"},
-        {"name": "server", "description": "Start the webhook server"},
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "status", "description": "Show sync status and statistics"},
-        {"name": "customers", "description": "List customers"},
-        {"name": "subscriptions", "description": "List subscriptions"},
-        {"name": "invoices", "description": "List invoices"},
-        {"name": "products", "description": "List products"},
-        {"name": "prices", "description": "List prices"},
-        {"name": "reconcile", "description": "Re-sync recent data to catch gaps from missed webhooks"}
+        {
+          "name": "sync",
+          "description": "Sync all Stripe data to database"
+        },
+        {
+          "name": "server",
+          "description": "Start the webhook server"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        },
+        {
+          "name": "customers",
+          "description": "List customers"
+        },
+        {
+          "name": "subscriptions",
+          "description": "List subscriptions"
+        },
+        {
+          "name": "invoices",
+          "description": "List invoices"
+        },
+        {
+          "name": "products",
+          "description": "List products"
+        },
+        {
+          "name": "prices",
+          "description": "List prices"
+        },
+        {
+          "name": "reconcile",
+          "description": "Re-sync recent data to catch gaps from missed webhooks"
+        }
       ],
       "apiEndpoints": [
-        {"method": "GET", "path": "/health", "description": "Basic liveness check"},
-        {"method": "GET", "path": "/ready", "description": "Readiness check (verifies database)"},
-        {"method": "GET", "path": "/live", "description": "Liveness check with sync info"},
-        {"method": "GET", "path": "/status", "description": "Full status with account info and stats"},
-        {"method": "POST", "path": "/webhooks/stripe", "description": "Stripe webhook receiver"},
-        {"method": "POST", "path": "/sync", "description": "Trigger data sync (supports account filtering)"},
-        {"method": "GET", "path": "/api/customers", "description": "List customers"},
-        {"method": "GET", "path": "/api/products", "description": "List products"},
-        {"method": "GET", "path": "/api/prices", "description": "List prices"},
-        {"method": "GET", "path": "/api/subscriptions", "description": "List subscriptions"},
-        {"method": "GET", "path": "/api/invoices", "description": "List invoices"},
-        {"method": "GET", "path": "/api/charges", "description": "List charges"},
-        {"method": "GET", "path": "/api/refunds", "description": "List refunds"},
-        {"method": "GET", "path": "/api/disputes", "description": "List disputes"},
-        {"method": "GET", "path": "/api/payment-intents", "description": "List payment intents"},
-        {"method": "GET", "path": "/api/payment-methods", "description": "List payment methods"},
-        {"method": "GET", "path": "/api/coupons", "description": "List coupons"},
-        {"method": "GET", "path": "/api/promotion-codes", "description": "List promotion codes"},
-        {"method": "GET", "path": "/api/balance-transactions", "description": "List balance transactions"},
-        {"method": "GET", "path": "/api/tax-rates", "description": "List tax rates"},
-        {"method": "GET", "path": "/api/events", "description": "List webhook events"},
-        {"method": "GET", "path": "/api/stats", "description": "Get sync statistics"},
-        {"method": "POST", "path": "/reconcile", "description": "Reconcile recent data (gap-check lookback window)"}
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Basic liveness check"
+        },
+        {
+          "method": "GET",
+          "path": "/ready",
+          "description": "Readiness check (verifies database)"
+        },
+        {
+          "method": "GET",
+          "path": "/live",
+          "description": "Liveness check with sync info"
+        },
+        {
+          "method": "GET",
+          "path": "/status",
+          "description": "Full status with account info and stats"
+        },
+        {
+          "method": "POST",
+          "path": "/webhooks/stripe",
+          "description": "Stripe webhook receiver"
+        },
+        {
+          "method": "POST",
+          "path": "/sync",
+          "description": "Trigger data sync (supports account filtering)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/customers",
+          "description": "List customers"
+        },
+        {
+          "method": "GET",
+          "path": "/api/products",
+          "description": "List products"
+        },
+        {
+          "method": "GET",
+          "path": "/api/prices",
+          "description": "List prices"
+        },
+        {
+          "method": "GET",
+          "path": "/api/subscriptions",
+          "description": "List subscriptions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/invoices",
+          "description": "List invoices"
+        },
+        {
+          "method": "GET",
+          "path": "/api/charges",
+          "description": "List charges"
+        },
+        {
+          "method": "GET",
+          "path": "/api/refunds",
+          "description": "List refunds"
+        },
+        {
+          "method": "GET",
+          "path": "/api/disputes",
+          "description": "List disputes"
+        },
+        {
+          "method": "GET",
+          "path": "/api/payment-intents",
+          "description": "List payment intents"
+        },
+        {
+          "method": "GET",
+          "path": "/api/payment-methods",
+          "description": "List payment methods"
+        },
+        {
+          "method": "GET",
+          "path": "/api/coupons",
+          "description": "List coupons"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotion-codes",
+          "description": "List promotion codes"
+        },
+        {
+          "method": "GET",
+          "path": "/api/balance-transactions",
+          "description": "List balance transactions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/tax-rates",
+          "description": "List tax rates"
+        },
+        {
+          "method": "GET",
+          "path": "/api/events",
+          "description": "List webhook events"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Get sync statistics"
+        },
+        {
+          "method": "POST",
+          "path": "/reconcile",
+          "description": "Reconcile recent data (gap-check lookback window)"
+        }
       ],
       "envVars": [
-        {"name": "STRIPE_API_KEY", "required": true, "description": "Stripe API secret key (single account)"},
-        {"name": "STRIPE_WEBHOOK_SECRET", "required": false, "description": "Webhook signing secret (single account)"},
-        {"name": "STRIPE_API_KEYS", "required": false, "description": "Comma-separated API keys for multi-account sync"},
-        {"name": "STRIPE_ACCOUNT_LABELS", "required": false, "description": "Comma-separated labels matching STRIPE_API_KEYS"},
-        {"name": "STRIPE_WEBHOOK_SECRETS", "required": false, "description": "Comma-separated webhook secrets matching STRIPE_API_KEYS"},
-        {"name": "STRIPE_ACCOUNT_ID", "required": false, "description": "Account label for single-account mode (default: primary)"},
-        {"name": "STRIPE_API_VERSION", "required": false, "default": "2024-12-18.acacia", "description": "Stripe API version"},
-        {"name": "STRIPE_SYNC_INTERVAL", "required": false, "default": "3600", "description": "Sync interval in seconds"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3001", "description": "Server port"},
-        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"},
-        {"name": "LOG_LEVEL", "required": false, "default": "info", "description": "Log level (debug, info, warn, error)"}
+        {
+          "name": "STRIPE_API_KEY",
+          "required": true,
+          "description": "Stripe API secret key (single account)"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook signing secret (single account)"
+        },
+        {
+          "name": "STRIPE_API_KEYS",
+          "required": false,
+          "description": "Comma-separated API keys for multi-account sync"
+        },
+        {
+          "name": "STRIPE_ACCOUNT_LABELS",
+          "required": false,
+          "description": "Comma-separated labels matching STRIPE_API_KEYS"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRETS",
+          "required": false,
+          "description": "Comma-separated webhook secrets matching STRIPE_API_KEYS"
+        },
+        {
+          "name": "STRIPE_ACCOUNT_ID",
+          "required": false,
+          "description": "Account label for single-account mode (default: primary)"
+        },
+        {
+          "name": "STRIPE_API_VERSION",
+          "required": false,
+          "default": "2024-12-18.acacia",
+          "description": "Stripe API version"
+        },
+        {
+          "name": "STRIPE_SYNC_INTERVAL",
+          "required": false,
+          "default": "3600",
+          "description": "Sync interval in seconds"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3001",
+          "description": "Server port"
+        },
+        {
+          "name": "HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "required": false,
+          "default": "info",
+          "description": "Log level (debug, info, warn, error)"
+        }
       ],
-      "dependencies": ["pg", "stripe", "fastify", "commander"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "stripe",
+        "fastify",
+        "commander"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
     },
     "github": {
       "name": "github",
@@ -222,7 +415,14 @@
       "path": "plugins/github",
       "minNselfVersion": "0.4.8",
       "category": "devops",
-      "tags": ["github", "git", "ci", "devops", "issues", "pull-requests"],
+      "tags": [
+        "github",
+        "git",
+        "ci",
+        "devops",
+        "issues",
+        "pull-requests"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -264,35 +464,132 @@
         "repository"
       ],
       "cliCommands": [
-        {"name": "sync", "description": "Sync all GitHub data to database"},
-        {"name": "server", "description": "Start the webhook server"},
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "status", "description": "Show sync status and statistics"},
-        {"name": "repos", "description": "List repositories"},
-        {"name": "issues", "description": "List issues"},
-        {"name": "prs", "description": "List pull requests"}
+        {
+          "name": "sync",
+          "description": "Sync all GitHub data to database"
+        },
+        {
+          "name": "server",
+          "description": "Start the webhook server"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        },
+        {
+          "name": "repos",
+          "description": "List repositories"
+        },
+        {
+          "name": "issues",
+          "description": "List issues"
+        },
+        {
+          "name": "prs",
+          "description": "List pull requests"
+        }
       ],
       "apiEndpoints": [
-        {"method": "POST", "path": "/webhook", "description": "GitHub webhook receiver"},
-        {"method": "POST", "path": "/api/sync", "description": "Trigger data sync"},
-        {"method": "GET", "path": "/api/status", "description": "Get sync status"},
-        {"method": "GET", "path": "/api/repositories", "description": "List repositories"},
-        {"method": "GET", "path": "/api/issues", "description": "List issues"},
-        {"method": "GET", "path": "/api/pull-requests", "description": "List pull requests"},
-        {"method": "GET", "path": "/api/commits", "description": "List commits"},
-        {"method": "GET", "path": "/api/releases", "description": "List releases"}
+        {
+          "method": "POST",
+          "path": "/webhook",
+          "description": "GitHub webhook receiver"
+        },
+        {
+          "method": "POST",
+          "path": "/api/sync",
+          "description": "Trigger data sync"
+        },
+        {
+          "method": "GET",
+          "path": "/api/status",
+          "description": "Get sync status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/repositories",
+          "description": "List repositories"
+        },
+        {
+          "method": "GET",
+          "path": "/api/issues",
+          "description": "List issues"
+        },
+        {
+          "method": "GET",
+          "path": "/api/pull-requests",
+          "description": "List pull requests"
+        },
+        {
+          "method": "GET",
+          "path": "/api/commits",
+          "description": "List commits"
+        },
+        {
+          "method": "GET",
+          "path": "/api/releases",
+          "description": "List releases"
+        }
       ],
       "envVars": [
-        {"name": "GITHUB_TOKEN", "required": true, "description": "GitHub personal access token"},
-        {"name": "GITHUB_WEBHOOK_SECRET", "required": false, "description": "Webhook signing secret"},
-        {"name": "GITHUB_ORG", "required": false, "description": "GitHub organization to sync"},
-        {"name": "GITHUB_REPOS", "required": false, "description": "Comma-separated list of repos"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3002", "description": "Server port"},
-        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+        {
+          "name": "GITHUB_TOKEN",
+          "required": true,
+          "description": "GitHub personal access token"
+        },
+        {
+          "name": "GITHUB_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook signing secret"
+        },
+        {
+          "name": "GITHUB_ORG",
+          "required": false,
+          "description": "GitHub organization to sync"
+        },
+        {
+          "name": "GITHUB_REPOS",
+          "required": false,
+          "description": "Comma-separated list of repos"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3002",
+          "description": "Server port"
+        },
+        {
+          "name": "HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        }
       ],
-      "dependencies": ["pg", "@octokit/rest", "@octokit/webhooks", "fastify", "commander"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "@octokit/rest",
+        "@octokit/webhooks",
+        "fastify",
+        "commander"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "composite",
+        "defaultValue": "primary"
+      }
     },
     "shopify": {
       "name": "shopify",
@@ -305,7 +602,13 @@
       "path": "plugins/shopify",
       "minNselfVersion": "0.4.8",
       "category": "ecommerce",
-      "tags": ["shopify", "ecommerce", "orders", "products", "inventory"],
+      "tags": [
+        "shopify",
+        "ecommerce",
+        "orders",
+        "products",
+        "inventory"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -359,43 +662,168 @@
         "shop/update"
       ],
       "cliCommands": [
-        {"name": "sync", "description": "Sync all Shopify data to database"},
-        {"name": "server", "description": "Start the webhook server"},
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "status", "description": "Show sync status and statistics"},
-        {"name": "products", "description": "List products"},
-        {"name": "customers", "description": "List customers"},
-        {"name": "orders", "description": "List orders"},
-        {"name": "collections", "description": "List collections"},
-        {"name": "inventory", "description": "List inventory levels"},
-        {"name": "webhooks", "description": "List recent webhook events"},
-        {"name": "analytics", "description": "Show analytics summary"}
+        {
+          "name": "sync",
+          "description": "Sync all Shopify data to database"
+        },
+        {
+          "name": "server",
+          "description": "Start the webhook server"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        },
+        {
+          "name": "products",
+          "description": "List products"
+        },
+        {
+          "name": "customers",
+          "description": "List customers"
+        },
+        {
+          "name": "orders",
+          "description": "List orders"
+        },
+        {
+          "name": "collections",
+          "description": "List collections"
+        },
+        {
+          "name": "inventory",
+          "description": "List inventory levels"
+        },
+        {
+          "name": "webhooks",
+          "description": "List recent webhook events"
+        },
+        {
+          "name": "analytics",
+          "description": "Show analytics summary"
+        }
       ],
       "apiEndpoints": [
-        {"method": "POST", "path": "/webhook", "description": "Shopify webhook receiver"},
-        {"method": "POST", "path": "/api/sync", "description": "Trigger data sync"},
-        {"method": "GET", "path": "/api/status", "description": "Get sync status"},
-        {"method": "GET", "path": "/api/shop", "description": "Get shop info"},
-        {"method": "GET", "path": "/api/products", "description": "List products"},
-        {"method": "GET", "path": "/api/customers", "description": "List customers"},
-        {"method": "GET", "path": "/api/orders", "description": "List orders"},
-        {"method": "GET", "path": "/api/collections", "description": "List collections"},
-        {"method": "GET", "path": "/api/inventory", "description": "List inventory"},
-        {"method": "GET", "path": "/api/analytics/daily-sales", "description": "Get daily sales"},
-        {"method": "GET", "path": "/api/analytics/top-products", "description": "Get top products"},
-        {"method": "GET", "path": "/api/analytics/customer-value", "description": "Get top customers by value"}
+        {
+          "method": "POST",
+          "path": "/webhook",
+          "description": "Shopify webhook receiver"
+        },
+        {
+          "method": "POST",
+          "path": "/api/sync",
+          "description": "Trigger data sync"
+        },
+        {
+          "method": "GET",
+          "path": "/api/status",
+          "description": "Get sync status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/shop",
+          "description": "Get shop info"
+        },
+        {
+          "method": "GET",
+          "path": "/api/products",
+          "description": "List products"
+        },
+        {
+          "method": "GET",
+          "path": "/api/customers",
+          "description": "List customers"
+        },
+        {
+          "method": "GET",
+          "path": "/api/orders",
+          "description": "List orders"
+        },
+        {
+          "method": "GET",
+          "path": "/api/collections",
+          "description": "List collections"
+        },
+        {
+          "method": "GET",
+          "path": "/api/inventory",
+          "description": "List inventory"
+        },
+        {
+          "method": "GET",
+          "path": "/api/analytics/daily-sales",
+          "description": "Get daily sales"
+        },
+        {
+          "method": "GET",
+          "path": "/api/analytics/top-products",
+          "description": "Get top products"
+        },
+        {
+          "method": "GET",
+          "path": "/api/analytics/customer-value",
+          "description": "Get top customers by value"
+        }
       ],
       "envVars": [
-        {"name": "SHOPIFY_SHOP_DOMAIN", "required": true, "description": "Shopify shop domain (e.g., myshop.myshopify.com)"},
-        {"name": "SHOPIFY_ACCESS_TOKEN", "required": true, "description": "Shopify Admin API access token"},
-        {"name": "SHOPIFY_API_VERSION", "required": false, "default": "2024-01", "description": "Shopify API version"},
-        {"name": "SHOPIFY_WEBHOOK_SECRET", "required": false, "description": "Webhook signing secret"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3003", "description": "Server port"},
-        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+        {
+          "name": "SHOPIFY_SHOP_DOMAIN",
+          "required": true,
+          "description": "Shopify shop domain (e.g., myshop.myshopify.com)"
+        },
+        {
+          "name": "SHOPIFY_ACCESS_TOKEN",
+          "required": true,
+          "description": "Shopify Admin API access token"
+        },
+        {
+          "name": "SHOPIFY_API_VERSION",
+          "required": false,
+          "default": "2024-01",
+          "description": "Shopify API version"
+        },
+        {
+          "name": "SHOPIFY_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook signing secret"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3003",
+          "description": "Server port"
+        },
+        {
+          "name": "HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        }
       ],
-      "dependencies": ["pg", "@shopify/shopify-api", "fastify", "commander"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "@shopify/shopify-api",
+        "fastify",
+        "commander"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "composite",
+        "defaultValue": "primary"
+      }
     },
     "realtime": {
       "name": "realtime",
@@ -408,7 +836,14 @@
       "path": "plugins/realtime",
       "minNselfVersion": "0.4.8",
       "category": "infrastructure",
-      "tags": ["realtime", "socket.io", "websockets", "presence", "chat", "notifications"],
+      "tags": [
+        "realtime",
+        "socket.io",
+        "websockets",
+        "presence",
+        "chat",
+        "notifications"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -436,33 +871,129 @@
       ],
       "webhooks": [],
       "cliCommands": [
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "server", "description": "Start Socket.io server"},
-        {"name": "status", "description": "Show connection statistics"},
-        {"name": "rooms", "description": "List active rooms"},
-        {"name": "connections", "description": "View active connections"},
-        {"name": "presence", "description": "View user presence states"}
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "server",
+          "description": "Start Socket.io server"
+        },
+        {
+          "name": "status",
+          "description": "Show connection statistics"
+        },
+        {
+          "name": "rooms",
+          "description": "List active rooms"
+        },
+        {
+          "name": "connections",
+          "description": "View active connections"
+        },
+        {
+          "name": "presence",
+          "description": "View user presence states"
+        }
       ],
       "apiEndpoints": [
-        {"method": "GET", "path": "/health", "description": "Health check"},
-        {"method": "GET", "path": "/status", "description": "Server status and metrics"},
-        {"method": "GET", "path": "/rooms", "description": "List active rooms"},
-        {"method": "GET", "path": "/connections", "description": "List active connections"},
-        {"method": "POST", "path": "/broadcast", "description": "Broadcast message to room"},
-        {"method": "DELETE", "path": "/connections/:id", "description": "Disconnect socket"}
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "GET",
+          "path": "/status",
+          "description": "Server status and metrics"
+        },
+        {
+          "method": "GET",
+          "path": "/rooms",
+          "description": "List active rooms"
+        },
+        {
+          "method": "GET",
+          "path": "/connections",
+          "description": "List active connections"
+        },
+        {
+          "method": "POST",
+          "path": "/broadcast",
+          "description": "Broadcast message to room"
+        },
+        {
+          "method": "DELETE",
+          "path": "/connections/:id",
+          "description": "Disconnect socket"
+        }
       ],
       "envVars": [
-        {"name": "REALTIME_PORT", "required": false, "default": "3101", "description": "Server port"},
-        {"name": "REALTIME_REDIS_URL", "required": false, "description": "Redis URL for multi-instance scaling"},
-        {"name": "REALTIME_CORS_ORIGIN", "required": true, "description": "CORS allowed origins"},
-        {"name": "REALTIME_MAX_CONNECTIONS", "required": false, "default": "10000", "description": "Maximum concurrent connections"},
-        {"name": "REALTIME_PING_TIMEOUT", "required": false, "default": "60000", "description": "Ping timeout (ms)"},
-        {"name": "REALTIME_PING_INTERVAL", "required": false, "default": "25000", "description": "Ping interval (ms)"},
-        {"name": "REALTIME_JWT_SECRET", "required": false, "description": "JWT secret for authentication"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"}
+        {
+          "name": "REALTIME_PORT",
+          "required": false,
+          "default": "3101",
+          "description": "Server port"
+        },
+        {
+          "name": "REALTIME_REDIS_URL",
+          "required": false,
+          "description": "Redis URL for multi-instance scaling"
+        },
+        {
+          "name": "REALTIME_CORS_ORIGIN",
+          "required": true,
+          "description": "CORS allowed origins"
+        },
+        {
+          "name": "REALTIME_MAX_CONNECTIONS",
+          "required": false,
+          "default": "10000",
+          "description": "Maximum concurrent connections"
+        },
+        {
+          "name": "REALTIME_PING_TIMEOUT",
+          "required": false,
+          "default": "60000",
+          "description": "Ping timeout (ms)"
+        },
+        {
+          "name": "REALTIME_PING_INTERVAL",
+          "required": false,
+          "default": "25000",
+          "description": "Ping interval (ms)"
+        },
+        {
+          "name": "REALTIME_JWT_SECRET",
+          "required": false,
+          "description": "JWT secret for authentication"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        }
       ],
-      "dependencies": ["pg", "socket.io", "socket.io-redis", "ioredis", "fastify", "commander", "jsonwebtoken", "pino", "dotenv"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "socket.io",
+        "socket.io-redis",
+        "ioredis",
+        "fastify",
+        "commander",
+        "jsonwebtoken",
+        "pino",
+        "dotenv"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
     },
     "file-processing": {
       "name": "file-processing",
@@ -475,7 +1006,15 @@
       "path": "plugins/file-processing",
       "minNselfVersion": "0.4.8",
       "category": "infrastructure",
-      "tags": ["files", "storage", "thumbnails", "images", "video", "s3", "minio"],
+      "tags": [
+        "files",
+        "storage",
+        "thumbnails",
+        "images",
+        "video",
+        "s3",
+        "minio"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -502,37 +1041,152 @@
       ],
       "webhooks": [],
       "cliCommands": [
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "server", "description": "Start file processing API"},
-        {"name": "worker", "description": "Start processing worker"},
-        {"name": "process", "description": "Process a file"},
-        {"name": "cleanup", "description": "Remove old jobs and temporary files"},
-        {"name": "stats", "description": "Show processing statistics"}
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "server",
+          "description": "Start file processing API"
+        },
+        {
+          "name": "worker",
+          "description": "Start processing worker"
+        },
+        {
+          "name": "process",
+          "description": "Process a file"
+        },
+        {
+          "name": "cleanup",
+          "description": "Remove old jobs and temporary files"
+        },
+        {
+          "name": "stats",
+          "description": "Show processing statistics"
+        }
       ],
       "apiEndpoints": [
-        {"method": "GET", "path": "/health", "description": "Health check"},
-        {"method": "POST", "path": "/api/jobs", "description": "Queue file for processing"},
-        {"method": "GET", "path": "/api/jobs/:id", "description": "Get job status"},
-        {"method": "GET", "path": "/api/jobs", "description": "List processing jobs"},
-        {"method": "GET", "path": "/api/stats", "description": "Processing statistics"}
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "POST",
+          "path": "/api/jobs",
+          "description": "Queue file for processing"
+        },
+        {
+          "method": "GET",
+          "path": "/api/jobs/:id",
+          "description": "Get job status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/jobs",
+          "description": "List processing jobs"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Processing statistics"
+        }
       ],
       "envVars": [
-        {"name": "FILE_STORAGE_PROVIDER", "required": true, "description": "Storage provider: minio, s3, gcs, r2, b2, azure"},
-        {"name": "FILE_STORAGE_ENDPOINT", "required": true, "description": "Storage endpoint URL"},
-        {"name": "FILE_STORAGE_BUCKET", "required": true, "description": "Storage bucket name"},
-        {"name": "FILE_STORAGE_ACCESS_KEY", "required": true, "description": "Storage access key"},
-        {"name": "FILE_STORAGE_SECRET_KEY", "required": true, "description": "Storage secret key"},
-        {"name": "FILE_THUMBNAIL_SIZES", "required": false, "default": "100x100,400x400,1200x1200", "description": "Thumbnail sizes"},
-        {"name": "FILE_ENABLE_VIRUS_SCAN", "required": false, "default": "false", "description": "Enable virus scanning"},
-        {"name": "FILE_ENABLE_OPTIMIZATION", "required": false, "default": "true", "description": "Enable image optimization"},
-        {"name": "FILE_MAX_SIZE", "required": false, "default": "100MB", "description": "Max file size"},
-        {"name": "FILE_ALLOWED_TYPES", "required": false, "default": "image/*,video/*,application/pdf", "description": "Allowed MIME types"},
-        {"name": "REDIS_URL", "required": true, "description": "Redis URL for job queue"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3104", "description": "Server port"}
+        {
+          "name": "FILE_STORAGE_PROVIDER",
+          "required": true,
+          "description": "Storage provider: minio, s3, gcs, r2, b2, azure"
+        },
+        {
+          "name": "FILE_STORAGE_ENDPOINT",
+          "required": true,
+          "description": "Storage endpoint URL"
+        },
+        {
+          "name": "FILE_STORAGE_BUCKET",
+          "required": true,
+          "description": "Storage bucket name"
+        },
+        {
+          "name": "FILE_STORAGE_ACCESS_KEY",
+          "required": true,
+          "description": "Storage access key"
+        },
+        {
+          "name": "FILE_STORAGE_SECRET_KEY",
+          "required": true,
+          "description": "Storage secret key"
+        },
+        {
+          "name": "FILE_THUMBNAIL_SIZES",
+          "required": false,
+          "default": "100x100,400x400,1200x1200",
+          "description": "Thumbnail sizes"
+        },
+        {
+          "name": "FILE_ENABLE_VIRUS_SCAN",
+          "required": false,
+          "default": "false",
+          "description": "Enable virus scanning"
+        },
+        {
+          "name": "FILE_ENABLE_OPTIMIZATION",
+          "required": false,
+          "default": "true",
+          "description": "Enable image optimization"
+        },
+        {
+          "name": "FILE_MAX_SIZE",
+          "required": false,
+          "default": "100MB",
+          "description": "Max file size"
+        },
+        {
+          "name": "FILE_ALLOWED_TYPES",
+          "required": false,
+          "default": "image/*,video/*,application/pdf",
+          "description": "Allowed MIME types"
+        },
+        {
+          "name": "REDIS_URL",
+          "required": true,
+          "description": "Redis URL for job queue"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3104",
+          "description": "Server port"
+        }
       ],
-      "dependencies": ["pg", "fastify", "commander", "sharp", "fluent-ffmpeg", "bullmq", "minio", "@aws-sdk/client-s3", "ioredis", "dotenv"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander",
+        "sharp",
+        "fluent-ffmpeg",
+        "bullmq",
+        "minio",
+        "@aws-sdk/client-s3",
+        "ioredis",
+        "dotenv"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
     },
     "jobs": {
       "name": "jobs",
@@ -545,7 +1199,14 @@
       "path": "plugins/jobs",
       "minNselfVersion": "0.4.8",
       "category": "infrastructure",
-      "tags": ["jobs", "queue", "background", "bullmq", "worker", "cron"],
+      "tags": [
+        "jobs",
+        "queue",
+        "background",
+        "bullmq",
+        "worker",
+        "cron"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -573,35 +1234,140 @@
       ],
       "webhooks": [],
       "cliCommands": [
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "server", "description": "Start API + BullBoard dashboard"},
-        {"name": "worker", "description": "Start job worker"},
-        {"name": "schedule", "description": "Manage cron schedules"},
-        {"name": "retry", "description": "Retry failed job"},
-        {"name": "stats", "description": "Show queue statistics"}
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "server",
+          "description": "Start API + BullBoard dashboard"
+        },
+        {
+          "name": "worker",
+          "description": "Start job worker"
+        },
+        {
+          "name": "schedule",
+          "description": "Manage cron schedules"
+        },
+        {
+          "name": "retry",
+          "description": "Retry failed job"
+        },
+        {
+          "name": "stats",
+          "description": "Show queue statistics"
+        }
       ],
       "apiEndpoints": [
-        {"method": "GET", "path": "/health", "description": "Health check"},
-        {"method": "GET", "path": "/dashboard", "description": "BullBoard dashboard"},
-        {"method": "POST", "path": "/api/jobs", "description": "Add job to queue"},
-        {"method": "GET", "path": "/api/jobs/:id", "description": "Get job status"},
-        {"method": "POST", "path": "/api/jobs/:id/retry", "description": "Retry failed job"},
-        {"method": "GET", "path": "/api/schedules", "description": "List schedules"},
-        {"method": "POST", "path": "/api/schedules", "description": "Create schedule"},
-        {"method": "GET", "path": "/api/stats", "description": "Queue statistics"}
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "GET",
+          "path": "/dashboard",
+          "description": "BullBoard dashboard"
+        },
+        {
+          "method": "POST",
+          "path": "/api/jobs",
+          "description": "Add job to queue"
+        },
+        {
+          "method": "GET",
+          "path": "/api/jobs/:id",
+          "description": "Get job status"
+        },
+        {
+          "method": "POST",
+          "path": "/api/jobs/:id/retry",
+          "description": "Retry failed job"
+        },
+        {
+          "method": "GET",
+          "path": "/api/schedules",
+          "description": "List schedules"
+        },
+        {
+          "method": "POST",
+          "path": "/api/schedules",
+          "description": "Create schedule"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Queue statistics"
+        }
       ],
       "envVars": [
-        {"name": "JOBS_REDIS_URL", "required": true, "description": "Redis connection URL"},
-        {"name": "JOBS_DASHBOARD_ENABLED", "required": false, "default": "true", "description": "Enable BullBoard dashboard"},
-        {"name": "JOBS_DEFAULT_CONCURRENCY", "required": false, "default": "5", "description": "Default worker concurrency"},
-        {"name": "JOBS_RETRY_ATTEMPTS", "required": false, "default": "3", "description": "Default retry attempts"},
-        {"name": "JOBS_RETRY_DELAY", "required": false, "default": "5000", "description": "Retry delay (ms)"},
-        {"name": "JOBS_JOB_TIMEOUT", "required": false, "default": "60000", "description": "Job timeout (ms)"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3105", "description": "Server port"}
+        {
+          "name": "JOBS_REDIS_URL",
+          "required": true,
+          "description": "Redis connection URL"
+        },
+        {
+          "name": "JOBS_DASHBOARD_ENABLED",
+          "required": false,
+          "default": "true",
+          "description": "Enable BullBoard dashboard"
+        },
+        {
+          "name": "JOBS_DEFAULT_CONCURRENCY",
+          "required": false,
+          "default": "5",
+          "description": "Default worker concurrency"
+        },
+        {
+          "name": "JOBS_RETRY_ATTEMPTS",
+          "required": false,
+          "default": "3",
+          "description": "Default retry attempts"
+        },
+        {
+          "name": "JOBS_RETRY_DELAY",
+          "required": false,
+          "default": "5000",
+          "description": "Retry delay (ms)"
+        },
+        {
+          "name": "JOBS_JOB_TIMEOUT",
+          "required": false,
+          "default": "60000",
+          "description": "Job timeout (ms)"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3105",
+          "description": "Server port"
+        }
       ],
-      "dependencies": ["pg", "fastify", "commander", "bullmq", "ioredis", "@bull-board/api", "@bull-board/fastify", "dotenv"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander",
+        "bullmq",
+        "ioredis",
+        "@bull-board/api",
+        "@bull-board/fastify",
+        "dotenv"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
     },
     "notifications": {
       "name": "notifications",
@@ -614,7 +1380,14 @@
       "path": "plugins/notifications",
       "minNselfVersion": "0.4.8",
       "category": "infrastructure",
-      "tags": ["notifications", "email", "push", "sms", "templates", "messaging"],
+      "tags": [
+        "notifications",
+        "email",
+        "push",
+        "sms",
+        "templates",
+        "messaging"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -651,42 +1424,175 @@
         "unsubscribe"
       ],
       "cliCommands": [
-        {"name": "init", "description": "Initialize database schema"},
-        {"name": "server", "description": "Start notification API server"},
-        {"name": "worker", "description": "Start delivery worker"},
-        {"name": "template", "description": "Manage templates"},
-        {"name": "test", "description": "Send test notification"},
-        {"name": "stats", "description": "Show delivery statistics"}
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "server",
+          "description": "Start notification API server"
+        },
+        {
+          "name": "worker",
+          "description": "Start delivery worker"
+        },
+        {
+          "name": "template",
+          "description": "Manage templates"
+        },
+        {
+          "name": "test",
+          "description": "Send test notification"
+        },
+        {
+          "name": "stats",
+          "description": "Show delivery statistics"
+        }
       ],
       "apiEndpoints": [
-        {"method": "GET", "path": "/health", "description": "Health check"},
-        {"method": "POST", "path": "/api/send", "description": "Send notification"},
-        {"method": "POST", "path": "/api/send-bulk", "description": "Send bulk notifications"},
-        {"method": "GET", "path": "/api/templates", "description": "List templates"},
-        {"method": "POST", "path": "/api/templates", "description": "Create template"},
-        {"method": "GET", "path": "/api/preferences/:userId", "description": "Get user preferences"},
-        {"method": "PUT", "path": "/api/preferences/:userId", "description": "Update preferences"},
-        {"method": "GET", "path": "/api/stats", "description": "Delivery statistics"}
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "POST",
+          "path": "/api/send",
+          "description": "Send notification"
+        },
+        {
+          "method": "POST",
+          "path": "/api/send-bulk",
+          "description": "Send bulk notifications"
+        },
+        {
+          "method": "GET",
+          "path": "/api/templates",
+          "description": "List templates"
+        },
+        {
+          "method": "POST",
+          "path": "/api/templates",
+          "description": "Create template"
+        },
+        {
+          "method": "GET",
+          "path": "/api/preferences/:userId",
+          "description": "Get user preferences"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/preferences/:userId",
+          "description": "Update preferences"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Delivery statistics"
+        }
       ],
       "envVars": [
-        {"name": "NOTIFICATIONS_EMAIL_ENABLED", "required": false, "default": "true", "description": "Enable email notifications"},
-        {"name": "NOTIFICATIONS_EMAIL_PROVIDER", "required": false, "default": "resend", "description": "Email provider: resend, sendgrid, mailgun, ses, smtp"},
-        {"name": "NOTIFICATIONS_EMAIL_API_KEY", "required": false, "description": "Email provider API key"},
-        {"name": "NOTIFICATIONS_EMAIL_FROM", "required": false, "description": "Default from address"},
-        {"name": "NOTIFICATIONS_PUSH_PROVIDER", "required": false, "description": "Push provider: fcm, onesignal, webpush"},
-        {"name": "NOTIFICATIONS_PUSH_API_KEY", "required": false, "description": "Push provider API key"},
-        {"name": "NOTIFICATIONS_SMS_PROVIDER", "required": false, "description": "SMS provider: twilio, plivo, sns"},
-        {"name": "NOTIFICATIONS_SMS_ACCOUNT_SID", "required": false, "description": "Twilio account SID"},
-        {"name": "NOTIFICATIONS_SMS_AUTH_TOKEN", "required": false, "description": "Twilio auth token"},
-        {"name": "NOTIFICATIONS_SMS_FROM", "required": false, "description": "SMS from number"},
-        {"name": "NOTIFICATIONS_QUEUE_BACKEND", "required": false, "default": "redis", "description": "Queue backend: redis, postgres"},
-        {"name": "NOTIFICATIONS_BATCH_INTERVAL", "required": false, "default": "86400", "description": "Batch interval (seconds)"},
-        {"name": "REDIS_URL", "required": false, "description": "Redis URL for queue"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3102", "description": "Server port"}
+        {
+          "name": "NOTIFICATIONS_EMAIL_ENABLED",
+          "required": false,
+          "default": "true",
+          "description": "Enable email notifications"
+        },
+        {
+          "name": "NOTIFICATIONS_EMAIL_PROVIDER",
+          "required": false,
+          "default": "resend",
+          "description": "Email provider: resend, sendgrid, mailgun, ses, smtp"
+        },
+        {
+          "name": "NOTIFICATIONS_EMAIL_API_KEY",
+          "required": false,
+          "description": "Email provider API key"
+        },
+        {
+          "name": "NOTIFICATIONS_EMAIL_FROM",
+          "required": false,
+          "description": "Default from address"
+        },
+        {
+          "name": "NOTIFICATIONS_PUSH_PROVIDER",
+          "required": false,
+          "description": "Push provider: fcm, onesignal, webpush"
+        },
+        {
+          "name": "NOTIFICATIONS_PUSH_API_KEY",
+          "required": false,
+          "description": "Push provider API key"
+        },
+        {
+          "name": "NOTIFICATIONS_SMS_PROVIDER",
+          "required": false,
+          "description": "SMS provider: twilio, plivo, sns"
+        },
+        {
+          "name": "NOTIFICATIONS_SMS_ACCOUNT_SID",
+          "required": false,
+          "description": "Twilio account SID"
+        },
+        {
+          "name": "NOTIFICATIONS_SMS_AUTH_TOKEN",
+          "required": false,
+          "description": "Twilio auth token"
+        },
+        {
+          "name": "NOTIFICATIONS_SMS_FROM",
+          "required": false,
+          "description": "SMS from number"
+        },
+        {
+          "name": "NOTIFICATIONS_QUEUE_BACKEND",
+          "required": false,
+          "default": "redis",
+          "description": "Queue backend: redis, postgres"
+        },
+        {
+          "name": "NOTIFICATIONS_BATCH_INTERVAL",
+          "required": false,
+          "default": "86400",
+          "description": "Batch interval (seconds)"
+        },
+        {
+          "name": "REDIS_URL",
+          "required": false,
+          "description": "Redis URL for queue"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3102",
+          "description": "Server port"
+        }
       ],
-      "dependencies": ["pg", "fastify", "commander", "handlebars", "resend", "twilio", "firebase-admin", "ioredis", "dotenv"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander",
+        "handlebars",
+        "resend",
+        "twilio",
+        "firebase-admin",
+        "ioredis",
+        "dotenv"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
     },
     "idme": {
       "name": "idme",
@@ -699,7 +1605,14 @@
       "path": "plugins/idme",
       "minNselfVersion": "0.4.8",
       "category": "authentication",
-      "tags": ["authentication", "oauth", "idme", "verification", "military", "veteran"],
+      "tags": [
+        "authentication",
+        "oauth",
+        "idme",
+        "verification",
+        "military",
+        "veteran"
+      ],
       "implementation": {
         "language": "typescript",
         "runtime": "node",
@@ -733,32 +1646,962 @@
         "attribute.updated"
       ],
       "cliCommands": [
-        {"name": "init", "description": "Initialize database and show config"},
-        {"name": "verify", "description": "Check user verification status"},
-        {"name": "groups", "description": "List verification groups"},
-        {"name": "server", "description": "Start OAuth and webhook server"},
-        {"name": "test", "description": "Test configuration"}
+        {
+          "name": "init",
+          "description": "Initialize database and show config"
+        },
+        {
+          "name": "verify",
+          "description": "Check user verification status"
+        },
+        {
+          "name": "groups",
+          "description": "List verification groups"
+        },
+        {
+          "name": "server",
+          "description": "Start OAuth and webhook server"
+        },
+        {
+          "name": "test",
+          "description": "Test configuration"
+        }
       ],
       "apiEndpoints": [
-        {"method": "GET", "path": "/health", "description": "Health check"},
-        {"method": "GET", "path": "/auth/idme", "description": "Start OAuth flow"},
-        {"method": "GET", "path": "/callback/idme", "description": "OAuth callback"},
-        {"method": "POST", "path": "/webhook/idme", "description": "Webhook receiver"},
-        {"method": "GET", "path": "/api/verifications/:userId", "description": "Get verification status"}
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "GET",
+          "path": "/auth/idme",
+          "description": "Start OAuth flow"
+        },
+        {
+          "method": "GET",
+          "path": "/callback/idme",
+          "description": "OAuth callback"
+        },
+        {
+          "method": "POST",
+          "path": "/webhook/idme",
+          "description": "Webhook receiver"
+        },
+        {
+          "method": "GET",
+          "path": "/api/verifications/:userId",
+          "description": "Get verification status"
+        }
       ],
       "envVars": [
-        {"name": "IDME_CLIENT_ID", "required": true, "description": "ID.me OAuth client ID"},
-        {"name": "IDME_CLIENT_SECRET", "required": true, "description": "ID.me OAuth client secret"},
-        {"name": "IDME_REDIRECT_URI", "required": true, "description": "OAuth redirect URL"},
-        {"name": "IDME_SCOPES", "required": false, "default": "openid,email,profile", "description": "OAuth scopes"},
-        {"name": "IDME_SANDBOX", "required": false, "default": "false", "description": "Use sandbox mode"},
-        {"name": "IDME_WEBHOOK_SECRET", "required": false, "description": "Webhook signature verification secret"},
-        {"name": "DATABASE_URL", "required": true, "description": "PostgreSQL connection string"},
-        {"name": "PORT", "required": false, "default": "3010", "description": "Server port"},
-        {"name": "HOST", "required": false, "default": "0.0.0.0", "description": "Server host"}
+        {
+          "name": "IDME_CLIENT_ID",
+          "required": true,
+          "description": "ID.me OAuth client ID"
+        },
+        {
+          "name": "IDME_CLIENT_SECRET",
+          "required": true,
+          "description": "ID.me OAuth client secret"
+        },
+        {
+          "name": "IDME_REDIRECT_URI",
+          "required": true,
+          "description": "OAuth redirect URL"
+        },
+        {
+          "name": "IDME_SCOPES",
+          "required": false,
+          "default": "openid,email,profile",
+          "description": "OAuth scopes"
+        },
+        {
+          "name": "IDME_SANDBOX",
+          "required": false,
+          "default": "false",
+          "description": "Use sandbox mode"
+        },
+        {
+          "name": "IDME_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook signature verification secret"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3010",
+          "description": "Server port"
+        },
+        {
+          "name": "HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        }
       ],
-      "dependencies": ["pg", "fastify", "commander", "dotenv"],
-      "checksums": {"sha256": ""}
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander",
+        "dotenv"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
+    },
+    "paypal": {
+      "name": "paypal",
+      "version": "1.0.0",
+      "description": "PayPal payment data sync with webhook handling",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/paypal",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/paypal",
+      "minNselfVersion": "0.4.8",
+      "category": "payments",
+      "tags": [
+        "payments",
+        "donations",
+        "subscriptions",
+        "paypal",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-paypal",
+        "defaultPort": 3004,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "paypal_transactions",
+        "paypal_orders",
+        "paypal_captures",
+        "paypal_authorizations",
+        "paypal_refunds",
+        "paypal_subscriptions",
+        "paypal_subscription_plans",
+        "paypal_products",
+        "paypal_disputes",
+        "paypal_payouts",
+        "paypal_invoices",
+        "paypal_payers",
+        "paypal_balances",
+        "paypal_webhook_events"
+      ],
+      "views": [
+        "paypal_donation_summary",
+        "paypal_active_subscriptions",
+        "paypal_recurring_revenue",
+        "paypal_dispute_summary",
+        "paypal_top_donors",
+        "paypal_unified_payments"
+      ],
+      "webhooks": [
+        "PAYMENT.CAPTURE.COMPLETED",
+        "PAYMENT.CAPTURE.DENIED",
+        "PAYMENT.CAPTURE.REFUNDED",
+        "PAYMENT.CAPTURE.REVERSED",
+        "PAYMENT.CAPTURE.PENDING",
+        "CHECKOUT.ORDER.COMPLETED",
+        "CHECKOUT.ORDER.APPROVED",
+        "CHECKOUT.ORDER.VOIDED",
+        "BILLING.SUBSCRIPTION.CREATED",
+        "BILLING.SUBSCRIPTION.ACTIVATED",
+        "BILLING.SUBSCRIPTION.UPDATED",
+        "BILLING.SUBSCRIPTION.CANCELLED",
+        "BILLING.SUBSCRIPTION.SUSPENDED",
+        "BILLING.SUBSCRIPTION.EXPIRED",
+        "CUSTOMER.DISPUTE.CREATED",
+        "CUSTOMER.DISPUTE.UPDATED",
+        "CUSTOMER.DISPUTE.RESOLVED",
+        "CUSTOMER.DISPUTE.OTHER",
+        "PAYMENT.PAYOUTSBATCH.SUCCESS",
+        "PAYMENT.PAYOUTSBATCH.DENIED",
+        "PAYMENT.PAYOUTSBATCH.PROCESSING",
+        "INVOICING.INVOICE.PAID",
+        "INVOICING.INVOICE.CANCELLED",
+        "PAYMENT.SALE.REFUNDED"
+      ],
+      "cliCommands": [
+        {
+          "name": "sync",
+          "description": "Sync all PayPal data to database"
+        },
+        {
+          "name": "reconcile",
+          "description": "Re-sync recent data to catch gaps from missed webhooks"
+        },
+        {
+          "name": "server",
+          "description": "Start the webhook server"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Basic liveness check"
+        },
+        {
+          "method": "GET",
+          "path": "/ready",
+          "description": "Readiness check (verifies database)"
+        },
+        {
+          "method": "GET",
+          "path": "/live",
+          "description": "Liveness check with sync info"
+        },
+        {
+          "method": "GET",
+          "path": "/status",
+          "description": "Full status with account info and stats"
+        },
+        {
+          "method": "POST",
+          "path": "/webhooks/paypal",
+          "description": "PayPal webhook receiver"
+        },
+        {
+          "method": "POST",
+          "path": "/sync",
+          "description": "Trigger data sync (supports account filtering)"
+        },
+        {
+          "method": "POST",
+          "path": "/reconcile",
+          "description": "Reconcile recent data (gap-check lookback window)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/transactions",
+          "description": "List transactions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/orders",
+          "description": "List orders"
+        },
+        {
+          "method": "GET",
+          "path": "/api/subscriptions",
+          "description": "List subscriptions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/disputes",
+          "description": "List disputes"
+        },
+        {
+          "method": "GET",
+          "path": "/api/refunds",
+          "description": "List refunds"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Get sync statistics"
+        },
+        {
+          "method": "GET",
+          "path": "/api/events",
+          "description": "List webhook events"
+        }
+      ],
+      "envVars": [
+        {
+          "name": "PAYPAL_CLIENT_ID",
+          "required": true,
+          "description": "PayPal OAuth2 client ID (single account)"
+        },
+        {
+          "name": "PAYPAL_CLIENT_SECRET",
+          "required": true,
+          "description": "PayPal OAuth2 client secret (single account)"
+        },
+        {
+          "name": "PAYPAL_CLIENT_IDS",
+          "required": false,
+          "description": "Comma-separated client IDs for multi-account sync"
+        },
+        {
+          "name": "PAYPAL_CLIENT_SECRETS",
+          "required": false,
+          "description": "Comma-separated client secrets matching PAYPAL_CLIENT_IDS"
+        },
+        {
+          "name": "PAYPAL_ACCOUNT_LABELS",
+          "required": false,
+          "description": "Comma-separated labels matching PAYPAL_CLIENT_IDS"
+        },
+        {
+          "name": "PAYPAL_WEBHOOK_IDS",
+          "required": false,
+          "description": "Comma-separated webhook IDs for multi-account verification"
+        },
+        {
+          "name": "PAYPAL_WEBHOOK_SECRETS",
+          "required": false,
+          "description": "Comma-separated webhook secrets matching PAYPAL_CLIENT_IDS"
+        },
+        {
+          "name": "PAYPAL_ENVIRONMENT",
+          "required": false,
+          "default": "live",
+          "description": "PayPal environment (sandbox or live)"
+        },
+        {
+          "name": "PAYPAL_SYNC_INTERVAL",
+          "required": false,
+          "default": "3600",
+          "description": "Sync interval in seconds"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3004",
+          "description": "Server port"
+        },
+        {
+          "name": "HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "required": false,
+          "default": "info",
+          "description": "Log level (debug, info, warn, error)"
+        }
+      ],
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
+    },
+    "donorbox": {
+      "name": "donorbox",
+      "version": "1.0.0",
+      "description": "Donorbox donation data sync with webhook handling",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/donorbox",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/donorbox",
+      "minNselfVersion": "0.4.8",
+      "category": "donations",
+      "tags": [
+        "donations",
+        "fundraising",
+        "campaigns",
+        "donorbox",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-donorbox",
+        "defaultPort": 3005,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "donorbox_campaigns",
+        "donorbox_donors",
+        "donorbox_donations",
+        "donorbox_plans",
+        "donorbox_events",
+        "donorbox_tickets",
+        "donorbox_webhook_events"
+      ],
+      "views": [
+        "donorbox_unified_donations",
+        "donorbox_campaign_summary",
+        "donorbox_daily_donations",
+        "donorbox_recurring_summary",
+        "donorbox_top_donors"
+      ],
+      "webhooks": [
+        "donation.created"
+      ],
+      "cliCommands": [
+        {
+          "name": "sync",
+          "description": "Sync all Donorbox data to database"
+        },
+        {
+          "name": "reconcile",
+          "description": "Re-sync recent data to catch gaps from missed webhooks"
+        },
+        {
+          "name": "server",
+          "description": "Start the webhook server"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Basic liveness check"
+        },
+        {
+          "method": "GET",
+          "path": "/ready",
+          "description": "Readiness check (verifies database)"
+        },
+        {
+          "method": "GET",
+          "path": "/live",
+          "description": "Liveness check with sync info"
+        },
+        {
+          "method": "GET",
+          "path": "/status",
+          "description": "Full status with account info and stats"
+        },
+        {
+          "method": "POST",
+          "path": "/webhooks/donorbox",
+          "description": "Donorbox webhook receiver"
+        },
+        {
+          "method": "POST",
+          "path": "/sync",
+          "description": "Trigger data sync (supports account filtering)"
+        },
+        {
+          "method": "POST",
+          "path": "/reconcile",
+          "description": "Reconcile recent data (gap-check lookback window)"
+        },
+        {
+          "method": "GET",
+          "path": "/api/campaigns",
+          "description": "List campaigns"
+        },
+        {
+          "method": "GET",
+          "path": "/api/donors",
+          "description": "List donors"
+        },
+        {
+          "method": "GET",
+          "path": "/api/donations",
+          "description": "List donations"
+        },
+        {
+          "method": "GET",
+          "path": "/api/plans",
+          "description": "List recurring plans"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Get sync statistics"
+        },
+        {
+          "method": "GET",
+          "path": "/api/events",
+          "description": "List webhook events"
+        }
+      ],
+      "envVars": [
+        {
+          "name": "DONORBOX_EMAIL",
+          "required": true,
+          "description": "Donorbox account email (single account)"
+        },
+        {
+          "name": "DONORBOX_API_KEY",
+          "required": true,
+          "description": "Donorbox API key (single account)"
+        },
+        {
+          "name": "DONORBOX_EMAILS",
+          "required": false,
+          "description": "Comma-separated emails for multi-account sync"
+        },
+        {
+          "name": "DONORBOX_API_KEYS",
+          "required": false,
+          "description": "Comma-separated API keys matching DONORBOX_EMAILS"
+        },
+        {
+          "name": "DONORBOX_ACCOUNT_LABELS",
+          "required": false,
+          "description": "Comma-separated labels matching DONORBOX_EMAILS"
+        },
+        {
+          "name": "DONORBOX_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook HMAC-SHA256 signing secret"
+        },
+        {
+          "name": "DONORBOX_WEBHOOK_SECRETS",
+          "required": false,
+          "description": "Comma-separated webhook secrets for multi-account"
+        },
+        {
+          "name": "DONORBOX_SYNC_INTERVAL",
+          "required": false,
+          "default": "3600",
+          "description": "Sync interval in seconds"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "default": "3005",
+          "description": "Server port"
+        },
+        {
+          "name": "HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "required": false,
+          "default": "info",
+          "description": "Log level (debug, info, warn, error)"
+        }
+      ],
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      }
+    },
+    "auth": {
+      "name": "auth",
+      "version": "1.0.0",
+      "description": "Advanced authentication: OAuth, WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/auth",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/auth",
+      "minNselfVersion": "0.4.8",
+      "category": "authentication",
+      "tags": [
+        "auth",
+        "oauth",
+        "webauthn",
+        "passkeys",
+        "2fa",
+        "totp",
+        "magic-link",
+        "device-code",
+        "sso"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "20.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-auth",
+        "defaultPort": 3014,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "auth_oauth_providers",
+        "auth_passkeys",
+        "auth_mfa_enrollments",
+        "auth_device_codes",
+        "auth_magic_links",
+        "auth_sessions",
+        "auth_login_attempts"
+      ],
+      "views": [],
+      "webhooks": [
+        "auth.oauth.linked",
+        "auth.oauth.unlinked",
+        "auth.passkey.registered",
+        "auth.passkey.used",
+        "auth.mfa.enrolled",
+        "auth.mfa.verified",
+        "auth.magic_link.sent",
+        "auth.magic_link.used",
+        "auth.device_code.initiated",
+        "auth.device_code.authorized",
+        "auth.device_code.denied",
+        "auth.session.created",
+        "auth.session.revoked",
+        "auth.login.success",
+        "auth.login.failure"
+      ],
+      "cliCommands": [
+        {
+          "name": "init",
+          "description": "Initialize auth database schema"
+        },
+        {
+          "name": "server",
+          "description": "Start auth HTTP server"
+        },
+        {
+          "name": "sessions",
+          "description": "List active sessions for a user"
+        },
+        {
+          "name": "revoke-session",
+          "description": "Revoke a specific session"
+        },
+        {
+          "name": "revoke-all",
+          "description": "Revoke all sessions for a user"
+        },
+        {
+          "name": "mfa-status",
+          "description": "Check MFA enrollment status"
+        },
+        {
+          "name": "login-attempts",
+          "description": "View recent login attempts"
+        },
+        {
+          "name": "oauth-connections",
+          "description": "List OAuth connections"
+        },
+        {
+          "name": "cleanup-expired",
+          "description": "Clean up expired tokens and codes"
+        },
+        {
+          "name": "stats",
+          "description": "Show auth plugin statistics"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "GET",
+          "path": "/ready",
+          "description": "Readiness check"
+        },
+        {
+          "method": "GET",
+          "path": "/live",
+          "description": "Liveness check"
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/providers",
+          "description": "List configured OAuth providers"
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/:provider/start",
+          "description": "Initiate OAuth flow"
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/:provider/callback",
+          "description": "OAuth callback handler"
+        },
+        {
+          "method": "POST",
+          "path": "/api/oauth/:provider/link",
+          "description": "Link OAuth account"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/oauth/:provider/unlink",
+          "description": "Unlink OAuth account"
+        },
+        {
+          "method": "GET",
+          "path": "/api/oauth/connections/:userId",
+          "description": "List OAuth connections"
+        },
+        {
+          "method": "POST",
+          "path": "/api/passkeys/register/start",
+          "description": "Start passkey registration"
+        },
+        {
+          "method": "POST",
+          "path": "/api/passkeys/register/finish",
+          "description": "Complete passkey registration"
+        },
+        {
+          "method": "POST",
+          "path": "/api/passkeys/authenticate/start",
+          "description": "Start passkey authentication"
+        },
+        {
+          "method": "POST",
+          "path": "/api/passkeys/authenticate/finish",
+          "description": "Complete passkey authentication"
+        },
+        {
+          "method": "GET",
+          "path": "/api/passkeys/:userId",
+          "description": "List registered passkeys"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/passkeys/:credentialId",
+          "description": "Remove a passkey"
+        },
+        {
+          "method": "POST",
+          "path": "/api/mfa/totp/enroll",
+          "description": "Start TOTP enrollment"
+        },
+        {
+          "method": "POST",
+          "path": "/api/mfa/totp/verify",
+          "description": "Verify TOTP code"
+        },
+        {
+          "method": "POST",
+          "path": "/api/mfa/totp/validate",
+          "description": "Validate TOTP during login"
+        },
+        {
+          "method": "POST",
+          "path": "/api/mfa/backup-code/validate",
+          "description": "Validate backup code"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/mfa/totp/:userId",
+          "description": "Disable TOTP"
+        },
+        {
+          "method": "GET",
+          "path": "/api/mfa/status/:userId",
+          "description": "Check MFA status"
+        },
+        {
+          "method": "POST",
+          "path": "/api/magic-link/send",
+          "description": "Send magic link email"
+        },
+        {
+          "method": "POST",
+          "path": "/api/magic-link/verify",
+          "description": "Verify magic link token"
+        },
+        {
+          "method": "POST",
+          "path": "/api/device-code/initiate",
+          "description": "Start device code flow"
+        },
+        {
+          "method": "GET",
+          "path": "/api/device-code/poll",
+          "description": "Poll for authorization"
+        },
+        {
+          "method": "POST",
+          "path": "/api/device-code/authorize",
+          "description": "Authorize device"
+        },
+        {
+          "method": "POST",
+          "path": "/api/device-code/deny",
+          "description": "Deny device"
+        },
+        {
+          "method": "GET",
+          "path": "/api/sessions/:userId",
+          "description": "List active sessions"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/sessions/:sessionId",
+          "description": "Revoke session"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/sessions/user/:userId",
+          "description": "Revoke all sessions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/login-attempts/:userId",
+          "description": "Get login attempts"
+        }
+      ],
+      "envVars": [
+        {
+          "name": "AUTH_ENCRYPTION_KEY",
+          "required": true,
+          "description": "Encryption key for tokens and secrets (min 32 chars)"
+        },
+        {
+          "name": "AUTH_PLUGIN_PORT",
+          "required": false,
+          "default": "3014",
+          "description": "Server port"
+        },
+        {
+          "name": "AUTH_PLUGIN_HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        },
+        {
+          "name": "AUTH_LOG_LEVEL",
+          "required": false,
+          "default": "info",
+          "description": "Log level"
+        },
+        {
+          "name": "AUTH_APP_IDS",
+          "required": false,
+          "default": "primary",
+          "description": "Comma-separated app IDs for multi-app"
+        },
+        {
+          "name": "AUTH_GOOGLE_CLIENT_ID",
+          "required": false,
+          "description": "Google OAuth client ID"
+        },
+        {
+          "name": "AUTH_GOOGLE_CLIENT_SECRET",
+          "required": false,
+          "description": "Google OAuth client secret"
+        },
+        {
+          "name": "AUTH_APPLE_CLIENT_ID",
+          "required": false,
+          "description": "Apple OAuth client ID"
+        },
+        {
+          "name": "AUTH_FACEBOOK_APP_ID",
+          "required": false,
+          "description": "Facebook OAuth app ID"
+        },
+        {
+          "name": "AUTH_WEBAUTHN_RP_NAME",
+          "required": false,
+          "default": "nSelf",
+          "description": "WebAuthn RP name"
+        },
+        {
+          "name": "AUTH_WEBAUTHN_RP_ID",
+          "required": false,
+          "description": "WebAuthn RP ID (domain)"
+        },
+        {
+          "name": "AUTH_TOTP_ISSUER",
+          "required": false,
+          "default": "nSelf",
+          "description": "TOTP issuer name"
+        },
+        {
+          "name": "AUTH_MAGIC_LINK_EXPIRY_SECONDS",
+          "required": false,
+          "default": "600",
+          "description": "Magic link expiry time"
+        },
+        {
+          "name": "AUTH_DEVICE_CODE_EXPIRY_SECONDS",
+          "required": false,
+          "default": "600",
+          "description": "Device code expiry time"
+        },
+        {
+          "name": "AUTH_SESSION_MAX_PER_USER",
+          "required": false,
+          "default": "10",
+          "description": "Max sessions per user"
+        },
+        {
+          "name": "AUTH_LOGIN_MAX_ATTEMPTS",
+          "required": false,
+          "default": "5",
+          "description": "Max login attempts before lockout"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        }
+      ],
+      "dependencies": [
+        "pg",
+        "fastify",
+        "commander",
+        "dotenv"
+      ],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      }
     }
   },
   "categories": {
@@ -806,6 +2649,16 @@
       "name": "Authentication",
       "description": "Identity verification and specialized authentication providers",
       "icon": "lock"
+    },
+    "payments": {
+      "name": "Payments",
+      "description": "Payment processing, donations, and transaction management",
+      "icon": "credit-card"
+    },
+    "donations": {
+      "name": "Donations & Fundraising",
+      "description": "Donation platforms, campaign management, and fundraising tools",
+      "icon": "heart"
     }
   }
 }
