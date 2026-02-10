@@ -100,6 +100,7 @@ export class ShopifyWebhookHandler {
 
     const eventRecord: ShopifyWebhookEventRecord = {
       id: webhookId,
+      source_account_id: 'primary',
       topic,
       shop_id: shopId ?? null,
       shop_domain: shopDomain,

@@ -53,6 +53,7 @@ export interface FileProcessingConfig {
 
 export interface ProcessingJob {
   id: string;
+  source_account_id: string;
   file_id: string;
   file_path: string;
   file_name: string;
@@ -86,6 +87,7 @@ export interface ProcessingJob {
 
 export interface FileThumbnail {
   id: string;
+  source_account_id: string;
   job_id: string;
   file_id: string;
   thumbnail_path: string;
@@ -107,6 +109,7 @@ export interface FileThumbnail {
 
 export interface FileScan {
   id: string;
+  source_account_id: string;
   job_id: string;
   file_id: string;
   scanner: string;
@@ -124,6 +127,7 @@ export interface FileScan {
 
 export interface FileMetadata {
   id: string;
+  source_account_id: string;
   job_id: string;
   file_id: string;
   mime_type: string;

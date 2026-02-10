@@ -6,7 +6,7 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import crypto from 'crypto';
-import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
+import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { ShopifyConfig } from './config.js';
 import { ShopifyClient } from './client.js';
 import { ShopifyDatabase } from './database.js';
@@ -61,6 +61,17 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
   const syncService = new ShopifySyncService(client, db);
   const webhookHandler = new ShopifyWebhookHandler(client, db, syncService);
 
+  // Add scoped database middleware
+  app.decorateRequest('scopedDb', null);
+  app.addHook('onRequest', async (request) => {
+    const ctx = getAppContext(request);
+    (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+  });
+
+  function scopedDb(req: unknown): ShopifyDatabase {
+    return (req as unknown as Record<string, unknown>).scopedDb as ShopifyDatabase;
+  }
+
   // Raw body parser for webhook signature verification
   app.addContentTypeParser(
     'application/json',
@@ -83,9 +94,9 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
   });
 
   // Readiness check (verifies database connectivity)
-  app.get('/ready', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/ready', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      await db.query('SELECT 1');
+      await scopedDb(request).execute('SELECT 1');
       return { ready: true, plugin: 'shopify', timestamp: new Date().toISOString() };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Database unavailable';
@@ -100,9 +111,9 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
   });
 
   // Liveness check (application state with sync info)
-  app.get('/live', async () => {
-    const stats = await db.getStats();
-    const shop = await db.getShop();
+  app.get('/live', async (request: FastifyRequest) => {
+    const stats = await scopedDb(request).getStats();
+    const shop = await scopedDb(request).getShop();
     return {
       alive: true,
       plugin: 'shopify',
@@ -182,10 +193,10 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
   });
 
   // Get sync status
-  app.get('/api/status', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/api/status', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const stats = await db.getStats();
-      const shop = await db.getShop();
+      const stats = await scopedDb(request).getStats();
+      const shop = await scopedDb(request).getShop();
       return reply.send({
         shop: shop ? { name: shop.name, domain: shop.domain } : null,
         stats,
@@ -197,9 +208,9 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
   });
 
   // Shop endpoint
-  app.get('/api/shop', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/api/shop', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const shop = await db.getShop();
+      const shop = await scopedDb(request).getShop();
       return reply.send({ shop });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -214,8 +225,8 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     const offset = parseInt(query.offset ?? '0', 10);
 
     try {
-      const products = await db.listProducts(limit, offset);
-      const total = await db.countProducts();
+      const products = await scopedDb(request).listProducts(limit, offset);
+      const total = await scopedDb(request).countProducts();
       return reply.send({ products, total, limit, offset });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -228,11 +239,11 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     const productId = parseInt(params.id, 10);
 
     try {
-      const product = await db.getProduct(productId);
+      const product = await scopedDb(request).getProduct(productId);
       if (!product) {
         return reply.status(404).send({ error: 'Product not found' });
       }
-      const variants = await db.getProductVariants(productId);
+      const variants = await scopedDb(request).getProductVariants(productId);
       return reply.send({ product, variants });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -247,8 +258,8 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     const offset = parseInt(query.offset ?? '0', 10);
 
     try {
-      const customers = await db.listCustomers(limit, offset);
-      const total = await db.countCustomers();
+      const customers = await scopedDb(request).listCustomers(limit, offset);
+      const total = await scopedDb(request).countCustomers();
       return reply.send({ customers, total, limit, offset });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -261,7 +272,7 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     const customerId = parseInt(params.id, 10);
 
     try {
-      const customer = await db.getCustomer(customerId);
+      const customer = await scopedDb(request).getCustomer(customerId);
       if (!customer) {
         return reply.status(404).send({ error: 'Customer not found' });
       }
@@ -279,8 +290,8 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     const offset = parseInt(query.offset ?? '0', 10);
 
     try {
-      const orders = await db.listOrders(query.status, limit, offset);
-      const total = await db.countOrders(query.status);
+      const orders = await scopedDb(request).listOrders(query.status, limit, offset);
+      const total = await scopedDb(request).countOrders(query.status);
       return reply.send({ orders, total, limit, offset });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -293,11 +304,11 @@ export async function createServer(config: ShopifyConfig): Promise<ShopifyServer
     const orderId = parseInt(params.id, 10);
 
     try {
-      const order = await db.getOrder(orderId);
+      const order = await scopedDb(request).getOrder(orderId);
       if (!order) {
         return reply.status(404).send({ error: 'Order not found' });
       }
-      const items = await db.getOrderItems(orderId);
+      const items = await scopedDb(request).getOrderItems(orderId);
       return reply.send({ order, items });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

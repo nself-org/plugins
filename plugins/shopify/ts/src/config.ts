@@ -4,16 +4,19 @@
  */
 
 import { config as loadEnv } from 'dotenv';
-import { createLogger, requireWebhookSecret, loadSecurityConfig, type SecurityConfig } from '@nself/plugin-utils';
+import { createLogger, requireWebhookSecret, loadSecurityConfig, buildAccountConfigs, type SecurityConfig, type AccountConfig } from '@nself/plugin-utils';
 
 const logger = createLogger('shopify:config');
 
 export interface ShopifyConfig {
-  // Shopify credentials
+  // Shopify credentials (legacy single account)
   shopifyShopDomain: string;
   shopifyAccessToken: string;
   shopifyApiVersion: string;
   shopifyWebhookSecret: string;
+
+  // Multi-app
+  accounts: AccountConfig[];
 
   // Database
   databaseHost: string;
@@ -40,12 +43,23 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
 
   const security = loadSecurityConfig('SHOPIFY');
 
+  // Build multi-account configs from CSV env vars
+  const accounts = buildAccountConfigs(
+    process.env.SHOPIFY_ACCESS_TOKENS,
+    process.env.SHOPIFY_ACCOUNT_LABELS,
+    process.env.SHOPIFY_ACCESS_TOKEN,
+    'primary'
+  );
+
   const config: ShopifyConfig = {
-    // Shopify credentials
+    // Shopify credentials (legacy single account)
     shopifyShopDomain: overrides.shopifyShopDomain ?? process.env.SHOPIFY_SHOP_DOMAIN ?? '',
     shopifyAccessToken: overrides.shopifyAccessToken ?? process.env.SHOPIFY_ACCESS_TOKEN ?? '',
     shopifyApiVersion: overrides.shopifyApiVersion ?? process.env.SHOPIFY_API_VERSION ?? '2024-01',
     shopifyWebhookSecret: overrides.shopifyWebhookSecret ?? process.env.SHOPIFY_WEBHOOK_SECRET ?? '',
+
+    // Multi-app
+    accounts,
 
     // Database
     databaseHost: overrides.databaseHost ?? process.env.POSTGRES_HOST ?? 'localhost',

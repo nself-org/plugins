@@ -10,6 +10,13 @@
   "category": "devops",
   "tags": ["github", "git", "ci", "devops", "issues", "pull-requests"],
 
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "composite",
+    "defaultValue": "primary"
+  },
+
   "tables": [
     "github_repositories",
     "github_issues",
@@ -54,7 +61,9 @@
     "optional": [
       "GITHUB_WEBHOOK_SECRET",
       "GITHUB_ORG",
-      "GITHUB_REPOS"
+      "GITHUB_REPOS",
+      "GITHUB_API_KEYS",
+      "GITHUB_ACCOUNT_LABELS"
     ]
   },
 

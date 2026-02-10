@@ -44,6 +44,7 @@ export interface RealtimeConfig {
 
 export interface Connection {
   id: string;
+  source_account_id: string;
   socket_id: string;
   user_id: string | null;
   session_id: string | null;
@@ -62,6 +63,7 @@ export interface Connection {
 
 export interface Room {
   id: string;
+  source_account_id: string;
   name: string;
   type: 'channel' | 'dm' | 'group' | 'broadcast';
   visibility: 'public' | 'private' | 'secret';
@@ -75,6 +77,7 @@ export interface Room {
 
 export interface RoomMember {
   id: string;
+  source_account_id: string;
   room_id: string;
   user_id: string;
   role: 'admin' | 'moderator' | 'member' | 'guest';
@@ -87,6 +90,7 @@ export interface RoomMember {
 
 export interface Presence {
   id: string;
+  source_account_id: string;
   user_id: string;
   status: 'online' | 'away' | 'busy' | 'offline';
   custom_status: string | null;
@@ -102,6 +106,7 @@ export interface Presence {
 
 export interface TypingIndicator {
   id: string;
+  source_account_id: string;
   room_id: string;
   user_id: string;
   thread_id: string | null;
@@ -111,6 +116,7 @@ export interface TypingIndicator {
 
 export interface RealtimeEvent {
   id: string;
+  source_account_id: string;
   event_type: string;
   socket_id: string | null;
   user_id: string | null;

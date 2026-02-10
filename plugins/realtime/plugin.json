@@ -42,6 +42,13 @@
     {"name": "REALTIME_TYPING_TIMEOUT", "required": false, "default": "3000", "description": "Typing indicator timeout in milliseconds"}
   ],
 
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",

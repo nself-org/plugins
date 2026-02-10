@@ -88,6 +88,7 @@ export class ShopifyClient {
   private mapShop(shop: Record<string, unknown>): ShopifyShopRecord {
     return {
       id: shop.id as number,
+      source_account_id: 'primary',
       name: shop.name as string,
       email: shop.email as string | null,
       domain: shop.domain as string | null,
@@ -148,6 +149,7 @@ export class ShopifyClient {
   private mapLocation(loc: Record<string, unknown>, shopId?: number): ShopifyLocationRecord {
     return {
       id: loc.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       name: loc.name as string,
       address1: loc.address1 as string | null,
@@ -224,6 +226,7 @@ export class ShopifyClient {
 
     return {
       id: product.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       title: product.title as string,
       body_html: product.body_html as string | null,
@@ -248,6 +251,7 @@ export class ShopifyClient {
   private mapVariant(variant: Record<string, unknown>, productId: number): ShopifyVariantRecord {
     return {
       id: variant.id as number,
+      source_account_id: 'primary',
       product_id: productId,
       title: variant.title as string | null,
       price: parseFloat(variant.price as string ?? '0'),
@@ -342,6 +346,7 @@ export class ShopifyClient {
 
     return {
       id: collection.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       title: collection.title as string,
       body_html: collection.body_html as string | null,
@@ -420,6 +425,7 @@ export class ShopifyClient {
 
     return {
       id: customer.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       email: customer.email as string | null,
       first_name: customer.first_name as string | null,
@@ -538,6 +544,7 @@ export class ShopifyClient {
 
     return {
       id: order.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       order_number: order.order_number as number,
       name: order.name as string,
@@ -595,6 +602,7 @@ export class ShopifyClient {
 
     return {
       id: item.id as number,
+      source_account_id: 'primary',
       order_id: orderId,
       product_id: item.product_id as number | null,
       variant_id: item.variant_id as number | null,
@@ -676,6 +684,7 @@ export class ShopifyClient {
   private mapFulfillment(f: Record<string, unknown>, orderId: number): ShopifyFulfillmentRecord {
     return {
       id: f.id as number,
+      source_account_id: 'primary',
       order_id: orderId,
       location_id: f.location_id as number | null,
       status: f.status as string | null,
@@ -719,6 +728,7 @@ export class ShopifyClient {
   private mapTransaction(t: Record<string, unknown>, orderId: number): ShopifyTransactionRecord {
     return {
       id: t.id as number,
+      source_account_id: 'primary',
       order_id: orderId,
       parent_id: t.parent_id as number | null,
       kind: t.kind as string,
@@ -762,6 +772,7 @@ export class ShopifyClient {
   private mapRefund(r: Record<string, unknown>, orderId: number): ShopifyRefundRecord {
     return {
       id: r.id as number,
+      source_account_id: 'primary',
       order_id: orderId,
       note: r.note as string | null,
       restock: r.restock as boolean ?? false,
@@ -814,6 +825,7 @@ export class ShopifyClient {
     const customer = d.customer as Record<string, unknown> | null;
     return {
       id: d.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       order_id: d.order_id as number | null,
       name: d.name as string | null,
@@ -876,6 +888,7 @@ export class ShopifyClient {
   private mapInventoryItem(item: Record<string, unknown>): ShopifyInventoryItemRecord {
     return {
       id: item.id as number,
+      source_account_id: 'primary',
       sku: item.sku as string | null,
       cost: item.cost ? parseFloat(item.cost as string) : null,
       country_code_of_origin: item.country_code_of_origin as string | null,
@@ -925,6 +938,7 @@ export class ShopifyClient {
   private mapInventoryLevel(inv: Record<string, unknown>): ShopifyInventoryRecord {
     return {
       id: 0,
+      source_account_id: 'primary',
       inventory_item_id: inv.inventory_item_id as number,
       location_id: inv.location_id as number,
       variant_id: null,
@@ -977,6 +991,7 @@ export class ShopifyClient {
   private mapPriceRule(pr: Record<string, unknown>, shopId?: number): ShopifyPriceRuleRecord {
     return {
       id: pr.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       title: pr.title as string,
       target_type: pr.target_type as string | null,
@@ -1030,6 +1045,7 @@ export class ShopifyClient {
   private mapDiscountCodeRecord(dc: Record<string, unknown>, priceRuleId: number): ShopifyDiscountCodeRecord {
     return {
       id: dc.id as number,
+      source_account_id: 'primary',
       price_rule_id: priceRuleId,
       code: dc.code as string,
       usage_count: dc.usage_count as number ?? 0,
@@ -1076,6 +1092,7 @@ export class ShopifyClient {
   private mapGiftCard(gc: Record<string, unknown>, shopId?: number): ShopifyGiftCardRecord {
     return {
       id: gc.id as number,
+      source_account_id: 'primary',
       shop_id: shopId ?? null,
       balance: gc.balance ? parseFloat(gc.balance as string) : null,
       initial_value: gc.initial_value ? parseFloat(gc.initial_value as string) : null,
@@ -1121,6 +1138,7 @@ export class ShopifyClient {
   private mapMetafield(mf: Record<string, unknown>, ownerResource: string, ownerId: number): ShopifyMetafieldRecord {
     return {
       id: mf.id as number,
+      source_account_id: 'primary',
       namespace: mf.namespace as string,
       key: mf.key as string,
       value: mf.value as string | null,
@@ -1172,6 +1190,7 @@ export class ShopifyClient {
     const customer = ch.customer as Record<string, unknown> | null;
     return {
       id: ch.id as number,
+      source_account_id: 'primary',
       token: ch.token as string,
       cart_token: ch.cart_token as string | null,
       shop_id: shopId ?? null,

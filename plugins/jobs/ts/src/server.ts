@@ -12,7 +12,7 @@ import { Queue } from 'bullmq';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const IORedis = require('ioredis');
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, getAppContext } from '@nself/plugin-utils';
 import { getConfig } from './config.js';
 import { JobsDatabase } from './database.js';
 import { JobPriorityValue } from './types.js';
@@ -39,12 +39,22 @@ logger.info('Starting Jobs server...');
 logger.info(`Dashboard: http://localhost:${config.dashboardPort}${config.dashboardPath}`);
 
 /**
+ * Helper to get the scoped database from a request
+ */
+function scopedDb(request: unknown): JobsDatabase {
+  return (request as Record<string, unknown>).scopedDb as JobsDatabase;
+}
+
+/**
  * Create and start server
  */
 async function startServer() {
   // Connect to database
   await db.connect();
   logger.info('Database connected');
+
+  // Run multi-app migration
+  await db.migrateMultiApp();
 
   // Create Fastify app
   const app = Fastify({
@@ -56,6 +66,13 @@ async function startServer() {
   await app.register(cors, {
     origin: true,
     credentials: true,
+  });
+
+  // App context middleware: scope database per-request based on X-App-Name header or ?app= query
+  app.decorateRequest('scopedDb', null);
+  app.addHook('onRequest', async (request) => {
+    const ctx = getAppContext(request);
+    (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
   });
 
   // BullBoard dashboard
@@ -97,8 +114,8 @@ async function startServer() {
   });
 
   // Stats endpoint
-  app.get('/api/stats', async () => {
-    const stats = await db.getStats();
+  app.get('/api/stats', async (request) => {
+    const stats = await scopedDb(request).getStats();
     return stats;
   });
 
@@ -137,7 +154,7 @@ async function startServer() {
       });
 
       // Create database record
-      await db.createJob({
+      await scopedDb(request).createJob({
         bullmq_id: job.id!,
         queue_name: queueName,
         job_type: type,
@@ -169,7 +186,7 @@ async function startServer() {
   app.get<{ Params: { id: string } }>('/api/jobs/:id', async (request, reply) => {
     const { id } = request.params;
 
-    const job = await db.getJobByBullMQId(id);
+    const job = await scopedDb(request).getJobByBullMQId(id);
 
     if (!job) {
       return reply.status(404).send({ error: 'Job not found' });

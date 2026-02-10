@@ -105,6 +105,7 @@ export class GitHubClient {
     const owner = repo.owner as { login: string; type: string } | undefined;
     return {
       id: repo.id as number,
+      source_account_id: 'primary',
       node_id: repo.node_id as string,
       name: repo.name as string,
       full_name: repo.full_name as string,
@@ -194,6 +195,7 @@ export class GitHubClient {
         }
         branches.push({
           id: `${repoId}_${b.name}`,
+          source_account_id: 'primary',
           repo_id: repoId,
           name: b.name,
           sha: b.commit.sha,
@@ -251,6 +253,7 @@ export class GitHubClient {
 
     return {
       id: issue.id as number,
+      source_account_id: 'primary',
       node_id: issue.node_id as string,
       repo_id: repoId,
       number: issue.number as number,
@@ -315,6 +318,7 @@ export class GitHubClient {
 
     return {
       id: pr.id as number,
+      source_account_id: 'primary',
       node_id: pr.node_id as string,
       repo_id: repoId,
       number: pr.number as number,
@@ -381,6 +385,7 @@ export class GitHubClient {
     const user = review.user as { login: string; id: number } | null;
     return {
       id: review.id as number,
+      source_account_id: 'primary',
       node_id: review.node_id as string,
       repo_id: repoId,
       pull_request_id: prId,
@@ -425,6 +430,7 @@ export class GitHubClient {
 
     return {
       id: comment.id as number,
+      source_account_id: 'primary',
       node_id: comment.node_id as string,
       repo_id: repoId,
       issue_number: issueNumber,
@@ -470,6 +476,7 @@ export class GitHubClient {
 
     return {
       id: comment.id as number,
+      source_account_id: 'primary',
       node_id: comment.node_id as string,
       repo_id: repoId,
       pull_request_id: 0,
@@ -520,6 +527,7 @@ export class GitHubClient {
 
     return {
       id: comment.id as number,
+      source_account_id: 'primary',
       node_id: comment.node_id as string,
       repo_id: repoId,
       commit_sha: comment.commit_id as string,
@@ -590,6 +598,7 @@ export class GitHubClient {
 
     return {
       sha: commit.sha as string,
+      source_account_id: 'primary',
       node_id: commit.node_id as string,
       repo_id: repoId,
       message: commitData.message as string,
@@ -651,6 +660,7 @@ export class GitHubClient {
 
     return {
       id: release.id as number,
+      source_account_id: 'primary',
       node_id: release.node_id as string,
       repo_id: repoId,
       tag_name: release.tag_name as string,
@@ -673,6 +683,7 @@ export class GitHubClient {
     if (!assets) return [];
     return assets.map(a => ({
       id: a.id as number,
+      source_account_id: 'primary',
       name: a.name as string,
       content_type: a.content_type as string,
       size: a.size as number,
@@ -698,6 +709,7 @@ export class GitHubClient {
     )) {
       tags.push(...response.data.map(t => ({
         id: `${repoId}_${t.name}`,
+        source_account_id: 'primary',
         repo_id: repoId,
         name: t.name,
         sha: t.commit.sha,
@@ -738,6 +750,7 @@ export class GitHubClient {
     const creator = m.creator as { login: string } | null;
     return {
       id: m.id as number,
+      source_account_id: 'primary',
       node_id: m.node_id as string,
       repo_id: repoId,
       number: m.number as number,
@@ -772,6 +785,7 @@ export class GitHubClient {
     )) {
       labels.push(...response.data.map(l => ({
         id: l.id,
+        source_account_id: 'primary',
         node_id: l.node_id,
         repo_id: repoId,
         name: l.name,
@@ -801,6 +815,7 @@ export class GitHubClient {
     )) {
       workflows.push(...response.data.map(w => ({
         id: w.id,
+        source_account_id: 'primary',
         node_id: w.node_id,
         repo_id: repoId,
         name: w.name,
@@ -858,6 +873,7 @@ export class GitHubClient {
 
     return {
       id: run.id as number,
+      source_account_id: 'primary',
       node_id: run.node_id as string,
       repo_id: repoId,
       workflow_id: run.workflow_id as number,
@@ -906,6 +922,7 @@ export class GitHubClient {
     const steps = job.steps as Array<Record<string, unknown>> | undefined;
     return {
       id: job.id as number,
+      source_account_id: 'primary',
       node_id: job.node_id as string,
       repo_id: repoId,
       run_id: job.run_id as number,
@@ -960,6 +977,7 @@ export class GitHubClient {
     const prs = suite.pull_requests as Array<{ number: number }> | undefined;
     return {
       id: suite.id as number,
+      source_account_id: 'primary',
       node_id: suite.node_id as string,
       repo_id: repoId,
       head_branch: suite.head_branch as string | null,
@@ -1003,6 +1021,7 @@ export class GitHubClient {
     const output = run.output as Record<string, unknown> | undefined;
     return {
       id: run.id as number,
+      source_account_id: 'primary',
       node_id: run.node_id as string,
       repo_id: repoId,
       check_suite_id: (run.check_suite as { id: number })?.id ?? 0,
@@ -1041,6 +1060,7 @@ export class GitHubClient {
     )) {
       teams.push(...response.data.map(t => ({
         id: t.id,
+        source_account_id: 'primary',
         node_id: t.node_id,
         org_login: org,
         name: t.name,
@@ -1078,6 +1098,7 @@ export class GitHubClient {
       )) {
         collaborators.push(...response.data.map(c => ({
           id: c.id,
+          source_account_id: 'primary',
           repo_id: repoId,
           login: c.login,
           type: c.type,
@@ -1134,6 +1155,7 @@ export class GitHubClient {
       });
       return data.map(s => ({
         id: s.id,
+        source_account_id: 'primary',
         state: s.state,
         description: s.description ?? '',
         environment_url: s.environment_url ?? null,
@@ -1149,6 +1171,7 @@ export class GitHubClient {
 
     return {
       id: deployment.id as number,
+      source_account_id: 'primary',
       node_id: deployment.node_id as string,
       repo_id: repoId,
       sha: deployment.sha as string,
@@ -1175,6 +1198,7 @@ export class GitHubClient {
     if (!labels) return [];
     return labels.map(l => ({
       id: l.id as number,
+      source_account_id: 'primary',
       name: l.name as string,
       color: l.color as string,
       description: l.description as string | null,
@@ -1185,6 +1209,7 @@ export class GitHubClient {
     if (!users) return [];
     return users.map(u => ({
       id: u.id as number,
+      source_account_id: 'primary',
       login: u.login as string,
       type: u.type as string,
       avatar_url: u.avatar_url as string,

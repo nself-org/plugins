@@ -91,6 +91,7 @@ export class GitHubWebhookHandler {
 
     const eventRecord: GitHubWebhookEventRecord = {
       id: deliveryId,
+      source_account_id: 'primary',
       event,
       action: action ?? null,
       repo_id: repository?.id ?? null,

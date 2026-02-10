@@ -159,6 +159,29 @@
           "items": { "type": "string" },
           "description": "Other plugins this plugin depends on"
         },
+        "multiApp": {
+          "type": "object",
+          "properties": {
+            "supported": {
+              "type": "boolean",
+              "description": "Whether the plugin supports multi-app isolation"
+            },
+            "isolationColumn": {
+              "type": "string",
+              "description": "Column name used for app isolation (typically source_account_id)"
+            },
+            "pkStrategy": {
+              "type": "string",
+              "enum": ["single", "composite"],
+              "description": "Primary key strategy: single (IDs globally unique) or composite (ID + source_account_id)"
+            },
+            "defaultValue": {
+              "type": "string",
+              "description": "Default value for the isolation column (typically 'primary')"
+            }
+          },
+          "description": "Multi-app isolation support configuration"
+        },
         "checksums": {
           "type": "object",
           "properties": {

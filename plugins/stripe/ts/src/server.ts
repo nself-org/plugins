@@ -5,7 +5,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createLogger, verifyStripeSignature, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
+import { createLogger, verifyStripeSignature, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { StripeDatabase } from './database.js';
 import { loadConfig, type Config } from './config.js';
 import { createStripeAccountContexts, runStripeAccountSync, runStripeAccountReconcile } from './account-sync.js';
@@ -62,6 +62,18 @@ export async function createServer(config?: Partial<Config>) {
     }
   });
 
+  // Multi-app context: resolve source_account_id per request and create scoped DB
+  app.decorateRequest('scopedDb', null);
+  app.addHook('onRequest', async (request) => {
+    const ctx = getAppContext(request);
+    (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+  });
+
+  /** Extract scoped StripeDatabase from request */
+  function scopedDb(request: unknown): StripeDatabase {
+    return (request as Record<string, unknown>).scopedDb as StripeDatabase;
+  }
+
   // Health check endpoint (basic liveness)
   app.get('/health', async () => {
     return { status: 'ok', plugin: 'stripe', timestamp: new Date().toISOString() };
@@ -85,8 +97,8 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Liveness check (application state with sync info)
-  app.get('/live', async () => {
-    const stats = await db.getStats();
+  app.get('/live', async (request) => {
+    const stats = await scopedDb(request).getStats();
     return {
       alive: true,
       plugin: 'stripe',
@@ -103,8 +115,8 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Status endpoint
-  app.get('/status', async () => {
-    const stats = await db.getStats();
+  app.get('/status', async (request) => {
+    const stats = await scopedDb(request).getStats();
     return {
       plugin: 'stripe',
       version: '1.0.0',
@@ -213,15 +225,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // API endpoints for querying synced data
   app.get('/api/customers', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const customers = await db.listCustomers(limit, offset);
-    const total = await db.countCustomers();
+    const customers = await sdb.listCustomers(limit, offset);
+    const total = await sdb.countCustomers();
     return { data: customers, total, limit, offset };
   });
 
   app.get('/api/customers/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const customer = await db.getCustomer(id);
+    const customer = await scopedDb(request).getCustomer(id);
     if (!customer) {
       return reply.status(404).send({ error: 'Customer not found' });
     }
@@ -229,15 +242,16 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.get('/api/products', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const products = await db.listProducts(limit, offset);
-    const total = await db.countProducts();
+    const products = await sdb.listProducts(limit, offset);
+    const total = await sdb.countProducts();
     return { data: products, total, limit, offset };
   });
 
   app.get('/api/products/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const product = await db.getProduct(id);
+    const product = await scopedDb(request).getProduct(id);
     if (!product) {
       return reply.status(404).send({ error: 'Product not found' });
     }
@@ -245,15 +259,16 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.get('/api/prices', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const prices = await db.listPrices(limit, offset);
-    const total = await db.countPrices();
+    const prices = await sdb.listPrices(limit, offset);
+    const total = await sdb.countPrices();
     return { data: prices, total, limit, offset };
   });
 
   app.get('/api/prices/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const price = await db.getPrice(id);
+    const price = await scopedDb(request).getPrice(id);
     if (!price) {
       return reply.status(404).send({ error: 'Price not found' });
     }
@@ -261,19 +276,20 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.get('/api/subscriptions', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0, status } = request.query as {
       limit?: number;
       offset?: number;
       status?: string;
     };
-    const subscriptions = await db.listSubscriptions(limit, offset);
-    const total = await db.countSubscriptions(status);
+    const subscriptions = await sdb.listSubscriptions(limit, offset);
+    const total = await sdb.countSubscriptions(status);
     return { data: subscriptions, total, limit, offset };
   });
 
   app.get('/api/subscriptions/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const subscription = await db.getSubscription(id);
+    const subscription = await scopedDb(request).getSubscription(id);
     if (!subscription) {
       return reply.status(404).send({ error: 'Subscription not found' });
     }
@@ -281,19 +297,20 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.get('/api/invoices', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0, status } = request.query as {
       limit?: number;
       offset?: number;
       status?: string;
     };
-    const invoices = await db.listInvoices(limit, offset);
-    const total = await db.countInvoices(status);
+    const invoices = await sdb.listInvoices(limit, offset);
+    const total = await sdb.countInvoices(status);
     return { data: invoices, total, limit, offset };
   });
 
   app.get('/api/invoices/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const invoice = await db.getInvoice(id);
+    const invoice = await scopedDb(request).getInvoice(id);
     if (!invoice) {
       return reply.status(404).send({ error: 'Invoice not found' });
     }
@@ -302,15 +319,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Charges
   app.get('/api/charges', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const charges = await db.listCharges(limit, offset);
-    const total = await db.countCharges();
+    const charges = await sdb.listCharges(limit, offset);
+    const total = await sdb.countCharges();
     return { data: charges, total, limit, offset };
   });
 
   app.get('/api/charges/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const charge = await db.getCharge(id);
+    const charge = await scopedDb(request).getCharge(id);
     if (!charge) {
       return reply.status(404).send({ error: 'Charge not found' });
     }
@@ -319,15 +337,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Refunds
   app.get('/api/refunds', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const refunds = await db.listRefunds(limit, offset);
-    const total = await db.countRefunds();
+    const refunds = await sdb.listRefunds(limit, offset);
+    const total = await sdb.countRefunds();
     return { data: refunds, total, limit, offset };
   });
 
   app.get('/api/refunds/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const refund = await db.getRefund(id);
+    const refund = await scopedDb(request).getRefund(id);
     if (!refund) {
       return reply.status(404).send({ error: 'Refund not found' });
     }
@@ -336,15 +355,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Disputes
   app.get('/api/disputes', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const disputes = await db.listDisputes(limit, offset);
-    const total = await db.countDisputes();
+    const disputes = await sdb.listDisputes(limit, offset);
+    const total = await sdb.countDisputes();
     return { data: disputes, total, limit, offset };
   });
 
   app.get('/api/disputes/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const dispute = await db.getDispute(id);
+    const dispute = await scopedDb(request).getDispute(id);
     if (!dispute) {
       return reply.status(404).send({ error: 'Dispute not found' });
     }
@@ -353,15 +373,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Payment Intents
   app.get('/api/payment-intents', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const paymentIntents = await db.listPaymentIntents(limit, offset);
-    const total = await db.countPaymentIntents();
+    const paymentIntents = await sdb.listPaymentIntents(limit, offset);
+    const total = await sdb.countPaymentIntents();
     return { data: paymentIntents, total, limit, offset };
   });
 
   app.get('/api/payment-intents/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const paymentIntent = await db.getPaymentIntent(id);
+    const paymentIntent = await scopedDb(request).getPaymentIntent(id);
     if (!paymentIntent) {
       return reply.status(404).send({ error: 'Payment intent not found' });
     }
@@ -370,15 +391,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Payment Methods
   app.get('/api/payment-methods', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const paymentMethods = await db.listPaymentMethods(limit, offset);
-    const total = await db.countPaymentMethods();
+    const paymentMethods = await sdb.listPaymentMethods(limit, offset);
+    const total = await sdb.countPaymentMethods();
     return { data: paymentMethods, total, limit, offset };
   });
 
   app.get('/api/payment-methods/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const paymentMethod = await db.getPaymentMethod(id);
+    const paymentMethod = await scopedDb(request).getPaymentMethod(id);
     if (!paymentMethod) {
       return reply.status(404).send({ error: 'Payment method not found' });
     }
@@ -387,15 +409,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Coupons
   app.get('/api/coupons', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const coupons = await db.listCoupons(limit, offset);
-    const total = await db.countCoupons();
+    const coupons = await sdb.listCoupons(limit, offset);
+    const total = await sdb.countCoupons();
     return { data: coupons, total, limit, offset };
   });
 
   app.get('/api/coupons/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const coupon = await db.getCoupon(id);
+    const coupon = await scopedDb(request).getCoupon(id);
     if (!coupon) {
       return reply.status(404).send({ error: 'Coupon not found' });
     }
@@ -404,15 +427,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Promotion Codes
   app.get('/api/promotion-codes', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const promotionCodes = await db.listPromotionCodes(limit, offset);
-    const total = await db.countPromotionCodes();
+    const promotionCodes = await sdb.listPromotionCodes(limit, offset);
+    const total = await sdb.countPromotionCodes();
     return { data: promotionCodes, total, limit, offset };
   });
 
   app.get('/api/promotion-codes/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const promotionCode = await db.getPromotionCode(id);
+    const promotionCode = await scopedDb(request).getPromotionCode(id);
     if (!promotionCode) {
       return reply.status(404).send({ error: 'Promotion code not found' });
     }
@@ -421,15 +445,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Balance Transactions
   app.get('/api/balance-transactions', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const transactions = await db.listBalanceTransactions(limit, offset);
-    const total = await db.countBalanceTransactions();
+    const transactions = await sdb.listBalanceTransactions(limit, offset);
+    const total = await sdb.countBalanceTransactions();
     return { data: transactions, total, limit, offset };
   });
 
   app.get('/api/balance-transactions/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const transaction = await db.getBalanceTransaction(id);
+    const transaction = await scopedDb(request).getBalanceTransaction(id);
     if (!transaction) {
       return reply.status(404).send({ error: 'Balance transaction not found' });
     }
@@ -438,15 +463,16 @@ export async function createServer(config?: Partial<Config>) {
 
   // Tax Rates
   app.get('/api/tax-rates', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const taxRates = await db.listTaxRates(limit, offset);
-    const total = await db.countTaxRates();
+    const taxRates = await sdb.listTaxRates(limit, offset);
+    const total = await sdb.countTaxRates();
     return { data: taxRates, total, limit, offset };
   });
 
   app.get('/api/tax-rates/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const taxRate = await db.getTaxRate(id);
+    const taxRate = await scopedDb(request).getTaxRate(id);
     if (!taxRate) {
       return reply.status(404).send({ error: 'Tax rate not found' });
     }
@@ -455,18 +481,19 @@ export async function createServer(config?: Partial<Config>) {
 
   // Webhook Events
   app.get('/api/events', async (request) => {
+    const sdb = scopedDb(request);
     const { limit = 100, offset = 0, type } = request.query as {
       limit?: number;
       offset?: number;
       type?: string;
     };
-    const events = await db.listWebhookEvents(type, limit, offset);
+    const events = await sdb.listWebhookEvents(type, limit, offset);
     return { data: events, limit, offset };
   });
 
   // Stats endpoint
-  app.get('/api/stats', async () => {
-    return await db.getStats();
+  app.get('/api/stats', async (request) => {
+    return await scopedDb(request).getStats();
   });
 
   // Graceful shutdown

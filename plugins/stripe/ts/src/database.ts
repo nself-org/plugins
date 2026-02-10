@@ -811,6 +811,7 @@ export class StripeDatabase {
 
       CREATE OR REPLACE VIEW stripe_mrr AS
       SELECT
+        s.source_account_id,
         DATE_TRUNC('month', s.created_at) AS month,
         COUNT(*) AS subscription_count,
         SUM(
@@ -824,7 +825,7 @@ export class StripeDatabase {
         ) AS mrr_cents
       FROM stripe_subscriptions s
       WHERE s.status IN ('active', 'trialing')
-      GROUP BY DATE_TRUNC('month', s.created_at)
+      GROUP BY s.source_account_id, DATE_TRUNC('month', s.created_at)
       ORDER BY month DESC;
 
       CREATE OR REPLACE VIEW stripe_failed_payments AS
@@ -863,17 +864,19 @@ export class StripeDatabase {
 
       CREATE OR REPLACE VIEW stripe_dispute_summary AS
       SELECT
+        d.source_account_id,
         d.status,
         d.reason,
         COUNT(*) AS dispute_count,
         SUM(d.amount) AS total_amount,
         d.currency
       FROM stripe_disputes d
-      GROUP BY d.status, d.reason, d.currency
+      GROUP BY d.source_account_id, d.status, d.reason, d.currency
       ORDER BY dispute_count DESC;
 
       CREATE OR REPLACE VIEW stripe_daily_revenue AS
       SELECT
+        c.source_account_id,
         DATE(c.created_at) AS date,
         COUNT(*) AS charge_count,
         SUM(c.amount) AS gross_amount,
@@ -882,7 +885,7 @@ export class StripeDatabase {
         c.currency
       FROM stripe_charges c
       WHERE c.status = 'succeeded'
-      GROUP BY DATE(c.created_at), c.currency
+      GROUP BY c.source_account_id, DATE(c.created_at), c.currency
       ORDER BY date DESC;
 
       -- Unified payments view: merges charges across all accounts into one queryable table
@@ -953,23 +956,23 @@ export class StripeDatabase {
   }
 
   async getCustomer(id: string): Promise<StripeCustomerRecord | null> {
-    return this.db.queryOne<StripeCustomerRecord>('SELECT * FROM stripe_customers WHERE id = $1', [id]);
+    return this.db.queryOne<StripeCustomerRecord>('SELECT * FROM stripe_customers WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listCustomers(limit = 100, offset = 0): Promise<StripeCustomerRecord[]> {
     const result = await this.db.query<StripeCustomerRecord>(
-      'SELECT * FROM stripe_customers WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_customers WHERE deleted_at IS NULL AND source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
 
   async countCustomers(): Promise<number> {
-    return this.db.count('stripe_customers', 'deleted_at IS NULL');
+    return this.db.countScoped('stripe_customers', this.sourceAccountId, 'deleted_at IS NULL');
   }
 
   async markCustomerDeleted(id: string): Promise<void> {
-    await this.execute('UPDATE stripe_customers SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1', [id]);
+    await this.execute('UPDATE stripe_customers SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   // =========================================================================
@@ -1007,19 +1010,19 @@ export class StripeDatabase {
   }
 
   async getProduct(id: string): Promise<StripeProductRecord | null> {
-    return this.db.queryOne<StripeProductRecord>('SELECT * FROM stripe_products WHERE id = $1', [id]);
+    return this.db.queryOne<StripeProductRecord>('SELECT * FROM stripe_products WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listProducts(limit = 100, offset = 0): Promise<StripeProductRecord[]> {
     const result = await this.db.query<StripeProductRecord>(
-      'SELECT * FROM stripe_products WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_products WHERE deleted_at IS NULL AND source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
 
   async countProducts(): Promise<number> {
-    return this.db.count('stripe_products', 'deleted_at IS NULL');
+    return this.db.countScoped('stripe_products', this.sourceAccountId, 'deleted_at IS NULL');
   }
 
   // =========================================================================
@@ -1060,19 +1063,19 @@ export class StripeDatabase {
   }
 
   async getPrice(id: string): Promise<StripePriceRecord | null> {
-    return this.db.queryOne<StripePriceRecord>('SELECT * FROM stripe_prices WHERE id = $1', [id]);
+    return this.db.queryOne<StripePriceRecord>('SELECT * FROM stripe_prices WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listPrices(limit = 100, offset = 0): Promise<StripePriceRecord[]> {
     const result = await this.db.query<StripePriceRecord>(
-      'SELECT * FROM stripe_prices WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_prices WHERE deleted_at IS NULL AND source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
 
   async countPrices(): Promise<number> {
-    return this.db.count('stripe_prices', 'deleted_at IS NULL');
+    return this.db.countScoped('stripe_prices', this.sourceAccountId, 'deleted_at IS NULL');
   }
 
   // =========================================================================
@@ -1109,17 +1112,17 @@ export class StripeDatabase {
   }
 
   async countCoupons(): Promise<number> {
-    return this.db.count('stripe_coupons', 'deleted_at IS NULL');
+    return this.db.countScoped('stripe_coupons', this.sourceAccountId, 'deleted_at IS NULL');
   }
 
   async getCoupon(id: string): Promise<StripeCouponRecord | null> {
-    return this.db.queryOne<StripeCouponRecord>('SELECT * FROM stripe_coupons WHERE id = $1', [id]);
+    return this.db.queryOne<StripeCouponRecord>('SELECT * FROM stripe_coupons WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listCoupons(limit = 100, offset = 0): Promise<StripeCouponRecord[]> {
     const result = await this.db.query<StripeCouponRecord>(
-      'SELECT * FROM stripe_coupons WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_coupons WHERE deleted_at IS NULL AND source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1154,17 +1157,17 @@ export class StripeDatabase {
   }
 
   async countPromotionCodes(): Promise<number> {
-    return this.db.count('stripe_promotion_codes');
+    return this.db.countScoped('stripe_promotion_codes', this.sourceAccountId);
   }
 
   async getPromotionCode(id: string): Promise<StripePromotionCodeRecord | null> {
-    return this.db.queryOne<StripePromotionCodeRecord>('SELECT * FROM stripe_promotion_codes WHERE id = $1', [id]);
+    return this.db.queryOne<StripePromotionCodeRecord>('SELECT * FROM stripe_promotion_codes WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listPromotionCodes(limit = 100, offset = 0): Promise<StripePromotionCodeRecord[]> {
     const result = await this.db.query<StripePromotionCodeRecord>(
-      'SELECT * FROM stripe_promotion_codes ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_promotion_codes WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1226,20 +1229,20 @@ export class StripeDatabase {
   }
 
   async getSubscription(id: string): Promise<StripeSubscriptionRecord | null> {
-    return this.db.queryOne<StripeSubscriptionRecord>('SELECT * FROM stripe_subscriptions WHERE id = $1', [id]);
+    return this.db.queryOne<StripeSubscriptionRecord>('SELECT * FROM stripe_subscriptions WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listSubscriptions(limit = 100, offset = 0): Promise<StripeSubscriptionRecord[]> {
     const result = await this.db.query<StripeSubscriptionRecord>(
-      'SELECT * FROM stripe_subscriptions ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_subscriptions WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
 
   async countSubscriptions(status?: string): Promise<number> {
-    if (status) return this.db.count('stripe_subscriptions', 'status = $1', [status]);
-    return this.db.count('stripe_subscriptions');
+    if (status) return this.db.countScoped('stripe_subscriptions', this.sourceAccountId, 'status = $1', [status]);
+    return this.db.countScoped('stripe_subscriptions', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1372,20 +1375,20 @@ export class StripeDatabase {
   }
 
   async getInvoice(id: string): Promise<StripeInvoiceRecord | null> {
-    return this.db.queryOne<StripeInvoiceRecord>('SELECT * FROM stripe_invoices WHERE id = $1', [id]);
+    return this.db.queryOne<StripeInvoiceRecord>('SELECT * FROM stripe_invoices WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listInvoices(limit = 100, offset = 0): Promise<StripeInvoiceRecord[]> {
     const result = await this.db.query<StripeInvoiceRecord>(
-      'SELECT * FROM stripe_invoices ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_invoices WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
 
   async countInvoices(status?: string): Promise<number> {
-    if (status) return this.db.count('stripe_invoices', 'status = $1', [status]);
-    return this.db.count('stripe_invoices');
+    if (status) return this.db.countScoped('stripe_invoices', this.sourceAccountId, 'status = $1', [status]);
+    return this.db.countScoped('stripe_invoices', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1474,17 +1477,17 @@ export class StripeDatabase {
   }
 
   async countCharges(): Promise<number> {
-    return this.db.count('stripe_charges');
+    return this.db.countScoped('stripe_charges', this.sourceAccountId);
   }
 
   async getCharge(id: string): Promise<StripeChargeRecord | null> {
-    return this.db.queryOne<StripeChargeRecord>('SELECT * FROM stripe_charges WHERE id = $1', [id]);
+    return this.db.queryOne<StripeChargeRecord>('SELECT * FROM stripe_charges WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listCharges(limit = 100, offset = 0): Promise<StripeChargeRecord[]> {
     const result = await this.db.query<StripeChargeRecord>(
-      'SELECT * FROM stripe_charges ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_charges WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1523,17 +1526,17 @@ export class StripeDatabase {
   }
 
   async countRefunds(): Promise<number> {
-    return this.db.count('stripe_refunds');
+    return this.db.countScoped('stripe_refunds', this.sourceAccountId);
   }
 
   async getRefund(id: string): Promise<StripeRefundRecord | null> {
-    return this.db.queryOne<StripeRefundRecord>('SELECT * FROM stripe_refunds WHERE id = $1', [id]);
+    return this.db.queryOne<StripeRefundRecord>('SELECT * FROM stripe_refunds WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listRefunds(limit = 100, offset = 0): Promise<StripeRefundRecord[]> {
     const result = await this.db.query<StripeRefundRecord>(
-      'SELECT * FROM stripe_refunds ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_refunds WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1572,17 +1575,17 @@ export class StripeDatabase {
   }
 
   async countDisputes(): Promise<number> {
-    return this.db.count('stripe_disputes');
+    return this.db.countScoped('stripe_disputes', this.sourceAccountId);
   }
 
   async getDispute(id: string): Promise<StripeDisputeRecord | null> {
-    return this.db.queryOne<StripeDisputeRecord>('SELECT * FROM stripe_disputes WHERE id = $1', [id]);
+    return this.db.queryOne<StripeDisputeRecord>('SELECT * FROM stripe_disputes WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listDisputes(limit = 100, offset = 0): Promise<StripeDisputeRecord[]> {
     const result = await this.db.query<StripeDisputeRecord>(
-      'SELECT * FROM stripe_disputes ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_disputes WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1643,17 +1646,17 @@ export class StripeDatabase {
   }
 
   async countPaymentIntents(): Promise<number> {
-    return this.db.count('stripe_payment_intents');
+    return this.db.countScoped('stripe_payment_intents', this.sourceAccountId);
   }
 
   async getPaymentIntent(id: string): Promise<StripePaymentIntentRecord | null> {
-    return this.db.queryOne<StripePaymentIntentRecord>('SELECT * FROM stripe_payment_intents WHERE id = $1', [id]);
+    return this.db.queryOne<StripePaymentIntentRecord>('SELECT * FROM stripe_payment_intents WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listPaymentIntents(limit = 100, offset = 0): Promise<StripePaymentIntentRecord[]> {
     const result = await this.db.query<StripePaymentIntentRecord>(
-      'SELECT * FROM stripe_payment_intents ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_payment_intents WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1695,7 +1698,7 @@ export class StripeDatabase {
   }
 
   async countSetupIntents(): Promise<number> {
-    return this.db.count('stripe_setup_intents');
+    return this.db.countScoped('stripe_setup_intents', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1731,17 +1734,17 @@ export class StripeDatabase {
   }
 
   async countPaymentMethods(): Promise<number> {
-    return this.db.count('stripe_payment_methods');
+    return this.db.countScoped('stripe_payment_methods', this.sourceAccountId);
   }
 
   async getPaymentMethod(id: string): Promise<StripePaymentMethodRecord | null> {
-    return this.db.queryOne<StripePaymentMethodRecord>('SELECT * FROM stripe_payment_methods WHERE id = $1', [id]);
+    return this.db.queryOne<StripePaymentMethodRecord>('SELECT * FROM stripe_payment_methods WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listPaymentMethods(limit = 100, offset = 0): Promise<StripePaymentMethodRecord[]> {
     const result = await this.db.query<StripePaymentMethodRecord>(
-      'SELECT * FROM stripe_payment_methods ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_payment_methods WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1775,17 +1778,17 @@ export class StripeDatabase {
   }
 
   async countBalanceTransactions(): Promise<number> {
-    return this.db.count('stripe_balance_transactions');
+    return this.db.countScoped('stripe_balance_transactions', this.sourceAccountId);
   }
 
   async getBalanceTransaction(id: string): Promise<StripeBalanceTransactionRecord | null> {
-    return this.db.queryOne<StripeBalanceTransactionRecord>('SELECT * FROM stripe_balance_transactions WHERE id = $1', [id]);
+    return this.db.queryOne<StripeBalanceTransactionRecord>('SELECT * FROM stripe_balance_transactions WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listBalanceTransactions(limit = 100, offset = 0): Promise<StripeBalanceTransactionRecord[]> {
     const result = await this.db.query<StripeBalanceTransactionRecord>(
-      'SELECT * FROM stripe_balance_transactions ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_balance_transactions WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1838,7 +1841,7 @@ export class StripeDatabase {
   }
 
   async countCheckoutSessions(): Promise<number> {
-    return this.db.count('stripe_checkout_sessions');
+    return this.db.countScoped('stripe_checkout_sessions', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1871,7 +1874,7 @@ export class StripeDatabase {
   }
 
   async countCreditNotes(): Promise<number> {
-    return this.db.count('stripe_credit_notes');
+    return this.db.countScoped('stripe_credit_notes', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1904,17 +1907,17 @@ export class StripeDatabase {
   }
 
   async countTaxRates(): Promise<number> {
-    return this.db.count('stripe_tax_rates');
+    return this.db.countScoped('stripe_tax_rates', this.sourceAccountId);
   }
 
   async getTaxRate(id: string): Promise<StripeTaxRateRecord | null> {
-    return this.db.queryOne<StripeTaxRateRecord>('SELECT * FROM stripe_tax_rates WHERE id = $1', [id]);
+    return this.db.queryOne<StripeTaxRateRecord>('SELECT * FROM stripe_tax_rates WHERE id = $1 AND source_account_id = $2', [id, this.sourceAccountId]);
   }
 
   async listTaxRates(limit = 100, offset = 0): Promise<StripeTaxRateRecord[]> {
     const result = await this.db.query<StripeTaxRateRecord>(
-      'SELECT * FROM stripe_tax_rates WHERE active = TRUE ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_tax_rates WHERE active = TRUE AND source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -1969,39 +1972,39 @@ export class StripeDatabase {
 
   async markEventProcessed(id: string, error?: string): Promise<void> {
     await this.execute(
-      'UPDATE stripe_webhook_events SET processed = TRUE, processed_at = NOW(), error = $2 WHERE id = $1',
-      [id, error ?? null]
+      'UPDATE stripe_webhook_events SET processed = TRUE, processed_at = NOW(), error = $2 WHERE id = $1 AND source_account_id = $3',
+      [id, error ?? null, this.sourceAccountId]
     );
   }
 
   async getUnprocessedEvents(limit = 100): Promise<StripeWebhookEventRecord[]> {
     const result = await this.db.query<StripeWebhookEventRecord>(
       `SELECT * FROM stripe_webhook_events
-       WHERE processed = FALSE AND retry_count < 3
+       WHERE processed = FALSE AND retry_count < 3 AND source_account_id = $2
        ORDER BY received_at ASC LIMIT $1`,
-      [limit]
+      [limit, this.sourceAccountId]
     );
     return result.rows;
   }
 
   async incrementRetryCount(id: string): Promise<void> {
     await this.execute(
-      'UPDATE stripe_webhook_events SET retry_count = retry_count + 1 WHERE id = $1',
-      [id]
+      'UPDATE stripe_webhook_events SET retry_count = retry_count + 1 WHERE id = $1 AND source_account_id = $2',
+      [id, this.sourceAccountId]
     );
   }
 
   async listWebhookEvents(type?: string, limit = 100, offset = 0): Promise<StripeWebhookEventRecord[]> {
     if (type) {
       const result = await this.db.query<StripeWebhookEventRecord>(
-        'SELECT * FROM stripe_webhook_events WHERE type = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-        [type, limit, offset]
+        'SELECT * FROM stripe_webhook_events WHERE type = $1 AND source_account_id = $4 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+        [type, limit, offset, this.sourceAccountId]
       );
       return result.rows;
     }
     const result = await this.db.query<StripeWebhookEventRecord>(
-      'SELECT * FROM stripe_webhook_events ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+      'SELECT * FROM stripe_webhook_events WHERE source_account_id = $3 ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      [limit, offset, this.sourceAccountId]
     );
     return result.rows;
   }
@@ -2024,10 +2027,10 @@ export class StripeDatabase {
       this.countCoupons(),
       this.countPromotionCodes(),
       this.countSubscriptions(),
-      this.db.count('stripe_subscription_items'),
-      this.db.count('stripe_subscription_schedules'),
+      this.db.countScoped('stripe_subscription_items', this.sourceAccountId),
+      this.db.countScoped('stripe_subscription_schedules', this.sourceAccountId),
       this.countInvoices(),
-      this.db.count('stripe_invoice_items'),
+      this.db.countScoped('stripe_invoice_items', this.sourceAccountId),
       this.countCreditNotes(),
       this.countCharges(),
       this.countRefunds(),
@@ -2037,9 +2040,12 @@ export class StripeDatabase {
       this.countPaymentMethods(),
       this.countBalanceTransactions(),
       this.countCheckoutSessions(),
-      this.db.count('stripe_tax_ids'),
+      this.db.countScoped('stripe_tax_ids', this.sourceAccountId),
       this.countTaxRates(),
-      this.db.queryOne<{ max_synced: Date | null }>('SELECT MAX(synced_at) as max_synced FROM stripe_customers'),
+      this.db.queryOne<{ max_synced: Date | null }>(
+        'SELECT MAX(synced_at) as max_synced FROM stripe_customers WHERE source_account_id = $1',
+        [this.sourceAccountId]
+      ),
     ]);
 
     return {
@@ -2049,5 +2055,37 @@ export class StripeDatabase {
       paymentMethods, balanceTransactions, checkoutSessions, taxIds, taxRates,
       lastSyncedAt: lastSyncResult?.max_synced ?? null,
     };
+  }
+
+  // =========================================================================
+  // Multi-App Cleanup
+  // =========================================================================
+
+  async cleanupForAccount(sourceAccountId: string): Promise<number> {
+    // Child tables first, parent tables last to respect FK constraints
+    return this.db.cleanupForAccount([
+      'stripe_webhook_events',
+      'stripe_balance_transactions',
+      'stripe_refunds',
+      'stripe_disputes',
+      'stripe_charges',
+      'stripe_credit_notes',
+      'stripe_invoice_items',
+      'stripe_invoices',
+      'stripe_checkout_sessions',
+      'stripe_subscription_items',
+      'stripe_subscription_schedules',
+      'stripe_subscriptions',
+      'stripe_promotion_codes',
+      'stripe_coupons',
+      'stripe_tax_ids',
+      'stripe_tax_rates',
+      'stripe_prices',
+      'stripe_products',
+      'stripe_payment_methods',
+      'stripe_setup_intents',
+      'stripe_payment_intents',
+      'stripe_customers',
+    ], sourceAccountId);
   }
 }

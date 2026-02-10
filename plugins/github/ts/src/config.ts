@@ -3,7 +3,7 @@
  */
 
 import 'dotenv/config';
-import { requireWebhookSecret, loadSecurityConfig, type SecurityConfig } from '@nself/plugin-utils';
+import { requireWebhookSecret, loadSecurityConfig, buildAccountConfigs, type SecurityConfig, type AccountConfig } from '@nself/plugin-utils';
 
 export interface Config {
   // GitHub
@@ -11,6 +11,9 @@ export interface Config {
   githubWebhookSecret: string;
   githubOrg?: string;
   githubRepos?: string[];
+
+  // Multi-app
+  accounts: AccountConfig[];
 
   // Server
   port: number;
@@ -37,12 +40,22 @@ export function loadConfig(overrides?: Partial<Config>): Config {
   const repos = reposEnv ? reposEnv.split(',').map(r => r.trim()).filter(r => r) : undefined;
   const security = loadSecurityConfig('GITHUB');
 
+  const accounts = buildAccountConfigs(
+    process.env.GITHUB_API_KEYS,
+    process.env.GITHUB_ACCOUNT_LABELS,
+    process.env.GITHUB_TOKEN,
+    'primary'
+  );
+
   const config: Config = {
     // GitHub
     githubToken: process.env.GITHUB_TOKEN ?? '',
     githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET ?? '',
     githubOrg: process.env.GITHUB_ORG,
     githubRepos: repos,
+
+    // Multi-app
+    accounts,
 
     // Server
     port: parseInt(process.env.GITHUB_PLUGIN_PORT ?? process.env.PORT ?? '3002', 10),

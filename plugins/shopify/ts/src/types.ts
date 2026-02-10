@@ -27,6 +27,7 @@ export interface ShopifyPluginConfig {
 
 export interface ShopifyShopRecord {
   id: number;
+  source_account_id: string;
   name: string;
   email: string | null;
   domain: string | null;
@@ -69,6 +70,7 @@ export interface ShopifyShopRecord {
 
 export interface ShopifyLocationRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   name: string;
   address1: string | null;
@@ -96,6 +98,7 @@ export interface ShopifyLocationRecord {
 
 export interface ShopifyProductRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   title: string;
   body_html: string | null;
@@ -138,6 +141,7 @@ export interface ShopifyProductOption {
 
 export interface ShopifyVariantRecord {
   id: number;
+  source_account_id: string;
   product_id: number;
   title: string | null;
   price: number;
@@ -170,6 +174,7 @@ export interface ShopifyVariantRecord {
 
 export interface ShopifyCollectionRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   title: string;
   body_html: string | null;
@@ -199,6 +204,7 @@ export interface ShopifyCollectionRule {
 
 export interface ShopifyCustomerRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   email: string | null;
   first_name: string | null;
@@ -256,6 +262,7 @@ export interface ShopifyAddress {
 
 export interface ShopifyOrderRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   order_number: number;
   name: string;
@@ -379,6 +386,7 @@ export interface ShopifyClientDetails {
 
 export interface ShopifyOrderItemRecord {
   id: number;
+  source_account_id: string;
   order_id: number;
   product_id: number | null;
   variant_id: number | null;
@@ -413,6 +421,7 @@ export interface ShopifyLineItemProperty {
 
 export interface ShopifyFulfillmentRecord {
   id: number;
+  source_account_id: string;
   order_id: number;
   location_id: number | null;
   name: string;
@@ -452,6 +461,7 @@ export interface ShopifyFulfillmentLineItem {
 
 export interface ShopifyTransactionRecord {
   id: number;
+  source_account_id: string;
   order_id: number;
   amount: number;
   currency: string;
@@ -492,6 +502,7 @@ export interface ShopifyPaymentDetails {
 
 export interface ShopifyRefundRecord {
   id: number;
+  source_account_id: string;
   order_id: number;
   note: string | null;
   restock: boolean;
@@ -547,6 +558,7 @@ export interface ShopifyRefundDuty {
 
 export interface ShopifyDraftOrderRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   name: string;
   email: string | null;
@@ -628,6 +640,7 @@ export interface ShopifyPaymentSchedule {
 
 export interface ShopifyPriceRuleRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   title: string;
   value_type: string;
@@ -675,6 +688,7 @@ export interface ShopifyQuantityRatio {
 
 export interface ShopifyDiscountCodeRecord {
   id: number;
+  source_account_id: string;
   price_rule_id: number;
   code: string;
   usage_count: number;
@@ -689,6 +703,7 @@ export interface ShopifyDiscountCodeRecord {
 
 export interface ShopifyGiftCardRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   code: string;
   last_characters: string;
@@ -714,6 +729,7 @@ export interface ShopifyGiftCardRecord {
 
 export interface ShopifyInventoryRecord {
   id: number;
+  source_account_id: string;
   inventory_item_id: number;
   location_id: number;
   variant_id: number | null;
@@ -730,6 +746,7 @@ export interface ShopifyInventoryRecord {
 
 export interface ShopifyInventoryItemRecord {
   id: number;
+  source_account_id: string;
   sku: string | null;
   created_at: Date;
   updated_at: Date;
@@ -754,6 +771,7 @@ export interface ShopifyHSCode {
 
 export interface ShopifyMetafieldRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   namespace: string;
   key: string;
@@ -773,6 +791,7 @@ export interface ShopifyMetafieldRecord {
 
 export interface ShopifyCheckoutRecord {
   id: number;
+  source_account_id: string;
   shop_id: number | null;
   token: string;
   cart_token: string | null;
@@ -841,6 +860,7 @@ export interface ShopifyCheckoutLineItem {
 
 export interface ShopifyWebhookEventRecord {
   id: string;
+  source_account_id: string;
   topic: string;
   shop_id: number | null;
   shop_domain: string | null;

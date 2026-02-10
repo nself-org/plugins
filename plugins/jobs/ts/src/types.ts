@@ -54,6 +54,7 @@ export const JobPriorityValue: Record<JobPriority, number> = {
 
 export interface JobRecord {
   id: string;
+  source_account_id: string;
   bullmq_id: string | null;
   queue_name: string;
   job_type: string;
@@ -79,6 +80,7 @@ export interface JobRecord {
 
 export interface JobResultRecord {
   id: string;
+  source_account_id: string;
   job_id: string;
   result: Record<string, unknown>;
   duration_ms: number;
@@ -90,6 +92,7 @@ export interface JobResultRecord {
 
 export interface JobFailureRecord {
   id: string;
+  source_account_id: string;
   job_id: string;
   error_message: string;
   error_stack: string | null;
@@ -105,6 +108,7 @@ export interface JobFailureRecord {
 
 export interface JobScheduleRecord {
   id: string;
+  source_account_id: string;
   name: string;
   description: string | null;
   job_type: string;

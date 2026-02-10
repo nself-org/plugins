@@ -2,7 +2,7 @@
  * File Processing Plugin - HTTP Server
  */
 
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, getAppContext } from '@nself/plugin-utils';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { loadConfig, validateConfig, getDatabaseConfig } from './config.js';
@@ -16,6 +16,10 @@ async function startServer() {
   validateConfig(config);
 
   const db = new Database(getDatabaseConfig());
+
+  // Run multi-app migration to add source_account_id columns if missing
+  await db.migrateMultiApp();
+
   const fastify = Fastify({
     logger: {
       level: config.logLevel,
@@ -27,6 +31,18 @@ async function startServer() {
     origin: true,
   });
 
+  // Multi-app context: resolve source_account_id per request and create scoped DB
+  fastify.decorateRequest('scopedDb', null);
+  fastify.addHook('onRequest', async (request) => {
+    const ctx = getAppContext(request);
+    (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+  });
+
+  /** Extract scoped Database from request */
+  function scopedDb(request: unknown): Database {
+    return (request as Record<string, unknown>).scopedDb as Database;
+  }
+
   // Health check
   fastify.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
@@ -35,7 +51,8 @@ async function startServer() {
   // Create processing job
   fastify.post<{ Body: CreateJobRequest }>('/api/jobs', async (request, reply) => {
     try {
-      const jobId = await db.createJob(request.body);
+      const sdb = scopedDb(request);
+      const jobId = await sdb.createJob(request.body);
 
       return {
         jobId,
@@ -53,15 +70,16 @@ async function startServer() {
     const { jobId } = request.params;
 
     try {
-      const job = await db.getJob(jobId);
+      const sdb = scopedDb(request);
+      const job = await sdb.getJob(jobId);
       if (!job) {
         reply.code(404);
         return { error: 'Job not found' };
       }
 
-      const thumbnails = await db.getThumbnails(jobId);
-      const metadata = await db.getMetadata(jobId);
-      const scan = await db.getScan(jobId);
+      const thumbnails = await sdb.getThumbnails(jobId);
+      const metadata = await sdb.getMetadata(jobId);
+      const scan = await sdb.getScan(jobId);
 
       return {
         job,
@@ -82,7 +100,8 @@ async function startServer() {
     const { status, limit = '50', offset = '0' } = request.query;
 
     try {
-      const jobs = await db.listJobs(
+      const sdb = scopedDb(request);
+      const jobs = await sdb.listJobs(
         status as ProcessingStatus | undefined,
         parseInt(limit, 10),
         parseInt(offset, 10)
@@ -95,9 +114,10 @@ async function startServer() {
   });
 
   // Get statistics
-  fastify.get('/api/stats', async () => {
+  fastify.get('/api/stats', async (request) => {
     try {
-      const stats = await db.getStats();
+      const sdb = scopedDb(request);
+      const stats = await sdb.getStats();
       return stats;
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Failed to get stats' };

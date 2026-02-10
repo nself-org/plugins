@@ -10,6 +10,7 @@ export * from './webhook.js';
 export * from './http.js';
 export * from './validation.js';
 export * from './security.js';
+export * from './app-context.js';
 
 // Re-export commonly used items at top level
 export { createLogger, Logger } from './logger.js';
@@ -43,3 +44,10 @@ export {
   createAuthHook,
   createRateLimitHook,
 } from './security.js';
+export {
+  normalizeSourceAccountId,
+  getAppContext,
+  registerAppContext,
+  parseCsvList,
+  buildAccountConfigs,
+} from './app-context.js';

@@ -70,6 +70,13 @@
     ]
   },
 
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",

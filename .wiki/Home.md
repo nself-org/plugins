@@ -35,11 +35,13 @@ Command pages include action/subcommand syntax, argument shapes, and option flag
 
 ### Plugin Documentation
 
+- [[Donorbox|plugins/Donorbox]]
 - [[File Processing|plugins/FileProcessing]]
 - [[GitHub|plugins/GitHub]]
 - [[ID.me|plugins/IDme]]
 - [[Jobs|plugins/Jobs]]
 - [[Notifications|plugins/Notifications]]
+- [[PayPal|plugins/PayPal]]
 - [[Realtime|plugins/Realtime]]
 - [[Shopify|plugins/Shopify]]
 - [[Stripe|plugins/Stripe]]
@@ -53,6 +55,7 @@ Command pages include action/subcommand syntax, argument shapes, and option flag
 
 - [[Plugin Development|DEVELOPMENT]]
 - [[TypeScript Plugin Guide|TYPESCRIPT_PLUGIN_GUIDE]]
+- [[Multi-App Setup|guides/Multi-App-Setup]] 🆕 **All plugins support multi-app isolation**
 - [[Deployment|guides/Deployment]]
 - [[Migration|guides/Migration]]
 - [[Best Practices|guides/Best-Practices]]

@@ -1,9 +1,10 @@
 /**
  * Notification service - main business logic
+ * Multi-app aware: accepts a scoped DatabaseClient for per-request isolation
  */
 
 import { createLogger } from '@nself/plugin-utils';
-import { db } from './database.js';
+import { db, DatabaseClient } from './database.js';
 import { TemplateEngine } from './template.js';
 import { config } from './config.js';
 import {
@@ -17,12 +18,21 @@ const logger = createLogger('notifications:service');
 
 export class NotificationService {
   /**
-   * Send a notification (queues for async processing)
+   * Send a notification using the default (singleton) database client.
+   * Kept for backward compatibility with CLI and worker usage.
    */
   async send(input: CreateNotificationInput): Promise<SendNotificationResult> {
+    return this.sendWith(db, input);
+  }
+
+  /**
+   * Send a notification using a specific (scoped) database client.
+   * This is the multi-app-aware entry point used by the server.
+   */
+  async sendWith(scopedDb: DatabaseClient, input: CreateNotificationInput): Promise<SendNotificationResult> {
     try {
       // Check if user can receive this type of notification
-      const canReceive = await db.checkUserCanReceive(
+      const canReceive = await scopedDb.checkUserCanReceive(
         input.user_id,
         input.channel,
         input.category || 'transactional'
@@ -38,7 +48,7 @@ export class NotificationService {
       // Check rate limits (skip for transactional)
       if (input.category !== 'transactional') {
         const rateLimitConfig = config.rate_limits[input.channel];
-        const allowed = await db.checkRateLimit(
+        const allowed = await scopedDb.checkRateLimit(
           input.user_id,
           input.channel,
           rateLimitConfig.window,
@@ -61,7 +71,7 @@ export class NotificationService {
       };
 
       if (input.template_name) {
-        const template = await db.getTemplate(input.template_name);
+        const template = await scopedDb.getTemplate(input.template_name);
         if (!template) {
           return {
             success: false,
@@ -82,16 +92,16 @@ export class NotificationService {
       }
 
       // Create notification record
-      const notification = await db.createNotification({
+      const notification = await scopedDb.createNotification({
         ...input,
         ...renderedContent,
       });
 
       // Add to processing queue
-      await db.addToQueue(notification.id, input.priority || 5);
+      await scopedDb.addToQueue(notification.id, input.priority || 5);
 
       // Update status
-      await db.updateNotificationStatus(notification.id, 'queued');
+      await scopedDb.updateNotificationStatus(notification.id, 'queued');
 
       return {
         success: true,

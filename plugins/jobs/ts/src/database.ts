@@ -13,9 +13,11 @@ const logger = createLogger('jobs:database');
 export class JobsDatabase {
   private pool: InstanceType<typeof Pool>;
   private config: JobsConfig;
+  private readonly sourceAccountId: string;
 
-  constructor(config: JobsConfig) {
+  constructor(config: JobsConfig, sourceAccountId = 'primary') {
     this.config = config;
+    this.sourceAccountId = sourceAccountId;
     this.pool = new Pool({
       host: config.database.host,
       port: config.database.port,
@@ -27,6 +29,24 @@ export class JobsDatabase {
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
     });
+  }
+
+  /**
+   * Create a new JobsDatabase instance scoped to a specific source account.
+   * Shares the same underlying pool and config.
+   */
+  forSourceAccount(accountId: string): JobsDatabase {
+    const scoped = new JobsDatabase(this.config, accountId);
+    // Share the same pool instance
+    scoped.pool = this.pool;
+    return scoped;
+  }
+
+  /**
+   * Get the current source account ID
+   */
+  getSourceAccountId(): string {
+    return this.sourceAccountId;
   }
 
   async connect(): Promise<void> {
@@ -46,13 +66,29 @@ export class JobsDatabase {
     return result.rows as T[];
   }
 
+  /**
+   * Run schema migrations to add source_account_id column if missing
+   */
+  async migrateMultiApp(): Promise<void> {
+    const migResult = await this.query<{ exists: boolean }>(`SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns WHERE table_name = 'jobs_tasks' AND column_name = 'source_account_id'
+    )`);
+    if (!migResult[0]?.exists) {
+      logger.info('Running multi-app migration: adding source_account_id columns...');
+      for (const table of ['jobs_tasks', 'job_results', 'job_failures', 'job_schedules']) {
+        await this.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'`);
+      }
+      logger.info('Multi-app migration complete');
+    }
+  }
+
   // Job operations
   async createJob(job: Partial<JobRecord>): Promise<JobRecord> {
     const result = await this.query<JobRecord>(
       `INSERT INTO jobs_tasks (
         bullmq_id, queue_name, job_type, priority, status, payload, options,
-        scheduled_for, retry_count, max_retries, retry_delay, metadata, tags
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        scheduled_for, retry_count, max_retries, retry_delay, metadata, tags, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         job.bullmq_id,
@@ -68,6 +104,7 @@ export class JobsDatabase {
         job.retry_delay || this.config.retryDelay,
         JSON.stringify(job.metadata || {}),
         job.tags || [],
+        this.sourceAccountId,
       ]
     );
     return result[0];
@@ -93,25 +130,26 @@ export class JobsDatabase {
       params.push(extra.process_id);
     }
 
+    params.push(this.sourceAccountId);
     await this.query(
-      `UPDATE jobs_tasks SET ${updates.join(', ')} WHERE id = $1`,
+      `UPDATE jobs_tasks SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $${paramIndex}`,
       params
     );
   }
 
   async getJobByBullMQId(bullmqId: string): Promise<JobRecord | null> {
     const result = await this.query<JobRecord>(
-      'SELECT * FROM jobs_tasks WHERE bullmq_id = $1',
-      [bullmqId]
+      'SELECT * FROM jobs_tasks WHERE bullmq_id = $1 AND source_account_id = $2',
+      [bullmqId, this.sourceAccountId]
     );
     return result[0] || null;
   }
 
   async saveJobResult(jobId: string, result: unknown, durationMs: number): Promise<void> {
     await this.query(
-      `INSERT INTO job_results (job_id, result, duration_ms)
-       VALUES ($1, $2, $3)`,
-      [jobId, JSON.stringify(result), durationMs]
+      `INSERT INTO job_results (job_id, result, duration_ms, source_account_id)
+       VALUES ($1, $2, $3, $4)`,
+      [jobId, JSON.stringify(result), durationMs, this.sourceAccountId]
     );
   }
 
@@ -124,16 +162,16 @@ export class JobsDatabase {
   ): Promise<void> {
     await this.query(
       `INSERT INTO job_failures (
-        job_id, error_message, error_stack, attempt_number, will_retry, retry_at
-      ) VALUES ($1, $2, $3, $4, $5, $6)`,
-      [jobId, error.message, error.stack || null, attemptNumber, willRetry, retryAt || null]
+        job_id, error_message, error_stack, attempt_number, will_retry, retry_at, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [jobId, error.message, error.stack || null, attemptNumber, willRetry, retryAt || null, this.sourceAccountId]
     );
   }
 
   async incrementRetryCount(jobId: string): Promise<void> {
     await this.query(
-      'UPDATE jobs_tasks SET retry_count = retry_count + 1, updated_at = NOW() WHERE id = $1',
-      [jobId]
+      'UPDATE jobs_tasks SET retry_count = retry_count + 1, updated_at = NOW() WHERE id = $1 AND source_account_id = $2',
+      [jobId, this.sourceAccountId]
     );
   }
 
@@ -142,8 +180,8 @@ export class JobsDatabase {
     const result = await this.query<JobScheduleRecord>(
       `INSERT INTO job_schedules (
         name, description, job_type, queue_name, payload, options,
-        cron_expression, timezone, enabled, max_runs, end_date, metadata, tags
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        cron_expression, timezone, enabled, max_runs, end_date, metadata, tags, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         schedule.name,
@@ -159,6 +197,7 @@ export class JobsDatabase {
         schedule.end_date || null,
         JSON.stringify(schedule.metadata || {}),
         schedule.tags || [],
+        this.sourceAccountId,
       ]
     );
     return result[0];
@@ -167,11 +206,14 @@ export class JobsDatabase {
   async getSchedules(enabled?: boolean): Promise<JobScheduleRecord[]> {
     if (enabled !== undefined) {
       return this.query<JobScheduleRecord>(
-        'SELECT * FROM job_schedules WHERE enabled = $1 ORDER BY next_run_at',
-        [enabled]
+        'SELECT * FROM job_schedules WHERE enabled = $1 AND source_account_id = $2 ORDER BY next_run_at',
+        [enabled, this.sourceAccountId]
       );
     }
-    return this.query<JobScheduleRecord>('SELECT * FROM job_schedules ORDER BY next_run_at');
+    return this.query<JobScheduleRecord>(
+      'SELECT * FROM job_schedules WHERE source_account_id = $1 ORDER BY next_run_at',
+      [this.sourceAccountId]
+    );
   }
 
   async updateScheduleRun(scheduleId: string, jobId: string): Promise<void> {
@@ -181,37 +223,72 @@ export class JobsDatabase {
         last_job_id = $2,
         total_runs = total_runs + 1,
         updated_at = NOW()
-       WHERE id = $1`,
-      [scheduleId, jobId]
+       WHERE id = $1 AND source_account_id = $3`,
+      [scheduleId, jobId, this.sourceAccountId]
     );
   }
 
   async updateScheduleSuccess(scheduleId: string): Promise<void> {
     await this.query(
-      'UPDATE job_schedules SET successful_runs = successful_runs + 1 WHERE id = $1',
-      [scheduleId]
+      'UPDATE job_schedules SET successful_runs = successful_runs + 1 WHERE id = $1 AND source_account_id = $2',
+      [scheduleId, this.sourceAccountId]
     );
   }
 
   async updateScheduleFailure(scheduleId: string): Promise<void> {
     await this.query(
-      'UPDATE job_schedules SET failed_runs = failed_runs + 1 WHERE id = $1',
-      [scheduleId]
+      'UPDATE job_schedules SET failed_runs = failed_runs + 1 WHERE id = $1 AND source_account_id = $2',
+      [scheduleId, this.sourceAccountId]
     );
   }
 
   async updateNextRun(scheduleId: string, nextRun: Date): Promise<void> {
     await this.query(
-      'UPDATE job_schedules SET next_run_at = $2 WHERE id = $1',
-      [scheduleId, nextRun]
+      'UPDATE job_schedules SET next_run_at = $2 WHERE id = $1 AND source_account_id = $3',
+      [scheduleId, nextRun, this.sourceAccountId]
     );
   }
 
   // Stats
   async getStats() {
     const [queueStats, typeStats, counts] = await Promise.all([
-      this.query('SELECT * FROM queue_stats ORDER BY queue_name'),
-      this.query('SELECT * FROM job_type_stats ORDER BY total_jobs DESC LIMIT 20'),
+      this.query(
+        `SELECT queue_name,
+          COUNT(*) FILTER (WHERE status = 'waiting') AS waiting,
+          COUNT(*) FILTER (WHERE status = 'active') AS active,
+          COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+          COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+          COUNT(*) FILTER (WHERE status = 'delayed') AS delayed,
+          COUNT(*) FILTER (WHERE status = 'stuck') AS stuck,
+          COUNT(*) AS total,
+          AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE status = 'completed' AND completed_at IS NOT NULL) AS avg_duration_seconds,
+          MAX(created_at) AS last_job_at
+        FROM jobs_tasks
+        WHERE source_account_id = $1
+        GROUP BY queue_name
+        ORDER BY queue_name`,
+        [this.sourceAccountId]
+      ),
+      this.query(
+        `SELECT job_type,
+          COUNT(*) AS total_jobs,
+          COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+          COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+          ROUND(
+            COUNT(*) FILTER (WHERE status = 'completed')::NUMERIC /
+            NULLIF(COUNT(*) FILTER (WHERE status IN ('completed', 'failed')), 0) * 100,
+            2
+          ) AS success_rate,
+          AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE status = 'completed') AS avg_duration_seconds,
+          MIN(created_at) AS first_job_at,
+          MAX(created_at) AS last_job_at
+        FROM jobs_tasks
+        WHERE source_account_id = $1
+        GROUP BY job_type
+        ORDER BY total_jobs DESC
+        LIMIT 20`,
+        [this.sourceAccountId]
+      ),
       this.query<{
         waiting: number;
         active: number;
@@ -224,7 +301,10 @@ export class JobsDatabase {
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
         COUNT(*) as total
-      FROM jobs_tasks`),
+      FROM jobs_tasks
+      WHERE source_account_id = $1`,
+        [this.sourceAccountId]
+      ),
     ]);
 
     return {
@@ -232,5 +312,25 @@ export class JobsDatabase {
       queues: queueStats,
       job_types: typeStats,
     };
+  }
+
+  /**
+   * Delete all data for a specific source account across all tables.
+   */
+  async cleanupForAccount(sourceAccountId: string): Promise<{ tables: Record<string, number> }> {
+    const tables = ['job_results', 'job_failures', 'jobs_tasks', 'job_schedules'];
+    const result: Record<string, number> = {};
+
+    for (const table of tables) {
+      const rows = await this.query<{ count: string }>(
+        `WITH deleted AS (DELETE FROM ${table} WHERE source_account_id = $1 RETURNING 1)
+         SELECT COUNT(*)::text AS count FROM deleted`,
+        [sourceAccountId]
+      );
+      result[table] = parseInt(rows[0]?.count ?? '0', 10);
+    }
+
+    logger.info(`Cleaned up data for account "${sourceAccountId}"`, result);
+    return { tables: result };
   }
 }

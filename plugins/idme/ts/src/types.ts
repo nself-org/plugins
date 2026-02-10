@@ -65,6 +65,7 @@ export interface IDmeBadge {
 // Database record types
 export interface IDmeVerificationRecord {
   id: string;
+  source_account_id: string;
   user_id: string;
   idme_user_id?: string;
   email: string;
@@ -87,6 +88,7 @@ export interface IDmeVerificationRecord {
 
 export interface IDmeGroupRecord {
   id: string;
+  source_account_id: string;
   verification_id: string;
   user_id: string;
   group_type: string;
@@ -104,6 +106,7 @@ export interface IDmeGroupRecord {
 
 export interface IDmeBadgeRecord {
   id: string;
+  source_account_id: string;
   verification_id: string;
   user_id: string;
   badge_type: string;
@@ -121,6 +124,7 @@ export interface IDmeBadgeRecord {
 
 export interface IDmeAttributeRecord {
   id: string;
+  source_account_id: string;
   verification_id: string;
   user_id: string;
   attribute_key: string;
@@ -136,6 +140,7 @@ export interface IDmeAttributeRecord {
 
 export interface IDmeWebhookEvent {
   id: string;
+  source_account_id: string;
   event_id?: string;
   event_type: string;
   user_id?: string;

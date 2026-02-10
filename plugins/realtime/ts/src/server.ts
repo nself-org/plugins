@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from 'jsonwebtoken';
 import pino from 'pino';
+import { getAppContext, normalizeSourceAccountId } from '@nself/plugin-utils';
 import { config } from './config.js';
 import { Database } from './database.js';
 import type {
@@ -56,6 +57,43 @@ const db = new Database({
 });
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Resolve source account ID from a Socket.io handshake.
+ *
+ * Resolution priority:
+ * 1. handshake.auth.sourceAccountId (set by client)
+ * 2. X-App-Name header on the upgrade request
+ * 3. 'app' query parameter on the connection URL
+ * 4. Falls back to 'primary'
+ */
+function resolveSocketAccountId(socket: Socket): string {
+  // 1. Auth payload
+  const authId = socket.handshake.auth?.sourceAccountId;
+  if (authId && typeof authId === 'string') {
+    return normalizeSourceAccountId(authId);
+  }
+
+  // 2. X-App-Name header
+  const headerValue = socket.handshake.headers['x-app-name'];
+  const header = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  if (header) {
+    return normalizeSourceAccountId(header);
+  }
+
+  // 3. Query parameter
+  const queryApp = socket.handshake.query?.app;
+  const queryValue = Array.isArray(queryApp) ? queryApp[0] : queryApp;
+  if (queryValue && typeof queryValue === 'string') {
+    return normalizeSourceAccountId(queryValue);
+  }
+
+  return 'primary';
+}
+
+// =============================================================================
 // Fastify HTTP Server (for health checks and metrics)
 // =============================================================================
 
@@ -66,10 +104,23 @@ await fastify.register(cors, {
   credentials: true,
 });
 
+// Multi-app context: resolve source_account_id per HTTP request and create scoped DB
+fastify.decorateRequest('scopedDb', null);
+fastify.addHook('onRequest', async (request) => {
+  const ctx = getAppContext(request);
+  (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+});
+
+/** Extract scoped Database from a Fastify request */
+function scopedDbFromRequest(request: unknown): Database {
+  return (request as Record<string, unknown>).scopedDb as Database;
+}
+
 // Health check
 if (config.enableHealth) {
-  fastify.get(config.healthPath, async () => {
-    const stats = await db.getStats();
+  fastify.get(config.healthPath, async (request) => {
+    const sdb = scopedDbFromRequest(request);
+    const stats = await sdb.getStats();
     return {
       status: 'healthy',
       timestamp: new Date(),
@@ -81,8 +132,9 @@ if (config.enableHealth) {
 
 // Metrics endpoint
 if (config.enableMetrics) {
-  fastify.get(config.metricsPath, async () => {
-    const stats = await db.getStats();
+  fastify.get(config.metricsPath, async (request) => {
+    const sdb = scopedDbFromRequest(request);
+    const stats = await sdb.getStats();
     const memUsage = process.memoryUsage();
 
     const serverStats: ServerStats = {
@@ -190,11 +242,25 @@ io.use(async (socket, next) => {
 });
 
 // =============================================================================
+// App Context Middleware (Socket.io)
+// =============================================================================
+
+io.use(async (socket, next) => {
+  // Resolve the source account from the handshake and store it + a scoped DB
+  const accountId = resolveSocketAccountId(socket);
+  socket.data.sourceAccountId = accountId;
+  socket.data.scopedDb = db.forSourceAccount(accountId);
+  logger.debug({ socketId: socket.id, sourceAccountId: accountId }, 'App context resolved for socket');
+  next();
+});
+
+// =============================================================================
 // Connection Handling
 // =============================================================================
 
 io.on('connection', async (socket: Socket) => {
   const { userId, sessionId } = socket.data;
+  const sdb: Database = socket.data.scopedDb;
   const ipAddress = socket.handshake.address;
   const userAgent = socket.handshake.headers['user-agent'];
   const transport = socket.conn.transport.name as 'websocket' | 'polling';
@@ -205,12 +271,13 @@ io.on('connection', async (socket: Socket) => {
       userId,
       transport,
       ipAddress,
+      sourceAccountId: sdb.getSourceAccountId(),
     },
     'Client connected'
   );
 
   // Create connection record
-  await db.createConnection({
+  await sdb.createConnection({
     socketId: socket.id,
     userId,
     sessionId,
@@ -222,11 +289,11 @@ io.on('connection', async (socket: Socket) => {
 
   // Update presence
   if (userId && config.enablePresence) {
-    await db.upsertPresence(userId, 'online');
-    await db.incrementConnectionCount(userId);
+    await sdb.upsertPresence(userId, 'online');
+    await sdb.incrementConnectionCount(userId);
 
     // Broadcast presence change
-    const presence = await db.getPresence(userId);
+    const presence = await sdb.getPresence(userId);
     if (presence) {
       io.emit('presence:changed', {
         userId,
@@ -239,7 +306,7 @@ io.on('connection', async (socket: Socket) => {
 
   // Log event
   if (config.logEvents && config.logEventTypes.includes('connect')) {
-    await db.logEvent({
+    await sdb.logEvent({
       eventType: 'connect',
       socketId: socket.id,
       userId,
@@ -262,7 +329,7 @@ io.on('connection', async (socket: Socket) => {
     try {
       logger.debug({ socketId: socket.id, room: payload.roomName }, 'Joining room');
 
-      const room = await db.getRoomByName(payload.roomName);
+      const room = await sdb.getRoomByName(payload.roomName);
       if (!room) {
         const error = { code: 'ROOM_NOT_FOUND', message: 'Room not found' };
         callback?.({ success: false, error });
@@ -274,11 +341,11 @@ io.on('connection', async (socket: Socket) => {
 
       // Add member to database
       if (userId) {
-        await db.addRoomMember(room.id, userId);
+        await sdb.addRoomMember(room.id, userId);
       }
 
       // Get member count
-      const members = await db.getRoomMembers(room.id);
+      const members = await sdb.getRoomMembers(room.id);
 
       // Notify others
       socket.to(payload.roomName).emit('user:joined', {
@@ -308,7 +375,7 @@ io.on('connection', async (socket: Socket) => {
     try {
       logger.debug({ socketId: socket.id, room: payload.roomName }, 'Leaving room');
 
-      const room = await db.getRoomByName(payload.roomName);
+      const room = await sdb.getRoomByName(payload.roomName);
       if (!room) {
         callback?.({ success: false, error: { code: 'ROOM_NOT_FOUND', message: 'Room not found' } });
         return;
@@ -319,7 +386,7 @@ io.on('connection', async (socket: Socket) => {
 
       // Remove member from database
       if (userId) {
-        await db.removeRoomMember(room.id, userId);
+        await sdb.removeRoomMember(room.id, userId);
       }
 
       // Notify others
@@ -348,7 +415,7 @@ io.on('connection', async (socket: Socket) => {
     try {
       logger.debug({ userId, room: payload.roomName }, 'Sending message');
 
-      const room = await db.getRoomByName(payload.roomName);
+      const room = await sdb.getRoomByName(payload.roomName);
       if (!room) {
         callback?.({ success: false, error: { code: 'ROOM_NOT_FOUND', message: 'Room not found' } });
         return;
@@ -384,12 +451,12 @@ io.on('connection', async (socket: Socket) => {
     socket.on('typing:start', async (payload: TypingPayload) => {
       if (!userId) return;
 
-      const room = await db.getRoomByName(payload.roomName);
+      const room = await sdb.getRoomByName(payload.roomName);
       if (!room) return;
 
-      await db.setTyping(room.id, userId, payload.threadId);
+      await sdb.setTyping(room.id, userId, payload.threadId);
 
-      const typingUsers = await db.getTypingUsers(room.id, payload.threadId);
+      const typingUsers = await sdb.getTypingUsers(room.id, payload.threadId);
 
       socket.to(payload.roomName).emit('typing:event', {
         roomName: payload.roomName,
@@ -404,12 +471,12 @@ io.on('connection', async (socket: Socket) => {
     socket.on('typing:stop', async (payload: TypingPayload) => {
       if (!userId) return;
 
-      const room = await db.getRoomByName(payload.roomName);
+      const room = await sdb.getRoomByName(payload.roomName);
       if (!room) return;
 
-      await db.clearTyping(room.id, userId, payload.threadId);
+      await sdb.clearTyping(room.id, userId, payload.threadId);
 
-      const typingUsers = await db.getTypingUsers(room.id, payload.threadId);
+      const typingUsers = await sdb.getTypingUsers(room.id, payload.threadId);
 
       socket.to(payload.roomName).emit('typing:event', {
         roomName: payload.roomName,
@@ -428,9 +495,9 @@ io.on('connection', async (socket: Socket) => {
 
   if (config.enablePresence && userId) {
     socket.on('presence:update', async (payload: PresencePayload) => {
-      await db.upsertPresence(userId, payload.status, payload.customStatus);
+      await sdb.upsertPresence(userId, payload.status, payload.customStatus);
 
-      const presence = await db.getPresence(userId);
+      const presence = await sdb.getPresence(userId);
       if (presence) {
         io.emit('presence:changed', {
           userId,
@@ -444,7 +511,7 @@ io.on('connection', async (socket: Socket) => {
     // Presence heartbeat
     const heartbeatInterval = setInterval(async () => {
       if (userId) {
-        await db.updatePresenceHeartbeat(userId);
+        await sdb.updatePresenceHeartbeat(userId);
       }
     }, config.presenceHeartbeat);
 
@@ -459,13 +526,13 @@ io.on('connection', async (socket: Socket) => {
 
   socket.on('ping', async () => {
     const pingTime = Date.now();
-    await db.updatePing(socket.id);
+    await sdb.updatePing(socket.id);
     socket.emit('pong', { timestamp: pingTime });
   });
 
   socket.on('pong', async (data: { timestamp: number }) => {
     const latency = Date.now() - data.timestamp;
-    await db.updatePong(socket.id, latency);
+    await sdb.updatePong(socket.id, latency);
   });
 
   // -------------------------------------------------------------------------
@@ -475,14 +542,14 @@ io.on('connection', async (socket: Socket) => {
   socket.on('disconnect', async (reason) => {
     logger.info({ socketId: socket.id, userId, reason }, 'Client disconnected');
 
-    await db.disconnectConnection(socket.id);
+    await sdb.disconnectConnection(socket.id);
 
     if (userId && config.enablePresence) {
-      await db.decrementConnectionCount(userId);
+      await sdb.decrementConnectionCount(userId);
 
-      const presence = await db.getPresence(userId);
+      const presence = await sdb.getPresence(userId);
       if (presence && presence.connections_count === 0) {
-        await db.upsertPresence(userId, 'offline');
+        await sdb.upsertPresence(userId, 'offline');
         io.emit('presence:changed', {
           userId,
           status: 'offline',
@@ -491,7 +558,7 @@ io.on('connection', async (socket: Socket) => {
     }
 
     if (config.logEvents && config.logEventTypes.includes('disconnect')) {
-      await db.logEvent({
+      await sdb.logEvent({
         eventType: 'disconnect',
         socketId: socket.id,
         userId,

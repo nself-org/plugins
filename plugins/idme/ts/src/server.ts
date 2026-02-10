@@ -4,9 +4,9 @@
  */
 
 import Fastify from 'fastify';
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, getAppContext } from '@nself/plugin-utils';
 import { createIDmeClient } from './client.js';
-import { createDatabase } from './database.js';
+import { IDmeDatabase, createDatabase } from './database.js';
 import { loadConfig, DEFAULT_PORT, DEFAULT_HOST } from './config.js';
 
 const logger = createLogger('idme:server');
@@ -17,6 +17,18 @@ export async function createServer() {
   const client = createIDmeClient(config);
   const db = createDatabase();
 
+  // Multi-app context: resolve source_account_id per request and create scoped DB
+  fastify.decorateRequest('scopedDb', null);
+  fastify.addHook('onRequest', async (request) => {
+    const ctx = getAppContext(request);
+    (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+  });
+
+  /** Extract scoped IDmeDatabase from request */
+  function scopedDb(request: unknown): IDmeDatabase {
+    return (request as Record<string, unknown>).scopedDb as IDmeDatabase;
+  }
+
   // Health check
   fastify.get('/health', async () => {
     return { status: 'ok', service: 'idme-plugin' };
@@ -24,11 +36,16 @@ export async function createServer() {
 
   // OAuth authorization (redirect to ID.me)
   fastify.get('/auth/idme', async (request, reply) => {
-    const state = Math.random().toString(36).substring(7);
-    const url = client.getAuthorizationUrl(state);
+    const ctx = getAppContext(request);
+    const nonce = Math.random().toString(36).substring(7);
+    // Encode source_account_id into the OAuth state so the callback can route
+    // back to the correct app context after the redirect round-trip.
+    const state = JSON.stringify({ nonce, sourceAccountId: ctx.sourceAccountId });
+    const encodedState = Buffer.from(state).toString('base64url');
+    const url = client.getAuthorizationUrl(encodedState);
 
-    // Store state in session/cookie for verification
-    reply.setCookie('idme_state', state, {
+    // Store nonce in cookie for CSRF verification
+    reply.setCookie('idme_state', nonce, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 600, // 10 minutes
@@ -52,12 +69,26 @@ export async function createServer() {
       return reply.status(400).send({ error: 'Missing code or state' });
     }
 
-    // Verify state (CSRF protection)
-    const storedState = request.cookies.idme_state;
-    if (state !== storedState) {
-      logger.error('State mismatch', { provided: state, stored: storedState });
+    // Decode state to extract nonce and source_account_id
+    let nonce: string;
+    let sourceAccountId = 'primary';
+    try {
+      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+      nonce = decoded.nonce;
+      sourceAccountId = decoded.sourceAccountId ?? 'primary';
+    } catch {
       return reply.status(400).send({ error: 'Invalid state parameter' });
     }
+
+    // Verify nonce (CSRF protection)
+    const storedState = (request as unknown as Record<string, Record<string, string>>).cookies?.idme_state;
+    if (nonce !== storedState) {
+      logger.error('State mismatch', { provided: nonce, stored: storedState });
+      return reply.status(400).send({ error: 'Invalid state parameter' });
+    }
+
+    // Use the source_account_id from the OAuth state for scoped DB access
+    const callbackDb = db.forSourceAccount(sourceAccountId);
 
     try {
       // Exchange code for tokens
@@ -71,6 +102,7 @@ export async function createServer() {
       logger.info('User verified', {
         email: profile.email,
         groups: verification.groups.length,
+        sourceAccountId,
       });
 
       // Return data (in production, store in database and redirect to app)
@@ -78,6 +110,7 @@ export async function createServer() {
         success: true,
         profile,
         verification,
+        sourceAccountId,
         // Don't return tokens in production!
         tokens: {
           expiresAt: tokens.expiresAt,
@@ -109,10 +142,11 @@ export async function createServer() {
 
     const body = request.body as Record<string, unknown>;
     const eventType = body.type as string;
+    const reqDb = scopedDb(request);
 
     try {
       // Store webhook event
-      await db.storeWebhookEvent(
+      await reqDb.storeWebhookEvent(
         eventType,
         body,
         body.id as string,
@@ -138,9 +172,10 @@ export async function createServer() {
     Params: { userId: string };
   }>('/api/verifications/:userId', async (request, reply) => {
     const { userId } = request.params;
+    const reqDb = scopedDb(request);
 
     try {
-      const verification = await db.getVerificationByUserId(userId);
+      const verification = await reqDb.getVerificationByUserId(userId);
 
       if (!verification) {
         return reply.status(404).send({ error: 'Verification not found' });

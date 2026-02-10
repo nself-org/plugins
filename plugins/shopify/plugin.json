@@ -55,8 +55,21 @@
     "optional": [
       "SHOPIFY_API_VERSION",
       "SHOPIFY_WEBHOOK_SECRET",
-      "SHOPIFY_SYNC_INTERVAL"
+      "SHOPIFY_SYNC_INTERVAL",
+      "SHOPIFY_ACCESS_TOKENS",
+      "SHOPIFY_SHOP_DOMAINS",
+      "SHOPIFY_ACCOUNT_LABELS",
+      "SHOPIFY_WEBHOOK_SECRETS"
     ]
+  },
+
+  "multiApp": {
+    "supported": true,
+    "pkStrategy": "composite",
+    "envVars": {
+      "apiKeys": "SHOPIFY_ACCESS_TOKENS",
+      "labels": "SHOPIFY_ACCOUNT_LABELS"
+    }
   },
 
   "config": {

@@ -1,0 +1,89 @@
+{
+  "name": "audit",
+  "version": "1.0.0",
+  "description": "Immutable audit logging with SIEM integration, compliance frameworks, and retention policies",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/audit",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "security",
+  "tags": ["audit", "logging", "compliance", "siem", "immutable", "forensics", "soc2", "hipaa", "gdpr", "pci"],
+
+  "tables": [
+    "audit_events",
+    "audit_retention_policies",
+    "audit_alert_rules",
+    "audit_webhook_events"
+  ],
+
+  "webhooks": {
+    "audit.event.created": "Audit event created (append-only)",
+    "audit.event.exported": "Audit events exported to external system",
+    "audit.alert.triggered": "Alert rule triggered by compliance violation",
+    "audit.retention.executed": "Retention policy executed",
+    "audit.compliance.report_generated": "Compliance report generated"
+  },
+
+  "actions": {
+    "init": "Initialize audit database schema (with immutability triggers)",
+    "server": "Start audit HTTP server",
+    "log": "Append an audit event",
+    "query": "Query audit events with filters",
+    "export": "Export audit events (CSV/JSON/JSONL/CEF/LEEF/Syslog)",
+    "retention": "Manage retention policies",
+    "alerts": "Manage alert rules",
+    "compliance": "Generate compliance reports (SOC2/HIPAA/GDPR/PCI)",
+    "verify": "Verify event integrity using checksums",
+    "stats": "Show audit plugin statistics"
+  },
+
+  "envVars": {
+    "required": [],
+    "optional": [
+      "AUDIT_PLUGIN_PORT",
+      "AUDIT_PLUGIN_HOST",
+      "AUDIT_LOG_LEVEL",
+      "AUDIT_APP_IDS",
+      "AUDIT_FALLBACK_LOG_PATH",
+      "AUDIT_SIEM_SPLUNK_HEC_URL",
+      "AUDIT_SIEM_SPLUNK_HEC_TOKEN",
+      "AUDIT_SIEM_ELK_URL",
+      "AUDIT_SIEM_ELK_INDEX",
+      "AUDIT_SIEM_ELK_API_KEY",
+      "AUDIT_SIEM_DATADOG_API_KEY",
+      "AUDIT_SIEM_DATADOG_SITE",
+      "AUDIT_DEFAULT_RETENTION_DAYS",
+      "AUDIT_COMPLIANCE_FRAMEWORKS",
+      "AUDIT_ALERT_WEBHOOK_URL",
+      "AUDIT_EXPORT_MAX_ROWS"
+    ]
+  },
+
+  "config": {
+    "port": 3303,
+    "webhookPath": "/webhooks/audit",
+    "defaultRetentionDays": 2555,
+    "exportMaxRows": 100000,
+    "complianceFrameworks": ["SOC2", "HIPAA", "GDPR", "PCI"]
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "app_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "permissions": {
+    "database": ["create", "read"],
+    "network": ["splunk.com", "elastic.co", "datadoghq.com"],
+    "filesystem": ["logs"]
+  }
+}

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * HTTP server for notifications API
+ * Multi-app aware: each request is scoped to a source_account_id
  */
 
 import Fastify from 'fastify';
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, getAppContext } from '@nself/plugin-utils';
 import { config } from './config.js';
 import { notificationService } from './service.js';
-import { db } from './database.js';
+import { db, DatabaseClient } from './database.js';
 import { SendNotificationRequest, SendNotificationResponse } from './types.js';
 
 const logger = createLogger('notifications:server');
@@ -17,6 +18,22 @@ const fastify = Fastify({
     level: config.development.log_level,
   },
 });
+
+// =============================================================================
+// Multi-app context middleware
+// =============================================================================
+
+fastify.decorateRequest('scopedDb', null);
+
+fastify.addHook('onRequest', async (request) => {
+  const ctx = getAppContext(request as any);
+  (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+});
+
+/** Extract the request-scoped DatabaseClient */
+function scopedDb(request: unknown): DatabaseClient {
+  return (request as Record<string, unknown>).scopedDb as DatabaseClient;
+}
 
 // =============================================================================
 // Routes
@@ -59,7 +76,8 @@ fastify.post<{ Body: SendNotificationRequest }>(
     }
 
     try {
-      const result = await notificationService.send({
+      const reqDb = scopedDb(request);
+      const result = await notificationService.sendWith(reqDb, {
         user_id,
         template_name: template,
         channel,
@@ -107,7 +125,7 @@ fastify.get<{ Params: { id: string } }>(
     const { id } = request.params;
 
     try {
-      const notification = await notificationService.getStatus(id);
+      const notification = await scopedDb(request).getNotification(id);
 
       if (!notification) {
         return reply.code(404).send({
@@ -129,7 +147,7 @@ fastify.get<{ Params: { id: string } }>(
 // List templates
 fastify.get('/api/templates', async (request) => {
   try {
-    const templates = await db.listTemplates();
+    const templates = await scopedDb(request).listTemplates();
     return {
       templates,
       total: templates.length,
@@ -148,7 +166,7 @@ fastify.get<{ Params: { name: string } }>(
     const { name } = request.params;
 
     try {
-      const template = await db.getTemplate(name);
+      const template = await scopedDb(request).getTemplate(name);
 
       if (!template) {
         return reply.code(404).send({
@@ -172,7 +190,7 @@ fastify.get<{ Querystring: { days?: string } }>(
     const days = parseInt(request.query.days || '7');
 
     try {
-      const stats = await notificationService.getDeliveryStats(days);
+      const stats = await scopedDb(request).getDeliveryStats(days);
       return { stats };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -189,7 +207,7 @@ fastify.get<{ Querystring: { days?: string } }>(
     const days = parseInt(request.query.days || '7');
 
     try {
-      const metrics = await notificationService.getEngagementStats(days);
+      const metrics = await scopedDb(request).getEngagementStats(days);
       return { metrics };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -215,6 +233,9 @@ fastify.post('/webhooks/notifications', async (request, reply) => {
 
 const start = async () => {
   try {
+    // Run multi-app migration on startup
+    await db.migrateMultiApp();
+
     await fastify.listen({
       port: config.server.port,
       host: config.server.host,

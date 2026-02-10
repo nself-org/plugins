@@ -101,3 +101,6 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelay: 30000,
   backoffMultiplier: 2,
 };
+
+// Re-export multi-app types from app-context for convenience
+export type { AppContext, AccountConfig, MultiAppConfig } from './app-context.js';

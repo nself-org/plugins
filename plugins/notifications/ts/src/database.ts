@@ -1,5 +1,6 @@
 /**
  * Database client for notification operations
+ * Multi-app aware: all queries are scoped by source_account_id
  */
 
 import { Pool, PoolClient } from 'pg';
@@ -15,8 +16,9 @@ import {
 
 export class DatabaseClient {
   private pool: Pool;
+  private sourceAccountId: string;
 
-  constructor() {
+  constructor(sourceAccountId = 'primary') {
     this.pool = new Pool({
       host: config.database.host,
       port: config.database.port,
@@ -25,6 +27,22 @@ export class DatabaseClient {
       password: config.database.password,
       ssl: config.database.ssl ? { rejectUnauthorized: false } : false,
     });
+    this.sourceAccountId = sourceAccountId;
+  }
+
+  /**
+   * Return a new DatabaseClient scoped to a different source account.
+   * Shares the same underlying connection pool.
+   */
+  forSourceAccount(accountId: string): DatabaseClient {
+    const scoped = Object.create(DatabaseClient.prototype) as DatabaseClient;
+    scoped.pool = this.pool;
+    scoped.sourceAccountId = accountId;
+    return scoped;
+  }
+
+  getSourceAccountId(): string {
+    return this.sourceAccountId;
   }
 
   async getClient(): Promise<PoolClient> {
@@ -36,6 +54,45 @@ export class DatabaseClient {
   }
 
   // =============================================================================
+  // Schema Migration
+  // =============================================================================
+
+  /**
+   * Add source_account_id column to all notification tables if it does not exist.
+   * Safe to call repeatedly (idempotent).
+   */
+  async migrateMultiApp(): Promise<void> {
+    const tables = [
+      'notification_templates',
+      'notification_messages',
+      'notification_queue',
+      'notification_preferences',
+      'notification_providers',
+      'notification_batches',
+    ];
+
+    const client = await this.getClient();
+    try {
+      for (const table of tables) {
+        const colCheck = await client.query(
+          `SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = $1
+             AND column_name = 'source_account_id'`,
+          [table]
+        );
+        if (colCheck.rowCount === 0) {
+          await client.query(
+            `ALTER TABLE ${table} ADD COLUMN source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'`
+          );
+        }
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  // =============================================================================
   // Templates
   // =============================================================================
 
@@ -43,8 +100,8 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM notification_templates WHERE name = $1 AND active = true',
-        [name]
+        'SELECT * FROM notification_templates WHERE name = $1 AND active = true AND source_account_id = $2',
+        [name, this.sourceAccountId]
       );
       return result.rows[0] || null;
     } finally {
@@ -56,7 +113,8 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM notification_templates WHERE active = true ORDER BY category, name'
+        'SELECT * FROM notification_templates WHERE active = true AND source_account_id = $1 ORDER BY category, name',
+        [this.sourceAccountId]
       );
       return result.rows;
     } finally {
@@ -76,8 +134,8 @@ export class DatabaseClient {
           user_id, template_name, channel, category,
           recipient_email, recipient_phone, recipient_push_token,
           subject, body_text, body_html, priority,
-          scheduled_at, metadata, tags, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending')
+          scheduled_at, metadata, tags, status, source_account_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15)
         RETURNING *`,
         [
           input.user_id,
@@ -94,6 +152,7 @@ export class DatabaseClient {
           input.scheduled_at,
           JSON.stringify(input.metadata || {}),
           JSON.stringify(input.tags || []),
+          this.sourceAccountId,
         ]
       );
       return result.rows[0];
@@ -106,8 +165,8 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM notification_messages WHERE id = $1',
-        [id]
+        'SELECT * FROM notification_messages WHERE id = $1 AND source_account_id = $2',
+        [id, this.sourceAccountId]
       );
       return result.rows[0] || null;
     } finally {
@@ -133,8 +192,8 @@ export class DatabaseClient {
         params.push(values[index]);
       });
 
-      query += ' WHERE id = $' + (params.length + 1);
-      params.push(id);
+      query += ` WHERE id = $${params.length + 1} AND source_account_id = $${params.length + 2}`;
+      params.push(id, this.sourceAccountId);
 
       await client.query(query, params);
     } finally {
@@ -150,10 +209,10 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       await client.query(
-        `INSERT INTO notification_queue (notification_id, status, priority, next_attempt_at)
-         VALUES ($1, 'pending', $2, NOW())
+        `INSERT INTO notification_queue (notification_id, status, priority, next_attempt_at, source_account_id)
+         VALUES ($1, 'pending', $2, NOW(), $3)
          ON CONFLICT (notification_id) DO NOTHING`,
-        [notificationId, priority]
+        [notificationId, priority, this.sourceAccountId]
       );
     } finally {
       client.release();
@@ -163,7 +222,7 @@ export class DatabaseClient {
   async getNextQueueItem(): Promise<QueueItem | null> {
     const client = await this.getClient();
     try {
-      // Get and lock the next pending item
+      // Get and lock the next pending item scoped to this account
       const result = await client.query(
         `UPDATE notification_queue
          SET status = 'processing', processing_started_at = NOW(), updated_at = NOW()
@@ -172,11 +231,13 @@ export class DatabaseClient {
            WHERE status = 'pending'
              AND next_attempt_at <= NOW()
              AND attempts < max_attempts
+             AND source_account_id = $1
            ORDER BY priority ASC, next_attempt_at ASC
            LIMIT 1
            FOR UPDATE SKIP LOCKED
          )
-         RETURNING *`
+         RETURNING *`,
+        [this.sourceAccountId]
       );
       return result.rows[0] || null;
     } finally {
@@ -191,8 +252,8 @@ export class DatabaseClient {
         await client.query(
           `UPDATE notification_queue
            SET status = $1, processing_completed_at = NOW(), updated_at = NOW()
-           WHERE id = $2`,
-          [status, id]
+           WHERE id = $2 AND source_account_id = $3`,
+          [status, id, this.sourceAccountId]
         );
       } else if (status === 'failed') {
         await client.query(
@@ -202,8 +263,8 @@ export class DatabaseClient {
                last_error = $1,
                next_attempt_at = NOW() + (attempts * interval '1 second'),
                updated_at = NOW()
-           WHERE id = $2`,
-          [error, id]
+           WHERE id = $2 AND source_account_id = $3`,
+          [error, id, this.sourceAccountId]
         );
       }
     } finally {
@@ -224,8 +285,8 @@ export class DatabaseClient {
     try {
       const result = await client.query(
         `SELECT * FROM notification_preferences
-         WHERE user_id = $1 AND channel = $2 AND category = $3`,
-        [userId, channel, category]
+         WHERE user_id = $1 AND channel = $2 AND category = $3 AND source_account_id = $4`,
+        [userId, channel, category, this.sourceAccountId]
       );
       return result.rows[0] || null;
     } finally {
@@ -240,11 +301,15 @@ export class DatabaseClient {
   ): Promise<boolean> {
     const client = await this.getClient();
     try {
+      // Inline preference check scoped by source_account_id instead of
+      // relying on the unscoped SQL function get_user_notification_preference.
       const result = await client.query(
-        `SELECT get_user_notification_preference($1, $2, $3) AS enabled`,
-        [userId, channel, category]
+        `SELECT enabled FROM notification_preferences
+         WHERE user_id = $1 AND channel = $2 AND category = $3 AND source_account_id = $4`,
+        [userId, channel, category, this.sourceAccountId]
       );
-      return result.rows[0]?.enabled || true;
+      // Default to enabled if no preference found
+      return result.rows[0]?.enabled ?? true;
     } finally {
       client.release();
     }
@@ -259,10 +324,15 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT check_notification_rate_limit($1, $2, $3, $4) AS allowed`,
-        [userId, channel, windowSeconds, maxCount]
+        `SELECT COUNT(*) AS cnt FROM notification_messages
+         WHERE user_id = $1
+           AND channel = $2
+           AND created_at >= NOW() - ($3 || ' seconds')::INTERVAL
+           AND source_account_id = $4`,
+        [userId, channel, windowSeconds, this.sourceAccountId]
       );
-      return result.rows[0]?.allowed || false;
+      const count = parseInt(result.rows[0]?.cnt ?? '0', 10);
+      return count < maxCount;
     } finally {
       client.release();
     }
@@ -277,9 +347,9 @@ export class DatabaseClient {
     try {
       const result = await client.query(
         `SELECT * FROM notification_providers
-         WHERE type = $1 AND enabled = true
+         WHERE type = $1 AND enabled = true AND source_account_id = $2
          ORDER BY priority ASC`,
-        [type]
+        [type, this.sourceAccountId]
       );
       return result.rows;
     } finally {
@@ -290,7 +360,7 @@ export class DatabaseClient {
   async updateProviderHealth(
     name: string,
     success: boolean,
-    response?: any
+    _response?: any
   ): Promise<void> {
     const client = await this.getClient();
     try {
@@ -301,8 +371,8 @@ export class DatabaseClient {
                last_success_at = NOW(),
                health_status = 'healthy',
                updated_at = NOW()
-           WHERE name = $1`,
-          [name]
+           WHERE name = $1 AND source_account_id = $2`,
+          [name, this.sourceAccountId]
         );
       } else {
         await client.query(
@@ -315,8 +385,8 @@ export class DatabaseClient {
                  ELSE health_status
                END,
                updated_at = NOW()
-           WHERE name = $1`,
-          [name]
+           WHERE name = $1 AND source_account_id = $2`,
+          [name, this.sourceAccountId]
         );
       }
     } finally {
@@ -332,10 +402,21 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT * FROM notification_delivery_rates
-         WHERE date >= NOW() - INTERVAL '1 day' * $1
-         ORDER BY date DESC`,
-        [days]
+        `SELECT
+           channel,
+           category,
+           DATE_TRUNC('day', created_at) AS date,
+           COUNT(*) AS total,
+           COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
+           COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+           COUNT(*) FILTER (WHERE status = 'bounced') AS bounced,
+           ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'delivered') / NULLIF(COUNT(*), 0), 2) AS delivery_rate
+         FROM notification_messages
+         WHERE source_account_id = $1
+           AND created_at >= NOW() - INTERVAL '1 day' * $2
+         GROUP BY channel, category, DATE_TRUNC('day', created_at)
+         ORDER BY date DESC, channel`,
+        [this.sourceAccountId, days]
       );
       return result.rows;
     } finally {
@@ -347,15 +428,62 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT * FROM notification_engagement
-         WHERE date >= NOW() - INTERVAL '1 day' * $1
+        `SELECT
+           channel,
+           category,
+           DATE_TRUNC('day', created_at) AS date,
+           COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
+           COUNT(*) FILTER (WHERE opened_at IS NOT NULL) AS opened,
+           COUNT(*) FILTER (WHERE clicked_at IS NOT NULL) AS clicked,
+           COUNT(*) FILTER (WHERE unsubscribed_at IS NOT NULL) AS unsubscribed,
+           ROUND(100.0 * COUNT(*) FILTER (WHERE opened_at IS NOT NULL) / NULLIF(COUNT(*) FILTER (WHERE status = 'delivered'), 0), 2) AS open_rate,
+           ROUND(100.0 * COUNT(*) FILTER (WHERE clicked_at IS NOT NULL) / NULLIF(COUNT(*) FILTER (WHERE status = 'delivered'), 0), 2) AS click_rate
+         FROM notification_messages
+         WHERE channel = 'email'
+           AND source_account_id = $1
+           AND created_at >= NOW() - INTERVAL '1 day' * $2
+         GROUP BY channel, category, DATE_TRUNC('day', created_at)
          ORDER BY date DESC`,
-        [days]
+        [this.sourceAccountId, days]
       );
       return result.rows;
     } finally {
       client.release();
     }
+  }
+
+  // =============================================================================
+  // Multi-App Cleanup
+  // =============================================================================
+
+  /**
+   * Delete all data for a given source account across all notification tables.
+   * Returns total number of deleted rows.
+   */
+  async cleanupForAccount(sourceAccountId: string): Promise<number> {
+    const tables = [
+      'notification_queue',
+      'notification_messages',
+      'notification_preferences',
+      'notification_templates',
+      'notification_providers',
+      'notification_batches',
+    ];
+
+    const client = await this.getClient();
+    let total = 0;
+    try {
+      for (const table of tables) {
+        const result = await client.query(
+          `DELETE FROM ${table} WHERE source_account_id = $1`,
+          [sourceAccountId]
+        );
+        total += result.rowCount ?? 0;
+      }
+    } finally {
+      client.release();
+    }
+    return total;
   }
 }
 

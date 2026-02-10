@@ -62,6 +62,13 @@
     "preUninstall": "uninstall.sh"
   },
 
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
   "permissions": {
     "database": ["create", "read", "update", "delete"],
     "network": ["id.me", "idmelabs.com"],

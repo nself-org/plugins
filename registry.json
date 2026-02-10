@@ -2602,6 +2602,290 @@
         "pkStrategy": "uuid",
         "defaultValue": "primary"
       }
+    },
+    "audit": {
+      "name": "audit",
+      "version": "1.0.0",
+      "description": "Immutable audit logging with SIEM integration, compliance frameworks, and retention policies",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/audit",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/audit",
+      "minNselfVersion": "0.4.8",
+      "category": "security",
+      "tags": [
+        "audit",
+        "logging",
+        "compliance",
+        "siem",
+        "immutable",
+        "forensics",
+        "soc2",
+        "hipaa",
+        "gdpr",
+        "pci"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "20.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-audit",
+        "defaultPort": 3303,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "audit_events",
+        "audit_retention_policies",
+        "audit_alert_rules",
+        "audit_webhook_events"
+      ],
+      "views": [],
+      "webhooks": [
+        "audit.event.created",
+        "audit.event.exported",
+        "audit.alert.triggered",
+        "audit.retention.executed",
+        "audit.compliance.report_generated"
+      ],
+      "cliCommands": [
+        {
+          "name": "init",
+          "description": "Initialize audit database schema (with immutability triggers)"
+        },
+        {
+          "name": "server",
+          "description": "Start audit HTTP server"
+        },
+        {
+          "name": "log",
+          "description": "Append an audit event"
+        },
+        {
+          "name": "query",
+          "description": "Query audit events with filters"
+        },
+        {
+          "name": "export",
+          "description": "Export audit events (CSV/JSON/JSONL/CEF/LEEF/Syslog)"
+        },
+        {
+          "name": "verify",
+          "description": "Verify event integrity using checksums"
+        },
+        {
+          "name": "compliance",
+          "description": "Generate compliance reports (SOC2/HIPAA/GDPR/PCI)"
+        },
+        {
+          "name": "stats",
+          "description": "Show audit plugin statistics"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/health",
+          "description": "Health check"
+        },
+        {
+          "method": "GET",
+          "path": "/ready",
+          "description": "Readiness check (database + triggers)"
+        },
+        {
+          "method": "GET",
+          "path": "/live",
+          "description": "Liveness check with stats"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/events",
+          "description": "Log an audit event (append-only)"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/events",
+          "description": "Query audit events"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/events/:id",
+          "description": "Get event by ID"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/export",
+          "description": "Export events in various formats"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/retention",
+          "description": "Create retention policy"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/retention",
+          "description": "List retention policies"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/retention/:id",
+          "description": "Get retention policy"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/retention/:id",
+          "description": "Update retention policy"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/retention/:id",
+          "description": "Delete retention policy"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/retention/execute",
+          "description": "Execute retention policies"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/alerts",
+          "description": "Create alert rule"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/alerts",
+          "description": "List alert rules"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/alerts/:id",
+          "description": "Get alert rule"
+        },
+        {
+          "method": "PATCH",
+          "path": "/v1/alerts/:id",
+          "description": "Update alert rule"
+        },
+        {
+          "method": "DELETE",
+          "path": "/v1/alerts/:id",
+          "description": "Delete alert rule"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/compliance/reports",
+          "description": "Generate compliance report"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/verify",
+          "description": "Verify event integrity"
+        }
+      ],
+      "envVars": [
+        {
+          "name": "AUDIT_PLUGIN_PORT",
+          "required": false,
+          "default": "3303",
+          "description": "Server port"
+        },
+        {
+          "name": "AUDIT_PLUGIN_HOST",
+          "required": false,
+          "default": "0.0.0.0",
+          "description": "Server host"
+        },
+        {
+          "name": "AUDIT_LOG_LEVEL",
+          "required": false,
+          "default": "info",
+          "description": "Log level"
+        },
+        {
+          "name": "AUDIT_APP_IDS",
+          "required": false,
+          "default": "primary",
+          "description": "Comma-separated app IDs"
+        },
+        {
+          "name": "AUDIT_FALLBACK_LOG_PATH",
+          "required": false,
+          "default": "/var/log/nself/audit-fallback.jsonl",
+          "description": "Fallback log file path"
+        },
+        {
+          "name": "AUDIT_SIEM_SPLUNK_HEC_URL",
+          "required": false,
+          "description": "Splunk HEC URL"
+        },
+        {
+          "name": "AUDIT_SIEM_SPLUNK_HEC_TOKEN",
+          "required": false,
+          "description": "Splunk HEC token"
+        },
+        {
+          "name": "AUDIT_SIEM_ELK_URL",
+          "required": false,
+          "description": "Elasticsearch URL"
+        },
+        {
+          "name": "AUDIT_SIEM_ELK_INDEX",
+          "required": false,
+          "default": "audit-logs",
+          "description": "Elasticsearch index name"
+        },
+        {
+          "name": "AUDIT_SIEM_ELK_API_KEY",
+          "required": false,
+          "description": "Elasticsearch API key"
+        },
+        {
+          "name": "AUDIT_SIEM_DATADOG_API_KEY",
+          "required": false,
+          "description": "Datadog API key"
+        },
+        {
+          "name": "AUDIT_SIEM_DATADOG_SITE",
+          "required": false,
+          "default": "datadoghq.com",
+          "description": "Datadog site"
+        },
+        {
+          "name": "AUDIT_DEFAULT_RETENTION_DAYS",
+          "required": false,
+          "default": "2555",
+          "description": "Default retention period (7 years)"
+        },
+        {
+          "name": "AUDIT_COMPLIANCE_FRAMEWORKS",
+          "required": false,
+          "default": "SOC2,HIPAA,GDPR,PCI",
+          "description": "Supported compliance frameworks"
+        },
+        {
+          "name": "AUDIT_ALERT_WEBHOOK_URL",
+          "required": false,
+          "description": "Global alert webhook URL"
+        },
+        {
+          "name": "AUDIT_EXPORT_MAX_ROWS",
+          "required": false,
+          "default": "100000",
+          "description": "Maximum rows per export"
+        }
+      ],
+      "dependencies": [],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "app_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      }
     }
   },
   "categories": {

@@ -36,6 +36,7 @@ export type BatchType = 'digest' | 'bulk' | 'scheduled';
 
 export interface NotificationTemplate {
   id: string;
+  source_account_id: string;
   name: string;
   category: NotificationCategory;
   channels: NotificationChannel[];
@@ -64,6 +65,7 @@ export interface TemplateVariables {
 
 export interface NotificationPreference {
   id: string;
+  source_account_id: string;
   user_id: string;
   channel: NotificationChannel;
   category: NotificationCategory;
@@ -87,6 +89,7 @@ export interface QuietHours {
 
 export interface Notification {
   id: string;
+  source_account_id: string;
   user_id: string;
   template_id?: string;
   template_name?: string;
@@ -172,6 +175,7 @@ export interface SendNotificationResult {
 
 export interface QueueItem {
   id: string;
+  source_account_id: string;
   notification_id: string;
   status: QueueStatus;
   priority: number;
@@ -191,6 +195,7 @@ export interface QueueItem {
 
 export interface NotificationProvider {
   id: string;
+  source_account_id: string;
   name: string;
   type: ProviderType;
   priority: number;
@@ -252,6 +257,7 @@ export interface INotificationProvider {
 
 export interface NotificationBatch {
   id: string;
+  source_account_id: string;
   name?: string;
   category?: string;
   batch_type: BatchType;

@@ -50,6 +50,13 @@
     ]
   },
 
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
   "config": {
     "port": 3104,
     "defaultThumbnailSizes": [100, 400, 1200],

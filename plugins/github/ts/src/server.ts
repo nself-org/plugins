@@ -5,7 +5,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createLogger, verifyGitHubSignature, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
+import { createLogger, verifyGitHubSignature, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { GitHubClient } from './client.js';
 import { GitHubDatabase } from './database.js';
 import { GitHubSyncService } from './sync.js';
@@ -59,6 +59,17 @@ export async function createServer(config?: Partial<Config>) {
     logger.info('API key authentication enabled');
   }
 
+  // Add scoped database middleware
+  app.decorateRequest('scopedDb', null);
+  app.addHook('onRequest', async (request) => {
+    const ctx = getAppContext(request);
+    (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
+  });
+
+  function scopedDb(req: unknown): GitHubDatabase {
+    return (req as unknown as Record<string, unknown>).scopedDb as GitHubDatabase;
+  }
+
   // Raw body parser for webhook signature verification
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
     try {
@@ -76,9 +87,9 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Readiness check (verifies database connectivity)
-  app.get('/ready', async (_request, reply) => {
+  app.get('/ready', async (request, reply) => {
     try {
-      await db.execute('SELECT 1');
+      await scopedDb(request).execute('SELECT 1');
       return { ready: true, plugin: 'github', timestamp: new Date().toISOString() };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Database unavailable';
@@ -93,8 +104,8 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Liveness check (application state with sync info)
-  app.get('/live', async () => {
-    const stats = await db.getStats();
+  app.get('/live', async (request) => {
+    const stats = await scopedDb(request).getStats();
     return {
       alive: true,
       plugin: 'github',
@@ -112,8 +123,8 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // Status endpoint
-  app.get('/status', async () => {
-    const stats = await db.getStats();
+  app.get('/status', async (request) => {
+    const stats = await scopedDb(request).getStats();
     return {
       plugin: 'github',
       version: '1.0.0',
@@ -177,14 +188,14 @@ export async function createServer(config?: Partial<Config>) {
   // API endpoints for querying synced data
   app.get('/api/repos', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const repos = await db.listRepositories(limit, offset);
-    const total = await db.countRepositories();
+    const repos = await scopedDb(request).listRepositories(limit, offset);
+    const total = await scopedDb(request).countRepositories();
     return { data: repos, total, limit, offset };
   });
 
   app.get('/api/repos/:fullName', async (request, reply) => {
     const { fullName } = request.params as { fullName: string };
-    const repo = await db.getRepositoryByFullName(decodeURIComponent(fullName));
+    const repo = await scopedDb(request).getRepositoryByFullName(decodeURIComponent(fullName));
     if (!repo) {
       return reply.status(404).send({ error: 'Repository not found' });
     }
@@ -198,8 +209,8 @@ export async function createServer(config?: Partial<Config>) {
       state?: string;
       repo_id?: number;
     };
-    const issues = await db.listIssues(repo_id, state, limit, offset);
-    const total = await db.countIssues(state);
+    const issues = await scopedDb(request).listIssues(repo_id, state, limit, offset);
+    const total = await scopedDb(request).countIssues(state);
     return { data: issues, total, limit, offset };
   });
 
@@ -210,30 +221,30 @@ export async function createServer(config?: Partial<Config>) {
       state?: string;
       repo_id?: number;
     };
-    const prs = await db.listPullRequests(repo_id, state, limit, offset);
-    const total = await db.countPullRequests(state);
+    const prs = await scopedDb(request).listPullRequests(repo_id, state, limit, offset);
+    const total = await scopedDb(request).countPullRequests(state);
     return { data: prs, total, limit, offset };
   });
 
   // Commits
   app.get('/api/commits', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_commits ORDER BY author_date DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_commits WHERE source_account_id = $1 ORDER BY author_date DESC LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countCommits();
+    const total = await scopedDb(request).countCommits();
     return { data: result, total, limit, offset };
   });
 
   // Releases
   app.get('/api/releases', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_releases ORDER BY published_at DESC NULLS LAST LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_releases WHERE source_account_id = $1 ORDER BY published_at DESC NULLS LAST LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countReleases();
+    const total = await scopedDb(request).countReleases();
     return { data: result, total, limit, offset };
   });
 
@@ -244,38 +255,39 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       repo_id?: number;
     };
-    let sql = 'SELECT * FROM github_branches';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_branches WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (repo_id) {
-      sql += ' WHERE repo_id = $1';
+      sql += ' AND repo_id = $2';
       params.push(repo_id);
     }
     sql += ` ORDER BY name LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countBranches();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countBranches();
     return { data: result, total, limit, offset };
   });
 
   // Tags
   app.get('/api/tags', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_tags ORDER BY name LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_tags WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countTags();
+    const total = await scopedDb(request).countTags();
     return { data: result, total, limit, offset };
   });
 
   // Milestones
   app.get('/api/milestones', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_milestones ORDER BY due_on ASC NULLS LAST LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_milestones WHERE source_account_id = $1 ORDER BY due_on ASC NULLS LAST LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countMilestones();
+    const total = await scopedDb(request).countMilestones();
     return { data: result, total, limit, offset };
   });
 
@@ -286,27 +298,28 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       repo_id?: number;
     };
-    let sql = 'SELECT * FROM github_labels';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_labels WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (repo_id) {
-      sql += ' WHERE repo_id = $1';
+      sql += ' AND repo_id = $2';
       params.push(repo_id);
     }
     sql += ` ORDER BY name LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countLabels();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countLabels();
     return { data: result, total, limit, offset };
   });
 
   // Workflows
   app.get('/api/workflows', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_workflows ORDER BY name LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_workflows WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countWorkflows();
+    const total = await scopedDb(request).countWorkflows();
     return { data: result, total, limit, offset };
   });
 
@@ -318,9 +331,10 @@ export async function createServer(config?: Partial<Config>) {
       status?: string;
       conclusion?: string;
     };
-    let sql = 'SELECT * FROM github_workflow_runs WHERE 1=1';
-    const params: unknown[] = [];
-    let paramIndex = 1;
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_workflow_runs WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
+    let paramIndex = 2;
     if (status) {
       sql += ` AND status = $${paramIndex++}`;
       params.push(status);
@@ -331,8 +345,8 @@ export async function createServer(config?: Partial<Config>) {
     }
     sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countWorkflowRuns();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countWorkflowRuns();
     return { data: result, total, limit, offset };
   });
 
@@ -343,38 +357,39 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       run_id?: number;
     };
-    let sql = 'SELECT * FROM github_workflow_jobs';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_workflow_jobs WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (run_id) {
-      sql += ' WHERE run_id = $1';
+      sql += ' AND run_id = $2';
       params.push(run_id);
     }
     sql += ` ORDER BY started_at DESC NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countWorkflowJobs();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countWorkflowJobs();
     return { data: result, total, limit, offset };
   });
 
   // Check Suites
   app.get('/api/check-suites', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_check_suites ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_check_suites WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countCheckSuites();
+    const total = await scopedDb(request).countCheckSuites();
     return { data: result, total, limit, offset };
   });
 
   // Check Runs
   app.get('/api/check-runs', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_check_runs ORDER BY started_at DESC NULLS LAST LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_check_runs WHERE source_account_id = $1 ORDER BY started_at DESC NULLS LAST LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countCheckRuns();
+    const total = await scopedDb(request).countCheckRuns();
     return { data: result, total, limit, offset };
   });
 
@@ -385,27 +400,28 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       environment?: string;
     };
-    let sql = 'SELECT * FROM github_deployments';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_deployments WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (environment) {
-      sql += ' WHERE environment = $1';
+      sql += ' AND environment = $2';
       params.push(environment);
     }
     sql += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countDeployments();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countDeployments();
     return { data: result, total, limit, offset };
   });
 
   // Teams
   app.get('/api/teams', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_teams ORDER BY name LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_teams WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countTeams();
+    const total = await scopedDb(request).countTeams();
     return { data: result, total, limit, offset };
   });
 
@@ -416,16 +432,17 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       repo_id?: number;
     };
-    let sql = 'SELECT * FROM github_collaborators';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_collaborators WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (repo_id) {
-      sql += ' WHERE repo_id = $1';
+      sql += ' AND repo_id = $2';
       params.push(repo_id);
     }
     sql += ` ORDER BY login LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countCollaborators();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countCollaborators();
     return { data: result, total, limit, offset };
   });
 
@@ -436,49 +453,50 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       pr_id?: number;
     };
-    let sql = 'SELECT * FROM github_pr_reviews';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_pr_reviews WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (pr_id) {
-      sql += ' WHERE pull_request_id = $1';
+      sql += ' AND pull_request_id = $2';
       params.push(pr_id);
     }
     sql += ` ORDER BY submitted_at DESC NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
-    const total = await db.countPRReviews();
+    const result = await scopedDb(request).execute(sql, params);
+    const total = await scopedDb(request).countPRReviews();
     return { data: result, total, limit, offset };
   });
 
   // Issue Comments
   app.get('/api/issue-comments', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_issue_comments ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_issue_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countIssueComments();
+    const total = await scopedDb(request).countIssueComments();
     return { data: result, total, limit, offset };
   });
 
   // PR Review Comments
   app.get('/api/pr-review-comments', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_pr_review_comments ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_pr_review_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countPRReviewComments();
+    const total = await scopedDb(request).countPRReviewComments();
     return { data: result, total, limit, offset };
   });
 
   // Commit Comments
   app.get('/api/commit-comments', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await db.execute(
-      'SELECT * FROM github_commit_comments ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const result = await scopedDb(request).execute(
+      'SELECT * FROM github_commit_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [scopedDb(request).getSourceAccountId(), limit, offset]
     );
-    const total = await db.countCommitComments();
+    const total = await scopedDb(request).countCommitComments();
     return { data: result, total, limit, offset };
   });
 
@@ -489,21 +507,22 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
       event?: string;
     };
-    let sql = 'SELECT * FROM github_webhook_events';
-    const params: unknown[] = [];
+    const accountId = scopedDb(request).getSourceAccountId();
+    let sql = 'SELECT * FROM github_webhook_events WHERE source_account_id = $1';
+    const params: unknown[] = [accountId];
     if (event) {
-      sql += ' WHERE event = $1';
+      sql += ' AND event = $2';
       params.push(event);
     }
     sql += ` ORDER BY received_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
-    const result = await db.execute(sql, params);
+    const result = await scopedDb(request).execute(sql, params);
     return { data: result, limit, offset };
   });
 
   // Stats endpoint
-  app.get('/api/stats', async () => {
-    return await db.getStats();
+  app.get('/api/stats', async (request) => {
+    return await scopedDb(request).getStats();
   });
 
   // Graceful shutdown

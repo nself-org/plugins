@@ -17,8 +17,9 @@ const { Pool } = pg;
 
 export class Database {
   private pool: pg.Pool;
+  private readonly sourceAccountId: string;
 
-  constructor(config?: { host?: string; port?: number; database?: string; user?: string; password?: string; ssl?: boolean }) {
+  constructor(config?: { host?: string; port?: number; database?: string; user?: string; password?: string; ssl?: boolean }, sourceAccountId = 'primary') {
     const dbConfig = config ?? {
       host: process.env.POSTGRES_HOST ?? 'localhost',
       port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
@@ -39,6 +40,31 @@ export class Database {
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
     });
+
+    this.sourceAccountId = this.normalizeId(sourceAccountId);
+  }
+
+  /**
+   * Create a new Database instance scoped to a specific source account,
+   * sharing the same underlying connection pool.
+   */
+  forSourceAccount(sourceAccountId: string): Database {
+    const scoped = Object.create(Database.prototype) as Database;
+    Object.defineProperty(scoped, 'pool', { value: this.pool, writable: false });
+    Object.defineProperty(scoped, 'sourceAccountId', { value: this.normalizeId(sourceAccountId), writable: false });
+    return scoped;
+  }
+
+  getSourceAccountId(): string {
+    return this.sourceAccountId;
+  }
+
+  private normalizeId(value: string): string {
+    const normalized = value
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^[-_]+|[-_]+$/g, '');
+    return normalized.length > 0 ? normalized : 'primary';
   }
 
   async query<T = unknown>(text: string, params?: unknown[]): Promise<T[]> {
@@ -56,6 +82,206 @@ export class Database {
   }
 
   // -------------------------------------------------------------------------
+  // Schema Initialization & Migration
+  // -------------------------------------------------------------------------
+
+  async initializeSchema(): Promise<void> {
+    const schema = `
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+      -- Connections
+      CREATE TABLE IF NOT EXISTS realtime_connections (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        socket_id VARCHAR(255) UNIQUE NOT NULL,
+        user_id VARCHAR(255),
+        session_id VARCHAR(255),
+        status VARCHAR(20) DEFAULT 'connected',
+        transport VARCHAR(20),
+        ip_address INET,
+        user_agent TEXT,
+        device_info JSONB,
+        connected_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        disconnected_at TIMESTAMP WITH TIME ZONE,
+        last_ping TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        last_pong TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        latency_ms INTEGER,
+        metadata JSONB DEFAULT '{}'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_connections_socket_id ON realtime_connections(socket_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_connections_user_id ON realtime_connections(user_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_connections_status ON realtime_connections(status);
+      CREATE INDEX IF NOT EXISTS idx_realtime_connections_connected_at ON realtime_connections(connected_at);
+      CREATE INDEX IF NOT EXISTS idx_realtime_connections_source_account ON realtime_connections(source_account_id);
+
+      -- Rooms (UNIQUE on name + source_account_id so each app gets its own namespace)
+      CREATE TABLE IF NOT EXISTS realtime_rooms (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) DEFAULT 'channel',
+        visibility VARCHAR(20) DEFAULT 'public',
+        max_members INTEGER,
+        is_active BOOLEAN DEFAULT TRUE,
+        settings JSONB DEFAULT '{}',
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(name, source_account_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_rooms_name ON realtime_rooms(name);
+      CREATE INDEX IF NOT EXISTS idx_realtime_rooms_type ON realtime_rooms(type);
+      CREATE INDEX IF NOT EXISTS idx_realtime_rooms_is_active ON realtime_rooms(is_active);
+      CREATE INDEX IF NOT EXISTS idx_realtime_rooms_source_account ON realtime_rooms(source_account_id);
+
+      -- Room Members
+      CREATE TABLE IF NOT EXISTS realtime_room_members (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        room_id UUID REFERENCES realtime_rooms(id) ON DELETE CASCADE,
+        user_id VARCHAR(255) NOT NULL,
+        role VARCHAR(50) DEFAULT 'member',
+        is_muted BOOLEAN DEFAULT FALSE,
+        is_banned BOOLEAN DEFAULT FALSE,
+        joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        metadata JSONB DEFAULT '{}',
+        UNIQUE(room_id, user_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_room_members_room_id ON realtime_room_members(room_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_room_members_user_id ON realtime_room_members(user_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_room_members_joined_at ON realtime_room_members(joined_at);
+      CREATE INDEX IF NOT EXISTS idx_realtime_room_members_source_account ON realtime_room_members(source_account_id);
+
+      -- Presence (UNIQUE on user_id + source_account_id)
+      CREATE TABLE IF NOT EXISTS realtime_presence (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        user_id VARCHAR(255) NOT NULL,
+        status VARCHAR(20) DEFAULT 'offline',
+        custom_status TEXT,
+        custom_emoji VARCHAR(100),
+        last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        last_heartbeat TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE,
+        connections_count INTEGER DEFAULT 0,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(user_id, source_account_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_presence_user_id ON realtime_presence(user_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_presence_status ON realtime_presence(status);
+      CREATE INDEX IF NOT EXISTS idx_realtime_presence_last_active ON realtime_presence(last_active);
+      CREATE INDEX IF NOT EXISTS idx_realtime_presence_source_account ON realtime_presence(source_account_id);
+
+      -- Typing Indicators
+      CREATE TABLE IF NOT EXISTS realtime_typing (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        room_id UUID REFERENCES realtime_rooms(id) ON DELETE CASCADE,
+        user_id VARCHAR(255) NOT NULL,
+        thread_id VARCHAR(255),
+        started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        UNIQUE(room_id, user_id, thread_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_typing_room_id ON realtime_typing(room_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_typing_user_id ON realtime_typing(user_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_typing_expires_at ON realtime_typing(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_realtime_typing_source_account ON realtime_typing(source_account_id);
+
+      -- Events
+      CREATE TABLE IF NOT EXISTS realtime_events (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        event_type VARCHAR(100) NOT NULL,
+        socket_id VARCHAR(255),
+        user_id VARCHAR(255),
+        room_id UUID REFERENCES realtime_rooms(id) ON DELETE SET NULL,
+        payload JSONB DEFAULT '{}',
+        ip_address INET,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_event_type ON realtime_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_socket_id ON realtime_events(socket_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_user_id ON realtime_events(user_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_room_id ON realtime_events(room_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_created_at ON realtime_events(created_at);
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_source_account ON realtime_events(source_account_id);
+
+      -- -----------------------------------------------------------------------
+      -- Migration: add source_account_id to tables that already exist
+      -- -----------------------------------------------------------------------
+      ALTER TABLE realtime_connections ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE realtime_rooms ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE realtime_room_members ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE realtime_presence ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE realtime_typing ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE realtime_events ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+
+      CREATE INDEX IF NOT EXISTS idx_realtime_connections_source_account ON realtime_connections(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_rooms_source_account ON realtime_rooms(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_room_members_source_account ON realtime_room_members(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_presence_source_account ON realtime_presence(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_typing_source_account ON realtime_typing(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_realtime_events_source_account ON realtime_events(source_account_id);
+
+      -- Migrate UNIQUE constraints for existing tables.
+      -- Drop the old single-column unique constraints if they exist and recreate
+      -- as compound constraints. The IF NOT EXISTS on the new constraint is handled
+      -- by checking pg_constraint first.
+
+      -- Rooms: (name) -> (name, source_account_id)
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'realtime_rooms_name_key'
+        ) THEN
+          ALTER TABLE realtime_rooms DROP CONSTRAINT realtime_rooms_name_key;
+        END IF;
+      END $$;
+
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'realtime_rooms_name_source_account_id_key'
+        ) THEN
+          ALTER TABLE realtime_rooms ADD CONSTRAINT realtime_rooms_name_source_account_id_key UNIQUE (name, source_account_id);
+        END IF;
+      END $$;
+
+      -- Presence: (user_id) -> (user_id, source_account_id)
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'realtime_presence_user_id_key'
+        ) THEN
+          ALTER TABLE realtime_presence DROP CONSTRAINT realtime_presence_user_id_key;
+        END IF;
+      END $$;
+
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'realtime_presence_user_id_source_account_id_key'
+        ) THEN
+          ALTER TABLE realtime_presence ADD CONSTRAINT realtime_presence_user_id_source_account_id_key UNIQUE (user_id, source_account_id);
+        END IF;
+      END $$;
+    `;
+
+    await this.query(schema);
+  }
+
+  // -------------------------------------------------------------------------
   // Connections
   // -------------------------------------------------------------------------
 
@@ -70,11 +296,12 @@ export class Database {
   }): Promise<Connection> {
     const result = await this.query<Connection>(
       `INSERT INTO realtime_connections (
-        socket_id, user_id, session_id, status, transport,
+        source_account_id, socket_id, user_id, session_id, status, transport,
         ip_address, user_agent, device_info
-      ) VALUES ($1, $2, $3, 'connected', $4, $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, 'connected', $5, $6, $7, $8)
       RETURNING *`,
       [
+        this.sourceAccountId,
         data.socketId,
         data.userId || null,
         data.sessionId || null,
@@ -108,8 +335,9 @@ export class Database {
     if (updates.length === 0) return;
 
     values.push(socketId);
+    values.push(this.sourceAccountId);
     await this.query(
-      `UPDATE realtime_connections SET ${updates.join(', ')} WHERE socket_id = $${paramIndex}`,
+      `UPDATE realtime_connections SET ${updates.join(', ')} WHERE socket_id = $${paramIndex} AND source_account_id = $${paramIndex + 1}`,
       values
     );
   }
@@ -118,15 +346,15 @@ export class Database {
     await this.query(
       `UPDATE realtime_connections
        SET status = 'disconnected', disconnected_at = NOW()
-       WHERE socket_id = $1`,
-      [socketId]
+       WHERE socket_id = $1 AND source_account_id = $2`,
+      [socketId, this.sourceAccountId]
     );
   }
 
   async updatePing(socketId: string): Promise<void> {
     await this.query(
-      `UPDATE realtime_connections SET last_ping = NOW() WHERE socket_id = $1`,
-      [socketId]
+      `UPDATE realtime_connections SET last_ping = NOW() WHERE socket_id = $1 AND source_account_id = $2`,
+      [socketId, this.sourceAccountId]
     );
   }
 
@@ -134,20 +362,22 @@ export class Database {
     await this.query(
       `UPDATE realtime_connections
        SET last_pong = NOW(), latency_ms = $2
-       WHERE socket_id = $1`,
-      [socketId, latencyMs]
+       WHERE socket_id = $1 AND source_account_id = $3`,
+      [socketId, latencyMs, this.sourceAccountId]
     );
   }
 
   async getActiveConnections(): Promise<Connection[]> {
     return this.query<Connection>(
-      `SELECT * FROM realtime_connections WHERE status = 'connected'`
+      `SELECT * FROM realtime_connections WHERE status = 'connected' AND source_account_id = $1`,
+      [this.sourceAccountId]
     );
   }
 
   async getConnectionCount(): Promise<number> {
     const result = await this.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM realtime_connections WHERE status = 'connected'`
+      `SELECT COUNT(*) as count FROM realtime_connections WHERE status = 'connected' AND source_account_id = $1`,
+      [this.sourceAccountId]
     );
     return parseInt(result?.count || '0', 10);
   }
@@ -163,35 +393,41 @@ export class Database {
     maxMembers?: number;
   }): Promise<Room> {
     const result = await this.query<Room>(
-      `INSERT INTO realtime_rooms (name, type, visibility, max_members)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (name) DO UPDATE SET updated_at = NOW()
+      `INSERT INTO realtime_rooms (source_account_id, name, type, visibility, max_members)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (name, source_account_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
-      [data.name, data.type || 'channel', data.visibility || 'public', data.maxMembers || null]
+      [this.sourceAccountId, data.name, data.type || 'channel', data.visibility || 'public', data.maxMembers || null]
     );
     return result[0];
   }
 
   async getRoomByName(name: string): Promise<Room | null> {
     return this.queryOne<Room>(
-      `SELECT * FROM realtime_rooms WHERE name = $1 AND is_active = TRUE`,
-      [name]
+      `SELECT * FROM realtime_rooms WHERE name = $1 AND is_active = TRUE AND source_account_id = $2`,
+      [name, this.sourceAccountId]
     );
   }
 
   async getRoomById(id: string): Promise<Room | null> {
     return this.queryOne<Room>(
-      `SELECT * FROM realtime_rooms WHERE id = $1 AND is_active = TRUE`,
-      [id]
+      `SELECT * FROM realtime_rooms WHERE id = $1 AND is_active = TRUE AND source_account_id = $2`,
+      [id, this.sourceAccountId]
     );
   }
 
   async getAllRooms(): Promise<Room[]> {
-    return this.query<Room>(`SELECT * FROM realtime_rooms WHERE is_active = TRUE`);
+    return this.query<Room>(
+      `SELECT * FROM realtime_rooms WHERE is_active = TRUE AND source_account_id = $1`,
+      [this.sourceAccountId]
+    );
   }
 
   async deleteRoom(name: string): Promise<void> {
-    await this.query(`UPDATE realtime_rooms SET is_active = FALSE WHERE name = $1`, [name]);
+    await this.query(
+      `UPDATE realtime_rooms SET is_active = FALSE WHERE name = $1 AND source_account_id = $2`,
+      [name, this.sourceAccountId]
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -200,24 +436,24 @@ export class Database {
 
   async addRoomMember(roomId: string, userId: string, role: string = 'member'): Promise<void> {
     await this.query(
-      `INSERT INTO realtime_room_members (room_id, user_id, role)
-       VALUES ($1, $2, $3)
+      `INSERT INTO realtime_room_members (source_account_id, room_id, user_id, role)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (room_id, user_id) DO UPDATE SET last_seen = NOW()`,
-      [roomId, userId, role]
+      [this.sourceAccountId, roomId, userId, role]
     );
   }
 
   async removeRoomMember(roomId: string, userId: string): Promise<void> {
     await this.query(
-      `DELETE FROM realtime_room_members WHERE room_id = $1 AND user_id = $2`,
-      [roomId, userId]
+      `DELETE FROM realtime_room_members WHERE room_id = $1 AND user_id = $2 AND source_account_id = $3`,
+      [roomId, userId, this.sourceAccountId]
     );
   }
 
   async getRoomMembers(roomId: string): Promise<RoomMember[]> {
     return this.query<RoomMember>(
-      `SELECT * FROM realtime_room_members WHERE room_id = $1`,
-      [roomId]
+      `SELECT * FROM realtime_room_members WHERE room_id = $1 AND source_account_id = $2`,
+      [roomId, this.sourceAccountId]
     );
   }
 
@@ -225,16 +461,17 @@ export class Database {
     return this.query<Room>(
       `SELECT r.* FROM realtime_rooms r
        JOIN realtime_room_members rm ON r.id = rm.room_id
-       WHERE rm.user_id = $1 AND r.is_active = TRUE`,
-      [userId]
+       WHERE rm.user_id = $1 AND r.is_active = TRUE
+         AND r.source_account_id = $2 AND rm.source_account_id = $2`,
+      [userId, this.sourceAccountId]
     );
   }
 
   async updateMemberLastSeen(roomId: string, userId: string): Promise<void> {
     await this.query(
       `UPDATE realtime_room_members SET last_seen = NOW()
-       WHERE room_id = $1 AND user_id = $2`,
-      [roomId, userId]
+       WHERE room_id = $1 AND user_id = $2 AND source_account_id = $3`,
+      [roomId, userId, this.sourceAccountId]
     );
   }
 
@@ -249,17 +486,18 @@ export class Database {
   ): Promise<Presence> {
     const result = await this.query<Presence>(
       `INSERT INTO realtime_presence (
-        user_id, status, custom_status, custom_emoji, expires_at, last_heartbeat
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
-      ON CONFLICT (user_id) DO UPDATE SET
-        status = $2,
-        custom_status = $3,
-        custom_emoji = $4,
-        expires_at = $5,
+        source_account_id, user_id, status, custom_status, custom_emoji, expires_at, last_heartbeat
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ON CONFLICT (user_id, source_account_id) DO UPDATE SET
+        status = $3,
+        custom_status = $4,
+        custom_emoji = $5,
+        expires_at = $6,
         last_heartbeat = NOW(),
         updated_at = NOW()
       RETURNING *`,
       [
+        this.sourceAccountId,
         userId,
         status,
         customStatus?.text || null,
@@ -274,8 +512,8 @@ export class Database {
     await this.query(
       `UPDATE realtime_presence
        SET last_heartbeat = NOW(), last_active = NOW()
-       WHERE user_id = $1`,
-      [userId]
+       WHERE user_id = $1 AND source_account_id = $2`,
+      [userId, this.sourceAccountId]
     );
   }
 
@@ -283,8 +521,8 @@ export class Database {
     await this.query(
       `UPDATE realtime_presence
        SET connections_count = connections_count + 1, status = 'online'
-       WHERE user_id = $1`,
-      [userId]
+       WHERE user_id = $1 AND source_account_id = $2`,
+      [userId, this.sourceAccountId]
     );
   }
 
@@ -292,20 +530,23 @@ export class Database {
     await this.query(
       `UPDATE realtime_presence
        SET connections_count = GREATEST(connections_count - 1, 0)
-       WHERE user_id = $1`,
-      [userId]
+       WHERE user_id = $1 AND source_account_id = $2`,
+      [userId, this.sourceAccountId]
     );
   }
 
   async getPresence(userId: string): Promise<Presence | null> {
     return this.queryOne<Presence>(
-      `SELECT * FROM realtime_presence WHERE user_id = $1`,
-      [userId]
+      `SELECT * FROM realtime_presence WHERE user_id = $1 AND source_account_id = $2`,
+      [userId, this.sourceAccountId]
     );
   }
 
   async getAllPresence(): Promise<Presence[]> {
-    return this.query<Presence>(`SELECT * FROM realtime_presence`);
+    return this.query<Presence>(
+      `SELECT * FROM realtime_presence WHERE source_account_id = $1`,
+      [this.sourceAccountId]
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -315,27 +556,29 @@ export class Database {
   async setTyping(roomId: string, userId: string, threadId?: string): Promise<void> {
     const expiresAt = new Date(Date.now() + 3000); // 3 seconds
     await this.query(
-      `INSERT INTO realtime_typing (room_id, user_id, thread_id, expires_at)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO realtime_typing (source_account_id, room_id, user_id, thread_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (room_id, user_id, thread_id) DO UPDATE
-       SET started_at = NOW(), expires_at = $4`,
-      [roomId, userId, threadId || null, expiresAt]
+       SET started_at = NOW(), expires_at = $5`,
+      [this.sourceAccountId, roomId, userId, threadId || null, expiresAt]
     );
   }
 
   async clearTyping(roomId: string, userId: string, threadId?: string): Promise<void> {
     await this.query(
       `DELETE FROM realtime_typing
-       WHERE room_id = $1 AND user_id = $2 AND thread_id IS NOT DISTINCT FROM $3`,
-      [roomId, userId, threadId || null]
+       WHERE room_id = $1 AND user_id = $2 AND thread_id IS NOT DISTINCT FROM $3
+         AND source_account_id = $4`,
+      [roomId, userId, threadId || null, this.sourceAccountId]
     );
   }
 
   async getTypingUsers(roomId: string, threadId?: string): Promise<TypingIndicator[]> {
     return this.query<TypingIndicator>(
       `SELECT * FROM realtime_typing
-       WHERE room_id = $1 AND thread_id IS NOT DISTINCT FROM $2 AND expires_at > NOW()`,
-      [roomId, threadId || null]
+       WHERE room_id = $1 AND thread_id IS NOT DISTINCT FROM $2 AND expires_at > NOW()
+         AND source_account_id = $3`,
+      [roomId, threadId || null, this.sourceAccountId]
     );
   }
 
@@ -357,9 +600,10 @@ export class Database {
   }): Promise<void> {
     await this.query(
       `INSERT INTO realtime_events (
-        event_type, socket_id, user_id, room_id, payload, ip_address
-      ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        source_account_id, event_type, socket_id, user_id, room_id, payload, ip_address
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
+        this.sourceAccountId,
         data.eventType,
         data.socketId || null,
         data.userId || null,
@@ -372,8 +616,8 @@ export class Database {
 
   async getRecentEvents(limit: number = 100): Promise<RealtimeEvent[]> {
     return this.query<RealtimeEvent>(
-      `SELECT * FROM realtime_events ORDER BY created_at DESC LIMIT $1`,
-      [limit]
+      `SELECT * FROM realtime_events WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [this.sourceAccountId, limit]
     );
   }
 
@@ -390,21 +634,26 @@ export class Database {
   }> {
     const [connections, authenticated, rooms, presence, events] = await Promise.all([
       this.queryOne<{ count: string }>(
-        `SELECT COUNT(*) as count FROM realtime_connections WHERE status = 'connected'`
+        `SELECT COUNT(*) as count FROM realtime_connections WHERE status = 'connected' AND source_account_id = $1`,
+        [this.sourceAccountId]
       ),
       this.queryOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM realtime_connections
-         WHERE status = 'connected' AND user_id IS NOT NULL`
+         WHERE status = 'connected' AND user_id IS NOT NULL AND source_account_id = $1`,
+        [this.sourceAccountId]
       ),
       this.queryOne<{ count: string }>(
-        `SELECT COUNT(*) as count FROM realtime_rooms WHERE is_active = TRUE`
+        `SELECT COUNT(*) as count FROM realtime_rooms WHERE is_active = TRUE AND source_account_id = $1`,
+        [this.sourceAccountId]
       ),
       this.query<{ status: string; count: string }>(
-        `SELECT status, COUNT(*) as count FROM realtime_presence GROUP BY status`
+        `SELECT status, COUNT(*) as count FROM realtime_presence WHERE source_account_id = $1 GROUP BY status`,
+        [this.sourceAccountId]
       ),
       this.queryOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM realtime_events
-         WHERE created_at > NOW() - INTERVAL '1 hour'`
+         WHERE created_at > NOW() - INTERVAL '1 hour' AND source_account_id = $1`,
+        [this.sourceAccountId]
       ),
     ]);
 
@@ -420,5 +669,31 @@ export class Database {
       presence: presenceMap,
       eventsLastHour: parseInt(events?.count || '0', 10),
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Multi-App Cleanup
+  // -------------------------------------------------------------------------
+
+  async cleanupForAccount(sourceAccountId: string): Promise<number> {
+    const tables = [
+      'realtime_events',
+      'realtime_typing',
+      'realtime_room_members',
+      'realtime_presence',
+      'realtime_rooms',
+      'realtime_connections',
+    ];
+
+    let total = 0;
+    for (const table of tables) {
+      const result = await this.queryOne<{ count: string }>(
+        `WITH deleted AS (DELETE FROM ${table} WHERE source_account_id = $1 RETURNING 1)
+         SELECT COUNT(*) as count FROM deleted`,
+        [sourceAccountId]
+      );
+      total += parseInt(result?.count || '0', 10);
+    }
+    return total;
   }
 }

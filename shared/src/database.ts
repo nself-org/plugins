@@ -190,6 +190,53 @@ export class Database {
     const result = await this.queryOne<{ count: string }>(sql, params);
     return parseInt(result?.count ?? '0', 10);
   }
+
+  /**
+   * Count rows scoped to a specific source_account_id.
+   * Optionally add extra WHERE conditions.
+   */
+  async countScoped(
+    table: string,
+    sourceAccountId: string,
+    where?: string,
+    params?: unknown[]
+  ): Promise<number> {
+    const baseParams = params ? [...params] : [];
+    const accountParamIndex = baseParams.length + 1;
+    const accountFilter = `source_account_id = $${accountParamIndex}`;
+    const fullWhere = where ? `${where} AND ${accountFilter}` : accountFilter;
+    const sql = `SELECT COUNT(*) as count FROM ${table} WHERE ${fullWhere}`;
+    const result = await this.queryOne<{ count: string }>(sql, [...baseParams, sourceAccountId]);
+    return parseInt(result?.count ?? '0', 10);
+  }
+
+  /**
+   * Get the last sync time for a table scoped to a specific source_account_id.
+   */
+  async getLastSyncTimeScoped(table: string, sourceAccountId: string): Promise<Date | null> {
+    const result = await this.queryOne<{ max: Date | null }>(
+      `SELECT MAX(synced_at) as max FROM ${table} WHERE source_account_id = $1`,
+      [sourceAccountId]
+    );
+    return result?.max ?? null;
+  }
+
+  /**
+   * Delete all rows for a given source_account_id across multiple tables.
+   * Tables should be ordered so that child tables come before parent tables.
+   * Returns total number of deleted rows.
+   */
+  async cleanupForAccount(tables: string[], sourceAccountId: string): Promise<number> {
+    let total = 0;
+    for (const table of tables) {
+      const deleted = await this.execute(
+        `DELETE FROM ${table} WHERE source_account_id = $1`,
+        [sourceAccountId]
+      );
+      total += deleted;
+    }
+    return total;
+  }
 }
 
 export function createDatabase(config?: Partial<DatabaseConfig>): Database {

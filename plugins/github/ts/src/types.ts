@@ -27,6 +27,7 @@ export interface GitHubPluginConfig {
 
 export interface GitHubRepositoryRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   name: string;
   full_name: string;
@@ -80,6 +81,7 @@ export interface GitHubLicense {
 
 export interface GitHubBranchRecord {
   id: string; // composite: repo_id + name
+  source_account_id: string;
   repo_id: number;
   name: string;
   sha: string;
@@ -111,6 +113,7 @@ export interface GitHubBranchProtection {
 
 export interface GitHubIssueRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   number: number;
@@ -139,6 +142,7 @@ export interface GitHubIssueRecord {
 
 export interface GitHubPullRequestRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   number: number;
@@ -183,6 +187,7 @@ export interface GitHubPullRequestRecord {
 
 export interface GitHubPullRequestReviewRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   pull_request_id: number;
@@ -202,6 +207,7 @@ export interface GitHubPullRequestReviewRecord {
 
 export interface GitHubIssueCommentRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   issue_number: number;
@@ -218,6 +224,7 @@ export interface GitHubIssueCommentRecord {
 
 export interface GitHubPullRequestReviewCommentRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   pull_request_id: number;
@@ -241,6 +248,7 @@ export interface GitHubPullRequestReviewCommentRecord {
 
 export interface GitHubCommitCommentRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   commit_sha: string;
@@ -262,6 +270,7 @@ export interface GitHubCommitCommentRecord {
 
 export interface GitHubCommitRecord {
   sha: string;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   message: string;
@@ -289,6 +298,7 @@ export interface GitHubCommitRecord {
 
 export interface GitHubReleaseRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   tag_name: string;
@@ -312,6 +322,7 @@ export interface GitHubReleaseRecord {
 
 export interface GitHubTagRecord {
   id: string; // composite: repo_id + name
+  source_account_id: string;
   repo_id: number;
   name: string;
   sha: string;
@@ -329,6 +340,7 @@ export interface GitHubTagRecord {
 
 export interface GitHubMilestoneRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   number: number;
@@ -351,6 +363,7 @@ export interface GitHubMilestoneRecord {
 
 export interface GitHubLabelRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   name: string;
@@ -365,6 +378,7 @@ export interface GitHubLabelRecord {
 
 export interface GitHubWorkflowRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   name: string;
@@ -378,6 +392,7 @@ export interface GitHubWorkflowRecord {
 
 export interface GitHubWorkflowRunRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   workflow_id: number;
@@ -402,6 +417,7 @@ export interface GitHubWorkflowRunRecord {
 
 export interface GitHubWorkflowJobRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   run_id: number;
@@ -437,6 +453,7 @@ export interface GitHubWorkflowStep {
 
 export interface GitHubCheckSuiteRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   head_branch: string | null;
@@ -454,6 +471,7 @@ export interface GitHubCheckSuiteRecord {
 
 export interface GitHubCheckRunRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   check_suite_id: number;
@@ -485,6 +503,7 @@ export interface GitHubCheckRunOutput {
 
 export interface GitHubDeploymentRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   repo_id: number;
   sha: string;
@@ -508,6 +527,7 @@ export interface GitHubDeploymentRecord {
 
 export interface GitHubTeamRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   org_login: string;
   name: string;
@@ -525,6 +545,7 @@ export interface GitHubTeamRecord {
 
 export interface GitHubCollaboratorRecord {
   id: number;
+  source_account_id: string;
   repo_id: number;
   login: string;
   type: string;
@@ -547,6 +568,7 @@ export interface GitHubPermissions {
 
 export interface GitHubOrganizationRecord {
   id: number;
+  source_account_id: string;
   node_id: string;
   login: string;
   name: string | null;
@@ -585,6 +607,7 @@ export interface GitHubPlan {
 
 export interface GitHubWebhookEventRecord {
   id: string;
+  source_account_id: string;
   event: string;
   action: string | null;
   repo_id: number | null;
