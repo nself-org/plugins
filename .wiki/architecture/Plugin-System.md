@@ -3185,7 +3185,7 @@ This architecture has been battle-tested with Stripe, GitHub, and Shopify plugin
 ---
 
 **For More Information**:
-- Plugin Development: `/docs/DEVELOPMENT.md`
-- TypeScript Guide: `/docs/TYPESCRIPT_PLUGIN_GUIDE.md`
-- Contributing: `/docs/CONTRIBUTING.md`
-- Individual Plugin Docs: `/docs/plugins/`
+- Plugin Development: [DEVELOPMENT.md](../DEVELOPMENT.md)
+- TypeScript Guide: [TYPESCRIPT_PLUGIN_GUIDE.md](../TYPESCRIPT_PLUGIN_GUIDE.md)
+- Contributing: [CONTRIBUTING.md](../CONTRIBUTING.md)
+- Individual Plugin Docs: [plugins/](../plugins/)

@@ -415,9 +415,8 @@ export class StripeSyncService {
 
   private async syncSubscriptionItems(): Promise<number> {
     logger.info('Syncing subscription items...');
-    // Get all subscriptions from database (listSubscriptions takes only limit, offset)
-    const subscriptions = await this.db.listSubscriptions(10000, 0);
-    // Filter to active subscriptions in code
+    // Fetch from Stripe directly so multi-account sync does not depend on mixed local state.
+    const subscriptions = await this.client.listAllSubscriptions({ status: 'all' });
     const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
     let totalCount = 0;
 
@@ -490,8 +489,8 @@ export class StripeSyncService {
 
   private async syncPaymentMethods(): Promise<number> {
     logger.info('Syncing payment methods...');
-    // Get all customer IDs from database
-    const customers = await this.db.listCustomers(10000, 0);
+    // Fetch from Stripe directly so each account sync only requests its own customers.
+    const customers = await this.client.listAllCustomers();
     let totalCount = 0;
 
     for (const customer of customers) {
@@ -521,8 +520,8 @@ export class StripeSyncService {
 
   private async syncTaxIds(): Promise<number> {
     logger.info('Syncing tax IDs...');
-    // Get all customer IDs from database
-    const customers = await this.db.listCustomers(10000, 0);
+    // Fetch from Stripe directly so each account sync only requests its own customers.
+    const customers = await this.client.listAllCustomers();
     let totalCount = 0;
 
     for (const customer of customers) {

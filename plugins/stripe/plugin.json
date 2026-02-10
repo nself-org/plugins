@@ -55,6 +55,10 @@
     ],
     "optional": [
       "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_API_KEYS",
+      "STRIPE_ACCOUNT_LABELS",
+      "STRIPE_WEBHOOK_SECRETS",
+      "STRIPE_ACCOUNT_ID",
       "STRIPE_SYNC_INTERVAL",
       "STRIPE_API_VERSION"
     ]

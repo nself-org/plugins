@@ -20,9 +20,9 @@ install_stripe_plugin() {
     plugin_info "Installing Stripe plugin..."
 
     # Check required environment variables
-    if ! plugin_check_env "stripe" "STRIPE_API_KEY"; then
-        plugin_warn "STRIPE_API_KEY not set. You'll need to configure it before using the plugin."
-        plugin_info "Add to your .env: STRIPE_API_KEY=sk_live_..."
+    if [[ -z "${STRIPE_API_KEY:-}" && -z "${STRIPE_API_KEYS:-}" ]]; then
+        plugin_warn "Stripe API key not set. Configure STRIPE_API_KEY or STRIPE_API_KEYS before using the plugin."
+        plugin_info "Add to your .env: STRIPE_API_KEY=sk_live_... (or STRIPE_API_KEYS=sk_live_legacy,sk_live_rebrand)"
     fi
 
     # Apply database schema
@@ -67,7 +67,7 @@ install_stripe_plugin() {
 
     printf "\n"
     printf "Next steps:\n"
-    printf "  1. Add STRIPE_API_KEY to your .env file\n"
+    printf "  1. Add STRIPE_API_KEY (or STRIPE_API_KEYS) to your .env file\n"
     printf "  2. Run 'nself plugin stripe sync' to import existing data\n"
     printf "  3. Configure webhooks at https://dashboard.stripe.com/webhooks\n"
     printf "\n"

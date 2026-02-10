@@ -35,9 +35,61 @@ const logger = createLogger('stripe:db');
 
 export class StripeDatabase {
   private db: Database;
+  private readonly sourceAccountId: string;
 
-  constructor(db?: Database) {
+  constructor(db?: Database, sourceAccountId = 'primary') {
     this.db = db ?? createDatabase();
+    this.sourceAccountId = this.normalizeSourceAccountId(sourceAccountId);
+  }
+
+  forSourceAccount(sourceAccountId: string): StripeDatabase {
+    return new StripeDatabase(this.db, sourceAccountId);
+  }
+
+  getCurrentSourceAccountId(): string {
+    return this.sourceAccountId;
+  }
+
+  private normalizeSourceAccountId(value: string): string {
+    const normalized = value
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    return normalized.length > 0 ? normalized : 'primary';
+  }
+
+  private withSourceAccountContext(sql: string, params: unknown[] = []): { sql: string; params: unknown[] } {
+    if (!/^\s*INSERT INTO\s+stripe_/i.test(sql) || !/\bON\s+CONFLICT\b/i.test(sql) || /\bsource_account_id\b/i.test(sql)) {
+      return { sql, params };
+    }
+
+    const accountPlaceholder = `$${params.length + 1}`;
+
+    const withColumn = sql.replace(
+      /INSERT INTO\s+(stripe_[a-z_]+)\s*\(([\s\S]*?)\)\s*VALUES/i,
+      (_match, tableName: string, columns: string) => {
+        return `INSERT INTO ${tableName} (${columns.trimEnd()}, source_account_id) VALUES`;
+      }
+    );
+
+    const withValue = withColumn.replace(
+      /\)\s*VALUES\s*\(([\s\S]*?)\)\s*ON\s+CONFLICT/i,
+      (_match, values: string) => {
+        return `) VALUES (${values.trimEnd()}, ${accountPlaceholder}) ON CONFLICT`;
+      }
+    );
+
+    const withUpdate = withValue.replace(
+      /DO\s+UPDATE\s+SET\s*/i,
+      match => `${match}source_account_id = EXCLUDED.source_account_id, `
+    );
+
+    if (withUpdate === sql) {
+      return { sql, params };
+    }
+
+    return { sql: withUpdate, params: [...params, this.sourceAccountId] };
   }
 
   async connect(): Promise<void> {
@@ -53,7 +105,8 @@ export class StripeDatabase {
   }
 
   async execute(sql: string, params?: unknown[]): Promise<number> {
-    return this.db.execute(sql, params);
+    const context = this.withSourceAccountContext(sql, params ?? []);
+    return this.db.execute(context.sql, context.params);
   }
 
   // =========================================================================
@@ -683,12 +736,65 @@ export class StripeDatabase {
       CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_created ON stripe_webhook_events(created_at);
 
       -- =====================================================================
+      -- Multi-Account Source Tracking
+      -- =====================================================================
+
+      ALTER TABLE stripe_customers ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_products ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_prices ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_coupons ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_promotion_codes ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_subscriptions ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_subscription_items ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_subscription_schedules ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_invoices ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_invoice_items ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_credit_notes ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_charges ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_refunds ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_disputes ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_payment_intents ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_setup_intents ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_payment_methods ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_balance_transactions ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_checkout_sessions ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_checkout_session_line_items ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_tax_ids ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_tax_rates ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+      ALTER TABLE stripe_webhook_events ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+
+      CREATE INDEX IF NOT EXISTS idx_stripe_customers_source_account ON stripe_customers(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_products_source_account ON stripe_products(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_prices_source_account ON stripe_prices(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_coupons_source_account ON stripe_coupons(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_promo_codes_source_account ON stripe_promotion_codes(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_source_account ON stripe_subscriptions(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_sub_items_source_account ON stripe_subscription_items(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_sub_schedules_source_account ON stripe_subscription_schedules(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_invoices_source_account ON stripe_invoices(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_invoice_items_source_account ON stripe_invoice_items(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_credit_notes_source_account ON stripe_credit_notes(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_charges_source_account ON stripe_charges(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_refunds_source_account ON stripe_refunds(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_disputes_source_account ON stripe_disputes(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_source_account ON stripe_payment_intents(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_setup_intents_source_account ON stripe_setup_intents(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_payment_methods_source_account ON stripe_payment_methods(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_balance_tx_source_account ON stripe_balance_transactions(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_checkout_sessions_source_account ON stripe_checkout_sessions(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_checkout_items_source_account ON stripe_checkout_session_line_items(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_tax_ids_source_account ON stripe_tax_ids(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_tax_rates_source_account ON stripe_tax_rates(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_source_account ON stripe_webhook_events(source_account_id);
+
+      -- =====================================================================
       -- Analytics Views
       -- =====================================================================
 
       CREATE OR REPLACE VIEW stripe_active_subscriptions AS
       SELECT
         s.id AS subscription_id,
+        s.source_account_id,
         s.status,
         c.id AS customer_id,
         c.email AS customer_email,
@@ -699,7 +805,7 @@ export class StripeDatabase {
         s.items,
         s.metadata
       FROM stripe_subscriptions s
-      LEFT JOIN stripe_customers c ON s.customer_id = c.id
+      LEFT JOIN stripe_customers c ON s.customer_id = c.id AND s.source_account_id = c.source_account_id
       WHERE s.status IN ('active', 'trialing', 'past_due')
         AND (c.deleted_at IS NULL OR c.id IS NULL);
 
@@ -724,6 +830,7 @@ export class StripeDatabase {
       CREATE OR REPLACE VIEW stripe_failed_payments AS
       SELECT
         pi.id AS payment_intent_id,
+        pi.source_account_id,
         pi.amount,
         pi.currency,
         pi.status,
@@ -733,7 +840,7 @@ export class StripeDatabase {
         c.name AS customer_name,
         pi.created_at
       FROM stripe_payment_intents pi
-      LEFT JOIN stripe_customers c ON pi.customer_id = c.id
+      LEFT JOIN stripe_customers c ON pi.customer_id = c.id AND pi.source_account_id = c.source_account_id
       WHERE pi.status IN ('requires_payment_method', 'canceled')
         AND pi.last_payment_error IS NOT NULL
       ORDER BY pi.created_at DESC;
@@ -742,15 +849,16 @@ export class StripeDatabase {
       SELECT
         p.id AS product_id,
         p.name AS product_name,
+        c.source_account_id,
         COUNT(DISTINCT c.id) AS charge_count,
         SUM(c.amount) AS total_amount,
         c.currency
       FROM stripe_charges c
-      JOIN stripe_invoices i ON c.invoice_id = i.id
-      JOIN stripe_prices pr ON i.lines->0->>'price' = pr.id
-      JOIN stripe_products p ON pr.product_id = p.id
+      JOIN stripe_invoices i ON c.invoice_id = i.id AND c.source_account_id = i.source_account_id
+      JOIN stripe_prices pr ON i.lines->0->>'price' = pr.id AND i.source_account_id = pr.source_account_id
+      JOIN stripe_products p ON pr.product_id = p.id AND pr.source_account_id = p.source_account_id
       WHERE c.status = 'succeeded'
-      GROUP BY p.id, p.name, c.currency
+      GROUP BY p.id, p.name, c.currency, c.source_account_id
       ORDER BY total_amount DESC;
 
       CREATE OR REPLACE VIEW stripe_dispute_summary AS
@@ -779,7 +887,7 @@ export class StripeDatabase {
     `;
 
     await this.db.executeSqlFile(schema);
-    logger.success('Complete Stripe schema initialized (21 tables, 6 views)');
+    logger.success('Complete Stripe schema initialized (23 tables, 6 views)');
   }
 
   // =========================================================================
@@ -787,7 +895,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertCustomer(customer: StripeCustomerRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_customers (
         id, email, name, phone, description, currency, default_source,
         invoice_prefix, balance, delinquent, tax_exempt, metadata,
@@ -835,7 +943,7 @@ export class StripeDatabase {
   }
 
   async markCustomerDeleted(id: string): Promise<void> {
-    await this.db.execute('UPDATE stripe_customers SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1', [id]);
+    await this.execute('UPDATE stripe_customers SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1', [id]);
   }
 
   // =========================================================================
@@ -843,7 +951,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertProduct(product: StripeProductRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_products (
         id, name, description, active, type, images, metadata, attributes,
         shippable, statement_descriptor, tax_code, unit_label, url,
@@ -893,7 +1001,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertPrice(price: StripePriceRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_prices (
         id, product_id, active, currency, unit_amount, unit_amount_decimal,
         type, billing_scheme, recurring, tiers, tiers_mode, transform_quantity,
@@ -946,7 +1054,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertCoupon(coupon: StripeCouponRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_coupons (
         id, name, amount_off, percent_off, currency, duration, duration_in_months,
         max_redemptions, times_redeemed, redeem_by, valid, applies_to, metadata,
@@ -995,7 +1103,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertPromotionCode(code: StripePromotionCodeRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_promotion_codes (
         id, coupon_id, code, customer_id, active, max_redemptions, times_redeemed,
         expires_at, restrictions, metadata, created_at, synced_at
@@ -1040,7 +1148,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertSubscription(subscription: StripeSubscriptionRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_subscriptions (
         id, customer_id, status, current_period_start, current_period_end,
         cancel_at, canceled_at, cancel_at_period_end, ended_at, trial_start,
@@ -1113,7 +1221,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertSubscriptionItem(item: StripeSubscriptionItemRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_subscription_items (
         id, subscription_id, price_id, quantity, billing_thresholds, metadata, created_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
@@ -1139,7 +1247,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertSubscriptionSchedule(schedule: StripeSubscriptionScheduleRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_subscription_schedules (
         id, customer_id, subscription_id, status, current_phase, default_settings,
         end_behavior, phases, released_at, released_subscription, metadata,
@@ -1174,7 +1282,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertInvoice(invoice: StripeInvoiceRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_invoices (
         id, customer_id, subscription_id, status, collection_method, currency,
         amount_due, amount_paid, amount_remaining, subtotal, subtotal_excluding_tax,
@@ -1259,7 +1367,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertInvoiceItem(item: StripeInvoiceItemRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_invoice_items (
         id, customer_id, invoice_id, subscription_id, subscription_item_id, price_id,
         amount, currency, description, discountable, quantity, unit_amount,
@@ -1294,7 +1402,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertCharge(charge: StripeChargeRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_charges (
         id, customer_id, payment_intent_id, invoice_id, amount, amount_captured,
         amount_refunded, currency, status, paid, captured, refunded, disputed,
@@ -1360,7 +1468,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertRefund(refund: StripeRefundRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_refunds (
         id, charge_id, payment_intent_id, amount, currency, status, reason,
         receipt_number, description, failure_balance_transaction, failure_reason,
@@ -1409,7 +1517,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertDispute(dispute: StripeDisputeRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_disputes (
         id, charge_id, payment_intent_id, amount, currency, status, reason,
         is_charge_refundable, balance_transactions, evidence, evidence_details,
@@ -1458,7 +1566,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertPaymentIntent(pi: StripePaymentIntentRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_payment_intents (
         id, customer_id, invoice_id, amount, amount_capturable, amount_received,
         currency, status, capture_method, confirmation_method, payment_method_id,
@@ -1529,7 +1637,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertSetupIntent(si: StripeSetupIntentRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_setup_intents (
         id, customer_id, payment_method_id, status, usage, payment_method_types,
         client_secret, description, cancellation_reason, last_setup_error,
@@ -1569,7 +1677,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertPaymentMethod(pm: StripePaymentMethodRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_payment_methods (
         id, customer_id, type, billing_details, card, bank_account,
         sepa_debit, us_bank_account, link, metadata, created_at, synced_at
@@ -1617,7 +1725,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertBalanceTransaction(bt: StripeBalanceTransactionRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_balance_transactions (
         id, amount, currency, net, fee, fee_details, type, status,
         description, source, reporting_category, available_on, created_at, synced_at
@@ -1661,7 +1769,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertCheckoutSession(session: StripeCheckoutSessionRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_checkout_sessions (
         id, customer_id, customer_email, payment_intent_id, subscription_id,
         invoice_id, mode, status, payment_status, currency, amount_total,
@@ -1712,7 +1820,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertCreditNote(cn: StripeCreditNoteRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_credit_notes (
         id, invoice_id, customer_id, type, status, currency, amount, subtotal,
         subtotal_excluding_tax, total, total_excluding_tax, discount_amount,
@@ -1745,7 +1853,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertTaxRate(tr: StripeTaxRateRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_tax_rates (
         id, display_name, description, percentage, inclusive, active,
         country, state, jurisdiction, tax_type, metadata, created_at, synced_at
@@ -1790,7 +1898,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async upsertTaxId(taxId: StripeTaxIdRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_tax_ids (
         id, customer_id, type, value, country, verification, created_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
@@ -1815,7 +1923,7 @@ export class StripeDatabase {
   // =========================================================================
 
   async insertWebhookEvent(event: StripeWebhookEventRecord): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       `INSERT INTO stripe_webhook_events (
         id, type, api_version, data, object_type, object_id, request_id,
         request_idempotency_key, livemode, pending_webhooks, processed,
@@ -1834,7 +1942,7 @@ export class StripeDatabase {
   }
 
   async markEventProcessed(id: string, error?: string): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       'UPDATE stripe_webhook_events SET processed = TRUE, processed_at = NOW(), error = $2 WHERE id = $1',
       [id, error ?? null]
     );
@@ -1851,7 +1959,7 @@ export class StripeDatabase {
   }
 
   async incrementRetryCount(id: string): Promise<void> {
-    await this.db.execute(
+    await this.execute(
       'UPDATE stripe_webhook_events SET retry_count = retry_count + 1 WHERE id = $1',
       [id]
     );

@@ -6,11 +6,9 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { createLogger, verifyStripeSignature, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
-import { StripeClient } from './client.js';
 import { StripeDatabase } from './database.js';
-import { StripeSyncService } from './sync.js';
-import { StripeWebhookHandler } from './webhooks.js';
 import { loadConfig, type Config } from './config.js';
+import { createStripeAccountContexts, runStripeAccountSync } from './account-sync.js';
 
 const logger = createLogger('stripe:server');
 
@@ -18,14 +16,13 @@ export async function createServer(config?: Partial<Config>) {
   const fullConfig = loadConfig(config);
 
   // Initialize components
-  const client = new StripeClient(fullConfig.stripeApiKey, fullConfig.stripeApiVersion);
   const db = new StripeDatabase();
-  const syncService = new StripeSyncService(client, db);
-  const webhookHandler = new StripeWebhookHandler(client, db, syncService);
 
   // Connect to database
   await db.connect();
   await db.initializeSchema();
+  const accountContexts = createStripeAccountContexts(fullConfig, db);
+  const primaryContext = accountContexts[0];
 
   // Create Fastify server
   const app = Fastify({
@@ -112,6 +109,7 @@ export async function createServer(config?: Partial<Config>) {
       plugin: 'stripe',
       version: '1.0.0',
       status: 'running',
+      accounts: accountContexts.map(context => context.account.id),
       stats,
       timestamp: new Date().toISOString(),
     };
@@ -127,17 +125,25 @@ export async function createServer(config?: Partial<Config>) {
       return reply.status(400).send({ error: 'Missing signature' });
     }
 
-    if (fullConfig.stripeWebhookSecret) {
-      if (!verifyStripeSignature(rawBody, signature, fullConfig.stripeWebhookSecret)) {
-        logger.warn('Invalid Stripe signature');
-        return reply.status(401).send({ error: 'Invalid signature' });
-      }
+    const contextsWithSecrets = accountContexts.filter(context => Boolean(context.account.webhookSecret));
+    const matchedContext = contextsWithSecrets.length > 0
+      ? contextsWithSecrets.find(context => verifyStripeSignature(rawBody, signature, context.account.webhookSecret))
+      : primaryContext;
+
+    if (!matchedContext) {
+      logger.warn('Invalid Stripe signature for all configured accounts');
+      return reply.status(401).send({ error: 'Invalid signature' });
     }
 
     try {
-      const event = client.constructEvent(rawBody, signature, fullConfig.stripeWebhookSecret ?? '');
-      await webhookHandler.handle(event);
-      return { received: true };
+      if (!matchedContext.account.webhookSecret) {
+        logger.warn('Stripe webhook secret is not configured for matched account');
+        return reply.status(400).send({ error: 'Webhook secret not configured' });
+      }
+
+      const event = matchedContext.client.constructEvent(rawBody, signature, matchedContext.account.webhookSecret);
+      await matchedContext.webhookHandler.handle(event);
+      return { received: true, account: matchedContext.account.id };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Webhook processing failed', { error: message });
@@ -147,13 +153,25 @@ export async function createServer(config?: Partial<Config>) {
 
   // Sync endpoint
   app.post('/sync', async (request, reply) => {
-    const { resources, incremental } = request.body as {
+    const { resources, incremental, accounts } = request.body as {
       resources?: string[];
       incremental?: boolean;
+      accounts?: string[];
     };
 
     try {
-      const result = await syncService.sync({
+      const selectedContexts = Array.isArray(accounts) && accounts.length > 0
+        ? accountContexts.filter(context => accounts.includes(context.account.id))
+        : accountContexts;
+
+      if (selectedContexts.length === 0) {
+        return reply.status(400).send({
+          error: 'No matching accounts selected',
+          availableAccounts: accountContexts.map(context => context.account.id),
+        });
+      }
+
+      const result = await runStripeAccountSync(selectedContexts, {
         resources: resources as Array<'customers' | 'products' | 'prices' | 'subscriptions' | 'invoices' | 'payment_intents' | 'payment_methods'>,
         incremental,
       });
@@ -437,9 +455,10 @@ export async function createServer(config?: Partial<Config>) {
   return {
     app,
     db,
-    client,
-    syncService,
-    webhookHandler,
+    accountContexts,
+    client: primaryContext.client,
+    syncService: primaryContext.syncService,
+    webhookHandler: primaryContext.webhookHandler,
     start: async () => {
       await app.listen({ port: fullConfig.port, host: fullConfig.host });
       logger.success(`Stripe plugin server running on http://${fullConfig.host}:${fullConfig.port}`);

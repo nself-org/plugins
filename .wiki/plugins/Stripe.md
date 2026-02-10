@@ -30,6 +30,7 @@ The Stripe plugin provides complete synchronization of your Stripe account data 
 - **6 Analytics Views** - Pre-built SQL views for common metrics
 - **Full REST API** - Query synced data via HTTP endpoints
 - **CLI Interface** - Manage everything from the command line
+- **Account Provenance** - `source_account_id` stored on synced rows for multi-account traceability
 
 ### Synced Resources
 
@@ -89,11 +90,17 @@ nself plugin stripe server --port 3001
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | - | PostgreSQL connection string |
-| `STRIPE_API_KEY` | Yes | - | Stripe secret API key (sk_live_xxx or sk_test_xxx) |
+| `STRIPE_API_KEY` | Yes* | - | Stripe secret API key (sk_live_xxx or sk_test_xxx) |
+| `STRIPE_API_KEYS` | No | - | Comma-separated API keys for unified multi-account sync |
+| `STRIPE_ACCOUNT_LABELS` | No | - | Comma-separated labels aligned with `STRIPE_API_KEYS` |
 | `STRIPE_WEBHOOK_SECRET` | No | - | Webhook endpoint signing secret (whsec_xxx) |
+| `STRIPE_WEBHOOK_SECRETS` | No | - | Comma-separated webhook secrets aligned with `STRIPE_API_KEYS` |
+| `STRIPE_ACCOUNT_ID` | No | `primary` | Label for single-account status output |
 | `STRIPE_API_VERSION` | No | `2024-12-18` | Stripe API version to use |
 | `PORT` | No | `3001` | HTTP server port |
 | `LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
+
+\* `STRIPE_API_KEY` is required when `STRIPE_API_KEYS` is not set.
 
 ### API Key Permissions
 
@@ -118,6 +125,18 @@ STRIPE_API_VERSION=2024-12-18
 PORT=3001
 LOG_LEVEL=info
 ```
+
+### Unified Multi-Account Example
+
+```bash
+STRIPE_API_KEYS=sk_live_legacy,sk_live_rebrand
+STRIPE_ACCOUNT_LABELS=legacy,rebrand
+STRIPE_WEBHOOK_SECRETS=whsec_legacy,whsec_rebrand
+```
+
+With these vars set, `sync` runs aggregate data from all configured accounts in one pass.
+Each synced record keeps its origin in `source_account_id`, so data is unified by default but still account-aware for filtering and audits.
+If a Stripe object ID collides across accounts, the most recently synced row for that ID is retained.
 
 ---
 
@@ -295,27 +314,28 @@ GET /health
 Returns server health status.
 
 ```http
-GET /api/status
+GET /status
 ```
 Returns sync status and statistics.
 
 #### Sync
 
 ```http
-POST /api/sync
+POST /sync
 ```
 Triggers a full data sync.
 
 ```http
-POST /api/sync
+POST /sync
 Content-Type: application/json
 
 {
   "resources": ["customers", "subscriptions"],
-  "incremental": true
+  "incremental": true,
+  "accounts": ["legacy", "rebrand"]
 }
 ```
-Triggers sync for specific resources.
+Triggers sync for specific resources and optional account subsets.
 
 #### Customers
 
@@ -1511,7 +1531,7 @@ ORDER BY total_mrr DESC;
 Error: Invalid API Key provided
 ```
 
-**Solution:** Check that `STRIPE_API_KEY` is set correctly. Ensure you're using the correct key for your environment (test vs live).
+**Solution:** Check that `STRIPE_API_KEY` (or each key in `STRIPE_API_KEYS`) is set correctly. Ensure you're using the correct key for your environment (test vs live).
 
 ```bash
 # Verify key format

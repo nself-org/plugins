@@ -1170,7 +1170,7 @@ If you're still stuck after trying these solutions:
 3. **Review Documentation**
    - [Debugging Guide](./Debugging.md)
    - [FAQ](./FAQ.md)
-   - Plugin-specific docs in `/docs/plugins/`
+   - Plugin-specific docs in the wiki Plugins section
 
 4. **Search Issues**
    - GitHub Issues: https://github.com/acamarata/nself-plugins/issues

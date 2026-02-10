@@ -21,6 +21,10 @@ Thank you for your interest in contributing!
    ```bash
    git checkout -b feature/my-new-plugin
    ```
+4. Install local policy hooks:
+   ```bash
+   bash .github/scripts/install-hooks.sh
+   ```
 
 ## Plugin Guidelines
 
@@ -47,7 +51,7 @@ Thank you for your interest in contributing!
 
 Each plugin needs:
 - README in plugin directory
-- Wiki page in docs/plugins/
+- Wiki page in `plugins/<Plugin>.md`
 - Environment variable documentation
 - Usage examples
 
@@ -73,6 +77,11 @@ Follow conventional commits:
 - `fix(plugin): fix bug`
 - `docs(plugin): update documentation`
 - `test(plugin): add tests`
+
+Authorship policy:
+- Keep commit messages free of assistant/tool authorship language.
+- Do not add `Co-authored-by` trailers.
+- Product capability language in code/docs is allowed (for example, feature descriptions such as `AI-powered`).
 
 ## Review Process
 

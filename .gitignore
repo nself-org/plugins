@@ -38,8 +38,9 @@ build/
 # Node modules (if any tooling uses npm)
 node_modules/
 
-# Claude Code private directory (contains credentials)
+# Private control directories (contains credentials)
 .claude/
+.codex/
 
 # Task tracking files
 todo.md

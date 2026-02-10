@@ -9,4 +9,5 @@ export { StripeSyncService } from './sync.js';
 export { StripeWebhookHandler } from './webhooks.js';
 export { createServer } from './server.js';
 export { loadConfig, isTestMode, isLiveMode } from './config.js';
+export { createStripeAccountContexts, runStripeAccountSync } from './account-sync.js';
 export * from './types.js';

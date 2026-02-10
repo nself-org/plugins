@@ -1705,8 +1705,8 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guide.
    - Update registry.json
 
 6. **Documentation**
-   - Create docs/plugins/ServiceName.md
-   - Update docs/Home.md
+   - Create `plugins/ServiceName.md`
+   - Update `Home.md`
 
 7. **Test**
    ```bash

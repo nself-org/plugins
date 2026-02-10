@@ -12,6 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS stripe_customers (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe customer ID (cus_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     email VARCHAR(255),
     name VARCHAR(255),
     phone VARCHAR(50),
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS stripe_customers (
 
 CREATE INDEX IF NOT EXISTS idx_stripe_customers_email ON stripe_customers(email);
 CREATE INDEX IF NOT EXISTS idx_stripe_customers_created ON stripe_customers(created_at);
+CREATE INDEX IF NOT EXISTS idx_stripe_customers_source_account ON stripe_customers(source_account_id);
 
 -- =============================================================================
 -- Products
@@ -40,6 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_customers_created ON stripe_customers(crea
 
 CREATE TABLE IF NOT EXISTS stripe_products (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe product ID (prod_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     name VARCHAR(255) NOT NULL,
     description TEXT,
     active BOOLEAN DEFAULT TRUE,
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS stripe_products (
 );
 
 CREATE INDEX IF NOT EXISTS idx_stripe_products_active ON stripe_products(active);
+CREATE INDEX IF NOT EXISTS idx_stripe_products_source_account ON stripe_products(source_account_id);
 
 -- =============================================================================
 -- Prices
@@ -67,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_products_active ON stripe_products(active)
 
 CREATE TABLE IF NOT EXISTS stripe_prices (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe price ID (price_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     product_id VARCHAR(255) REFERENCES stripe_products(id),
     active BOOLEAN DEFAULT TRUE,
     currency VARCHAR(3) NOT NULL,
@@ -91,6 +96,7 @@ CREATE TABLE IF NOT EXISTS stripe_prices (
 CREATE INDEX IF NOT EXISTS idx_stripe_prices_product ON stripe_prices(product_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_prices_active ON stripe_prices(active);
 CREATE INDEX IF NOT EXISTS idx_stripe_prices_lookup_key ON stripe_prices(lookup_key);
+CREATE INDEX IF NOT EXISTS idx_stripe_prices_source_account ON stripe_prices(source_account_id);
 
 -- =============================================================================
 -- Subscriptions
@@ -98,6 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_prices_lookup_key ON stripe_prices(lookup_
 
 CREATE TABLE IF NOT EXISTS stripe_subscriptions (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe subscription ID (sub_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     customer_id VARCHAR(255) REFERENCES stripe_customers(id),
     status VARCHAR(20) NOT NULL,                    -- active, past_due, canceled, etc.
     current_period_start TIMESTAMP WITH TIME ZONE,
@@ -134,6 +141,7 @@ CREATE TABLE IF NOT EXISTS stripe_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_customer ON stripe_subscriptions(customer_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_status ON stripe_subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_period ON stripe_subscriptions(current_period_end);
+CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_source_account ON stripe_subscriptions(source_account_id);
 
 -- =============================================================================
 -- Invoices
@@ -141,6 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_period ON stripe_subscriptio
 
 CREATE TABLE IF NOT EXISTS stripe_invoices (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe invoice ID (in_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     customer_id VARCHAR(255) REFERENCES stripe_customers(id),
     subscription_id VARCHAR(255) REFERENCES stripe_subscriptions(id),
     status VARCHAR(20),                             -- draft, open, paid, uncollectible, void
@@ -203,6 +212,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_invoices_customer ON stripe_invoices(custo
 CREATE INDEX IF NOT EXISTS idx_stripe_invoices_subscription ON stripe_invoices(subscription_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_invoices_status ON stripe_invoices(status);
 CREATE INDEX IF NOT EXISTS idx_stripe_invoices_created ON stripe_invoices(created_at);
+CREATE INDEX IF NOT EXISTS idx_stripe_invoices_source_account ON stripe_invoices(source_account_id);
 
 -- =============================================================================
 -- Payment Intents
@@ -210,6 +220,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_invoices_created ON stripe_invoices(create
 
 CREATE TABLE IF NOT EXISTS stripe_payment_intents (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe payment intent ID (pi_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     customer_id VARCHAR(255) REFERENCES stripe_customers(id),
     invoice_id VARCHAR(255) REFERENCES stripe_invoices(id),
     amount BIGINT NOT NULL,
@@ -250,6 +261,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_customer ON stripe_payment
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_invoice ON stripe_payment_intents(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_status ON stripe_payment_intents(status);
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_created ON stripe_payment_intents(created_at);
+CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_source_account ON stripe_payment_intents(source_account_id);
 
 -- =============================================================================
 -- Payment Methods
@@ -257,6 +269,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_payment_intents_created ON stripe_payment_
 
 CREATE TABLE IF NOT EXISTS stripe_payment_methods (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe payment method ID (pm_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     customer_id VARCHAR(255) REFERENCES stripe_customers(id),
     type VARCHAR(30) NOT NULL,                      -- card, bank_account, etc.
     billing_details JSONB,
@@ -273,6 +286,7 @@ CREATE TABLE IF NOT EXISTS stripe_payment_methods (
 
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_methods_customer ON stripe_payment_methods(customer_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_payment_methods_type ON stripe_payment_methods(type);
+CREATE INDEX IF NOT EXISTS idx_stripe_payment_methods_source_account ON stripe_payment_methods(source_account_id);
 
 -- =============================================================================
 -- Webhook Events (for audit and replay)
@@ -280,6 +294,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_payment_methods_type ON stripe_payment_met
 
 CREATE TABLE IF NOT EXISTS stripe_webhook_events (
     id VARCHAR(255) PRIMARY KEY,                    -- Stripe event ID (evt_xxx)
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     type VARCHAR(100) NOT NULL,                     -- Event type (customer.created, etc.)
     api_version VARCHAR(50),
     data JSONB NOT NULL,                            -- Full event data
@@ -301,6 +316,20 @@ CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_type ON stripe_webhook_even
 CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_object ON stripe_webhook_events(object_type, object_id);
 CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_processed ON stripe_webhook_events(processed);
 CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_created ON stripe_webhook_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_source_account ON stripe_webhook_events(source_account_id);
+
+-- =============================================================================
+-- Multi-account source tracking backfill (existing installs)
+-- =============================================================================
+
+ALTER TABLE IF EXISTS stripe_customers ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_products ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_prices ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_subscriptions ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_invoices ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_payment_intents ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_payment_methods ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
+ALTER TABLE IF EXISTS stripe_webhook_events ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary';
 
 -- =============================================================================
 -- Views for common queries
@@ -310,6 +339,7 @@ CREATE INDEX IF NOT EXISTS idx_stripe_webhook_events_created ON stripe_webhook_e
 CREATE OR REPLACE VIEW stripe_active_subscriptions AS
 SELECT
     s.id AS subscription_id,
+    s.source_account_id,
     s.status,
     c.id AS customer_id,
     c.email AS customer_email,
@@ -320,7 +350,7 @@ SELECT
     s.items,
     s.metadata
 FROM stripe_subscriptions s
-JOIN stripe_customers c ON s.customer_id = c.id
+JOIN stripe_customers c ON s.customer_id = c.id AND s.source_account_id = c.source_account_id
 WHERE s.status IN ('active', 'trialing', 'past_due')
   AND c.deleted_at IS NULL;
 
@@ -346,6 +376,7 @@ ORDER BY month;
 CREATE OR REPLACE VIEW stripe_failed_payments AS
 SELECT
     pi.id AS payment_intent_id,
+    pi.source_account_id,
     pi.amount,
     pi.currency,
     pi.status,
@@ -355,7 +386,7 @@ SELECT
     c.name AS customer_name,
     pi.created_at
 FROM stripe_payment_intents pi
-JOIN stripe_customers c ON pi.customer_id = c.id
+JOIN stripe_customers c ON pi.customer_id = c.id AND pi.source_account_id = c.source_account_id
 WHERE pi.status IN ('requires_payment_method', 'canceled')
   AND pi.last_payment_error IS NOT NULL
 ORDER BY pi.created_at DESC;

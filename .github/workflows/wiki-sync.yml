@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'docs/**'
+      - '.wiki/**'
   workflow_dispatch:
 
 permissions:
@@ -18,13 +18,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Enforce attribution policy
+        run: bash .github/scripts/no-attribution-check.sh --all
+
       - name: Check if wiki exists
         id: wiki-check
         run: |
           if git ls-remote --exit-code https://github.com/${{ github.repository }}.wiki.git HEAD >/dev/null 2>&1; then
-            echo "wiki_exists=true" >> $GITHUB_OUTPUT
+            echo "wiki_exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "wiki_exists=false" >> $GITHUB_OUTPUT
+            echo "wiki_exists=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Wiki not initialized. Create a wiki page manually first at https://github.com/${{ github.repository }}/wiki"
           fi
 
@@ -36,89 +39,14 @@ jobs:
           path: wiki
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync docs to wiki
+      - name: Sync .wiki source to wiki
         if: steps.wiki-check.outputs.wiki_exists == 'true'
         run: |
           # Clear existing wiki content (except .git)
           find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 
-          # Copy docs to wiki
-          cp -r docs/* wiki/
-
-          # Rename PLANNED.md to Planned-Plugins.md for wiki
-          if [ -f wiki/PLANNED.md ]; then
-            mv wiki/PLANNED.md wiki/Planned-Plugins.md
-          fi
-
-          # Rename DEVELOPMENT.md to Plugin-Development.md for wiki
-          if [ -f wiki/DEVELOPMENT.md ]; then
-            mv wiki/DEVELOPMENT.md wiki/Plugin-Development.md
-          fi
-
-          # Rename CONTRIBUTING.md to Contributing.md for wiki
-          if [ -f wiki/CONTRIBUTING.md ]; then
-            mv wiki/CONTRIBUTING.md wiki/Contributing.md
-          fi
-
-          # Create _Sidebar.md for wiki navigation
-          cat > wiki/_Sidebar.md << 'SIDEBAR_EOF'
-          ## nself-plugins
-
-          ### Home
-          - [[Home]]
-
-          ### Getting Started
-          - [[Quick Start|getting-started/Quick-Start]]
-          - [[Installation]]
-
-          ### Architecture
-          - [[Plugin System|architecture/Plugin-System]]
-
-          ### Guides
-          - [[Configuration|guides/Configuration]]
-          - [[Best Practices|guides/Best-Practices]]
-
-          ### API Reference
-          - [[REST API|api/REST-API]]
-
-          ### Plugins
-          - [[Stripe|plugins/Stripe]]
-          - [[GitHub|plugins/GitHub]]
-          - [[Shopify|plugins/Shopify]]
-          - [[ID.me|plugins/IDme]]
-          - [[Realtime|plugins/Realtime]]
-          - [[Notifications|plugins/Notifications]]
-          - [[File Processing|plugins/FileProcessing]]
-          - [[Jobs|plugins/Jobs]]
-
-          ### Troubleshooting
-          - [[Common Issues|troubleshooting/Common-Issues]]
-          - [[FAQ|troubleshooting/FAQ]]
-          - [[Debugging|troubleshooting/Debugging]]
-
-          ### Development
-          - [[Plugin Development|Plugin-Development]]
-          - [[TypeScript Guide|TYPESCRIPT_PLUGIN_GUIDE]]
-          - [[Contributing]]
-
-          ### Security & Compliance
-          - [[Security]]
-
-          ### Roadmap
-          - [[Planned Plugins|Planned-Plugins]]
-          SIDEBAR_EOF
-
-          # Remove leading spaces from sidebar
-          sed -i 's/^          //' wiki/_Sidebar.md
-
-          # Create _Footer.md
-          cat > wiki/_Footer.md << 'FOOTER_EOF'
-          ---
-          [nself](https://github.com/acamarata/nself) | [Plugins](https://github.com/acamarata/nself-plugins) | [Issues](https://github.com/acamarata/nself-plugins/issues)
-          FOOTER_EOF
-
-          # Remove leading spaces from footer
-          sed -i 's/^          //' wiki/_Footer.md
+          # Copy tracked wiki source from repository
+          cp -R .wiki/. wiki/
 
       - name: Push to wiki
         if: steps.wiki-check.outputs.wiki_exists == 'true'
@@ -130,6 +58,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Sync docs to wiki"
+            git commit -m "Sync .wiki to wiki"
             git push
           fi

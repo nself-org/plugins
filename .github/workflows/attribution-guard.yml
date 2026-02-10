@@ -1,0 +1,48 @@
+name: Attribution Guard
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tracked-content:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce attribution policy in tracked content
+        run: bash .github/scripts/no-attribution-check.sh --all
+
+  commit-messages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Enforce attribution policy in commit messages
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=200 origin "${{ github.base_ref }}"
+            RANGE="origin/${{ github.base_ref }}..${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              RANGE="${{ github.sha }}"
+            else
+              RANGE="$BEFORE..${{ github.sha }}"
+            fi
+          else
+            RANGE="${{ github.sha }}"
+          fi
+
+          bash .github/scripts/no-attribution-check.sh --history-range "$RANGE"

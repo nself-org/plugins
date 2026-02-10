@@ -27,6 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Enforce attribution policy
+        run: bash .github/scripts/no-attribution-check.sh --all
+
       - name: Validate registry.json
         run: |
           # Check JSON syntax

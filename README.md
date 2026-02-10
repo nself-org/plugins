@@ -20,6 +20,42 @@ nself plugins extend the core functionality of nself by integrating with third-p
 | [GitHub](plugins/github/) | DevOps | 3002 | Repositories, issues, PRs, workflows, deployments |
 | [Shopify](plugins/shopify/) | E-Commerce | 3003 | Products, orders, customers, inventory |
 
+## Repository Structure Policy
+
+Root should stay minimal and intentional:
+
+- `.claude/` (private control plane, gitignored)
+- `.codex/` (private control plane, gitignored)
+- `.github/`
+- `.wiki/` (public wiki source)
+- `plugins/`
+- `shared/`
+- `registry.json`
+- `registry-schema.json`
+- `README.md`
+- `LICENSE`
+- required meta files (for example `.gitignore`)
+
+Allowed exception:
+- `.workers/` is retained because it is required registry publishing infrastructure.
+
+All planning/temp/task artifacts belong in `.claude/` or `.codex/`.
+All public docs belong in `.wiki/` (legacy `docs/` is retired).
+
+## Authorship Attribution Policy
+
+Tracked project artifacts must remain attribution-free regarding assistant/tool authorship.
+
+- No assistant/tool authorship claims in code comments, docs, release notes, or commits.
+- No `Co-authored-by` trailers in commit messages.
+- Product capability language is allowed (for example, feature descriptions such as `AI-powered`).
+
+Local enforcement:
+
+```bash
+bash .github/scripts/install-hooks.sh
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -247,10 +283,13 @@ Source-Available License - See [LICENSE](LICENSE)
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](.wiki/CONTRIBUTING.md) for guidelines.
 
 ## Support
 
 - [Documentation](https://github.com/acamarata/nself-plugins/wiki)
+- [Repository Structure Policy](.wiki/REPOSITORY-STRUCTURE.md)
+- [Changelog](.wiki/CHANGELOG.md)
+- [License Page](.wiki/License.md)
 - [Issues](https://github.com/acamarata/nself-plugins/issues)
 - [nself Main Repo](https://github.com/acamarata/nself)
