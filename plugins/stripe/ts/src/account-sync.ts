@@ -106,6 +106,37 @@ export function createStripeAccountContexts(config: Config, db: StripeDatabase):
   });
 }
 
+export async function runStripeAccountReconcile(
+  contexts: StripeAccountContext[],
+  lookbackDays = 7
+): Promise<StripeAggregateSyncResult> {
+  const startedAt = Date.now();
+  const aggregateStats = emptySyncStats();
+  const aggregateErrors: string[] = [];
+  const accountResults: StripeAccountSyncResult[] = [];
+
+  for (const context of contexts) {
+    const result = await context.syncService.reconcile(lookbackDays);
+
+    mergeSyncStats(aggregateStats, result.stats);
+    aggregateErrors.push(...result.errors.map(error => `[${context.account.id}] ${error}`));
+
+    accountResults.push({
+      accountId: context.account.id,
+      mode: isTestMode(context.account.apiKey) ? 'TEST' : 'LIVE',
+      result,
+    });
+  }
+
+  return {
+    success: accountResults.every(account => account.result.success),
+    stats: aggregateStats,
+    errors: aggregateErrors,
+    duration: Date.now() - startedAt,
+    accounts: accountResults,
+  };
+}
+
 export async function runStripeAccountSync(
   contexts: StripeAccountContext[],
   options: SyncOptions = {}

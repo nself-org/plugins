@@ -9,7 +9,7 @@ import { createLogger } from '@nself/plugin-utils';
 import { loadConfig, isTestMode } from './config.js';
 import { StripeDatabase } from './database.js';
 import { createServer } from './server.js';
-import { createStripeAccountContexts, runStripeAccountSync } from './account-sync.js';
+import { createStripeAccountContexts, runStripeAccountSync, runStripeAccountReconcile } from './account-sync.js';
 
 const logger = createLogger('stripe:cli');
 
@@ -34,6 +34,7 @@ program
   .description('Sync Stripe data to database')
   .option('-r, --resources <resources>', 'Comma-separated list of resources to sync', 'all')
   .option('-i, --incremental', 'Only sync changes since last sync')
+  .option('-a, --account <accounts>', 'Comma-separated account labels to sync (default: all)')
   .action(async (options) => {
     try {
       const config = loadConfig();
@@ -43,7 +44,22 @@ program
       const db = new StripeDatabase();
       await db.connect();
       await db.initializeSchema();
-      const contexts = createStripeAccountContexts(config, db);
+      const allContexts = createStripeAccountContexts(config, db);
+
+      let contexts = allContexts;
+      if (options.account) {
+        const accountFilter = options.account.split(',').map((s: string) => s.trim());
+        contexts = allContexts.filter(c => accountFilter.includes(c.account.id));
+        if (contexts.length === 0) {
+          logger.error('No matching accounts found', {
+            requested: accountFilter,
+            available: allContexts.map(c => c.account.id),
+          });
+          await db.disconnect();
+          process.exit(1);
+        }
+        logger.info(`Syncing accounts: ${contexts.map(c => c.account.id).join(', ')}`);
+      }
 
       const resources = options.resources === 'all'
         ? undefined
@@ -82,6 +98,71 @@ program
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Sync failed', { error: message });
+      process.exit(1);
+    }
+  });
+
+// Reconcile command
+program
+  .command('reconcile')
+  .description('Re-sync recent data to catch gaps from missed webhooks')
+  .option('-d, --days <days>', 'Number of days to look back', '7')
+  .option('-a, --account <accounts>', 'Comma-separated account labels to reconcile (default: all)')
+  .action(async (options) => {
+    try {
+      const config = loadConfig();
+      const lookbackDays = parseInt(options.days, 10);
+
+      logger.info(`Starting reconciliation (last ${lookbackDays} days)...`);
+
+      const db = new StripeDatabase();
+      await db.connect();
+      await db.initializeSchema();
+      const allContexts = createStripeAccountContexts(config, db);
+
+      let contexts = allContexts;
+      if (options.account) {
+        const accountFilter = options.account.split(',').map((s: string) => s.trim());
+        contexts = allContexts.filter(c => accountFilter.includes(c.account.id));
+        if (contexts.length === 0) {
+          logger.error('No matching accounts found', {
+            requested: accountFilter,
+            available: allContexts.map(c => c.account.id),
+          });
+          await db.disconnect();
+          process.exit(1);
+        }
+      }
+
+      const result = await runStripeAccountReconcile(contexts, lookbackDays);
+
+      console.log('\nReconciliation Results:');
+      console.log('=======================');
+      result.accounts.forEach(accountResult => {
+        const status = accountResult.result.success ? 'OK' : 'FAILED';
+        console.log(`- ${accountResult.accountId} (${accountResult.mode}): ${status} in ${(accountResult.result.duration / 1000).toFixed(1)}s`);
+      });
+
+      console.log('\nReconciled Records:');
+      console.log(`  Customers:           ${result.stats.customers}`);
+      console.log(`  Subscriptions:       ${result.stats.subscriptions}`);
+      console.log(`  Invoices:            ${result.stats.invoices}`);
+      console.log(`  Charges:             ${result.stats.charges}`);
+      console.log(`  Refunds:             ${result.stats.refunds}`);
+      console.log(`  Payment Intents:     ${result.stats.paymentIntents}`);
+      console.log(`  Balance Transactions:${result.stats.balanceTransactions}`);
+      console.log(`\nDuration: ${(result.duration / 1000).toFixed(1)}s`);
+
+      if (result.errors.length > 0) {
+        console.log('\nErrors:');
+        result.errors.forEach(err => console.log(`  - ${err}`));
+      }
+
+      await db.disconnect();
+      process.exit(result.success ? 0 : 1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Reconciliation failed', { error: message });
       process.exit(1);
     }
   });

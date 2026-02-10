@@ -884,10 +884,36 @@ export class StripeDatabase {
       WHERE c.status = 'succeeded'
       GROUP BY DATE(c.created_at), c.currency
       ORDER BY date DESC;
+
+      -- Unified payments view: merges charges across all accounts into one queryable table
+      CREATE OR REPLACE VIEW stripe_unified_payments AS
+      SELECT
+        c.id AS payment_id,
+        'charge' AS payment_type,
+        c.source_account_id,
+        c.customer_id,
+        cust.email AS customer_email,
+        cust.name AS customer_name,
+        c.amount,
+        c.amount_refunded,
+        (c.amount - c.amount_refunded) AS net_amount,
+        c.currency,
+        c.status,
+        c.description,
+        c.invoice_id,
+        c.payment_intent_id,
+        c.payment_method_id,
+        c.receipt_email,
+        c.metadata,
+        c.created_at
+      FROM stripe_charges c
+      LEFT JOIN stripe_customers cust ON c.customer_id = cust.id AND c.source_account_id = cust.source_account_id
+      WHERE c.status = 'succeeded'
+      ORDER BY c.created_at DESC;
     `;
 
     await this.db.executeSqlFile(schema);
-    logger.success('Complete Stripe schema initialized (23 tables, 6 views)');
+    logger.success('Complete Stripe schema initialized (23 tables, 7 views)');
   }
 
   // =========================================================================

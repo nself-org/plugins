@@ -374,6 +374,111 @@ export class StripeSyncService {
   }
 
   // =========================================================================
+  // Reconciliation Sync
+  // =========================================================================
+
+  /**
+   * Re-sync resources created within a lookback window to catch gaps from
+   * missed webhooks or cron failures. Uses Stripe's `created` filter to
+   * only fetch objects in the window, then upserts them (idempotent).
+   *
+   * @param lookbackDays Number of days to look back (default 7)
+   * @returns SyncResult with counts of reconciled records
+   */
+  async reconcile(lookbackDays = 7): Promise<SyncResult> {
+    if (this.syncing) {
+      throw new Error('Sync already in progress');
+    }
+
+    this.syncing = true;
+    const startTime = Date.now();
+    const errors: string[] = [];
+    const stats: SyncStats = {
+      customers: 0,
+      products: 0,
+      prices: 0,
+      coupons: 0,
+      promotionCodes: 0,
+      subscriptions: 0,
+      subscriptionItems: 0,
+      subscriptionSchedules: 0,
+      invoices: 0,
+      invoiceItems: 0,
+      creditNotes: 0,
+      charges: 0,
+      refunds: 0,
+      disputes: 0,
+      paymentIntents: 0,
+      setupIntents: 0,
+      paymentMethods: 0,
+      balanceTransactions: 0,
+      checkoutSessions: 0,
+      taxIds: 0,
+      taxRates: 0,
+    };
+
+    const since = Math.floor(Date.now() / 1000) - (lookbackDays * 86400);
+    const createdFilter = { gte: since } as const;
+
+    logger.info('Starting reconciliation sync', { lookbackDays, since: new Date(since * 1000).toISOString() });
+
+    try {
+      // Reconcile payment-critical resources using created filter
+      const reconcileTasks: Array<{ name: string; key: keyof SyncStats; fn: () => Promise<number> }> = [
+        { name: 'Charges', key: 'charges', fn: async () => {
+          const items = await this.client.listAllCharges({ created: createdFilter });
+          return this.db.upsertCharges(items);
+        }},
+        { name: 'Payment intents', key: 'paymentIntents', fn: async () => {
+          const items = await this.client.listAllPaymentIntents({ created: createdFilter });
+          return this.db.upsertPaymentIntents(items);
+        }},
+        { name: 'Invoices', key: 'invoices', fn: async () => {
+          const items = await this.client.listAllInvoices({ created: createdFilter });
+          return this.db.upsertInvoices(items);
+        }},
+        { name: 'Customers', key: 'customers', fn: async () => {
+          const items = await this.client.listAllCustomers({ created: createdFilter });
+          return this.db.upsertCustomers(items);
+        }},
+        { name: 'Subscriptions', key: 'subscriptions', fn: async () => {
+          const items = await this.client.listAllSubscriptions({ created: createdFilter });
+          return this.db.upsertSubscriptions(items);
+        }},
+        { name: 'Refunds', key: 'refunds', fn: async () => {
+          const items = await this.client.listAllRefunds({ created: createdFilter });
+          return this.db.upsertRefunds(items);
+        }},
+        { name: 'Balance transactions', key: 'balanceTransactions', fn: async () => {
+          const items = await this.client.listAllBalanceTransactions({ created: createdFilter });
+          return this.db.upsertBalanceTransactions(items);
+        }},
+      ];
+
+      for (const task of reconcileTasks) {
+        try {
+          const count = await task.fn();
+          (stats as unknown as Record<string, unknown>)[task.key] = count;
+          if (count > 0) {
+            logger.info(`Reconciled ${count} ${task.name.toLowerCase()}`);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`${task.name} reconciliation failed: ${message}`);
+          logger.error(`${task.name} reconciliation failed`, { error: message });
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      logger.success('Reconciliation completed', { duration: `${(duration / 1000).toFixed(1)}s`, errors: errors.length });
+
+      return { success: errors.length === 0, stats, errors, duration };
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  // =========================================================================
   // Individual Sync Methods
   // =========================================================================
 

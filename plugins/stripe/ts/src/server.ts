@@ -8,7 +8,7 @@ import cors from '@fastify/cors';
 import { createLogger, verifyStripeSignature, ApiRateLimiter, createAuthHook, createRateLimitHook } from '@nself/plugin-utils';
 import { StripeDatabase } from './database.js';
 import { loadConfig, type Config } from './config.js';
-import { createStripeAccountContexts, runStripeAccountSync } from './account-sync.js';
+import { createStripeAccountContexts, runStripeAccountSync, runStripeAccountReconcile } from './account-sync.js';
 
 const logger = createLogger('stripe:server');
 
@@ -179,6 +179,34 @@ export async function createServer(config?: Partial<Config>) {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Sync failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // Reconcile endpoint
+  app.post('/reconcile', async (request, reply) => {
+    const { lookbackDays = 7, accounts } = request.body as {
+      lookbackDays?: number;
+      accounts?: string[];
+    };
+
+    try {
+      const selectedContexts = Array.isArray(accounts) && accounts.length > 0
+        ? accountContexts.filter(context => accounts.includes(context.account.id))
+        : accountContexts;
+
+      if (selectedContexts.length === 0) {
+        return reply.status(400).send({
+          error: 'No matching accounts selected',
+          availableAccounts: accountContexts.map(context => context.account.id),
+        });
+      }
+
+      const result = await runStripeAccountReconcile(selectedContexts, lookbackDays);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Reconciliation failed', { error: message });
       return reply.status(500).send({ error: message });
     }
   });
