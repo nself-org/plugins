@@ -2,6 +2,21 @@
 
 Thank you for your interest in contributing!
 
+## 🚨 IMPORTANT: Read Standards First
+
+**BEFORE contributing, you MUST read and follow [STANDARDS.md](STANDARDS.md).**
+
+All plugins must comply with mandatory standards:
+
+- ✅ Universal `np_` table prefix
+- ✅ `source_account_id` multi-app isolation
+- ✅ Official category assignment (1 of 13)
+- ✅ Lowercase-with-hyphens naming
+
+**Violations will cause automated build failures.**
+
+---
+
 ## Ways to Contribute
 
 1. **New Plugins** - Create integrations for new services
@@ -28,10 +43,11 @@ Thank you for your interest in contributing!
 
 ## Plugin Guidelines
 
-### Naming
+### Naming ⚠️ MANDATORY
 
 - Use lowercase with hyphens: `my-service` not `MyService`
 - Match the service name: `stripe`, `shopify`, `github`
+- Plugin directory: `plugins/my-service/`
 
 ### Code Style
 
@@ -40,20 +56,84 @@ Thank you for your interest in contributing!
 - Include comments for complex logic
 - Use `printf` not `echo -e`
 
-### Schema Design
+### Schema Design ⚠️ MANDATORY
 
-- Prefix tables with plugin name: `stripe_customers`
+**ALL tables MUST follow these rules:**
+
+- **Prefix with `np_`**: `np_stripe_customers` not `stripe_customers`
+- **Use `source_account_id`** for multi-tenant isolation
 - Include standard columns: `created_at`, `synced_at`
 - Use JSONB for flexible data
 - Add indexes for common queries
 
+**Example**:
+
+```sql
+CREATE TABLE np_myplugin_resources (
+    id UUID PRIMARY KEY,
+    source_account_id VARCHAR(255) NOT NULL,  -- REQUIRED
+    name VARCHAR(255) NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    INDEX idx_np_myplugin_resources_account (source_account_id)
+);
+```
+
+### Multi-App Configuration ⚠️ MANDATORY
+
+**plugin.json must include**:
+
+```json
+{
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  }
+}
+```
+
+### Category Assignment ⚠️ MANDATORY
+
+Choose ONE of the 13 official categories:
+
+- authentication, automation, commerce, communication, content
+- data, development, infrastructure, integrations, media
+- streaming, sports, compliance
+
+See [STANDARDS.md](STANDARDS.md) for category descriptions.
+
 ### Documentation
 
 Each plugin needs:
+
 - README in plugin directory
 - Wiki page in `plugins/<Plugin>.md`
 - Environment variable documentation
 - Usage examples
+
+## Pre-Submission Validation
+
+**BEFORE submitting, run these checks:**
+
+```bash
+# 1. Validate JSON syntax
+jq empty plugins/my-plugin/plugin.json
+
+# 2. Check table prefixes (should return nothing)
+jq -r '.tables[] | select(startswith("np_") | not)' plugins/my-plugin/plugin.json
+
+# 3. Check multi-app isolation (should output: source_account_id)
+jq -r '.multiApp.isolationColumn' plugins/my-plugin/plugin.json
+
+# 4. Check category is valid
+jq -r '.category' plugins/my-plugin/plugin.json
+```
+
+**All checks must pass or your PR will fail automated validation.**
 
 ## Submitting Changes
 

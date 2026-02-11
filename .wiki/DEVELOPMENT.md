@@ -2,6 +2,21 @@
 
 This guide covers how to create custom nself plugins.
 
+## 🚨 READ FIRST: Mandatory Standards
+
+**BEFORE developing a plugin, you MUST read and follow [STANDARDS.md](STANDARDS.md).**
+
+Key requirements:
+
+- ✅ ALL tables must use `np_` prefix
+- ✅ ALL plugins must use `source_account_id` for multi-app isolation
+- ✅ Use one of 13 official categories only
+- ✅ Plugin names must be lowercase-with-hyphens
+
+**Failure to comply will result in automated build failures.**
+
+---
+
 ## Plugin Structure
 
 Every plugin follows this structure:
@@ -43,12 +58,12 @@ The manifest file describes your plugin:
   "author": "Your Name",
   "license": "MIT",
   "minNselfVersion": "0.4.8",
-  "category": "productivity",
+  "category": "integrations",
   "tags": ["my-service", "integration"],
 
   "tables": [
-    "myservice_items",
-    "myservice_webhooks"
+    "np_myservice_items",
+    "np_myservice_webhooks"
   ],
 
   "webhooks": {
@@ -64,33 +79,71 @@ The manifest file describes your plugin:
   "envVars": {
     "required": ["MYSERVICE_API_KEY"],
     "optional": ["MYSERVICE_WEBHOOK_SECRET"]
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "config": {
+    "port": 4000,
+    "webhookPath": "/webhooks/my-service"
   }
 }
 ```
+
+**Key Points**:
+
+- ⚠️ Tables MUST start with `np_` prefix
+- ⚠️ Category must be one of 13 official categories
+- ⚠️ `multiApp.isolationColumn` MUST be `source_account_id`
 
 ### 3. Create Database Schema
 
 Create `schema/tables.sql`:
 
 ```sql
-CREATE TABLE IF NOT EXISTS myservice_items (
-    id VARCHAR(255) PRIMARY KEY,
+-- ⚠️ IMPORTANT: ALL tables MUST use np_ prefix and include source_account_id
+
+CREATE TABLE IF NOT EXISTS np_myservice_items (
+    id UUID PRIMARY KEY,
+    source_account_id VARCHAR(255) NOT NULL,  -- REQUIRED for multi-app
     name VARCHAR(255) NOT NULL,
     data JSONB DEFAULT '{}',
-    created_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS myservice_webhooks (
-    id VARCHAR(255) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS np_myservice_webhooks (
+    id UUID PRIMARY KEY,
+    source_account_id VARCHAR(255) NOT NULL,  -- REQUIRED for multi-app
     type VARCHAR(100) NOT NULL,
     data JSONB NOT NULL,
     processed BOOLEAN DEFAULT FALSE,
     received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_myservice_items_name ON myservice_items(name);
+-- Indexes for multi-tenant queries
+CREATE INDEX IF NOT EXISTS idx_np_myservice_items_account
+    ON np_myservice_items(source_account_id);
+
+CREATE INDEX IF NOT EXISTS idx_np_myservice_items_name
+    ON np_myservice_items(name);
+
+CREATE INDEX IF NOT EXISTS idx_np_myservice_webhooks_account
+    ON np_myservice_webhooks(source_account_id);
 ```
+
+**Schema Requirements**:
+
+- ⚠️ Table name MUST start with `np_`
+- ⚠️ MUST include `source_account_id VARCHAR(255) NOT NULL`
+- ⚠️ MUST add index on `source_account_id`
+- Use UUID for primary keys (recommended)
+- Include `created_at` and `synced_at` timestamps
 
 ### 4. Create Install Script
 
