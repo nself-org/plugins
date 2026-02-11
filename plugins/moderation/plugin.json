@@ -1,14 +1,14 @@
 {
   "name": "moderation",
   "version": "1.0.0",
-  "description": "Comprehensive content moderation with profanity filtering, toxicity detection, automated actions, and manual review workflows",
+  "description": "Unified content moderation platform with profanity filtering, toxicity detection, AI-powered review, rule-based policies, automated actions, manual review workflows, user strikes, and appeals management",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/moderation",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "content-safety",
-  "tags": ["moderation", "profanity", "toxicity", "content-filter", "safety", "review-queue", "appeals"],
+  "tags": ["moderation", "profanity", "toxicity", "content-filter", "safety", "review-queue", "appeals", "policy-engine", "ai-moderation", "strikes"],
 
   "tables": [
     "moderation_rules",
@@ -19,7 +19,16 @@
     "moderation_reports",
     "moderation_toxicity_scores",
     "moderation_user_stats",
-    "moderation_audit_log"
+    "moderation_audit_log",
+    "mod_reviews",
+    "mod_policies",
+    "mod_user_strikes",
+    "cp_policies",
+    "cp_rules",
+    "cp_evaluations",
+    "cp_word_lists",
+    "cp_overrides",
+    "moderation_webhook_events"
   ],
 
   "webhooks": {
@@ -31,16 +40,29 @@
     "appeal.reviewed": "Appeal reviewed",
     "report.created": "New user report submitted",
     "rule.created": "New moderation rule created",
-    "rule.updated": "Moderation rule updated"
+    "rule.updated": "Moderation rule updated",
+    "review.approved": "Content auto-approved",
+    "review.flagged": "Content flagged for manual review",
+    "review.rejected": "Content rejected",
+    "review.manual.completed": "Manual review completed",
+    "user.strike.added": "Strike added to user",
+    "user.strike.threshold": "User reached strike threshold"
   },
 
   "actions": {
+    "init": "Initialize moderation database schema",
+    "server": "Start moderation HTTP server",
     "analyze": "Analyze content for moderation issues",
+    "evaluate": "Evaluate content against policies",
     "check-profanity": "Check content for profanity matches",
     "queue": "View and manage the moderation review queue",
+    "review": "Make review decision on flagged content",
     "actions": "Manage moderation actions (warn, mute, ban)",
     "appeals": "Manage user appeals",
     "rules": "Manage moderation rules and wordlists",
+    "policies": "Manage content policies",
+    "word-lists": "Manage word lists",
+    "user-status": "Check user moderation status and strikes",
     "stats": "View moderation statistics"
   },
 
@@ -50,6 +72,10 @@
     ],
     "optional": [
       "MODERATION_PLUGIN_PORT",
+      "MODERATION_PLUGIN_HOST",
+      "MODERATION_APP_IDS",
+      "MODERATION_LOG_LEVEL",
+      "MODERATION_PROVIDER",
       "MODERATION_TOXICITY_ENABLED",
       "MODERATION_TOXICITY_PROVIDER",
       "MODERATION_TOXICITY_THRESHOLD",
@@ -63,7 +89,24 @@
       "MODERATION_CLEANUP_INTERVAL_MINUTES",
       "MODERATION_API_KEY",
       "MODERATION_RATE_LIMIT_MAX",
-      "MODERATION_RATE_LIMIT_WINDOW_MS"
+      "MODERATION_RATE_LIMIT_WINDOW_MS",
+      "MOD_OPENAI_API_KEY",
+      "MOD_GOOGLE_VISION_KEY",
+      "MOD_AWS_REKOGNITION_KEY",
+      "MOD_AWS_REKOGNITION_SECRET",
+      "MOD_AWS_REKOGNITION_REGION",
+      "MOD_AUTO_APPROVE_BELOW",
+      "MOD_AUTO_REJECT_ABOVE",
+      "MOD_FLAG_THRESHOLD",
+      "MOD_STRIKE_WARN_THRESHOLD",
+      "MOD_STRIKE_BAN_THRESHOLD",
+      "MOD_STRIKE_EXPIRY_DAYS",
+      "MOD_REVIEW_SLA_HOURS",
+      "MOD_QUEUE_WORKER_CONCURRENCY",
+      "CP_DEFAULT_ACTION",
+      "CP_PROFANITY_ENABLED",
+      "CP_MAX_CONTENT_LENGTH",
+      "CP_EVALUATION_LOG_ENABLED"
     ]
   },
 
@@ -92,7 +135,7 @@
 
   "permissions": {
     "database": ["create", "read", "update", "delete"],
-    "network": [],
-    "filesystem": ["logs"]
+    "network": ["api.openai.com", "vision.googleapis.com", "rekognition.*.amazonaws.com"],
+    "filesystem": ["logs", "cache", "temp"]
   }
 }

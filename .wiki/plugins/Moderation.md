@@ -1,59 +1,145 @@
-# Moderation
+# Moderation Plugin
 
-Comprehensive content moderation with profanity filtering, toxicity detection, automated actions, and manual review workflows.
+Unified content moderation platform with profanity filtering, toxicity detection, AI-powered review, rule-based policies, automated actions, manual review workflows, user strikes, and appeals management.
+
+---
 
 ## Table of Contents
+
 - [Overview](#overview)
+- [Key Features](#key-features)
 - [Quick Start](#quick-start)
+- [Installation](#installation)
 - [Configuration](#configuration)
+- [Database Schema](#database-schema)
 - [CLI Commands](#cli-commands)
 - [REST API](#rest-api)
 - [Webhook Events](#webhook-events)
-- [Database Schema](#database-schema)
-- [Examples](#examples)
+- [Moderation Workflows](#moderation-workflows)
+- [Policy Engine](#policy-engine)
+- [AI-Powered Moderation](#ai-powered-moderation)
+- [User Strikes & Bans](#user-strikes--bans)
+- [Appeals Management](#appeals-management)
+- [Query Examples](#query-examples)
 - [Troubleshooting](#troubleshooting)
+
+---
 
 ## Overview
 
-The Moderation plugin provides comprehensive content moderation capabilities for nself applications. It combines automated filtering with manual review workflows to keep communities safe and enforce content policies. The plugin supports profanity detection, toxicity scoring, automated moderation actions, appeals processes, and detailed user risk tracking.
+The Moderation plugin provides a comprehensive, production-ready content moderation solution that combines multiple detection methods, automated decision-making, and manual review workflows. It syncs all moderation data to PostgreSQL and provides real-time webhook notifications.
 
-This plugin is essential for any platform with user-generated content, providing the tools needed to enforce community guidelines while maintaining transparency and fairness through appeals and audit trails.
+This is a **unified moderation platform** that consolidates:
+- **Profanity filtering** and toxicity detection
+- **AI-powered moderation** using OpenAI, Google Vision, and AWS Rekognition
+- **Automated content review** with configurable auto-approve/reject thresholds
+- **Manual review queue** with SLA tracking and workflow management
+- **User strikes and ban management** with automatic threshold enforcement
+- **Appeals management** with time-limited appeal windows
+- **Rule-based policy engine** for custom content policies
+- **Word list management** for profanity and allowed terms
+- **Policy evaluation** with detailed violation tracking
+- **Automated actions** (warn, mute, ban) based on severity
 
-### Key Features
+### Core Capabilities
 
-- **Profanity Filtering**: Customizable wordlists with regex support and multi-language detection
-- **Toxicity Detection**: Optional AI-powered toxicity scoring via Perspective API, OpenAI, or local models
-- **Automated Moderation**: Rule-based automatic actions (warn, mute, ban, delete content)
-- **Manual Review Queue**: Flag content for human review with severity-based prioritization
-- **User Reporting**: Community-driven content reporting with spam prevention
-- **Appeals System**: Allow users to contest moderation actions with review workflows
-- **Risk Scoring**: Track user behavior patterns and calculate risk levels
-- **User Statistics**: Comprehensive per-user moderation history and metrics
-- **Audit Trail**: Complete log of all moderation actions for accountability
-- **Multi-Account Isolation**: Full support for multi-tenant applications
+| Capability | Description |
+|------------|-------------|
+| **Profanity Detection** | Real-time profanity checking against customizable word lists |
+| **Toxicity Analysis** | AI-powered toxicity scoring with configurable thresholds |
+| **Content Review** | Automated and manual review workflows with queue management |
+| **Policy Enforcement** | Rule-based policy engine with custom rules and actions |
+| **User Management** | Strike tracking, automatic bans, and appeal workflows |
+| **Audit Trail** | Complete audit log of all moderation actions and decisions |
+| **Multi-Provider AI** | Support for OpenAI, Google Vision, and AWS Rekognition |
+| **Real-time Webhooks** | Instant notifications for all moderation events |
 
-### Supported Moderation Actions
+### Moderation Tables
 
-- **Warn**: Issue a warning to a user
-- **Mute**: Temporarily or permanently mute a user
-- **Kick**: Remove user from channel/server
-- **Ban**: Temporarily or permanently ban a user
-- **Delete**: Remove offensive content
-- **Flag**: Mark content for review
+The plugin creates **17 comprehensive tables**:
 
-### Toxicity Detection Providers
+| Table | Purpose |
+|-------|---------|
+| `moderation_rules` | Custom moderation rules with conditions and actions |
+| `moderation_wordlists` | Profanity and allowed word lists |
+| `moderation_actions` | All moderation actions (warn, mute, ban) taken against users |
+| `moderation_flags` | Content flagged for review with severity and status |
+| `moderation_appeals` | User appeals against moderation actions |
+| `moderation_reports` | User-submitted reports of violating content |
+| `moderation_toxicity_scores` | AI toxicity analysis results |
+| `moderation_user_stats` | Per-user violation and action statistics |
+| `moderation_audit_log` | Complete audit trail of all moderation activities |
+| `mod_reviews` | Automated and manual content review records |
+| `mod_policies` | Content policies with configured thresholds |
+| `mod_user_strikes` | User strike tracking with expiration |
+| `cp_policies` | Content policy definitions |
+| `cp_rules` | Individual policy rules with matching conditions |
+| `cp_evaluations` | Policy evaluation results for content |
+| `cp_word_lists` | Word lists for policy matching |
+| `cp_overrides` | Manual policy overrides for specific content |
+| `moderation_webhook_events` | Received webhook event log |
 
-- **local**: Built-in keyword-based detection (default, no API required)
-- **perspective_api**: Google's Perspective API for advanced toxicity scoring
-- **openai**: OpenAI's moderation API
+---
 
-### Use Cases
+## Key Features
 
-1. **Chat Platforms**: Real-time content moderation for messaging apps
-2. **Forums & Communities**: Enforce community guidelines and handle user reports
-3. **Social Networks**: Automated moderation at scale with human oversight
-4. **Gaming Platforms**: Toxicity detection and player behavior tracking
-5. **E-commerce**: Review moderation and spam prevention
+### 1. Multi-Layer Detection
+
+- **Profanity Filtering**: Regex-based word list matching with severity levels
+- **Toxicity Detection**: AI-powered toxicity scoring (0.0 - 1.0 scale)
+- **Image Moderation**: Unsafe content detection in images via Google Vision or AWS Rekognition
+- **Text Moderation**: Hate speech, harassment, and self-harm detection via OpenAI
+- **Custom Rules**: Create rules based on keywords, patterns, user attributes, or content metadata
+
+### 2. Automated Decision Making
+
+- **Auto-Approve**: Content below configured safety threshold auto-approved
+- **Auto-Flag**: Content above threshold flagged for manual review
+- **Auto-Reject**: Content above high threshold automatically rejected
+- **Smart Routing**: Borderline content routed to manual review queue
+
+### 3. Manual Review Workflows
+
+- **Review Queue**: Centralized queue of flagged content requiring human review
+- **Priority Sorting**: Sort by severity, age, report count, or user reputation
+- **SLA Tracking**: Monitor review times against configured SLA
+- **Batch Actions**: Approve or reject multiple items at once
+- **Reviewer Assignment**: Assign specific reviewers to content
+- **Review History**: Full audit trail of all review decisions
+
+### 4. User Strike System
+
+- **Strike Accumulation**: Automatic strike assignment on policy violations
+- **Strike Expiry**: Strikes expire after configured period (default 30 days)
+- **Threshold Actions**: Auto-warn, auto-mute, or auto-ban at strike thresholds
+- **Strike History**: Complete history of strikes per user
+- **Manual Strikes**: Moderators can manually add or remove strikes
+
+### 5. Appeals Management
+
+- **Appeal Submission**: Users can appeal moderation actions
+- **Time-Limited**: Appeals must be submitted within configured window (default 7 days)
+- **Appeal Review**: Moderators review and approve/deny appeals
+- **Action Reversal**: Approved appeals automatically reverse original action
+- **Appeal History**: Track all appeals and outcomes
+
+### 6. Policy Engine
+
+- **Custom Policies**: Define policies with multiple rules and conditions
+- **Rule Matching**: Rules match on content, metadata, user attributes, or context
+- **Action Assignment**: Policies trigger specific actions (approve, reject, warn, ban)
+- **Policy Priority**: Policies evaluated in priority order
+- **Override Support**: Manual overrides for specific content or users
+
+### 7. Comprehensive Reporting
+
+- **User Statistics**: Per-user violation counts, strikes, and actions
+- **Content Statistics**: Aggregate statistics by content type, severity, and outcome
+- **Moderator Performance**: Track review times, decision distribution, and accuracy
+- **Trend Analysis**: Identify patterns in violations over time
+- **Export Support**: Export reports to CSV or JSON
+
+---
 
 ## Quick Start
 
@@ -61,19 +147,83 @@ This plugin is essential for any platform with user-generated content, providing
 # Install the plugin
 nself plugin install moderation
 
-# Set environment variables
-export DATABASE_URL="postgresql://user:pass@localhost:5432/mydb"
-export MODERATION_PLUGIN_PORT=3704
+# Configure environment
+cat >> .env <<EOF
+DATABASE_URL=postgresql://user:pass@localhost:5432/nself
+MODERATION_PLUGIN_PORT=3704
+MODERATION_TOXICITY_ENABLED=true
+MODERATION_TOXICITY_PROVIDER=openai
+MOD_OPENAI_API_KEY=sk-xxx
+MOD_AUTO_APPROVE_BELOW=0.3
+MOD_AUTO_REJECT_ABOVE=0.9
+EOF
 
 # Initialize database schema
 nself plugin moderation init
 
-# Start the moderation server
-nself plugin moderation server
+# Start moderation server
+nself plugin moderation server --port 3704
 
-# Check status
+# Analyze content
+nself plugin moderation analyze --text "Sample content to moderate"
+
+# Check profanity
+nself plugin moderation check-profanity "Test this content"
+
+# View review queue
+nself plugin moderation queue list
+
+# Check user status
+nself plugin moderation user-status user_12345
+```
+
+---
+
+## Installation
+
+### Prerequisites
+
+- **nself CLI** version 0.4.8 or later
+- **PostgreSQL** 12+ running and accessible
+- **Node.js** 18+ (for TypeScript implementation)
+- **API Keys** (optional): OpenAI, Google Cloud, or AWS credentials for AI moderation
+
+### Install Command
+
+```bash
+# Install from nself registry
+nself plugin install moderation
+
+# Verify installation
+nself plugin list | grep moderation
+```
+
+### Manual Installation
+
+```bash
+# Clone repository
+git clone https://github.com/acamarata/nself-plugins.git
+cd nself-plugins/plugins/moderation
+
+# Install dependencies (if using TypeScript implementation)
+cd ts
+npm install
+
+# Build TypeScript
+npm run build
+```
+
+### Initialize Database
+
+```bash
+# Create all moderation tables, indexes, and views
+nself plugin moderation init
+
+# Verify tables created
 nself plugin moderation status
 ```
+
+---
 
 ## Configuration
 
@@ -82,1651 +232,864 @@ nself plugin moderation status
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | - | PostgreSQL connection string |
-| `MODERATION_PLUGIN_PORT` | No | `3704` | HTTP server port |
+| `MODERATION_PLUGIN_PORT` | No | `3704` | HTTP server port for API and webhooks |
 | `MODERATION_PLUGIN_HOST` | No | `0.0.0.0` | HTTP server bind address |
-| `POSTGRES_HOST` | No | `localhost` | PostgreSQL host |
-| `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
-| `POSTGRES_DB` | No | `nself` | PostgreSQL database name |
-| `POSTGRES_USER` | No | `postgres` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | No | `` (empty) | PostgreSQL password |
-| `POSTGRES_SSL` | No | `false` | Enable SSL for PostgreSQL |
-| `MODERATION_TOXICITY_ENABLED` | No | `false` | Enable AI toxicity detection |
-| `MODERATION_TOXICITY_PROVIDER` | No | `local` | Toxicity provider: local, perspective_api, openai |
-| `MODERATION_TOXICITY_THRESHOLD` | No | `0.8` | Toxicity score threshold (0.0-1.0) |
-| `MODERATION_AUTO_DELETE_ENABLED` | No | `true` | Automatically delete highly toxic content |
-| `MODERATION_AUTO_DELETE_THRESHOLD` | No | `0.95` | Threshold for auto-deletion (0.0-1.0) |
-| `MODERATION_AUTO_MUTE_ENABLED` | No | `false` | Automatically mute repeat offenders |
+| `MODERATION_APP_IDS` | No | - | Comma-separated app IDs for multi-app isolation |
+| `MODERATION_LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
+| `MODERATION_PROVIDER` | No | `internal` | Primary moderation provider (internal, openai, google, aws) |
+| `MODERATION_TOXICITY_ENABLED` | No | `false` | Enable toxicity detection |
+| `MODERATION_TOXICITY_PROVIDER` | No | `openai` | Toxicity analysis provider (openai, perspective) |
+| `MODERATION_TOXICITY_THRESHOLD` | No | `0.8` | Toxicity score threshold for flagging (0.0-1.0) |
+| `MODERATION_AUTO_DELETE_ENABLED` | No | `true` | Auto-delete content above threshold |
+| `MODERATION_AUTO_DELETE_THRESHOLD` | No | `0.95` | Auto-delete toxicity threshold (0.0-1.0) |
+| `MODERATION_AUTO_MUTE_ENABLED` | No | `false` | Auto-mute users on repeated violations |
 | `MODERATION_AUTO_MUTE_VIOLATIONS` | No | `3` | Number of violations before auto-mute |
-| `MODERATION_AUTO_BAN_ENABLED` | No | `false` | Automatically ban severe repeat offenders |
-| `MODERATION_APPEALS_ENABLED` | No | `true` | Allow users to appeal moderation actions |
-| `MODERATION_APPEALS_TIME_LIMIT_DAYS` | No | `7` | Days users have to submit appeals |
-| `MODERATION_CLEANUP_ENABLED` | No | `true` | Automatically clean up expired actions |
-| `MODERATION_CLEANUP_INTERVAL_MINUTES` | No | `60` | Cleanup interval in minutes |
-| `MODERATION_MAX_REPORTS_PER_USER_PER_DAY` | No | `10` | Maximum reports per user per day (spam prevention) |
-| `MODERATION_API_KEY` | No | - | API key for authenticated requests |
-| `MODERATION_RATE_LIMIT_MAX` | No | `100` | Maximum requests per window |
+| `MODERATION_APPEALS_ENABLED` | No | `true` | Enable appeals system |
+| `MODERATION_APPEALS_TIME_LIMIT_DAYS` | No | `7` | Days allowed to submit appeal |
+| `MODERATION_CLEANUP_ENABLED` | No | `false` | Enable automatic cleanup of old records |
+| `MODERATION_CLEANUP_INTERVAL_MINUTES` | No | `1440` | Cleanup interval in minutes (default 24h) |
+| `MODERATION_API_KEY` | No | - | API key for authenticating webhook/API requests |
+| `MODERATION_RATE_LIMIT_MAX` | No | `100` | Max requests per window |
 | `MODERATION_RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window in milliseconds |
-| `LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
+| `MOD_OPENAI_API_KEY` | No | - | OpenAI API key for content moderation |
+| `MOD_GOOGLE_VISION_KEY` | No | - | Google Cloud Vision API key |
+| `MOD_AWS_REKOGNITION_KEY` | No | - | AWS access key for Rekognition |
+| `MOD_AWS_REKOGNITION_SECRET` | No | - | AWS secret key for Rekognition |
+| `MOD_AWS_REKOGNITION_REGION` | No | `us-east-1` | AWS region for Rekognition |
+| `MOD_AUTO_APPROVE_BELOW` | No | `0.3` | Auto-approve content below this score (0.0-1.0) |
+| `MOD_AUTO_REJECT_ABOVE` | No | `0.9` | Auto-reject content above this score (0.0-1.0) |
+| `MOD_FLAG_THRESHOLD` | No | `0.5` | Flag content for review above this score (0.0-1.0) |
+| `MOD_STRIKE_WARN_THRESHOLD` | No | `1` | Strikes to trigger warning |
+| `MOD_STRIKE_BAN_THRESHOLD` | No | `3` | Strikes to trigger automatic ban |
+| `MOD_STRIKE_EXPIRY_DAYS` | No | `30` | Days until strikes expire |
+| `MOD_REVIEW_SLA_HOURS` | No | `24` | SLA for manual review completion (hours) |
+| `MOD_QUEUE_WORKER_CONCURRENCY` | No | `5` | Concurrent workers for processing queue |
+| `CP_DEFAULT_ACTION` | No | `flag` | Default action for policy violations (approve, flag, reject) |
+| `CP_PROFANITY_ENABLED` | No | `true` | Enable profanity filtering in policies |
+| `CP_MAX_CONTENT_LENGTH` | No | `10000` | Max content length to evaluate (chars) |
+| `CP_EVALUATION_LOG_ENABLED` | No | `true` | Log all policy evaluations |
 
-### Example .env
+### Example .env File
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://postgres:password@localhost:5432/nself
-POSTGRES_SSL=false
+# Database
+DATABASE_URL=postgresql://nself:password@localhost:5432/nself
 
-# Server Configuration
+# Server
 MODERATION_PLUGIN_PORT=3704
-MODERATION_PLUGIN_HOST=0.0.0.0
+MODERATION_LOG_LEVEL=info
+MODERATION_API_KEY=your-secure-api-key-here
 
-# Toxicity Detection (Optional - requires API keys)
-MODERATION_TOXICITY_ENABLED=false
-MODERATION_TOXICITY_PROVIDER=local
-MODERATION_TOXICITY_THRESHOLD=0.8
+# Moderation Configuration
+MODERATION_PROVIDER=openai
+MODERATION_TOXICITY_ENABLED=true
+MODERATION_TOXICITY_PROVIDER=openai
+MODERATION_TOXICITY_THRESHOLD=0.75
 
-# Automated Moderation
-MODERATION_AUTO_DELETE_ENABLED=true
-MODERATION_AUTO_DELETE_THRESHOLD=0.95
-MODERATION_AUTO_MUTE_ENABLED=false
-MODERATION_AUTO_MUTE_VIOLATIONS=3
-MODERATION_AUTO_BAN_ENABLED=false
+# AI Provider Keys
+MOD_OPENAI_API_KEY=sk-your-openai-key
+MOD_GOOGLE_VISION_KEY=your-google-vision-key
+MOD_AWS_REKOGNITION_KEY=AKIAIOSFODNN7EXAMPLE
+MOD_AWS_REKOGNITION_SECRET=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+MOD_AWS_REKOGNITION_REGION=us-east-1
 
-# Appeals System
+# Automated Thresholds
+MOD_AUTO_APPROVE_BELOW=0.3
+MOD_AUTO_REJECT_ABOVE=0.9
+MOD_FLAG_THRESHOLD=0.5
+
+# Strike System
+MOD_STRIKE_WARN_THRESHOLD=1
+MOD_STRIKE_BAN_THRESHOLD=3
+MOD_STRIKE_EXPIRY_DAYS=30
+
+# Appeals
 MODERATION_APPEALS_ENABLED=true
 MODERATION_APPEALS_TIME_LIMIT_DAYS=7
 
-# Maintenance
+# Policy Engine
+CP_DEFAULT_ACTION=flag
+CP_PROFANITY_ENABLED=true
+CP_MAX_CONTENT_LENGTH=10000
+
+# Cleanup
 MODERATION_CLEANUP_ENABLED=true
-MODERATION_CLEANUP_INTERVAL_MINUTES=60
-
-# Rate Limiting
-MODERATION_MAX_REPORTS_PER_USER_PER_DAY=10
-
-# Security
-MODERATION_API_KEY=your-secret-api-key-here
-MODERATION_RATE_LIMIT_MAX=100
-MODERATION_RATE_LIMIT_WINDOW_MS=60000
-
-# Logging
-LOG_LEVEL=info
+MODERATION_CLEANUP_INTERVAL_MINUTES=1440
 ```
 
-## CLI Commands
+### Multi-App Configuration
 
-### Global Commands
-
-#### `init`
-Initialize the moderation plugin database schema.
+The moderation plugin supports multi-app isolation via the `source_account_id` column:
 
 ```bash
-nself plugin moderation init
+# Configure multiple app IDs
+MODERATION_APP_IDS=app1,app2,app3
+
+# Each moderation action/flag/review will be tagged with source_account_id
+# Filter queries by app: WHERE source_account_id = 'app1'
 ```
 
-Creates all required tables, indexes, and constraints.
+### API Provider Setup
 
-#### `server`
-Start the moderation plugin HTTP server.
+#### OpenAI Setup
 
-```bash
-nself plugin moderation server
-nself plugin moderation server --port 3704
-```
+1. Create API key at https://platform.openai.com/api-keys
+2. Add to `.env`: `MOD_OPENAI_API_KEY=sk-xxx`
+3. Set provider: `MODERATION_TOXICITY_PROVIDER=openai`
 
-**Options:**
-- `-p, --port <port>` - Server port (default: 3704)
+#### Google Vision Setup
 
-#### `status`
-Display current moderation plugin status and statistics.
+1. Create project at https://console.cloud.google.com
+2. Enable Cloud Vision API
+3. Create service account and download JSON key
+4. Add to `.env`: `MOD_GOOGLE_VISION_KEY=your-key-json`
 
-```bash
-nself plugin moderation status
-```
+#### AWS Rekognition Setup
 
-Shows configuration, rules, wordlists, and 30-day statistics.
+1. Create IAM user with Rekognition permissions
+2. Generate access key and secret
+3. Add to `.env`:
+   ```bash
+   MOD_AWS_REKOGNITION_KEY=AKIAIOSFODNN7EXAMPLE
+   MOD_AWS_REKOGNITION_SECRET=wJalrXUtnFEMI/K7MDENG/bPxRfiCY
+   MOD_AWS_REKOGNITION_REGION=us-east-1
+   ```
 
-### Content Analysis Commands
-
-#### `analyze`
-Analyze content for moderation issues.
-
-```bash
-nself plugin moderation analyze --content "This is test content"
-nself plugin moderation analyze --content "Bad word here" --type message
-```
-
-**Options:**
-- `--content <content>` - Content to analyze (required)
-- `--type <type>` - Content type (default: message)
-
-### Queue Management Commands
-
-#### `queue`
-View the moderation review queue.
-
-```bash
-nself plugin moderation queue
-nself plugin moderation queue --status pending --severity high --limit 50
-```
-
-**Options:**
-- `--status <status>` - Filter by status (default: pending)
-- `--severity <severity>` - Filter by severity (low, medium, high, critical)
-- `--limit <limit>` - Result limit (default: 20)
-
-### Action Commands
-
-#### `action`
-Take a moderation action against a user.
-
-```bash
-nself plugin moderation action \
-  --user user_123 \
-  --type warn \
-  --reason "Violated community guidelines"
-
-nself plugin moderation action \
-  --user user_456 \
-  --type mute \
-  --reason "Spam" \
-  --duration 1440
-```
-
-**Options:**
-- `--user <user_id>` - Target user ID (required)
-- `--type <type>` - Action type: warn, mute, kick, ban (required)
-- `--reason <reason>` - Reason for action (required)
-- `--duration <minutes>` - Duration in minutes (for mute/ban)
-
-### Statistics Commands
-
-#### `stats`
-View moderation statistics.
-
-```bash
-# Overview stats
-nself plugin moderation stats
-nself plugin moderation stats --days 7
-
-# User-specific stats
-nself plugin moderation stats --user user_123
-```
-
-**Options:**
-- `--user <user_id>` - View stats for a specific user
-- `--days <days>` - Number of days for overview (default: 30)
-
-### Maintenance Commands
-
-#### `cleanup`
-Clean up expired moderation actions.
-
-```bash
-nself plugin moderation cleanup
-```
-
-Expires and deactivates temporary mutes and bans that have reached their expiration time.
-
-## REST API
-
-### Health Check Endpoints
-
-#### `GET /health`
-Basic health check.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "plugin": "moderation",
-  "timestamp": "2024-02-11T10:00:00Z"
-}
-```
-
-#### `GET /ready`
-Readiness check (includes database connectivity).
-
-**Response:**
-```json
-{
-  "ready": true,
-  "plugin": "moderation",
-  "timestamp": "2024-02-11T10:00:00Z"
-}
-```
-
-### Content Analysis Endpoints
-
-#### `POST /api/moderation/analyze`
-Analyze content for moderation issues.
-
-**Request:**
-```json
-{
-  "content": "This is some content to check",
-  "content_type": "message",
-  "channel_id": "channel_123"
-}
-```
-
-**Response:**
-```json
-{
-  "is_safe": false,
-  "toxicity_score": 0.85,
-  "matched_rules": [
-    {
-      "rule_id": "rule-uuid",
-      "rule_name": "Profanity Filter",
-      "severity": "high",
-      "matched_words": ["badword1", "badword2"]
-    }
-  ],
-  "suggested_actions": [
-    {
-      "type": "delete",
-      "reason": "Matched rule: Profanity Filter"
-    },
-    {
-      "type": "warn",
-      "reason": "Matched rule: Profanity Filter"
-    }
-  ]
-}
-```
-
-#### `POST /api/moderation/check-profanity`
-Check content for profanity matches.
-
-**Request:**
-```json
-{
-  "content": "Text to check for profanity",
-  "language": "en"
-}
-```
-
-**Response:**
-```json
-{
-  "contains_profanity": true,
-  "matched_words": ["badword1", "badword2"],
-  "severity": "high"
-}
-```
-
-### Action Endpoints
-
-#### `POST /api/moderation/actions`
-Create a moderation action.
-
-**Request:**
-```json
-{
-  "user_id": "user_123",
-  "action_type": "mute",
-  "reason": "Spamming chat",
-  "severity": "medium",
-  "duration_minutes": 1440,
-  "target_message_id": "msg_456",
-  "target_channel_id": "channel_789",
-  "moderator_id": "mod_111",
-  "moderator_notes": "First offense, temporary mute",
-  "is_automated": false
-}
-```
-
-**Response (201):**
-```json
-{
-  "action_id": "action-uuid",
-  "expires_at": "2024-02-12T10:00:00Z"
-}
-```
-
-#### `GET /api/moderation/actions/:user_id`
-List all actions for a user.
-
-**Response:**
-```json
-{
-  "actions": [
-    {
-      "id": "action-uuid",
-      "action_type": "mute",
-      "severity": "medium",
-      "reason": "Spamming chat",
-      "created_at": "2024-02-11T10:00:00Z",
-      "expires_at": "2024-02-12T10:00:00Z",
-      "is_active": true,
-      "is_automated": false,
-      "moderator_id": "mod_111"
-    }
-  ]
-}
-```
-
-#### `DELETE /api/moderation/actions/:action_id`
-Revoke a moderation action.
-
-**Request:**
-```json
-{
-  "revoke_reason": "Appeal approved",
-  "revoked_by": "mod_222"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-### Flag & Queue Endpoints
-
-#### `POST /api/moderation/flags`
-Create a flag for content review.
-
-**Request:**
-```json
-{
-  "content_type": "message",
-  "content_id": "msg_123",
-  "content_snapshot": {
-    "text": "Flagged message content",
-    "author_id": "user_456"
-  },
-  "flag_reason": "Contains hate speech",
-  "flag_category": "hate_speech",
-  "severity": "high",
-  "flagged_by_user_id": "user_789",
-  "is_automated": false
-}
-```
-
-**Response (201):**
-```json
-{
-  "flag_id": "flag-uuid"
-}
-```
-
-#### `GET /api/moderation/queue`
-Get the moderation review queue.
-
-**Query Parameters:**
-- `status` - Filter by status (default: pending)
-- `severity` - Filter by severity
-- `limit` - Result limit (default: 50)
-- `offset` - Offset for pagination (default: 0)
-
-**Response:**
-```json
-{
-  "flags": [
-    {
-      "id": "flag-uuid",
-      "content_type": "message",
-      "content_id": "msg_123",
-      "flag_reason": "Contains hate speech",
-      "flag_category": "hate_speech",
-      "severity": "high",
-      "status": "pending",
-      "is_automated": false,
-      "created_at": "2024-02-11T10:00:00Z"
-    }
-  ],
-  "total": 42
-}
-```
-
-#### `POST /api/moderation/flags/:flag_id/review`
-Review a flagged item.
-
-**Request:**
-```json
-{
-  "status": "approved",
-  "reviewed_by": "mod_123",
-  "review_notes": "Confirmed violation, taking action",
-  "action": {
-    "type": "warn",
-    "duration_minutes": null
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "action_id": "action-uuid"
-}
-```
-
-### Report Endpoints
-
-#### `POST /api/moderation/reports`
-Submit a user report.
-
-**Request:**
-```json
-{
-  "reporter_id": "user_123",
-  "content_type": "message",
-  "content_id": "msg_456",
-  "report_category": "harassment",
-  "report_reason": "User is harassing me in chat",
-  "additional_context": "This has been happening for several days"
-}
-```
-
-**Response (201):**
-```json
-{
-  "report_id": "report-uuid"
-}
-```
-
-#### `GET /api/moderation/reports`
-List user reports.
-
-**Query Parameters:**
-- `status` - Filter by status
-- `limit` - Result limit (default: 50)
-- `offset` - Offset for pagination (default: 0)
-
-**Response:**
-```json
-{
-  "reports": [
-    {
-      "id": "report-uuid",
-      "reporter_id": "user_123",
-      "content_type": "message",
-      "content_id": "msg_456",
-      "report_category": "harassment",
-      "report_reason": "User is harassing me in chat",
-      "status": "pending",
-      "created_at": "2024-02-11T10:00:00Z"
-    }
-  ],
-  "total": 15
-}
-```
-
-### Appeal Endpoints
-
-#### `POST /api/moderation/appeals`
-Submit an appeal for a moderation action.
-
-**Request:**
-```json
-{
-  "action_id": "action-uuid",
-  "appellant_user_id": "user_123",
-  "appeal_reason": "I believe this action was a mistake. I was not spamming, just excited about the news.",
-  "supporting_evidence": {
-    "context": "Previous messages show legitimate conversation",
-    "screenshots": ["url1", "url2"]
-  }
-}
-```
-
-**Response (201):**
-```json
-{
-  "appeal_id": "appeal-uuid"
-}
-```
-
-#### `GET /api/moderation/appeals`
-List appeals.
-
-**Query Parameters:**
-- `status` - Filter by status (pending, approved, rejected)
-- `limit` - Result limit (default: 50)
-
-**Response:**
-```json
-{
-  "appeals": [
-    {
-      "id": "appeal-uuid",
-      "action_id": "action-uuid",
-      "appellant_user_id": "user_123",
-      "appeal_reason": "I believe this action was a mistake...",
-      "status": "pending",
-      "created_at": "2024-02-11T10:00:00Z"
-    }
-  ]
-}
-```
-
-#### `POST /api/moderation/appeals/:appeal_id/review`
-Review an appeal.
-
-**Request:**
-```json
-{
-  "status": "approved",
-  "reviewed_by": "mod_456",
-  "review_decision": "Appeal granted. User's explanation is reasonable and previous behavior shows good standing."
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "action_revoked": true
-}
-```
-
-### Rule & Wordlist Endpoints
-
-#### `GET /api/moderation/rules`
-List all moderation rules.
-
-**Response:**
-```json
-{
-  "rules": [
-    {
-      "id": "rule-uuid",
-      "name": "Profanity Filter",
-      "description": "Blocks messages containing profanity",
-      "filter_type": "profanity",
-      "severity": "high",
-      "is_enabled": true,
-      "conditions": {
-        "wordlist_ids": ["wordlist-uuid"]
-      },
-      "actions": [
-        {"type": "delete"},
-        {"type": "warn"}
-      ]
-    }
-  ]
-}
-```
-
-#### `POST /api/moderation/rules`
-Create a moderation rule.
-
-**Request:**
-```json
-{
-  "name": "Spam Filter",
-  "description": "Detects and removes spam messages",
-  "filter_type": "spam",
-  "severity": "medium",
-  "conditions": {
-    "pattern": "http.*(viagra|cialis)",
-    "regex": true
-  },
-  "actions": [
-    {"type": "delete"},
-    {"type": "mute", "duration_minutes": 60}
-  ],
-  "threshold_config": {
-    "min_score": 0.7
-  }
-}
-```
-
-**Response (201):**
-```json
-{
-  "rule_id": "rule-uuid"
-}
-```
-
-#### `PATCH /api/moderation/rules/:rule_id`
-Update a moderation rule.
-
-**Request:**
-```json
-{
-  "is_enabled": false,
-  "severity": "low"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-#### `DELETE /api/moderation/rules/:rule_id`
-Delete a moderation rule.
-
-**Response:**
-```json
-{
-  "deleted": true
-}
-```
-
-#### `GET /api/moderation/wordlists`
-List all wordlists.
-
-**Response:**
-```json
-{
-  "wordlists": [
-    {
-      "id": "wordlist-uuid",
-      "name": "English Profanity",
-      "description": "Common English profanity words",
-      "language": "en",
-      "category": "profanity",
-      "words": ["word1", "word2", "word3"],
-      "is_regex": false,
-      "case_sensitive": false,
-      "is_enabled": true,
-      "severity": "high"
-    }
-  ]
-}
-```
-
-#### `POST /api/moderation/wordlists`
-Create a wordlist.
-
-**Request:**
-```json
-{
-  "name": "Custom Banned Words",
-  "description": "Community-specific banned words",
-  "language": "en",
-  "category": "profanity",
-  "words": ["badword1", "badword2", "badword3"],
-  "is_regex": false,
-  "case_sensitive": false,
-  "severity": "high"
-}
-```
-
-**Response (201):**
-```json
-{
-  "wordlist_id": "wordlist-uuid"
-}
-```
-
-#### `PATCH /api/moderation/wordlists/:wordlist_id`
-Update a wordlist.
-
-**Request:**
-```json
-{
-  "words": ["word1", "word2", "word3", "word4"],
-  "is_enabled": true
-}
-```
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-#### `DELETE /api/moderation/wordlists/:wordlist_id`
-Delete a wordlist.
-
-**Response:**
-```json
-{
-  "deleted": true
-}
-```
-
-### Statistics Endpoints
-
-#### `GET /api/moderation/stats/user/:user_id`
-Get moderation stats for a specific user.
-
-**Response:**
-```json
-{
-  "total_warnings": 2,
-  "total_mutes": 1,
-  "total_bans": 0,
-  "total_flags": 3,
-  "risk_level": "medium",
-  "risk_score": 35.5,
-  "average_toxicity_score": 0.65,
-  "is_muted": false,
-  "muted_until": null,
-  "is_banned": false,
-  "banned_until": null
-}
-```
-
-#### `GET /api/moderation/stats/overview`
-Get overview statistics.
-
-**Query Parameters:**
-- `timeframe` - Time period: day, week, month (default: month)
-
-**Response:**
-```json
-{
-  "total_actions": 156,
-  "total_flags": 42,
-  "total_reports": 28,
-  "actions_by_type": {
-    "warn": 89,
-    "mute": 45,
-    "ban": 12,
-    "kick": 10
-  },
-  "flags_by_severity": {
-    "low": 8,
-    "medium": 20,
-    "high": 10,
-    "critical": 4
-  },
-  "average_toxicity_score": 0.42
-}
-```
-
-### Audit Log Endpoint
-
-#### `GET /api/moderation/audit-log`
-List audit log entries.
-
-**Query Parameters:**
-- `event_type` - Filter by event type
-- `event_category` - Filter by category (action, flag, appeal, config)
-- `actor_id` - Filter by actor
-- `limit` - Result limit (default: 50)
-- `offset` - Offset for pagination (default: 0)
-
-**Response:**
-```json
-{
-  "logs": [
-    {
-      "id": "log-uuid",
-      "event_type": "action.created",
-      "event_category": "action",
-      "actor_id": "mod_123",
-      "actor_type": "user",
-      "target_type": "user",
-      "target_id": "user_456",
-      "details": {
-        "action_type": "mute",
-        "reason": "Spamming",
-        "action_id": "action-uuid"
-      },
-      "created_at": "2024-02-11T10:00:00Z"
-    }
-  ],
-  "total": 1500
-}
-```
-
-### Maintenance Endpoint
-
-#### `POST /api/moderation/cleanup/expired`
-Manually trigger cleanup of expired actions.
-
-**Response:**
-```json
-{
-  "expired_count": 15
-}
-```
-
-## Webhook Events
-
-The Moderation plugin emits webhook events for all moderation activities:
-
-### Action Events
-
-| Event | Description | Payload |
-|-------|-------------|---------|
-| `action.created` | New moderation action taken | `{action_id, user_id, action_type, reason, expires_at}` |
-| `action.revoked` | Moderation action revoked | `{action_id, revoke_reason, revoked_by}` |
-
-### Flag Events
-
-| Event | Description | Payload |
-|-------|-------------|---------|
-| `flag.created` | Content flagged for review | `{flag_id, content_type, content_id, severity}` |
-| `flag.reviewed` | Flagged content reviewed | `{flag_id, status, reviewed_by, action_taken}` |
-
-### Appeal Events
-
-| Event | Description | Payload |
-|-------|-------------|---------|
-| `appeal.created` | New appeal submitted | `{appeal_id, action_id, appellant_user_id}` |
-| `appeal.reviewed` | Appeal reviewed | `{appeal_id, status, was_successful}` |
-
-### Report Events
-
-| Event | Description | Payload |
-|-------|-------------|---------|
-| `report.created` | New user report submitted | `{report_id, reporter_id, content_type, content_id}` |
-
-### Rule Events
-
-| Event | Description | Payload |
-|-------|-------------|---------|
-| `rule.created` | New moderation rule created | `{rule_id, name, filter_type}` |
-| `rule.updated` | Moderation rule updated | `{rule_id, changes}` |
+---
 
 ## Database Schema
 
-### moderation_rules
+### Complete Table Overview
 
-Moderation rules for automated content filtering.
+The Moderation plugin creates 17 tables for comprehensive content moderation:
 
-```sql
-CREATE TABLE IF NOT EXISTS moderation_rules (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  filter_type VARCHAR(50) NOT NULL,
-  severity VARCHAR(20) NOT NULL DEFAULT 'medium',
-  is_enabled BOOLEAN NOT NULL DEFAULT true,
-  conditions JSONB NOT NULL DEFAULT '{}',
-  actions JSONB NOT NULL DEFAULT '[]',
-  threshold_config JSONB DEFAULT '{}',
-  channel_id VARCHAR(255),
-  created_by VARCHAR(255),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+1. **moderation_rules** - Custom rules with conditions and actions
+2. **moderation_wordlists** - Profanity and allowed word lists
+3. **moderation_actions** - Actions taken against users (warn, mute, ban)
+4. **moderation_flags** - Content flagged for review
+5. **moderation_appeals** - User appeals against actions
+6. **moderation_reports** - User-submitted reports
+7. **moderation_toxicity_scores** - AI toxicity analysis results
+8. **moderation_user_stats** - Per-user statistics
+9. **moderation_audit_log** - Complete audit trail
+10. **mod_reviews** - Content review records
+11. **mod_policies** - Content policies with thresholds
+12. **mod_user_strikes** - Strike tracking with expiration
+13. **cp_policies** - Content policy definitions
+14. **cp_rules** - Individual policy rules
+15. **cp_evaluations** - Policy evaluation results
+16. **cp_word_lists** - Word lists for policies
+17. **cp_overrides** - Manual policy overrides
+18. **moderation_webhook_events** - Webhook event log
 
-CREATE INDEX IF NOT EXISTS idx_moderation_rules_account ON moderation_rules(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_rules_enabled ON moderation_rules(source_account_id, is_enabled) WHERE is_enabled = true;
-CREATE INDEX IF NOT EXISTS idx_moderation_rules_type ON moderation_rules(source_account_id, filter_type, severity);
-```
+### Key Schema Details
 
-**Columns:**
+#### moderation_rules
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| name | VARCHAR(255) | No | - | Rule name |
-| description | TEXT | Yes | - | Rule description |
-| filter_type | VARCHAR(50) | No | - | Type: profanity, toxicity, spam, caps, links |
-| severity | VARCHAR(20) | No | 'medium' | Severity: low, medium, high, critical |
-| is_enabled | BOOLEAN | No | true | Whether rule is active |
-| conditions | JSONB | No | {} | Rule conditions (patterns, thresholds, etc.) |
-| actions | JSONB | No | [] | Actions to take when rule matches |
-| threshold_config | JSONB | No | {} | Threshold configuration |
-| channel_id | VARCHAR(255) | Yes | - | Limit rule to specific channel |
-| created_by | VARCHAR(255) | Yes | - | User who created rule |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
+Columns: `id`, `name`, `description`, `rule_type`, `condition` (JSONB), `action`, `severity`, `enabled`, `priority`, `metadata` (JSONB), `source_account_id`, `created_at`, `updated_at`, `synced_at`
 
-### moderation_wordlists
+Indexes: `rule_type`, `enabled`, `priority`, `source_account_id`
 
-Profanity and banned word lists.
+#### moderation_actions
 
-```sql
-CREATE TABLE IF NOT EXISTS moderation_wordlists (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  language VARCHAR(10) NOT NULL DEFAULT 'en',
-  category VARCHAR(100),
-  words TEXT[] NOT NULL DEFAULT '{}',
-  is_regex BOOLEAN NOT NULL DEFAULT false,
-  case_sensitive BOOLEAN NOT NULL DEFAULT false,
-  is_enabled BOOLEAN NOT NULL DEFAULT true,
-  severity VARCHAR(20) NOT NULL DEFAULT 'medium',
-  created_by VARCHAR(255),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(source_account_id, name)
-);
+Columns: `id`, `user_id`, `action_type`, `reason`, `content_id`, `moderator_id`, `duration_seconds`, `expires_at`, `revoked`, `revoked_at`, `revoked_by`, `revoke_reason`, `metadata` (JSONB), `source_account_id`, `created_at`, `synced_at`
 
-CREATE INDEX IF NOT EXISTS idx_moderation_wordlists_account ON moderation_wordlists(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_wordlists_enabled ON moderation_wordlists(source_account_id, is_enabled) WHERE is_enabled = true;
-CREATE INDEX IF NOT EXISTS idx_moderation_wordlists_language ON moderation_wordlists(source_account_id, language);
-```
+Indexes: `user_id`, `action_type`, `moderator_id`, `created_at`, `expires_at`, `source_account_id`
 
-**Columns:**
+#### moderation_flags
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| name | VARCHAR(255) | No | - | Wordlist name |
-| description | TEXT | Yes | - | Wordlist description |
-| language | VARCHAR(10) | No | 'en' | Language code (en, es, fr, etc.) |
-| category | VARCHAR(100) | Yes | - | Category: profanity, slurs, spam |
-| words | TEXT[] | No | {} | Array of words/patterns |
-| is_regex | BOOLEAN | No | false | Whether words are regex patterns |
-| case_sensitive | BOOLEAN | No | false | Case-sensitive matching |
-| is_enabled | BOOLEAN | No | true | Whether wordlist is active |
-| severity | VARCHAR(20) | No | 'medium' | Severity: low, medium, high, critical |
-| created_by | VARCHAR(255) | Yes | - | User who created wordlist |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
+Columns: `id`, `content_id`, `content_type`, `user_id`, `flag_reason`, `severity`, `status`, `toxicity_score`, `matched_rules` (TEXT[]), `matched_words` (TEXT[]), `reporter_id`, `reviewer_id`, `reviewed_at`, `review_decision`, `review_notes`, `metadata` (JSONB), `source_account_id`, `created_at`, `synced_at`
 
-### moderation_actions
+Indexes: `content_id`, `user_id`, `status`, `severity`, `reviewer_id`, `created_at`, `source_account_id`
 
-Moderation actions taken against users.
+#### moderation_user_stats
 
-```sql
-CREATE TABLE IF NOT EXISTS moderation_actions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  target_user_id VARCHAR(255) NOT NULL,
-  target_message_id VARCHAR(255),
-  target_channel_id VARCHAR(255),
-  action_type VARCHAR(50) NOT NULL,
-  severity VARCHAR(20) NOT NULL,
-  reason TEXT NOT NULL,
-  duration_minutes INTEGER,
-  expires_at TIMESTAMP WITH TIME ZONE,
-  triggered_by_rule_id UUID REFERENCES moderation_rules(id) ON DELETE SET NULL,
-  is_automated BOOLEAN NOT NULL DEFAULT false,
-  moderator_id VARCHAR(255),
-  moderator_notes TEXT,
-  metadata JSONB DEFAULT '{}',
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  revoked_at TIMESTAMP WITH TIME ZONE,
-  revoked_by VARCHAR(255),
-  revoke_reason TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+Columns: `user_id`, `total_flags`, `total_violations`, `total_warnings`, `total_mutes`, `total_bans`, `active_strikes`, `total_strikes`, `last_violation_at`, `last_action_at`, `reputation_score`, `is_currently_muted`, `is_currently_banned`, `metadata` (JSONB), `source_account_id`, `updated_at`, `synced_at`
 
-CREATE INDEX IF NOT EXISTS idx_moderation_actions_account ON moderation_actions(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_actions_user ON moderation_actions(source_account_id, target_user_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_actions_message ON moderation_actions(target_message_id) WHERE target_message_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_moderation_actions_moderator ON moderation_actions(moderator_id) WHERE moderator_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_moderation_actions_expires ON moderation_actions(expires_at) WHERE expires_at IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_moderation_actions_active ON moderation_actions(source_account_id, is_active, created_at);
-```
+Indexes: `total_violations`, `active_strikes`, `reputation_score`, `is_currently_muted`, `is_currently_banned`, `source_account_id`
 
-**Columns:**
+#### mod_user_strikes
 
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| target_user_id | VARCHAR(255) | No | - | User receiving action |
-| target_message_id | VARCHAR(255) | Yes | - | Related message ID |
-| target_channel_id | VARCHAR(255) | Yes | - | Related channel ID |
-| action_type | VARCHAR(50) | No | - | Type: warn, mute, kick, ban, delete |
-| severity | VARCHAR(20) | No | - | Severity: low, medium, high, critical |
-| reason | TEXT | No | - | Reason for action |
-| duration_minutes | INTEGER | Yes | - | Duration for temporary actions |
-| expires_at | TIMESTAMP WITH TIME ZONE | Yes | - | Expiration timestamp |
-| triggered_by_rule_id | UUID | Yes | - | Rule that triggered action (if automated) |
-| is_automated | BOOLEAN | No | false | Whether action was automated |
-| moderator_id | VARCHAR(255) | Yes | - | Moderator who took action |
-| moderator_notes | TEXT | Yes | - | Internal moderator notes |
-| metadata | JSONB | No | {} | Additional metadata |
-| is_active | BOOLEAN | No | true | Whether action is still active |
-| revoked_at | TIMESTAMP WITH TIME ZONE | Yes | - | When action was revoked |
-| revoked_by | VARCHAR(255) | Yes | - | Who revoked the action |
-| revoke_reason | TEXT | Yes | - | Reason for revoking |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Action timestamp |
+Columns: `id`, `user_id`, `reason`, `severity`, `content_id`, `action_id`, `issued_by`, `expires_at`, `expired`, `revoked`, `revoked_at`, `revoked_by`, `metadata` (JSONB), `source_account_id`, `created_at`, `synced_at`
 
-### moderation_flags
+Indexes: `user_id`, `expires_at`, `expired`, `severity`, `created_at`, `source_account_id`
 
-Content flagged for manual review.
+---
 
-```sql
-CREATE TABLE IF NOT EXISTS moderation_flags (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  content_type VARCHAR(50) NOT NULL,
-  content_id VARCHAR(255) NOT NULL,
-  content_snapshot JSONB,
-  flag_reason VARCHAR(255) NOT NULL,
-  flag_category VARCHAR(100),
-  severity VARCHAR(20) NOT NULL DEFAULT 'medium',
-  flagged_by_user_id VARCHAR(255),
-  flagged_by_rule_id UUID REFERENCES moderation_rules(id) ON DELETE SET NULL,
-  is_automated BOOLEAN NOT NULL DEFAULT false,
-  status VARCHAR(20) NOT NULL DEFAULT 'pending',
-  reviewed_by VARCHAR(255),
-  reviewed_at TIMESTAMP WITH TIME ZONE,
-  review_notes TEXT,
-  action_id UUID REFERENCES moderation_actions(id) ON DELETE SET NULL,
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+## CLI Commands
 
-CREATE INDEX IF NOT EXISTS idx_moderation_flags_account ON moderation_flags(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_flags_content ON moderation_flags(source_account_id, content_type, content_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_flags_status ON moderation_flags(source_account_id, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_moderation_flags_severity ON moderation_flags(source_account_id, severity, status);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| content_type | VARCHAR(50) | No | - | Type: message, post, profile, etc. |
-| content_id | VARCHAR(255) | No | - | Content identifier |
-| content_snapshot | JSONB | Yes | - | Snapshot of flagged content |
-| flag_reason | VARCHAR(255) | No | - | Reason for flag |
-| flag_category | VARCHAR(100) | Yes | - | Category: hate_speech, harassment, spam, etc. |
-| severity | VARCHAR(20) | No | 'medium' | Severity: low, medium, high, critical |
-| flagged_by_user_id | VARCHAR(255) | Yes | - | User who flagged (if manual) |
-| flagged_by_rule_id | UUID | Yes | - | Rule that flagged (if automated) |
-| is_automated | BOOLEAN | No | false | Whether flag was automated |
-| status | VARCHAR(20) | No | 'pending' | Status: pending, approved, rejected |
-| reviewed_by | VARCHAR(255) | Yes | - | Moderator who reviewed |
-| reviewed_at | TIMESTAMP WITH TIME ZONE | Yes | - | Review timestamp |
-| review_notes | TEXT | Yes | - | Review notes |
-| action_id | UUID | Yes | - | Related moderation action |
-| metadata | JSONB | No | {} | Additional metadata |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Flag timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### moderation_appeals
-
-Appeals of moderation actions.
-
-```sql
-CREATE TABLE IF NOT EXISTS moderation_appeals (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  action_id UUID NOT NULL REFERENCES moderation_actions(id) ON DELETE CASCADE,
-  appellant_user_id VARCHAR(255) NOT NULL,
-  appeal_reason TEXT NOT NULL,
-  supporting_evidence JSONB DEFAULT '{}',
-  status VARCHAR(20) NOT NULL DEFAULT 'pending',
-  reviewed_by VARCHAR(255),
-  reviewed_at TIMESTAMP WITH TIME ZONE,
-  review_decision TEXT,
-  was_successful BOOLEAN,
-  new_action_id UUID REFERENCES moderation_actions(id) ON DELETE SET NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_moderation_appeals_account ON moderation_appeals(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_appeals_action ON moderation_appeals(action_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_appeals_user ON moderation_appeals(source_account_id, appellant_user_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_appeals_status ON moderation_appeals(source_account_id, status, created_at);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| action_id | UUID | No | - | Moderation action being appealed |
-| appellant_user_id | VARCHAR(255) | No | - | User submitting appeal |
-| appeal_reason | TEXT | No | - | Reason for appeal |
-| supporting_evidence | JSONB | No | {} | Evidence supporting appeal |
-| status | VARCHAR(20) | No | 'pending' | Status: pending, approved, rejected |
-| reviewed_by | VARCHAR(255) | Yes | - | Moderator who reviewed appeal |
-| reviewed_at | TIMESTAMP WITH TIME ZONE | Yes | - | Review timestamp |
-| review_decision | TEXT | Yes | - | Decision explanation |
-| was_successful | BOOLEAN | Yes | - | Whether appeal was granted |
-| new_action_id | UUID | Yes | - | New action if modified |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Appeal timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### moderation_reports
-
-User-submitted reports of content violations.
-
-```sql
-CREATE TABLE IF NOT EXISTS moderation_reports (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  reporter_id VARCHAR(255) NOT NULL,
-  content_type VARCHAR(50) NOT NULL,
-  content_id VARCHAR(255) NOT NULL,
-  report_category VARCHAR(100) NOT NULL,
-  report_reason TEXT NOT NULL,
-  additional_context TEXT,
-  status VARCHAR(20) NOT NULL DEFAULT 'pending',
-  assigned_to VARCHAR(255),
-  flag_id UUID REFERENCES moderation_flags(id) ON DELETE SET NULL,
-  action_id UUID REFERENCES moderation_actions(id) ON DELETE SET NULL,
-  resolution_notes TEXT,
-  resolved_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_moderation_reports_account ON moderation_reports(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_reports_reporter ON moderation_reports(source_account_id, reporter_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_reports_content ON moderation_reports(source_account_id, content_type, content_id);
-CREATE INDEX IF NOT EXISTS idx_moderation_reports_status ON moderation_reports(source_account_id, status, created_at);
-CREATE INDEX IF NOT EXISTS idx_moderation_reports_assigned ON moderation_reports(assigned_to) WHERE assigned_to IS NOT NULL;
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| reporter_id | VARCHAR(255) | No | - | User submitting report |
-| content_type | VARCHAR(50) | No | - | Type of reported content |
-| content_id | VARCHAR(255) | No | - | Content identifier |
-| report_category | VARCHAR(100) | No | - | Category: harassment, spam, hate_speech, etc. |
-| report_reason | TEXT | No | - | Report explanation |
-| additional_context | TEXT | Yes | - | Additional context |
-| status | VARCHAR(20) | No | 'pending' | Status: pending, investigating, resolved, dismissed |
-| assigned_to | VARCHAR(255) | Yes | - | Assigned moderator |
-| flag_id | UUID | Yes | - | Related flag if created |
-| action_id | UUID | Yes | - | Related action if taken |
-| resolution_notes | TEXT | Yes | - | Resolution notes |
-| resolved_at | TIMESTAMP WITH TIME ZONE | Yes | - | Resolution timestamp |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Report timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### moderation_toxicity_scores
-
-AI toxicity detection scores.
-
-```sql
-CREATE TABLE IF NOT EXISTS moderation_toxicity_scores (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  content_type VARCHAR(50) NOT NULL,
-  content_id VARCHAR(255) NOT NULL,
-  content_hash VARCHAR(64),
-  overall_score DECIMAL(5,4) NOT NULL,
-  category_scores JSONB DEFAULT '{}',
-  provider VARCHAR(50) NOT NULL,
-  model_version VARCHAR(50),
-  analyzed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  metadata JSONB DEFAULT '{}',
-  UNIQUE(source_account_id, content_type, content_id, provider)
-);
-
-CREATE INDEX IF NOT EXISTS idx_toxicity_account ON moderation_toxicity_scores(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_toxicity_content ON moderation_toxicity_scores(source_account_id, content_type, content_id);
-CREATE INDEX IF NOT EXISTS idx_toxicity_score ON moderation_toxicity_scores(source_account_id, overall_score);
-CREATE INDEX IF NOT EXISTS idx_toxicity_hash ON moderation_toxicity_scores(content_hash) WHERE content_hash IS NOT NULL;
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| content_type | VARCHAR(50) | No | - | Type of content analyzed |
-| content_id | VARCHAR(255) | No | - | Content identifier |
-| content_hash | VARCHAR(64) | Yes | - | Hash for caching |
-| overall_score | DECIMAL(5,4) | No | - | Overall toxicity score (0.0-1.0) |
-| category_scores | JSONB | No | {} | Scores by category (hate, harassment, etc.) |
-| provider | VARCHAR(50) | No | - | Provider: local, perspective_api, openai |
-| model_version | VARCHAR(50) | Yes | - | Model version used |
-| analyzed_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Analysis timestamp |
-| metadata | JSONB | No | {} | Additional metadata |
-
-### moderation_user_stats
-
-Per-user moderation statistics and risk tracking.
-
-```sql
-CREATE TABLE IF NOT EXISTS moderation_user_stats (
-  user_id VARCHAR(255) NOT NULL,
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  total_warnings INTEGER NOT NULL DEFAULT 0,
-  total_mutes INTEGER NOT NULL DEFAULT 0,
-  total_bans INTEGER NOT NULL DEFAULT 0,
-  total_flags INTEGER NOT NULL DEFAULT 0,
-  total_reports_filed INTEGER NOT NULL DEFAULT 0,
-  total_reports_against INTEGER NOT NULL DEFAULT 0,
-  average_toxicity_score DECIMAL(5,4),
-  toxicity_trend DECIMAL(5,4),
-  risk_level VARCHAR(20) NOT NULL DEFAULT 'low',
-  risk_score DECIMAL(5,2) DEFAULT 0.0,
-  is_muted BOOLEAN NOT NULL DEFAULT false,
-  muted_until TIMESTAMP WITH TIME ZONE,
-  is_banned BOOLEAN NOT NULL DEFAULT false,
-  banned_until TIMESTAMP WITH TIME ZONE,
-  first_violation_at TIMESTAMP WITH TIME ZONE,
-  last_violation_at TIMESTAMP WITH TIME ZONE,
-  last_calculated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (source_account_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_user_stats_account ON moderation_user_stats(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_user_stats_risk ON moderation_user_stats(source_account_id, risk_level, risk_score);
-CREATE INDEX IF NOT EXISTS idx_user_stats_muted ON moderation_user_stats(source_account_id, is_muted, muted_until) WHERE is_muted = true;
-CREATE INDEX IF NOT EXISTS idx_user_stats_banned ON moderation_user_stats(source_account_id, is_banned, banned_until) WHERE is_banned = true;
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| user_id | VARCHAR(255) | No | - | User identifier |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| total_warnings | INTEGER | No | 0 | Total warnings received |
-| total_mutes | INTEGER | No | 0 | Total mutes received |
-| total_bans | INTEGER | No | 0 | Total bans received |
-| total_flags | INTEGER | No | 0 | Total flags on user's content |
-| total_reports_filed | INTEGER | No | 0 | Reports filed by user |
-| total_reports_against | INTEGER | No | 0 | Reports filed against user |
-| average_toxicity_score | DECIMAL(5,4) | Yes | - | Average toxicity score |
-| toxicity_trend | DECIMAL(5,4) | Yes | - | Toxicity trend |
-| risk_level | VARCHAR(20) | No | 'low' | Risk level: low, medium, high, critical |
-| risk_score | DECIMAL(5,2) | No | 0.0 | Calculated risk score (0-100) |
-| is_muted | BOOLEAN | No | false | Currently muted |
-| muted_until | TIMESTAMP WITH TIME ZONE | Yes | - | Mute expiration |
-| is_banned | BOOLEAN | No | false | Currently banned |
-| banned_until | TIMESTAMP WITH TIME ZONE | Yes | - | Ban expiration |
-| first_violation_at | TIMESTAMP WITH TIME ZONE | Yes | - | First violation timestamp |
-| last_violation_at | TIMESTAMP WITH TIME ZONE | Yes | - | Last violation timestamp |
-| last_calculated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last calculation timestamp |
-
-### moderation_audit_log
-
-Audit trail of all moderation activities.
-
-```sql
-CREATE TABLE IF NOT EXISTS moderation_audit_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  event_type VARCHAR(100) NOT NULL,
-  event_category VARCHAR(50) NOT NULL,
-  actor_id VARCHAR(255),
-  actor_type VARCHAR(50) NOT NULL DEFAULT 'user',
-  target_type VARCHAR(50),
-  target_id VARCHAR(255),
-  details JSONB NOT NULL DEFAULT '{}',
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_audit_log_account ON moderation_audit_log(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_event ON moderation_audit_log(source_account_id, event_type, created_at);
-CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON moderation_audit_log(source_account_id, actor_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_audit_log_target ON moderation_audit_log(source_account_id, target_type, target_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_created ON moderation_audit_log(source_account_id, created_at DESC);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| event_type | VARCHAR(100) | No | - | Event type (action.created, flag.reviewed, etc.) |
-| event_category | VARCHAR(50) | No | - | Category: action, flag, appeal, config |
-| actor_id | VARCHAR(255) | Yes | - | User/moderator performing action |
-| actor_type | VARCHAR(50) | No | 'user' | Actor type: user, automation, system |
-| target_type | VARCHAR(50) | Yes | - | Target type: user, message, rule, etc. |
-| target_id | VARCHAR(255) | Yes | - | Target identifier |
-| details | JSONB | No | {} | Event details |
-| ip_address | VARCHAR(45) | Yes | - | IP address |
-| user_agent | TEXT | Yes | - | User agent |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Event timestamp |
-
-## Examples
-
-### Example 1: Set Up Profanity Filtering
+### Plugin Management
 
 ```bash
-# 1. Create a wordlist
-curl -X POST http://localhost:3704/api/moderation/wordlists \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "English Profanity",
-    "language": "en",
-    "category": "profanity",
-    "words": ["badword1", "badword2", "badword3"],
-    "severity": "high",
-    "is_regex": false,
-    "case_sensitive": false
-  }'
+# Initialize database schema
+nself plugin moderation init
 
-# 2. Create a moderation rule
-curl -X POST http://localhost:3704/api/moderation/rules \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Profanity Filter",
-    "description": "Auto-delete messages with profanity",
-    "filter_type": "profanity",
-    "severity": "high",
-    "conditions": {
-      "wordlist_ids": ["wordlist-uuid"]
-    },
-    "actions": [
-      {"type": "delete"},
-      {"type": "warn"}
-    ]
-  }'
+# Check plugin status
+nself plugin moderation status
 
-# 3. Test content
-nself plugin moderation analyze --content "This has a badword1 in it"
+# View moderation statistics
+nself plugin moderation stats
 ```
 
-### Example 2: Manual Content Review Workflow
-
-```sql
--- View pending flags in queue
-SELECT
-  id, content_type, content_id, flag_reason, severity, created_at
-FROM moderation_flags
-WHERE source_account_id = 'primary'
-  AND status = 'pending'
-ORDER BY severity DESC, created_at ASC
-LIMIT 20;
-
--- Review a flag and take action
--- Via API:
-curl -X POST http://localhost:3704/api/moderation/flags/{flag-uuid}/review \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "approved",
-    "reviewed_by": "mod_123",
-    "review_notes": "Confirmed harassment, muting user",
-    "action": {
-      "type": "mute",
-      "duration_minutes": 1440
-    }
-  }'
-```
-
-### Example 3: User Reports and Flags
+### Server Management
 
 ```bash
-# User submits a report
-curl -X POST http://localhost:3704/api/moderation/reports \
-  -H "Content-Type: application/json" \
-  -d '{
-    "reporter_id": "user_123",
-    "content_type": "message",
-    "content_id": "msg_456",
-    "report_category": "harassment",
-    "report_reason": "This user has been harassing me repeatedly",
-    "additional_context": "This is the third time this week"
-  }'
+# Start moderation server
+nself plugin moderation server --port 3704
 
-# System automatically creates flag for moderator review
-# Moderator reviews in queue
-nself plugin moderation queue --severity high --limit 10
+# Start with custom host
+nself plugin moderation server --host 127.0.0.1 --port 3704
+
+# Start in production mode
+NODE_ENV=production nself plugin moderation server
 ```
 
-### Example 4: Appeals Process
+### Content Analysis
 
 ```bash
-# 1. User receives mute action
-curl -X POST http://localhost:3704/api/moderation/actions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": "user_789",
-    "action_type": "mute",
-    "reason": "Spamming chat",
-    "duration_minutes": 1440,
-    "moderator_id": "mod_111"
-  }'
+# Analyze text content
+nself plugin moderation analyze --text "Content to check"
 
-# 2. User submits appeal
-curl -X POST http://localhost:3704/api/moderation/appeals \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action_id": "action-uuid",
-    "appellant_user_id": "user_789",
-    "appeal_reason": "I was not spamming, just excited about the news. I will be more careful with message frequency.",
-    "supporting_evidence": {
-      "context": "Previous messages show legitimate conversation"
-    }
-  }'
+# Analyze with custom threshold
+nself plugin moderation analyze --text "Content" --threshold 0.7
 
-# 3. Moderator reviews appeal
-curl -X POST http://localhost:3704/api/moderation/appeals/{appeal-uuid}/review \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "approved",
-    "reviewed_by": "mod_222",
-    "review_decision": "Appeal granted. User has good history and explanation is reasonable. Revoking mute."
-  }'
+# Analyze image URL
+nself plugin moderation analyze --image-url "https://example.com/image.jpg"
+
+# Check profanity only
+nself plugin moderation check-profanity "Text to check for profanity"
+
+# Evaluate against policies
+nself plugin moderation evaluate --content-id "post_123" --text "Content"
 ```
 
-### Example 5: User Risk Tracking
-
-```sql
--- Calculate risk scores for all users with violations
-UPDATE moderation_user_stats
-SET risk_score = (
-  SELECT LEAST(100, (
-    -- Recent violations (last 30 days)
-    (SELECT COUNT(*) * 5 FROM moderation_actions
-     WHERE target_user_id = moderation_user_stats.user_id
-       AND created_at > NOW() - INTERVAL '30 days') +
-    -- Average toxicity
-    (COALESCE((SELECT AVG(overall_score) * 50 FROM moderation_toxicity_scores
-              WHERE content_type = 'message'
-                AND content_id IN (SELECT target_message_id FROM moderation_actions
-                                  WHERE target_user_id = moderation_user_stats.user_id)), 0))
-  ))
-),
-risk_level = CASE
-  WHEN risk_score >= 75 THEN 'critical'
-  WHEN risk_score >= 50 THEN 'high'
-  WHEN risk_score >= 25 THEN 'medium'
-  ELSE 'low'
-END;
-
--- Find high-risk users
-SELECT user_id, risk_level, risk_score,
-       total_warnings, total_mutes, total_bans,
-       average_toxicity_score
-FROM moderation_user_stats
-WHERE source_account_id = 'primary'
-  AND risk_level IN ('high', 'critical')
-ORDER BY risk_score DESC;
-```
-
-## Troubleshooting
-
-### Profanity Not Being Detected
-
-**Problem**: Content with banned words is not being flagged.
-
-**Solution:**
-```sql
--- Check wordlists are enabled
-SELECT id, name, is_enabled, words
-FROM moderation_wordlists
-WHERE source_account_id = 'primary';
-
--- Check rules are enabled
-SELECT id, name, is_enabled, filter_type
-FROM moderation_rules
-WHERE source_account_id = 'primary'
-  AND filter_type = 'profanity';
-
--- Test profanity detection directly
-```
+### Review Queue Management
 
 ```bash
-nself plugin moderation analyze --content "test content with badword"
+# List pending reviews
+nself plugin moderation queue list
+
+# List with filters
+nself plugin moderation queue list --status pending --severity high
+
+# List sorted by age
+nself plugin moderation queue list --sort age
+
+# View specific flag details
+nself plugin moderation queue show flag_123
+
+# Approve flagged content
+nself plugin moderation review flag_123 approve --notes "Content is acceptable"
+
+# Reject flagged content
+nself plugin moderation review flag_123 reject --notes "Violates policy X"
 ```
 
-### Expired Actions Not Cleaning Up
+### Moderation Actions
 
-**Problem**: Mutes and bans that should have expired are still active.
-
-**Solution:**
 ```bash
-# Manual cleanup
-nself plugin moderation cleanup
+# Warn user
+nself plugin moderation actions warn user_123 --reason "First violation of policy X"
 
-# Check cleanup is enabled
-echo $MODERATION_CLEANUP_ENABLED  # should be true
+# Mute user temporarily
+nself plugin moderation actions mute user_123 --duration 3600 --reason "Repeated spam"
 
-# Set up automated cleanup via cron
-echo "0 * * * * nself plugin moderation cleanup" | crontab -
+# Ban user permanently
+nself plugin moderation actions ban user_123 --reason "Severe ToS violation"
+
+# Temporary ban
+nself plugin moderation actions ban user_123 --duration 86400 --reason "7-day suspension"
+
+# Unmute user
+nself plugin moderation actions unmute user_123
+
+# Unban user
+nself plugin moderation actions unban user_123 --reason "Appeal approved"
+
+# Revoke action
+nself plugin moderation actions revoke action_123 --reason "Mistaken action"
+
+# List actions for user
+nself plugin moderation actions list --user user_123
 ```
 
-```sql
--- Manually expire old actions
-UPDATE moderation_user_stats
-SET is_muted = false, muted_until = NULL
-WHERE is_muted = true
-  AND muted_until < NOW();
+### Appeals Management
 
-UPDATE moderation_user_stats
-SET is_banned = false, banned_until = NULL
-WHERE is_banned = true
-  AND banned_until < NOW();
-```
-
-### Too Many False Positives
-
-**Problem**: Legitimate content is being flagged/deleted.
-
-**Solution:**
-```sql
--- Lower sensitivity thresholds
-UPDATE moderation_rules
-SET threshold_config = jsonb_set(threshold_config, '{min_score}', '0.9')
-WHERE filter_type = 'toxicity';
-
--- Disable overly aggressive rules
-UPDATE moderation_rules
-SET is_enabled = false
-WHERE name = 'Aggressive Spam Filter';
-
--- Review false positive patterns
-SELECT flag_reason, COUNT(*) as count
-FROM moderation_flags
-WHERE status = 'rejected'
-  AND created_at > NOW() - INTERVAL '7 days'
-GROUP BY flag_reason
-ORDER BY count DESC;
-```
-
-### Queue Overload
-
-**Problem**: Moderation queue has too many pending items.
-
-**Solution:**
-```sql
--- Prioritize by severity
-SELECT COUNT(*), severity
-FROM moderation_flags
-WHERE status = 'pending'
-GROUP BY severity;
-
--- Auto-reject low-severity old items
-UPDATE moderation_flags
-SET status = 'rejected',
-    review_notes = 'Auto-rejected due to age',
-    reviewed_at = NOW()
-WHERE status = 'pending'
-  AND severity = 'low'
-  AND created_at < NOW() - INTERVAL '30 days';
-
--- Assign moderators to handle backlog
-UPDATE moderation_flags
-SET assigned_to = 'mod_team'
-WHERE status = 'pending'
-  AND severity IN ('high', 'critical');
-```
-
-### User Stats Not Updating
-
-**Problem**: User risk scores and statistics are stale.
-
-**Solution:**
 ```bash
-# Recalculate risk scores for specific user
-curl -X POST http://localhost:3704/api/moderation/stats/user/user_123/calculate
+# List pending appeals
+nself plugin moderation appeals list --status pending
 
-# Bulk recalculation
+# View appeal details
+nself plugin moderation appeals show appeal_123
+
+# Approve appeal
+nself plugin moderation appeals review appeal_123 approve --notes "Valid appeal"
+
+# Deny appeal
+nself plugin moderation appeals review appeal_123 deny --notes "Violation stands"
 ```
 
-```sql
--- Recalculate all user stats
-UPDATE moderation_user_stats
-SET
-  total_warnings = (SELECT COUNT(*) FROM moderation_actions
-                   WHERE target_user_id = moderation_user_stats.user_id
-                     AND action_type = 'warn'),
-  total_mutes = (SELECT COUNT(*) FROM moderation_actions
-                WHERE target_user_id = moderation_user_stats.user_id
-                  AND action_type = 'mute'),
-  total_bans = (SELECT COUNT(*) FROM moderation_actions
-               WHERE target_user_id = moderation_user_stats.user_id
-                 AND action_type = 'ban'),
-  last_calculated_at = NOW()
-WHERE source_account_id = 'primary';
-```
+### Rules Management
 
-### Appeals Not Working
-
-**Problem**: Users cannot submit appeals or appeals are not being processed.
-
-**Solution:**
 ```bash
-# Check appeals are enabled
-echo $MODERATION_APPEALS_ENABLED  # should be true
-echo $MODERATION_APPEALS_TIME_LIMIT_DAYS  # default: 7
+# List all rules
+nself plugin moderation rules list
 
-# Check for expired appeal window
+# Create keyword rule
+nself plugin moderation rules create \
+  --name "spam-keywords" \
+  --type keyword \
+  --condition '{"keywords": ["spam", "scam"]}' \
+  --action flag \
+  --severity medium
+
+# Update rule
+nself plugin moderation rules update rule_123 --enabled false
+
+# Delete rule
+nself plugin moderation rules delete rule_123
 ```
 
-```sql
-SELECT
-  a.id as action_id,
-  a.target_user_id,
-  a.action_type,
-  a.created_at,
-  NOW() - a.created_at as age,
-  CASE
-    WHEN NOW() - a.created_at > INTERVAL '7 days' THEN 'Expired'
-    ELSE 'Can Appeal'
-  END as appeal_status
-FROM moderation_actions a
-LEFT JOIN moderation_appeals ap ON ap.action_id = a.id
-WHERE a.is_active = true
-  AND ap.id IS NULL;
+### Policy Management
+
+```bash
+# List all policies
+nself plugin moderation policies list
+
+# Create policy
+nself plugin moderation policies create \
+  --name "Community Guidelines" \
+  --auto-approve-below 0.3 \
+  --auto-reject-above 0.9
+
+# Update policy thresholds
+nself plugin moderation policies update policy_123 \
+  --auto-approve-below 0.2 \
+  --flag-threshold 0.6
 ```
 
-### Database Performance Issues
+### Word List Management
 
-**Problem**: Moderation queries are slow.
+```bash
+# List word lists
+nself plugin moderation word-lists list
 
-**Solution:**
-```sql
--- Check index usage
-SELECT schemaname, tablename, indexname, idx_scan
-FROM pg_stat_user_indexes
-WHERE schemaname = 'public'
-  AND tablename LIKE 'moderation_%'
-ORDER BY idx_scan ASC;
+# Create word list
+nself plugin moderation word-lists create \
+  --name "profanity-tier1" \
+  --type profanity \
+  --severity high \
+  --words "word1,word2,word3"
 
--- Analyze tables
-ANALYZE moderation_actions;
-ANALYZE moderation_flags;
-ANALYZE moderation_user_stats;
+# Add words to list
+nself plugin moderation word-lists add wordlist_123 "newword1,newword2"
 
--- Archive old audit logs
-DELETE FROM moderation_audit_log
-WHERE created_at < NOW() - INTERVAL '1 year';
+# Remove words from list
+nself plugin moderation word-lists remove wordlist_123 "word1"
+```
 
-VACUUM FULL moderation_audit_log;
+### User Status
+
+```bash
+# Check user moderation status
+nself plugin moderation user-status user_123
+
+# View user strikes
+nself plugin moderation user-status user_123 --strikes
+
+# View user action history
+nself plugin moderation user-status user_123 --actions
 ```
 
 ---
 
-For additional support, consult the [nself-plugins GitHub repository](https://github.com/acamarata/nself-plugins) or file an issue.
+## REST API
+
+The moderation server exposes a comprehensive REST API on port 3704 (configurable).
+
+### Base URL
+
+```
+http://localhost:3704
+```
+
+### Authentication
+
+Include API key in header (if `MODERATION_API_KEY` is set):
+
+```
+Authorization: Bearer your-api-key-here
+```
+
+### Health Check
+
+**GET** `/health`
+
+```bash
+curl http://localhost:3704/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-02-11T10:00:00Z",
+  "uptime": 3600
+}
+```
+
+### Content Analysis
+
+**POST** `/api/analyze`
+
+Analyze content for moderation issues.
+
+```bash
+curl -X POST http://localhost:3704/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content_id": "post_123",
+    "content_type": "post",
+    "text": "Content to analyze",
+    "user_id": "user_456"
+  }'
+```
+
+Response:
+```json
+{
+  "content_id": "post_123",
+  "status": "approved",
+  "toxicity_score": 0.15,
+  "confidence": 0.92,
+  "matched_rules": [],
+  "action": "approve"
+}
+```
+
+### Policy Evaluation
+
+**POST** `/api/evaluate`
+
+Evaluate content against policies.
+
+```bash
+curl -X POST http://localhost:3704/api/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content_id": "post_123",
+    "text": "Content to evaluate",
+    "user_id": "user_456"
+  }'
+```
+
+Response:
+```json
+{
+  "content_id": "post_123",
+  "matched_policies": ["policy_1"],
+  "violations": [
+    {
+      "policy_id": "policy_1",
+      "rule_id": "rule_5",
+      "severity": "medium",
+      "reason": "Keyword match: spam"
+    }
+  ],
+  "recommended_action": "flag"
+}
+```
+
+### Review Queue
+
+**GET** `/api/queue`
+
+Get review queue items. Query params: `status`, `severity`, `limit`, `offset`.
+
+```bash
+curl "http://localhost:3704/api/queue?status=pending&severity=high"
+```
+
+**GET** `/api/queue/:id`
+
+Get specific flag details.
+
+```bash
+curl http://localhost:3704/api/queue/flag_123
+```
+
+### Review Decision
+
+**POST** `/api/review/:id`
+
+Make review decision.
+
+```bash
+curl -X POST http://localhost:3704/api/review/flag_123 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision": "approved",
+    "reviewer_id": "mod_456",
+    "notes": "Content is acceptable"
+  }'
+```
+
+### Moderation Actions
+
+**POST** `/api/actions`
+
+Create moderation action.
+
+```bash
+curl -X POST http://localhost:3704/api/actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_123",
+    "action_type": "warn",
+    "reason": "Policy violation",
+    "moderator_id": "mod_789"
+  }'
+```
+
+**GET** `/api/actions`
+
+List actions. Query params: `user_id`, `action_type`, `moderator_id`, `active`.
+
+```bash
+curl "http://localhost:3704/api/actions?user_id=user_123"
+```
+
+### User Status
+
+**GET** `/api/users/:id/status`
+
+Get user moderation status.
+
+```bash
+curl http://localhost:3704/api/users/user_123/status
+```
+
+Response:
+```json
+{
+  "user_id": "user_123",
+  "active_strikes": 2,
+  "total_strikes": 5,
+  "total_violations": 7,
+  "is_currently_muted": false,
+  "is_currently_banned": false,
+  "reputation_score": 65.5
+}
+```
+
+---
+
+## Webhook Events
+
+The moderation plugin sends webhooks for all significant events.
+
+### Webhook Configuration
+
+```bash
+MODERATION_WEBHOOK_URL=https://your-app.com/webhooks/moderation
+```
+
+### Event Types
+
+All webhooks follow this format:
+
+```json
+{
+  "id": "evt_123",
+  "type": "action.created",
+  "created": 1707650400,
+  "data": {
+    "object": { ... }
+  }
+}
+```
+
+### Action Events
+
+- **action.created** - Moderation action taken
+- **action.revoked** - Action revoked
+
+### Flag Events
+
+- **flag.created** - Content flagged
+- **flag.reviewed** - Content reviewed
+
+### Appeal Events
+
+- **appeal.created** - Appeal submitted
+- **appeal.reviewed** - Appeal reviewed
+
+### Report Events
+
+- **report.created** - Report submitted
+
+### Rule Events
+
+- **rule.created** - Rule created
+- **rule.updated** - Rule updated
+
+### Review Events
+
+- **review.approved** - Content auto-approved
+- **review.flagged** - Content flagged
+- **review.rejected** - Content rejected
+- **review.manual.completed** - Manual review completed
+
+### Strike Events
+
+- **user.strike.added** - Strike added
+- **user.strike.threshold** - Strike threshold reached
+
+---
+
+## Moderation Workflows
+
+### Automated Review Workflow
+
+1. Content Submission → Analysis
+2. Score Calculation → Toxicity/policy scores
+3. Threshold Check:
+   - Score < AUTO_APPROVE_BELOW → Auto-approved
+   - Score > AUTO_REJECT_ABOVE → Auto-rejected
+   - Between thresholds → Flagged for review
+4. Queue Addition → Manual review
+5. Moderator Review → Decision
+6. Action Execution → Applied
+
+### Strike System Workflow
+
+1. Violation Detected
+2. Strike Assignment
+3. Threshold Check:
+   - 1 strike → Warning
+   - 3 strikes → Temporary mute
+   - 5 strikes → Permanent ban
+4. Strike Expiry (30 days default)
+5. Appeal Process
+
+---
+
+## Policy Engine
+
+### Policy Structure
+
+Policies consist of:
+- Name and description
+- Priority (lower = first)
+- Thresholds (auto-approve, flag, reject)
+- Rules (matching conditions)
+- Actions (what to do on match)
+
+### Rule Types
+
+- `keyword` - Match keywords
+- `regex` - Match patterns
+- `wordlist` - Match against word list
+- `ai` - AI-based detection
+- `metadata` - Match content metadata
+
+---
+
+## AI-Powered Moderation
+
+### OpenAI Moderation
+
+Categories: hate, harassment, self-harm, sexual, violence
+
+```bash
+MOD_OPENAI_API_KEY=sk-your-key
+MODERATION_TOXICITY_PROVIDER=openai
+```
+
+### Google Cloud Vision
+
+Image detection: adult, violence, racy content
+
+```bash
+MOD_GOOGLE_VISION_KEY=your-key
+MODERATION_PROVIDER=google
+```
+
+### AWS Rekognition
+
+Content detection: nudity, violence, drugs, hate symbols
+
+```bash
+MOD_AWS_REKOGNITION_KEY=AKIAIOSFODNN7EXAMPLE
+MOD_AWS_REKOGNITION_SECRET=wJalrXUtnFEMI
+MOD_AWS_REKOGNITION_REGION=us-east-1
+```
+
+---
+
+## User Strikes & Bans
+
+### Strike Levels
+
+- 1 strike → Warning
+- 2 strikes → Final warning
+- 3 strikes → 24h mute
+- 5 strikes → Permanent ban
+
+### Configuration
+
+```bash
+MOD_STRIKE_WARN_THRESHOLD=1
+MOD_STRIKE_BAN_THRESHOLD=3
+MOD_STRIKE_EXPIRY_DAYS=30
+```
+
+### Ban Types
+
+**Temporary:**
+```bash
+nself plugin moderation actions ban user_123 --duration 604800
+```
+
+**Permanent:**
+```bash
+nself plugin moderation actions ban user_123 --reason "Severe violation"
+```
+
+---
+
+## Appeals Management
+
+### Appeal Window
+
+```bash
+MODERATION_APPEALS_ENABLED=true
+MODERATION_APPEALS_TIME_LIMIT_DAYS=7
+```
+
+### Submit Appeal
+
+```bash
+curl -X POST http://localhost:3704/api/appeals \
+  -d '{
+    "action_id": "action_123",
+    "user_id": "user_456",
+    "appeal_reason": "I believe this was a mistake..."
+  }'
+```
+
+### Review Appeal
+
+```bash
+nself plugin moderation appeals review appeal_123 approve \
+  --notes "Valid appeal, reversing action"
+```
+
+---
+
+## Query Examples
+
+### Pending Reviews
+
+```sql
+SELECT id, content_id, severity, toxicity_score, created_at
+FROM moderation_flags
+WHERE status = 'pending'
+ORDER BY severity DESC, created_at ASC;
+```
+
+### Users with Multiple Strikes
+
+```sql
+SELECT user_id, active_strikes, total_violations, reputation_score
+FROM moderation_user_stats
+WHERE active_strikes >= 2
+ORDER BY active_strikes DESC;
+```
+
+### Review Queue Age
+
+```sql
+SELECT
+  severity,
+  COUNT(*) as count,
+  AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600) as avg_age_hours
+FROM moderation_flags
+WHERE status = 'pending'
+GROUP BY severity;
+```
+
+### Top Violated Rules
+
+```sql
+SELECT r.name, COUNT(*) as violation_count
+FROM moderation_flags f
+CROSS JOIN LATERAL unnest(f.matched_rules) AS rule_id
+JOIN moderation_rules r ON r.id = rule_id
+WHERE f.created_at >= NOW() - INTERVAL '30 days'
+GROUP BY r.id, r.name
+ORDER BY violation_count DESC
+LIMIT 20;
+```
+
+---
+
+## Troubleshooting
+
+### Plugin Won't Start
+
+**Error:** Cannot connect to database
+
+**Solution:**
+```bash
+# Verify DATABASE_URL
+echo $DATABASE_URL
+
+# Test connection
+psql $DATABASE_URL -c "SELECT 1"
+
+# Reinitialize
+nself plugin moderation init
+```
+
+### High False Positives
+
+**Solution:**
+```bash
+# Increase threshold
+MODERATION_TOXICITY_THRESHOLD=0.9
+
+# Add to allowed list
+nself plugin moderation word-lists create \
+  --name "false-positives" \
+  --type allowed \
+  --words "word1,word2"
+```
+
+### Review Queue Growing
+
+**Solution:**
+```bash
+# Adjust thresholds
+MOD_AUTO_APPROVE_BELOW=0.4
+MOD_AUTO_REJECT_ABOVE=0.85
+
+# Increase workers
+MOD_QUEUE_WORKER_CONCURRENCY=10
+```
+
+### Webhook Not Received
+
+**Solution:**
+```bash
+# Check webhook log
+SELECT * FROM moderation_webhook_events
+WHERE processed = false
+ORDER BY created_at DESC;
+```
+
+---
+
+**Last Updated**: February 11, 2026
+**Plugin Version**: 1.0.0
+**Minimum nself Version**: 0.4.8

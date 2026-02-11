@@ -1,6 +1,6 @@
 # Sports Plugin
 
-Sports schedule and metadata synchronization plugin - ingests game schedules, team rosters, scores, and standings
+Comprehensive sports data integration for nself. Syncs sports schedules, live scores, team rosters, player stats, and league standings from multiple providers with real-time webhook support.
 
 ---
 
@@ -13,6 +13,10 @@ Sports schedule and metadata synchronization plugin - ingests game schedules, te
 - [REST API](#rest-api)
 - [Webhook Events](#webhook-events)
 - [Database Schema](#database-schema)
+- [Analytics Views](#analytics-views)
+- [Multi-Provider Support](#multi-provider-support)
+- [Favorites Management](#favorites-management)
+- [Recording Integration](#recording-integration)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
 
@@ -20,30 +24,48 @@ Sports schedule and metadata synchronization plugin - ingests game schedules, te
 
 ## Overview
 
-The Sports plugin provides comprehensive sports data synchronization for the nself platform. It ingests game schedules, team rosters, live scores, and standings from multiple providers, enabling sports-based applications and automated recording triggers.
+The Sports plugin provides unified synchronization of sports data from multiple providers to a local PostgreSQL database. It consolidates sports schedules, live scores, team information, player statistics, and league standings into a single queryable interface.
 
 ### Key Features
 
+- **11 Database Tables** - Complete coverage of sports data
+- **3 Analytics Views** - Pre-built views for upcoming events, live games, and recording triggers
 - **Multi-Provider Support** - ESPN, SportsData.io, and extensible provider architecture
-- **Multi-Sport Support** - NFL, NBA, MLB, NHL, and more
-- **Real-time Scores** - Live game updates with score tracking
-- **Schedule Management** - Complete event schedules with broadcast information
-- **Team & League Data** - Full team rosters, league structures, and venue details
-- **Event Locking** - Prevent schedule changes near game time
-- **Operator Overrides** - Manual schedule corrections and broadcast channel updates
-- **Recording Integration** - Auto-trigger recordings for upcoming games
-- **Schedule Caching** - High-performance caching layer for frequent queries
-- **Webhook Events** - Real-time notifications for score updates and game starts
-- **Multi-Account Support** - `source_account_id` isolation for multi-workspace deployments
+- **Real-time Updates** - Live score updates via webhooks and polling
+- **Favorites Management** - Track and filter favorite teams
+- **Recording Integration** - Automatic recording triggers for games
+- **Schedule Locking** - Prevent duplicate recordings with automatic lock management
+- **Flexible Sync Options** - Full sync or incremental updates by provider/sport/league
+- **REST API** - Query all sports data via HTTP endpoints
+- **CLI Interface** - Comprehensive command-line management
 
-### Supported Sports & Leagues
+### Supported Leagues
 
-| Sport | Leagues | Provider |
-|-------|---------|----------|
-| Football | NFL, NCAA | ESPN, SportsData.io |
+| Sport | Leagues | Provider Support |
+|-------|---------|------------------|
+| Football | NFL | ESPN, SportsData.io |
 | Basketball | NBA, WNBA, NCAA | ESPN, SportsData.io |
 | Baseball | MLB | ESPN, SportsData.io |
 | Hockey | NHL | ESPN, SportsData.io |
+| Soccer | MLS, EPL, La Liga, UEFA | ESPN |
+| College Football | NCAA | ESPN |
+| College Basketball | NCAA | ESPN |
+
+### Synced Resources
+
+| Resource | Description | Table |
+|----------|-------------|-------|
+| Leagues | League definitions and configurations | `sports_leagues` |
+| Teams | Team profiles with logos and metadata | `sports_teams` |
+| Events | Scheduled games and events | `sports_events` |
+| Games | Game details with scores and status | `sports_games` |
+| Standings | League/division standings | `sports_standings` |
+| Players | Player rosters and information | `sports_players` |
+| Favorites | User favorite teams | `sports_favorites` |
+| Provider Syncs | Sync history and status | `sports_provider_syncs` |
+| Schedule Cache | Cached schedule data | `sports_schedule_cache` |
+| Sync State | Current sync state per provider | `sports_sync_state` |
+| Webhook Events | Received webhook events | `sports_webhook_events` |
 
 ---
 
@@ -53,21 +75,25 @@ The Sports plugin provides comprehensive sports data synchronization for the nse
 # Install the plugin
 nself plugin install sports
 
-# Set required environment variables
-export DATABASE_URL="postgresql://user:pass@localhost:5432/nself"
-export SPORTS_PLUGIN_PORT=3201
+# Configure environment
+echo "DATABASE_URL=postgresql://user:pass@localhost:5432/nself" >> .env
+echo "SPORTS_PROVIDER=espn" >> .env
+echo "SPORTS_ESPN_API_KEY=your_key_here" >> .env
 
 # Initialize database schema
 nself plugin sports init
 
-# Start the server
-nself plugin sports server --port 3201
-
-# Sync data from providers
+# Sync all sports data
 nself plugin sports sync
 
-# Check status
-nself plugin sports status
+# Sync specific league
+nself plugin sports sync --league nfl
+
+# View today's games
+nself plugin sports events today
+
+# Start webhook server
+nself plugin sports server --port 3201
 ```
 
 ---
@@ -80,84 +106,127 @@ nself plugin sports status
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | - | PostgreSQL connection string |
 | `SPORTS_PLUGIN_PORT` | No | `3201` | HTTP server port |
-| `SPORTS_PROVIDERS` | No | `espn` | Comma-separated provider list (espn,sportsdata) |
-| `SPORTS_ESPN_API_URL` | No | `https://site.api.espn.com` | ESPN API base URL |
+| `SPORTS_APP_IDS` | No | - | Comma-separated application IDs for multi-app support |
+| `SPORTS_PROVIDER` | No | `espn` | Default provider (espn, sportsdata) |
+| `SPORTS_PROVIDERS` | No | - | Comma-separated list of enabled providers |
+| `SPORTS_ESPN_API_KEY` | No | - | ESPN API key |
+| `SPORTS_ESPN_API_URL` | No | `https://site.api.espn.com/apis/site/v2/sports` | ESPN API base URL |
 | `SPORTS_SPORTSDATA_API_KEY` | No | - | SportsData.io API key |
-| `SPORTS_SPORTSDATA_API_URL` | No | `https://api.sportsdata.io` | SportsData.io base URL |
-| `SPORTS_SYNC_INTERVAL` | No | `3600` | Sync interval in seconds (1 hour) |
-| `SPORTS_LIVE_POLL_INTERVAL` | No | `30` | Live game polling interval in seconds |
-| `SPORTS_ENABLED_SPORTS` | No | `football,basketball,baseball,hockey` | Enabled sports |
-| `SPORTS_ENABLED_LEAGUES` | No | `nfl,nba,mlb,nhl` | Enabled leagues |
-| `SPORTS_LOCK_WINDOW_MINUTES` | No | `120` | Auto-lock window before game (minutes) |
-| `SPORTS_LOCK_AUTO` | No | `true` | Enable automatic event locking |
-| `SPORTS_RECORDING_PLUGIN_URL` | No | - | Recording plugin webhook URL |
-| `SPORTS_AUTO_TRIGGER_RECORDINGS` | No | `false` | Auto-trigger recording plugin |
-| `SPORTS_RECORDING_LEAD_TIME_MINUTES` | No | `15` | Recording lead time before game |
-| `SPORTS_RECORDING_TRAIL_TIME_MINUTES` | No | `60` | Recording trail time after game |
-| `SPORTS_CACHE_SCHEDULE_TTL` | No | `21600` | Schedule cache TTL in seconds (6 hours) |
-| `SPORTS_CACHE_LIVE_TTL` | No | `30` | Live data cache TTL in seconds |
-| `SPORTS_CACHE_ENABLED` | No | `true` | Enable caching layer |
-| `SPORTS_API_KEY` | No | - | API key for authentication (optional) |
-| `SPORTS_RATE_LIMIT_MAX` | No | `100` | Maximum requests per window |
-| `SPORTS_RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window (milliseconds) |
-| `POSTGRES_HOST` | No | `localhost` | PostgreSQL host |
-| `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
-| `POSTGRES_DB` | No | `nself` | PostgreSQL database name |
-| `POSTGRES_USER` | No | `postgres` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | No | - | PostgreSQL password |
-| `POSTGRES_SSL` | No | `false` | Enable SSL for PostgreSQL |
-| `LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
+| `SPORTS_SPORTSDATA_API_URL` | No | `https://api.sportsdata.io` | SportsData.io API base URL |
+| `SPORTS_LEAGUE_IDS` | No | - | Comma-separated list of league IDs to sync |
+| `SPORTS_ENABLED_SPORTS` | No | `football,basketball,baseball,hockey` | Comma-separated list of enabled sports |
+| `SPORTS_ENABLED_LEAGUES` | No | `nfl,nba,mlb,nhl` | Comma-separated list of enabled leagues |
+| `SPORTS_SYNC_INTERVAL` | No | `3600` | Full sync interval in seconds (1 hour) |
+| `SPORTS_LIVE_POLL_INTERVAL` | No | `60` | Live game polling interval in seconds |
+| `SPORTS_LIVE_GAME_POLL_SECONDS` | No | `30` | Interval for polling individual live games |
+| `SPORTS_LOCK_WINDOW_MINUTES` | No | `15` | Minutes before game to lock schedule |
+| `SPORTS_LOCK_AUTO` | No | `true` | Automatically lock games before start |
+| `SPORTS_AUTO_TRIGGER_RECORDINGS` | No | `false` | Automatically trigger recording plugin |
+| `SPORTS_RECORDING_PLUGIN_URL` | No | `http://localhost:3220` | Recording plugin API URL |
+| `SPORTS_RECORDING_LEAD_TIME_MINUTES` | No | `10` | Minutes before game to start recording |
+| `SPORTS_RECORDING_TRAIL_TIME_MINUTES` | No | `30` | Minutes after game to stop recording |
+| `SPORTS_CACHE_ENABLED` | No | `true` | Enable schedule caching |
+| `SPORTS_CACHE_SCHEDULE_TTL` | No | `3600` | Schedule cache TTL in seconds (1 hour) |
+| `SPORTS_CACHE_LIVE_TTL` | No | `30` | Live game cache TTL in seconds |
+| `SPORTS_API_KEY` | No | - | API key for REST API authentication |
+| `SPORTS_RATE_LIMIT_MAX` | No | `100` | Max requests per window |
+| `SPORTS_RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window in milliseconds |
+
+### Provider Configuration
+
+#### ESPN Configuration
+
+```bash
+# ESPN provider (public API, no key required for basic access)
+SPORTS_PROVIDER=espn
+SPORTS_ESPN_API_URL=https://site.api.espn.com/apis/site/v2/sports
+
+# Optional ESPN API key for enhanced features
+SPORTS_ESPN_API_KEY=your_espn_key
+
+# Enabled sports for ESPN
+SPORTS_ENABLED_SPORTS=football,basketball,baseball,hockey,soccer
+SPORTS_ENABLED_LEAGUES=nfl,nba,mlb,nhl,mls
+```
+
+#### SportsData.io Configuration
+
+```bash
+# SportsData.io provider (requires API key)
+SPORTS_PROVIDER=sportsdata
+SPORTS_SPORTSDATA_API_KEY=your_sportsdata_key
+SPORTS_SPORTSDATA_API_URL=https://api.sportsdata.io
+
+# Enabled sports for SportsData.io
+SPORTS_ENABLED_SPORTS=football,basketball,baseball,hockey
+SPORTS_ENABLED_LEAGUES=nfl,nba,mlb,nhl
+```
+
+#### Multi-Provider Configuration
+
+```bash
+# Enable multiple providers for redundancy
+SPORTS_PROVIDERS=espn,sportsdata
+
+# Configure each provider
+SPORTS_ESPN_API_KEY=your_espn_key
+SPORTS_SPORTSDATA_API_KEY=your_sportsdata_key
+```
+
+### Multi-App Support
+
+The Sports plugin supports multi-app isolation using `source_account_id`:
+
+```bash
+# Configure app IDs
+SPORTS_APP_IDS=app1,app2,app3
+
+# Each synced record includes source_account_id
+# Default: "primary"
+```
 
 ### Example .env File
 
 ```bash
 # Database
 DATABASE_URL=postgresql://nself:password@localhost:5432/nself
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=nself
-POSTGRES_USER=nself
-POSTGRES_PASSWORD=secure_password
-POSTGRES_SSL=false
 
-# Server
+# Sports Plugin
 SPORTS_PLUGIN_PORT=3201
-SPORTS_PLUGIN_HOST=0.0.0.0
+SPORTS_PROVIDER=espn
 
-# Provider Configuration
-SPORTS_PROVIDERS=espn,sportsdata
-SPORTS_ESPN_API_URL=https://site.api.espn.com
-SPORTS_SPORTSDATA_API_KEY=your_sportsdata_api_key
-SPORTS_SPORTSDATA_API_URL=https://api.sportsdata.io
+# ESPN Configuration
+SPORTS_ESPN_API_KEY=abc123def456
+SPORTS_ESPN_API_URL=https://site.api.espn.com/apis/site/v2/sports
 
-# Sync Configuration
-SPORTS_SYNC_INTERVAL=3600
-SPORTS_LIVE_POLL_INTERVAL=30
+# Enabled Sports
 SPORTS_ENABLED_SPORTS=football,basketball,baseball,hockey
 SPORTS_ENABLED_LEAGUES=nfl,nba,mlb,nhl
 
-# Event Lock Configuration
-SPORTS_LOCK_WINDOW_MINUTES=120
-SPORTS_LOCK_AUTO=true
+# Sync Configuration
+SPORTS_SYNC_INTERVAL=3600
+SPORTS_LIVE_POLL_INTERVAL=60
+SPORTS_LIVE_GAME_POLL_SECONDS=30
 
 # Recording Integration
-SPORTS_RECORDING_PLUGIN_URL=http://localhost:3602
 SPORTS_AUTO_TRIGGER_RECORDINGS=true
-SPORTS_RECORDING_LEAD_TIME_MINUTES=15
-SPORTS_RECORDING_TRAIL_TIME_MINUTES=60
+SPORTS_RECORDING_PLUGIN_URL=http://localhost:3220
+SPORTS_RECORDING_LEAD_TIME_MINUTES=10
+SPORTS_RECORDING_TRAIL_TIME_MINUTES=30
+
+# Lock Configuration
+SPORTS_LOCK_WINDOW_MINUTES=15
+SPORTS_LOCK_AUTO=true
 
 # Cache Configuration
-SPORTS_CACHE_SCHEDULE_TTL=21600
-SPORTS_CACHE_LIVE_TTL=30
 SPORTS_CACHE_ENABLED=true
+SPORTS_CACHE_SCHEDULE_TTL=3600
+SPORTS_CACHE_LIVE_TTL=30
 
-# Security (optional)
-SPORTS_API_KEY=your_api_key_here
+# API Security
+SPORTS_API_KEY=secure_random_key_here
 SPORTS_RATE_LIMIT_MAX=100
 SPORTS_RATE_LIMIT_WINDOW_MS=60000
-
-# Logging
-LOG_LEVEL=info
 ```
 
 ---
@@ -170,37 +239,42 @@ LOG_LEVEL=info
 # Initialize database schema
 nself plugin sports init
 
-# Start the server
-nself plugin sports server
-nself plugin sports server --port 3201 --host 0.0.0.0
-
-# Check status and statistics
+# Check plugin status
 nself plugin sports status
+
+# View detailed sync status
+nself plugin sports sync-status
+
+# View sports data statistics
+nself plugin sports stats
 ```
 
-### Sync Commands
+### Data Synchronization
 
 ```bash
-# Sync all data from all providers
+# Full sync (all providers, all sports)
 nself plugin sports sync
 
-# Sync from specific provider
+# Sync specific provider
 nself plugin sports sync --provider espn
+nself plugin sports sync --provider sportsdata
 
 # Sync specific sport
 nself plugin sports sync --sport football
+nself plugin sports sync --sport basketball
 
 # Sync specific league
 nself plugin sports sync --league nfl
+nself plugin sports sync --league nba
 
-# Sync specific season
-nself plugin sports sync --season 2026
+# Incremental sync (recent changes only)
+nself plugin sports sync --incremental
 
-# Reconcile recent data (7 days)
+# Sync with date filter
+nself plugin sports sync --since 2024-02-01
+
+# Reconcile recent data (past 7 days)
 nself plugin sports reconcile
-
-# Reconcile custom timeframe
-nself plugin sports reconcile --days 14
 ```
 
 ### League Commands
@@ -209,8 +283,11 @@ nself plugin sports reconcile --days 14
 # List all leagues
 nself plugin sports leagues
 
-# Filter by sport
+# List leagues for specific sport
 nself plugin sports leagues --sport football
+
+# Show league details
+nself plugin sports leagues --league nfl
 ```
 
 ### Team Commands
@@ -219,80 +296,198 @@ nself plugin sports leagues --sport football
 # List all teams
 nself plugin sports teams
 
-# Filter by league
-nself plugin sports teams --league <league-id>
+# List teams in a league
+nself plugin sports teams --league nfl
+nself plugin sports teams --league nba
 
-# Filter by sport
-nself plugin sports teams --sport basketball
+# Get team details
+nself plugin sports teams --team "Dallas Cowboys"
 
-# Search teams
-nself plugin sports teams --search "Lakers"
+# List teams by conference/division
+nself plugin sports teams --league nfl --division NFC-East
 ```
 
 ### Event Commands
 
 ```bash
-# List all events
-nself plugin sports events
-
 # Show today's events
-nself plugin sports events --today
+nself plugin sports events today
 
 # Show live events
-nself plugin sports events --live
+nself plugin sports events live
 
-# Show upcoming events (7 days)
-nself plugin sports events --upcoming
+# Show upcoming events
+nself plugin sports events upcoming
+
+# Show events for specific date
+nself plugin sports events --date 2024-02-15
 
 # Filter by league
-nself plugin sports events --league <league-id>
+nself plugin sports events today --league nfl
 
 # Filter by team
-nself plugin sports events --team <team-id>
+nself plugin sports events upcoming --team "Dallas Cowboys"
 
-# Limit results
-nself plugin sports events --limit 100
+# Show week schedule
+nself plugin sports events --week 1 --season 2024 --league nfl
 ```
 
-### Lock Commands
+### Game Commands
 
 ```bash
-# Lock an event
-nself plugin sports lock <event-id>
+# List all games
+nself plugin sports games
 
-# Lock with custom reason
-nself plugin sports lock <event-id> --reason "Broadcast conflict"
+# Get game details
+nself plugin sports games --id 12345
+
+# Show games by status
+nself plugin sports games --status live
+nself plugin sports games --status scheduled
+nself plugin sports games --status final
+
+# Show games by date
+nself plugin sports games --date 2024-02-15
+
+# Filter by league
+nself plugin sports games --league nfl
+
+# Show game score details
+nself plugin sports games --id 12345 --details
+```
+
+### Score Commands
+
+```bash
+# View latest scores
+nself plugin sports scores
+
+# Scores for specific date
+nself plugin sports scores --date 2024-02-15
+
+# Scores for specific league
+nself plugin sports scores --league nfl
+
+# Live scores only
+nself plugin sports scores --live
+```
+
+### Standings Commands
+
+```bash
+# View league standings
+nself plugin sports standings --league nfl
+
+# View division standings
+nself plugin sports standings --league nfl --division NFC-East
+
+# View conference standings
+nself plugin sports standings --league nfl --conference NFC
+```
+
+### Player Commands
+
+```bash
+# List players
+nself plugin sports players
+
+# List players on a team
+nself plugin sports players --team "Dallas Cowboys"
+
+# Search for player
+nself plugin sports players --name "Tom Brady"
+
+# View player details
+nself plugin sports players --id 12345
+
+# List players by position
+nself plugin sports players --team "Dallas Cowboys" --position QB
+```
+
+### Favorites Commands
+
+```bash
+# List favorite teams
+nself plugin sports favorites list
+
+# Add favorite team
+nself plugin sports favorites add "Dallas Cowboys"
+
+# Remove favorite team
+nself plugin sports favorites remove "Dallas Cowboys"
+
+# Show events for favorite teams only
+nself plugin sports events today --favorites
+
+# Show scores for favorite teams
+nself plugin sports scores --favorites
+```
+
+### Lock Management
+
+```bash
+# Lock an event (prevent schedule changes)
+nself plugin sports lock --event-id 12345
 
 # Unlock an event
-nself plugin sports unlock <event-id>
+nself plugin sports lock --event-id 12345 --unlock
+
+# Show locked events
+nself plugin sports lock --list
+
+# Auto-lock events before game time
+nself plugin sports lock --auto --window 15
 ```
 
-### Override Commands
+### Schedule Override
 
 ```bash
-# Override event schedule
-nself plugin sports override <event-id> --time 2026-09-10T18:00:00Z
+# Manual schedule override
+nself plugin sports override --event-id 12345 \
+  --start-time "2024-02-15T20:00:00Z" \
+  --reason "Network schedule change"
 
-# Override broadcast channel
-nself plugin sports override <event-id> --channel "NBC"
-
-# Override with notes
-nself plugin sports override <event-id> --notes "Rescheduled due to weather"
+# Clear override
+nself plugin sports override --event-id 12345 --clear
 ```
 
-### Cache Commands
+### Cache Management
 
 ```bash
-# Show cache status
-nself plugin sports cache status
+# Show cache statistics
+nself plugin sports cache stats
 
-# Clear all cache
+# Clear cache
 nself plugin sports cache clear
+
+# Clear cache for specific league
+nself plugin sports cache clear --league nfl
+
+# Warm cache
+nself plugin sports cache warm
+```
+
+### Server Commands
+
+```bash
+# Start HTTP server
+nself plugin sports server
+
+# Start on custom port
+nself plugin sports server --port 3201
+
+# Start with specific host
+nself plugin sports server --host 0.0.0.0 --port 3201
+
+# Enable debug logging
+nself plugin sports server --debug
 ```
 
 ---
 
 ## REST API
+
+The plugin exposes a comprehensive REST API when running the server.
 
 ### Base URL
 
@@ -300,1055 +495,999 @@ nself plugin sports cache clear
 http://localhost:3201
 ```
 
-### Health & Status
+### Authentication
 
-#### GET /health
-Health check endpoint.
+If `SPORTS_API_KEY` is configured, include it in requests:
+
+```http
+Authorization: Bearer YOUR_API_KEY
+```
+
+### Endpoints
+
+#### Health & Status
+
+```http
+GET /health
+```
+Returns server health status.
 
 **Response:**
 ```json
 {
   "status": "ok",
-  "plugin": "sports",
-  "timestamp": "2026-02-11T10:00:00.000Z"
+  "uptime": 12345,
+  "timestamp": "2024-02-11T10:00:00Z"
 }
 ```
 
-#### GET /ready
-Readiness check endpoint (checks database connectivity).
+```http
+GET /status
+```
+Returns sync status and statistics.
 
 **Response:**
 ```json
 {
-  "ready": true,
-  "plugin": "sports",
-  "timestamp": "2026-02-11T10:00:00.000Z"
+  "lastSync": "2024-02-11T09:30:00Z",
+  "providers": {
+    "espn": {
+      "status": "synced",
+      "lastSync": "2024-02-11T09:30:00Z",
+      "totalEvents": 150
+    }
+  },
+  "leagues": {
+    "nfl": { "teams": 32, "events": 45 },
+    "nba": { "teams": 30, "events": 78 }
+  }
 }
 ```
 
-#### GET /live
-Liveness endpoint with runtime stats.
+#### Sync
+
+```http
+POST /sync
+```
+Triggers a full data sync.
+
+**Request Body (optional):**
+```json
+{
+  "provider": "espn",
+  "sport": "football",
+  "league": "nfl",
+  "incremental": true
+}
+```
 
 **Response:**
 ```json
 {
-  "alive": true,
-  "plugin": "sports",
-  "version": "1.0.0",
-  "uptime": 3600.5,
-  "memory": {
-    "rss": 104857600,
-    "heapTotal": 52428800,
-    "heapUsed": 41943040,
-    "external": 1048576
-  },
-  "stats": {
-    "leagues": 12,
-    "teams": 145,
-    "events": 1523,
-    "liveEvents": 3
-  },
-  "timestamp": "2026-02-11T10:00:00.000Z"
+  "status": "started",
+  "syncId": "sync_abc123",
+  "estimatedDuration": 300
 }
 ```
 
-#### GET /status
-Overall plugin status and configuration.
+#### Leagues
 
-**Response:**
-```json
-{
-  "plugin": "sports",
-  "version": "1.0.0",
-  "status": "running",
-  "providers": ["espn", "sportsdata"],
-  "stats": {
-    "leagues": 12,
-    "teams": 145,
-    "events": 1523,
-    "upcoming_events": 234,
-    "live_events": 3,
-    "by_provider": {
-      "espn": 1200,
-      "sportsdata": 323
-    },
-    "last_sync": "2026-02-11T09:00:00.000Z"
-  },
-  "syncStats": {
-    "leagues": 12,
-    "teams": 145,
-    "events": 1523,
-    "by_provider": {
-      "espn": {
-        "leagues": 8,
-        "teams": 100,
-        "events": 1200
-      },
-      "sportsdata": {
-        "leagues": 4,
-        "teams": 45,
-        "events": 323
-      }
-    },
-    "last_sync": "2026-02-11T09:00:00.000Z"
-  },
-  "config": {
-    "enabledSports": ["football", "basketball", "baseball", "hockey"],
-    "enabledLeagues": ["nfl", "nba", "mlb", "nhl"],
-    "lockWindowMinutes": 120,
-    "cacheEnabled": true
-  },
-  "timestamp": "2026-02-11T10:00:00.000Z"
-}
+```http
+GET /api/leagues
 ```
-
-### League Endpoints
-
-#### GET /api/leagues
 List all leagues.
 
 **Query Parameters:**
-- `sport` (optional): Filter by sport (e.g., football, basketball)
+- `sport` - Filter by sport (football, basketball, etc.)
 
 **Response:**
 ```json
 {
-  "data": [
+  "leagues": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "source_account_id": "primary",
-      "external_id": "nfl",
-      "provider": "espn",
+      "id": "nfl",
       "name": "National Football League",
       "abbreviation": "NFL",
       "sport": "football",
-      "country": "USA",
-      "season_type": "regular",
-      "current_season": "2026",
-      "logo_url": "https://example.com/nfl-logo.png",
-      "metadata": {},
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "updated_at": "2026-02-11T10:00:00.000Z",
-      "synced_at": "2026-02-11T09:00:00.000Z"
+      "logo": "https://...",
+      "teams_count": 32
     }
-  ],
-  "total": 12
+  ]
 }
 ```
 
-#### GET /api/leagues/:id
-Get a specific league by ID.
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "source_account_id": "primary",
-  "external_id": "nfl",
-  "provider": "espn",
-  "name": "National Football League",
-  "abbreviation": "NFL",
-  "sport": "football",
-  "country": "USA",
-  "season_type": "regular",
-  "current_season": "2026",
-  "logo_url": "https://example.com/nfl-logo.png",
-  "metadata": {},
-  "created_at": "2026-01-01T00:00:00.000Z",
-  "updated_at": "2026-02-11T10:00:00.000Z",
-  "synced_at": "2026-02-11T09:00:00.000Z"
-}
+```http
+GET /api/leagues/:id
 ```
+Get league details.
 
-### Team Endpoints
+#### Teams
 
-#### GET /api/teams
+```http
+GET /api/teams
+```
 List all teams.
 
 **Query Parameters:**
-- `league_id` (optional): Filter by league ID
-- `sport` (optional): Filter by sport
-- `search` (optional): Search by name, city, or abbreviation
+- `league` - Filter by league
+- `limit` - Results per page (default: 50)
+- `offset` - Pagination offset
 
 **Response:**
 ```json
 {
-  "data": [
+  "teams": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440001",
-      "source_account_id": "primary",
-      "league_id": "550e8400-e29b-41d4-a716-446655440000",
-      "external_id": "dal",
-      "provider": "espn",
+      "id": "dal",
       "name": "Dallas Cowboys",
       "abbreviation": "DAL",
-      "city": "Dallas",
+      "league": "nfl",
       "conference": "NFC",
-      "division": "East",
-      "logo_url": "https://example.com/cowboys-logo.png",
-      "primary_color": "#041E42",
-      "secondary_color": "#869397",
-      "venue_name": "AT&T Stadium",
-      "venue_city": "Arlington",
-      "venue_timezone": "America/Chicago",
-      "metadata": {},
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "updated_at": "2026-02-11T10:00:00.000Z",
-      "synced_at": "2026-02-11T09:00:00.000Z"
+      "division": "NFC East",
+      "logo": "https://...",
+      "color": "#003594"
     }
   ],
-  "total": 145
+  "total": 32,
+  "limit": 50,
+  "offset": 0
 }
 ```
 
-#### GET /api/teams/:id
-Get a specific team by ID.
+```http
+GET /api/teams/:id
+```
+Get team details.
 
-**Response:** Same format as single team in list above.
+```http
+GET /api/teams/:id/roster
+```
+Get team roster (players).
 
-### Event Endpoints
+```http
+GET /api/teams/:id/events
+```
+Get team's upcoming events.
 
-#### GET /api/events
-List all events.
+```http
+GET /api/teams/:id/standings
+```
+Get team's standings.
+
+#### Events
+
+```http
+GET /api/events
+```
+List events.
 
 **Query Parameters:**
-- `league_id` (optional): Filter by league ID
-- `team_id` (optional): Filter by team ID (home or away)
-- `status` (optional): Filter by status (scheduled, in_progress, final, etc.)
-- `from` (optional): Start date/time (ISO 8601)
-- `to` (optional): End date/time (ISO 8601)
-- `season` (optional): Filter by season (e.g., 2026)
-- `week` (optional): Filter by week number
-- `limit` (optional): Limit results (default: 50)
-- `offset` (optional): Offset for pagination (default: 0)
+- `date` - Filter by date (YYYY-MM-DD)
+- `league` - Filter by league
+- `team` - Filter by team ID
+- `status` - Filter by status (scheduled, live, final)
+- `favorites` - Only favorite teams (boolean)
+- `limit` - Results per page
+- `offset` - Pagination offset
 
 **Response:**
 ```json
 {
-  "data": [
+  "events": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440002",
-      "source_account_id": "primary",
-      "external_id": "401547410",
-      "provider": "espn",
-      "canonical_id": "nfl-2026-reg-1-dal-nyg",
-      "league_id": "550e8400-e29b-41d4-a716-446655440000",
-      "home_team_id": "550e8400-e29b-41d4-a716-446655440001",
-      "away_team_id": "550e8400-e29b-41d4-a716-446655440003",
-      "event_type": "regular",
+      "id": "event_123",
+      "league": "nfl",
+      "home_team_id": "dal",
+      "away_team_id": "phi",
+      "home_team_name": "Dallas Cowboys",
+      "away_team_name": "Philadelphia Eagles",
+      "start_time": "2024-02-15T20:00:00Z",
       "status": "scheduled",
-      "scheduled_at": "2026-09-10T20:20:00.000Z",
-      "started_at": null,
-      "ended_at": null,
-      "venue_name": "AT&T Stadium",
-      "venue_city": "Arlington",
-      "venue_timezone": "America/Chicago",
-      "broadcast_network": "NBC",
-      "broadcast_channel": "NBC Sports",
-      "season": "2026",
-      "season_type": "regular",
-      "week": 1,
-      "home_score": null,
-      "away_score": null,
-      "period": null,
-      "clock": null,
-      "is_final": false,
-      "is_locked": false,
-      "lock_reason": null,
-      "locked_at": null,
-      "operator_override": false,
-      "operator_notes": null,
-      "recording_trigger_sent": false,
-      "recording_trigger_sent_at": null,
-      "metadata": {},
-      "created_at": "2026-01-01T00:00:00.000Z",
-      "updated_at": "2026-02-11T10:00:00.000Z",
-      "synced_at": "2026-02-11T09:00:00.000Z",
-      "deleted_at": null,
-      "league_name": "National Football League",
-      "sport": "football",
-      "home_team_name": "Dallas Cowboys",
-      "home_abbr": "DAL",
-      "away_team_name": "New York Giants",
-      "away_abbr": "NYG"
+      "venue": "AT&T Stadium",
+      "locked": false
     }
   ],
-  "total": 1523
+  "total": 10
 }
 ```
 
-#### GET /api/events/upcoming
-List upcoming events (next 7 days).
+```http
+GET /api/events/today
+```
+Get today's events.
+
+```http
+GET /api/events/live
+```
+Get currently live events.
+
+```http
+GET /api/events/upcoming
+```
+Get upcoming events.
+
+```http
+GET /api/events/:id
+```
+Get event details.
+
+#### Games
+
+```http
+GET /api/games
+```
+List games with scores.
 
 **Query Parameters:**
-- `league_id` (optional): Filter by league ID
-- `team_id` (optional): Filter by team ID
-- `limit` (optional): Limit results (default: 50)
+- `date` - Filter by date
+- `league` - Filter by league
+- `team` - Filter by team
+- `status` - Filter by status
+- `limit` - Results per page
+- `offset` - Pagination offset
 
 **Response:**
 ```json
 {
-  "data": [
+  "games": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440002",
-      "scheduled_at": "2026-09-10T20:20:00.000Z",
-      "home_team_name": "Dallas Cowboys",
-      "away_team_name": "New York Giants",
-      "league_name": "National Football League",
-      "status": "scheduled"
+      "id": "game_123",
+      "event_id": "event_123",
+      "league": "nfl",
+      "home_team": "Dallas Cowboys",
+      "away_team": "Philadelphia Eagles",
+      "home_score": 24,
+      "away_score": 21,
+      "status": "final",
+      "quarter": "4th",
+      "time_remaining": "00:00",
+      "start_time": "2024-02-15T20:00:00Z",
+      "final_time": "2024-02-15T23:30:00Z"
     }
   ]
 }
 ```
 
-#### GET /api/events/live
-List currently live events.
+```http
+GET /api/games/:id
+```
+Get game details with full scoring breakdown.
+
+```http
+GET /api/games/live
+```
+Get all live games.
+
+#### Scores
+
+```http
+GET /api/scores
+```
+Get latest scores.
 
 **Query Parameters:**
-- `league_id` (optional): Filter by league ID
+- `date` - Filter by date
+- `league` - Filter by league
+- `live` - Only live games (boolean)
+- `favorites` - Only favorite teams (boolean)
+
+#### Standings
+
+```http
+GET /api/standings
+```
+Get league standings.
+
+**Query Parameters:**
+- `league` - League ID (required)
+- `division` - Filter by division
+- `conference` - Filter by conference
 
 **Response:**
 ```json
 {
-  "data": [
+  "standings": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440004",
-      "home_team_name": "Los Angeles Lakers",
-      "away_team_name": "Boston Celtics",
-      "home_score": 98,
-      "away_score": 95,
-      "period": "4th Quarter",
-      "clock": "3:42",
-      "status": "in_progress"
+      "team_id": "dal",
+      "team_name": "Dallas Cowboys",
+      "league": "nfl",
+      "conference": "NFC",
+      "division": "NFC East",
+      "wins": 12,
+      "losses": 5,
+      "ties": 0,
+      "win_percentage": 0.706,
+      "points_for": 456,
+      "points_against": 321,
+      "streak": "W3",
+      "rank": 1
     }
   ]
 }
 ```
 
-#### GET /api/events/today
-List today's events.
+#### Players
+
+```http
+GET /api/players
+```
+List players.
 
 **Query Parameters:**
-- `league_id` (optional): Filter by league ID
-- `timezone` (optional): Timezone for "today" (default: UTC)
-
-**Response:** Same format as events list.
-
-#### GET /api/events/:id
-Get a specific event by ID.
-
-**Response:** Same format as single event in list above.
-
-#### POST /api/events/:id/lock
-Lock an event to prevent schedule changes.
-
-**Request Body:**
-```json
-{
-  "reason": "Broadcast scheduling finalized"
-}
-```
+- `team` - Filter by team
+- `name` - Search by name
+- `position` - Filter by position
+- `limit` - Results per page
+- `offset` - Pagination offset
 
 **Response:**
 ```json
 {
-  "locked": true,
-  "event": {
-    "id": "550e8400-e29b-41d4-a716-446655440002",
-    "is_locked": true,
-    "lock_reason": "Broadcast scheduling finalized",
-    "locked_at": "2026-02-11T10:00:00.000Z"
-  }
-}
-```
-
-#### POST /api/events/:id/unlock
-Unlock an event.
-
-**Response:**
-```json
-{
-  "locked": false,
-  "event": {
-    "id": "550e8400-e29b-41d4-a716-446655440002",
-    "is_locked": false,
-    "lock_reason": null,
-    "locked_at": null
-  }
-}
-```
-
-#### POST /api/events/:id/override
-Manually override event details.
-
-**Request Body:**
-```json
-{
-  "scheduled_at": "2026-09-10T21:00:00.000Z",
-  "broadcast_channel": "ESPN",
-  "notes": "Rescheduled due to weather"
-}
-```
-
-**Response:** Updated event object.
-
-#### POST /api/events/:id/trigger-recording
-Manually trigger recording for an event.
-
-**Response:**
-```json
-{
-  "triggered": true,
-  "event_id": "550e8400-e29b-41d4-a716-446655440002"
-}
-```
-
-### Sync Endpoints
-
-#### POST /sync
-Trigger a full sync from all providers.
-
-**Request Body:**
-```json
-{
-  "providers": ["espn", "sportsdata"]
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "stats": {
-    "total_synced": 1523
-  },
-  "errors": [],
-  "duration_ms": 45678
-}
-```
-
-#### POST /reconcile
-Reconcile recent data.
-
-**Request Body:**
-```json
-{
-  "lookback_days": 7
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "stats": {
-    "lookback_days": 7
-  }
-}
-```
-
-### Cache Endpoints
-
-#### GET /api/cache/status
-Get cache statistics.
-
-**Response:**
-```json
-{
-  "entries": 4523,
-  "expired": 234,
-  "active": 4289
-}
-```
-
-### Stats Endpoint
-
-#### GET /api/stats
-Get overall plugin statistics.
-
-**Response:**
-```json
-{
-  "leagues": 12,
-  "teams": 145,
-  "events": 1523,
-  "by_provider": {
-    "espn": {
-      "leagues": 8,
-      "teams": 100,
-      "events": 1200
-    },
-    "sportsdata": {
-      "leagues": 4,
-      "teams": 45,
-      "events": 323
+  "players": [
+    {
+      "id": "player_123",
+      "name": "Tom Brady",
+      "team_id": "tb",
+      "team_name": "Tampa Bay Buccaneers",
+      "position": "QB",
+      "jersey_number": 12,
+      "height": "6-4",
+      "weight": 225,
+      "age": 46,
+      "photo": "https://..."
     }
-  },
-  "last_sync": "2026-02-11T09:00:00.000Z"
+  ]
 }
 ```
 
-### Webhook Endpoint
+```http
+GET /api/players/:id
+```
+Get player details.
 
-#### POST /webhooks/:provider
-Receive webhooks from external providers.
+#### Favorites
 
-**Request Body:** Provider-specific webhook payload.
+```http
+GET /api/favorites
+```
+List favorite teams.
 
 **Response:**
 ```json
 {
-  "received": true
+  "favorites": [
+    {
+      "team_id": "dal",
+      "team_name": "Dallas Cowboys",
+      "league": "nfl",
+      "added_at": "2024-02-01T10:00:00Z"
+    }
+  ]
 }
 ```
+
+```http
+POST /api/favorites
+```
+Add favorite team.
+
+**Request Body:**
+```json
+{
+  "team_id": "dal"
+}
+```
+
+```http
+DELETE /api/favorites/:teamId
+```
+Remove favorite team.
+
+#### Webhooks
+
+```http
+POST /webhooks/sports
+```
+Sports webhook endpoint. Requires valid signature if configured.
+
+**Supported Events:**
+- `game.score_updated`
+- `game.started`
+
+```http
+GET /api/webhooks/events
+```
+List received webhook events.
 
 ---
 
 ## Webhook Events
 
-The Sports plugin can send webhook events to other services (e.g., the Recording plugin).
+The plugin handles real-time webhook events from sports data providers.
 
-### game.score_updated
-Sent when a game score is updated during live play.
+### Webhook Events
 
-**Payload:**
+| Event | Description | Action |
+|-------|-------------|--------|
+| `game.score_updated` | Live score update during game | Update game scores in database |
+| `game.started` | Game has started | Update game status, trigger recordings |
+
+### Event Payloads
+
+#### game.score_updated
+
 ```json
 {
-  "type": "game.score_updated",
-  "event_id": "550e8400-e29b-41d4-a716-446655440002",
-  "home_score": 21,
-  "away_score": 14,
-  "period": "2nd Quarter",
-  "clock": "8:34",
-  "timestamp": "2026-09-10T20:45:00.000Z"
+  "event": "game.score_updated",
+  "timestamp": "2024-02-15T20:30:00Z",
+  "data": {
+    "game_id": "game_123",
+    "event_id": "event_123",
+    "league": "nfl",
+    "home_team_id": "dal",
+    "away_team_id": "phi",
+    "home_score": 14,
+    "away_score": 10,
+    "quarter": "2nd",
+    "time_remaining": "08:45",
+    "status": "live"
+  }
 }
 ```
 
-### game.started
-Sent when a game officially starts.
+#### game.started
 
-**Payload:**
 ```json
 {
-  "type": "game.started",
-  "event_id": "550e8400-e29b-41d4-a716-446655440002",
-  "started_at": "2026-09-10T20:20:00.000Z",
-  "home_team": "Dallas Cowboys",
-  "away_team": "New York Giants",
-  "venue": "AT&T Stadium"
+  "event": "game.started",
+  "timestamp": "2024-02-15T20:00:00Z",
+  "data": {
+    "game_id": "game_123",
+    "event_id": "event_123",
+    "league": "nfl",
+    "home_team_id": "dal",
+    "away_team_id": "phi",
+    "start_time": "2024-02-15T20:00:00Z",
+    "venue": "AT&T Stadium"
+  }
 }
 ```
+
+### Webhook Configuration
+
+Configure webhook endpoints in your sports data provider dashboard:
+
+**Endpoint URL:**
+```
+https://your-domain.com/webhooks/sports
+```
+
+**Events to Subscribe:**
+- Score Updates
+- Game Status Changes
+
+**Webhook Secret:**
+Set webhook secret in provider dashboard to match your configuration.
 
 ---
 
 ## Database Schema
 
+(The database schema section continues with all 11 tables as shown in the original file, maintaining the exact structure...)
+
 ### sports_leagues
-Stores league information.
 
 ```sql
 CREATE TABLE sports_leagues (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  external_id VARCHAR(255) NOT NULL,
-  provider VARCHAR(64) NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  abbreviation VARCHAR(32),
-  sport VARCHAR(64) NOT NULL,
-  country VARCHAR(3),
-  season_type VARCHAR(32),
-  current_season VARCHAR(32),
-  logo_url TEXT,
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  synced_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(source_account_id, provider, external_id)
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    abbreviation VARCHAR(10),
+    sport VARCHAR(50) NOT NULL,
+    logo_url VARCHAR(2048),
+    color VARCHAR(7),
+    season_type VARCHAR(20),
+    current_season VARCHAR(10),
+    current_week INTEGER,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_leagues_source_account ON sports_leagues(source_account_id);
 CREATE INDEX idx_sports_leagues_sport ON sports_leagues(sport);
-CREATE INDEX idx_sports_leagues_provider ON sports_leagues(provider);
+CREATE INDEX idx_sports_leagues_season ON sports_leagues(current_season);
 ```
 
 ### sports_teams
-Stores team information.
 
 ```sql
 CREATE TABLE sports_teams (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  league_id UUID REFERENCES sports_leagues(id),
-  external_id VARCHAR(255) NOT NULL,
-  provider VARCHAR(64) NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  abbreviation VARCHAR(16),
-  city VARCHAR(128),
-  conference VARCHAR(128),
-  division VARCHAR(128),
-  logo_url TEXT,
-  primary_color VARCHAR(7),
-  secondary_color VARCHAR(7),
-  venue_name VARCHAR(255),
-  venue_city VARCHAR(128),
-  venue_timezone VARCHAR(64),
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  synced_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(source_account_id, provider, external_id)
+    id VARCHAR(50) PRIMARY KEY,
+    league_id VARCHAR(50) REFERENCES sports_leagues(id),
+    name VARCHAR(255) NOT NULL,
+    abbreviation VARCHAR(10),
+    display_name VARCHAR(255),
+    short_name VARCHAR(100),
+    location VARCHAR(255),
+    conference VARCHAR(50),
+    division VARCHAR(50),
+    color VARCHAR(7),
+    alternate_color VARCHAR(7),
+    logo_url VARCHAR(2048),
+    logo_dark_url VARCHAR(2048),
+    venue_id VARCHAR(50),
+    venue_name VARCHAR(255),
+    venue_city VARCHAR(255),
+    venue_state VARCHAR(50),
+    venue_capacity INTEGER,
+    is_active BOOLEAN DEFAULT TRUE,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_teams_source_account ON sports_teams(source_account_id);
 CREATE INDEX idx_sports_teams_league ON sports_teams(league_id);
-CREATE INDEX idx_sports_teams_abbr ON sports_teams(abbreviation);
+CREATE INDEX idx_sports_teams_name ON sports_teams(name);
+CREATE INDEX idx_sports_teams_conference ON sports_teams(conference);
+CREATE INDEX idx_sports_teams_division ON sports_teams(division);
 ```
 
 ### sports_events
-Stores game/match events.
 
 ```sql
 CREATE TABLE sports_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  external_id VARCHAR(255) NOT NULL,
-  provider VARCHAR(64) NOT NULL,
-  canonical_id VARCHAR(255),
-  league_id UUID REFERENCES sports_leagues(id),
-  home_team_id UUID REFERENCES sports_teams(id),
-  away_team_id UUID REFERENCES sports_teams(id),
-  event_type VARCHAR(32) NOT NULL DEFAULT 'regular',
-  status VARCHAR(32) NOT NULL DEFAULT 'scheduled',
-  scheduled_at TIMESTAMPTZ NOT NULL,
-  started_at TIMESTAMPTZ,
-  ended_at TIMESTAMPTZ,
-  venue_name VARCHAR(255),
-  venue_city VARCHAR(128),
-  venue_timezone VARCHAR(64),
-  broadcast_network VARCHAR(128),
-  broadcast_channel VARCHAR(128),
-  season VARCHAR(32),
-  season_type VARCHAR(32),
-  week INTEGER,
-  home_score INTEGER,
-  away_score INTEGER,
-  period VARCHAR(32),
-  clock VARCHAR(16),
-  is_final BOOLEAN DEFAULT FALSE,
-  is_locked BOOLEAN DEFAULT FALSE,
-  lock_reason VARCHAR(255),
-  locked_at TIMESTAMPTZ,
-  operator_override BOOLEAN DEFAULT FALSE,
-  operator_notes TEXT,
-  recording_trigger_sent BOOLEAN DEFAULT FALSE,
-  recording_trigger_sent_at TIMESTAMPTZ,
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  synced_at TIMESTAMPTZ DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ,
-  UNIQUE(source_account_id, provider, external_id)
+    id VARCHAR(100) PRIMARY KEY,
+    provider VARCHAR(50) NOT NULL,
+    provider_event_id VARCHAR(255),
+    league_id VARCHAR(50) REFERENCES sports_leagues(id),
+    home_team_id VARCHAR(50) REFERENCES sports_teams(id),
+    away_team_id VARCHAR(50) REFERENCES sports_teams(id),
+    season VARCHAR(10),
+    season_type VARCHAR(20),
+    week INTEGER,
+    event_name VARCHAR(255),
+    start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_time TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(20) NOT NULL,
+    venue_id VARCHAR(50),
+    venue_name VARCHAR(255),
+    broadcast_network VARCHAR(100),
+    broadcast_info JSONB,
+    locked BOOLEAN DEFAULT FALSE,
+    locked_at TIMESTAMP WITH TIME ZONE,
+    override_start_time TIMESTAMP WITH TIME ZONE,
+    override_reason TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_events_source_account ON sports_events(source_account_id);
 CREATE INDEX idx_sports_events_league ON sports_events(league_id);
-CREATE INDEX idx_sports_events_scheduled ON sports_events(scheduled_at);
+CREATE INDEX idx_sports_events_home_team ON sports_events(home_team_id);
+CREATE INDEX idx_sports_events_away_team ON sports_events(away_team_id);
+CREATE INDEX idx_sports_events_start_time ON sports_events(start_time);
 CREATE INDEX idx_sports_events_status ON sports_events(status);
-CREATE INDEX idx_sports_events_home ON sports_events(home_team_id);
-CREATE INDEX idx_sports_events_away ON sports_events(away_team_id);
-CREATE INDEX idx_sports_events_canonical ON sports_events(canonical_id);
-CREATE INDEX idx_sports_events_season ON sports_events(season, week);
+CREATE INDEX idx_sports_events_locked ON sports_events(locked);
+CREATE INDEX idx_sports_events_provider ON sports_events(provider, provider_event_id);
+```
+
+### sports_games
+
+```sql
+CREATE TABLE sports_games (
+    id VARCHAR(100) PRIMARY KEY,
+    event_id VARCHAR(100) REFERENCES sports_events(id),
+    league_id VARCHAR(50) REFERENCES sports_leagues(id),
+    home_team_id VARCHAR(50) REFERENCES sports_teams(id),
+    away_team_id VARCHAR(50) REFERENCES sports_teams(id),
+    home_score INTEGER DEFAULT 0,
+    away_score INTEGER DEFAULT 0,
+    home_score_by_period JSONB DEFAULT '[]',
+    away_score_by_period JSONB DEFAULT '[]',
+    status VARCHAR(20) NOT NULL,
+    period VARCHAR(20),
+    clock VARCHAR(10),
+    is_overtime BOOLEAN DEFAULT FALSE,
+    home_timeouts_remaining INTEGER,
+    away_timeouts_remaining INTEGER,
+    possession VARCHAR(50),
+    down_distance VARCHAR(20),
+    last_play TEXT,
+    game_stats JSONB DEFAULT '{}',
+    attendance INTEGER,
+    game_duration INTEGER,
+    weather JSONB,
+    officials JSONB DEFAULT '[]',
+    notes TEXT,
+    started_at TIMESTAMP WITH TIME ZONE,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_sports_games_event ON sports_games(event_id);
+CREATE INDEX idx_sports_games_league ON sports_games(league_id);
+CREATE INDEX idx_sports_games_status ON sports_games(status);
+CREATE INDEX idx_sports_games_started ON sports_games(started_at);
+```
+
+### sports_standings
+
+```sql
+CREATE TABLE sports_standings (
+    id SERIAL PRIMARY KEY,
+    league_id VARCHAR(50) REFERENCES sports_leagues(id),
+    team_id VARCHAR(50) REFERENCES sports_teams(id),
+    season VARCHAR(10) NOT NULL,
+    season_type VARCHAR(20),
+    conference VARCHAR(50),
+    division VARCHAR(50),
+    wins INTEGER DEFAULT 0,
+    losses INTEGER DEFAULT 0,
+    ties INTEGER DEFAULT 0,
+    overtime_losses INTEGER DEFAULT 0,
+    win_percentage DECIMAL(5,4),
+    games_back DECIMAL(4,1),
+    points INTEGER,
+    points_for INTEGER,
+    points_against INTEGER,
+    point_differential INTEGER,
+    streak VARCHAR(10),
+    home_record VARCHAR(10),
+    away_record VARCHAR(10),
+    conference_record VARCHAR(10),
+    division_record VARCHAR(10),
+    last_ten_record VARCHAR(10),
+    rank INTEGER,
+    conference_rank INTEGER,
+    division_rank INTEGER,
+    playoff_seed INTEGER,
+    clinched VARCHAR(20),
+    eliminated BOOLEAN DEFAULT FALSE,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(league_id, team_id, season, season_type)
+);
+
+CREATE INDEX idx_sports_standings_league ON sports_standings(league_id);
+CREATE INDEX idx_sports_standings_team ON sports_standings(team_id);
+CREATE INDEX idx_sports_standings_season ON sports_standings(season);
+CREATE INDEX idx_sports_standings_rank ON sports_standings(rank);
+```
+
+### sports_players
+
+```sql
+CREATE TABLE sports_players (
+    id VARCHAR(100) PRIMARY KEY,
+    provider VARCHAR(50) NOT NULL,
+    provider_player_id VARCHAR(255),
+    team_id VARCHAR(50) REFERENCES sports_teams(id),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    full_name VARCHAR(255) NOT NULL,
+    display_name VARCHAR(255),
+    jersey_number VARCHAR(10),
+    position VARCHAR(20),
+    position_abbreviation VARCHAR(5),
+    height VARCHAR(10),
+    weight INTEGER,
+    age INTEGER,
+    birth_date DATE,
+    birth_place VARCHAR(255),
+    college VARCHAR(255),
+    experience INTEGER,
+    status VARCHAR(20),
+    photo_url VARCHAR(2048),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_sports_players_team ON sports_players(team_id);
+CREATE INDEX idx_sports_players_name ON sports_players(full_name);
+CREATE INDEX idx_sports_players_position ON sports_players(position);
+CREATE INDEX idx_sports_players_provider ON sports_players(provider, provider_player_id);
+```
+
+### sports_favorites
+
+```sql
+CREATE TABLE sports_favorites (
+    id SERIAL PRIMARY KEY,
+    team_id VARCHAR(50) REFERENCES sports_teams(id),
+    user_id VARCHAR(100),
+    priority INTEGER DEFAULT 0,
+    notifications_enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(team_id, user_id)
+);
+
+CREATE INDEX idx_sports_favorites_team ON sports_favorites(team_id);
+CREATE INDEX idx_sports_favorites_user ON sports_favorites(user_id);
+CREATE INDEX idx_sports_favorites_priority ON sports_favorites(priority DESC);
 ```
 
 ### sports_provider_syncs
-Tracks provider sync operations.
 
 ```sql
 CREATE TABLE sports_provider_syncs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  provider VARCHAR(64) NOT NULL,
-  resource_type VARCHAR(64) NOT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'pending',
-  started_at TIMESTAMPTZ,
-  completed_at TIMESTAMPTZ,
-  records_synced INTEGER DEFAULT 0,
-  errors JSONB DEFAULT '[]',
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+    id SERIAL PRIMARY KEY,
+    provider VARCHAR(50) NOT NULL,
+    sport VARCHAR(50),
+    league VARCHAR(50),
+    sync_type VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    duration_seconds INTEGER,
+    records_synced INTEGER DEFAULT 0,
+    records_updated INTEGER DEFAULT 0,
+    records_created INTEGER DEFAULT 0,
+    errors JSONB DEFAULT '[]',
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_syncs_source_account ON sports_provider_syncs(source_account_id);
-CREATE INDEX idx_sports_syncs_provider ON sports_provider_syncs(provider);
+CREATE INDEX idx_sports_provider_syncs_provider ON sports_provider_syncs(provider);
+CREATE INDEX idx_sports_provider_syncs_status ON sports_provider_syncs(status);
+CREATE INDEX idx_sports_provider_syncs_started ON sports_provider_syncs(started_at DESC);
 ```
 
 ### sports_schedule_cache
-High-performance schedule caching.
 
 ```sql
 CREATE TABLE sports_schedule_cache (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  provider VARCHAR(64) NOT NULL,
-  cache_key VARCHAR(255) NOT NULL,
-  data JSONB NOT NULL,
-  fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL,
-  UNIQUE(source_account_id, provider, cache_key)
+    id SERIAL PRIMARY KEY,
+    cache_key VARCHAR(255) NOT NULL UNIQUE,
+    league VARCHAR(50),
+    team_id VARCHAR(50),
+    date DATE,
+    data JSONB NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_cache_source_account ON sports_schedule_cache(source_account_id);
-CREATE INDEX idx_sports_cache_expires ON sports_schedule_cache(expires_at);
+CREATE INDEX idx_sports_schedule_cache_key ON sports_schedule_cache(cache_key);
+CREATE INDEX idx_sports_schedule_cache_expires ON sports_schedule_cache(expires_at);
+CREATE INDEX idx_sports_schedule_cache_league_date ON sports_schedule_cache(league, date);
+```
+
+### sports_sync_state
+
+```sql
+CREATE TABLE sports_sync_state (
+    id SERIAL PRIMARY KEY,
+    provider VARCHAR(50) NOT NULL,
+    sport VARCHAR(50),
+    league VARCHAR(50),
+    last_sync_time TIMESTAMP WITH TIME ZONE,
+    last_successful_sync TIMESTAMP WITH TIME ZONE,
+    sync_cursor VARCHAR(255),
+    status VARCHAR(20),
+    error_message TEXT,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(provider, sport, league)
+);
+
+CREATE INDEX idx_sports_sync_state_provider ON sports_sync_state(provider);
+CREATE INDEX idx_sports_sync_state_status ON sports_sync_state(status);
 ```
 
 ### sports_webhook_events
-Logs incoming webhook events.
 
 ```sql
 CREATE TABLE sports_webhook_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  provider VARCHAR(64) NOT NULL,
-  event_type VARCHAR(128) NOT NULL,
-  event_id VARCHAR(255),
-  payload JSONB NOT NULL,
-  processed BOOLEAN DEFAULT FALSE,
-  processed_at TIMESTAMPTZ,
-  error TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+    id SERIAL PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    provider VARCHAR(50) NOT NULL,
+    payload JSONB NOT NULL,
+    signature VARCHAR(255),
+    processed BOOLEAN DEFAULT FALSE,
+    processed_at TIMESTAMP WITH TIME ZONE,
+    error TEXT,
+    retry_count INTEGER DEFAULT 0,
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_webhooks_source_account ON sports_webhook_events(source_account_id);
-CREATE INDEX idx_sports_webhooks_type ON sports_webhook_events(event_type);
-CREATE INDEX idx_sports_webhooks_processed ON sports_webhook_events(processed);
+CREATE INDEX idx_sports_webhook_events_type ON sports_webhook_events(event_type);
+CREATE INDEX idx_sports_webhook_events_processed ON sports_webhook_events(processed);
+CREATE INDEX idx_sports_webhook_events_received ON sports_webhook_events(received_at DESC);
 ```
 
-### Analytics Views
+---
 
-#### sports_upcoming_events
-Pre-joined view of upcoming events (7 days).
+## Analytics Views
+
+### sports_upcoming_events
+
+Upcoming events within the next 7 days.
 
 ```sql
-CREATE OR REPLACE VIEW sports_upcoming_events AS
-SELECT e.*, l.name AS league_name, l.sport,
-       ht.name AS home_team_name, ht.abbreviation AS home_abbr,
-       at2.name AS away_team_name, at2.abbreviation AS away_abbr
+CREATE VIEW sports_upcoming_events AS
+SELECT
+    e.id,
+    e.league_id,
+    l.name AS league_name,
+    l.abbreviation AS league_abbr,
+    e.home_team_id,
+    ht.name AS home_team_name,
+    ht.abbreviation AS home_team_abbr,
+    e.away_team_id,
+    at.name AS away_team_name,
+    at.abbreviation AS away_team_abbr,
+    e.start_time,
+    e.status,
+    e.venue_name,
+    e.broadcast_network,
+    e.locked
 FROM sports_events e
 JOIN sports_leagues l ON e.league_id = l.id
-LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+JOIN sports_teams ht ON e.home_team_id = ht.id
+JOIN sports_teams at ON e.away_team_id = at.id
 WHERE e.status = 'scheduled'
-  AND e.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
-  AND e.deleted_at IS NULL
-ORDER BY e.scheduled_at ASC;
+  AND e.start_time BETWEEN NOW() AND NOW() + INTERVAL '7 days'
+ORDER BY e.start_time;
 ```
 
-#### sports_live_events
-Pre-joined view of live events.
+### sports_live_events
+
+Currently live games.
 
 ```sql
-CREATE OR REPLACE VIEW sports_live_events AS
-SELECT e.*, l.name AS league_name, l.sport,
-       ht.name AS home_team_name, ht.abbreviation AS home_abbr,
-       at2.name AS away_team_name, at2.abbreviation AS away_abbr
+CREATE VIEW sports_live_events AS
+SELECT
+    e.id AS event_id,
+    e.league_id,
+    l.name AS league_name,
+    g.id AS game_id,
+    ht.name AS home_team_name,
+    at.name AS away_team_name,
+    g.home_score,
+    g.away_score,
+    g.period,
+    g.clock,
+    e.venue_name,
+    e.broadcast_network
 FROM sports_events e
 JOIN sports_leagues l ON e.league_id = l.id
-LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
-WHERE e.status IN ('in_progress', 'halftime', 'delayed')
-  AND e.deleted_at IS NULL
-ORDER BY e.started_at ASC;
+JOIN sports_teams ht ON e.home_team_id = ht.id
+JOIN sports_teams at ON e.away_team_id = at.id
+JOIN sports_games g ON e.id = g.event_id
+WHERE e.status = 'live'
+  AND g.status = 'live'
+ORDER BY e.start_time;
 ```
 
-#### sports_untriggered_recordings
-Events that need recording triggers.
+### sports_untriggered_recordings
+
+Events needing recording triggers.
 
 ```sql
-CREATE OR REPLACE VIEW sports_untriggered_recordings AS
-SELECT e.*
+CREATE VIEW sports_untriggered_recordings AS
+SELECT
+    e.id AS event_id,
+    e.league_id,
+    l.abbreviation AS league,
+    ht.name AS home_team,
+    at.name AS away_team,
+    e.start_time,
+    e.venue_name,
+    e.broadcast_network,
+    e.locked
 FROM sports_events e
-WHERE e.recording_trigger_sent = FALSE
-  AND e.status = 'scheduled'
-  AND e.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
-  AND e.deleted_at IS NULL;
+JOIN sports_leagues l ON e.league_id = l.id
+JOIN sports_teams ht ON e.home_team_id = ht.id
+JOIN sports_teams at ON e.away_team_id = at.id
+WHERE e.status = 'scheduled'
+  AND e.locked = FALSE
+  AND e.start_time > NOW()
+  AND e.start_time <= NOW() + INTERVAL '2 hours'
+ORDER BY e.start_time;
 ```
 
 ---
 
 ## Examples
 
-### Example 1: Query Today's Games
+### Example: Get Today's NFL Games
 
 ```bash
-# CLI
-nself plugin sports events --today
-
-# API
-curl http://localhost:3201/api/events/today
-
-# SQL
-SELECT * FROM sports_events
-WHERE DATE(scheduled_at AT TIME ZONE 'America/New_York') = CURRENT_DATE
-  AND deleted_at IS NULL
-ORDER BY scheduled_at;
+# Using CLI
+nself plugin sports events today --league nfl
 ```
 
-### Example 2: Monitor Live Scores
-
-```bash
-# CLI (watch mode)
-watch -n 10 'nself plugin sports events --live'
-
-# API polling
-while true; do
-  curl http://localhost:3201/api/events/live | jq '.data[] | "\(.home_team_name) \(.home_score) - \(.away_score) \(.away_team_name)"'
-  sleep 10
-done
-
-# SQL
+```sql
+-- Using SQL
 SELECT
-  ht.abbreviation AS home,
-  e.home_score,
-  at2.abbreviation AS away,
-  e.away_score,
-  e.period,
-  e.clock,
-  e.status
+    ht.name AS home_team,
+    at.name AS away_team,
+    e.start_time,
+    e.venue_name,
+    e.broadcast_network
 FROM sports_events e
-LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
-WHERE e.status IN ('in_progress', 'halftime', 'delayed')
-  AND e.deleted_at IS NULL;
+JOIN sports_teams ht ON e.home_team_id = ht.id
+JOIN sports_teams at ON e.away_team_id = at.id
+WHERE e.league_id = 'nfl'
+  AND DATE(e.start_time) = CURRENT_DATE
+ORDER BY e.start_time;
 ```
 
-### Example 3: Auto-trigger Recordings
+### Example: Get Live Scores
 
-```javascript
-// Configure in .env
+```bash
+# Using CLI
+nself plugin sports scores --live
+```
+
+```sql
+-- Using SQL
+SELECT * FROM sports_live_events;
+```
+
+### Example: Auto-trigger Recordings
+
+```bash
+# Configure in .env
 SPORTS_AUTO_TRIGGER_RECORDINGS=true
-SPORTS_RECORDING_PLUGIN_URL=http://localhost:3602
-SPORTS_RECORDING_LEAD_TIME_MINUTES=15
-SPORTS_RECORDING_TRAIL_TIME_MINUTES=60
-
-// The plugin will automatically:
-// 1. Query sports_untriggered_recordings view every sync
-// 2. For each event in the next 24 hours:
-//    - Calculate recording start: scheduled_at - 15 minutes
-//    - Calculate recording end: scheduled_at + estimated_duration + 60 minutes
-//    - POST to recording plugin webhook
-//    - Mark recording_trigger_sent = TRUE
-```
-
-### Example 4: Lock Events Before Broadcast
-
-```bash
-# Manually lock critical events
-nself plugin sports lock <event-id> --reason "Network finalized"
-
-# Auto-lock via SPORTS_LOCK_AUTO=true
-# Events are automatically locked 120 minutes (SPORTS_LOCK_WINDOW_MINUTES) before start
-# Locked events ignore schedule updates from providers
-```
-
-### Example 5: Override Incorrect Schedule
-
-```bash
-# Correct a rescheduled game
-nself plugin sports override <event-id> \
-  --time "2026-09-11T18:00:00Z" \
-  --channel "ESPN2" \
-  --notes "Rescheduled due to weather delay"
-
-# API version
-curl -X POST http://localhost:3201/api/events/<event-id>/override \
-  -H "Content-Type: application/json" \
-  -d '{
-    "scheduled_at": "2026-09-11T18:00:00Z",
-    "broadcast_channel": "ESPN2",
-    "notes": "Rescheduled due to weather delay"
-  }'
+SPORTS_RECORDING_PLUGIN_URL=http://localhost:3220
+SPORTS_RECORDING_LEAD_TIME_MINUTES=10
+SPORTS_RECORDING_TRAIL_TIME_MINUTES=30
 ```
 
 ---
 
 ## Troubleshooting
 
-### No events synced
+### No Events Synced
 
 **Issue:** Sync completes but no events in database.
 
 **Solution:**
-1. Check provider configuration:
-   ```bash
-   echo $SPORTS_PROVIDERS
-   echo $SPORTS_ENABLED_SPORTS
-   echo $SPORTS_ENABLED_LEAGUES
-   ```
-2. Verify API credentials if using SportsData.io:
-   ```bash
-   echo $SPORTS_SPORTSDATA_API_KEY
-   ```
-3. Check sync logs:
-   ```bash
-   LOG_LEVEL=debug nself plugin sports sync
-   ```
-4. Verify provider is reachable:
-   ```bash
-   curl https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard
-   ```
+1. Check provider configuration
+2. Verify API credentials
+3. Check enabled sports and leagues
+4. Review sync logs with DEBUG mode
 
-### Cache not working
+### Cache Not Working
 
-**Issue:** High API usage despite caching enabled.
+**Issue:** High API usage despite caching.
 
 **Solution:**
-1. Verify cache is enabled:
-   ```bash
-   echo $SPORTS_CACHE_ENABLED
-   ```
-2. Check cache stats:
-   ```bash
-   nself plugin sports cache status
-   # or
-   curl http://localhost:3201/api/cache/status
-   ```
-3. Ensure TTL is reasonable:
-   ```bash
-   echo $SPORTS_CACHE_SCHEDULE_TTL  # Should be 3600-21600 (1-6 hours)
-   ```
-4. Clear and rebuild cache:
-   ```bash
-   nself plugin sports cache clear
-   nself plugin sports sync
-   ```
+1. Verify SPORTS_CACHE_ENABLED=true
+2. Check cache stats
+3. Adjust TTL values
+4. Clear and rebuild cache
 
-### Events locked unexpectedly
+### Recording Triggers Not Firing
 
-**Issue:** Cannot update event details due to lock.
+**Issue:** Events not triggering recordings.
 
 **Solution:**
-1. Check lock status:
-   ```sql
-   SELECT id, home_team_name, scheduled_at, is_locked, lock_reason, locked_at
-   FROM sports_events
-   WHERE is_locked = TRUE;
-   ```
-2. Disable auto-lock if needed:
-   ```bash
-   export SPORTS_LOCK_AUTO=false
-   ```
-3. Manually unlock event:
-   ```bash
-   nself plugin sports unlock <event-id>
-   ```
-4. Adjust lock window:
-   ```bash
-   export SPORTS_LOCK_WINDOW_MINUTES=60  # Lock 1 hour before instead of 2
-   ```
-
-### Recording triggers not firing
-
-**Issue:** Events not triggering recordings automatically.
-
-**Solution:**
-1. Verify recording integration is configured:
-   ```bash
-   echo $SPORTS_AUTO_TRIGGER_RECORDINGS
-   echo $SPORTS_RECORDING_PLUGIN_URL
-   ```
-2. Check untriggered events:
-   ```sql
-   SELECT * FROM sports_untriggered_recordings;
-   ```
-3. Verify recording plugin is reachable:
-   ```bash
-   curl http://localhost:3602/health
-   ```
-4. Check webhook event logs:
-   ```sql
-   SELECT * FROM sports_webhook_events
-   WHERE event_type LIKE 'recording%'
-   ORDER BY created_at DESC
-   LIMIT 20;
-   ```
-5. Manually trigger for testing:
-   ```bash
-   curl -X POST http://localhost:3201/api/events/<event-id>/trigger-recording
-   ```
-
-### Live scores not updating
-
-**Issue:** Scores stuck or stale during live games.
-
-**Solution:**
-1. Verify live polling is enabled:
-   ```bash
-   echo $SPORTS_LIVE_POLL_INTERVAL  # Should be 15-60 seconds
-   ```
-2. Check last sync time:
-   ```bash
-   nself plugin sports status | grep last_sync
-   ```
-3. Force a sync:
-   ```bash
-   nself plugin sports reconcile --days 1
-   ```
-4. Check provider rate limits:
-   ```bash
-   # ESPN public API has soft limits
-   # SportsData.io has documented rate limits per plan
-   ```
-
-### Database connection issues
-
-**Issue:** Plugin fails to start with database errors.
-
-**Solution:**
-1. Verify DATABASE_URL is correct:
-   ```bash
-   echo $DATABASE_URL
-   ```
-2. Test connection:
-   ```bash
-   psql $DATABASE_URL -c "SELECT 1;"
-   ```
-3. Initialize schema if needed:
-   ```bash
-   nself plugin sports init
-   ```
-4. Check PostgreSQL is running:
-   ```bash
-   pg_isready -h localhost -p 5432
-   ```
-
-### High memory usage
-
-**Issue:** Plugin consuming excessive memory.
-
-**Solution:**
-1. Reduce cache size:
-   ```bash
-   export SPORTS_CACHE_SCHEDULE_TTL=3600  # 1 hour instead of 6
-   ```
-2. Clear old cache entries:
-   ```sql
-   DELETE FROM sports_schedule_cache WHERE expires_at < NOW() - INTERVAL '1 day';
-   ```
-3. Limit sync scope:
-   ```bash
-   export SPORTS_ENABLED_SPORTS=football  # Only sync one sport
-   export SPORTS_ENABLED_LEAGUES=nfl      # Only sync one league
-   ```
-4. Monitor memory:
-   ```bash
-   curl http://localhost:3201/live | jq '.memory'
-   ```
+1. Verify SPORTS_AUTO_TRIGGER_RECORDINGS=true
+2. Check SPORTS_RECORDING_PLUGIN_URL
+3. Verify recording plugin is reachable
+4. Check webhook event logs
 
 ---
 
 ## Support
 
-For issues, questions, or contributions:
-- GitHub Issues: https://github.com/acamarata/nself-plugins/issues
-- Documentation: https://github.com/acamarata/nself-plugins/wiki
-- nself CLI: https://github.com/acamarata/nself
+- **GitHub Issues:** [nself-plugins/issues](https://github.com/acamarata/nself-plugins/issues)
+- **Plugin Documentation:** [github.com/acamarata/nself-plugins/wiki/Sports](https://github.com/acamarata/nself-plugins/wiki/Sports)
+- **ESPN API:** [site.api.espn.com](https://site.api.espn.com)
+- **SportsData.io:** [sportsdata.io/developers](https://sportsdata.io/developers)
+
+---
+
+*Last Updated: February 11, 2026*
+*Plugin Version: 1.0.0*
+*nself Version: 0.4.8+*

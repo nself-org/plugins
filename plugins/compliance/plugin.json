@@ -1,14 +1,14 @@
 {
   "name": "compliance",
   "version": "1.0.0",
-  "description": "GDPR/CCPA compliance management with DSARs, consent tracking, data retention, breach notification, and audit trails",
+  "description": "Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/compliance",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "privacy-legal",
-  "tags": ["compliance", "gdpr", "ccpa", "privacy", "dsar", "consent", "retention", "breach", "audit"],
+  "tags": ["compliance", "gdpr", "ccpa", "hipaa", "soc2", "pci", "privacy", "dsar", "consent", "retention", "breach", "audit", "siem", "immutable", "forensics"],
 
   "tables": [
     "compliance_dsars",
@@ -23,7 +23,11 @@
     "compliance_data_processors",
     "compliance_data_breaches",
     "compliance_breach_notifications",
-    "compliance_audit_log"
+    "compliance_audit_log",
+    "audit_events",
+    "audit_retention_policies",
+    "audit_alert_rules",
+    "audit_webhook_events"
   ],
 
   "webhooks": {
@@ -35,10 +39,17 @@
     "policy.published": "New privacy policy published",
     "retention.executed": "Data retention policy executed",
     "breach.created": "New data breach recorded",
-    "breach.notified": "Breach notification sent"
+    "breach.notified": "Breach notification sent",
+    "audit.event.created": "Immutable audit event created",
+    "audit.event.exported": "Audit events exported to external system",
+    "audit.alert.triggered": "Alert rule triggered by compliance violation",
+    "audit.retention.executed": "Audit retention policy executed",
+    "audit.compliance.report_generated": "Compliance report generated"
   },
 
   "actions": {
+    "init": "Initialize compliance and audit database schema",
+    "server": "Start compliance and audit HTTP server",
     "dsars": "Manage Data Subject Access Requests",
     "consent": "Manage user consent records",
     "retention": "Manage and execute data retention policies",
@@ -46,7 +57,13 @@
     "policies": "Manage privacy policy versions",
     "processors": "Track third-party data processors",
     "audit": "View compliance audit logs",
-    "export": "Export user data packages"
+    "log": "Append immutable audit event",
+    "query": "Query audit events with filters",
+    "export": "Export user data packages and audit events",
+    "alerts": "Manage audit alert rules",
+    "compliance": "Generate compliance reports (SOC2/HIPAA/GDPR/PCI)",
+    "verify": "Verify audit event integrity using checksums",
+    "stats": "Show compliance and audit statistics"
   },
 
   "envVars": {
@@ -55,8 +72,14 @@
     ],
     "optional": [
       "COMPLIANCE_PLUGIN_PORT",
+      "COMPLIANCE_PLUGIN_HOST",
+      "COMPLIANCE_APP_IDS",
+      "COMPLIANCE_LOG_LEVEL",
       "COMPLIANCE_GDPR_ENABLED",
       "COMPLIANCE_CCPA_ENABLED",
+      "COMPLIANCE_HIPAA_ENABLED",
+      "COMPLIANCE_SOC2_ENABLED",
+      "COMPLIANCE_PCI_ENABLED",
       "COMPLIANCE_DSAR_DEADLINE_DAYS",
       "COMPLIANCE_BREACH_NOTIFICATION_HOURS",
       "COMPLIANCE_CONSENT_REQUIRED",
@@ -66,9 +89,21 @@
       "COMPLIANCE_AUDIT_RETENTION_DAYS",
       "COMPLIANCE_EXPORT_FORMAT",
       "COMPLIANCE_EXPORT_EXPIRY_HOURS",
+      "COMPLIANCE_EXPORT_MAX_ROWS",
       "COMPLIANCE_API_KEY",
       "COMPLIANCE_RATE_LIMIT_MAX",
-      "COMPLIANCE_RATE_LIMIT_WINDOW_MS"
+      "COMPLIANCE_RATE_LIMIT_WINDOW_MS",
+      "AUDIT_FALLBACK_LOG_PATH",
+      "AUDIT_SIEM_SPLUNK_HEC_URL",
+      "AUDIT_SIEM_SPLUNK_HEC_TOKEN",
+      "AUDIT_SIEM_ELK_URL",
+      "AUDIT_SIEM_ELK_INDEX",
+      "AUDIT_SIEM_ELK_API_KEY",
+      "AUDIT_SIEM_DATADOG_API_KEY",
+      "AUDIT_SIEM_DATADOG_SITE",
+      "AUDIT_DEFAULT_RETENTION_DAYS",
+      "AUDIT_COMPLIANCE_FRAMEWORKS",
+      "AUDIT_ALERT_WEBHOOK_URL"
     ]
   },
 
@@ -76,10 +111,15 @@
     "defaultPort": 3706,
     "gdprEnabled": true,
     "ccpaEnabled": true,
+    "hipaaEnabled": false,
+    "soc2Enabled": false,
+    "pciEnabled": false,
     "dsarDeadlineDays": 30,
     "breachNotificationHours": 72,
     "consentExpiryDays": 365,
-    "auditRetentionDays": 2555
+    "auditRetentionDays": 2555,
+    "exportMaxRows": 100000,
+    "complianceFrameworks": ["SOC2", "HIPAA", "GDPR", "CCPA", "PCI"]
   },
 
   "hooks": {
@@ -97,7 +137,7 @@
 
   "permissions": {
     "database": ["create", "read", "update", "delete"],
-    "network": [],
+    "network": ["splunk.com", "elastic.co", "datadoghq.com"],
     "filesystem": ["logs", "exports"]
   }
 }

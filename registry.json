@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-11T11:13:21Z",
+  "lastUpdated": "2026-02-11T17:25:52.995Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -2603,290 +2603,6 @@
         "defaultValue": "primary"
       }
     },
-    "audit": {
-      "name": "audit",
-      "version": "1.0.0",
-      "description": "Immutable audit logging with SIEM integration, compliance frameworks, and retention policies",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/audit",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/audit",
-      "minNselfVersion": "0.4.8",
-      "category": "security",
-      "tags": [
-        "audit",
-        "logging",
-        "compliance",
-        "siem",
-        "immutable",
-        "forensics",
-        "soc2",
-        "hipaa",
-        "gdpr",
-        "pci"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "20.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-audit",
-        "defaultPort": 3303,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "audit_events",
-        "audit_retention_policies",
-        "audit_alert_rules",
-        "audit_webhook_events"
-      ],
-      "views": [],
-      "webhooks": [
-        "audit.event.created",
-        "audit.event.exported",
-        "audit.alert.triggered",
-        "audit.retention.executed",
-        "audit.compliance.report_generated"
-      ],
-      "cliCommands": [
-        {
-          "name": "init",
-          "description": "Initialize audit database schema (with immutability triggers)"
-        },
-        {
-          "name": "server",
-          "description": "Start audit HTTP server"
-        },
-        {
-          "name": "log",
-          "description": "Append an audit event"
-        },
-        {
-          "name": "query",
-          "description": "Query audit events with filters"
-        },
-        {
-          "name": "export",
-          "description": "Export audit events (CSV/JSON/JSONL/CEF/LEEF/Syslog)"
-        },
-        {
-          "name": "verify",
-          "description": "Verify event integrity using checksums"
-        },
-        {
-          "name": "compliance",
-          "description": "Generate compliance reports (SOC2/HIPAA/GDPR/PCI)"
-        },
-        {
-          "name": "stats",
-          "description": "Show audit plugin statistics"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "GET",
-          "path": "/health",
-          "description": "Health check"
-        },
-        {
-          "method": "GET",
-          "path": "/ready",
-          "description": "Readiness check (database + triggers)"
-        },
-        {
-          "method": "GET",
-          "path": "/live",
-          "description": "Liveness check with stats"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/events",
-          "description": "Log an audit event (append-only)"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/events",
-          "description": "Query audit events"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/events/:id",
-          "description": "Get event by ID"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/export",
-          "description": "Export events in various formats"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/retention",
-          "description": "Create retention policy"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/retention",
-          "description": "List retention policies"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/retention/:id",
-          "description": "Get retention policy"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/retention/:id",
-          "description": "Update retention policy"
-        },
-        {
-          "method": "DELETE",
-          "path": "/v1/retention/:id",
-          "description": "Delete retention policy"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/retention/execute",
-          "description": "Execute retention policies"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/alerts",
-          "description": "Create alert rule"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/alerts",
-          "description": "List alert rules"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/alerts/:id",
-          "description": "Get alert rule"
-        },
-        {
-          "method": "PATCH",
-          "path": "/v1/alerts/:id",
-          "description": "Update alert rule"
-        },
-        {
-          "method": "DELETE",
-          "path": "/v1/alerts/:id",
-          "description": "Delete alert rule"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/compliance/reports",
-          "description": "Generate compliance report"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/verify",
-          "description": "Verify event integrity"
-        }
-      ],
-      "envVars": [
-        {
-          "name": "AUDIT_PLUGIN_PORT",
-          "required": false,
-          "default": "3303",
-          "description": "Server port"
-        },
-        {
-          "name": "AUDIT_PLUGIN_HOST",
-          "required": false,
-          "default": "0.0.0.0",
-          "description": "Server host"
-        },
-        {
-          "name": "AUDIT_LOG_LEVEL",
-          "required": false,
-          "default": "info",
-          "description": "Log level"
-        },
-        {
-          "name": "AUDIT_APP_IDS",
-          "required": false,
-          "default": "primary",
-          "description": "Comma-separated app IDs"
-        },
-        {
-          "name": "AUDIT_FALLBACK_LOG_PATH",
-          "required": false,
-          "default": "/var/log/nself/audit-fallback.jsonl",
-          "description": "Fallback log file path"
-        },
-        {
-          "name": "AUDIT_SIEM_SPLUNK_HEC_URL",
-          "required": false,
-          "description": "Splunk HEC URL"
-        },
-        {
-          "name": "AUDIT_SIEM_SPLUNK_HEC_TOKEN",
-          "required": false,
-          "description": "Splunk HEC token"
-        },
-        {
-          "name": "AUDIT_SIEM_ELK_URL",
-          "required": false,
-          "description": "Elasticsearch URL"
-        },
-        {
-          "name": "AUDIT_SIEM_ELK_INDEX",
-          "required": false,
-          "default": "audit-logs",
-          "description": "Elasticsearch index name"
-        },
-        {
-          "name": "AUDIT_SIEM_ELK_API_KEY",
-          "required": false,
-          "description": "Elasticsearch API key"
-        },
-        {
-          "name": "AUDIT_SIEM_DATADOG_API_KEY",
-          "required": false,
-          "description": "Datadog API key"
-        },
-        {
-          "name": "AUDIT_SIEM_DATADOG_SITE",
-          "required": false,
-          "default": "datadoghq.com",
-          "description": "Datadog site"
-        },
-        {
-          "name": "AUDIT_DEFAULT_RETENTION_DAYS",
-          "required": false,
-          "default": "2555",
-          "description": "Default retention period (7 years)"
-        },
-        {
-          "name": "AUDIT_COMPLIANCE_FRAMEWORKS",
-          "required": false,
-          "default": "SOC2,HIPAA,GDPR,PCI",
-          "description": "Supported compliance frameworks"
-        },
-        {
-          "name": "AUDIT_ALERT_WEBHOOK_URL",
-          "required": false,
-          "description": "Global alert webhook URL"
-        },
-        {
-          "name": "AUDIT_EXPORT_MAX_ROWS",
-          "required": false,
-          "default": "100000",
-          "description": "Maximum rows per export"
-        }
-      ],
-      "dependencies": [],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "app_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      }
-    },
     "access-controls": {
       "name": "access-controls",
       "version": "1.0.0",
@@ -4203,7 +3919,7 @@
     "compliance": {
       "name": "compliance",
       "version": "1.0.0",
-      "description": "GDPR/CCPA compliance management with DSARs, consent tracking, data retention, breach notification, and audit trails",
+      "description": "Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting",
       "author": "nself",
       "license": "Source-Available",
       "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/compliance",
@@ -4246,7 +3962,11 @@
         "compliance_data_processors",
         "compliance_data_breaches",
         "compliance_breach_notifications",
-        "compliance_audit_log"
+        "compliance_audit_log",
+        "audit_events",
+        "audit_retention_policies",
+        "audit_alert_rules",
+        "audit_webhook_events"
       ],
       "webhooks": [
         "dsar.created",
@@ -4351,248 +4071,6 @@
         "sha256": ""
       }
     },
-    "content-moderation": {
-      "name": "content-moderation",
-      "version": "1.0.0",
-      "description": "Content moderation and safety service with automated review, manual queue, and appeals",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-moderation",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/content-moderation",
-      "minNselfVersion": "0.4.8",
-      "category": "security",
-      "tags": [
-        "moderation",
-        "content-safety",
-        "review",
-        "appeals",
-        "automated-moderation"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-content-moderation",
-        "defaultPort": 3028,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "mod_reviews",
-        "mod_policies",
-        "mod_appeals",
-        "mod_user_strikes",
-        "mod_webhook_events"
-      ],
-      "webhooks": [
-        "mod.review.approved",
-        "mod.review.flagged",
-        "mod.review.rejected",
-        "mod.review.manual.completed",
-        "mod.appeal.submitted",
-        "mod.appeal.resolved",
-        "mod.user.strike.added",
-        "mod.user.strike.threshold"
-      ],
-      "envVars": [
-        {
-          "name": "MOD_PROVIDER",
-          "required": true,
-          "description": "Mod Provider"
-        },
-        {
-          "name": "MOD_PLUGIN_PORT",
-          "required": false,
-          "description": "Mod Plugin Port"
-        },
-        {
-          "name": "MOD_PLUGIN_HOST",
-          "required": false,
-          "description": "Mod Plugin Host"
-        },
-        {
-          "name": "MOD_LOG_LEVEL",
-          "required": false,
-          "description": "Mod Log Level"
-        },
-        {
-          "name": "MOD_APP_IDS",
-          "required": false,
-          "description": "Mod App Ids"
-        },
-        {
-          "name": "MOD_OPENAI_API_KEY",
-          "required": false,
-          "description": "Mod Openai Api Key"
-        },
-        {
-          "name": "MOD_GOOGLE_VISION_KEY",
-          "required": false,
-          "description": "Mod Google Vision Key"
-        },
-        {
-          "name": "MOD_AWS_REKOGNITION_KEY",
-          "required": false,
-          "description": "Mod Aws Rekognition Key"
-        },
-        {
-          "name": "MOD_AWS_REKOGNITION_SECRET",
-          "required": false,
-          "description": "Mod Aws Rekognition Secret"
-        },
-        {
-          "name": "MOD_AWS_REKOGNITION_REGION",
-          "required": false,
-          "description": "Mod Aws Rekognition Region"
-        },
-        {
-          "name": "MOD_AUTO_APPROVE_BELOW",
-          "required": false,
-          "description": "Mod Auto Approve Below"
-        },
-        {
-          "name": "MOD_AUTO_REJECT_ABOVE",
-          "required": false,
-          "description": "Mod Auto Reject Above"
-        },
-        {
-          "name": "MOD_FLAG_THRESHOLD",
-          "required": false,
-          "description": "Mod Flag Threshold"
-        },
-        {
-          "name": "MOD_STRIKE_WARN_THRESHOLD",
-          "required": false,
-          "description": "Mod Strike Warn Threshold"
-        },
-        {
-          "name": "MOD_STRIKE_BAN_THRESHOLD",
-          "required": false,
-          "description": "Mod Strike Ban Threshold"
-        },
-        {
-          "name": "MOD_STRIKE_EXPIRY_DAYS",
-          "required": false,
-          "description": "Mod Strike Expiry Days"
-        },
-        {
-          "name": "MOD_REVIEW_SLA_HOURS",
-          "required": false,
-          "description": "Mod Review Sla Hours"
-        },
-        {
-          "name": "MOD_QUEUE_WORKER_CONCURRENCY",
-          "required": false,
-          "description": "Mod Queue Worker Concurrency"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": ""
-      }
-    },
-    "content-policy": {
-      "name": "content-policy",
-      "version": "1.0.0",
-      "description": "Content policy evaluation and moderation engine with rule-based filtering",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-policy",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/content-policy",
-      "minNselfVersion": "0.4.8",
-      "category": "content",
-      "tags": [
-        "content",
-        "moderation",
-        "policy",
-        "filtering",
-        "compliance"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-content-policy",
-        "defaultPort": 3504,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "cp_policies",
-        "cp_rules",
-        "cp_evaluations",
-        "cp_word_lists",
-        "cp_overrides"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "CP_PLUGIN_PORT",
-          "required": false,
-          "description": "Cp Plugin Port"
-        },
-        {
-          "name": "CP_DEFAULT_ACTION",
-          "required": false,
-          "description": "Cp Default Action"
-        },
-        {
-          "name": "CP_PROFANITY_ENABLED",
-          "required": false,
-          "description": "Cp Profanity Enabled"
-        },
-        {
-          "name": "CP_MAX_CONTENT_LENGTH",
-          "required": false,
-          "description": "Cp Max Content Length"
-        },
-        {
-          "name": "CP_EVALUATION_LOG_ENABLED",
-          "required": false,
-          "description": "Cp Evaluation Log Enabled"
-        },
-        {
-          "name": "CP_API_KEY",
-          "required": false,
-          "description": "Cp Api Key"
-        },
-        {
-          "name": "CP_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Cp Rate Limit Max"
-        },
-        {
-          "name": "CP_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Cp Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": ""
-      }
-    },
     "content-progress": {
       "name": "content-progress",
       "version": "1.0.0",
@@ -4678,106 +4156,6 @@
           "name": "PROGRESS_RATE_LIMIT_WINDOW_MS",
           "required": false,
           "description": "Progress Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": ""
-      }
-    },
-    "data-export": {
-      "name": "data-export",
-      "version": "1.0.0",
-      "description": "GDPR-compliant data export, deletion, and import for user data and plugin data",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/data-export",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/data-export",
-      "minNselfVersion": "0.4.8",
-      "category": "infrastructure",
-      "tags": [
-        "gdpr",
-        "export",
-        "deletion",
-        "import",
-        "compliance",
-        "privacy"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-data-export",
-        "defaultPort": 3306,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "export_requests",
-        "export_deletion_requests",
-        "export_plugin_registry",
-        "export_import_jobs",
-        "export_webhook_events"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "EXPORT_PLUGIN_PORT",
-          "required": false,
-          "description": "Export Plugin Port"
-        },
-        {
-          "name": "EXPORT_STORAGE_PATH",
-          "required": false,
-          "description": "Export Storage Path"
-        },
-        {
-          "name": "EXPORT_DOWNLOAD_EXPIRY_HOURS",
-          "required": false,
-          "description": "Export Download Expiry Hours"
-        },
-        {
-          "name": "EXPORT_DELETION_COOLDOWN_HOURS",
-          "required": false,
-          "description": "Export Deletion Cooldown Hours"
-        },
-        {
-          "name": "EXPORT_MAX_EXPORT_SIZE_MB",
-          "required": false,
-          "description": "Export Max Export Size Mb"
-        },
-        {
-          "name": "EXPORT_VERIFICATION_CODE_LENGTH",
-          "required": false,
-          "description": "Export Verification Code Length"
-        },
-        {
-          "name": "EXPORT_API_KEY",
-          "required": false,
-          "description": "Export Api Key"
-        },
-        {
-          "name": "EXPORT_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Export Rate Limit Max"
-        },
-        {
-          "name": "EXPORT_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Export Rate Limit Window Ms"
         }
       ],
       "multiApp": {
@@ -5199,149 +4577,6 @@
           "name": "EPG_GUIDE_DAYS_AHEAD",
           "required": false,
           "description": "Epg Guide Days Ahead"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": ""
-      }
-    },
-    "export-import": {
-      "name": "export-import",
-      "version": "1.0.0",
-      "description": "Bulk data export/import with multiple format support, migration tools, backup/restore, and cross-platform data transfer",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/export-import",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/export-import",
-      "minNselfVersion": "0.4.8",
-      "category": "data-management",
-      "tags": [
-        "export",
-        "import",
-        "migration",
-        "backup",
-        "restore",
-        "data-transfer"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-export-import",
-        "defaultPort": 3717,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "ei_export_jobs",
-        "ei_import_jobs",
-        "ei_migration_jobs",
-        "ei_backup_snapshots",
-        "ei_restore_jobs",
-        "ei_transform_templates",
-        "ei_data_transfer_audit",
-        "ei_backup_schedule"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "EI_PLUGIN_PORT",
-          "required": false,
-          "description": "Ei Plugin Port"
-        },
-        {
-          "name": "EXPORT_STORAGE_PATH",
-          "required": false,
-          "description": "Export Storage Path"
-        },
-        {
-          "name": "EXPORT_MAX_FILE_SIZE_GB",
-          "required": false,
-          "description": "Export Max File Size Gb"
-        },
-        {
-          "name": "EXPORT_RETENTION_DAYS",
-          "required": false,
-          "description": "Export Retention Days"
-        },
-        {
-          "name": "IMPORT_MAX_FILE_SIZE_GB",
-          "required": false,
-          "description": "Import Max File Size Gb"
-        },
-        {
-          "name": "IMPORT_TEMP_PATH",
-          "required": false,
-          "description": "Import Temp Path"
-        },
-        {
-          "name": "BACKUP_STORAGE_BACKEND",
-          "required": false,
-          "description": "Backup Storage Backend"
-        },
-        {
-          "name": "BACKUP_RETENTION_DAYS",
-          "required": false,
-          "description": "Backup Retention Days"
-        },
-        {
-          "name": "MIGRATION_BATCH_SIZE",
-          "required": false,
-          "description": "Migration Batch Size"
-        },
-        {
-          "name": "MIGRATION_RATE_LIMIT_MS",
-          "required": false,
-          "description": "Migration Rate Limit Ms"
-        },
-        {
-          "name": "EXPORT_IMPORT_QUEUE_CONCURRENCY",
-          "required": false,
-          "description": "Export Import Queue Concurrency"
-        },
-        {
-          "name": "EXPORT_IMPORT_QUEUE_TIMEOUT_MINUTES",
-          "required": false,
-          "description": "Export Import Queue Timeout Minutes"
-        },
-        {
-          "name": "COMPRESSION_LEVEL",
-          "required": false,
-          "description": "Compression Level"
-        },
-        {
-          "name": "COMPRESSION_ALGORITHM",
-          "required": false,
-          "description": "Compression Algorithm"
-        },
-        {
-          "name": "EI_API_KEY",
-          "required": false,
-          "description": "Ei Api Key"
-        },
-        {
-          "name": "EI_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Ei Rate Limit Max"
-        },
-        {
-          "name": "EI_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Ei Rate Limit Window Ms"
         }
       ],
       "multiApp": {
@@ -6232,108 +5467,6 @@
         "sha256": ""
       }
     },
-    "media-metadata": {
-      "name": "media-metadata",
-      "version": "1.0.0",
-      "description": "TMDB media metadata enrichment with automatic matching and confidence scoring",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/media-metadata",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/media-metadata",
-      "minNselfVersion": "0.4.8",
-      "category": "external-data",
-      "tags": [
-        "tmdb",
-        "movies",
-        "tv",
-        "metadata",
-        "enrichment",
-        "media"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-media-metadata",
-        "defaultPort": 3202,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "tmdb_movies",
-        "tmdb_tv_shows",
-        "tmdb_tv_seasons",
-        "tmdb_tv_episodes",
-        "tmdb_genres",
-        "tmdb_match_queue",
-        "tmdb_webhook_events"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "TMDB_API_KEY",
-          "required": true,
-          "description": "Tmdb Api Key"
-        },
-        {
-          "name": "TMDB_PLUGIN_PORT",
-          "required": false,
-          "description": "Tmdb Plugin Port"
-        },
-        {
-          "name": "TMDB_API_READ_ACCESS_TOKEN",
-          "required": false,
-          "description": "Tmdb Api Read Access Token"
-        },
-        {
-          "name": "TMDB_IMAGE_BASE_URL",
-          "required": false,
-          "description": "Tmdb Image Base Url"
-        },
-        {
-          "name": "TMDB_DEFAULT_LANGUAGE",
-          "required": false,
-          "description": "Tmdb Default Language"
-        },
-        {
-          "name": "TMDB_AUTO_ENRICH",
-          "required": false,
-          "description": "Tmdb Auto Enrich"
-        },
-        {
-          "name": "TMDB_CONFIDENCE_THRESHOLD",
-          "required": false,
-          "description": "Tmdb Confidence Threshold"
-        },
-        {
-          "name": "TMDB_CACHE_TTL_DAYS",
-          "required": false,
-          "description": "Tmdb Cache Ttl Days"
-        },
-        {
-          "name": "TMDB_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Tmdb Rate Limit Max"
-        },
-        {
-          "name": "TMDB_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Tmdb Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": ""
-      }
-    },
     "media-processing": {
       "name": "media-processing",
       "version": "1.0.0",
@@ -6556,7 +5689,7 @@
     "moderation": {
       "name": "moderation",
       "version": "1.0.0",
-      "description": "Comprehensive content moderation with profanity filtering, toxicity detection, automated actions, and manual review workflows",
+      "description": "Unified content moderation platform with profanity filtering, toxicity detection, AI-powered review, rule-based policies, automated actions, manual review workflows, user strikes, and appeals management",
       "author": "nself",
       "license": "Source-Available",
       "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/moderation",
@@ -6593,7 +5726,16 @@
         "moderation_reports",
         "moderation_toxicity_scores",
         "moderation_user_stats",
-        "moderation_audit_log"
+        "moderation_audit_log",
+        "mod_reviews",
+        "mod_policies",
+        "mod_user_strikes",
+        "cp_policies",
+        "cp_rules",
+        "cp_evaluations",
+        "cp_word_lists",
+        "cp_overrides",
+        "moderation_webhook_events"
       ],
       "webhooks": [
         "action.created",
@@ -7320,94 +6462,10 @@
         "sha256": ""
       }
     },
-    "sports-data": {
-      "name": "sports-data",
-      "version": "1.0.0",
-      "description": "Sports data aggregation with live scores, schedules, standings, and team/player information",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/sports-data",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/sports-data",
-      "minNselfVersion": "0.4.8",
-      "category": "data-services",
-      "tags": [
-        "sports",
-        "scores",
-        "standings",
-        "schedule",
-        "nfl",
-        "nba",
-        "live-data"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-sports-data",
-        "defaultPort": 3030,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "sports_leagues",
-        "sports_teams",
-        "sports_games",
-        "sports_standings",
-        "sports_players",
-        "sports_favorites",
-        "sports_sync_state",
-        "sports_webhook_events"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "SPORTS_PROVIDER",
-          "required": true,
-          "description": "Sports Provider"
-        },
-        {
-          "name": "SPORTS_PLUGIN_PORT",
-          "required": false,
-          "description": "Sports Plugin Port"
-        },
-        {
-          "name": "SPORTS_APP_IDS",
-          "required": false,
-          "description": "Sports App Ids"
-        },
-        {
-          "name": "SPORTS_ESPN_API_KEY",
-          "required": false,
-          "description": "Sports Espn Api Key"
-        },
-        {
-          "name": "SPORTS_LEAGUE_IDS",
-          "required": false,
-          "description": "Sports League Ids"
-        },
-        {
-          "name": "SPORTS_LIVE_GAME_POLL_SECONDS",
-          "required": false,
-          "description": "Sports Live Game Poll Seconds"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": ""
-      }
-    },
     "sports": {
       "name": "sports",
       "version": "1.0.0",
-      "description": "Sports schedule and metadata synchronization plugin - ingests game schedules, team rosters, scores, and standings",
+      "description": "Comprehensive sports data plugin with live scores, schedules, standings, team rosters, player stats, and real-time game updates",
       "author": "nself",
       "license": "Source-Available",
       "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/sports",
@@ -7438,8 +6496,13 @@
         "sports_leagues",
         "sports_teams",
         "sports_events",
+        "sports_games",
+        "sports_standings",
+        "sports_players",
+        "sports_favorites",
         "sports_provider_syncs",
         "sports_schedule_cache",
+        "sports_sync_state",
         "sports_webhook_events"
       ],
       "views": [
@@ -8484,6 +7547,53 @@
       "checksums": {
         "sha256": ""
       }
+    },
+    "data-operations": {
+      "name": "data-operations",
+      "version": "1.0.0",
+      "description": "Comprehensive data operations platform with GDPR-compliant export/deletion, bulk import/export, cross-platform migration, backup/restore, and data portability",
+      "author": "nself",
+      "license": "Source-Available",
+      "category": "data-management",
+      "path": "plugins/data-operations",
+      "language": "backend-service",
+      "minNselfVersion": "0.4.8",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "tables": [
+        "dataops_export_requests",
+        "dataops_import_requests",
+        "dataops_deletion_requests",
+        "dataops_migration_jobs",
+        "dataops_backup_snapshots",
+        "dataops_restore_jobs",
+        "dataops_transform_templates",
+        "dataops_plugin_registry",
+        "dataops_transfer_audit",
+        "dataops_backup_schedule",
+        "dataops_webhook_events"
+      ],
+      "webhooks": [
+        "export.completed",
+        "export.failed",
+        "import.completed",
+        "import.failed",
+        "deletion.completed",
+        "migration.completed",
+        "backup.completed",
+        "restore.completed"
+      ],
+      "tags": [
+        "gdpr",
+        "export",
+        "import",
+        "migration",
+        "backup",
+        "restore",
+        "deletion",
+        "compliance",
+        "privacy",
+        "data-transfer"
+      ]
     }
   },
   "categories": {

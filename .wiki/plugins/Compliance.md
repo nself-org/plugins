@@ -1,62 +1,131 @@
-# Compliance
+# Compliance Plugin
 
-GDPR/CCPA compliance management with DSARs, consent tracking, data retention, breach notification, and audit trails.
+Comprehensive compliance and audit platform for GDPR, CCPA, HIPAA, SOC2, and PCI compliance management. Includes Data Subject Access Requests (DSARs), consent tracking, privacy policies, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting.
+
+---
 
 ## Table of Contents
+
 - [Overview](#overview)
+- [Key Features](#key-features)
 - [Quick Start](#quick-start)
+- [Installation](#installation)
 - [Configuration](#configuration)
+- [Database Schema](#database-schema)
 - [CLI Commands](#cli-commands)
 - [REST API](#rest-api)
 - [Webhook Events](#webhook-events)
-- [Database Schema](#database-schema)
-- [Examples](#examples)
+- [Compliance Frameworks](#compliance-frameworks)
+- [DSAR Management](#dsar-management)
+- [Consent Management](#consent-management)
+- [Privacy Policy Versioning](#privacy-policy-versioning)
+- [Data Retention](#data-retention)
+- [Breach Notification](#breach-notification)
+- [Audit Logging](#audit-logging)
+- [SIEM Integration](#siem-integration)
+- [Compliance Reporting](#compliance-reporting)
+- [SQL Query Examples](#sql-query-examples)
 - [Troubleshooting](#troubleshooting)
+
+---
 
 ## Overview
 
-The Compliance plugin provides comprehensive GDPR and CCPA compliance management for nself applications. It handles Data Subject Access Requests (DSARs), consent management, privacy policy versioning, data retention policies, breach notifications, and maintains a complete audit trail of all compliance-related activities.
+The Compliance plugin provides a unified platform for managing compliance across multiple regulatory frameworks. It combines privacy compliance features (DSARs, consent, retention) with enterprise audit logging and SIEM integration.
 
-This plugin is essential for any application that handles EU or California user data, providing the tools needed to meet regulatory requirements while maintaining detailed records for regulatory audits.
+### What This Plugin Does
 
-### Key Features
+- **Multi-Framework Compliance** - Support for GDPR, CCPA, HIPAA, SOC2, and PCI DSS
+- **Data Subject Rights** - Automated DSAR processing with 30-day deadline tracking
+- **Consent Management** - Granular consent tracking with full audit history
+- **Privacy Policies** - Version-controlled policies with user acceptance tracking
+- **Data Retention** - Automated retention policy execution and data lifecycle management
+- **Breach Management** - 72-hour breach notification tracking and compliance
+- **Processor Tracking** - Third-party data processor and DPA management
+- **Immutable Audit Log** - Append-only audit trail with cryptographic integrity verification
+- **SIEM Integration** - Real-time event forwarding to Splunk, ELK Stack, and Datadog
+- **Compliance Reports** - Automated SOC2, HIPAA, GDPR, and PCI compliance reporting
+- **Alert System** - Rule-based alerting for compliance violations
 
-- **GDPR & CCPA Support**: Full support for both GDPR (30-day DSARs) and CCPA (45-day requests)
-- **Data Subject Access Requests (DSARs)**: Complete lifecycle management from submission through verification, processing, and fulfillment
-- **Consent Management**: Track and manage user consent with expiration, withdrawal, and history tracking
-- **Privacy Policy Versioning**: Maintain multiple policy versions with re-acceptance tracking
-- **Data Retention Policies**: Automated deletion, anonymization, or archival based on configurable retention rules
-- **Breach Management**: 72-hour breach notification tracking with authority and user notifications
-- **Processing Records**: GDPR Article 30 compliance with full processing activity documentation
-- **Data Processor Tracking**: Maintain records of third-party data processors and DPAs
-- **Comprehensive Audit Log**: Immutable audit trail of all compliance activities
-- **Data Export**: Generate complete user data packages in JSON or CSV format
-- **Multi-Account Isolation**: Full support for multi-tenant applications
+### Unified Compliance + Audit
 
-### Supported Regulations
+This plugin merges two previously separate systems:
 
-- **GDPR** (General Data Protection Regulation)
-  - Right to access (Article 15)
-  - Right to erasure (Article 17)
-  - Right to rectification (Article 16)
-  - Right to data portability (Article 20)
-  - Right to restriction of processing (Article 18)
-  - Right to object (Article 21)
-  - Breach notification (Article 33-34)
-  - Processing records (Article 30)
+1. **Compliance Features** (DSARs, consent, retention, breaches)
+2. **Audit Features** (immutable logs, SIEM, integrity verification)
 
-- **CCPA** (California Consumer Privacy Act)
-  - Right to know (CCPA Disclosure)
-  - Right to delete (CCPA Deletion)
-  - Right to opt-out of sale (CCPA Opt-Out)
+Both systems share the same database, server, and CLI for seamless compliance operations.
 
-### Use Cases
+---
 
-1. **SaaS Applications**: Meet GDPR/CCPA requirements for user data handling
-2. **Healthcare Platforms**: Manage patient data with full audit trails
-3. **E-commerce Sites**: Track consent for marketing and data processing
-4. **Financial Services**: Maintain regulatory compliance records
-5. **Educational Platforms**: Manage student data privacy requirements
+## Key Features
+
+### Privacy Compliance
+
+- ✅ **GDPR Article 15-22** - Full implementation of data subject rights
+- ✅ **CCPA Compliance** - California Consumer Privacy Act requirements
+- ✅ **HIPAA Privacy Rule** - Protected Health Information (PHI) safeguards
+- ✅ **SOC2 Type II** - Security, availability, and confidentiality controls
+- ✅ **PCI DSS** - Payment card data protection requirements
+
+### DSAR Lifecycle
+
+- ✅ **30-Day Deadline** - Automatic deadline tracking and overdue alerts
+- ✅ **Request Types** - Access, portability, erasure, rectification, restriction
+- ✅ **Activity Timeline** - Full audit trail of DSAR processing steps
+- ✅ **Data Exports** - Automated user data package generation
+- ✅ **Status Tracking** - Pending, in_progress, completed, rejected states
+
+### Consent Management
+
+- ✅ **Granular Purposes** - Marketing, analytics, profiling, data_sharing, etc.
+- ✅ **Opt-in/Opt-out** - Support for both consent models
+- ✅ **Consent History** - Complete audit trail of all consent changes
+- ✅ **Expiry Tracking** - Automatic consent expiration (default 365 days)
+- ✅ **Withdrawal Support** - Easy consent withdrawal with timestamp tracking
+
+### Data Retention
+
+- ✅ **Policy Engine** - Define retention rules by data type
+- ✅ **Automated Execution** - Schedule-based policy enforcement
+- ✅ **Legal Hold** - Override retention for legal requirements
+- ✅ **Execution History** - Track all retention runs with affected records
+- ✅ **Dry Run Mode** - Preview what would be deleted before execution
+
+### Breach Management
+
+- ✅ **72-Hour Rule** - GDPR breach notification deadline tracking
+- ✅ **Severity Levels** - Low, medium, high, critical classification
+- ✅ **Notification Tracking** - Authority, affected users, public disclosure
+- ✅ **Mitigation Steps** - Document remediation actions taken
+- ✅ **Timeline Management** - Track discovery, containment, resolution dates
+
+### Audit & Forensics
+
+- ✅ **Immutable Log** - Append-only audit trail with cryptographic integrity
+- ✅ **Event Types** - User actions, API calls, data access, compliance events
+- ✅ **Actor Tracking** - User, service, system, webhook actor types
+- ✅ **Rich Metadata** - IP address, user agent, request ID, resource tracking
+- ✅ **Checksum Verification** - SHA-256 checksums for event integrity
+- ✅ **Retention Policies** - Automated audit log retention (default 7 years)
+
+### SIEM Integration
+
+- ✅ **Splunk HEC** - HTTP Event Collector integration
+- ✅ **ELK Stack** - Elasticsearch/Logstash/Kibana support
+- ✅ **Datadog Logs** - Datadog log ingestion API
+- ✅ **Real-time Forwarding** - Events sent to SIEM within seconds
+- ✅ **Fallback Logging** - File-based backup when SIEM unavailable
+
+### Compliance Reporting
+
+- ✅ **SOC2 Reports** - Trust Services Criteria compliance evidence
+- ✅ **HIPAA Reports** - Privacy Rule and Security Rule compliance
+- ✅ **GDPR Reports** - Data processing, DSARs, breach notifications
+- ✅ **PCI Reports** - Cardholder data environment audit trails
+- ✅ **Custom Frameworks** - Extensible framework support
+
+---
 
 ## Quick Start
 
@@ -64,19 +133,87 @@ This plugin is essential for any application that handles EU or California user 
 # Install the plugin
 nself plugin install compliance
 
-# Set environment variables
-export DATABASE_URL="postgresql://user:pass@localhost:5432/mydb"
-export COMPLIANCE_PLUGIN_PORT=3706
+# Configure environment
+echo "DATABASE_URL=postgresql://user:pass@localhost:5432/nself" >> .env
+echo "COMPLIANCE_GDPR_ENABLED=true" >> .env
+echo "COMPLIANCE_CCPA_ENABLED=true" >> .env
 
 # Initialize database schema
 nself plugin compliance init
 
-# Start the compliance server
-nself plugin compliance server
+# Start the server
+nself plugin compliance server --port 3706
 
-# Check status
-nself plugin compliance status
+# Submit a DSAR
+nself plugin compliance dsars create \
+  --email "user@example.com" \
+  --type "access" \
+  --description "Request my personal data"
+
+# Track DSAR status
+nself plugin compliance dsars list
+
+# Log an audit event
+nself plugin compliance log \
+  --action "user.login" \
+  --actor-type "user" \
+  --actor-id "user_123" \
+  --ip "192.168.1.100"
+
+# Generate compliance report
+nself plugin compliance compliance report --framework gdpr
 ```
+
+---
+
+## Installation
+
+### Prerequisites
+
+- PostgreSQL 12+ database
+- Node.js 18+ (for TypeScript implementation)
+- nself CLI 0.4.8 or higher
+
+### Install via nself CLI
+
+```bash
+# Install the plugin
+nself plugin install compliance
+
+# Verify installation
+nself plugin list | grep compliance
+```
+
+### Manual Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/acamarata/nself-plugins.git
+cd nself-plugins/plugins/compliance
+
+# Install dependencies
+cd ts
+npm install
+
+# Build TypeScript
+npm run build
+
+# Link to nself
+nself plugin link .
+```
+
+### Database Initialization
+
+```bash
+# Create database schema (15 tables)
+nself plugin compliance init
+
+# Verify tables were created
+psql $DATABASE_URL -c "\dt compliance_*"
+psql $DATABASE_URL -c "\dt audit_*"
+```
+
+---
 
 ## Configuration
 
@@ -84,2497 +221,2658 @@ nself plugin compliance status
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | - | PostgreSQL connection string |
+| `DATABASE_URL` | **Yes** | - | PostgreSQL connection string |
 | `COMPLIANCE_PLUGIN_PORT` | No | `3706` | HTTP server port |
 | `COMPLIANCE_PLUGIN_HOST` | No | `0.0.0.0` | HTTP server bind address |
-| `POSTGRES_HOST` | No | `localhost` | PostgreSQL host |
-| `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
-| `POSTGRES_DB` | No | `nself` | PostgreSQL database name |
-| `POSTGRES_USER` | No | `postgres` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | No | ` ` (empty) | PostgreSQL password |
-| `POSTGRES_SSL` | No | `false` | Enable SSL for PostgreSQL |
+| `COMPLIANCE_APP_IDS` | No | - | Comma-separated app IDs for multi-app isolation |
+| `COMPLIANCE_LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
 | `COMPLIANCE_GDPR_ENABLED` | No | `true` | Enable GDPR compliance features |
 | `COMPLIANCE_CCPA_ENABLED` | No | `true` | Enable CCPA compliance features |
-| `COMPLIANCE_DSAR_DEADLINE_DAYS` | No | `30` | GDPR DSAR response deadline (days) |
-| `COMPLIANCE_DSAR_AUTO_VERIFICATION` | No | `false` | Automatically verify DSARs without manual approval |
-| `COMPLIANCE_CCPA_DEADLINE_DAYS` | No | `45` | CCPA request response deadline (days) |
-| `COMPLIANCE_BREACH_NOTIFICATION_HOURS` | No | `72` | Hours until breach notification deadline |
-| `COMPLIANCE_CONSENT_REQUIRED` | No | `true` | Require explicit consent for data processing |
-| `COMPLIANCE_CONSENT_EXPIRY_DAYS` | No | `365` | Days until consent expires |
-| `COMPLIANCE_CONSENT_METHOD` | No | `explicit` | Default consent method (explicit, implicit, opt_in, opt_out) |
-| `COMPLIANCE_RETENTION_ENABLED` | No | `true` | Enable data retention policy execution |
-| `COMPLIANCE_RETENTION_GRACE_PERIOD_DAYS` | No | `7` | Grace period before retention execution |
-| `COMPLIANCE_NOTIFY_DSAR_ASSIGNED` | No | `true` | Send notifications when DSAR is assigned |
-| `COMPLIANCE_NOTIFY_DSAR_DEADLINE_DAYS` | No | `3` | Send deadline reminder N days before deadline |
-| `COMPLIANCE_NOTIFY_POLICY_UPDATES` | No | `true` | Notify users of privacy policy updates |
-| `COMPLIANCE_EXPORT_FORMAT` | No | `json` | Default export format (json, csv) |
-| `COMPLIANCE_EXPORT_ENCRYPTION` | No | `true` | Encrypt data exports |
-| `COMPLIANCE_EXPORT_EXPIRY_HOURS` | No | `72` | Hours until export package expires |
-| `COMPLIANCE_AUDIT_ENABLED` | No | `true` | Enable compliance audit logging |
-| `COMPLIANCE_AUDIT_RETENTION_DAYS` | No | `2555` | Days to retain audit logs (7 years) |
-| `COMPLIANCE_API_KEY` | No | - | API key for authenticated requests |
-| `COMPLIANCE_RATE_LIMIT_MAX` | No | `100` | Maximum requests per window |
-| `COMPLIANCE_RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window in milliseconds |
-| `LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
+| `COMPLIANCE_HIPAA_ENABLED` | No | `false` | Enable HIPAA compliance features |
+| `COMPLIANCE_SOC2_ENABLED` | No | `false` | Enable SOC2 compliance features |
+| `COMPLIANCE_PCI_ENABLED` | No | `false` | Enable PCI DSS compliance features |
+| `COMPLIANCE_DSAR_DEADLINE_DAYS` | No | `30` | DSAR deadline in days (GDPR default) |
+| `COMPLIANCE_BREACH_NOTIFICATION_HOURS` | No | `72` | Breach notification deadline in hours |
+| `COMPLIANCE_CONSENT_REQUIRED` | No | `false` | Require consent for all data processing |
+| `COMPLIANCE_CONSENT_EXPIRY_DAYS` | No | `365` | Consent expiration period (0 = never) |
+| `COMPLIANCE_RETENTION_ENABLED` | No | `true` | Enable automated retention policy execution |
+| `COMPLIANCE_AUDIT_ENABLED` | No | `true` | Enable immutable audit logging |
+| `COMPLIANCE_AUDIT_RETENTION_DAYS` | No | `2555` | Audit log retention (7 years default) |
+| `COMPLIANCE_EXPORT_FORMAT` | No | `json` | Default export format (json, csv, xml) |
+| `COMPLIANCE_EXPORT_EXPIRY_HOURS` | No | `72` | Export link expiration time |
+| `COMPLIANCE_EXPORT_MAX_ROWS` | No | `100000` | Maximum rows per export |
+| `COMPLIANCE_API_KEY` | No | - | API key for authenticated endpoints |
+| `COMPLIANCE_RATE_LIMIT_MAX` | No | `100` | Max requests per window |
+| `COMPLIANCE_RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window (1 minute default) |
+| `AUDIT_FALLBACK_LOG_PATH` | No | `/var/log/audit` | File path for fallback logging |
+| `AUDIT_SIEM_SPLUNK_HEC_URL` | No | - | Splunk HTTP Event Collector URL |
+| `AUDIT_SIEM_SPLUNK_HEC_TOKEN` | No | - | Splunk HEC authentication token |
+| `AUDIT_SIEM_ELK_URL` | No | - | Elasticsearch API endpoint URL |
+| `AUDIT_SIEM_ELK_INDEX` | No | `audit-logs` | Elasticsearch index name |
+| `AUDIT_SIEM_ELK_API_KEY` | No | - | Elasticsearch API key |
+| `AUDIT_SIEM_DATADOG_API_KEY` | No | - | Datadog API key for log ingestion |
+| `AUDIT_SIEM_DATADOG_SITE` | No | `datadoghq.com` | Datadog site (datadoghq.com, datadoghq.eu) |
+| `AUDIT_DEFAULT_RETENTION_DAYS` | No | `2555` | Default retention for audit events (7 years) |
+| `AUDIT_COMPLIANCE_FRAMEWORKS` | No | `SOC2,HIPAA,GDPR,PCI` | Enabled compliance frameworks |
+| `AUDIT_ALERT_WEBHOOK_URL` | No | - | Webhook URL for alert notifications |
 
-### Example .env
+### Compliance Framework Configuration
+
+Enable the frameworks you need to comply with:
 
 ```bash
-# Database Configuration
-DATABASE_URL=postgresql://postgres:password@localhost:5432/nself
-POSTGRES_SSL=false
-
-# Server Configuration
-COMPLIANCE_PLUGIN_PORT=3706
-COMPLIANCE_PLUGIN_HOST=0.0.0.0
-
-# GDPR Configuration
+# GDPR + CCPA (default for most SaaS apps)
 COMPLIANCE_GDPR_ENABLED=true
+COMPLIANCE_CCPA_ENABLED=true
 COMPLIANCE_DSAR_DEADLINE_DAYS=30
-COMPLIANCE_DSAR_AUTO_VERIFICATION=false
 COMPLIANCE_BREACH_NOTIFICATION_HOURS=72
 
-# CCPA Configuration
+# Healthcare (HIPAA)
+COMPLIANCE_HIPAA_ENABLED=true
+COMPLIANCE_AUDIT_RETENTION_DAYS=2555  # 7 years required
+
+# Financial services (PCI DSS)
+COMPLIANCE_PCI_ENABLED=true
+COMPLIANCE_AUDIT_RETENTION_DAYS=365   # 1 year minimum
+
+# Enterprise (SOC2)
+COMPLIANCE_SOC2_ENABLED=true
+COMPLIANCE_AUDIT_ENABLED=true
+```
+
+### SIEM Configuration Examples
+
+#### Splunk HEC
+
+```bash
+AUDIT_SIEM_SPLUNK_HEC_URL=https://splunk.example.com:8088/services/collector
+AUDIT_SIEM_SPLUNK_HEC_TOKEN=abcd1234-5678-90ab-cdef-1234567890ab
+```
+
+#### ELK Stack
+
+```bash
+AUDIT_SIEM_ELK_URL=https://elasticsearch.example.com:9200
+AUDIT_SIEM_ELK_INDEX=compliance-audit-logs
+AUDIT_SIEM_ELK_API_KEY=base64_encoded_api_key
+```
+
+#### Datadog
+
+```bash
+AUDIT_SIEM_DATADOG_API_KEY=1234567890abcdef1234567890abcdef
+AUDIT_SIEM_DATADOG_SITE=datadoghq.com
+```
+
+### Example .env File
+
+```bash
+# Database
+DATABASE_URL=postgresql://compliance:secure_password@localhost:5432/compliance_db
+
+# Server
+COMPLIANCE_PLUGIN_PORT=3706
+COMPLIANCE_PLUGIN_HOST=0.0.0.0
+COMPLIANCE_LOG_LEVEL=info
+
+# Compliance Frameworks
+COMPLIANCE_GDPR_ENABLED=true
 COMPLIANCE_CCPA_ENABLED=true
-COMPLIANCE_CCPA_DEADLINE_DAYS=45
+COMPLIANCE_HIPAA_ENABLED=false
+COMPLIANCE_SOC2_ENABLED=true
+COMPLIANCE_PCI_ENABLED=false
+
+# DSAR Configuration
+COMPLIANCE_DSAR_DEADLINE_DAYS=30
+COMPLIANCE_EXPORT_FORMAT=json
+COMPLIANCE_EXPORT_EXPIRY_HOURS=72
+
+# Breach Management
+COMPLIANCE_BREACH_NOTIFICATION_HOURS=72
 
 # Consent Management
-COMPLIANCE_CONSENT_REQUIRED=true
 COMPLIANCE_CONSENT_EXPIRY_DAYS=365
-COMPLIANCE_CONSENT_METHOD=explicit
+COMPLIANCE_CONSENT_REQUIRED=false
 
 # Data Retention
 COMPLIANCE_RETENTION_ENABLED=true
-COMPLIANCE_RETENTION_GRACE_PERIOD_DAYS=7
 
-# Notifications
-COMPLIANCE_NOTIFY_DSAR_ASSIGNED=true
-COMPLIANCE_NOTIFY_DSAR_DEADLINE_DAYS=3
-COMPLIANCE_NOTIFY_POLICY_UPDATES=true
-
-# Data Export
-COMPLIANCE_EXPORT_FORMAT=json
-COMPLIANCE_EXPORT_ENCRYPTION=true
-COMPLIANCE_EXPORT_EXPIRY_HOURS=72
-
-# Audit Logging
+# Audit & SIEM
 COMPLIANCE_AUDIT_ENABLED=true
 COMPLIANCE_AUDIT_RETENTION_DAYS=2555  # 7 years
+AUDIT_SIEM_SPLUNK_HEC_URL=https://splunk.company.com:8088/services/collector
+AUDIT_SIEM_SPLUNK_HEC_TOKEN=your_hec_token_here
+AUDIT_FALLBACK_LOG_PATH=/var/log/compliance-audit
+
+# Compliance Reporting
+AUDIT_COMPLIANCE_FRAMEWORKS=SOC2,HIPAA,GDPR,PCI
 
 # Security
-COMPLIANCE_API_KEY=your-secret-api-key-here
+COMPLIANCE_API_KEY=your_secure_api_key_here
 COMPLIANCE_RATE_LIMIT_MAX=100
 COMPLIANCE_RATE_LIMIT_WINDOW_MS=60000
 
-# Logging
-LOG_LEVEL=info
+# Alerts
+AUDIT_ALERT_WEBHOOK_URL=https://alerts.company.com/webhook
 ```
+
+### Multi-Application Support
+
+The plugin supports multi-application isolation using the `source_account_id` column:
+
+```bash
+# Configure multiple application IDs
+COMPLIANCE_APP_IDS=app1,app2,app3
+
+# All records will be tagged with source_account_id
+# Query per app: SELECT * FROM compliance_dsars WHERE source_account_id = 'app1'
+```
+
+---
+
+## Database Schema
+
+The plugin creates **15 tables** for comprehensive compliance and audit tracking.
+
+### Compliance Tables (12 tables)
+
+#### 1. compliance_dsars
+
+Data Subject Access Requests with 30-day deadline tracking.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier for multi-app isolation |
+| `request_type` | VARCHAR(50) | access, portability, erasure, rectification, restriction |
+| `subject_email` | VARCHAR(255) | Data subject's email address |
+| `subject_user_id` | VARCHAR(255) | Optional internal user ID |
+| `description` | TEXT | Request description from user |
+| `status` | VARCHAR(50) | pending, in_progress, completed, rejected |
+| `priority` | VARCHAR(20) | normal, high, urgent |
+| `deadline` | TIMESTAMP | Calculated deadline (created_at + 30 days) |
+| `completed_at` | TIMESTAMP | When DSAR was completed |
+| `rejected_reason` | TEXT | Reason if request was rejected |
+| `export_url` | TEXT | URL to download data export |
+| `export_expires_at` | TIMESTAMP | Export link expiration time |
+| `assigned_to` | VARCHAR(255) | User/team assigned to process DSAR |
+| `metadata` | JSONB | Additional custom data |
+| `created_at` | TIMESTAMP | Request submission time |
+| `updated_at` | TIMESTAMP | Last modification time |
+| `synced_at` | TIMESTAMP | Last sync time |
+
+**Indexes:**
+- `idx_compliance_dsars_email` on `subject_email`
+- `idx_compliance_dsars_status` on `status`
+- `idx_compliance_dsars_deadline` on `deadline`
+- `idx_compliance_dsars_account` on `source_account_id`
+
+#### 2. compliance_dsar_activities
+
+Activity timeline for each DSAR (audit trail of processing steps).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `dsar_id` | VARCHAR(255) | Foreign key to compliance_dsars |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `activity_type` | VARCHAR(50) | created, assigned, status_changed, note_added, completed |
+| `description` | TEXT | Activity description |
+| `performed_by` | VARCHAR(255) | User who performed the action |
+| `old_value` | TEXT | Previous value (for changes) |
+| `new_value` | TEXT | New value (for changes) |
+| `metadata` | JSONB | Additional activity data |
+| `created_at` | TIMESTAMP | Activity timestamp |
+
+**Indexes:**
+- `idx_compliance_dsar_activities_dsar` on `dsar_id`
+- `idx_compliance_dsar_activities_created` on `created_at`
+
+#### 3. compliance_consents
+
+User consent records for various processing purposes.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `user_id` | VARCHAR(255) | User identifier |
+| `user_email` | VARCHAR(255) | User email address |
+| `purpose` | VARCHAR(100) | marketing, analytics, profiling, data_sharing, etc. |
+| `consent_given` | BOOLEAN | Current consent status |
+| `consent_method` | VARCHAR(50) | opt_in, opt_out, implicit, explicit |
+| `consent_source` | VARCHAR(100) | web_form, mobile_app, api, email, etc. |
+| `ip_address` | VARCHAR(45) | IP address when consent was given |
+| `user_agent` | TEXT | Browser user agent string |
+| `consent_text` | TEXT | Exact text user consented to |
+| `language` | VARCHAR(10) | Language code (en, es, fr, etc.) |
+| `expires_at` | TIMESTAMP | Consent expiration date (if applicable) |
+| `withdrawn_at` | TIMESTAMP | When consent was withdrawn (if applicable) |
+| `metadata` | JSONB | Additional consent data |
+| `created_at` | TIMESTAMP | Initial consent timestamp |
+| `updated_at` | TIMESTAMP | Last modification time |
+| `synced_at` | TIMESTAMP | Last sync time |
+
+**Indexes:**
+- `idx_compliance_consents_user` on `user_id`
+- `idx_compliance_consents_email` on `user_email`
+- `idx_compliance_consents_purpose` on `purpose`
+- `idx_compliance_consents_account` on `source_account_id`
+
+#### 4. compliance_consent_history
+
+Complete audit trail of all consent changes.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `consent_id` | VARCHAR(255) | Foreign key to compliance_consents |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `action` | VARCHAR(50) | granted, withdrawn, updated, expired |
+| `consent_given` | BOOLEAN | Consent status after action |
+| `reason` | TEXT | Reason for change (if applicable) |
+| `ip_address` | VARCHAR(45) | IP address of change |
+| `user_agent` | TEXT | User agent string |
+| `metadata` | JSONB | Additional change data |
+| `created_at` | TIMESTAMP | Change timestamp |
+
+**Indexes:**
+- `idx_compliance_consent_history_consent` on `consent_id`
+- `idx_compliance_consent_history_created` on `created_at`
+
+#### 5. compliance_privacy_policies
+
+Version-controlled privacy policy documents.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `version` | VARCHAR(50) | Version number (e.g., 1.0.0, 2.1.3) |
+| `title` | VARCHAR(255) | Policy title |
+| `content` | TEXT | Full policy content (HTML/Markdown) |
+| `content_hash` | VARCHAR(64) | SHA-256 hash of content |
+| `language` | VARCHAR(10) | Language code |
+| `status` | VARCHAR(50) | draft, published, archived |
+| `published_at` | TIMESTAMP | When policy became active |
+| `archived_at` | TIMESTAMP | When policy was superseded |
+| `changes_summary` | TEXT | Summary of changes from previous version |
+| `metadata` | JSONB | Additional policy data |
+| `created_at` | TIMESTAMP | Policy creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_compliance_privacy_policies_version` on `version`
+- `idx_compliance_privacy_policies_status` on `status`
+- `idx_compliance_privacy_policies_published` on `published_at`
+
+#### 6. compliance_policy_acceptances
+
+User acceptance tracking for privacy policies.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `policy_id` | VARCHAR(255) | Foreign key to compliance_privacy_policies |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `user_id` | VARCHAR(255) | User identifier |
+| `user_email` | VARCHAR(255) | User email address |
+| `accepted_version` | VARCHAR(50) | Policy version accepted |
+| `acceptance_method` | VARCHAR(50) | checkbox, button, api, implicit |
+| `ip_address` | VARCHAR(45) | IP address at acceptance time |
+| `user_agent` | TEXT | Browser user agent |
+| `metadata` | JSONB | Additional acceptance data |
+| `accepted_at` | TIMESTAMP | Acceptance timestamp |
+
+**Indexes:**
+- `idx_compliance_policy_acceptances_user` on `user_id`
+- `idx_compliance_policy_acceptances_policy` on `policy_id`
+- `idx_compliance_policy_acceptances_accepted` on `accepted_at`
+
+#### 7. compliance_retention_policies
+
+Data retention rules and schedules.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `name` | VARCHAR(255) | Policy name |
+| `description` | TEXT | Policy description |
+| `data_type` | VARCHAR(100) | users, logs, transactions, backups, etc. |
+| `retention_period_days` | INTEGER | How long to retain data |
+| `action` | VARCHAR(50) | delete, anonymize, archive |
+| `schedule` | VARCHAR(100) | Cron expression for execution |
+| `enabled` | BOOLEAN | Whether policy is active |
+| `legal_hold` | BOOLEAN | Whether data is on legal hold |
+| `last_executed_at` | TIMESTAMP | Last execution time |
+| `next_execution_at` | TIMESTAMP | Scheduled next execution |
+| `metadata` | JSONB | Additional policy data |
+| `created_at` | TIMESTAMP | Policy creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_compliance_retention_policies_enabled` on `enabled`
+- `idx_compliance_retention_policies_next_exec` on `next_execution_at`
+
+#### 8. compliance_retention_executions
+
+History of retention policy executions.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `policy_id` | VARCHAR(255) | Foreign key to compliance_retention_policies |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `status` | VARCHAR(50) | success, failed, partial |
+| `records_affected` | INTEGER | Number of records processed |
+| `records_deleted` | INTEGER | Number of records deleted |
+| `records_anonymized` | INTEGER | Number of records anonymized |
+| `records_archived` | INTEGER | Number of records archived |
+| `error_message` | TEXT | Error details if failed |
+| `dry_run` | BOOLEAN | Whether this was a dry run |
+| `started_at` | TIMESTAMP | Execution start time |
+| `completed_at` | TIMESTAMP | Execution end time |
+| `duration_seconds` | INTEGER | Execution duration |
+| `metadata` | JSONB | Additional execution data |
+
+**Indexes:**
+- `idx_compliance_retention_executions_policy` on `policy_id`
+- `idx_compliance_retention_executions_started` on `started_at`
+
+#### 9. compliance_processing_records
+
+Records of Processing Activities (ROPA) for GDPR Article 30.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `activity_name` | VARCHAR(255) | Name of processing activity |
+| `purpose` | TEXT | Purpose of processing |
+| `legal_basis` | VARCHAR(100) | consent, contract, legal_obligation, vital_interests, public_task, legitimate_interests |
+| `data_categories` | TEXT[] | Categories of personal data |
+| `data_subjects` | TEXT[] | Categories of data subjects |
+| `recipients` | TEXT[] | Categories of recipients |
+| `transfers` | TEXT[] | International transfers |
+| `retention_period` | VARCHAR(255) | Data retention period |
+| `security_measures` | TEXT | Technical and organizational measures |
+| `dpia_required` | BOOLEAN | Whether DPIA is required |
+| `dpia_completed` | BOOLEAN | Whether DPIA is completed |
+| `metadata` | JSONB | Additional ROPA data |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_compliance_processing_records_activity` on `activity_name`
+- `idx_compliance_processing_records_account` on `source_account_id`
+
+#### 10. compliance_data_processors
+
+Third-party data processor tracking and DPA management.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `processor_name` | VARCHAR(255) | Processor company name |
+| `contact_email` | VARCHAR(255) | Processor contact email |
+| `contact_phone` | VARCHAR(50) | Processor contact phone |
+| `website` | VARCHAR(255) | Processor website URL |
+| `country` | VARCHAR(100) | Processor location country |
+| `services_provided` | TEXT | Description of services |
+| `data_categories` | TEXT[] | Categories of data processed |
+| `dpa_signed` | BOOLEAN | Whether DPA is signed |
+| `dpa_signed_date` | DATE | DPA signature date |
+| `dpa_expiry_date` | DATE | DPA expiration date |
+| `dpa_document_url` | TEXT | URL to DPA document |
+| `certification` | TEXT[] | Certifications (ISO 27001, SOC2, etc.) |
+| `status` | VARCHAR(50) | active, inactive, under_review |
+| `metadata` | JSONB | Additional processor data |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_compliance_data_processors_name` on `processor_name`
+- `idx_compliance_data_processors_status` on `status`
+- `idx_compliance_data_processors_dpa_expiry` on `dpa_expiry_date`
+
+#### 11. compliance_data_breaches
+
+Data breach tracking with 72-hour notification requirement.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `title` | VARCHAR(255) | Breach title/name |
+| `description` | TEXT | Detailed breach description |
+| `severity` | VARCHAR(50) | low, medium, high, critical |
+| `affected_records` | INTEGER | Number of records affected |
+| `affected_users` | INTEGER | Number of users affected |
+| `data_types` | TEXT[] | Types of data exposed |
+| `discovered_at` | TIMESTAMP | When breach was discovered |
+| `contained_at` | TIMESTAMP | When breach was contained |
+| `resolved_at` | TIMESTAMP | When breach was fully resolved |
+| `root_cause` | TEXT | Root cause analysis |
+| `mitigation_steps` | TEXT | Steps taken to mitigate |
+| `notification_required` | BOOLEAN | Whether notification is required |
+| `notification_deadline` | TIMESTAMP | Notification deadline (72 hours) |
+| `authority_notified` | BOOLEAN | Whether authority was notified |
+| `users_notified` | BOOLEAN | Whether affected users were notified |
+| `public_disclosure` | BOOLEAN | Whether public disclosure was made |
+| `status` | VARCHAR(50) | discovered, contained, resolved, closed |
+| `metadata` | JSONB | Additional breach data |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_compliance_data_breaches_severity` on `severity`
+- `idx_compliance_data_breaches_discovered` on `discovered_at`
+- `idx_compliance_data_breaches_deadline` on `notification_deadline`
+
+#### 12. compliance_breach_notifications
+
+Tracking of breach notifications sent to authorities and users.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `breach_id` | VARCHAR(255) | Foreign key to compliance_data_breaches |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `notification_type` | VARCHAR(50) | authority, user, public |
+| `recipient` | VARCHAR(255) | Recipient name/authority |
+| `recipient_email` | VARCHAR(255) | Recipient email address |
+| `subject` | VARCHAR(255) | Notification subject line |
+| `message` | TEXT | Notification message content |
+| `sent_at` | TIMESTAMP | When notification was sent |
+| `acknowledged_at` | TIMESTAMP | When recipient acknowledged |
+| `metadata` | JSONB | Additional notification data |
+| `created_at` | TIMESTAMP | Record creation time |
+
+**Indexes:**
+- `idx_compliance_breach_notifications_breach` on `breach_id`
+- `idx_compliance_breach_notifications_sent` on `sent_at`
+
+#### 13. compliance_audit_log
+
+Audit log for compliance operations (separate from main audit system).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | BIGSERIAL | Primary key (auto-incrementing) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `event_type` | VARCHAR(100) | Type of compliance event |
+| `resource_type` | VARCHAR(100) | dsar, consent, breach, policy, etc. |
+| `resource_id` | VARCHAR(255) | ID of affected resource |
+| `action` | VARCHAR(50) | created, updated, deleted, etc. |
+| `actor_id` | VARCHAR(255) | User/system that performed action |
+| `actor_type` | VARCHAR(50) | user, system, api |
+| `ip_address` | VARCHAR(45) | IP address of actor |
+| `user_agent` | TEXT | User agent string |
+| `changes` | JSONB | Before/after values |
+| `metadata` | JSONB | Additional event data |
+| `created_at` | TIMESTAMP | Event timestamp |
+
+**Indexes:**
+- `idx_compliance_audit_log_resource` on `resource_type, resource_id`
+- `idx_compliance_audit_log_created` on `created_at`
+- `idx_compliance_audit_log_actor` on `actor_id`
+
+### Audit Tables (3 tables)
+
+#### 14. audit_events
+
+Immutable append-only audit trail with cryptographic integrity.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | BIGSERIAL | Primary key (auto-incrementing, ensures order) |
+| `source_account_id` | VARCHAR(255) | Application identifier for multi-app isolation |
+| `event_id` | UUID | Globally unique event identifier |
+| `timestamp` | TIMESTAMP | Event occurrence time (with timezone) |
+| `action` | VARCHAR(255) | Action performed (user.login, api.call, etc.) |
+| `actor_type` | VARCHAR(50) | user, service, system, webhook |
+| `actor_id` | VARCHAR(255) | Actor identifier (user ID, service name) |
+| `resource_type` | VARCHAR(100) | Type of resource affected |
+| `resource_id` | VARCHAR(255) | Resource identifier |
+| `status` | VARCHAR(50) | success, failure, error |
+| `ip_address` | INET | IP address of actor |
+| `user_agent` | TEXT | User agent string |
+| `request_id` | VARCHAR(255) | Request/trace ID for correlation |
+| `metadata` | JSONB | Additional event context |
+| `checksum` | VARCHAR(64) | SHA-256 checksum for integrity verification |
+| `previous_checksum` | VARCHAR(64) | Checksum of previous event (chain integrity) |
+| `compliance_frameworks` | TEXT[] | Applicable frameworks (SOC2, HIPAA, etc.) |
+| `created_at` | TIMESTAMP | Record insertion time |
+
+**Indexes:**
+- `idx_audit_events_timestamp` on `timestamp`
+- `idx_audit_events_action` on `action`
+- `idx_audit_events_actor` on `actor_id`
+- `idx_audit_events_resource` on `resource_type, resource_id`
+- `idx_audit_events_account` on `source_account_id`
+- `idx_audit_events_frameworks` on `compliance_frameworks` (GIN index)
+
+#### 15. audit_retention_policies
+
+Retention policies specifically for audit logs.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `name` | VARCHAR(255) | Policy name |
+| `description` | TEXT | Policy description |
+| `retention_days` | INTEGER | How long to retain audit events |
+| `event_filters` | JSONB | Filters to match events (action, actor_type, etc.) |
+| `compliance_framework` | VARCHAR(50) | Framework this policy supports |
+| `enabled` | BOOLEAN | Whether policy is active |
+| `last_executed_at` | TIMESTAMP | Last execution time |
+| `next_execution_at` | TIMESTAMP | Scheduled next execution |
+| `metadata` | JSONB | Additional policy data |
+| `created_at` | TIMESTAMP | Policy creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_audit_retention_policies_enabled` on `enabled`
+- `idx_audit_retention_policies_next_exec` on `next_execution_at`
+
+#### 16. audit_alert_rules
+
+Alert rules for compliance violations and suspicious activity.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `name` | VARCHAR(255) | Rule name |
+| `description` | TEXT | Rule description |
+| `rule_type` | VARCHAR(50) | threshold, pattern, anomaly |
+| `conditions` | JSONB | Rule conditions (JSON expression) |
+| `severity` | VARCHAR(50) | low, medium, high, critical |
+| `enabled` | BOOLEAN | Whether rule is active |
+| `notification_channels` | TEXT[] | email, slack, webhook, pagerduty |
+| `notification_config` | JSONB | Channel-specific configuration |
+| `last_triggered_at` | TIMESTAMP | Last time rule was triggered |
+| `trigger_count` | INTEGER | Total number of triggers |
+| `metadata` | JSONB | Additional rule data |
+| `created_at` | TIMESTAMP | Rule creation time |
+| `updated_at` | TIMESTAMP | Last modification time |
+
+**Indexes:**
+- `idx_audit_alert_rules_enabled` on `enabled`
+- `idx_audit_alert_rules_severity` on `severity`
+
+#### 17. audit_webhook_events
+
+Webhook events sent from the audit system.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | VARCHAR(255) | Primary key (generated UUID) |
+| `source_account_id` | VARCHAR(255) | Application identifier |
+| `event_type` | VARCHAR(100) | Webhook event type |
+| `payload` | JSONB | Complete webhook payload |
+| `url` | TEXT | Webhook URL |
+| `status` | VARCHAR(50) | pending, sent, failed |
+| `attempts` | INTEGER | Number of delivery attempts |
+| `last_attempt_at` | TIMESTAMP | Last delivery attempt time |
+| `response_code` | INTEGER | HTTP response code |
+| `response_body` | TEXT | HTTP response body |
+| `error_message` | TEXT | Error details if failed |
+| `created_at` | TIMESTAMP | Event creation time |
+| `sent_at` | TIMESTAMP | Successful delivery time |
+
+**Indexes:**
+- `idx_audit_webhook_events_status` on `status`
+- `idx_audit_webhook_events_type` on `event_type`
+- `idx_audit_webhook_events_created` on `created_at`
+
+---
 
 ## CLI Commands
 
-### Global Commands
+The plugin provides comprehensive CLI commands for all compliance operations.
 
-#### `init`
-Initialize the compliance plugin database schema.
+### Plugin Management
 
 ```bash
+# Initialize database schema (creates all 15 tables)
 nself plugin compliance init
-```
 
-Creates all required tables, indexes, and constraints.
-
-#### `server`
-Start the compliance plugin HTTP server.
-
-```bash
-nself plugin compliance server
-nself plugin compliance server --port 3706
-```
-
-**Options:**
-- `-p, --port <port>` - Server port (default: 3706)
-
-#### `status`
-Display current compliance plugin status and statistics.
-
-```bash
+# Check plugin status
 nself plugin compliance status
+
+# View comprehensive statistics
+nself plugin compliance stats
 ```
 
-Shows configuration, DSAR counts, retention policies, breach status, and active privacy policy.
+### Server Management
+
+```bash
+# Start HTTP server (default port 3706)
+nself plugin compliance server
+
+# Start on custom port
+nself plugin compliance server --port 8080
+
+# Start with specific host binding
+nself plugin compliance server --host 127.0.0.1 --port 3706
+```
 
 ### DSAR Commands
 
-#### `dsar create`
-Create a new Data Subject Access Request.
-
 ```bash
-nself plugin compliance dsar create \
-  --email user@example.com \
-  --type access \
-  --name "John Doe" \
-  --user-id user_123 \
-  --description "Request for all personal data" \
-  --categories "profile,orders,messages"
+# List all DSARs
+nself plugin compliance dsars list
+
+# List with filters
+nself plugin compliance dsars list --status pending
+nself plugin compliance dsars list --status overdue
+nself plugin compliance dsars list --priority urgent
+
+# Get specific DSAR by ID
+nself plugin compliance dsars get dsar_abc123
+
+# Create new DSAR
+nself plugin compliance dsars create \
+  --email "user@example.com" \
+  --type "access" \
+  --description "I want a copy of my personal data"
+
+# Create DSAR with priority
+nself plugin compliance dsars create \
+  --email "user@example.com" \
+  --type "erasure" \
+  --priority "urgent" \
+  --description "Delete all my data immediately"
+
+# Update DSAR status
+nself plugin compliance dsars update dsar_abc123 \
+  --status "in_progress" \
+  --assigned-to "compliance@company.com"
+
+# Complete DSAR
+nself plugin compliance dsars complete dsar_abc123 \
+  --export-url "https://exports.company.com/user_data.zip"
+
+# Reject DSAR
+nself plugin compliance dsars reject dsar_abc123 \
+  --reason "Unable to verify identity"
+
+# Add activity to DSAR
+nself plugin compliance dsars activity dsar_abc123 \
+  --type "note_added" \
+  --description "Contacted user for additional verification"
+
+# Search DSARs by email
+nself plugin compliance dsars search user@example.com
+
+# Export DSAR list to CSV
+nself plugin compliance dsars list --format csv > dsars.csv
 ```
-
-**Options:**
-- `-e, --email <email>` - Requester email (required)
-- `-t, --type <type>` - Request type (required):
-  - `access` - GDPR Article 15
-  - `erasure` - GDPR Article 17
-  - `portability` - GDPR Article 20
-  - `rectification` - GDPR Article 16
-  - `restriction` - GDPR Article 18
-  - `objection` - GDPR Article 21
-  - `ccpa_disclosure` - CCPA Right to Know
-  - `ccpa_deletion` - CCPA Right to Delete
-  - `ccpa_opt_out` - CCPA Opt-Out of Sale
-- `-n, --name <name>` - Requester name
-- `-u, --user-id <userId>` - Associated user ID
-- `-d, --description <description>` - Request description
-- `-c, --categories <categories>` - Comma-separated data categories
-
-#### `dsar list`
-List all DSARs with optional filtering.
-
-```bash
-nself plugin compliance dsar list
-nself plugin compliance dsar list --status pending
-nself plugin compliance dsar list --user-id user_123 --limit 10
-```
-
-**Options:**
-- `-s, --status <status>` - Filter by status (pending, in_progress, approved, rejected, completed)
-- `-u, --user-id <userId>` - Filter by user ID
-- `-l, --limit <limit>` - Limit results (default: 50)
-
-#### `dsar process`
-Approve or reject a DSAR.
-
-```bash
-nself plugin compliance dsar process \
-  --id dsar-uuid \
-  --action approve \
-  --notes "Identity verified via government ID" \
-  --assign-to admin_user_123
-```
-
-**Options:**
-- `-i, --id <id>` - DSAR ID (required)
-- `-a, --action <action>` - Action: approve or reject (required)
-- `-n, --notes <notes>` - Resolution notes
-- `-r, --reason <reason>` - Rejection reason (for reject action)
-- `--assign-to <assignTo>` - Assign to user ID
-
-#### `dsar complete`
-Mark a DSAR as completed with optional data package URL.
-
-```bash
-nself plugin compliance dsar complete \
-  --id dsar-uuid \
-  --url https://s3.amazonaws.com/exports/user_123_data.json
-```
-
-**Options:**
-- `-i, --id <id>` - DSAR ID (required)
-- `-u, --url <url>` - Data package URL
-
-#### `dsar export`
-Export user data for a DSAR.
-
-```bash
-nself plugin compliance dsar export --id dsar-uuid --format json
-```
-
-**Options:**
-- `-i, --id <id>` - DSAR ID (required)
-- `-f, --format <format>` - Export format (json, csv) (default: json)
 
 ### Consent Commands
 
-#### `consent grant`
-Grant consent for a user.
-
 ```bash
-nself plugin compliance consent grant \
-  --user-id user_123 \
-  --purpose marketing_emails \
-  --description "Receive promotional emails" \
-  --method explicit \
-  --policy-version 2.0.0 \
-  --expires 2025-12-31T23:59:59Z
-```
-
-**Options:**
-- `-u, --user-id <userId>` - User ID (required)
-- `-p, --purpose <purpose>` - Consent purpose (required)
-- `-d, --description <description>` - Purpose description
-- `-t, --text <text>` - Consent text
-- `-m, --method <method>` - Consent method (explicit, implicit, opt_in, opt_out)
-- `-v, --policy-version <version>` - Privacy policy version
-- `-e, --expires <expiresAt>` - Expiry date (ISO format)
-
-#### `consent withdraw`
-Withdraw a consent.
-
-```bash
-nself plugin compliance consent withdraw \
-  --id consent-uuid \
-  --reason "User requested withdrawal"
-```
-
-**Options:**
-- `-i, --id <id>` - Consent ID (required)
-- `-r, --reason <reason>` - Withdrawal reason
-
-#### `consent list`
-List consent records.
-
-```bash
+# List all consents
 nself plugin compliance consent list
+
+# List consents for specific user
 nself plugin compliance consent list --user-id user_123
-nself plugin compliance consent list --purpose marketing_emails
-```
+nself plugin compliance consent list --email user@example.com
 
-**Options:**
-- `-u, --user-id <userId>` - Filter by user ID
-- `-p, --purpose <purpose>` - Filter by purpose
+# Get consent details
+nself plugin compliance consent get consent_abc123
 
-#### `consent check`
-Check if a user has valid consent for a purpose.
+# Grant consent
+nself plugin compliance consent grant \
+  --user-id "user_123" \
+  --email "user@example.com" \
+  --purpose "marketing" \
+  --method "opt_in" \
+  --ip "192.168.1.100"
 
-```bash
+# Withdraw consent
+nself plugin compliance consent withdraw consent_abc123 \
+  --reason "User requested opt-out"
+
+# Update consent
+nself plugin compliance consent update consent_abc123 \
+  --expires-at "2025-12-31"
+
+# View consent history
+nself plugin compliance consent history consent_abc123
+
+# Check if user has active consent
 nself plugin compliance consent check \
-  --user-id user_123 \
-  --purpose marketing_emails
+  --user-id "user_123" \
+  --purpose "marketing"
+
+# List expired consents
+nself plugin compliance consent list --expired
+
+# Export consent records
+nself plugin compliance consent list --format csv > consents.csv
 ```
 
-**Options:**
-- `-u, --user-id <userId>` - User ID (required)
-- `-p, --purpose <purpose>` - Consent purpose (required)
-
-Returns exit code 0 if consent is valid, 1 otherwise.
-
-### Retention Commands
-
-#### `retention create`
-Create a data retention policy.
+### Privacy Policy Commands
 
 ```bash
-nself plugin compliance retention create \
-  --name "Delete old user logs" \
-  --category user_logs \
-  --days 90 \
-  --action delete \
-  --description "Remove user activity logs after 90 days" \
-  --table user_activity_logs \
-  --legal-basis "Legitimate interest - system security" \
-  --regulation GDPR
+# List all privacy policies
+nself plugin compliance policies list
+
+# Get policy by ID
+nself plugin compliance policies get policy_abc123
+
+# Create new policy
+nself plugin compliance policies create \
+  --version "2.0.0" \
+  --title "Privacy Policy" \
+  --content-file "./privacy-policy.md" \
+  --language "en"
+
+# Publish policy
+nself plugin compliance policies publish policy_abc123
+
+# Archive old policy
+nself plugin compliance policies archive policy_abc123
+
+# View policy acceptances
+nself plugin compliance policies acceptances policy_abc123
+
+# Record user acceptance
+nself plugin compliance policies accept \
+  --policy-id "policy_abc123" \
+  --user-id "user_123" \
+  --email "user@example.com" \
+  --ip "192.168.1.100"
+
+# List users who haven't accepted latest policy
+nself plugin compliance policies non-acceptances
+
+# Compare policy versions
+nself plugin compliance policies diff policy_v1 policy_v2
 ```
 
-**Options:**
-- `-n, --name <name>` - Policy name (required)
-- `-c, --category <category>` - Data category (required)
-- `-d, --days <days>` - Retention period in days (required)
-- `-a, --action <action>` - Retention action (required): delete, anonymize, archive, notify
-- `--description <description>` - Policy description
-- `--table <table>` - Target table name
-- `--legal-basis <basis>` - Legal basis for processing
-- `--regulation <regulation>` - Regulation (GDPR, CCPA)
-
-#### `retention list`
-List retention policies.
+### Data Retention Commands
 
 ```bash
+# List retention policies
 nself plugin compliance retention list
-nself plugin compliance retention list --enabled-only
+
+# Get policy details
+nself plugin compliance retention get policy_abc123
+
+# Create retention policy
+nself plugin compliance retention create \
+  --name "User Data Retention" \
+  --data-type "users" \
+  --retention-days 730 \
+  --action "anonymize" \
+  --schedule "0 2 * * 0"
+
+# Enable policy
+nself plugin compliance retention enable policy_abc123
+
+# Disable policy
+nself plugin compliance retention disable policy_abc123
+
+# Execute policy manually (dry run)
+nself plugin compliance retention execute policy_abc123 --dry-run
+
+# Execute policy (actual deletion)
+nself plugin compliance retention execute policy_abc123
+
+# View execution history
+nself plugin compliance retention history policy_abc123
+
+# Set legal hold
+nself plugin compliance retention hold policy_abc123 \
+  --reason "Litigation hold for case #12345"
+
+# Release legal hold
+nself plugin compliance retention unhold policy_abc123
 ```
 
-**Options:**
-- `-e, --enabled-only` - Show only enabled policies
-
-#### `retention execute`
-Execute a retention policy manually.
+### Breach Management Commands
 
 ```bash
-nself plugin compliance retention execute --id policy-uuid
+# List all breaches
+nself plugin compliance breaches list
+
+# List active breaches
+nself plugin compliance breaches list --status discovered
+
+# Get breach details
+nself plugin compliance breaches get breach_abc123
+
+# Report new breach
+nself plugin compliance breaches create \
+  --title "Database Exposure" \
+  --description "Misconfigured S3 bucket exposed user emails" \
+  --severity "high" \
+  --affected-records 1000 \
+  --affected-users 800 \
+  --data-types "email,name"
+
+# Update breach status
+nself plugin compliance breaches update breach_abc123 \
+  --status "contained" \
+  --contained-at "2026-02-11T14:30:00Z"
+
+# Record mitigation steps
+nself plugin compliance breaches update breach_abc123 \
+  --mitigation "Fixed S3 bucket permissions, rotated credentials"
+
+# Mark breach as resolved
+nself plugin compliance breaches resolve breach_abc123 \
+  --root-cause "Misconfigured IAM role" \
+  --resolved-at "2026-02-11T16:00:00Z"
+
+# Send authority notification
+nself plugin compliance breaches notify breach_abc123 \
+  --type "authority" \
+  --recipient "data-protection@regulator.gov" \
+  --message-file "./breach-notice.txt"
+
+# Send user notifications
+nself plugin compliance breaches notify breach_abc123 \
+  --type "user" \
+  --batch-send
+
+# Check notification deadline
+nself plugin compliance breaches deadline breach_abc123
 ```
 
-**Options:**
-- `-i, --id <policyId>` - Policy ID (required)
-
-#### `retention report`
-Show retention execution report.
+### Data Processor Commands
 
 ```bash
-nself plugin compliance retention report
-nself plugin compliance retention report --id policy-uuid --limit 20
+# List all processors
+nself plugin compliance processors list
+
+# List active processors
+nself plugin compliance processors list --status active
+
+# Get processor details
+nself plugin compliance processors get processor_abc123
+
+# Add new processor
+nself plugin compliance processors create \
+  --name "Email Service Provider" \
+  --contact-email "legal@emailprovider.com" \
+  --country "United States" \
+  --services "Email delivery and tracking" \
+  --data-categories "email,name"
+
+# Update DPA status
+nself plugin compliance processors update processor_abc123 \
+  --dpa-signed true \
+  --dpa-signed-date "2026-01-15" \
+  --dpa-expiry-date "2028-01-15"
+
+# Upload DPA document
+nself plugin compliance processors update processor_abc123 \
+  --dpa-url "https://docs.company.com/dpa-emailprovider.pdf"
+
+# Deactivate processor
+nself plugin compliance processors deactivate processor_abc123
+
+# List processors with expiring DPAs
+nself plugin compliance processors list --dpa-expiring 30
 ```
 
-**Options:**
-- `-i, --id <policyId>` - Policy ID (show all if not specified)
-- `-l, --limit <limit>` - Limit results (default: 20)
-
-### Breach Commands
-
-#### `breach create`
-Report a new data breach.
+### Audit Log Commands
 
 ```bash
-nself plugin compliance breach create \
-  --title "Database access breach" \
-  --description "Unauthorized access to customer database detected" \
-  --severity high \
-  --categories "email,name,phone" \
-  --discovered-by admin_123 \
-  --affected-users 1500 \
-  --data-description "Customer contact information exposed"
+# Log a new audit event
+nself plugin compliance log \
+  --action "user.login" \
+  --actor-type "user" \
+  --actor-id "user_123" \
+  --status "success" \
+  --ip "192.168.1.100"
+
+# Log with metadata
+nself plugin compliance log \
+  --action "api.call" \
+  --actor-type "service" \
+  --actor-id "payment-service" \
+  --resource-type "payment" \
+  --resource-id "pay_abc123" \
+  --status "success" \
+  --metadata '{"amount": 99.99, "currency": "USD"}'
+
+# Query audit events
+nself plugin compliance query \
+  --action "user.login" \
+  --from "2026-02-01" \
+  --to "2026-02-11"
+
+# Query by actor
+nself plugin compliance query --actor-id "user_123"
+
+# Query by resource
+nself plugin compliance query \
+  --resource-type "payment" \
+  --resource-id "pay_abc123"
+
+# Query failed events
+nself plugin compliance query --status "failure"
+
+# Export audit events
+nself plugin compliance export \
+  --from "2026-01-01" \
+  --to "2026-01-31" \
+  --format "json" \
+  --output "audit-jan-2026.json"
+
+# Export to CSV
+nself plugin compliance export \
+  --from "2026-02-01" \
+  --format "csv" \
+  --output "audit-feb-2026.csv"
+
+# Verify event integrity
+nself plugin compliance verify --event-id event_abc123
+
+# Verify event chain
+nself plugin compliance verify --from-id 1000 --to-id 2000
+
+# View audit statistics
+nself plugin compliance audit stats
+
+# View events by compliance framework
+nself plugin compliance query --framework "HIPAA"
 ```
 
-**Options:**
-- `-t, --title <title>` - Breach title (required)
-- `-d, --description <description>` - Breach description (required)
-- `-s, --severity <severity>` - Severity (required): low, medium, high, critical
-- `-c, --categories <categories>` - Comma-separated data categories (required)
-- `--discovered-by <discoveredBy>` - Discovered by user ID
-- `--affected-users <count>` - Number of affected users
-- `--data-description <desc>` - Description of data involved
-- `--no-notification` - Notification not required
-
-#### `breach list`
-List data breaches.
+### Alert Management Commands
 
 ```bash
-nself plugin compliance breach list
-nself plugin compliance breach list --status investigating
-nself plugin compliance breach list --severity high
+# List alert rules
+nself plugin compliance alerts list
+
+# Get rule details
+nself plugin compliance alerts get rule_abc123
+
+# Create threshold alert
+nself plugin compliance alerts create \
+  --name "Failed Login Attempts" \
+  --type "threshold" \
+  --conditions '{"action": "user.login", "status": "failure", "count": 5, "window": "5m"}' \
+  --severity "high" \
+  --channels "email,webhook"
+
+# Create pattern alert
+nself plugin compliance alerts create \
+  --name "Suspicious Data Access" \
+  --type "pattern" \
+  --conditions '{"resource_type": "pii", "actor_type": "service", "off_hours": true}' \
+  --severity "critical"
+
+# Enable rule
+nself plugin compliance alerts enable rule_abc123
+
+# Disable rule
+nself plugin compliance alerts disable rule_abc123
+
+# View rule triggers
+nself plugin compliance alerts triggers rule_abc123
+
+# Test rule
+nself plugin compliance alerts test rule_abc123
 ```
 
-**Options:**
-- `-s, --status <status>` - Filter by status (investigating, contained, notified, resolved)
-- `--severity <severity>` - Filter by severity (low, medium, high, critical)
-
-#### `breach notify`
-Send breach notification.
+### Compliance Reporting Commands
 
 ```bash
-nself plugin compliance breach notify \
-  --id breach-uuid \
-  --type authority \
-  --recipient-type supervisory_authority \
-  --email dpo@data-authority.gov \
-  --subject "Data Breach Notification" \
-  --message "We are notifying you of a data breach that occurred on..."
+# Generate SOC2 report
+nself plugin compliance compliance report --framework soc2
+
+# Generate SOC2 report for date range
+nself plugin compliance compliance report \
+  --framework soc2 \
+  --from "2026-01-01" \
+  --to "2026-12-31"
+
+# Generate HIPAA report
+nself plugin compliance compliance report --framework hipaa
+
+# Generate GDPR report
+nself plugin compliance compliance report --framework gdpr
+
+# Generate PCI report
+nself plugin compliance compliance report --framework pci
+
+# Generate all framework reports
+nself plugin compliance compliance report --framework all
+
+# Export report to file
+nself plugin compliance compliance report \
+  --framework soc2 \
+  --output "soc2-compliance-report.json"
+
+# Generate PDF report (if supported)
+nself plugin compliance compliance report \
+  --framework soc2 \
+  --format pdf \
+  --output "soc2-report.pdf"
 ```
 
-**Options:**
-- `-i, --id <id>` - Breach ID (required)
-- `-t, --type <type>` - Notification type (required): authority, user, media
-- `--recipient-type <recipientType>` - Recipient type (required)
-- `-e, --email <email>` - Recipient email
-- `-s, --subject <subject>` - Notification subject
-- `-m, --message <message>` - Notification message
-
-### Policy Commands
-
-#### `policy create`
-Create a new privacy policy version.
-
-```bash
-nself plugin compliance policy create \
-  --version 2.0.0 \
-  --version-number 2 \
-  --title "Privacy Policy v2.0" \
-  --content "$(cat privacy_policy_v2.txt)" \
-  --effective-from 2024-03-01T00:00:00Z \
-  --summary "Updated to include new AI features" \
-  --changes "Added section on AI data processing" \
-  --reacceptance \
-  --language en \
-  --jurisdiction "EU"
-```
-
-**Options:**
-- `-v, --version <version>` - Policy version (e.g., 2.0.0) (required)
-- `-n, --version-number <number>` - Version number (integer) (required)
-- `-t, --title <title>` - Policy title (required)
-- `-c, --content <content>` - Policy content (required)
-- `-e, --effective-from <date>` - Effective from date (ISO format) (required)
-- `-s, --summary <summary>` - Policy summary
-- `--changes <changes>` - Changes summary from previous version
-- `-r, --reacceptance` - Requires re-acceptance
-- `-l, --language <language>` - Language code (default: en)
-- `-j, --jurisdiction <jurisdiction>` - Jurisdiction
-
-#### `policy publish`
-Publish a privacy policy (makes it active).
-
-```bash
-nself plugin compliance policy publish --id policy-uuid
-```
-
-**Options:**
-- `-i, --id <id>` - Policy ID (required)
-
-#### `policy current`
-Show current active privacy policy.
-
-```bash
-nself plugin compliance policy current
-```
-
-### Audit Commands
-
-#### `audit list`
-List compliance audit log entries.
-
-```bash
-nself plugin compliance audit list
-nself plugin compliance audit list --category dsar --limit 100
-nself plugin compliance audit list --actor admin_123
-nself plugin compliance audit list --subject user_456
-```
-
-**Options:**
-- `-c, --category <category>` - Filter by event category (dsar, consent, retention, breach, policy, webhook)
-- `-a, --actor <actorId>` - Filter by actor ID
-- `-s, --subject <subjectId>` - Filter by data subject ID
-- `-l, --limit <limit>` - Limit results (default: 50)
-
-#### `audit export`
-Export audit logs as JSON.
-
-```bash
-nself plugin compliance audit export --category dsar --limit 1000 > audit_export.json
-```
-
-**Options:**
-- `-c, --category <category>` - Filter by event category
-- `-a, --actor <actorId>` - Filter by actor ID
-- `-s, --subject <subjectId>` - Filter by data subject ID
-- `-l, --limit <limit>` - Limit results (default: 1000)
-
-### Export Command
-
-#### `export`
-Export user data for compliance purposes.
-
-```bash
-nself plugin compliance export --user-id user_123
-nself plugin compliance export --user-id user_123 --categories "profile,orders" --format json
-```
-
-**Options:**
-- `-u, --user-id <userId>` - User ID (required)
-- `-c, --categories <categories>` - Comma-separated data categories
-- `-f, --format <format>` - Export format (json, csv) (default: json)
+---
 
 ## REST API
 
-### Health Check Endpoints
+The plugin exposes a comprehensive REST API on port **3706** (configurable).
 
-#### `GET /health`
-Basic health check.
+### Health & Status
+
+#### GET /health
+
+Health check endpoint.
+
+```bash
+curl http://localhost:3706/health
+```
 
 **Response:**
 ```json
 {
   "status": "ok",
-  "plugin": "compliance",
-  "timestamp": "2024-02-11T10:00:00Z"
+  "timestamp": "2026-02-11T12:00:00Z",
+  "version": "1.0.0"
 }
 ```
 
-#### `GET /ready`
-Readiness check (includes database connectivity).
+#### GET /api/status
 
-**Response:**
-```json
-{
-  "ready": true,
-  "plugin": "compliance",
-  "timestamp": "2024-02-11T10:00:00Z"
-}
+Plugin status and statistics.
+
+```bash
+curl http://localhost:3706/api/status
 ```
-
-#### `GET /live`
-Liveness check with detailed status.
-
-**Response:**
-```json
-{
-  "alive": true,
-  "plugin": "compliance",
-  "version": "1.0.0",
-  "uptime": 3600.5,
-  "memory": {
-    "rss": 52428800,
-    "heapTotal": 20971520,
-    "heapUsed": 15728640,
-    "external": 1048576
-  },
-  "config": {
-    "gdprEnabled": true,
-    "ccpaEnabled": true,
-    "retentionEnabled": true,
-    "auditEnabled": true
-  },
-  "stats": {
-    "totalDsars": 42
-  },
-  "timestamp": "2024-02-11T10:00:00Z"
-}
-```
-
-### Status Endpoint
-
-#### `GET /v1/status`
-Get compliance plugin status with statistics.
 
 **Response:**
 ```json
 {
   "plugin": "compliance",
   "version": "1.0.0",
-  "status": "running",
-  "config": {
-    "gdprEnabled": true,
-    "ccpaEnabled": true,
-    "dsarDeadlineDays": 30,
-    "breachNotificationHours": 72,
-    "retentionEnabled": true,
-    "auditEnabled": true
+  "database": "connected",
+  "frameworks": ["GDPR", "CCPA", "SOC2"],
+  "dsars": {
+    "total": 45,
+    "pending": 5,
+    "overdue": 1
   },
-  "stats": {
-    "totalDsars": 42,
-    "retentionPolicies": 5,
-    "activeBreaches": 0
+  "consents": {
+    "total": 1234,
+    "active": 1100,
+    "withdrawn": 134
   },
-  "timestamp": "2024-02-11T10:00:00Z"
+  "breaches": {
+    "total": 2,
+    "active": 0
+  },
+  "audit_events": {
+    "total": 150000,
+    "today": 500
+  }
 }
 ```
 
 ### DSAR Endpoints
 
-#### `POST /api/compliance/dsars`
-Create a new DSAR.
+#### POST /api/dsars
 
-**Request:**
-```json
-{
-  "request_type": "access",
-  "email": "user@example.com",
-  "name": "John Doe",
-  "user_id": "user_123",
-  "description": "Request for all personal data",
-  "data_categories": ["profile", "orders", "messages"],
-  "specific_data_requested": "All data related to my account",
-  "regulation": "GDPR",
-  "jurisdiction": "EU"
-}
+Create new DSAR.
+
+```bash
+curl -X POST http://localhost:3706/api/dsars \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_type": "access",
+    "subject_email": "user@example.com",
+    "subject_user_id": "user_123",
+    "description": "I want a copy of my personal data",
+    "priority": "normal"
+  }'
 ```
 
-**Response (201):**
-```json
-{
-  "dsar_id": "550e8400-e29b-41d4-a716-446655440000",
-  "request_number": "DSAR-2024-00042",
-  "status": "pending",
-  "deadline": "2024-03-13T10:00:00Z",
-  "verification_required": true,
-  "created_at": "2024-02-11T10:00:00Z"
-}
+#### GET /api/dsars
+
+List all DSARs.
+
+```bash
+# List all
+curl http://localhost:3706/api/dsars
+
+# Filter by status
+curl "http://localhost:3706/api/dsars?status=pending"
+
+# Filter by priority
+curl "http://localhost:3706/api/dsars?priority=urgent"
+
+# Pagination
+curl "http://localhost:3706/api/dsars?limit=20&offset=40"
 ```
 
-#### `GET /api/compliance/dsars`
-List DSARs with optional filtering.
+#### GET /api/dsars/:id
 
-**Query Parameters:**
-- `status` - Filter by status
-- `user_id` - Filter by user ID
-- `limit` - Limit results (default: 50)
-- `offset` - Offset for pagination (default: 0)
+Get DSAR by ID.
 
-**Response:**
-```json
-{
-  "dsars": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "source_account_id": "primary",
-      "request_type": "access",
-      "request_number": "DSAR-2024-00042",
-      "user_id": "user_123",
-      "requester_email": "user@example.com",
-      "requester_name": "John Doe",
-      "status": "pending",
-      "deadline": "2024-03-13T10:00:00Z",
-      "regulation": "GDPR",
-      "created_at": "2024-02-11T10:00:00Z",
-      "updated_at": "2024-02-11T10:00:00Z"
-    }
-  ],
-  "total": 42,
-  "limit": 50,
-  "offset": 0
-}
+```bash
+curl http://localhost:3706/api/dsars/dsar_abc123
 ```
 
-#### `GET /api/compliance/dsars/:id`
-Get a specific DSAR with activities.
+#### PATCH /api/dsars/:id
 
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "source_account_id": "primary",
-  "request_type": "access",
-  "request_number": "DSAR-2024-00042",
-  "user_id": "user_123",
-  "requester_email": "user@example.com",
-  "requester_name": "John Doe",
-  "status": "in_progress",
-  "assigned_to": "admin_123",
-  "deadline": "2024-03-13T10:00:00Z",
-  "regulation": "GDPR",
-  "created_at": "2024-02-11T10:00:00Z",
-  "updated_at": "2024-02-11T11:00:00Z",
-  "activities": [
-    {
-      "id": "activity-uuid",
-      "activity_type": "created",
-      "description": "DSAR request created",
-      "performed_by": null,
-      "created_at": "2024-02-11T10:00:00Z"
-    },
-    {
-      "id": "activity-uuid-2",
-      "activity_type": "verified",
-      "description": "Identity verification completed",
-      "performed_by": "admin_123",
-      "created_at": "2024-02-11T11:00:00Z"
-    }
-  ]
-}
+Update DSAR.
+
+```bash
+curl -X PATCH http://localhost:3706/api/dsars/dsar_abc123 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "in_progress",
+    "assigned_to": "compliance@company.com"
+  }'
 ```
 
-#### `POST /api/compliance/dsars/:id/verify`
-Verify DSAR identity.
+#### POST /api/dsars/:id/complete
 
-**Request:**
-```json
-{
-  "verification_token": "abc123xyz789"
-}
+Complete DSAR.
+
+```bash
+curl -X POST http://localhost:3706/api/dsars/dsar_abc123/complete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "export_url": "https://exports.company.com/user_data.zip",
+    "export_expires_at": "2026-02-14T12:00:00Z"
+  }'
 ```
 
-**Response:**
-```json
-{
-  "verified": true
-}
-```
+#### POST /api/dsars/:id/activities
 
-#### `POST /api/compliance/dsars/:id/process`
-Approve or reject a DSAR.
+Add activity to DSAR.
 
-**Request:**
-```json
-{
-  "action": "approve",
-  "notes": "Identity verified via government ID",
-  "assigned_to": "admin_123"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "dsar": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "status": "approved",
-    "assigned_to": "admin_123",
-    "resolution_notes": "Identity verified via government ID",
-    "updated_at": "2024-02-11T11:00:00Z"
-  }
-}
-```
-
-#### `POST /api/compliance/dsars/:id/complete`
-Complete a DSAR.
-
-**Request:**
-```json
-{
-  "data_package_url": "https://s3.amazonaws.com/exports/user_123_data.json"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "dsar": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "status": "completed",
-    "completed_at": "2024-02-11T12:00:00Z",
-    "data_package_url": "https://s3.amazonaws.com/exports/user_123_data.json",
-    "data_package_generated_at": "2024-02-11T12:00:00Z"
-  }
-}
-```
-
-#### `GET /api/compliance/dsars/:id/activities`
-Get DSAR activity log.
-
-**Response:**
-```json
-{
-  "activities": [
-    {
-      "id": "activity-uuid",
-      "dsar_id": "550e8400-e29b-41d4-a716-446655440000",
-      "activity_type": "created",
-      "description": "DSAR request created",
-      "performed_by": null,
-      "created_at": "2024-02-11T10:00:00Z"
-    }
-  ],
-  "count": 1
-}
+```bash
+curl -X POST http://localhost:3706/api/dsars/dsar_abc123/activities \
+  -H "Content-Type: application/json" \
+  -d '{
+    "activity_type": "note_added",
+    "description": "Contacted user for verification",
+    "performed_by": "admin_user"
+  }'
 ```
 
 ### Consent Endpoints
 
-#### `POST /api/compliance/consent`
-Create or update consent.
+#### POST /api/consents
 
-**Request:**
-```json
-{
-  "user_id": "user_123",
-  "purpose": "marketing_emails",
-  "purpose_description": "Receive promotional emails",
-  "status": "granted",
-  "consent_method": "explicit",
-  "consent_text": "I agree to receive marketing emails",
-  "privacy_policy_version": "2.0.0",
-  "expires_at": "2025-12-31T23:59:59Z"
-}
+Grant consent.
+
+```bash
+curl -X POST http://localhost:3706/api/consents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_123",
+    "user_email": "user@example.com",
+    "purpose": "marketing",
+    "consent_given": true,
+    "consent_method": "opt_in",
+    "consent_source": "web_form",
+    "ip_address": "192.168.1.100",
+    "consent_text": "I agree to receive marketing emails"
+  }'
 ```
 
-**Response (201):**
-```json
-{
-  "consent_id": "consent-uuid",
-  "user_id": "user_123",
-  "purpose": "marketing_emails",
-  "status": "granted",
-  "granted_at": "2024-02-11T10:00:00Z",
-  "expires_at": "2025-12-31T23:59:59Z"
-}
-```
+#### GET /api/consents
 
-#### `GET /api/compliance/consent`
 List consents.
 
-**Query Parameters:**
-- `user_id` - Filter by user ID
-- `purpose` - Filter by purpose
+```bash
+# List all
+curl http://localhost:3706/api/consents
 
-**Response:**
-```json
-{
-  "consents": [
-    {
-      "id": "consent-uuid",
-      "user_id": "user_123",
-      "purpose": "marketing_emails",
-      "status": "granted",
-      "granted_at": "2024-02-11T10:00:00Z",
-      "expires_at": "2025-12-31T23:59:59Z"
-    }
-  ],
-  "count": 1
-}
+# Filter by user
+curl "http://localhost:3706/api/consents?user_id=user_123"
+
+# Filter by purpose
+curl "http://localhost:3706/api/consents?purpose=marketing"
+
+# Filter by status
+curl "http://localhost:3706/api/consents?consent_given=true"
 ```
 
-#### `GET /api/compliance/consent/:id`
-Get specific consent.
+#### GET /api/consents/:id
 
-**Response:**
-```json
-{
-  "id": "consent-uuid",
-  "user_id": "user_123",
-  "purpose": "marketing_emails",
-  "purpose_description": "Receive promotional emails",
-  "status": "granted",
-  "granted_at": "2024-02-11T10:00:00Z",
-  "expires_at": "2025-12-31T23:59:59Z",
-  "consent_method": "explicit",
-  "consent_text": "I agree to receive marketing emails",
-  "privacy_policy_version": "2.0.0"
-}
+Get consent by ID.
+
+```bash
+curl http://localhost:3706/api/consents/consent_abc123
 ```
 
-#### `POST /api/compliance/consent/:id/withdraw`
-Withdraw consent.
+#### PATCH /api/consents/:id
 
-**Request:**
-```json
-{
-  "reason": "User requested withdrawal"
-}
+Update consent (withdraw).
+
+```bash
+curl -X PATCH http://localhost:3706/api/consents/consent_abc123 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "consent_given": false,
+    "withdrawn_at": "2026-02-11T12:00:00Z"
+  }'
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "consent": {
-    "id": "consent-uuid",
-    "status": "withdrawn",
-    "withdrawn_at": "2024-02-11T11:00:00Z"
-  }
-}
-```
+#### GET /api/consents/:id/history
 
-#### `GET /api/compliance/consent/check`
-Check if user has valid consent.
+Get consent history.
 
-**Query Parameters:**
-- `user_id` - User ID (required)
-- `purpose` - Consent purpose (required)
-
-**Response:**
-```json
-{
-  "user_id": "user_123",
-  "purpose": "marketing_emails",
-  "has_consent": true
-}
+```bash
+curl http://localhost:3706/api/consents/consent_abc123/history
 ```
 
 ### Privacy Policy Endpoints
 
-#### `GET /api/compliance/privacy-policy`
-Get active privacy policy.
+#### POST /api/policies
 
-**Query Parameters:**
-- `version` - Get specific version (optional)
+Create privacy policy.
 
-**Response:**
-```json
-{
-  "id": "policy-uuid",
-  "version": "2.0.0",
-  "version_number": 2,
-  "title": "Privacy Policy v2.0",
-  "content": "...",
-  "summary": "Updated to include new AI features",
-  "is_active": true,
-  "effective_from": "2024-03-01T00:00:00Z",
-  "language": "en",
-  "jurisdiction": "EU"
-}
-```
-
-#### `GET /api/compliance/privacy-policies`
-List all privacy policies.
-
-**Response:**
-```json
-{
-  "policies": [
-    {
-      "id": "policy-uuid",
-      "version": "2.0.0",
-      "version_number": 2,
-      "title": "Privacy Policy v2.0",
-      "summary": "Updated to include new AI features",
-      "is_active": true,
-      "effective_from": "2024-03-01T00:00:00Z",
-      "language": "en",
-      "created_at": "2024-02-01T10:00:00Z"
-    }
-  ],
-  "count": 1
-}
-```
-
-#### `POST /api/compliance/privacy-policies`
-Create a new privacy policy version.
-
-**Request:**
-```json
-{
-  "version": "2.0.0",
-  "version_number": 2,
-  "title": "Privacy Policy v2.0",
-  "content": "...",
-  "summary": "Updated to include new AI features",
-  "changes_summary": "Added section on AI data processing",
-  "requires_reacceptance": true,
-  "effective_from": "2024-03-01T00:00:00Z",
-  "language": "en",
-  "jurisdiction": "EU"
-}
-```
-
-**Response (201):**
-```json
-{
-  "id": "policy-uuid",
-  "version": "2.0.0",
-  "version_number": 2,
-  "title": "Privacy Policy v2.0",
-  "is_active": false,
-  "created_at": "2024-02-01T10:00:00Z"
-}
-```
-
-#### `POST /api/compliance/privacy-policies/:id/publish`
-Publish a privacy policy.
-
-**Response:**
-```json
-{
-  "success": true,
-  "policy": {
-    "id": "policy-uuid",
+```bash
+curl -X POST http://localhost:3706/api/policies \
+  -H "Content-Type: application/json" \
+  -d '{
     "version": "2.0.0",
-    "is_active": true
-  }
-}
+    "title": "Privacy Policy",
+    "content": "Full policy content here...",
+    "language": "en",
+    "status": "draft"
+  }'
 ```
 
-#### `POST /api/compliance/privacy-policy/accept`
-Accept a privacy policy.
+#### GET /api/policies
 
-**Request:**
-```json
-{
-  "user_id": "user_123",
-  "policy_id": "policy-uuid"
-}
+List policies.
+
+```bash
+curl http://localhost:3706/api/policies
 ```
 
-**Response (201):**
-```json
-{
-  "acceptance_id": "acceptance-uuid",
-  "user_id": "user_123",
-  "policy_id": "policy-uuid",
-  "accepted_at": "2024-02-11T10:00:00Z"
-}
+#### GET /api/policies/:id
+
+Get policy by ID.
+
+```bash
+curl http://localhost:3706/api/policies/policy_abc123
 ```
 
-### Data Retention Endpoints
+#### POST /api/policies/:id/publish
 
-#### `GET /api/compliance/retention/policies`
+Publish policy.
+
+```bash
+curl -X POST http://localhost:3706/api/policies/policy_abc123/publish
+```
+
+#### POST /api/policies/:id/accept
+
+Record user acceptance.
+
+```bash
+curl -X POST http://localhost:3706/api/policies/policy_abc123/accept \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_123",
+    "user_email": "user@example.com",
+    "ip_address": "192.168.1.100"
+  }'
+```
+
+### Retention Policy Endpoints
+
+#### POST /api/retention
+
+Create retention policy.
+
+```bash
+curl -X POST http://localhost:3706/api/retention \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "User Data Retention",
+    "data_type": "users",
+    "retention_period_days": 730,
+    "action": "anonymize",
+    "schedule": "0 2 * * 0",
+    "enabled": true
+  }'
+```
+
+#### GET /api/retention
+
 List retention policies.
 
-**Query Parameters:**
-- `enabled_only` - Show only enabled policies (default: false)
-
-**Response:**
-```json
-{
-  "policies": [
-    {
-      "id": "policy-uuid",
-      "name": "Delete old user logs",
-      "data_category": "user_logs",
-      "table_name": "user_activity_logs",
-      "retention_days": 90,
-      "retention_action": "delete",
-      "is_enabled": true,
-      "priority": 100,
-      "legal_basis": "Legitimate interest - system security",
-      "regulation": "GDPR"
-    }
-  ],
-  "count": 1
-}
+```bash
+curl http://localhost:3706/api/retention
 ```
 
-#### `POST /api/compliance/retention/policies`
-Create a retention policy.
+#### POST /api/retention/:id/execute
 
-**Request:**
-```json
-{
-  "name": "Delete old user logs",
-  "description": "Remove user activity logs after 90 days",
-  "data_category": "user_logs",
-  "table_name": "user_activity_logs",
-  "retention_days": 90,
-  "retention_action": "delete",
-  "conditions": {},
-  "legal_basis": "Legitimate interest - system security",
-  "regulation": "GDPR"
-}
+Execute retention policy.
+
+```bash
+# Dry run
+curl -X POST "http://localhost:3706/api/retention/policy_abc123/execute?dry_run=true"
+
+# Actual execution
+curl -X POST http://localhost:3706/api/retention/policy_abc123/execute
 ```
 
-**Response (201):**
-```json
-{
-  "id": "policy-uuid",
-  "name": "Delete old user logs",
-  "data_category": "user_logs",
-  "retention_days": 90,
-  "retention_action": "delete",
-  "is_enabled": true,
-  "created_at": "2024-02-11T10:00:00Z"
-}
+### Breach Management Endpoints
+
+#### POST /api/breaches
+
+Report data breach.
+
+```bash
+curl -X POST http://localhost:3706/api/breaches \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Database Exposure",
+    "description": "Misconfigured S3 bucket",
+    "severity": "high",
+    "affected_records": 1000,
+    "affected_users": 800,
+    "data_types": ["email", "name"],
+    "discovered_at": "2026-02-11T10:00:00Z"
+  }'
 ```
 
-#### `POST /api/compliance/retention/execute`
-Execute a retention policy.
+#### GET /api/breaches
 
-**Request:**
-```json
-{
-  "policy_id": "policy-uuid"
-}
+List breaches.
+
+```bash
+curl http://localhost:3706/api/breaches
 ```
 
-**Response:**
-```json
-{
-  "execution_id": "execution-uuid",
-  "policy_id": "policy-uuid",
-  "status": "completed",
-  "records_processed": 150,
-  "records_deleted": 150,
-  "records_anonymized": 0,
-  "records_archived": 0,
-  "execution_time_ms": 1250
-}
+#### GET /api/breaches/:id
+
+Get breach details.
+
+```bash
+curl http://localhost:3706/api/breaches/breach_abc123
 ```
 
-#### `GET /api/compliance/retention/executions/:policyId`
-Get execution history for a policy.
+#### POST /api/breaches/:id/notify
 
-**Query Parameters:**
-- `limit` - Limit results (default: 20)
-
-**Response:**
-```json
-{
-  "executions": [
-    {
-      "id": "execution-uuid",
-      "policy_id": "policy-uuid",
-      "executed_at": "2024-02-11T10:00:00Z",
-      "records_processed": 150,
-      "records_deleted": 150,
-      "status": "completed",
-      "execution_time_ms": 1250
-    }
-  ],
-  "count": 1
-}
-```
-
-### Data Processor Endpoints
-
-#### `GET /api/compliance/processors`
-List data processors.
-
-**Query Parameters:**
-- `active_only` - Show only active processors (default: true)
-
-**Response:**
-```json
-{
-  "processors": [
-    {
-      "id": "processor-uuid",
-      "processor_name": "Email Service Provider Inc.",
-      "processor_type": "email",
-      "contact_email": "dpo@emailprovider.com",
-      "country": "Ireland",
-      "is_eu_based": true,
-      "dpa_signed": true,
-      "dpa_signed_date": "2024-01-01",
-      "dpa_expiry_date": "2026-01-01",
-      "processing_purposes": ["email_delivery", "bounce_tracking"],
-      "data_categories": ["email", "name"],
-      "is_active": true
-    }
-  ],
-  "count": 1
-}
-```
-
-### Data Breach Endpoints
-
-#### `POST /api/compliance/breaches`
-Report a new data breach.
-
-**Request:**
-```json
-{
-  "title": "Database access breach",
-  "description": "Unauthorized access to customer database detected",
-  "severity": "high",
-  "data_categories": ["email", "name", "phone"],
-  "discovered_by": "admin_123",
-  "affected_users_count": 1500,
-  "data_description": "Customer contact information exposed",
-  "notification_required": true
-}
-```
-
-**Response (201):**
-```json
-{
-  "breach_id": "breach-uuid",
-  "breach_number": "BREACH-2024-00001",
-  "severity": "high",
-  "status": "investigating",
-  "notification_required": true,
-  "notification_deadline": "2024-02-14T10:00:00Z",
-  "created_at": "2024-02-11T10:00:00Z"
-}
-```
-
-#### `GET /api/compliance/breaches`
-List data breaches.
-
-**Query Parameters:**
-- `status` - Filter by status (investigating, contained, notified, resolved)
-- `severity` - Filter by severity (low, medium, high, critical)
-
-**Response:**
-```json
-{
-  "breaches": [
-    {
-      "id": "breach-uuid",
-      "breach_number": "BREACH-2024-00001",
-      "title": "Database access breach",
-      "severity": "high",
-      "status": "investigating",
-      "affected_users_count": 1500,
-      "discovered_at": "2024-02-11T10:00:00Z",
-      "notification_deadline": "2024-02-14T10:00:00Z"
-    }
-  ],
-  "count": 1
-}
-```
-
-#### `GET /api/compliance/breaches/:id`
-Get breach details with notifications.
-
-**Response:**
-```json
-{
-  "id": "breach-uuid",
-  "breach_number": "BREACH-2024-00001",
-  "title": "Database access breach",
-  "description": "Unauthorized access to customer database detected",
-  "severity": "high",
-  "status": "notified",
-  "affected_users_count": 1500,
-  "data_categories": ["email", "name", "phone"],
-  "discovered_at": "2024-02-11T10:00:00Z",
-  "authority_notified_at": "2024-02-11T12:00:00Z",
-  "users_notified_at": "2024-02-11T13:00:00Z",
-  "notification_deadline": "2024-02-14T10:00:00Z",
-  "notifications": [
-    {
-      "id": "notification-uuid",
-      "notification_type": "authority",
-      "recipient_type": "supervisory_authority",
-      "sent_at": "2024-02-11T12:00:00Z",
-      "delivery_status": "sent"
-    }
-  ]
-}
-```
-
-#### `POST /api/compliance/breaches/:id/notify`
 Send breach notification.
 
-**Request:**
-```json
-{
-  "notification_type": "authority",
-  "recipient_type": "supervisory_authority",
-  "recipient_email": "dpo@data-authority.gov",
-  "subject": "Data Breach Notification",
-  "message_body": "We are notifying you of a data breach..."
-}
-```
-
-**Response (201):**
-```json
-{
-  "id": "notification-uuid",
-  "breach_id": "breach-uuid",
-  "notification_type": "authority",
-  "recipient_type": "supervisory_authority",
-  "sent_at": "2024-02-11T12:00:00Z",
-  "delivery_status": "sent"
-}
-```
-
-### Data Export Endpoints
-
-#### `POST /api/compliance/export`
-Export user data.
-
-**Request:**
-```json
-{
-  "user_id": "user_123",
-  "data_categories": ["profile", "orders", "messages"],
-  "format": "json"
-}
-```
-
-**Response:**
-```json
-{
-  "user_id": "user_123",
-  "data": {
-    "user_id": "user_123",
-    "exported_at": "2024-02-11T10:00:00Z",
-    "consents": [...],
-    "dsars": [...],
-    "policy_acceptances": [...]
-  },
-  "format": "json",
-  "exported_at": "2024-02-11T10:00:00Z",
-  "expires_at": "2024-02-14T10:00:00Z"
-}
+```bash
+curl -X POST http://localhost:3706/api/breaches/breach_abc123/notify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "authority",
+    "recipient": "data-protection@regulator.gov",
+    "subject": "Data Breach Notification",
+    "message": "Notification message..."
+  }'
 ```
 
 ### Audit Log Endpoints
 
-#### `POST /api/compliance/audit`
-Create audit log entry.
+#### POST /api/audit/log
 
-**Request:**
-```json
-{
-  "event_type": "data.accessed",
-  "event_category": "access",
-  "actor_id": "admin_123",
-  "actor_type": "user",
-  "target_type": "user_profile",
-  "target_id": "user_456",
-  "accessed_data_categories": ["email", "name"],
-  "data_subject_id": "user_456",
-  "details": {"reason": "Customer support request"},
-  "legal_basis": "Legitimate interest"
-}
+Log audit event.
+
+```bash
+curl -X POST http://localhost:3706/api/audit/log \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "user.login",
+    "actor_type": "user",
+    "actor_id": "user_123",
+    "status": "success",
+    "ip_address": "192.168.1.100",
+    "metadata": {"device": "iPhone"}
+  }'
 ```
 
-**Response (201):**
-```json
-{
-  "id": "audit-uuid",
-  "event_type": "data.accessed",
-  "event_category": "access",
-  "created_at": "2024-02-11T10:00:00Z"
-}
+#### GET /api/audit/events
+
+Query audit events.
+
+```bash
+# Query all
+curl http://localhost:3706/api/audit/events
+
+# Filter by action
+curl "http://localhost:3706/api/audit/events?action=user.login"
+
+# Filter by actor
+curl "http://localhost:3706/api/audit/events?actor_id=user_123"
+
+# Filter by date range
+curl "http://localhost:3706/api/audit/events?from=2026-02-01&to=2026-02-11"
+
+# Filter by framework
+curl "http://localhost:3706/api/audit/events?framework=HIPAA"
 ```
 
-#### `GET /api/compliance/audit`
-List audit logs.
+#### POST /api/audit/export
 
-**Query Parameters:**
-- `event_category` - Filter by category
-- `actor_id` - Filter by actor
-- `data_subject_id` - Filter by data subject
-- `limit` - Limit results (default: 50)
-- `offset` - Offset for pagination (default: 0)
+Export audit events.
 
-**Response:**
-```json
-{
-  "logs": [
-    {
-      "id": "audit-uuid",
-      "event_type": "data.accessed",
-      "event_category": "access",
-      "actor_id": "admin_123",
-      "actor_type": "user",
-      "target_type": "user_profile",
-      "target_id": "user_456",
-      "data_subject_id": "user_456",
-      "created_at": "2024-02-11T10:00:00Z"
+```bash
+curl -X POST http://localhost:3706/api/audit/export \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "2026-02-01",
+    "to": "2026-02-11",
+    "format": "json",
+    "filters": {
+      "action": "user.login"
     }
-  ],
-  "total": 1000,
-  "limit": 50,
-  "offset": 0
-}
+  }'
 ```
 
-### Processing Records Endpoints
+#### POST /api/audit/verify
 
-#### `GET /api/compliance/processing-records`
-List processing records (GDPR Article 30).
+Verify event integrity.
 
-**Query Parameters:**
-- `active_only` - Show only active records (default: true)
-
-**Response:**
-```json
-{
-  "records": [
-    {
-      "id": "record-uuid",
-      "activity_name": "Customer email marketing",
-      "processing_purpose": "Direct marketing to customers",
-      "legal_basis": "Consent",
-      "data_categories": ["email", "name", "preferences"],
-      "data_subjects": ["customers"],
-      "recipient_categories": ["email_service_provider"],
-      "third_party_transfers": true,
-      "third_party_countries": ["United States"],
-      "safeguards": "Standard contractual clauses",
-      "retention_period": "2 years from last contact",
-      "is_active": true
-    }
-  ],
-  "count": 1
-}
+```bash
+curl -X POST http://localhost:3706/api/audit/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_id": "550e8400-e29b-41d4-a716-446655440000"
+  }'
 ```
 
-#### `POST /api/compliance/processing-records`
-Create a processing record.
+### Alert Endpoints
 
-**Request:**
-```json
-{
-  "activity_name": "Customer email marketing",
-  "activity_description": "Sending promotional emails to customers",
-  "processing_purpose": "Direct marketing to customers",
-  "legal_basis": "Consent",
-  "data_categories": ["email", "name", "preferences"],
-  "data_subjects": ["customers"],
-  "recipient_categories": ["email_service_provider"],
-  "third_party_transfers": true,
-  "third_party_countries": ["United States"],
-  "safeguards": "Standard contractual clauses",
-  "retention_period": "2 years from last contact",
-  "security_measures": "Encryption at rest and in transit, access controls"
-}
+#### POST /api/alerts
+
+Create alert rule.
+
+```bash
+curl -X POST http://localhost:3706/api/alerts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Failed Login Attempts",
+    "rule_type": "threshold",
+    "conditions": {
+      "action": "user.login",
+      "status": "failure",
+      "count": 5,
+      "window": "5m"
+    },
+    "severity": "high",
+    "notification_channels": ["email", "webhook"],
+    "enabled": true
+  }'
 ```
 
-**Response (201):**
-```json
-{
-  "id": "record-uuid",
-  "activity_name": "Customer email marketing",
-  "processing_purpose": "Direct marketing to customers",
-  "legal_basis": "Consent",
-  "is_active": true,
-  "created_at": "2024-02-11T10:00:00Z"
-}
+#### GET /api/alerts
+
+List alert rules.
+
+```bash
+curl http://localhost:3706/api/alerts
+```
+
+### Compliance Reporting Endpoints
+
+#### POST /api/compliance/report
+
+Generate compliance report.
+
+```bash
+curl -X POST http://localhost:3706/api/compliance/report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "framework": "soc2",
+    "from": "2026-01-01",
+    "to": "2026-12-31"
+  }'
+```
+
+#### GET /api/compliance/frameworks
+
+List supported frameworks.
+
+```bash
+curl http://localhost:3706/api/compliance/frameworks
 ```
 
 ### Webhook Endpoint
 
-#### `POST /webhook`
-Receive webhook events from external systems.
+#### POST /webhook
 
-**Request:**
-```json
-{
-  "type": "user.deleted",
-  "data": {
-    "user_id": "user_123",
-    "deleted_at": "2024-02-11T10:00:00Z"
-  }
-}
+Receive webhook events.
+
+```bash
+curl -X POST http://localhost:3706/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Signature: sha256=..." \
+  -d '{
+    "event": "dsar.created",
+    "data": {...}
+  }'
 ```
 
-**Response:**
-```json
-{
-  "received": true,
-  "type": "user.deleted"
-}
-```
+---
 
 ## Webhook Events
 
-The Compliance plugin emits webhook events for all major compliance activities:
+The plugin emits webhook events for compliance activities.
 
 ### DSAR Events
 
 | Event | Description | Payload |
 |-------|-------------|---------|
-| `dsar.created` | New DSAR submitted | `{dsar_id, request_number, request_type, email, deadline}` |
-| `dsar.completed` | DSAR processing completed | `{dsar_id, request_number, completed_at, data_package_url}` |
-| `dsar.overdue` | DSAR deadline approaching | `{dsar_id, request_number, deadline, days_remaining}` |
+| `dsar.created` | New DSAR submitted | DSAR object |
+| `dsar.completed` | DSAR processing completed | DSAR object with export URL |
+| `dsar.overdue` | DSAR deadline approaching (7 days) | DSAR object with deadline |
 
 ### Consent Events
 
 | Event | Description | Payload |
 |-------|-------------|---------|
-| `consent.granted` | User granted consent | `{consent_id, user_id, purpose, granted_at}` |
-| `consent.withdrawn` | User withdrew consent | `{consent_id, user_id, purpose, withdrawn_at, reason}` |
+| `consent.granted` | User granted consent | Consent object |
+| `consent.withdrawn` | User withdrew consent | Consent object with withdrawal timestamp |
 
 ### Policy Events
 
 | Event | Description | Payload |
 |-------|-------------|---------|
-| `policy.published` | New privacy policy published | `{policy_id, version, effective_from, requires_reacceptance}` |
+| `policy.published` | New privacy policy published | Policy object |
 
 ### Retention Events
 
 | Event | Description | Payload |
 |-------|-------------|---------|
-| `retention.executed` | Data retention policy executed | `{policy_id, execution_id, records_processed, records_deleted}` |
+| `retention.executed` | Retention policy executed | Execution summary with records affected |
 
 ### Breach Events
 
 | Event | Description | Payload |
 |-------|-------------|---------|
-| `breach.created` | New data breach recorded | `{breach_id, breach_number, severity, notification_deadline}` |
-| `breach.notified` | Breach notification sent | `{breach_id, notification_type, recipient_type, sent_at}` |
-
-## Database Schema
-
-### compliance_dsars
-
-Data Subject Access Requests (GDPR/CCPA).
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_dsars (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  request_type VARCHAR(50) NOT NULL,
-  request_number VARCHAR(50) NOT NULL,
-  user_id VARCHAR(255),
-  requester_email VARCHAR(255) NOT NULL,
-  requester_name VARCHAR(255),
-  verification_token VARCHAR(255),
-  verification_sent_at TIMESTAMP WITH TIME ZONE,
-  verification_completed_at TIMESTAMP WITH TIME ZONE,
-  verified_by VARCHAR(255),
-  description TEXT,
-  data_categories TEXT[] DEFAULT '{}',
-  specific_data_requested TEXT,
-  status VARCHAR(30) NOT NULL DEFAULT 'pending',
-  assigned_to VARCHAR(255),
-  started_at TIMESTAMP WITH TIME ZONE,
-  completed_at TIMESTAMP WITH TIME ZONE,
-  deadline TIMESTAMP WITH TIME ZONE NOT NULL,
-  data_package_url TEXT,
-  data_package_size_bytes BIGINT,
-  data_package_generated_at TIMESTAMP WITH TIME ZONE,
-  resolution_notes TEXT,
-  rejection_reason TEXT,
-  regulation VARCHAR(50) NOT NULL DEFAULT 'GDPR',
-  jurisdiction VARCHAR(100),
-  legal_basis TEXT,
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(source_account_id, request_number)
-);
-
-CREATE INDEX IF NOT EXISTS idx_dsars_account ON compliance_dsars(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_dsars_user ON compliance_dsars(source_account_id, user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_dsars_status ON compliance_dsars(source_account_id, status, deadline);
-CREATE INDEX IF NOT EXISTS idx_dsars_assigned ON compliance_dsars(assigned_to) WHERE assigned_to IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_dsars_number ON compliance_dsars(source_account_id, request_number);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| request_type | VARCHAR(50) | No | - | Type: access, erasure, portability, ccpa_deletion, etc. |
-| request_number | VARCHAR(50) | No | - | Unique DSAR number (e.g., DSAR-2024-00042) |
-| user_id | VARCHAR(255) | Yes | - | Associated user ID |
-| requester_email | VARCHAR(255) | No | - | Email address of requester |
-| requester_name | VARCHAR(255) | Yes | - | Name of requester |
-| verification_token | VARCHAR(255) | Yes | - | Token for identity verification |
-| verification_sent_at | TIMESTAMP WITH TIME ZONE | Yes | - | When verification email was sent |
-| verification_completed_at | TIMESTAMP WITH TIME ZONE | Yes | - | When identity was verified |
-| verified_by | VARCHAR(255) | Yes | - | User ID who verified identity |
-| description | TEXT | Yes | - | Description of request |
-| data_categories | TEXT[] | No | {} | Categories of data requested |
-| specific_data_requested | TEXT | Yes | - | Specific data items requested |
-| status | VARCHAR(30) | No | 'pending' | Status: pending, in_progress, approved, rejected, completed |
-| assigned_to | VARCHAR(255) | Yes | - | User ID of assigned handler |
-| started_at | TIMESTAMP WITH TIME ZONE | Yes | - | When processing started |
-| completed_at | TIMESTAMP WITH TIME ZONE | Yes | - | When processing completed |
-| deadline | TIMESTAMP WITH TIME ZONE | No | - | Regulatory deadline (30 days GDPR, 45 days CCPA) |
-| data_package_url | TEXT | Yes | - | URL to generated data package |
-| data_package_size_bytes | BIGINT | Yes | - | Size of data package in bytes |
-| data_package_generated_at | TIMESTAMP WITH TIME ZONE | Yes | - | When data package was generated |
-| resolution_notes | TEXT | Yes | - | Notes about resolution |
-| rejection_reason | TEXT | Yes | - | Reason for rejection |
-| regulation | VARCHAR(50) | No | 'GDPR' | Regulation: GDPR or CCPA |
-| jurisdiction | VARCHAR(100) | Yes | - | Jurisdiction (EU, California, etc.) |
-| legal_basis | TEXT | Yes | - | Legal basis for processing |
-| ip_address | VARCHAR(45) | Yes | - | IP address of requester |
-| user_agent | TEXT | Yes | - | User agent of requester |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### compliance_dsar_activities
-
-Activity log for DSAR lifecycle tracking.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_dsar_activities (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  dsar_id UUID NOT NULL REFERENCES compliance_dsars(id) ON DELETE CASCADE,
-  activity_type VARCHAR(100) NOT NULL,
-  description TEXT,
-  performed_by VARCHAR(255),
-  performed_by_name VARCHAR(255),
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_dsar_activities_account ON compliance_dsar_activities(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_dsar_activities_dsar ON compliance_dsar_activities(dsar_id, created_at);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| dsar_id | UUID | No | - | Foreign key to compliance_dsars |
-| activity_type | VARCHAR(100) | No | - | Type: created, verified, approved, rejected, completed |
-| description | TEXT | Yes | - | Activity description |
-| performed_by | VARCHAR(255) | Yes | - | User ID who performed activity |
-| performed_by_name | VARCHAR(255) | Yes | - | Name of user who performed activity |
-| metadata | JSONB | No | {} | Additional metadata |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Activity timestamp |
-
-### compliance_consents
-
-User consent records for data processing.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_consents (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  user_id VARCHAR(255) NOT NULL,
-  purpose VARCHAR(255) NOT NULL,
-  purpose_description TEXT,
-  status VARCHAR(20) NOT NULL DEFAULT 'granted',
-  granted_at TIMESTAMP WITH TIME ZONE,
-  denied_at TIMESTAMP WITH TIME ZONE,
-  withdrawn_at TIMESTAMP WITH TIME ZONE,
-  expires_at TIMESTAMP WITH TIME ZONE,
-  consent_method VARCHAR(100),
-  consent_text TEXT,
-  privacy_policy_version VARCHAR(50),
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_consents_account ON compliance_consents(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_consents_user ON compliance_consents(source_account_id, user_id, purpose);
-CREATE INDEX IF NOT EXISTS idx_consents_status ON compliance_consents(source_account_id, status, purpose);
-CREATE INDEX IF NOT EXISTS idx_consents_expires ON compliance_consents(expires_at) WHERE expires_at IS NOT NULL;
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| user_id | VARCHAR(255) | No | - | User ID |
-| purpose | VARCHAR(255) | No | - | Purpose: marketing_emails, analytics, etc. |
-| purpose_description | TEXT | Yes | - | Human-readable purpose description |
-| status | VARCHAR(20) | No | 'granted' | Status: granted, denied, withdrawn |
-| granted_at | TIMESTAMP WITH TIME ZONE | Yes | - | When consent was granted |
-| denied_at | TIMESTAMP WITH TIME ZONE | Yes | - | When consent was denied |
-| withdrawn_at | TIMESTAMP WITH TIME ZONE | Yes | - | When consent was withdrawn |
-| expires_at | TIMESTAMP WITH TIME ZONE | Yes | - | Expiration timestamp |
-| consent_method | VARCHAR(100) | Yes | - | Method: explicit, implicit, opt_in, opt_out |
-| consent_text | TEXT | Yes | - | Full consent text shown to user |
-| privacy_policy_version | VARCHAR(50) | Yes | - | Privacy policy version at time of consent |
-| ip_address | VARCHAR(45) | Yes | - | IP address when consent granted |
-| user_agent | TEXT | Yes | - | User agent when consent granted |
-| metadata | JSONB | No | {} | Additional metadata |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### compliance_consent_history
-
-Change history for consent records.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_consent_history (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  consent_id UUID NOT NULL REFERENCES compliance_consents(id) ON DELETE CASCADE,
-  previous_status VARCHAR(20),
-  new_status VARCHAR(20) NOT NULL,
-  change_reason VARCHAR(255),
-  changed_by VARCHAR(255),
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_consent_history_account ON compliance_consent_history(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_consent_history_consent ON compliance_consent_history(consent_id, created_at);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| consent_id | UUID | No | - | Foreign key to compliance_consents |
-| previous_status | VARCHAR(20) | Yes | - | Previous consent status |
-| new_status | VARCHAR(20) | No | - | New consent status |
-| change_reason | VARCHAR(255) | Yes | - | Reason for status change |
-| changed_by | VARCHAR(255) | Yes | - | User ID who changed status |
-| ip_address | VARCHAR(45) | Yes | - | IP address of change |
-| user_agent | TEXT | Yes | - | User agent of change |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Change timestamp |
-
-### compliance_privacy_policies
-
-Privacy policy versions.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_privacy_policies (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  version VARCHAR(50) NOT NULL,
-  version_number INTEGER NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  content TEXT NOT NULL,
-  summary TEXT,
-  changes_summary TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT false,
-  requires_reacceptance BOOLEAN NOT NULL DEFAULT false,
-  effective_from TIMESTAMP WITH TIME ZONE NOT NULL,
-  effective_until TIMESTAMP WITH TIME ZONE,
-  language VARCHAR(10) NOT NULL DEFAULT 'en',
-  jurisdiction VARCHAR(100),
-  created_by VARCHAR(255),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(source_account_id, version)
-);
-
-CREATE INDEX IF NOT EXISTS idx_privacy_policies_account ON compliance_privacy_policies(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_privacy_policies_active ON compliance_privacy_policies(source_account_id, is_active, effective_from);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| version | VARCHAR(50) | No | - | Version string (e.g., 2.0.0) |
-| version_number | INTEGER | No | - | Incrementing version number |
-| title | VARCHAR(255) | No | - | Policy title |
-| content | TEXT | No | - | Full policy content |
-| summary | TEXT | Yes | - | Brief summary of policy |
-| changes_summary | TEXT | Yes | - | Summary of changes from previous version |
-| is_active | BOOLEAN | No | false | Whether this is the active policy |
-| requires_reacceptance | BOOLEAN | No | false | Whether users must re-accept |
-| effective_from | TIMESTAMP WITH TIME ZONE | No | - | When policy becomes effective |
-| effective_until | TIMESTAMP WITH TIME ZONE | Yes | - | When policy expires |
-| language | VARCHAR(10) | No | 'en' | Language code |
-| jurisdiction | VARCHAR(100) | Yes | - | Jurisdiction |
-| created_by | VARCHAR(255) | Yes | - | User ID who created policy |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-
-### compliance_policy_acceptances
-
-User acceptances of privacy policies.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_policy_acceptances (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  user_id VARCHAR(255) NOT NULL,
-  policy_id UUID NOT NULL REFERENCES compliance_privacy_policies(id) ON DELETE CASCADE,
-  accepted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  metadata JSONB DEFAULT '{}',
-  UNIQUE(source_account_id, user_id, policy_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_policy_acceptances_account ON compliance_policy_acceptances(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_policy_acceptances_user ON compliance_policy_acceptances(source_account_id, user_id, accepted_at DESC);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| user_id | VARCHAR(255) | No | - | User ID |
-| policy_id | UUID | No | - | Foreign key to compliance_privacy_policies |
-| accepted_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Acceptance timestamp |
-| ip_address | VARCHAR(45) | Yes | - | IP address at acceptance |
-| user_agent | TEXT | Yes | - | User agent at acceptance |
-| metadata | JSONB | No | {} | Additional metadata |
-
-### compliance_retention_policies
-
-Data retention policies.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_retention_policies (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  data_category VARCHAR(50) NOT NULL,
-  table_name VARCHAR(255),
-  retention_days INTEGER NOT NULL,
-  retention_action VARCHAR(20) NOT NULL DEFAULT 'delete',
-  conditions JSONB DEFAULT '{}',
-  is_enabled BOOLEAN NOT NULL DEFAULT true,
-  priority INTEGER NOT NULL DEFAULT 100,
-  legal_basis TEXT,
-  regulation VARCHAR(50),
-  created_by VARCHAR(255),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_retention_policies_account ON compliance_retention_policies(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_retention_policies_enabled ON compliance_retention_policies(source_account_id, is_enabled, priority);
-CREATE INDEX IF NOT EXISTS idx_retention_policies_category ON compliance_retention_policies(source_account_id, data_category);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| name | VARCHAR(255) | No | - | Policy name |
-| description | TEXT | Yes | - | Policy description |
-| data_category | VARCHAR(50) | No | - | Data category |
-| table_name | VARCHAR(255) | Yes | - | Target database table |
-| retention_days | INTEGER | No | - | Retention period in days |
-| retention_action | VARCHAR(20) | No | 'delete' | Action: delete, anonymize, archive, notify |
-| conditions | JSONB | No | {} | Additional conditions for execution |
-| is_enabled | BOOLEAN | No | true | Whether policy is enabled |
-| priority | INTEGER | No | 100 | Execution priority (lower runs first) |
-| legal_basis | TEXT | Yes | - | Legal basis for retention policy |
-| regulation | VARCHAR(50) | Yes | - | Regulation: GDPR, CCPA |
-| created_by | VARCHAR(255) | Yes | - | User ID who created policy |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### compliance_retention_executions
-
-Execution history for retention policies.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_retention_executions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  policy_id UUID NOT NULL REFERENCES compliance_retention_policies(id) ON DELETE CASCADE,
-  executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  records_processed INTEGER NOT NULL DEFAULT 0,
-  records_deleted INTEGER NOT NULL DEFAULT 0,
-  records_anonymized INTEGER NOT NULL DEFAULT 0,
-  records_archived INTEGER NOT NULL DEFAULT 0,
-  status VARCHAR(50) NOT NULL DEFAULT 'completed',
-  error_message TEXT,
-  execution_time_ms INTEGER,
-  metadata JSONB DEFAULT '{}'
-);
-
-CREATE INDEX IF NOT EXISTS idx_retention_executions_account ON compliance_retention_executions(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_retention_executions_policy ON compliance_retention_executions(policy_id, executed_at DESC);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| policy_id | UUID | No | - | Foreign key to compliance_retention_policies |
-| executed_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Execution timestamp |
-| records_processed | INTEGER | No | 0 | Number of records processed |
-| records_deleted | INTEGER | No | 0 | Number of records deleted |
-| records_anonymized | INTEGER | No | 0 | Number of records anonymized |
-| records_archived | INTEGER | No | 0 | Number of records archived |
-| status | VARCHAR(50) | No | 'completed' | Status: running, completed, failed |
-| error_message | TEXT | Yes | - | Error message if failed |
-| execution_time_ms | INTEGER | Yes | - | Execution time in milliseconds |
-| metadata | JSONB | No | {} | Additional execution metadata |
-
-### compliance_processing_records
-
-GDPR Article 30 processing records.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_processing_records (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  activity_name VARCHAR(255) NOT NULL,
-  activity_description TEXT,
-  processing_purpose TEXT NOT NULL,
-  legal_basis VARCHAR(100) NOT NULL,
-  data_categories TEXT[] NOT NULL,
-  data_subjects TEXT[],
-  recipient_categories TEXT[],
-  third_party_transfers BOOLEAN NOT NULL DEFAULT false,
-  third_party_countries TEXT[],
-  safeguards TEXT,
-  retention_period VARCHAR(255),
-  security_measures TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_by VARCHAR(255),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_processing_records_account ON compliance_processing_records(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_processing_records_active ON compliance_processing_records(source_account_id, is_active);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| activity_name | VARCHAR(255) | No | - | Processing activity name |
-| activity_description | TEXT | Yes | - | Activity description |
-| processing_purpose | TEXT | No | - | Purpose of processing |
-| legal_basis | VARCHAR(100) | No | - | Legal basis: consent, contract, legal_obligation, vital_interest, public_task, legitimate_interest |
-| data_categories | TEXT[] | No | - | Categories of data processed |
-| data_subjects | TEXT[] | Yes | - | Categories of data subjects |
-| recipient_categories | TEXT[] | Yes | - | Categories of recipients |
-| third_party_transfers | BOOLEAN | No | false | Whether data is transferred to third parties |
-| third_party_countries | TEXT[] | Yes | - | Countries data is transferred to |
-| safeguards | TEXT | Yes | - | Safeguards for transfers |
-| retention_period | VARCHAR(255) | Yes | - | Retention period description |
-| security_measures | TEXT | Yes | - | Security measures in place |
-| is_active | BOOLEAN | No | true | Whether activity is active |
-| created_by | VARCHAR(255) | Yes | - | User ID who created record |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### compliance_data_processors
-
-Third-party data processor records.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_data_processors (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  processor_name VARCHAR(255) NOT NULL,
-  processor_type VARCHAR(100),
-  contact_name VARCHAR(255),
-  contact_email VARCHAR(255),
-  contact_phone VARCHAR(50),
-  country VARCHAR(100),
-  is_eu_based BOOLEAN NOT NULL DEFAULT false,
-  dpa_signed BOOLEAN NOT NULL DEFAULT false,
-  dpa_signed_date DATE,
-  dpa_expiry_date DATE,
-  dpa_document_url TEXT,
-  processing_purposes TEXT[],
-  data_categories TEXT[],
-  has_privacy_shield BOOLEAN DEFAULT false,
-  has_scc BOOLEAN DEFAULT false,
-  has_bcr BOOLEAN DEFAULT false,
-  security_certifications TEXT[],
-  last_security_audit DATE,
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  notes TEXT,
-  metadata JSONB DEFAULT '{}',
-  created_by VARCHAR(255),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_data_processors_account ON compliance_data_processors(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_data_processors_active ON compliance_data_processors(source_account_id, is_active);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| processor_name | VARCHAR(255) | No | - | Data processor name |
-| processor_type | VARCHAR(100) | Yes | - | Type: email, analytics, payment, etc. |
-| contact_name | VARCHAR(255) | Yes | - | Contact person name |
-| contact_email | VARCHAR(255) | Yes | - | Contact email |
-| contact_phone | VARCHAR(50) | Yes | - | Contact phone |
-| country | VARCHAR(100) | Yes | - | Country of operation |
-| is_eu_based | BOOLEAN | No | false | Whether processor is based in EU |
-| dpa_signed | BOOLEAN | No | false | Whether Data Processing Agreement is signed |
-| dpa_signed_date | DATE | Yes | - | DPA signing date |
-| dpa_expiry_date | DATE | Yes | - | DPA expiry date |
-| dpa_document_url | TEXT | Yes | - | URL to DPA document |
-| processing_purposes | TEXT[] | Yes | - | Purposes of processing |
-| data_categories | TEXT[] | Yes | - | Categories of data processed |
-| has_privacy_shield | BOOLEAN | No | false | Has Privacy Shield certification |
-| has_scc | BOOLEAN | No | false | Uses Standard Contractual Clauses |
-| has_bcr | BOOLEAN | No | false | Has Binding Corporate Rules |
-| security_certifications | TEXT[] | Yes | - | Security certifications (ISO 27001, SOC 2, etc.) |
-| last_security_audit | DATE | Yes | - | Date of last security audit |
-| is_active | BOOLEAN | No | true | Whether processor relationship is active |
-| notes | TEXT | Yes | - | Additional notes |
-| metadata | JSONB | No | {} | Additional metadata |
-| created_by | VARCHAR(255) | Yes | - | User ID who created record |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### compliance_data_breaches
-
-Data breach incidents.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_data_breaches (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  breach_number VARCHAR(50) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  description TEXT NOT NULL,
-  discovered_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  discovered_by VARCHAR(255),
-  severity VARCHAR(20) NOT NULL,
-  affected_users_count INTEGER,
-  data_categories TEXT[] NOT NULL,
-  data_description TEXT,
-  risk_assessment TEXT,
-  mitigation_steps TEXT,
-  notification_required BOOLEAN NOT NULL DEFAULT true,
-  authority_notified_at TIMESTAMP WITH TIME ZONE,
-  users_notified_at TIMESTAMP WITH TIME ZONE,
-  notification_deadline TIMESTAMP WITH TIME ZONE,
-  resolved_at TIMESTAMP WITH TIME ZONE,
-  resolution_summary TEXT,
-  root_cause TEXT,
-  preventive_measures TEXT,
-  status VARCHAR(50) NOT NULL DEFAULT 'investigating',
-  assigned_to VARCHAR(255),
-  metadata JSONB DEFAULT '{}',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(source_account_id, breach_number)
-);
-
-CREATE INDEX IF NOT EXISTS idx_data_breaches_account ON compliance_data_breaches(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_data_breaches_status ON compliance_data_breaches(source_account_id, status, discovered_at DESC);
-CREATE INDEX IF NOT EXISTS idx_data_breaches_severity ON compliance_data_breaches(source_account_id, severity);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| breach_number | VARCHAR(50) | No | - | Unique breach number (e.g., BREACH-2024-00001) |
-| title | VARCHAR(255) | No | - | Breach title |
-| description | TEXT | No | - | Breach description |
-| discovered_at | TIMESTAMP WITH TIME ZONE | No | - | When breach was discovered |
-| discovered_by | VARCHAR(255) | Yes | - | User ID who discovered breach |
-| severity | VARCHAR(20) | No | - | Severity: low, medium, high, critical |
-| affected_users_count | INTEGER | Yes | - | Number of affected users |
-| data_categories | TEXT[] | No | - | Categories of data affected |
-| data_description | TEXT | Yes | - | Description of affected data |
-| risk_assessment | TEXT | Yes | - | Risk assessment |
-| mitigation_steps | TEXT | Yes | - | Steps taken to mitigate |
-| notification_required | BOOLEAN | No | true | Whether notification is required |
-| authority_notified_at | TIMESTAMP WITH TIME ZONE | Yes | - | When supervisory authority was notified |
-| users_notified_at | TIMESTAMP WITH TIME ZONE | Yes | - | When users were notified |
-| notification_deadline | TIMESTAMP WITH TIME ZONE | Yes | - | 72-hour notification deadline |
-| resolved_at | TIMESTAMP WITH TIME ZONE | Yes | - | When breach was resolved |
-| resolution_summary | TEXT | Yes | - | Summary of resolution |
-| root_cause | TEXT | Yes | - | Root cause analysis |
-| preventive_measures | TEXT | Yes | - | Preventive measures implemented |
-| status | VARCHAR(50) | No | 'investigating' | Status: investigating, contained, notified, resolved |
-| assigned_to | VARCHAR(255) | Yes | - | User ID of assigned handler |
-| metadata | JSONB | No | {} | Additional metadata |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-| updated_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Last update timestamp |
-
-### compliance_breach_notifications
-
-Breach notification records.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_breach_notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  breach_id UUID NOT NULL REFERENCES compliance_data_breaches(id) ON DELETE CASCADE,
-  notification_type VARCHAR(50) NOT NULL,
-  recipient_type VARCHAR(50) NOT NULL,
-  recipient_email VARCHAR(255),
-  subject VARCHAR(255),
-  message_body TEXT,
-  sent_at TIMESTAMP WITH TIME ZONE,
-  delivery_status VARCHAR(50),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_breach_notifications_account ON compliance_breach_notifications(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_breach_notifications_breach ON compliance_breach_notifications(breach_id, sent_at);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| breach_id | UUID | No | - | Foreign key to compliance_data_breaches |
-| notification_type | VARCHAR(50) | No | - | Type: authority, user, media |
-| recipient_type | VARCHAR(50) | No | - | Recipient type: supervisory_authority, affected_user, media |
-| recipient_email | VARCHAR(255) | Yes | - | Recipient email address |
-| subject | VARCHAR(255) | Yes | - | Notification subject |
-| message_body | TEXT | Yes | - | Notification message body |
-| sent_at | TIMESTAMP WITH TIME ZONE | Yes | - | When notification was sent |
-| delivery_status | VARCHAR(50) | Yes | - | Delivery status: sent, delivered, bounced, failed |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Creation timestamp |
-
-### compliance_audit_log
-
-Comprehensive audit log for all compliance activities.
-
-```sql
-CREATE TABLE IF NOT EXISTS compliance_audit_log (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  event_type VARCHAR(100) NOT NULL,
-  event_category VARCHAR(50) NOT NULL,
-  actor_id VARCHAR(255),
-  actor_type VARCHAR(50) NOT NULL DEFAULT 'user',
-  target_type VARCHAR(50),
-  target_id VARCHAR(255),
-  accessed_data_categories TEXT[],
-  data_subject_id VARCHAR(255),
-  details JSONB NOT NULL DEFAULT '{}',
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  legal_basis VARCHAR(100),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_compliance_audit_account ON compliance_audit_log(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_compliance_audit_event ON compliance_audit_log(source_account_id, event_type, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_compliance_audit_actor ON compliance_audit_log(source_account_id, actor_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_compliance_audit_subject ON compliance_audit_log(source_account_id, data_subject_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_compliance_audit_created ON compliance_audit_log(source_account_id, created_at DESC);
-```
-
-**Columns:**
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | UUID | No | uuid_generate_v4() | Primary key |
-| source_account_id | VARCHAR(128) | No | 'primary' | Multi-account isolation |
-| event_type | VARCHAR(100) | No | - | Event type: dsar.created, consent.granted, data.accessed, etc. |
-| event_category | VARCHAR(50) | No | - | Category: dsar, consent, retention, breach, policy, access, webhook |
-| actor_id | VARCHAR(255) | Yes | - | User ID who performed action |
-| actor_type | VARCHAR(50) | No | 'user' | Actor type: user, system, api |
-| target_type | VARCHAR(50) | Yes | - | Target type: dsar, consent, policy, breach, etc. |
-| target_id | VARCHAR(255) | Yes | - | Target ID |
-| accessed_data_categories | TEXT[] | Yes | - | Categories of data accessed |
-| data_subject_id | VARCHAR(255) | Yes | - | Data subject (user) ID |
-| details | JSONB | No | {} | Event details |
-| ip_address | VARCHAR(45) | Yes | - | IP address of actor |
-| user_agent | TEXT | Yes | - | User agent of actor |
-| legal_basis | VARCHAR(100) | Yes | - | Legal basis for action |
-| created_at | TIMESTAMP WITH TIME ZONE | No | NOW() | Event timestamp |
-
-## Examples
-
-### Example 1: Complete DSAR Workflow
+| `breach.created` | New data breach recorded | Breach object |
+| `breach.notified` | Breach notification sent | Notification object |
+
+### Audit Events
+
+| Event | Description | Payload |
+|-------|-------------|---------|
+| `audit.event.created` | Immutable audit event created | Audit event object |
+| `audit.event.exported` | Audit events exported | Export metadata |
+| `audit.alert.triggered` | Alert rule triggered | Alert details |
+| `audit.retention.executed` | Audit retention policy executed | Execution summary |
+| `audit.compliance.report_generated` | Compliance report generated | Report metadata |
+
+### Webhook Configuration
 
 ```bash
-# 1. User submits a DSAR via API
-curl -X POST http://localhost:3706/api/compliance/dsars \
-  -H "Content-Type: application/json" \
-  -d '{
+# Set webhook URL for alerts
+AUDIT_ALERT_WEBHOOK_URL=https://your-app.com/webhooks/compliance
+
+# Webhook payload example
+{
+  "event": "dsar.overdue",
+  "timestamp": "2026-02-11T12:00:00Z",
+  "data": {
+    "id": "dsar_abc123",
+    "subject_email": "user@example.com",
     "request_type": "access",
-    "email": "john.doe@example.com",
-    "name": "John Doe",
-    "user_id": "user_12345",
-    "description": "I would like to receive a copy of all my personal data",
-    "data_categories": ["profile", "orders", "messages"],
-    "regulation": "GDPR"
-  }'
-
-# Response:
-# {
-#   "dsar_id": "550e8400-e29b-41d4-a716-446655440000",
-#   "request_number": "DSAR-2024-00042",
-#   "status": "pending",
-#   "deadline": "2024-03-13T10:00:00Z",
-#   "verification_required": true,
-#   "created_at": "2024-02-11T10:00:00Z"
-# }
-
-# 2. Admin reviews and verifies identity
-nself plugin compliance dsar process \
-  --id 550e8400-e29b-41d4-a716-446655440000 \
-  --action approve \
-  --notes "Identity verified via government ID" \
-  --assign-to admin_123
-
-# 3. Export user data
-nself plugin compliance export \
-  --user-id user_12345 \
-  --format json > user_12345_data.json
-
-# 4. Upload to S3 and complete DSAR
-nself plugin compliance dsar complete \
-  --id 550e8400-e29b-41d4-a716-446655440000 \
-  --url https://s3.amazonaws.com/exports/user_12345_data.json
-
-# 5. Check audit log
-nself plugin compliance audit list \
-  --category dsar \
-  --subject user_12345 \
-  --limit 10
-```
-
-### Example 2: Consent Management
-
-```sql
--- Grant marketing consent via SQL
-INSERT INTO compliance_consents (
-  user_id, purpose, status, consent_method,
-  consent_text, privacy_policy_version, expires_at
-) VALUES (
-  'user_12345',
-  'marketing_emails',
-  'granted',
-  'explicit',
-  'I agree to receive promotional emails about new features',
-  '2.0.0',
-  NOW() + INTERVAL '365 days'
-);
-
--- Check consent programmatically
-SELECT EXISTS (
-  SELECT 1 FROM compliance_consents
-  WHERE user_id = 'user_12345'
-    AND purpose = 'marketing_emails'
-    AND status = 'granted'
-    AND (expires_at IS NULL OR expires_at > NOW())
-) AS has_consent;
-
--- Withdraw consent
-UPDATE compliance_consents
-SET status = 'withdrawn', withdrawn_at = NOW(), updated_at = NOW()
-WHERE user_id = 'user_12345' AND purpose = 'marketing_emails';
-```
-
-### Example 3: Data Breach Notification
-
-```bash
-# 1. Report breach
-nself plugin compliance breach create \
-  --title "Database access breach" \
-  --description "Unauthorized access to customer database" \
-  --severity high \
-  --categories "email,name,phone" \
-  --affected-users 1500 \
-  --data-description "Customer contact information exposed"
-
-# Response: BREACH-2024-00001
-# Notification deadline: 2024-02-14T10:00:00Z (72 hours)
-
-# 2. Notify supervisory authority
-nself plugin compliance breach notify \
-  --id BREACH-2024-00001 \
-  --type authority \
-  --recipient-type supervisory_authority \
-  --email dpo@data-authority.gov \
-  --subject "GDPR Breach Notification - BREACH-2024-00001" \
-  --message "We are notifying you of a data breach that occurred..."
-
-# 3. Notify affected users
-nself plugin compliance breach notify \
-  --id BREACH-2024-00001 \
-  --type user \
-  --recipient-type affected_user \
-  --subject "Important Security Notice"
-
-# 4. Track breach status
-nself plugin compliance breach list --status investigating
-```
-
-### Example 4: Automated Data Retention
-
-```bash
-# 1. Create retention policy
-nself plugin compliance retention create \
-  --name "Delete old activity logs" \
-  --category user_logs \
-  --days 90 \
-  --action delete \
-  --description "Remove user activity logs after 90 days per data minimization principle" \
-  --table user_activity_logs \
-  --legal-basis "Data minimization - GDPR Article 5(1)(c)" \
-  --regulation GDPR
-
-# 2. Execute manually
-nself plugin compliance retention execute --id <policy-uuid>
-
-# 3. View execution history
-nself plugin compliance retention report --id <policy-uuid>
-
-# 4. Schedule automatic execution via cron
-# Add to crontab:
-# 0 2 * * * nself plugin compliance retention execute --id <policy-uuid>
-```
-
-### Example 5: Privacy Policy Versioning
-
-```http
-POST http://localhost:3706/api/compliance/privacy-policies
-Content-Type: application/json
-
-{
-  "version": "3.0.0",
-  "version_number": 3,
-  "title": "Privacy Policy v3.0",
-  "content": "# Privacy Policy\n\n## 1. Introduction\n...",
-  "summary": "Updated to comply with new AI regulations",
-  "changes_summary": "Added section 7 on AI data processing and user rights",
-  "requires_reacceptance": true,
-  "effective_from": "2024-04-01T00:00:00Z",
-  "language": "en",
-  "jurisdiction": "EU"
+    "deadline": "2026-02-15T12:00:00Z",
+    "days_remaining": 4
+  }
 }
-
-# Publish policy
-POST http://localhost:3706/api/compliance/privacy-policies/{policy-id}/publish
-
-# Users accept policy
-POST http://localhost:3706/api/compliance/privacy-policy/accept
-Content-Type: application/json
-
-{
-  "user_id": "user_12345",
-  "policy_id": "{policy-id}"
-}
-
-# Check which users need to re-accept
-SELECT u.id, u.email
-FROM users u
-LEFT JOIN compliance_policy_acceptances pa
-  ON u.id = pa.user_id AND pa.policy_id = '{new-policy-id}'
-WHERE pa.id IS NULL;
-```
-
-## Troubleshooting
-
-### DSAR Deadline Warnings
-
-**Problem**: DSARs approaching their 30-day (GDPR) or 45-day (CCPA) deadlines.
-
-**Solution:**
-```sql
--- Find overdue or near-deadline DSARs
-SELECT request_number, requester_email, status, deadline,
-       deadline - NOW() AS time_remaining
-FROM compliance_dsars
-WHERE status NOT IN ('completed', 'rejected')
-  AND deadline < NOW() + INTERVAL '3 days'
-ORDER BY deadline ASC;
-```
-
-Set up automated notifications:
-```bash
-# Add to crontab to check daily
-0 9 * * * nself plugin compliance dsar list --status pending | grep -i overdue && echo "Overdue DSARs!" | mail -s "DSAR Alert" compliance-team@company.com
-```
-
-### Consent Expiry Management
-
-**Problem**: Expired consents not being detected.
-
-**Solution:**
-```sql
--- Find expired consents
-SELECT user_id, purpose, granted_at, expires_at
-FROM compliance_consents
-WHERE status = 'granted'
-  AND expires_at IS NOT NULL
-  AND expires_at < NOW();
-
--- Auto-mark expired consents
-UPDATE compliance_consents
-SET status = 'expired', updated_at = NOW()
-WHERE status = 'granted'
-  AND expires_at IS NOT NULL
-  AND expires_at < NOW();
-```
-
-Schedule periodic cleanup:
-```bash
-# Add to crontab
-0 0 * * * psql $DATABASE_URL -c "UPDATE compliance_consents SET status = 'expired' WHERE status = 'granted' AND expires_at < NOW();"
-```
-
-### Breach Notification Deadline
-
-**Problem**: 72-hour breach notification deadline approaching.
-
-**Solution:**
-```sql
--- Find breaches needing notification
-SELECT breach_number, title, severity, discovered_at, notification_deadline,
-       notification_deadline - NOW() AS time_remaining
-FROM compliance_data_breaches
-WHERE notification_required = true
-  AND authority_notified_at IS NULL
-  AND notification_deadline > NOW()
-ORDER BY notification_deadline ASC;
-```
-
-### Audit Log Too Large
-
-**Problem**: Audit log table growing too large.
-
-**Solution:**
-```sql
--- Check audit log size
-SELECT
-  pg_size_pretty(pg_total_relation_size('compliance_audit_log')) AS total_size,
-  COUNT(*) AS row_count,
-  MIN(created_at) AS oldest_entry,
-  MAX(created_at) AS newest_entry
-FROM compliance_audit_log;
-
--- Archive old audit logs (older than 7 years)
--- First, export to archive
-COPY (
-  SELECT * FROM compliance_audit_log
-  WHERE created_at < NOW() - INTERVAL '2555 days'
-) TO '/path/to/audit_archive_2024.csv' CSV HEADER;
-
--- Then delete archived entries
-DELETE FROM compliance_audit_log
-WHERE created_at < NOW() - INTERVAL '2555 days';
-
--- Vacuum to reclaim space
-VACUUM FULL compliance_audit_log;
-```
-
-### Performance Issues
-
-**Problem**: Slow queries on compliance tables.
-
-**Solution:**
-```sql
--- Check index usage
-SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch
-FROM pg_stat_user_indexes
-WHERE schemaname = 'public'
-  AND tablename LIKE 'compliance_%'
-ORDER BY idx_scan DESC;
-
--- Analyze tables
-ANALYZE compliance_dsars;
-ANALYZE compliance_consents;
-ANALYZE compliance_audit_log;
-
--- Add missing indexes if needed
-CREATE INDEX CONCURRENTLY idx_audit_created_desc
-  ON compliance_audit_log(created_at DESC);
-```
-
-### Database Connection Issues
-
-**Problem**: Cannot connect to PostgreSQL database.
-
-**Solution:**
-```bash
-# Test connection
-psql $DATABASE_URL -c "SELECT 1;"
-
-# Check credentials
-echo $DATABASE_URL
-echo $POSTGRES_HOST
-echo $POSTGRES_PORT
-echo $POSTGRES_DB
-echo $POSTGRES_USER
-
-# Test with explicit connection
-PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 1;"
-```
-
-### API Authentication Failing
-
-**Problem**: API requests return 401 Unauthorized.
-
-**Solution:**
-```bash
-# Verify API key is set
-echo $COMPLIANCE_API_KEY
-
-# Include API key in request header
-curl -X GET http://localhost:3706/api/compliance/dsars \
-  -H "Authorization: Bearer $COMPLIANCE_API_KEY"
-
-# Or use X-API-Key header
-curl -X GET http://localhost:3706/api/compliance/dsars \
-  -H "X-API-Key: $COMPLIANCE_API_KEY"
-```
-
-### Rate Limiting Issues
-
-**Problem**: Requests being rate limited.
-
-**Solution:**
-```bash
-# Increase rate limits
-export COMPLIANCE_RATE_LIMIT_MAX=500
-export COMPLIANCE_RATE_LIMIT_WINDOW_MS=60000
-
-# Restart server
-nself plugin compliance server
-
-# Monitor rate limit headers in responses
-curl -v http://localhost:3706/api/compliance/dsars
-
-# Response headers:
-# X-RateLimit-Limit: 500
-# X-RateLimit-Remaining: 499
-# X-RateLimit-Reset: 1707652800
 ```
 
 ---
 
-For additional support, consult the [nself-plugins GitHub repository](https://github.com/acamarata/nself-plugins) or file an issue.
+## Compliance Frameworks
+
+### GDPR (General Data Protection Regulation)
+
+**Coverage:**
+- Article 15: Right to access
+- Article 16: Right to rectification
+- Article 17: Right to erasure ("right to be forgotten")
+- Article 18: Right to restriction of processing
+- Article 20: Right to data portability
+- Article 30: Records of Processing Activities (ROPA)
+- Article 33: Breach notification to authority (72 hours)
+- Article 34: Breach notification to data subjects
+
+**Configuration:**
+```bash
+COMPLIANCE_GDPR_ENABLED=true
+COMPLIANCE_DSAR_DEADLINE_DAYS=30
+COMPLIANCE_BREACH_NOTIFICATION_HOURS=72
+```
+
+### CCPA (California Consumer Privacy Act)
+
+**Coverage:**
+- Right to know (data access)
+- Right to delete
+- Right to opt-out of sale
+- Right to non-discrimination
+
+**Configuration:**
+```bash
+COMPLIANCE_CCPA_ENABLED=true
+COMPLIANCE_DSAR_DEADLINE_DAYS=45  # CCPA allows 45 days
+```
+
+### HIPAA (Health Insurance Portability and Accountability Act)
+
+**Coverage:**
+- PHI access and audit trails
+- Business Associate Agreement (BAA) tracking
+- 7-year audit log retention
+- Access controls and authentication logging
+
+**Configuration:**
+```bash
+COMPLIANCE_HIPAA_ENABLED=true
+COMPLIANCE_AUDIT_RETENTION_DAYS=2555  # 7 years
+AUDIT_COMPLIANCE_FRAMEWORKS=HIPAA
+```
+
+### SOC2 (Service Organization Control 2)
+
+**Coverage:**
+- Trust Services Criteria (security, availability, confidentiality)
+- Audit trail requirements
+- Access control logging
+- Change management tracking
+
+**Configuration:**
+```bash
+COMPLIANCE_SOC2_ENABLED=true
+COMPLIANCE_AUDIT_ENABLED=true
+AUDIT_COMPLIANCE_FRAMEWORKS=SOC2
+```
+
+### PCI DSS (Payment Card Industry Data Security Standard)
+
+**Coverage:**
+- Cardholder data environment audit trails
+- Access control logging
+- 1-year minimum audit retention
+- Security event monitoring
+
+**Configuration:**
+```bash
+COMPLIANCE_PCI_ENABLED=true
+COMPLIANCE_AUDIT_RETENTION_DAYS=365  # 1 year minimum
+AUDIT_COMPLIANCE_FRAMEWORKS=PCI
+```
+
+---
+
+## DSAR Management
+
+### DSAR Lifecycle
+
+```
+1. Created (pending)
+   ↓
+2. Assigned (in_progress)
+   ↓
+3. Data Collected
+   ↓
+4. Export Generated
+   ↓
+5. Completed (or Rejected)
+```
+
+### DSAR Types
+
+| Type | Description | GDPR Article |
+|------|-------------|--------------|
+| `access` | Provide copy of all personal data | Article 15 |
+| `portability` | Export data in machine-readable format | Article 20 |
+| `erasure` | Delete all personal data ("right to be forgotten") | Article 17 |
+| `rectification` | Correct inaccurate personal data | Article 16 |
+| `restriction` | Restrict processing of personal data | Article 18 |
+
+### Deadline Tracking
+
+- Default deadline: **30 days** (GDPR)
+- Warning sent **7 days** before deadline
+- Overdue DSARs flagged automatically
+- Email notifications for approaching deadlines
+
+### Data Export Format
+
+DSARs generate ZIP packages containing:
+
+```
+user_data_123.zip
+├── manifest.json          # Export metadata
+├── profile.json           # User profile data
+├── transactions.json      # Transaction history
+├── consents.json          # Consent records
+├── audit_trail.json       # User activity log
+└── attachments/           # User-uploaded files
+```
+
+### Example DSAR Workflow
+
+```bash
+# 1. User submits DSAR
+nself plugin compliance dsars create \
+  --email "john@example.com" \
+  --type "access"
+
+# 2. Assign to compliance team
+nself plugin compliance dsars update dsar_abc123 \
+  --status "in_progress" \
+  --assigned-to "compliance@company.com"
+
+# 3. Add processing note
+nself plugin compliance dsars activity dsar_abc123 \
+  --type "note_added" \
+  --description "Collecting data from all systems"
+
+# 4. Generate export (automated)
+nself plugin compliance export \
+  --user-id "user_123" \
+  --format "json"
+
+# 5. Complete DSAR
+nself plugin compliance dsars complete dsar_abc123 \
+  --export-url "https://secure-exports.company.com/user_123.zip"
+
+# 6. User receives email with download link (72-hour expiry)
+```
+
+---
+
+## Consent Management
+
+### Consent Purposes
+
+Common consent purposes:
+
+- `marketing` - Marketing communications
+- `analytics` - Analytics and tracking
+- `profiling` - User profiling and targeting
+- `data_sharing` - Sharing data with third parties
+- `essential` - Essential service operations (no consent required)
+
+### Consent Methods
+
+| Method | Description | Use Case |
+|--------|-------------|----------|
+| `opt_in` | User explicitly agrees | GDPR-compliant (required) |
+| `opt_out` | User must actively disagree | CCPA-compliant |
+| `implicit` | Implied by using service | Essential functions only |
+| `explicit` | Strong consent (checkbox) | Sensitive data processing |
+
+### Consent Expiry
+
+Consents can expire after a configurable period:
+
+```bash
+# Set consent expiry to 1 year
+COMPLIANCE_CONSENT_EXPIRY_DAYS=365
+
+# Set to never expire
+COMPLIANCE_CONSENT_EXPIRY_DAYS=0
+```
+
+### Consent Audit Trail
+
+Every consent change is logged in `compliance_consent_history`:
+
+```sql
+SELECT
+  h.action,
+  h.consent_given,
+  h.reason,
+  h.created_at,
+  c.purpose
+FROM compliance_consent_history h
+JOIN compliance_consents c ON h.consent_id = c.id
+WHERE c.user_email = 'user@example.com'
+ORDER BY h.created_at DESC;
+```
+
+### Withdrawal Process
+
+```bash
+# User withdraws consent
+nself plugin compliance consent withdraw consent_abc123
+
+# Check if user has active marketing consent
+nself plugin compliance consent check \
+  --user-id "user_123" \
+  --purpose "marketing"
+
+# Result: false (consent withdrawn)
+```
+
+---
+
+## Privacy Policy Versioning
+
+### Version Management
+
+Privacy policies are version-controlled with SHA-256 content hashing:
+
+```bash
+# Create new policy version
+nself plugin compliance policies create \
+  --version "2.1.0" \
+  --title "Privacy Policy" \
+  --content-file "./privacy-policy-v2.1.md"
+
+# Publish policy (activates it)
+nself plugin compliance policies publish policy_abc123
+
+# Previous version automatically archived
+```
+
+### User Acceptance Tracking
+
+Track which users have accepted which policy versions:
+
+```sql
+-- Users who haven't accepted latest policy
+SELECT DISTINCT u.id, u.email
+FROM users u
+LEFT JOIN compliance_policy_acceptances pa
+  ON u.id = pa.user_id
+  AND pa.accepted_version = (
+    SELECT version FROM compliance_privacy_policies
+    WHERE status = 'published'
+    ORDER BY published_at DESC
+    LIMIT 1
+  )
+WHERE pa.id IS NULL;
+```
+
+### Policy Acceptance Flow
+
+```bash
+# 1. Publish new policy
+nself plugin compliance policies publish policy_v2
+
+# 2. User logs in, sees new policy
+# 3. Record acceptance via API
+curl -X POST http://localhost:3706/api/policies/policy_v2/accept \
+  -d '{
+    "user_id": "user_123",
+    "user_email": "user@example.com",
+    "ip_address": "192.168.1.100"
+  }'
+
+# 4. User can now access service
+```
+
+---
+
+## Data Retention
+
+### Retention Policy Configuration
+
+```bash
+# Create retention policy for user data
+nself plugin compliance retention create \
+  --name "Inactive User Cleanup" \
+  --data-type "users" \
+  --retention-days 1095 \  # 3 years
+  --action "anonymize" \
+  --schedule "0 2 * * 0"   # Every Sunday at 2 AM
+```
+
+### Retention Actions
+
+| Action | Description | Use Case |
+|--------|-------------|----------|
+| `delete` | Permanently delete records | Non-critical data |
+| `anonymize` | Remove PII, keep aggregates | Analytics data |
+| `archive` | Move to cold storage | Historical records |
+
+### Legal Hold
+
+Prevent retention policy execution for legal matters:
+
+```bash
+# Set legal hold
+nself plugin compliance retention hold policy_abc123 \
+  --reason "Litigation hold for case #12345"
+
+# Retention policy won't execute while hold is active
+
+# Release hold
+nself plugin compliance retention unhold policy_abc123
+```
+
+### Dry Run Testing
+
+Test retention policies without deleting data:
+
+```bash
+# Dry run shows what would be deleted
+nself plugin compliance retention execute policy_abc123 --dry-run
+
+# Output:
+# Would affect 150 records
+# Would delete 100 records
+# Would anonymize 50 records
+```
+
+### Retention Execution History
+
+```sql
+-- View retention execution history
+SELECT
+  p.name,
+  e.started_at,
+  e.records_affected,
+  e.records_deleted,
+  e.records_anonymized,
+  e.duration_seconds,
+  e.status
+FROM compliance_retention_executions e
+JOIN compliance_retention_policies p ON e.policy_id = p.id
+ORDER BY e.started_at DESC
+LIMIT 10;
+```
+
+---
+
+## Breach Notification
+
+### 72-Hour Rule (GDPR)
+
+GDPR Article 33 requires breach notification within **72 hours** of discovery.
+
+### Breach Severity Levels
+
+| Severity | Description | Example |
+|----------|-------------|---------|
+| `low` | Minimal risk to individuals | Exposure of non-sensitive metadata |
+| `medium` | Moderate risk | Exposure of email addresses |
+| `high` | Significant risk | Exposure of financial data |
+| `critical` | Severe risk | Exposure of health/biometric data |
+
+### Breach Notification Types
+
+1. **Authority Notification** - Data protection authority (required)
+2. **User Notification** - Affected individuals (if high risk)
+3. **Public Disclosure** - Public announcement (if widespread)
+
+### Breach Timeline
+
+```
+Discovery → Containment → Resolution → Notification → Closure
+   ↓            ↓             ↓            ↓            ↓
+ Hour 0      Hour 4        Hour 24      Hour 72      Day 30
+```
+
+### Example Breach Response
+
+```bash
+# 1. Report breach immediately
+nself plugin compliance breaches create \
+  --title "Misconfigured S3 Bucket" \
+  --severity "high" \
+  --affected-records 5000 \
+  --discovered-at "2026-02-11T08:00:00Z"
+
+# 2. Update as contained
+nself plugin compliance breaches update breach_abc123 \
+  --status "contained" \
+  --contained-at "2026-02-11T12:00:00Z"
+
+# 3. Notify authority within 72 hours
+nself plugin compliance breaches notify breach_abc123 \
+  --type "authority" \
+  --recipient "ico@ico.org.uk"
+
+# 4. Notify affected users
+nself plugin compliance breaches notify breach_abc123 \
+  --type "user" \
+  --batch-send
+
+# 5. Mark as resolved
+nself plugin compliance breaches resolve breach_abc123 \
+  --root-cause "Misconfigured IAM permissions"
+```
+
+---
+
+## Audit Logging
+
+### Immutable Audit Trail
+
+The `audit_events` table is **append-only** with cryptographic integrity:
+
+1. Each event has a SHA-256 checksum
+2. Each event links to previous event's checksum (blockchain-like chain)
+3. Any tampering breaks the chain and is detectable
+
+### Event Integrity Verification
+
+```bash
+# Verify single event
+nself plugin compliance verify --event-id abc123
+
+# Verify event chain
+nself plugin compliance verify --from-id 1000 --to-id 2000
+
+# Output:
+# ✓ All 1000 events verified successfully
+# ✓ Chain integrity intact
+```
+
+### Common Audit Actions
+
+| Action | Description |
+|--------|-------------|
+| `user.login` | User authentication |
+| `user.logout` | User session end |
+| `user.password_change` | Password update |
+| `api.call` | API request |
+| `data.read` | Data access |
+| `data.write` | Data modification |
+| `data.delete` | Data deletion |
+| `config.change` | Configuration update |
+| `permission.grant` | Permission granted |
+| `permission.revoke` | Permission revoked |
+
+### Actor Types
+
+- `user` - Human user
+- `service` - Service/API client
+- `system` - Automated system process
+- `webhook` - External webhook
+
+### Audit Event Example
+
+```json
+{
+  "id": 12345,
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-02-11T12:00:00Z",
+  "action": "data.read",
+  "actor_type": "user",
+  "actor_id": "user_123",
+  "resource_type": "customer",
+  "resource_id": "cust_456",
+  "status": "success",
+  "ip_address": "192.168.1.100",
+  "user_agent": "Mozilla/5.0...",
+  "metadata": {
+    "endpoint": "/api/customers/cust_456",
+    "response_time_ms": 45
+  },
+  "checksum": "a1b2c3d4...",
+  "previous_checksum": "x7y8z9...",
+  "compliance_frameworks": ["SOC2", "HIPAA"]
+}
+```
+
+---
+
+## SIEM Integration
+
+### Supported SIEM Platforms
+
+1. **Splunk** - HTTP Event Collector (HEC)
+2. **ELK Stack** - Elasticsearch
+3. **Datadog** - Log ingestion API
+
+### Real-time Event Forwarding
+
+All audit events are automatically forwarded to configured SIEM platforms within seconds.
+
+### Splunk Configuration
+
+```bash
+AUDIT_SIEM_SPLUNK_HEC_URL=https://splunk.company.com:8088/services/collector
+AUDIT_SIEM_SPLUNK_HEC_TOKEN=your_hec_token_here
+```
+
+**Splunk HEC Token Setup:**
+1. Settings > Data Inputs > HTTP Event Collector
+2. Create new token
+3. Select source type: `_json`
+4. Copy token to environment variable
+
+### ELK Stack Configuration
+
+```bash
+AUDIT_SIEM_ELK_URL=https://elasticsearch.company.com:9200
+AUDIT_SIEM_ELK_INDEX=compliance-audit-logs
+AUDIT_SIEM_ELK_API_KEY=base64_encoded_api_key
+```
+
+**Elasticsearch API Key Setup:**
+1. Security > API Keys > Create API Key
+2. Grant `write` permission to index
+3. Copy Base64-encoded key
+
+### Datadog Configuration
+
+```bash
+AUDIT_SIEM_DATADOG_API_KEY=your_datadog_api_key
+AUDIT_SIEM_DATADOG_SITE=datadoghq.com  # or datadoghq.eu
+```
+
+**Datadog API Key Setup:**
+1. Organization Settings > API Keys
+2. Create new API key
+3. Copy key to environment variable
+
+### Fallback Logging
+
+If SIEM is unavailable, events are written to local files:
+
+```bash
+AUDIT_FALLBACK_LOG_PATH=/var/log/compliance-audit
+
+# Files created:
+# /var/log/compliance-audit/2026-02-11.log
+# /var/log/compliance-audit/2026-02-12.log
+```
+
+### SIEM Event Format
+
+Events are sent as JSON with standardized fields:
+
+```json
+{
+  "timestamp": "2026-02-11T12:00:00Z",
+  "source": "compliance-plugin",
+  "action": "user.login",
+  "actor": {
+    "type": "user",
+    "id": "user_123",
+    "ip": "192.168.1.100"
+  },
+  "resource": {
+    "type": "account",
+    "id": "acct_456"
+  },
+  "status": "success",
+  "metadata": {...},
+  "compliance_frameworks": ["SOC2", "HIPAA"]
+}
+```
+
+---
+
+## Compliance Reporting
+
+### Framework Reports
+
+Generate compliance reports for auditors:
+
+```bash
+# SOC2 Type II Report
+nself plugin compliance compliance report \
+  --framework soc2 \
+  --from "2026-01-01" \
+  --to "2026-12-31"
+
+# HIPAA Privacy & Security Rule Report
+nself plugin compliance compliance report \
+  --framework hipaa \
+  --from "2025-01-01" \
+  --to "2025-12-31"
+
+# GDPR Compliance Report
+nself plugin compliance compliance report --framework gdpr
+
+# PCI DSS Report
+nself plugin compliance compliance report --framework pci
+```
+
+### Report Contents
+
+#### SOC2 Report
+
+- **Security** - Access control logs, authentication events
+- **Availability** - Uptime metrics, incident responses
+- **Confidentiality** - Data access logs, encryption events
+- **Processing Integrity** - Data validation, error handling
+- **Privacy** - Consent records, DSAR processing
+
+#### HIPAA Report
+
+- **Privacy Rule** - PHI access logs, minimum necessary access
+- **Security Rule** - Authentication, encryption, audit trails
+- **Breach Notification** - Breach records, notification timeline
+- **Business Associates** - DPA tracking, processor management
+
+#### GDPR Report
+
+- **DSARs** - Request volume, completion rate, deadline compliance
+- **Consent** - Consent records, withdrawal tracking
+- **Breaches** - Breach count, 72-hour compliance
+- **ROPA** - Records of Processing Activities
+- **Data Processors** - Third-party processor list
+
+#### PCI Report
+
+- **Access Control** - Cardholder data access logs
+- **Network Security** - Firewall logs, network segmentation
+- **Data Protection** - Encryption, tokenization events
+- **Monitoring** - Audit trail coverage, log retention
+
+### Report Output Formats
+
+- **JSON** - Machine-readable, API integration
+- **CSV** - Spreadsheet import
+- **PDF** - Human-readable, auditor distribution (if supported)
+
+### Custom Report Queries
+
+```sql
+-- SOC2: Failed login attempts (security)
+SELECT
+  DATE(timestamp) as date,
+  COUNT(*) as failed_attempts,
+  COUNT(DISTINCT actor_id) as unique_users
+FROM audit_events
+WHERE action = 'user.login'
+  AND status = 'failure'
+  AND 'SOC2' = ANY(compliance_frameworks)
+GROUP BY DATE(timestamp)
+ORDER BY date DESC;
+
+-- HIPAA: PHI access by user
+SELECT
+  actor_id,
+  COUNT(*) as access_count,
+  MIN(timestamp) as first_access,
+  MAX(timestamp) as last_access
+FROM audit_events
+WHERE resource_type = 'phi'
+  AND action = 'data.read'
+  AND 'HIPAA' = ANY(compliance_frameworks)
+GROUP BY actor_id
+ORDER BY access_count DESC;
+
+-- GDPR: DSAR completion rate
+SELECT
+  DATE_TRUNC('month', created_at) as month,
+  COUNT(*) as total_dsars,
+  SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+  ROUND(100.0 * SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / COUNT(*), 2) as completion_rate
+FROM compliance_dsars
+GROUP BY DATE_TRUNC('month', created_at)
+ORDER BY month DESC;
+```
+
+---
+
+## SQL Query Examples
+
+### DSARs
+
+```sql
+-- Overdue DSARs
+SELECT
+  id,
+  subject_email,
+  request_type,
+  deadline,
+  EXTRACT(DAY FROM (NOW() - deadline)) as days_overdue
+FROM compliance_dsars
+WHERE status IN ('pending', 'in_progress')
+  AND deadline < NOW()
+ORDER BY days_overdue DESC;
+
+-- DSAR processing time
+SELECT
+  request_type,
+  AVG(EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400) as avg_days,
+  MIN(EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400) as min_days,
+  MAX(EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400) as max_days
+FROM compliance_dsars
+WHERE status = 'completed'
+GROUP BY request_type;
+
+-- DSARs by month
+SELECT
+  DATE_TRUNC('month', created_at) as month,
+  request_type,
+  COUNT(*) as count
+FROM compliance_dsars
+GROUP BY DATE_TRUNC('month', created_at), request_type
+ORDER BY month DESC, request_type;
+```
+
+### Consents
+
+```sql
+-- Active marketing consents
+SELECT
+  user_email,
+  consent_method,
+  created_at as granted_at,
+  expires_at
+FROM compliance_consents
+WHERE purpose = 'marketing'
+  AND consent_given = true
+  AND (expires_at IS NULL OR expires_at > NOW())
+  AND withdrawn_at IS NULL
+ORDER BY created_at DESC;
+
+-- Consent withdrawal rate
+SELECT
+  purpose,
+  COUNT(*) as total_consents,
+  SUM(CASE WHEN withdrawn_at IS NOT NULL THEN 1 ELSE 0 END) as withdrawn,
+  ROUND(100.0 * SUM(CASE WHEN withdrawn_at IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 2) as withdrawal_rate
+FROM compliance_consents
+GROUP BY purpose
+ORDER BY withdrawal_rate DESC;
+
+-- Consent expiry in next 30 days
+SELECT
+  user_email,
+  purpose,
+  expires_at,
+  EXTRACT(DAY FROM (expires_at - NOW())) as days_until_expiry
+FROM compliance_consents
+WHERE consent_given = true
+  AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '30 days'
+ORDER BY expires_at;
+```
+
+### Privacy Policies
+
+```sql
+-- Users who haven't accepted latest policy
+SELECT u.id, u.email, pp.version as latest_version
+FROM users u
+CROSS JOIN (
+  SELECT version FROM compliance_privacy_policies
+  WHERE status = 'published'
+  ORDER BY published_at DESC
+  LIMIT 1
+) pp
+LEFT JOIN compliance_policy_acceptances pa
+  ON u.id = pa.user_id
+  AND pa.accepted_version = pp.version
+WHERE pa.id IS NULL;
+
+-- Policy acceptance rate
+SELECT
+  p.version,
+  COUNT(DISTINCT pa.user_id) as users_accepted,
+  (SELECT COUNT(*) FROM users) as total_users,
+  ROUND(100.0 * COUNT(DISTINCT pa.user_id) / (SELECT COUNT(*) FROM users), 2) as acceptance_rate
+FROM compliance_privacy_policies p
+LEFT JOIN compliance_policy_acceptances pa ON p.id = pa.policy_id
+WHERE p.status = 'published'
+GROUP BY p.version
+ORDER BY p.published_at DESC;
+```
+
+### Data Retention
+
+```sql
+-- Retention policy execution summary
+SELECT
+  p.name,
+  e.started_at,
+  e.records_deleted + e.records_anonymized as total_affected,
+  e.duration_seconds,
+  e.status
+FROM compliance_retention_executions e
+JOIN compliance_retention_policies p ON e.policy_id = p.id
+WHERE e.started_at > NOW() - INTERVAL '30 days'
+ORDER BY e.started_at DESC;
+
+-- Data eligible for retention
+SELECT
+  'users' as data_type,
+  COUNT(*) as records_eligible
+FROM users
+WHERE last_login_at < NOW() - INTERVAL '3 years'
+  AND deleted_at IS NULL;
+```
+
+### Breaches
+
+```sql
+-- Breach notification compliance
+SELECT
+  id,
+  title,
+  severity,
+  discovered_at,
+  notification_deadline,
+  authority_notified,
+  CASE
+    WHEN authority_notified AND
+         (SELECT MIN(sent_at) FROM compliance_breach_notifications
+          WHERE breach_id = b.id AND notification_type = 'authority') < notification_deadline
+    THEN 'Compliant'
+    ELSE 'Non-Compliant'
+  END as compliance_status
+FROM compliance_data_breaches b
+WHERE notification_required = true;
+
+-- Breach impact summary
+SELECT
+  severity,
+  COUNT(*) as breach_count,
+  SUM(affected_users) as total_users_affected,
+  SUM(affected_records) as total_records_affected
+FROM compliance_data_breaches
+GROUP BY severity
+ORDER BY
+  CASE severity
+    WHEN 'critical' THEN 1
+    WHEN 'high' THEN 2
+    WHEN 'medium' THEN 3
+    WHEN 'low' THEN 4
+  END;
+```
+
+### Audit Events
+
+```sql
+-- Failed login attempts in last 24 hours
+SELECT
+  actor_id,
+  COUNT(*) as attempts,
+  ARRAY_AGG(DISTINCT ip_address::TEXT) as ip_addresses,
+  MAX(timestamp) as last_attempt
+FROM audit_events
+WHERE action = 'user.login'
+  AND status = 'failure'
+  AND timestamp > NOW() - INTERVAL '24 hours'
+GROUP BY actor_id
+HAVING COUNT(*) > 3
+ORDER BY attempts DESC;
+
+-- Data access by resource type
+SELECT
+  resource_type,
+  COUNT(*) as access_count,
+  COUNT(DISTINCT actor_id) as unique_actors,
+  COUNT(DISTINCT DATE(timestamp)) as days_accessed
+FROM audit_events
+WHERE action IN ('data.read', 'data.write', 'data.delete')
+  AND timestamp > NOW() - INTERVAL '30 days'
+GROUP BY resource_type
+ORDER BY access_count DESC;
+
+-- Audit event volume by hour
+SELECT
+  DATE_TRUNC('hour', timestamp) as hour,
+  COUNT(*) as event_count
+FROM audit_events
+WHERE timestamp > NOW() - INTERVAL '24 hours'
+GROUP BY DATE_TRUNC('hour', timestamp)
+ORDER BY hour;
+
+-- Compliance framework coverage
+SELECT
+  UNNEST(compliance_frameworks) as framework,
+  COUNT(*) as event_count
+FROM audit_events
+WHERE timestamp > NOW() - INTERVAL '30 days'
+GROUP BY framework
+ORDER BY event_count DESC;
+```
+
+---
+
+## Troubleshooting
+
+### Database Connection Issues
+
+**Problem:** `Error: Connection refused`
+
+**Solution:**
+```bash
+# Verify DATABASE_URL is set
+echo $DATABASE_URL
+
+# Test PostgreSQL connection
+psql $DATABASE_URL -c "SELECT 1"
+
+# Check PostgreSQL is running
+pg_isready
+```
+
+### DSAR Deadline Not Calculating
+
+**Problem:** DSAR deadline is NULL
+
+**Solution:**
+```sql
+-- Update existing DSARs with deadline
+UPDATE compliance_dsars
+SET deadline = created_at + INTERVAL '30 days'
+WHERE deadline IS NULL;
+```
+
+### Consent Not Expiring
+
+**Problem:** Expired consents still showing as active
+
+**Solution:**
+```bash
+# Check expiry configuration
+echo $COMPLIANCE_CONSENT_EXPIRY_DAYS
+
+# Manually expire old consents
+psql $DATABASE_URL <<SQL
+UPDATE compliance_consents
+SET consent_given = false
+WHERE expires_at < NOW()
+  AND consent_given = true;
+SQL
+```
+
+### Audit Events Not Forwarding to SIEM
+
+**Problem:** Events not appearing in Splunk/ELK/Datadog
+
+**Solution:**
+```bash
+# Check SIEM configuration
+echo $AUDIT_SIEM_SPLUNK_HEC_URL
+echo $AUDIT_SIEM_SPLUNK_HEC_TOKEN
+
+# Test SIEM connectivity
+curl -X POST $AUDIT_SIEM_SPLUNK_HEC_URL \
+  -H "Authorization: Splunk $AUDIT_SIEM_SPLUNK_HEC_TOKEN" \
+  -d '{"event": "test"}'
+
+# Check fallback logs
+tail -f /var/log/compliance-audit/$(date +%Y-%m-%d).log
+```
+
+### Retention Policy Not Executing
+
+**Problem:** Scheduled retention policy not running
+
+**Solution:**
+```bash
+# Check policy schedule
+nself plugin compliance retention list
+
+# Enable policy if disabled
+nself plugin compliance retention enable policy_abc123
+
+# Manual execution
+nself plugin compliance retention execute policy_abc123
+```
+
+### Breach Notification Deadline Passed
+
+**Problem:** Breach not notified within 72 hours
+
+**Solution:**
+```bash
+# Immediately send notification
+nself plugin compliance breaches notify breach_abc123 \
+  --type "authority" \
+  --recipient "data-protection@regulator.gov"
+
+# Document delay in breach record
+nself plugin compliance breaches update breach_abc123 \
+  --metadata '{"delay_reason": "Discovery delayed due to system outage"}'
+```
+
+### Alert Rules Not Triggering
+
+**Problem:** Alert rule conditions met but no notification
+
+**Solution:**
+```bash
+# Check rule is enabled
+nself plugin compliance alerts list
+
+# Test rule manually
+nself plugin compliance alerts test rule_abc123
+
+# Verify webhook URL is accessible
+curl -X POST $AUDIT_ALERT_WEBHOOK_URL \
+  -H "Content-Type: application/json" \
+  -d '{"test": true}'
+```
+
+### Event Integrity Verification Failed
+
+**Problem:** Checksum verification fails for audit events
+
+**Solution:**
+```bash
+# Identify tampered events
+nself plugin compliance verify --from-id 1 --to-id 10000
+
+# View event details
+psql $DATABASE_URL <<SQL
+SELECT id, event_id, action, checksum, previous_checksum
+FROM audit_events
+WHERE id = <failing_id>;
+SQL
+
+# Check for database corruption
+psql $DATABASE_URL <<SQL
+SELECT pg_stat_database_conflicts.* FROM pg_stat_database_conflicts;
+SQL
+```
+
+---
+
+**Last Updated:** February 11, 2026
+**Plugin Version:** 1.0.0
+**Minimum nself Version:** 0.4.8
