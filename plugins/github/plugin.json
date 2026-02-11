@@ -8,15 +8,20 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "devops",
-  "tags": ["github", "git", "ci", "devops", "issues", "pull-requests"],
-
+  "tags": [
+    "github",
+    "git",
+    "ci",
+    "devops",
+    "issues",
+    "pull-requests"
+  ],
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "composite",
     "defaultValue": "primary"
   },
-
   "tables": [
     "github_repositories",
     "github_issues",
@@ -27,7 +32,6 @@
     "github_deployments",
     "github_webhook_events"
   ],
-
   "webhooks": {
     "push": "Code pushed to repository",
     "pull_request": "PR opened, closed, or merged",
@@ -43,7 +47,6 @@
     "star": "Repository starred",
     "fork": "Repository forked"
   },
-
   "actions": {
     "sync": "Sync repository data",
     "repos": "List and manage repositories",
@@ -53,9 +56,9 @@
     "actions": "View workflow runs",
     "webhook": "Manage webhook events"
   },
-
   "envVars": {
     "required": [
+      "DATABASE_URL",
       "GITHUB_TOKEN"
     ],
     "optional": [
@@ -66,7 +69,6 @@
       "GITHUB_ACCOUNT_LABELS"
     ]
   },
-
   "config": {
     "apiVersion": "2022-11-28",
     "webhookPath": "/webhooks/github",

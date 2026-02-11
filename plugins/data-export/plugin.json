@@ -1,0 +1,75 @@
+{
+  "name": "data-export",
+  "version": "1.0.0",
+  "description": "GDPR-compliant data export, deletion, and import for user data and plugin data",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/data-export",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": ["gdpr", "export", "deletion", "import", "compliance", "privacy"],
+
+  "tables": [
+    "export_requests",
+    "export_deletion_requests",
+    "export_plugin_registry",
+    "export_import_jobs",
+    "export_webhook_events"
+  ],
+
+  "webhooks": {},
+
+  "actions": {
+    "export": "Export user or plugin data",
+    "delete": "Request GDPR data deletion",
+    "import": "Import data from file",
+    "plugins": "Manage plugin registry for export/deletion",
+    "stats": "View export and deletion statistics"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "EXPORT_PLUGIN_PORT",
+      "EXPORT_STORAGE_PATH",
+      "EXPORT_DOWNLOAD_EXPIRY_HOURS",
+      "EXPORT_DELETION_COOLDOWN_HOURS",
+      "EXPORT_MAX_EXPORT_SIZE_MB",
+      "EXPORT_VERIFICATION_CODE_LENGTH",
+      "EXPORT_API_KEY",
+      "EXPORT_RATE_LIMIT_MAX",
+      "EXPORT_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "defaultPort": 3306,
+    "storagePath": "/tmp/nself-exports",
+    "downloadExpiryHours": 24,
+    "deletionCooldownHours": 24,
+    "maxExportSizeMB": 500,
+    "verificationCodeLength": 6
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["read", "write", "exports", "imports"]
+  }
+}

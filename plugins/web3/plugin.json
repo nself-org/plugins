@@ -1,0 +1,92 @@
+{
+  "name": "web3",
+  "version": "1.0.0",
+  "description": "Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/web3",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "web3",
+  "tags": ["web3", "blockchain", "nft", "token-gating", "dao", "wallet", "ethereum", "defi"],
+
+  "tables": [
+    "web3_wallets",
+    "web3_nfts",
+    "web3_collections",
+    "web3_tokens",
+    "web3_token_balances",
+    "web3_token_gates",
+    "web3_gate_checks",
+    "web3_daos",
+    "web3_proposals",
+    "web3_votes",
+    "web3_transactions",
+    "web3_events"
+  ],
+
+  "webhooks": {
+    "wallet.connected": "Wallet connected",
+    "wallet.verified": "Wallet verified",
+    "nft.transferred": "NFT ownership transferred",
+    "nft.minted": "NFT minted",
+    "collection.indexed": "Collection indexed",
+    "token_gate.passed": "Token gate check passed",
+    "token_gate.failed": "Token gate check failed",
+    "proposal.created": "DAO proposal created",
+    "proposal.executed": "DAO proposal executed",
+    "vote.cast": "DAO vote cast",
+    "transaction.confirmed": "Transaction confirmed"
+  },
+
+  "actions": {
+    "wallets": "Manage web3 wallets",
+    "nfts": "Browse and manage NFTs",
+    "collections": "Manage NFT collections",
+    "tokens": "Track ERC-20 tokens",
+    "token-gates": "Manage token-gated access",
+    "daos": "Manage DAOs",
+    "proposals": "Manage DAO proposals",
+    "transactions": "View blockchain transactions"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "WEB3_PLUGIN_PORT",
+      "WEB3_DEFAULT_CHAIN_ID",
+      "WEB3_SUPPORTED_CHAINS",
+      "WEB3_GATE_CHECK_CACHE_TTL",
+      "WEB3_API_KEY",
+      "WEB3_RATE_LIMIT_MAX",
+      "WEB3_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "port": 3715,
+    "defaultChainId": 1,
+    "gateCheckCacheTtl": 300
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["logs"]
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "name": "photos",
+  "version": "1.0.0",
+  "description": "Photo album management with EXIF extraction, tagging, face grouping, and thumbnails",
+  "author": "nself",
+  "license": "Source-Available",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": [
+    "photos",
+    "albums",
+    "exif",
+    "tagging",
+    "faces",
+    "thumbnails",
+    "gallery"
+  ],
+  "tables": [
+    "photos_albums",
+    "photos_items",
+    "photos_tags",
+    "photos_faces",
+    "photos_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "albums": "Manage albums",
+    "list": "List photos",
+    "process-pending": "Process pending photos",
+    "tags": "View tag statistics",
+    "faces": "Manage face groups",
+    "search": "Search photos",
+    "stats": "Show photo statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PHOTOS_PLUGIN_PORT",
+      "PHOTOS_APP_IDS",
+      "PHOTOS_THUMBNAIL_SMALL",
+      "PHOTOS_THUMBNAIL_MEDIUM",
+      "PHOTOS_THUMBNAIL_LARGE",
+      "PHOTOS_EXIF_EXTRACTION",
+      "PHOTOS_FACE_DETECTION",
+      "PHOTOS_FACE_DETECTION_PROVIDER"
+    ]
+  },
+  "config": {
+    "thumbnailSmall": 150,
+    "thumbnailMedium": 600,
+    "thumbnailLarge": 1200,
+    "thumbnailQuality": 85,
+    "thumbnailFormat": "webp",
+    "exifExtraction": true,
+    "faceDetection": false,
+    "processingConcurrency": 4
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
+  }
+}

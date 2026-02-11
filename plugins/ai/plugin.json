@@ -1,0 +1,131 @@
+{
+  "name": "ai",
+  "version": "1.0.0",
+  "description": "Unified AI gateway with multi-provider LLM support, embeddings, semantic search, prompt templates, and usage tracking",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/ai",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "ai-ml",
+  "tags": ["ai", "llm", "openai", "anthropic", "embeddings", "semantic-search", "chat", "completions"],
+
+  "tables": [
+    "ai_models",
+    "ai_conversations",
+    "ai_messages",
+    "ai_requests",
+    "ai_embeddings",
+    "ai_prompt_templates",
+    "ai_functions",
+    "ai_function_calls",
+    "ai_usage_quotas",
+    "ai_features"
+  ],
+
+  "webhooks": {
+    "conversation.created": "New AI conversation started",
+    "conversation.completed": "AI conversation finished",
+    "request.completed": "AI request completed",
+    "request.failed": "AI request failed",
+    "quota.exceeded": "Usage quota exceeded",
+    "model.enabled": "AI model enabled",
+    "model.disabled": "AI model disabled"
+  },
+
+  "actions": {
+    "chat": "Send chat completions to AI models",
+    "embed": "Generate embeddings for text",
+    "search": "Semantic search using embeddings",
+    "models": "Manage AI models",
+    "prompts": "Manage prompt templates",
+    "usage": "View usage statistics",
+    "quota": "Manage usage quotas"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "AI_PLUGIN_PORT",
+      "AI_PLUGIN_HOST",
+      "PORT",
+      "HOST",
+      "POSTGRES_HOST",
+      "POSTGRES_PORT",
+      "POSTGRES_DB",
+      "POSTGRES_USER",
+      "POSTGRES_PASSWORD",
+      "POSTGRES_SSL",
+      "AI_OPENAI_ENABLED",
+      "AI_OPENAI_API_KEY",
+      "AI_OPENAI_ORG_ID",
+      "AI_OPENAI_DEFAULT_MODEL",
+      "AI_ANTHROPIC_ENABLED",
+      "AI_ANTHROPIC_API_KEY",
+      "AI_ANTHROPIC_DEFAULT_MODEL",
+      "AI_GOOGLE_ENABLED",
+      "AI_GOOGLE_API_KEY",
+      "AI_GOOGLE_DEFAULT_MODEL",
+      "AI_COHERE_ENABLED",
+      "AI_COHERE_API_KEY",
+      "AI_LOCAL_ENABLED",
+      "AI_LOCAL_BASE_URL",
+      "AI_LOCAL_DEFAULT_MODEL",
+      "AI_DEFAULT_PROVIDER",
+      "AI_DEFAULT_TEMPERATURE",
+      "AI_DEFAULT_MAX_TOKENS",
+      "AI_ENABLE_STREAMING",
+      "AI_ENABLE_FUNCTION_CALLING",
+      "AI_EMBEDDINGS_ENABLED",
+      "AI_EMBEDDINGS_MODEL",
+      "AI_EMBEDDINGS_DIMENSIONS",
+      "AI_RATE_LIMIT_ENABLED",
+      "AI_RATE_LIMIT_REQUESTS_PER_MINUTE",
+      "AI_RATE_LIMIT_TOKENS_PER_MINUTE",
+      "AI_DEFAULT_DAILY_REQUESTS",
+      "AI_DEFAULT_DAILY_TOKENS",
+      "AI_DEFAULT_DAILY_COST",
+      "AI_CHAT_ASSISTANT_ENABLED",
+      "AI_SUMMARIZATION_ENABLED",
+      "AI_TRANSLATION_ENABLED",
+      "AI_SENTIMENT_ANALYSIS_ENABLED",
+      "AI_SMART_SEARCH_ENABLED",
+      "AI_CACHE_ENABLED",
+      "AI_CACHE_TTL_SECONDS",
+      "AI_LOG_REQUESTS",
+      "AI_LOG_RESPONSES",
+      "AI_TRACK_COSTS",
+      "LOG_LEVEL"
+    ]
+  },
+
+  "config": {
+    "defaultPort": 3705,
+    "defaultProvider": "openai",
+    "defaultTemperature": 0.7,
+    "defaultMaxTokens": 1000,
+    "embeddingsEnabled": true,
+    "embeddingsDimensions": 1536
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["openai", "anthropic", "google"],
+    "filesystem": ["logs"]
+  }
+}

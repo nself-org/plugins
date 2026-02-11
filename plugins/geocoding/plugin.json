@@ -1,0 +1,88 @@
+{
+  "name": "geocoding",
+  "version": "1.0.0",
+  "description": "Geocoding and location services plugin - forward/reverse geocoding, place search, geofences",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/geocoding",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": ["geocoding", "maps", "location", "geofencing", "places"],
+
+  "tables": [
+    "geo_cache",
+    "geo_geofences",
+    "geo_geofence_events",
+    "geo_places"
+  ],
+
+  "views": [
+    "geo_cache_hit_rate",
+    "geo_volume_daily",
+    "geo_geofence_activity"
+  ],
+
+  "webhooks": {},
+
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start the API server",
+    "geocode": "Forward geocode an address",
+    "reverse": "Reverse geocode coordinates",
+    "search": "Search for places",
+    "batch": "Batch geocode from CSV",
+    "geofences": "Manage geofences",
+    "cache": "Manage geocoding cache",
+    "status": "Show overall statistics"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "GEOCODING_PLUGIN_PORT",
+      "GEOCODING_PROVIDERS",
+      "GEOCODING_GOOGLE_API_KEY",
+      "GEOCODING_MAPBOX_ACCESS_TOKEN",
+      "GEOCODING_NOMINATIM_URL",
+      "GEOCODING_NOMINATIM_EMAIL",
+      "GEOCODING_CACHE_TTL_DAYS",
+      "GEOCODING_CACHE_ENABLED",
+      "GEOCODING_MAX_BATCH_SIZE",
+      "GEOCODING_RATE_LIMIT_PROVIDER",
+      "GEOCODING_GEOFENCE_CHECK_TOLERANCE_METERS",
+      "GEOCODING_NOTIFY_URL",
+      "GEOCODING_API_KEY",
+      "GEOCODING_RATE_LIMIT_MAX",
+      "GEOCODING_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "port": 3203,
+    "webhookPath": "/webhooks/geocoding",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["*"],
+    "filesystem": ["logs", "cache"]
+  }
+}

@@ -8,15 +8,20 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["files", "storage", "processing", "thumbnails", "optimization", "virus-scanning"],
-
+  "tags": [
+    "files",
+    "storage",
+    "processing",
+    "thumbnails",
+    "optimization",
+    "virus-scanning"
+  ],
   "tables": [
     "file_processing_jobs",
     "file_thumbnails",
     "file_scans",
     "file_metadata"
   ],
-
   "actions": {
     "init": "Initialize file processing service",
     "server": "Start HTTP server for processing endpoints",
@@ -25,11 +30,11 @@
     "cleanup": "Clean up old processing jobs and temporary files",
     "stats": "View processing statistics"
   },
-
   "envVars": {
     "required": [
-      "FILE_STORAGE_PROVIDER",
-      "FILE_STORAGE_BUCKET"
+      "DATABASE_URL",
+      "FILE_STORAGE_BUCKET",
+      "FILE_STORAGE_PROVIDER"
     ],
     "optional": [
       "FILE_STORAGE_ENDPOINT",
@@ -49,33 +54,44 @@
       "PORT"
     ]
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "config": {
     "port": 3104,
-    "defaultThumbnailSizes": [100, 400, 1200],
+    "defaultThumbnailSizes": [
+      100,
+      400,
+      1200
+    ],
     "maxFileSize": 104857600,
     "queueConcurrency": 3,
     "enableOptimization": true,
     "stripExif": true,
     "webhookPath": "/webhooks/file-processing"
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache", "temp"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
   }
 }

@@ -1,0 +1,45 @@
+{
+  "name": "tmdb",
+  "version": "1.0.0",
+  "description": "Media metadata enrichment from TMDB/IMDb with auto-matching and manual review queue",
+  "author": "nself",
+  "license": "Source-Available",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": ["tmdb", "metadata", "movies", "tv-shows", "imdb", "media", "matching"],
+  "tables": ["tmdb_movies", "tmdb_tv_shows", "tmdb_tv_seasons", "tmdb_tv_episodes", "tmdb_genres", "tmdb_match_queue", "tmdb_webhook_events"],
+  "webhooks": {},
+  "actions": {
+    "search": "Search TMDB for movies/TV shows",
+    "match": "Match a media file to TMDB",
+    "match-batch": "Batch match media files",
+    "queue": "View match review queue",
+    "confirm": "Confirm a match",
+    "refresh": "Refresh cached metadata",
+    "sync": "Sync genres and configuration",
+    "status": "Show sync status"
+  },
+  "envVars": {
+    "required": ["DATABASE_URL", "TMDB_API_KEY"],
+    "optional": ["TMDB_PLUGIN_PORT", "TMDB_APP_IDS", "TMDB_API_READ_ACCESS_TOKEN", "OMDB_API_KEY", "TMDB_AUTO_ACCEPT_THRESHOLD", "TMDB_DEFAULT_LANGUAGE", "TMDB_CACHE_TTL_DAYS", "TMDB_REFRESH_CRON"]
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "config": {
+    "autoAcceptThreshold": 0.85,
+    "defaultLanguage": "en-US",
+    "cacheTtlDays": 30,
+    "refreshCron": "0 6 * * 0",
+    "posterSize": "w500",
+    "backdropSize": "w1280"
+  },
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["api.themoviedb.org", "www.omdbapi.com"],
+    "filesystem": ["logs", "cache"]
+  }
+}

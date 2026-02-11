@@ -8,17 +8,23 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["jobs", "queue", "bullmq", "redis", "background", "scheduling", "cron", "workers"],
-
+  "tags": [
+    "jobs",
+    "queue",
+    "bullmq",
+    "redis",
+    "background",
+    "scheduling",
+    "cron",
+    "workers"
+  ],
   "tables": [
     "jobs_tasks",
     "job_results",
     "job_schedules",
     "job_failures"
   ],
-
   "webhooks": {},
-
   "actions": {
     "init": "Initialize jobs infrastructure",
     "server": "Start BullBoard dashboard server",
@@ -27,9 +33,9 @@
     "retry": "Retry failed jobs",
     "stats": "View job statistics"
   },
-
   "envVars": {
     "required": [
+      "DATABASE_URL",
       "JOBS_REDIS_URL"
     ],
     "optional": [
@@ -44,7 +50,6 @@
       "JOBS_CLEAN_FAILED_AFTER"
     ]
   },
-
   "config": {
     "dashboardPath": "/dashboard",
     "dashboardPort": 3105,
@@ -57,9 +62,18 @@
     "cleanCompletedAfter": 86400000,
     "cleanFailedAfter": 604800000,
     "queues": {
-      "default": { "concurrency": 5, "priority": 0 },
-      "high-priority": { "concurrency": 3, "priority": 10 },
-      "low-priority": { "concurrency": 10, "priority": -10 }
+      "default": {
+        "concurrency": 5,
+        "priority": 0
+      },
+      "high-priority": {
+        "concurrency": 3,
+        "priority": 10
+      },
+      "low-priority": {
+        "concurrency": 10,
+        "priority": -10
+      }
     },
     "jobTypes": [
       "send-email",
@@ -69,23 +83,30 @@
       "custom"
     ]
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["redis"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "redis"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

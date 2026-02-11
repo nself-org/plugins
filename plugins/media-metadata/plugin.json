@@ -1,0 +1,88 @@
+{
+  "name": "media-metadata",
+  "version": "1.0.0",
+  "description": "TMDB media metadata enrichment with automatic matching and confidence scoring",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/media-metadata",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "external-data",
+  "tags": [
+    "tmdb",
+    "movies",
+    "tv",
+    "metadata",
+    "enrichment",
+    "media"
+  ],
+  "tables": [
+    "tmdb_movies",
+    "tmdb_tv_shows",
+    "tmdb_tv_seasons",
+    "tmdb_tv_episodes",
+    "tmdb_genres",
+    "tmdb_match_queue",
+    "tmdb_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "search": "Search TMDB for movies and TV shows",
+    "lookup": "Lookup media by title and year with confidence scoring",
+    "enrich": "Enrich local media with TMDB metadata",
+    "sync-genres": "Sync genre list from TMDB",
+    "match-queue": "Manage manual matching queue"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "TMDB_API_KEY"
+    ],
+    "optional": [
+      "TMDB_PLUGIN_PORT",
+      "TMDB_API_READ_ACCESS_TOKEN",
+      "TMDB_IMAGE_BASE_URL",
+      "TMDB_DEFAULT_LANGUAGE",
+      "TMDB_AUTO_ENRICH",
+      "TMDB_CONFIDENCE_THRESHOLD",
+      "TMDB_CACHE_TTL_DAYS",
+      "TMDB_RATE_LIMIT_MAX",
+      "TMDB_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "port": 3202,
+    "confidenceThreshold": 0.70,
+    "cacheTtlDays": 30,
+    "autoEnrich": true,
+    "imageBaseUrl": "https://image.tmdb.org/t/p",
+    "defaultLanguage": "en-US"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "api.themoviedb.org",
+      "image.tmdb.org"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  }
+}

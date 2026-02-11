@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-10T23:14:13Z",
+  "lastUpdated": "2026-02-11T11:13:21Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -2886,6 +2886,5604 @@
         "pkStrategy": "uuid",
         "defaultValue": "primary"
       }
+    },
+    "access-controls": {
+      "name": "access-controls",
+      "version": "1.0.0",
+      "description": "Role-based and attribute-based access control (RBAC + ABAC) with policy engine",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/access-controls",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/access-controls",
+      "minNselfVersion": "0.4.8",
+      "category": "security",
+      "tags": [
+        "access-control",
+        "rbac",
+        "abac",
+        "authorization",
+        "policies",
+        "permissions"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-access-controls",
+        "defaultPort": 3027,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "acl_roles",
+        "acl_permissions",
+        "acl_role_permissions",
+        "acl_user_roles",
+        "acl_policies",
+        "acl_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "ACL_PLUGIN_PORT",
+          "required": false,
+          "description": "Acl Plugin Port"
+        },
+        {
+          "name": "ACL_CACHE_TTL_SECONDS",
+          "required": false,
+          "description": "Acl Cache Ttl Seconds"
+        },
+        {
+          "name": "ACL_MAX_ROLE_DEPTH",
+          "required": false,
+          "description": "Acl Max Role Depth"
+        },
+        {
+          "name": "ACL_DEFAULT_DENY",
+          "required": false,
+          "description": "Acl Default Deny"
+        },
+        {
+          "name": "ACL_API_KEY",
+          "required": false,
+          "description": "Acl Api Key"
+        },
+        {
+          "name": "ACL_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Acl Rate Limit Max"
+        },
+        {
+          "name": "ACL_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Acl Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "activity-feed": {
+      "name": "activity-feed",
+      "version": "1.0.0",
+      "description": "Universal activity feed system with fan-out-on-read/write, aggregation, and subscriptions",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/activity-feed",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/activity-feed",
+      "minNselfVersion": "0.4.8",
+      "category": "content",
+      "tags": [
+        "activity",
+        "feed",
+        "notifications",
+        "social",
+        "events"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-activity-feed",
+        "defaultPort": 3503,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "feed_activities",
+        "feed_user_feeds",
+        "feed_subscriptions",
+        "feed_webhook_events"
+      ],
+      "webhooks": [
+        "activity.created",
+        "activity.updated",
+        "activity.deleted",
+        "subscription.created",
+        "subscription.deleted",
+        "feed.read",
+        "feed.hidden"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "FEED_PLUGIN_PORT",
+          "required": false,
+          "description": "Feed Plugin Port"
+        },
+        {
+          "name": "FEED_STRATEGY",
+          "required": false,
+          "description": "Feed Strategy"
+        },
+        {
+          "name": "FEED_MAX_FEED_SIZE",
+          "required": false,
+          "description": "Feed Max Feed Size"
+        },
+        {
+          "name": "FEED_AGGREGATION_WINDOW_MINUTES",
+          "required": false,
+          "description": "Feed Aggregation Window Minutes"
+        },
+        {
+          "name": "FEED_RETENTION_DAYS",
+          "required": false,
+          "description": "Feed Retention Days"
+        },
+        {
+          "name": "FEED_API_KEY",
+          "required": false,
+          "description": "Feed Api Key"
+        },
+        {
+          "name": "FEED_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Feed Rate Limit Max"
+        },
+        {
+          "name": "FEED_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Feed Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "ai": {
+      "name": "ai",
+      "version": "1.0.0",
+      "description": "Unified AI gateway with multi-provider LLM support, embeddings, semantic search, prompt templates, and usage tracking",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/ai",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/ai",
+      "minNselfVersion": "0.4.8",
+      "category": "ai-ml",
+      "tags": [
+        "ai",
+        "llm",
+        "openai",
+        "anthropic",
+        "embeddings",
+        "semantic-search",
+        "chat",
+        "completions"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-ai",
+        "defaultPort": 3705,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "ai_models",
+        "ai_conversations",
+        "ai_messages",
+        "ai_requests",
+        "ai_embeddings",
+        "ai_prompt_templates",
+        "ai_functions",
+        "ai_function_calls",
+        "ai_usage_quotas",
+        "ai_features"
+      ],
+      "webhooks": [
+        "conversation.created",
+        "conversation.completed",
+        "request.completed",
+        "request.failed",
+        "quota.exceeded",
+        "model.enabled",
+        "model.disabled"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "AI_PLUGIN_PORT",
+          "required": false,
+          "description": "Ai Plugin Port"
+        },
+        {
+          "name": "AI_OPENAI_ENABLED",
+          "required": false,
+          "description": "Ai Openai Enabled"
+        },
+        {
+          "name": "AI_OPENAI_API_KEY",
+          "required": false,
+          "description": "Ai Openai Api Key"
+        },
+        {
+          "name": "AI_ANTHROPIC_ENABLED",
+          "required": false,
+          "description": "Ai Anthropic Enabled"
+        },
+        {
+          "name": "AI_ANTHROPIC_API_KEY",
+          "required": false,
+          "description": "Ai Anthropic Api Key"
+        },
+        {
+          "name": "AI_GOOGLE_ENABLED",
+          "required": false,
+          "description": "Ai Google Enabled"
+        },
+        {
+          "name": "AI_GOOGLE_API_KEY",
+          "required": false,
+          "description": "Ai Google Api Key"
+        },
+        {
+          "name": "AI_DEFAULT_PROVIDER",
+          "required": false,
+          "description": "Ai Default Provider"
+        },
+        {
+          "name": "AI_DEFAULT_TEMPERATURE",
+          "required": false,
+          "description": "Ai Default Temperature"
+        },
+        {
+          "name": "AI_DEFAULT_MAX_TOKENS",
+          "required": false,
+          "description": "Ai Default Max Tokens"
+        },
+        {
+          "name": "AI_EMBEDDINGS_ENABLED",
+          "required": false,
+          "description": "Ai Embeddings Enabled"
+        },
+        {
+          "name": "AI_EMBEDDINGS_MODEL",
+          "required": false,
+          "description": "Ai Embeddings Model"
+        },
+        {
+          "name": "AI_EMBEDDINGS_DIMENSIONS",
+          "required": false,
+          "description": "Ai Embeddings Dimensions"
+        },
+        {
+          "name": "AI_RATE_LIMIT_ENABLED",
+          "required": false,
+          "description": "Ai Rate Limit Enabled"
+        },
+        {
+          "name": "AI_RATE_LIMIT_REQUESTS_PER_MINUTE",
+          "required": false,
+          "description": "Ai Rate Limit Requests Per Minute"
+        },
+        {
+          "name": "AI_DEFAULT_DAILY_REQUESTS",
+          "required": false,
+          "description": "Ai Default Daily Requests"
+        },
+        {
+          "name": "AI_DEFAULT_DAILY_TOKENS",
+          "required": false,
+          "description": "Ai Default Daily Tokens"
+        },
+        {
+          "name": "AI_DEFAULT_DAILY_COST",
+          "required": false,
+          "description": "Ai Default Daily Cost"
+        },
+        {
+          "name": "AI_API_KEY",
+          "required": false,
+          "description": "Ai Api Key"
+        },
+        {
+          "name": "AI_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Ai Rate Limit Max"
+        },
+        {
+          "name": "AI_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Ai Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "analytics": {
+      "name": "analytics",
+      "version": "1.0.0",
+      "description": "Event tracking, counters, funnels, and quota management analytics engine",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/analytics",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/analytics",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "analytics",
+        "events",
+        "metrics",
+        "funnels",
+        "quotas"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-analytics",
+        "defaultPort": 3304,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "analytics_events",
+        "analytics_counters",
+        "analytics_funnels",
+        "analytics_quotas",
+        "analytics_quota_violations",
+        "analytics_webhook_events"
+      ],
+      "webhooks": [
+        "event.tracked",
+        "counter.incremented",
+        "quota.exceeded",
+        "funnel.completed",
+        "rollup.completed"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "ANALYTICS_PLUGIN_PORT",
+          "required": false,
+          "description": "Analytics Plugin Port"
+        },
+        {
+          "name": "ANALYTICS_BATCH_SIZE",
+          "required": false,
+          "description": "Analytics Batch Size"
+        },
+        {
+          "name": "ANALYTICS_ROLLUP_INTERVAL_MS",
+          "required": false,
+          "description": "Analytics Rollup Interval Ms"
+        },
+        {
+          "name": "ANALYTICS_EVENT_RETENTION_DAYS",
+          "required": false,
+          "description": "Analytics Event Retention Days"
+        },
+        {
+          "name": "ANALYTICS_COUNTER_RETENTION_DAYS",
+          "required": false,
+          "description": "Analytics Counter Retention Days"
+        },
+        {
+          "name": "ANALYTICS_API_KEY",
+          "required": false,
+          "description": "Analytics Api Key"
+        },
+        {
+          "name": "ANALYTICS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Analytics Rate Limit Max"
+        },
+        {
+          "name": "ANALYTICS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Analytics Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "backup": {
+      "name": "backup",
+      "version": "1.0.0",
+      "description": "PostgreSQL backup and restore automation with scheduling",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/backup",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/backup",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "backup",
+        "restore",
+        "database",
+        "automation",
+        "disaster-recovery"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-backup",
+        "defaultPort": 3013,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "backup_schedules",
+        "backup_artifacts",
+        "backup_restore_jobs",
+        "backup_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "BACKUP_PLUGIN_PORT",
+          "required": false,
+          "description": "Backup Plugin Port"
+        },
+        {
+          "name": "BACKUP_STORAGE_PATH",
+          "required": false,
+          "description": "Backup Storage Path"
+        },
+        {
+          "name": "BACKUP_S3_ENDPOINT",
+          "required": false,
+          "description": "Backup S3 Endpoint"
+        },
+        {
+          "name": "BACKUP_S3_BUCKET",
+          "required": false,
+          "description": "Backup S3 Bucket"
+        },
+        {
+          "name": "BACKUP_S3_ACCESS_KEY",
+          "required": false,
+          "description": "Backup S3 Access Key"
+        },
+        {
+          "name": "BACKUP_S3_SECRET_KEY",
+          "required": false,
+          "description": "Backup S3 Secret Key"
+        },
+        {
+          "name": "BACKUP_S3_REGION",
+          "required": false,
+          "description": "Backup S3 Region"
+        },
+        {
+          "name": "BACKUP_ENCRYPTION_KEY",
+          "required": false,
+          "description": "Backup Encryption Key"
+        },
+        {
+          "name": "BACKUP_DEFAULT_RETENTION_DAYS",
+          "required": false,
+          "description": "Backup Default Retention Days"
+        },
+        {
+          "name": "BACKUP_MAX_CONCURRENT",
+          "required": false,
+          "description": "Backup Max Concurrent"
+        },
+        {
+          "name": "BACKUP_PG_DUMP_PATH",
+          "required": false,
+          "description": "Backup Pg Dump Path"
+        },
+        {
+          "name": "BACKUP_API_KEY",
+          "required": false,
+          "description": "Backup Api Key"
+        },
+        {
+          "name": "BACKUP_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Backup Rate Limit Max"
+        },
+        {
+          "name": "BACKUP_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Backup Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "bots": {
+      "name": "bots",
+      "version": "1.0.0",
+      "description": "Bot framework for nself-chat - commands, subscriptions, marketplace, API keys, reviews",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/bots",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/bots",
+      "minNselfVersion": "0.4.8",
+      "category": "automation",
+      "tags": [
+        "bots",
+        "commands",
+        "slash-commands",
+        "marketplace",
+        "automation",
+        "integrations",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-bots",
+        "defaultPort": 3708,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "nchat_bots",
+        "nchat_bot_commands",
+        "nchat_bot_subscriptions",
+        "nchat_bot_installations",
+        "nchat_bot_messages",
+        "nchat_bot_interactions",
+        "nchat_bot_reviews",
+        "nchat_bot_api_keys",
+        "nchat_bots_webhook_events"
+      ],
+      "webhooks": [
+        "bot.created",
+        "bot.updated",
+        "bot.deleted",
+        "bot.installed",
+        "bot.uninstalled",
+        "command.registered",
+        "command.executed",
+        "interaction.created",
+        "review.submitted"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "BOTS_PLUGIN_PORT",
+          "required": false,
+          "description": "Bots Plugin Port"
+        },
+        {
+          "name": "BOT_WEBHOOK_TIMEOUT",
+          "required": false,
+          "description": "Bot Webhook Timeout"
+        },
+        {
+          "name": "BOT_WEBHOOK_RETRY_COUNT",
+          "required": false,
+          "description": "Bot Webhook Retry Count"
+        },
+        {
+          "name": "BOT_WEBHOOK_RETRY_DELAY",
+          "required": false,
+          "description": "Bot Webhook Retry Delay"
+        },
+        {
+          "name": "BOT_DEFAULT_RATE_LIMIT_PER_MINUTE",
+          "required": false,
+          "description": "Bot Default Rate Limit Per Minute"
+        },
+        {
+          "name": "BOT_DEFAULT_RATE_LIMIT_PER_HOUR",
+          "required": false,
+          "description": "Bot Default Rate Limit Per Hour"
+        },
+        {
+          "name": "BOT_DEFAULT_RATE_LIMIT_PER_DAY",
+          "required": false,
+          "description": "Bot Default Rate Limit Per Day"
+        },
+        {
+          "name": "BOT_OAUTH_ENABLED",
+          "required": false,
+          "description": "Bot Oauth Enabled"
+        },
+        {
+          "name": "BOT_OAUTH_CALLBACK_URL",
+          "required": false,
+          "description": "Bot Oauth Callback Url"
+        },
+        {
+          "name": "BOT_MARKETPLACE_ENABLED",
+          "required": false,
+          "description": "Bot Marketplace Enabled"
+        },
+        {
+          "name": "BOT_MARKETPLACE_MODERATION",
+          "required": false,
+          "description": "Bot Marketplace Moderation"
+        },
+        {
+          "name": "BOT_TOKEN_EXPIRY_DAYS",
+          "required": false,
+          "description": "Bot Token Expiry Days"
+        },
+        {
+          "name": "BOT_WEBHOOK_SIGNATURE_ALGORITHM",
+          "required": false,
+          "description": "Bot Webhook Signature Algorithm"
+        },
+        {
+          "name": "BOT_MAX_MESSAGE_SIZE",
+          "required": false,
+          "description": "Bot Max Message Size"
+        },
+        {
+          "name": "BOTS_API_KEY",
+          "required": false,
+          "description": "Bots Api Key"
+        },
+        {
+          "name": "BOTS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Bots Rate Limit Max"
+        },
+        {
+          "name": "BOTS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Bots Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "calendar": {
+      "name": "calendar",
+      "version": "1.0.0",
+      "description": "Calendar and event management with recurring events, iCal export, and RSVP tracking",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/calendar",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/calendar",
+      "minNselfVersion": "0.4.8",
+      "category": "content",
+      "tags": [
+        "calendar",
+        "events",
+        "scheduling",
+        "ical",
+        "recurring",
+        "rsvp"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-calendar",
+        "defaultPort": 3505,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "calendar_calendars",
+        "calendar_events",
+        "calendar_attendees",
+        "calendar_reminders",
+        "calendar_ical_feeds",
+        "calendar_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "CALENDAR_PLUGIN_PORT",
+          "required": false,
+          "description": "Calendar Plugin Port"
+        },
+        {
+          "name": "CALENDAR_DEFAULT_TIMEZONE",
+          "required": false,
+          "description": "Calendar Default Timezone"
+        },
+        {
+          "name": "CALENDAR_MAX_ATTENDEES",
+          "required": false,
+          "description": "Calendar Max Attendees"
+        },
+        {
+          "name": "CALENDAR_REMINDER_CHECK_INTERVAL_MS",
+          "required": false,
+          "description": "Calendar Reminder Check Interval Ms"
+        },
+        {
+          "name": "CALENDAR_MAX_RECURRENCE_EXPAND",
+          "required": false,
+          "description": "Calendar Max Recurrence Expand"
+        },
+        {
+          "name": "CALENDAR_ICAL_TOKEN_LENGTH",
+          "required": false,
+          "description": "Calendar Ical Token Length"
+        },
+        {
+          "name": "CALENDAR_API_KEY",
+          "required": false,
+          "description": "Calendar Api Key"
+        },
+        {
+          "name": "CALENDAR_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Calendar Rate Limit Max"
+        },
+        {
+          "name": "CALENDAR_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Calendar Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "cdn": {
+      "name": "cdn",
+      "version": "1.0.0",
+      "description": "CDN management and integration plugin - cache purging, signed URLs, analytics",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/cdn",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/cdn",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "cdn",
+        "cache",
+        "cloudflare",
+        "bunnycdn",
+        "edge"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-cdn",
+        "defaultPort": 3204,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "cdn_zones",
+        "cdn_purge_requests",
+        "cdn_analytics",
+        "cdn_signed_urls"
+      ],
+      "views": [
+        "cdn_bandwidth_by_zone",
+        "cdn_cache_hit_rate",
+        "cdn_top_paths"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "CDN_PLUGIN_PORT",
+          "required": false,
+          "description": "Cdn Plugin Port"
+        },
+        {
+          "name": "CDN_PROVIDER",
+          "required": false,
+          "description": "Cdn Provider"
+        },
+        {
+          "name": "CDN_CLOUDFLARE_API_TOKEN",
+          "required": false,
+          "description": "Cdn Cloudflare Api Token"
+        },
+        {
+          "name": "CDN_CLOUDFLARE_ZONE_IDS",
+          "required": false,
+          "description": "Cdn Cloudflare Zone Ids"
+        },
+        {
+          "name": "CDN_BUNNYCDN_API_KEY",
+          "required": false,
+          "description": "Cdn Bunnycdn Api Key"
+        },
+        {
+          "name": "CDN_BUNNYCDN_PULL_ZONE_IDS",
+          "required": false,
+          "description": "Cdn Bunnycdn Pull Zone Ids"
+        },
+        {
+          "name": "CDN_SIGNING_KEY",
+          "required": false,
+          "description": "Cdn Signing Key"
+        },
+        {
+          "name": "CDN_SIGNED_URL_TTL",
+          "required": false,
+          "description": "Cdn Signed Url Ttl"
+        },
+        {
+          "name": "CDN_ANALYTICS_SYNC_INTERVAL",
+          "required": false,
+          "description": "Cdn Analytics Sync Interval"
+        },
+        {
+          "name": "CDN_PURGE_BATCH_SIZE",
+          "required": false,
+          "description": "Cdn Purge Batch Size"
+        },
+        {
+          "name": "CDN_API_KEY",
+          "required": false,
+          "description": "Cdn Api Key"
+        },
+        {
+          "name": "CDN_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Cdn Rate Limit Max"
+        },
+        {
+          "name": "CDN_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Cdn Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "chat": {
+      "name": "chat",
+      "version": "1.0.0",
+      "description": "Chat and messaging data management with conversation, messages, participants, and moderation",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/chat",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/chat",
+      "minNselfVersion": "0.4.8",
+      "category": "communication",
+      "tags": [
+        "chat",
+        "messaging",
+        "conversations",
+        "communication",
+        "moderation"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-chat",
+        "defaultPort": 3401,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "chat_conversations",
+        "chat_participants",
+        "chat_messages",
+        "chat_read_receipts",
+        "chat_moderation_actions",
+        "chat_webhook_events"
+      ],
+      "webhooks": [
+        "conversation.created",
+        "conversation.updated",
+        "conversation.archived",
+        "participant.joined",
+        "participant.left",
+        "participant.role_changed",
+        "message.created",
+        "message.updated",
+        "message.deleted",
+        "message.pinned",
+        "message.unpinned",
+        "message.reaction_added",
+        "message.reaction_removed",
+        "moderation.action_taken"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "CHAT_PLUGIN_PORT",
+          "required": false,
+          "description": "Chat Plugin Port"
+        },
+        {
+          "name": "CHAT_MAX_MESSAGE_LENGTH",
+          "required": false,
+          "description": "Chat Max Message Length"
+        },
+        {
+          "name": "CHAT_MAX_ATTACHMENTS",
+          "required": false,
+          "description": "Chat Max Attachments"
+        },
+        {
+          "name": "CHAT_EDIT_WINDOW_MINUTES",
+          "required": false,
+          "description": "Chat Edit Window Minutes"
+        },
+        {
+          "name": "CHAT_MAX_PARTICIPANTS",
+          "required": false,
+          "description": "Chat Max Participants"
+        },
+        {
+          "name": "CHAT_MAX_PINNED",
+          "required": false,
+          "description": "Chat Max Pinned"
+        },
+        {
+          "name": "CHAT_API_KEY",
+          "required": false,
+          "description": "Chat Api Key"
+        },
+        {
+          "name": "CHAT_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Chat Rate Limit Max"
+        },
+        {
+          "name": "CHAT_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Chat Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "cloudflare": {
+      "name": "cloudflare",
+      "version": "1.0.0",
+      "description": "Cloudflare zone, DNS, R2, cache, and analytics management",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/cloudflare",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/cloudflare",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "cloudflare",
+        "cdn",
+        "dns",
+        "r2",
+        "cache",
+        "analytics"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-cloudflare",
+        "defaultPort": 3024,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "cf_zones",
+        "cf_dns_records",
+        "cf_r2_buckets",
+        "cf_cache_purge_log",
+        "cf_analytics",
+        "cf_webhook_events"
+      ],
+      "webhooks": [
+        "cf.zone.synced",
+        "cf.dns.created",
+        "cf.dns.updated",
+        "cf.dns.deleted",
+        "cf.cache.purged",
+        "cf.r2.bucket.created",
+        "cf.analytics.synced"
+      ],
+      "envVars": [
+        {
+          "name": "CF_API_TOKEN",
+          "required": true,
+          "description": "Cf Api Token"
+        },
+        {
+          "name": "CF_PLUGIN_PORT",
+          "required": false,
+          "description": "Cf Plugin Port"
+        },
+        {
+          "name": "CF_PLUGIN_HOST",
+          "required": false,
+          "description": "Cf Plugin Host"
+        },
+        {
+          "name": "CF_LOG_LEVEL",
+          "required": false,
+          "description": "Cf Log Level"
+        },
+        {
+          "name": "CF_APP_IDS",
+          "required": false,
+          "description": "Cf App Ids"
+        },
+        {
+          "name": "CF_ZONE_IDS",
+          "required": false,
+          "description": "Cf Zone Ids"
+        },
+        {
+          "name": "CF_R2_ACCESS_KEY",
+          "required": false,
+          "description": "Cf R2 Access Key"
+        },
+        {
+          "name": "CF_R2_SECRET_KEY",
+          "required": false,
+          "description": "Cf R2 Secret Key"
+        },
+        {
+          "name": "CF_ACCOUNT_ID",
+          "required": false,
+          "description": "Cf Account Id"
+        },
+        {
+          "name": "CF_SYNC_INTERVAL",
+          "required": false,
+          "description": "Cf Sync Interval"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "cms": {
+      "name": "cms",
+      "version": "1.0.0",
+      "description": "Headless CMS plugin with content types, posts, categories, tags, and versioning",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/cms",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/cms",
+      "minNselfVersion": "0.4.8",
+      "category": "content",
+      "tags": [
+        "cms",
+        "content",
+        "blog",
+        "posts",
+        "headless"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-cms",
+        "defaultPort": 3501,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "cms_content_types",
+        "cms_posts",
+        "cms_post_versions",
+        "cms_categories",
+        "cms_tags",
+        "cms_post_categories",
+        "cms_post_tags",
+        "cms_webhook_events"
+      ],
+      "webhooks": [
+        "post.created",
+        "post.updated",
+        "post.deleted",
+        "post.published",
+        "post.unpublished",
+        "category.created",
+        "category.updated",
+        "category.deleted",
+        "tag.created",
+        "tag.updated",
+        "tag.deleted"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "CMS_PLUGIN_PORT",
+          "required": false,
+          "description": "Cms Plugin Port"
+        },
+        {
+          "name": "CMS_MAX_BODY_LENGTH",
+          "required": false,
+          "description": "Cms Max Body Length"
+        },
+        {
+          "name": "CMS_MAX_TITLE_LENGTH",
+          "required": false,
+          "description": "Cms Max Title Length"
+        },
+        {
+          "name": "CMS_SLUG_MAX_LENGTH",
+          "required": false,
+          "description": "Cms Slug Max Length"
+        },
+        {
+          "name": "CMS_MAX_VERSIONS",
+          "required": false,
+          "description": "Cms Max Versions"
+        },
+        {
+          "name": "CMS_SCHEDULED_CHECK_INTERVAL_MS",
+          "required": false,
+          "description": "Cms Scheduled Check Interval Ms"
+        },
+        {
+          "name": "CMS_DEFAULT_CONTENT_TYPES",
+          "required": false,
+          "description": "Cms Default Content Types"
+        },
+        {
+          "name": "CMS_API_KEY",
+          "required": false,
+          "description": "Cms Api Key"
+        },
+        {
+          "name": "CMS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Cms Rate Limit Max"
+        },
+        {
+          "name": "CMS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Cms Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "compliance": {
+      "name": "compliance",
+      "version": "1.0.0",
+      "description": "GDPR/CCPA compliance management with DSARs, consent tracking, data retention, breach notification, and audit trails",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/compliance",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/compliance",
+      "minNselfVersion": "0.4.8",
+      "category": "privacy-legal",
+      "tags": [
+        "compliance",
+        "gdpr",
+        "ccpa",
+        "privacy",
+        "dsar",
+        "consent",
+        "retention",
+        "breach",
+        "audit"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-compliance",
+        "defaultPort": 3706,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "compliance_dsars",
+        "compliance_dsar_activities",
+        "compliance_consents",
+        "compliance_consent_history",
+        "compliance_privacy_policies",
+        "compliance_policy_acceptances",
+        "compliance_retention_policies",
+        "compliance_retention_executions",
+        "compliance_processing_records",
+        "compliance_data_processors",
+        "compliance_data_breaches",
+        "compliance_breach_notifications",
+        "compliance_audit_log"
+      ],
+      "webhooks": [
+        "dsar.created",
+        "dsar.completed",
+        "dsar.overdue",
+        "consent.granted",
+        "consent.withdrawn",
+        "policy.published",
+        "retention.executed",
+        "breach.created",
+        "breach.notified"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "COMPLIANCE_PLUGIN_PORT",
+          "required": false,
+          "description": "Compliance Plugin Port"
+        },
+        {
+          "name": "COMPLIANCE_GDPR_ENABLED",
+          "required": false,
+          "description": "Compliance Gdpr Enabled"
+        },
+        {
+          "name": "COMPLIANCE_CCPA_ENABLED",
+          "required": false,
+          "description": "Compliance Ccpa Enabled"
+        },
+        {
+          "name": "COMPLIANCE_DSAR_DEADLINE_DAYS",
+          "required": false,
+          "description": "Compliance Dsar Deadline Days"
+        },
+        {
+          "name": "COMPLIANCE_BREACH_NOTIFICATION_HOURS",
+          "required": false,
+          "description": "Compliance Breach Notification Hours"
+        },
+        {
+          "name": "COMPLIANCE_CONSENT_REQUIRED",
+          "required": false,
+          "description": "Compliance Consent Required"
+        },
+        {
+          "name": "COMPLIANCE_CONSENT_EXPIRY_DAYS",
+          "required": false,
+          "description": "Compliance Consent Expiry Days"
+        },
+        {
+          "name": "COMPLIANCE_RETENTION_ENABLED",
+          "required": false,
+          "description": "Compliance Retention Enabled"
+        },
+        {
+          "name": "COMPLIANCE_AUDIT_ENABLED",
+          "required": false,
+          "description": "Compliance Audit Enabled"
+        },
+        {
+          "name": "COMPLIANCE_AUDIT_RETENTION_DAYS",
+          "required": false,
+          "description": "Compliance Audit Retention Days"
+        },
+        {
+          "name": "COMPLIANCE_EXPORT_FORMAT",
+          "required": false,
+          "description": "Compliance Export Format"
+        },
+        {
+          "name": "COMPLIANCE_EXPORT_EXPIRY_HOURS",
+          "required": false,
+          "description": "Compliance Export Expiry Hours"
+        },
+        {
+          "name": "COMPLIANCE_API_KEY",
+          "required": false,
+          "description": "Compliance Api Key"
+        },
+        {
+          "name": "COMPLIANCE_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Compliance Rate Limit Max"
+        },
+        {
+          "name": "COMPLIANCE_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Compliance Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "content-moderation": {
+      "name": "content-moderation",
+      "version": "1.0.0",
+      "description": "Content moderation and safety service with automated review, manual queue, and appeals",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-moderation",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/content-moderation",
+      "minNselfVersion": "0.4.8",
+      "category": "security",
+      "tags": [
+        "moderation",
+        "content-safety",
+        "review",
+        "appeals",
+        "automated-moderation"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-content-moderation",
+        "defaultPort": 3028,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "mod_reviews",
+        "mod_policies",
+        "mod_appeals",
+        "mod_user_strikes",
+        "mod_webhook_events"
+      ],
+      "webhooks": [
+        "mod.review.approved",
+        "mod.review.flagged",
+        "mod.review.rejected",
+        "mod.review.manual.completed",
+        "mod.appeal.submitted",
+        "mod.appeal.resolved",
+        "mod.user.strike.added",
+        "mod.user.strike.threshold"
+      ],
+      "envVars": [
+        {
+          "name": "MOD_PROVIDER",
+          "required": true,
+          "description": "Mod Provider"
+        },
+        {
+          "name": "MOD_PLUGIN_PORT",
+          "required": false,
+          "description": "Mod Plugin Port"
+        },
+        {
+          "name": "MOD_PLUGIN_HOST",
+          "required": false,
+          "description": "Mod Plugin Host"
+        },
+        {
+          "name": "MOD_LOG_LEVEL",
+          "required": false,
+          "description": "Mod Log Level"
+        },
+        {
+          "name": "MOD_APP_IDS",
+          "required": false,
+          "description": "Mod App Ids"
+        },
+        {
+          "name": "MOD_OPENAI_API_KEY",
+          "required": false,
+          "description": "Mod Openai Api Key"
+        },
+        {
+          "name": "MOD_GOOGLE_VISION_KEY",
+          "required": false,
+          "description": "Mod Google Vision Key"
+        },
+        {
+          "name": "MOD_AWS_REKOGNITION_KEY",
+          "required": false,
+          "description": "Mod Aws Rekognition Key"
+        },
+        {
+          "name": "MOD_AWS_REKOGNITION_SECRET",
+          "required": false,
+          "description": "Mod Aws Rekognition Secret"
+        },
+        {
+          "name": "MOD_AWS_REKOGNITION_REGION",
+          "required": false,
+          "description": "Mod Aws Rekognition Region"
+        },
+        {
+          "name": "MOD_AUTO_APPROVE_BELOW",
+          "required": false,
+          "description": "Mod Auto Approve Below"
+        },
+        {
+          "name": "MOD_AUTO_REJECT_ABOVE",
+          "required": false,
+          "description": "Mod Auto Reject Above"
+        },
+        {
+          "name": "MOD_FLAG_THRESHOLD",
+          "required": false,
+          "description": "Mod Flag Threshold"
+        },
+        {
+          "name": "MOD_STRIKE_WARN_THRESHOLD",
+          "required": false,
+          "description": "Mod Strike Warn Threshold"
+        },
+        {
+          "name": "MOD_STRIKE_BAN_THRESHOLD",
+          "required": false,
+          "description": "Mod Strike Ban Threshold"
+        },
+        {
+          "name": "MOD_STRIKE_EXPIRY_DAYS",
+          "required": false,
+          "description": "Mod Strike Expiry Days"
+        },
+        {
+          "name": "MOD_REVIEW_SLA_HOURS",
+          "required": false,
+          "description": "Mod Review Sla Hours"
+        },
+        {
+          "name": "MOD_QUEUE_WORKER_CONCURRENCY",
+          "required": false,
+          "description": "Mod Queue Worker Concurrency"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "content-policy": {
+      "name": "content-policy",
+      "version": "1.0.0",
+      "description": "Content policy evaluation and moderation engine with rule-based filtering",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-policy",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/content-policy",
+      "minNselfVersion": "0.4.8",
+      "category": "content",
+      "tags": [
+        "content",
+        "moderation",
+        "policy",
+        "filtering",
+        "compliance"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-content-policy",
+        "defaultPort": 3504,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "cp_policies",
+        "cp_rules",
+        "cp_evaluations",
+        "cp_word_lists",
+        "cp_overrides"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "CP_PLUGIN_PORT",
+          "required": false,
+          "description": "Cp Plugin Port"
+        },
+        {
+          "name": "CP_DEFAULT_ACTION",
+          "required": false,
+          "description": "Cp Default Action"
+        },
+        {
+          "name": "CP_PROFANITY_ENABLED",
+          "required": false,
+          "description": "Cp Profanity Enabled"
+        },
+        {
+          "name": "CP_MAX_CONTENT_LENGTH",
+          "required": false,
+          "description": "Cp Max Content Length"
+        },
+        {
+          "name": "CP_EVALUATION_LOG_ENABLED",
+          "required": false,
+          "description": "Cp Evaluation Log Enabled"
+        },
+        {
+          "name": "CP_API_KEY",
+          "required": false,
+          "description": "Cp Api Key"
+        },
+        {
+          "name": "CP_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Cp Rate Limit Max"
+        },
+        {
+          "name": "CP_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Cp Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "content-progress": {
+      "name": "content-progress",
+      "version": "1.0.0",
+      "description": "Track video, audio, and content playback progress with continue watching, watchlists, and favorites",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-progress",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/content-progress",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "media",
+        "video",
+        "audio",
+        "progress",
+        "watchlist",
+        "favorites"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-content-progress",
+        "defaultPort": 3022,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "progress_positions",
+        "progress_history",
+        "progress_watchlists",
+        "progress_favorites",
+        "progress_webhook_events"
+      ],
+      "webhooks": [
+        "progress.updated",
+        "progress.completed",
+        "watchlist.added",
+        "watchlist.removed",
+        "favorite.added",
+        "favorite.removed"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "PROGRESS_PLUGIN_PORT",
+          "required": false,
+          "description": "Progress Plugin Port"
+        },
+        {
+          "name": "PROGRESS_COMPLETE_THRESHOLD",
+          "required": false,
+          "description": "Progress Complete Threshold"
+        },
+        {
+          "name": "PROGRESS_HISTORY_SAMPLE_SECONDS",
+          "required": false,
+          "description": "Progress History Sample Seconds"
+        },
+        {
+          "name": "PROGRESS_HISTORY_RETENTION_DAYS",
+          "required": false,
+          "description": "Progress History Retention Days"
+        },
+        {
+          "name": "PROGRESS_API_KEY",
+          "required": false,
+          "description": "Progress Api Key"
+        },
+        {
+          "name": "PROGRESS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Progress Rate Limit Max"
+        },
+        {
+          "name": "PROGRESS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Progress Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "data-export": {
+      "name": "data-export",
+      "version": "1.0.0",
+      "description": "GDPR-compliant data export, deletion, and import for user data and plugin data",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/data-export",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/data-export",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "gdpr",
+        "export",
+        "deletion",
+        "import",
+        "compliance",
+        "privacy"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-data-export",
+        "defaultPort": 3306,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "export_requests",
+        "export_deletion_requests",
+        "export_plugin_registry",
+        "export_import_jobs",
+        "export_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "EXPORT_PLUGIN_PORT",
+          "required": false,
+          "description": "Export Plugin Port"
+        },
+        {
+          "name": "EXPORT_STORAGE_PATH",
+          "required": false,
+          "description": "Export Storage Path"
+        },
+        {
+          "name": "EXPORT_DOWNLOAD_EXPIRY_HOURS",
+          "required": false,
+          "description": "Export Download Expiry Hours"
+        },
+        {
+          "name": "EXPORT_DELETION_COOLDOWN_HOURS",
+          "required": false,
+          "description": "Export Deletion Cooldown Hours"
+        },
+        {
+          "name": "EXPORT_MAX_EXPORT_SIZE_MB",
+          "required": false,
+          "description": "Export Max Export Size Mb"
+        },
+        {
+          "name": "EXPORT_VERIFICATION_CODE_LENGTH",
+          "required": false,
+          "description": "Export Verification Code Length"
+        },
+        {
+          "name": "EXPORT_API_KEY",
+          "required": false,
+          "description": "Export Api Key"
+        },
+        {
+          "name": "EXPORT_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Export Rate Limit Max"
+        },
+        {
+          "name": "EXPORT_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Export Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "devices": {
+      "name": "devices",
+      "version": "1.0.0",
+      "description": "IoT device enrollment, trust management, and command dispatch service.",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/devices",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/devices",
+      "minNselfVersion": "0.9.8",
+      "category": "streaming",
+      "tags": [
+        "devices",
+        "iot",
+        "antbox",
+        "enrollment",
+        "commands",
+        "ingest"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-devices",
+        "defaultPort": 3603,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "dev_devices",
+        "dev_commands",
+        "dev_telemetry",
+        "dev_ingest_sessions",
+        "dev_audit_log"
+      ],
+      "views": [
+        "dev_devices_by_status",
+        "dev_command_success_rate",
+        "dev_ingest_uptime",
+        "dev_health_trends"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DEV_ENROLLMENT_TOKEN_TTL",
+          "required": false,
+          "description": "Dev Enrollment Token Ttl"
+        },
+        {
+          "name": "DEV_CHALLENGE_TTL",
+          "required": false,
+          "description": "Dev Challenge Ttl"
+        },
+        {
+          "name": "DEV_HEARTBEAT_INTERVAL",
+          "required": false,
+          "description": "Dev Heartbeat Interval"
+        },
+        {
+          "name": "DEV_HEARTBEAT_TIMEOUT",
+          "required": false,
+          "description": "Dev Heartbeat Timeout"
+        },
+        {
+          "name": "DEV_COMMAND_DEFAULT_TIMEOUT",
+          "required": false,
+          "description": "Dev Command Default Timeout"
+        },
+        {
+          "name": "DEV_COMMAND_MAX_RETRIES",
+          "required": false,
+          "description": "Dev Command Max Retries"
+        },
+        {
+          "name": "DEV_TELEMETRY_RETENTION_DAYS",
+          "required": false,
+          "description": "Dev Telemetry Retention Days"
+        },
+        {
+          "name": "DEV_INGEST_HEARTBEAT_INTERVAL",
+          "required": false,
+          "description": "Dev Ingest Heartbeat Interval"
+        },
+        {
+          "name": "DEV_INGEST_HEARTBEAT_TIMEOUT",
+          "required": false,
+          "description": "Dev Ingest Heartbeat Timeout"
+        },
+        {
+          "name": "DEV_INGEST_RETRY_MAX",
+          "required": false,
+          "description": "Dev Ingest Retry Max"
+        },
+        {
+          "name": "DEV_INGEST_RETRY_BACKOFF_BASE",
+          "required": false,
+          "description": "Dev Ingest Retry Backoff Base"
+        },
+        {
+          "name": "DEV_REALTIME_URL",
+          "required": false,
+          "description": "Dev Realtime Url"
+        },
+        {
+          "name": "DEV_RECORDING_URL",
+          "required": false,
+          "description": "Dev Recording Url"
+        },
+        {
+          "name": "DEV_STREAM_GATEWAY_URL",
+          "required": false,
+          "description": "Dev Stream Gateway Url"
+        },
+        {
+          "name": "DEV_APP_TV_HEARTBEAT_INTERVAL",
+          "required": false,
+          "description": "Dev App Tv Heartbeat Interval"
+        },
+        {
+          "name": "DEV_APP_TV_INGEST_HEARTBEAT_INTERVAL",
+          "required": false,
+          "description": "Dev App Tv Ingest Heartbeat Interval"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": false,
+          "description": "Database Url"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Port"
+        },
+        {
+          "name": "REDIS_URL",
+          "required": false,
+          "description": "Redis Url"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "app_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "default"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "documents": {
+      "name": "documents",
+      "version": "1.0.0",
+      "description": "Document management and generation service with templates, versioning, and sharing",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/documents",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/documents",
+      "minNselfVersion": "0.4.8",
+      "category": "data-services",
+      "tags": [
+        "documents",
+        "pdf",
+        "templates",
+        "generation",
+        "versioning",
+        "sharing"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-documents",
+        "defaultPort": 3029,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "docs_documents",
+        "docs_templates",
+        "docs_versions",
+        "docs_shares",
+        "docs_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DOCS_PLUGIN_PORT",
+          "required": false,
+          "description": "Docs Plugin Port"
+        },
+        {
+          "name": "DOCS_APP_IDS",
+          "required": false,
+          "description": "Docs App Ids"
+        },
+        {
+          "name": "DOCS_PDF_ENGINE",
+          "required": false,
+          "description": "Docs Pdf Engine"
+        },
+        {
+          "name": "DOCS_DEFAULT_TEMPLATE_ENGINE",
+          "required": false,
+          "description": "Docs Default Template Engine"
+        },
+        {
+          "name": "DOCS_STORAGE_PROVIDER",
+          "required": false,
+          "description": "Docs Storage Provider"
+        },
+        {
+          "name": "DOCS_MAX_DOCUMENT_SIZE_MB",
+          "required": false,
+          "description": "Docs Max Document Size Mb"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "entitlements": {
+      "name": "entitlements",
+      "version": "1.0.0",
+      "description": "Feature gating, subscription plan management, usage quota tracking, and metered billing",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/entitlements",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/entitlements",
+      "minNselfVersion": "0.4.8",
+      "category": "monetization",
+      "tags": [
+        "entitlements",
+        "subscriptions",
+        "plans",
+        "quotas",
+        "billing",
+        "feature-gating"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-entitlements",
+        "defaultPort": 3714,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "entitlement_plans",
+        "entitlement_subscriptions",
+        "entitlement_features",
+        "entitlement_quotas",
+        "entitlement_usage",
+        "entitlement_addons",
+        "entitlement_grants",
+        "entitlement_events"
+      ],
+      "webhooks": [
+        "subscription.created",
+        "subscription.updated",
+        "subscription.canceled",
+        "subscription.renewed",
+        "trial.started",
+        "trial.ended",
+        "quota.exceeded",
+        "quota.reset",
+        "grant.created",
+        "grant.revoked",
+        "addon.added",
+        "addon.removed",
+        "plan.upgraded",
+        "plan.downgraded"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "ENTITLEMENTS_PLUGIN_PORT",
+          "required": false,
+          "description": "Entitlements Plugin Port"
+        },
+        {
+          "name": "ENTITLEMENTS_DEFAULT_CURRENCY",
+          "required": false,
+          "description": "Entitlements Default Currency"
+        },
+        {
+          "name": "ENTITLEMENTS_DEFAULT_TRIAL_DAYS",
+          "required": false,
+          "description": "Entitlements Default Trial Days"
+        },
+        {
+          "name": "ENTITLEMENTS_API_KEY",
+          "required": false,
+          "description": "Entitlements Api Key"
+        },
+        {
+          "name": "ENTITLEMENTS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Entitlements Rate Limit Max"
+        },
+        {
+          "name": "ENTITLEMENTS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Entitlements Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "epg": {
+      "name": "epg",
+      "version": "1.0.0",
+      "description": "Electronic program guide with XMLTV import, channel management, and schedule queries",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/epg",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/epg",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "epg",
+        "tv-guide",
+        "xmltv",
+        "channels",
+        "schedule",
+        "program-guide",
+        "iptv"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-epg",
+        "defaultPort": 3031,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "epg_channels",
+        "epg_programs",
+        "epg_schedules",
+        "epg_channel_groups",
+        "epg_channel_group_members",
+        "epg_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "EPG_PLUGIN_PORT",
+          "required": false,
+          "description": "Epg Plugin Port"
+        },
+        {
+          "name": "EPG_APP_IDS",
+          "required": false,
+          "description": "Epg App Ids"
+        },
+        {
+          "name": "EPG_XMLTV_URLS",
+          "required": false,
+          "description": "Epg Xmltv Urls"
+        },
+        {
+          "name": "EPG_SCHEDULES_DIRECT_USERNAME",
+          "required": false,
+          "description": "Epg Schedules Direct Username"
+        },
+        {
+          "name": "EPG_SCHEDULES_DIRECT_PASSWORD",
+          "required": false,
+          "description": "Epg Schedules Direct Password"
+        },
+        {
+          "name": "EPG_DEFAULT_TIMEZONE",
+          "required": false,
+          "description": "Epg Default Timezone"
+        },
+        {
+          "name": "EPG_GUIDE_DAYS_AHEAD",
+          "required": false,
+          "description": "Epg Guide Days Ahead"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "export-import": {
+      "name": "export-import",
+      "version": "1.0.0",
+      "description": "Bulk data export/import with multiple format support, migration tools, backup/restore, and cross-platform data transfer",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/export-import",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/export-import",
+      "minNselfVersion": "0.4.8",
+      "category": "data-management",
+      "tags": [
+        "export",
+        "import",
+        "migration",
+        "backup",
+        "restore",
+        "data-transfer"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-export-import",
+        "defaultPort": 3717,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "ei_export_jobs",
+        "ei_import_jobs",
+        "ei_migration_jobs",
+        "ei_backup_snapshots",
+        "ei_restore_jobs",
+        "ei_transform_templates",
+        "ei_data_transfer_audit",
+        "ei_backup_schedule"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "EI_PLUGIN_PORT",
+          "required": false,
+          "description": "Ei Plugin Port"
+        },
+        {
+          "name": "EXPORT_STORAGE_PATH",
+          "required": false,
+          "description": "Export Storage Path"
+        },
+        {
+          "name": "EXPORT_MAX_FILE_SIZE_GB",
+          "required": false,
+          "description": "Export Max File Size Gb"
+        },
+        {
+          "name": "EXPORT_RETENTION_DAYS",
+          "required": false,
+          "description": "Export Retention Days"
+        },
+        {
+          "name": "IMPORT_MAX_FILE_SIZE_GB",
+          "required": false,
+          "description": "Import Max File Size Gb"
+        },
+        {
+          "name": "IMPORT_TEMP_PATH",
+          "required": false,
+          "description": "Import Temp Path"
+        },
+        {
+          "name": "BACKUP_STORAGE_BACKEND",
+          "required": false,
+          "description": "Backup Storage Backend"
+        },
+        {
+          "name": "BACKUP_RETENTION_DAYS",
+          "required": false,
+          "description": "Backup Retention Days"
+        },
+        {
+          "name": "MIGRATION_BATCH_SIZE",
+          "required": false,
+          "description": "Migration Batch Size"
+        },
+        {
+          "name": "MIGRATION_RATE_LIMIT_MS",
+          "required": false,
+          "description": "Migration Rate Limit Ms"
+        },
+        {
+          "name": "EXPORT_IMPORT_QUEUE_CONCURRENCY",
+          "required": false,
+          "description": "Export Import Queue Concurrency"
+        },
+        {
+          "name": "EXPORT_IMPORT_QUEUE_TIMEOUT_MINUTES",
+          "required": false,
+          "description": "Export Import Queue Timeout Minutes"
+        },
+        {
+          "name": "COMPRESSION_LEVEL",
+          "required": false,
+          "description": "Compression Level"
+        },
+        {
+          "name": "COMPRESSION_ALGORITHM",
+          "required": false,
+          "description": "Compression Algorithm"
+        },
+        {
+          "name": "EI_API_KEY",
+          "required": false,
+          "description": "Ei Api Key"
+        },
+        {
+          "name": "EI_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Ei Rate Limit Max"
+        },
+        {
+          "name": "EI_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Ei Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "feature-flags": {
+      "name": "feature-flags",
+      "version": "1.0.0",
+      "description": "Feature flags service with targeting rules, segments, and evaluation engine",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/feature-flags",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/feature-flags",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "feature-flags",
+        "feature-toggles",
+        "toggles",
+        "configuration",
+        "infrastructure"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-feature-flags",
+        "defaultPort": 3305,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "ff_flags",
+        "ff_rules",
+        "ff_segments",
+        "ff_evaluations",
+        "ff_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "FF_PLUGIN_PORT",
+          "required": false,
+          "description": "Ff Plugin Port"
+        },
+        {
+          "name": "FF_EVALUATION_LOG_ENABLED",
+          "required": false,
+          "description": "Ff Evaluation Log Enabled"
+        },
+        {
+          "name": "FF_EVALUATION_LOG_SAMPLE_RATE",
+          "required": false,
+          "description": "Ff Evaluation Log Sample Rate"
+        },
+        {
+          "name": "FF_CACHE_TTL_SECONDS",
+          "required": false,
+          "description": "Ff Cache Ttl Seconds"
+        },
+        {
+          "name": "FF_API_KEY",
+          "required": false,
+          "description": "Ff Api Key"
+        },
+        {
+          "name": "FF_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Ff Rate Limit Max"
+        },
+        {
+          "name": "FF_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Ff Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "geocoding": {
+      "name": "geocoding",
+      "version": "1.0.0",
+      "description": "Geocoding and location services plugin - forward/reverse geocoding, place search, geofences",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/geocoding",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/geocoding",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "geocoding",
+        "maps",
+        "location",
+        "geofencing",
+        "places"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-geocoding",
+        "defaultPort": 3203,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "geo_cache",
+        "geo_geofences",
+        "geo_geofence_events",
+        "geo_places"
+      ],
+      "views": [
+        "geo_cache_hit_rate",
+        "geo_volume_daily",
+        "geo_geofence_activity"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "GEOCODING_PLUGIN_PORT",
+          "required": false,
+          "description": "Geocoding Plugin Port"
+        },
+        {
+          "name": "GEOCODING_PROVIDERS",
+          "required": false,
+          "description": "Geocoding Providers"
+        },
+        {
+          "name": "GEOCODING_GOOGLE_API_KEY",
+          "required": false,
+          "description": "Geocoding Google Api Key"
+        },
+        {
+          "name": "GEOCODING_MAPBOX_ACCESS_TOKEN",
+          "required": false,
+          "description": "Geocoding Mapbox Access Token"
+        },
+        {
+          "name": "GEOCODING_NOMINATIM_URL",
+          "required": false,
+          "description": "Geocoding Nominatim Url"
+        },
+        {
+          "name": "GEOCODING_NOMINATIM_EMAIL",
+          "required": false,
+          "description": "Geocoding Nominatim Email"
+        },
+        {
+          "name": "GEOCODING_CACHE_TTL_DAYS",
+          "required": false,
+          "description": "Geocoding Cache Ttl Days"
+        },
+        {
+          "name": "GEOCODING_CACHE_ENABLED",
+          "required": false,
+          "description": "Geocoding Cache Enabled"
+        },
+        {
+          "name": "GEOCODING_MAX_BATCH_SIZE",
+          "required": false,
+          "description": "Geocoding Max Batch Size"
+        },
+        {
+          "name": "GEOCODING_RATE_LIMIT_PROVIDER",
+          "required": false,
+          "description": "Geocoding Rate Limit Provider"
+        },
+        {
+          "name": "GEOCODING_GEOFENCE_CHECK_TOLERANCE_METERS",
+          "required": false,
+          "description": "Geocoding Geofence Check Tolerance Meters"
+        },
+        {
+          "name": "GEOCODING_NOTIFY_URL",
+          "required": false,
+          "description": "Geocoding Notify Url"
+        },
+        {
+          "name": "GEOCODING_API_KEY",
+          "required": false,
+          "description": "Geocoding Api Key"
+        },
+        {
+          "name": "GEOCODING_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Geocoding Rate Limit Max"
+        },
+        {
+          "name": "GEOCODING_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Geocoding Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "geolocation": {
+      "name": "geolocation",
+      "version": "1.0.0",
+      "description": "Real-time location sharing, history tracking, geofencing, and proximity queries",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/geolocation",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/geolocation",
+      "minNselfVersion": "0.4.8",
+      "category": "data-services",
+      "tags": [
+        "geolocation",
+        "gps",
+        "location",
+        "geofence",
+        "tracking",
+        "proximity"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-geolocation",
+        "defaultPort": 3026,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "geo_locations",
+        "geo_latest",
+        "geo_fences",
+        "geo_fence_events",
+        "geo_webhook_events"
+      ],
+      "webhooks": [
+        "geo.location.updated",
+        "geo.geofence.enter",
+        "geo.geofence.exit",
+        "geo.geofence.created",
+        "geo.geofence.deleted",
+        "geo.sos.triggered",
+        "geo.battery.low"
+      ],
+      "envVars": [
+        {
+          "name": "GEO_PLUGIN_PORT",
+          "required": false,
+          "description": "Geo Plugin Port"
+        },
+        {
+          "name": "GEO_PLUGIN_HOST",
+          "required": false,
+          "description": "Geo Plugin Host"
+        },
+        {
+          "name": "GEO_LOG_LEVEL",
+          "required": false,
+          "description": "Geo Log Level"
+        },
+        {
+          "name": "GEO_APP_IDS",
+          "required": false,
+          "description": "Geo App Ids"
+        },
+        {
+          "name": "GEO_POSTGIS_ENABLED",
+          "required": false,
+          "description": "Geo Postgis Enabled"
+        },
+        {
+          "name": "GEO_HISTORY_RETENTION_DAYS",
+          "required": false,
+          "description": "Geo History Retention Days"
+        },
+        {
+          "name": "GEO_BATCH_MAX_POINTS",
+          "required": false,
+          "description": "Geo Batch Max Points"
+        },
+        {
+          "name": "GEO_MIN_UPDATE_INTERVAL_SECONDS",
+          "required": false,
+          "description": "Geo Min Update Interval Seconds"
+        },
+        {
+          "name": "GEO_GEOFENCE_CHECK_ON_UPDATE",
+          "required": false,
+          "description": "Geo Geofence Check On Update"
+        },
+        {
+          "name": "GEO_REVERSE_GEOCODE_ENABLED",
+          "required": false,
+          "description": "Geo Reverse Geocode Enabled"
+        },
+        {
+          "name": "GEO_REVERSE_GEOCODE_PROVIDER",
+          "required": false,
+          "description": "Geo Reverse Geocode Provider"
+        },
+        {
+          "name": "GEO_REVERSE_GEOCODE_API_KEY",
+          "required": false,
+          "description": "Geo Reverse Geocode Api Key"
+        },
+        {
+          "name": "GEO_LOW_BATTERY_THRESHOLD",
+          "required": false,
+          "description": "Geo Low Battery Threshold"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "invitations": {
+      "name": "invitations",
+      "version": "1.0.0",
+      "description": "Invitation management system with email/SMS delivery and tracking",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/invitations",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/invitations",
+      "minNselfVersion": "0.4.8",
+      "category": "communication",
+      "tags": [
+        "invitations",
+        "invite",
+        "onboarding",
+        "email",
+        "sms",
+        "referrals"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-invitations",
+        "defaultPort": 3402,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "inv_invitations",
+        "inv_templates",
+        "inv_bulk_sends",
+        "inv_webhook_events"
+      ],
+      "webhooks": [
+        "invitation.created",
+        "invitation.sent",
+        "invitation.delivered",
+        "invitation.accepted",
+        "invitation.declined",
+        "invitation.expired",
+        "invitation.revoked",
+        "bulk.started",
+        "bulk.completed",
+        "template.created",
+        "template.updated"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "INVITATIONS_PLUGIN_PORT",
+          "required": false,
+          "description": "Invitations Plugin Port"
+        },
+        {
+          "name": "INVITATIONS_DEFAULT_EXPIRY_HOURS",
+          "required": false,
+          "description": "Invitations Default Expiry Hours"
+        },
+        {
+          "name": "INVITATIONS_CODE_LENGTH",
+          "required": false,
+          "description": "Invitations Code Length"
+        },
+        {
+          "name": "INVITATIONS_MAX_BULK_SIZE",
+          "required": false,
+          "description": "Invitations Max Bulk Size"
+        },
+        {
+          "name": "INVITATIONS_ACCEPT_URL_TEMPLATE",
+          "required": false,
+          "description": "Invitations Accept Url Template"
+        },
+        {
+          "name": "INVITATIONS_API_KEY",
+          "required": false,
+          "description": "Invitations Api Key"
+        },
+        {
+          "name": "INVITATIONS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Invitations Rate Limit Max"
+        },
+        {
+          "name": "INVITATIONS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Invitations Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "knowledge-base": {
+      "name": "knowledge-base",
+      "version": "1.0.0",
+      "description": "Knowledge base with documentation, FAQ, semantic search, versioning, translations, and analytics",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/knowledge-base",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/knowledge-base",
+      "minNselfVersion": "0.4.8",
+      "category": "content",
+      "tags": [
+        "knowledge-base",
+        "documentation",
+        "faq",
+        "search",
+        "versioning",
+        "translations"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-knowledge-base",
+        "defaultPort": 3713,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "kb_documents",
+        "kb_collections",
+        "kb_faqs",
+        "kb_attachments",
+        "kb_comments",
+        "kb_analytics",
+        "kb_translations",
+        "kb_review_requests"
+      ],
+      "webhooks": [
+        "document.created",
+        "document.updated",
+        "document.published",
+        "document.archived",
+        "faq.created",
+        "faq.updated",
+        "comment.created",
+        "search.performed",
+        "review.requested",
+        "review.completed"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "KB_PLUGIN_PORT",
+          "required": false,
+          "description": "Kb Plugin Port"
+        },
+        {
+          "name": "KB_SEMANTIC_SEARCH_ENABLED",
+          "required": false,
+          "description": "Kb Semantic Search Enabled"
+        },
+        {
+          "name": "KB_DEFAULT_LANGUAGE",
+          "required": false,
+          "description": "Kb Default Language"
+        },
+        {
+          "name": "KB_MAX_DOCUMENT_SIZE",
+          "required": false,
+          "description": "Kb Max Document Size"
+        },
+        {
+          "name": "KB_CACHE_ENABLED",
+          "required": false,
+          "description": "Kb Cache Enabled"
+        },
+        {
+          "name": "KB_CACHE_TTL",
+          "required": false,
+          "description": "Kb Cache Ttl"
+        },
+        {
+          "name": "KB_API_KEY",
+          "required": false,
+          "description": "Kb Api Key"
+        },
+        {
+          "name": "KB_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Kb Rate Limit Max"
+        },
+        {
+          "name": "KB_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Kb Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "link-preview": {
+      "name": "link-preview",
+      "version": "1.0.0",
+      "description": "URL metadata extraction with Open Graph, Twitter Cards, oEmbed support, custom previews, and caching",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/link-preview",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/link-preview",
+      "minNselfVersion": "0.4.8",
+      "category": "content-enhancement",
+      "tags": [
+        "link-preview",
+        "oembed",
+        "open-graph",
+        "metadata",
+        "caching",
+        "url"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-link-preview",
+        "defaultPort": 3718,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "lp_link_previews",
+        "lp_link_preview_usage",
+        "lp_preview_templates",
+        "lp_oembed_providers",
+        "lp_url_blocklist",
+        "lp_preview_settings",
+        "lp_preview_analytics"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "LP_PLUGIN_PORT",
+          "required": false,
+          "description": "Lp Plugin Port"
+        },
+        {
+          "name": "LINK_PREVIEW_ENABLED",
+          "required": false,
+          "description": "Link Preview Enabled"
+        },
+        {
+          "name": "LINK_PREVIEW_CACHE_TTL_HOURS",
+          "required": false,
+          "description": "Link Preview Cache Ttl Hours"
+        },
+        {
+          "name": "LINK_PREVIEW_TIMEOUT_SECONDS",
+          "required": false,
+          "description": "Link Preview Timeout Seconds"
+        },
+        {
+          "name": "LINK_PREVIEW_USER_AGENT",
+          "required": false,
+          "description": "Link Preview User Agent"
+        },
+        {
+          "name": "LINK_PREVIEW_MAX_RESPONSE_SIZE_MB",
+          "required": false,
+          "description": "Link Preview Max Response Size Mb"
+        },
+        {
+          "name": "LINK_PREVIEW_FOLLOW_REDIRECTS",
+          "required": false,
+          "description": "Link Preview Follow Redirects"
+        },
+        {
+          "name": "LINK_PREVIEW_MAX_REDIRECTS",
+          "required": false,
+          "description": "Link Preview Max Redirects"
+        },
+        {
+          "name": "LINK_PREVIEW_RESPECT_ROBOTS_TXT",
+          "required": false,
+          "description": "Link Preview Respect Robots Txt"
+        },
+        {
+          "name": "OEMBED_ENABLED",
+          "required": false,
+          "description": "Oembed Enabled"
+        },
+        {
+          "name": "OEMBED_DISCOVERY",
+          "required": false,
+          "description": "Oembed Discovery"
+        },
+        {
+          "name": "OEMBED_MAX_WIDTH",
+          "required": false,
+          "description": "Oembed Max Width"
+        },
+        {
+          "name": "OEMBED_MAX_HEIGHT",
+          "required": false,
+          "description": "Oembed Max Height"
+        },
+        {
+          "name": "LINK_PREVIEW_SAFETY_CHECK",
+          "required": false,
+          "description": "Link Preview Safety Check"
+        },
+        {
+          "name": "LINK_PREVIEW_PHISHING_DETECTION",
+          "required": false,
+          "description": "Link Preview Phishing Detection"
+        },
+        {
+          "name": "LINK_PREVIEW_RATE_LIMIT_PER_MINUTE",
+          "required": false,
+          "description": "Link Preview Rate Limit Per Minute"
+        },
+        {
+          "name": "LINK_PREVIEW_RATE_LIMIT_PER_DOMAIN",
+          "required": false,
+          "description": "Link Preview Rate Limit Per Domain"
+        },
+        {
+          "name": "LP_API_KEY",
+          "required": false,
+          "description": "Lp Api Key"
+        },
+        {
+          "name": "LP_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Lp Rate Limit Max"
+        },
+        {
+          "name": "LP_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Lp Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "livekit": {
+      "name": "livekit",
+      "version": "1.0.0",
+      "description": "LiveKit voice/video infrastructure - room management, participant tracking, recording/egress, quality monitoring",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/livekit",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/livekit",
+      "minNselfVersion": "0.4.8",
+      "category": "voice-video",
+      "tags": [
+        "livekit",
+        "webrtc",
+        "voice",
+        "video",
+        "streaming",
+        "recording",
+        "egress",
+        "sfu"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-livekit",
+        "defaultPort": 3707,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "nchat_livekit_rooms",
+        "nchat_livekit_participants",
+        "nchat_livekit_egress_jobs",
+        "nchat_livekit_tokens",
+        "nchat_livekit_quality_metrics",
+        "nchat_livekit_webhook_events"
+      ],
+      "webhooks": [
+        "room.created",
+        "room.closed",
+        "participant.joined",
+        "participant.left",
+        "egress.started",
+        "egress.completed",
+        "egress.failed"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "LIVEKIT_URL",
+          "required": true,
+          "description": "Livekit Url"
+        },
+        {
+          "name": "LIVEKIT_API_KEY",
+          "required": true,
+          "description": "Livekit Api Key"
+        },
+        {
+          "name": "LIVEKIT_API_SECRET",
+          "required": true,
+          "description": "Livekit Api Secret"
+        },
+        {
+          "name": "LIVEKIT_PLUGIN_PORT",
+          "required": false,
+          "description": "Livekit Plugin Port"
+        },
+        {
+          "name": "LIVEKIT_EGRESS_ENABLED",
+          "required": false,
+          "description": "Livekit Egress Enabled"
+        },
+        {
+          "name": "LIVEKIT_RECORDINGS_PATH",
+          "required": false,
+          "description": "Livekit Recordings Path"
+        },
+        {
+          "name": "LIVEKIT_RECORDINGS_S3_BUCKET",
+          "required": false,
+          "description": "Livekit Recordings S3 Bucket"
+        },
+        {
+          "name": "LIVEKIT_QUALITY_MONITORING_ENABLED",
+          "required": false,
+          "description": "Livekit Quality Monitoring Enabled"
+        },
+        {
+          "name": "LIVEKIT_QUALITY_SAMPLE_INTERVAL",
+          "required": false,
+          "description": "Livekit Quality Sample Interval"
+        },
+        {
+          "name": "LIVEKIT_TOKEN_DEFAULT_TTL",
+          "required": false,
+          "description": "Livekit Token Default Ttl"
+        },
+        {
+          "name": "LIVEKIT_TOKEN_MAX_TTL",
+          "required": false,
+          "description": "Livekit Token Max Ttl"
+        },
+        {
+          "name": "LIVEKIT_ROOM_DEFAULT_MAX_PARTICIPANTS",
+          "required": false,
+          "description": "Livekit Room Default Max Participants"
+        },
+        {
+          "name": "LIVEKIT_ROOM_EMPTY_TIMEOUT",
+          "required": false,
+          "description": "Livekit Room Empty Timeout"
+        },
+        {
+          "name": "LIVEKIT_MAX_CONCURRENT_ROOMS",
+          "required": false,
+          "description": "Livekit Max Concurrent Rooms"
+        },
+        {
+          "name": "LIVEKIT_MAX_PARTICIPANTS_PER_ROOM",
+          "required": false,
+          "description": "Livekit Max Participants Per Room"
+        },
+        {
+          "name": "LIVEKIT_API_KEY_AUTH",
+          "required": false,
+          "description": "Livekit Api Key Auth"
+        },
+        {
+          "name": "LIVEKIT_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Livekit Rate Limit Max"
+        },
+        {
+          "name": "LIVEKIT_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Livekit Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "media-metadata": {
+      "name": "media-metadata",
+      "version": "1.0.0",
+      "description": "TMDB media metadata enrichment with automatic matching and confidence scoring",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/media-metadata",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/media-metadata",
+      "minNselfVersion": "0.4.8",
+      "category": "external-data",
+      "tags": [
+        "tmdb",
+        "movies",
+        "tv",
+        "metadata",
+        "enrichment",
+        "media"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-media-metadata",
+        "defaultPort": 3202,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "tmdb_movies",
+        "tmdb_tv_shows",
+        "tmdb_tv_seasons",
+        "tmdb_tv_episodes",
+        "tmdb_genres",
+        "tmdb_match_queue",
+        "tmdb_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "TMDB_API_KEY",
+          "required": true,
+          "description": "Tmdb Api Key"
+        },
+        {
+          "name": "TMDB_PLUGIN_PORT",
+          "required": false,
+          "description": "Tmdb Plugin Port"
+        },
+        {
+          "name": "TMDB_API_READ_ACCESS_TOKEN",
+          "required": false,
+          "description": "Tmdb Api Read Access Token"
+        },
+        {
+          "name": "TMDB_IMAGE_BASE_URL",
+          "required": false,
+          "description": "Tmdb Image Base Url"
+        },
+        {
+          "name": "TMDB_DEFAULT_LANGUAGE",
+          "required": false,
+          "description": "Tmdb Default Language"
+        },
+        {
+          "name": "TMDB_AUTO_ENRICH",
+          "required": false,
+          "description": "Tmdb Auto Enrich"
+        },
+        {
+          "name": "TMDB_CONFIDENCE_THRESHOLD",
+          "required": false,
+          "description": "Tmdb Confidence Threshold"
+        },
+        {
+          "name": "TMDB_CACHE_TTL_DAYS",
+          "required": false,
+          "description": "Tmdb Cache Ttl Days"
+        },
+        {
+          "name": "TMDB_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Tmdb Rate Limit Max"
+        },
+        {
+          "name": "TMDB_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Tmdb Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "media-processing": {
+      "name": "media-processing",
+      "version": "1.0.0",
+      "description": "FFmpeg-based media encoding and processing with HLS streaming support",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/media-processing",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/media-processing",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "media",
+        "video",
+        "encoding",
+        "ffmpeg",
+        "hls",
+        "streaming",
+        "transcoding"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-media-processing",
+        "defaultPort": 3019,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "mp_encoding_profiles",
+        "mp_jobs",
+        "mp_job_outputs",
+        "mp_hls_manifests",
+        "mp_subtitles",
+        "mp_trickplay",
+        "mp_webhook_events"
+      ],
+      "webhooks": [
+        "job.created",
+        "job.downloading",
+        "job.analyzing",
+        "job.encoding",
+        "job.packaging",
+        "job.uploading",
+        "job.completed",
+        "job.failed",
+        "job.cancelled",
+        "job.progress"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "MP_PLUGIN_PORT",
+          "required": false,
+          "description": "Mp Plugin Port"
+        },
+        {
+          "name": "MP_FFMPEG_PATH",
+          "required": false,
+          "description": "Mp Ffmpeg Path"
+        },
+        {
+          "name": "MP_FFPROBE_PATH",
+          "required": false,
+          "description": "Mp Ffprobe Path"
+        },
+        {
+          "name": "MP_OUTPUT_BASE_PATH",
+          "required": false,
+          "description": "Mp Output Base Path"
+        },
+        {
+          "name": "MP_MAX_CONCURRENT_JOBS",
+          "required": false,
+          "description": "Mp Max Concurrent Jobs"
+        },
+        {
+          "name": "MP_MAX_INPUT_SIZE_GB",
+          "required": false,
+          "description": "Mp Max Input Size Gb"
+        },
+        {
+          "name": "MP_HARDWARE_ACCEL",
+          "required": false,
+          "description": "Mp Hardware Accel"
+        },
+        {
+          "name": "MP_API_KEY",
+          "required": false,
+          "description": "Mp Api Key"
+        },
+        {
+          "name": "MP_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Mp Rate Limit Max"
+        },
+        {
+          "name": "MP_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Mp Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "meetings": {
+      "name": "meetings",
+      "version": "1.0.0",
+      "description": "Calendar integration and meeting management with room booking, Google/Outlook sync, recurring meetings, and availability tracking",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/meetings",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/meetings",
+      "minNselfVersion": "0.4.8",
+      "category": "productivity",
+      "tags": [
+        "meetings",
+        "calendar",
+        "rooms",
+        "scheduling",
+        "availability",
+        "google-calendar",
+        "outlook"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-meetings",
+        "defaultPort": 3710,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "meetings_events",
+        "meetings_attendees",
+        "meetings_rooms",
+        "meetings_calendars",
+        "meetings_calendar_shares",
+        "meetings_external_calendars",
+        "meetings_templates",
+        "meetings_reminders",
+        "meetings_waitlist"
+      ],
+      "webhooks": [
+        "event.created",
+        "event.updated",
+        "event.cancelled",
+        "event.deleted",
+        "rsvp.updated",
+        "room.booked",
+        "room.released",
+        "sync.completed",
+        "reminder.sent"
+      ],
+      "envVars": [
+        {
+          "name": "MEETINGS_PLUGIN_PORT",
+          "required": false,
+          "description": "Meetings Plugin Port"
+        },
+        {
+          "name": "GOOGLE_CALENDAR_CLIENT_ID",
+          "required": false,
+          "description": "Google Calendar Client Id"
+        },
+        {
+          "name": "GOOGLE_CALENDAR_CLIENT_SECRET",
+          "required": false,
+          "description": "Google Calendar Client Secret"
+        },
+        {
+          "name": "GOOGLE_CALENDAR_REDIRECT_URI",
+          "required": false,
+          "description": "Google Calendar Redirect Uri"
+        },
+        {
+          "name": "OUTLOOK_CALENDAR_CLIENT_ID",
+          "required": false,
+          "description": "Outlook Calendar Client Id"
+        },
+        {
+          "name": "OUTLOOK_CALENDAR_CLIENT_SECRET",
+          "required": false,
+          "description": "Outlook Calendar Client Secret"
+        },
+        {
+          "name": "OUTLOOK_CALENDAR_REDIRECT_URI",
+          "required": false,
+          "description": "Outlook Calendar Redirect Uri"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "moderation": {
+      "name": "moderation",
+      "version": "1.0.0",
+      "description": "Comprehensive content moderation with profanity filtering, toxicity detection, automated actions, and manual review workflows",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/moderation",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/moderation",
+      "minNselfVersion": "0.4.8",
+      "category": "content-safety",
+      "tags": [
+        "moderation",
+        "profanity",
+        "toxicity",
+        "content-filter",
+        "safety",
+        "review-queue",
+        "appeals"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-moderation",
+        "defaultPort": 3704,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "moderation_rules",
+        "moderation_wordlists",
+        "moderation_actions",
+        "moderation_flags",
+        "moderation_appeals",
+        "moderation_reports",
+        "moderation_toxicity_scores",
+        "moderation_user_stats",
+        "moderation_audit_log"
+      ],
+      "webhooks": [
+        "action.created",
+        "action.revoked",
+        "flag.created",
+        "flag.reviewed",
+        "appeal.created",
+        "appeal.reviewed",
+        "report.created",
+        "rule.created",
+        "rule.updated"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "MODERATION_PLUGIN_PORT",
+          "required": false,
+          "description": "Moderation Plugin Port"
+        },
+        {
+          "name": "MODERATION_TOXICITY_ENABLED",
+          "required": false,
+          "description": "Moderation Toxicity Enabled"
+        },
+        {
+          "name": "MODERATION_TOXICITY_PROVIDER",
+          "required": false,
+          "description": "Moderation Toxicity Provider"
+        },
+        {
+          "name": "MODERATION_TOXICITY_THRESHOLD",
+          "required": false,
+          "description": "Moderation Toxicity Threshold"
+        },
+        {
+          "name": "MODERATION_AUTO_DELETE_ENABLED",
+          "required": false,
+          "description": "Moderation Auto Delete Enabled"
+        },
+        {
+          "name": "MODERATION_AUTO_DELETE_THRESHOLD",
+          "required": false,
+          "description": "Moderation Auto Delete Threshold"
+        },
+        {
+          "name": "MODERATION_AUTO_MUTE_ENABLED",
+          "required": false,
+          "description": "Moderation Auto Mute Enabled"
+        },
+        {
+          "name": "MODERATION_AUTO_MUTE_VIOLATIONS",
+          "required": false,
+          "description": "Moderation Auto Mute Violations"
+        },
+        {
+          "name": "MODERATION_APPEALS_ENABLED",
+          "required": false,
+          "description": "Moderation Appeals Enabled"
+        },
+        {
+          "name": "MODERATION_APPEALS_TIME_LIMIT_DAYS",
+          "required": false,
+          "description": "Moderation Appeals Time Limit Days"
+        },
+        {
+          "name": "MODERATION_CLEANUP_ENABLED",
+          "required": false,
+          "description": "Moderation Cleanup Enabled"
+        },
+        {
+          "name": "MODERATION_CLEANUP_INTERVAL_MINUTES",
+          "required": false,
+          "description": "Moderation Cleanup Interval Minutes"
+        },
+        {
+          "name": "MODERATION_API_KEY",
+          "required": false,
+          "description": "Moderation Api Key"
+        },
+        {
+          "name": "MODERATION_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Moderation Rate Limit Max"
+        },
+        {
+          "name": "MODERATION_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Moderation Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "object-storage": {
+      "name": "object-storage",
+      "version": "1.0.0",
+      "description": "Multi-provider object storage with S3-compatible API, local storage, presigned URLs, and multipart uploads",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/object-storage",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/object-storage",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "storage",
+        "s3",
+        "minio",
+        "r2",
+        "gcs",
+        "azure",
+        "b2",
+        "uploads",
+        "presigned"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-object-storage",
+        "defaultPort": 3301,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "os_buckets",
+        "os_objects",
+        "os_upload_sessions",
+        "os_access_logs",
+        "os_webhook_events"
+      ],
+      "webhooks": [
+        "bucket.created",
+        "bucket.updated",
+        "bucket.deleted",
+        "object.created",
+        "object.deleted",
+        "upload.completed",
+        "upload.aborted"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "OS_PLUGIN_PORT",
+          "required": false,
+          "description": "Os Plugin Port"
+        },
+        {
+          "name": "OS_STORAGE_BASE_PATH",
+          "required": false,
+          "description": "Os Storage Base Path"
+        },
+        {
+          "name": "OS_DEFAULT_PROVIDER",
+          "required": false,
+          "description": "Os Default Provider"
+        },
+        {
+          "name": "OS_S3_ENDPOINT",
+          "required": false,
+          "description": "Os S3 Endpoint"
+        },
+        {
+          "name": "OS_S3_REGION",
+          "required": false,
+          "description": "Os S3 Region"
+        },
+        {
+          "name": "OS_S3_ACCESS_KEY",
+          "required": false,
+          "description": "Os S3 Access Key"
+        },
+        {
+          "name": "OS_S3_SECRET_KEY",
+          "required": false,
+          "description": "Os S3 Secret Key"
+        },
+        {
+          "name": "OS_S3_BUCKET_PREFIX",
+          "required": false,
+          "description": "Os S3 Bucket Prefix"
+        },
+        {
+          "name": "OS_PRESIGN_EXPIRY_SECONDS",
+          "required": false,
+          "description": "Os Presign Expiry Seconds"
+        },
+        {
+          "name": "OS_MAX_UPLOAD_SIZE",
+          "required": false,
+          "description": "Os Max Upload Size"
+        },
+        {
+          "name": "OS_MULTIPART_THRESHOLD",
+          "required": false,
+          "description": "Os Multipart Threshold"
+        },
+        {
+          "name": "OS_API_KEY",
+          "required": false,
+          "description": "Os Api Key"
+        },
+        {
+          "name": "OS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Os Rate Limit Max"
+        },
+        {
+          "name": "OS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Os Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "photos": {
+      "name": "photos",
+      "version": "1.0.0",
+      "description": "Photo album management with EXIF extraction, tagging, face grouping, and thumbnails",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/photos",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/photos",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "photos",
+        "albums",
+        "exif",
+        "tagging",
+        "faces",
+        "thumbnails",
+        "gallery"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-photos",
+        "defaultPort": 3716,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "photos_albums",
+        "photos_items",
+        "photos_tags",
+        "photos_faces",
+        "photos_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "PHOTOS_PLUGIN_PORT",
+          "required": false,
+          "description": "Photos Plugin Port"
+        },
+        {
+          "name": "PHOTOS_APP_IDS",
+          "required": false,
+          "description": "Photos App Ids"
+        },
+        {
+          "name": "PHOTOS_THUMBNAIL_SMALL",
+          "required": false,
+          "description": "Photos Thumbnail Small"
+        },
+        {
+          "name": "PHOTOS_THUMBNAIL_MEDIUM",
+          "required": false,
+          "description": "Photos Thumbnail Medium"
+        },
+        {
+          "name": "PHOTOS_THUMBNAIL_LARGE",
+          "required": false,
+          "description": "Photos Thumbnail Large"
+        },
+        {
+          "name": "PHOTOS_EXIF_EXTRACTION",
+          "required": false,
+          "description": "Photos Exif Extraction"
+        },
+        {
+          "name": "PHOTOS_FACE_DETECTION",
+          "required": false,
+          "description": "Photos Face Detection"
+        },
+        {
+          "name": "PHOTOS_FACE_DETECTION_PROVIDER",
+          "required": false,
+          "description": "Photos Face Detection Provider"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "recording": {
+      "name": "recording",
+      "version": "1.0.0",
+      "description": "Recording orchestration and archive management service.",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/recording",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/recording",
+      "minNselfVersion": "0.9.8",
+      "category": "streaming",
+      "tags": [
+        "recording",
+        "dvr",
+        "archive",
+        "encode",
+        "schedule"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-recording",
+        "defaultPort": 3602,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "rec_recordings",
+        "rec_schedules",
+        "rec_encode_jobs"
+      ],
+      "views": [
+        "rec_recordings_by_status",
+        "rec_storage_by_type",
+        "rec_success_rate",
+        "rec_scheduled_vs_completed"
+      ],
+      "webhooks": [
+        "sports",
+        "device"
+      ],
+      "envVars": [
+        {
+          "name": "REC_STORAGE_URL",
+          "required": false,
+          "description": "Rec Storage Url"
+        },
+        {
+          "name": "REC_FILE_PROCESSING_URL",
+          "required": false,
+          "description": "Rec File Processing Url"
+        },
+        {
+          "name": "REC_SPORTS_URL",
+          "required": false,
+          "description": "Rec Sports Url"
+        },
+        {
+          "name": "REC_MEDIA_METADATA_URL",
+          "required": false,
+          "description": "Rec Media Metadata Url"
+        },
+        {
+          "name": "REC_DEVICES_URL",
+          "required": false,
+          "description": "Rec Devices Url"
+        },
+        {
+          "name": "REC_DEFAULT_LEAD_TIME_MINUTES",
+          "required": false,
+          "description": "Rec Default Lead Time Minutes"
+        },
+        {
+          "name": "REC_DEFAULT_TRAIL_TIME_MINUTES",
+          "required": false,
+          "description": "Rec Default Trail Time Minutes"
+        },
+        {
+          "name": "REC_ENCODE_PROFILES",
+          "required": false,
+          "description": "Rec Encode Profiles"
+        },
+        {
+          "name": "REC_DEFAULT_ENCODE_PROFILE",
+          "required": false,
+          "description": "Rec Default Encode Profile"
+        },
+        {
+          "name": "REC_AUTO_ENCODE",
+          "required": false,
+          "description": "Rec Auto Encode"
+        },
+        {
+          "name": "REC_AUTO_ENRICH",
+          "required": false,
+          "description": "Rec Auto Enrich"
+        },
+        {
+          "name": "REC_AUTO_PUBLISH",
+          "required": false,
+          "description": "Rec Auto Publish"
+        },
+        {
+          "name": "REC_MAX_CONCURRENT_RECORDINGS",
+          "required": false,
+          "description": "Rec Max Concurrent Recordings"
+        },
+        {
+          "name": "REC_MAX_CONCURRENT_ENCODES",
+          "required": false,
+          "description": "Rec Max Concurrent Encodes"
+        },
+        {
+          "name": "REC_STORAGE_PATH_TEMPLATE",
+          "required": false,
+          "description": "Rec Storage Path Template"
+        },
+        {
+          "name": "REC_THUMBNAIL_AT_SECONDS",
+          "required": false,
+          "description": "Rec Thumbnail At Seconds"
+        },
+        {
+          "name": "REC_APP_TV_MAX_CONCURRENT_RECORDINGS",
+          "required": false,
+          "description": "Rec App Tv Max Concurrent Recordings"
+        },
+        {
+          "name": "REC_APP_TV_AUTO_PUBLISH",
+          "required": false,
+          "description": "Rec App Tv Auto Publish"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": false,
+          "description": "Database Url"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Port"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "app_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "default"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "search": {
+      "name": "search",
+      "version": "1.0.0",
+      "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/search",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/search",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "search",
+        "fts",
+        "full-text",
+        "postgres",
+        "meilisearch",
+        "autocomplete"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-search",
+        "defaultPort": 3302,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "search_indexes",
+        "search_documents",
+        "search_synonyms",
+        "search_queries",
+        "search_webhook_events"
+      ],
+      "webhooks": [
+        "index.created",
+        "index.updated",
+        "index.deleted",
+        "document.indexed",
+        "document.updated",
+        "document.deleted"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "SEARCH_PLUGIN_PORT",
+          "required": false,
+          "description": "Search Plugin Port"
+        },
+        {
+          "name": "SEARCH_ENGINE",
+          "required": false,
+          "description": "Search Engine"
+        },
+        {
+          "name": "SEARCH_MEILISEARCH_URL",
+          "required": false,
+          "description": "Search Meilisearch Url"
+        },
+        {
+          "name": "SEARCH_MEILISEARCH_API_KEY",
+          "required": false,
+          "description": "Search Meilisearch Api Key"
+        },
+        {
+          "name": "SEARCH_DEFAULT_LIMIT",
+          "required": false,
+          "description": "Search Default Limit"
+        },
+        {
+          "name": "SEARCH_MAX_RESULTS",
+          "required": false,
+          "description": "Search Max Results"
+        },
+        {
+          "name": "SEARCH_REINDEX_BATCH_SIZE",
+          "required": false,
+          "description": "Search Reindex Batch Size"
+        },
+        {
+          "name": "SEARCH_ANALYTICS_ENABLED",
+          "required": false,
+          "description": "Search Analytics Enabled"
+        },
+        {
+          "name": "SEARCH_ANALYTICS_RETENTION_DAYS",
+          "required": false,
+          "description": "Search Analytics Retention Days"
+        },
+        {
+          "name": "SEARCH_API_KEY",
+          "required": false,
+          "description": "Search Api Key"
+        },
+        {
+          "name": "SEARCH_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Search Rate Limit Max"
+        },
+        {
+          "name": "SEARCH_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Search Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "social": {
+      "name": "social",
+      "version": "1.0.0",
+      "description": "Universal social features plugin with posts, comments, reactions, follows, and bookmarks",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/social",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/social",
+      "minNselfVersion": "0.4.8",
+      "category": "content",
+      "tags": [
+        "social",
+        "posts",
+        "comments",
+        "reactions",
+        "follows",
+        "bookmarks",
+        "content"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-social",
+        "defaultPort": 3502,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "social_posts",
+        "social_comments",
+        "social_reactions",
+        "social_follows",
+        "social_bookmarks",
+        "social_shares",
+        "social_webhook_events"
+      ],
+      "webhooks": [
+        "post.created",
+        "post.updated",
+        "post.deleted",
+        "comment.created",
+        "comment.updated",
+        "comment.deleted",
+        "reaction.added",
+        "reaction.removed",
+        "follow.created",
+        "follow.deleted",
+        "bookmark.created",
+        "bookmark.deleted",
+        "share.created"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "SOCIAL_PLUGIN_PORT",
+          "required": false,
+          "description": "Social Plugin Port"
+        },
+        {
+          "name": "SOCIAL_MAX_POST_LENGTH",
+          "required": false,
+          "description": "Social Max Post Length"
+        },
+        {
+          "name": "SOCIAL_MAX_COMMENT_LENGTH",
+          "required": false,
+          "description": "Social Max Comment Length"
+        },
+        {
+          "name": "SOCIAL_MAX_COMMENT_DEPTH",
+          "required": false,
+          "description": "Social Max Comment Depth"
+        },
+        {
+          "name": "SOCIAL_EDIT_WINDOW_MINUTES",
+          "required": false,
+          "description": "Social Edit Window Minutes"
+        },
+        {
+          "name": "SOCIAL_REACTIONS_ALLOWED",
+          "required": false,
+          "description": "Social Reactions Allowed"
+        },
+        {
+          "name": "SOCIAL_API_KEY",
+          "required": false,
+          "description": "Social Api Key"
+        },
+        {
+          "name": "SOCIAL_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Social Rate Limit Max"
+        },
+        {
+          "name": "SOCIAL_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Social Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "sports-data": {
+      "name": "sports-data",
+      "version": "1.0.0",
+      "description": "Sports data aggregation with live scores, schedules, standings, and team/player information",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/sports-data",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/sports-data",
+      "minNselfVersion": "0.4.8",
+      "category": "data-services",
+      "tags": [
+        "sports",
+        "scores",
+        "standings",
+        "schedule",
+        "nfl",
+        "nba",
+        "live-data"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-sports-data",
+        "defaultPort": 3030,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "sports_leagues",
+        "sports_teams",
+        "sports_games",
+        "sports_standings",
+        "sports_players",
+        "sports_favorites",
+        "sports_sync_state",
+        "sports_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "SPORTS_PROVIDER",
+          "required": true,
+          "description": "Sports Provider"
+        },
+        {
+          "name": "SPORTS_PLUGIN_PORT",
+          "required": false,
+          "description": "Sports Plugin Port"
+        },
+        {
+          "name": "SPORTS_APP_IDS",
+          "required": false,
+          "description": "Sports App Ids"
+        },
+        {
+          "name": "SPORTS_ESPN_API_KEY",
+          "required": false,
+          "description": "Sports Espn Api Key"
+        },
+        {
+          "name": "SPORTS_LEAGUE_IDS",
+          "required": false,
+          "description": "Sports League Ids"
+        },
+        {
+          "name": "SPORTS_LIVE_GAME_POLL_SECONDS",
+          "required": false,
+          "description": "Sports Live Game Poll Seconds"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "sports": {
+      "name": "sports",
+      "version": "1.0.0",
+      "description": "Sports schedule and metadata synchronization plugin - ingests game schedules, team rosters, scores, and standings",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/sports",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/sports",
+      "minNselfVersion": "0.4.8",
+      "category": "external-data",
+      "tags": [
+        "sports",
+        "nfl",
+        "schedules",
+        "scores",
+        "live-data",
+        "espn"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-sports",
+        "defaultPort": 3201,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "sports_leagues",
+        "sports_teams",
+        "sports_events",
+        "sports_provider_syncs",
+        "sports_schedule_cache",
+        "sports_webhook_events"
+      ],
+      "views": [
+        "sports_upcoming_events",
+        "sports_live_events",
+        "sports_untriggered_recordings"
+      ],
+      "webhooks": [
+        "game.score_updated",
+        "game.started"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "SPORTS_PLUGIN_PORT",
+          "required": false,
+          "description": "Sports Plugin Port"
+        },
+        {
+          "name": "SPORTS_PROVIDERS",
+          "required": false,
+          "description": "Sports Providers"
+        },
+        {
+          "name": "SPORTS_ESPN_API_URL",
+          "required": false,
+          "description": "Sports Espn Api Url"
+        },
+        {
+          "name": "SPORTS_SPORTSDATA_API_KEY",
+          "required": false,
+          "description": "Sports Sportsdata Api Key"
+        },
+        {
+          "name": "SPORTS_SPORTSDATA_API_URL",
+          "required": false,
+          "description": "Sports Sportsdata Api Url"
+        },
+        {
+          "name": "SPORTS_SYNC_INTERVAL",
+          "required": false,
+          "description": "Sports Sync Interval"
+        },
+        {
+          "name": "SPORTS_LIVE_POLL_INTERVAL",
+          "required": false,
+          "description": "Sports Live Poll Interval"
+        },
+        {
+          "name": "SPORTS_ENABLED_SPORTS",
+          "required": false,
+          "description": "Sports Enabled Sports"
+        },
+        {
+          "name": "SPORTS_ENABLED_LEAGUES",
+          "required": false,
+          "description": "Sports Enabled Leagues"
+        },
+        {
+          "name": "SPORTS_LOCK_WINDOW_MINUTES",
+          "required": false,
+          "description": "Sports Lock Window Minutes"
+        },
+        {
+          "name": "SPORTS_LOCK_AUTO",
+          "required": false,
+          "description": "Sports Lock Auto"
+        },
+        {
+          "name": "SPORTS_RECORDING_PLUGIN_URL",
+          "required": false,
+          "description": "Sports Recording Plugin Url"
+        },
+        {
+          "name": "SPORTS_AUTO_TRIGGER_RECORDINGS",
+          "required": false,
+          "description": "Sports Auto Trigger Recordings"
+        },
+        {
+          "name": "SPORTS_RECORDING_LEAD_TIME_MINUTES",
+          "required": false,
+          "description": "Sports Recording Lead Time Minutes"
+        },
+        {
+          "name": "SPORTS_RECORDING_TRAIL_TIME_MINUTES",
+          "required": false,
+          "description": "Sports Recording Trail Time Minutes"
+        },
+        {
+          "name": "SPORTS_CACHE_SCHEDULE_TTL",
+          "required": false,
+          "description": "Sports Cache Schedule Ttl"
+        },
+        {
+          "name": "SPORTS_CACHE_LIVE_TTL",
+          "required": false,
+          "description": "Sports Cache Live Ttl"
+        },
+        {
+          "name": "SPORTS_CACHE_ENABLED",
+          "required": false,
+          "description": "Sports Cache Enabled"
+        },
+        {
+          "name": "SPORTS_API_KEY",
+          "required": false,
+          "description": "Sports Api Key"
+        },
+        {
+          "name": "SPORTS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Sports Rate Limit Max"
+        },
+        {
+          "name": "SPORTS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Sports Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "stream-gateway": {
+      "name": "stream-gateway",
+      "version": "1.0.0",
+      "description": "Stream admission and governance service.",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/stream-gateway",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/stream-gateway",
+      "minNselfVersion": "0.9.8",
+      "category": "streaming",
+      "tags": [
+        "streaming",
+        "admission",
+        "concurrency",
+        "governance",
+        "live"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-stream-gateway",
+        "defaultPort": 3601,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "sg_stream_sessions",
+        "sg_streams",
+        "sg_admission_rules",
+        "sg_viewer_analytics"
+      ],
+      "views": [
+        "sg_concurrent_viewers_over_time",
+        "sg_denial_rates",
+        "sg_stream_duration_distribution",
+        "sg_device_type_breakdown"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "SG_HEARTBEAT_INTERVAL",
+          "required": false,
+          "description": "Sg Heartbeat Interval"
+        },
+        {
+          "name": "SG_HEARTBEAT_TIMEOUT",
+          "required": false,
+          "description": "Sg Heartbeat Timeout"
+        },
+        {
+          "name": "SG_DEFAULT_MAX_CONCURRENT",
+          "required": false,
+          "description": "Sg Default Max Concurrent"
+        },
+        {
+          "name": "SG_DEFAULT_MAX_DEVICE_STREAMS",
+          "required": false,
+          "description": "Sg Default Max Device Streams"
+        },
+        {
+          "name": "SG_SESSION_MAX_DURATION_HOURS",
+          "required": false,
+          "description": "Sg Session Max Duration Hours"
+        },
+        {
+          "name": "SG_ANALYTICS_INTERVAL",
+          "required": false,
+          "description": "Sg Analytics Interval"
+        },
+        {
+          "name": "SG_REALTIME_URL",
+          "required": false,
+          "description": "Sg Realtime Url"
+        },
+        {
+          "name": "SG_APP_TV_MAX_CONCURRENT",
+          "required": false,
+          "description": "Sg App Tv Max Concurrent"
+        },
+        {
+          "name": "SG_APP_TV_MAX_DEVICE_STREAMS",
+          "required": false,
+          "description": "Sg App Tv Max Device Streams"
+        },
+        {
+          "name": "SG_APP_FAMILY_MAX_CONCURRENT",
+          "required": false,
+          "description": "Sg App Family Max Concurrent"
+        },
+        {
+          "name": "DATABASE_URL",
+          "required": false,
+          "description": "Database Url"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Port"
+        },
+        {
+          "name": "REDIS_URL",
+          "required": false,
+          "description": "Redis Url"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "app_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "default"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "streaming": {
+      "name": "streaming",
+      "version": "1.0.0",
+      "description": "Live streaming and broadcasting with RTMP/HLS, viewer analytics, chat integration, multi-quality streams, DVR playback, and moderation",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/streaming",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/streaming",
+      "minNselfVersion": "0.4.8",
+      "category": "communication",
+      "tags": [
+        "streaming",
+        "live",
+        "rtmp",
+        "hls",
+        "video",
+        "chat",
+        "broadcast",
+        "vod"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-streaming",
+        "defaultPort": 3711,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "streaming_streams",
+        "streaming_keys",
+        "streaming_viewers",
+        "streaming_recordings",
+        "streaming_clips",
+        "streaming_analytics",
+        "streaming_moderators",
+        "streaming_chat_messages",
+        "streaming_reports",
+        "streaming_schedule"
+      ],
+      "webhooks": [
+        "stream.started",
+        "stream.ended",
+        "stream.flagged",
+        "stream.taken_down",
+        "recording.ready",
+        "clip.ready",
+        "viewer.joined",
+        "viewer.left",
+        "chat.message",
+        "report.created"
+      ],
+      "envVars": [
+        {
+          "name": "STREAMING_PLUGIN_PORT",
+          "required": false,
+          "description": "Streaming Plugin Port"
+        },
+        {
+          "name": "S3_BUCKET",
+          "required": false,
+          "description": "S3 Bucket"
+        },
+        {
+          "name": "S3_REGION",
+          "required": false,
+          "description": "S3 Region"
+        },
+        {
+          "name": "S3_ACCESS_KEY",
+          "required": false,
+          "description": "S3 Access Key"
+        },
+        {
+          "name": "S3_SECRET_KEY",
+          "required": false,
+          "description": "S3 Secret Key"
+        },
+        {
+          "name": "CDN_URL",
+          "required": false,
+          "description": "Cdn Url"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "support": {
+      "name": "support",
+      "version": "1.0.0",
+      "description": "Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses, knowledge base, analytics",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/support",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/support",
+      "minNselfVersion": "0.4.8",
+      "category": "customer-support",
+      "tags": [
+        "support",
+        "helpdesk",
+        "ticketing",
+        "sla",
+        "knowledge-base",
+        "canned-responses",
+        "csat",
+        "analytics"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-support",
+        "defaultPort": 3709,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "nchat_support_sla_policies",
+        "nchat_support_teams",
+        "nchat_support_team_members",
+        "nchat_support_tickets",
+        "nchat_support_ticket_messages",
+        "nchat_support_ticket_events",
+        "nchat_support_canned_responses",
+        "nchat_support_kb_articles",
+        "nchat_support_webhook_events"
+      ],
+      "webhooks": [
+        "ticket.created",
+        "ticket.updated",
+        "ticket.resolved",
+        "ticket.closed",
+        "ticket.reopened",
+        "ticket.assigned",
+        "ticket.escalated",
+        "message.created",
+        "sla.breach.first_response",
+        "sla.breach.resolution",
+        "satisfaction.submitted",
+        "team.created",
+        "team.member.added",
+        "kb.article.published"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "SUPPORT_PLUGIN_PORT",
+          "required": false,
+          "description": "Support Plugin Port"
+        },
+        {
+          "name": "SUPPORT_EMAIL",
+          "required": false,
+          "description": "Support Email"
+        },
+        {
+          "name": "SUPPORT_EMAIL_SMTP_HOST",
+          "required": false,
+          "description": "Support Email Smtp Host"
+        },
+        {
+          "name": "SUPPORT_EMAIL_SMTP_PORT",
+          "required": false,
+          "description": "Support Email Smtp Port"
+        },
+        {
+          "name": "SUPPORT_EMAIL_FROM_NAME",
+          "required": false,
+          "description": "Support Email From Name"
+        },
+        {
+          "name": "SUPPORT_DEFAULT_FIRST_RESPONSE_MINUTES",
+          "required": false,
+          "description": "Support Default First Response Minutes"
+        },
+        {
+          "name": "SUPPORT_DEFAULT_RESOLUTION_MINUTES",
+          "required": false,
+          "description": "Support Default Resolution Minutes"
+        },
+        {
+          "name": "SUPPORT_BUSINESS_HOURS_START",
+          "required": false,
+          "description": "Support Business Hours Start"
+        },
+        {
+          "name": "SUPPORT_BUSINESS_HOURS_END",
+          "required": false,
+          "description": "Support Business Hours End"
+        },
+        {
+          "name": "SUPPORT_TIMEZONE",
+          "required": false,
+          "description": "Support Timezone"
+        },
+        {
+          "name": "SUPPORT_AUTO_ASSIGNMENT",
+          "required": false,
+          "description": "Support Auto Assignment"
+        },
+        {
+          "name": "SUPPORT_ASSIGNMENT_METHOD",
+          "required": false,
+          "description": "Support Assignment Method"
+        },
+        {
+          "name": "SUPPORT_MAX_TICKETS_PER_AGENT",
+          "required": false,
+          "description": "Support Max Tickets Per Agent"
+        },
+        {
+          "name": "SUPPORT_CSAT_ENABLED",
+          "required": false,
+          "description": "Support Csat Enabled"
+        },
+        {
+          "name": "SUPPORT_CSAT_SEND_DELAY_HOURS",
+          "required": false,
+          "description": "Support Csat Send Delay Hours"
+        },
+        {
+          "name": "SUPPORT_NPS_ENABLED",
+          "required": false,
+          "description": "Support Nps Enabled"
+        },
+        {
+          "name": "SUPPORT_NPS_SEND_INTERVAL_DAYS",
+          "required": false,
+          "description": "Support Nps Send Interval Days"
+        },
+        {
+          "name": "SUPPORT_KB_ENABLED",
+          "required": false,
+          "description": "Support Kb Enabled"
+        },
+        {
+          "name": "SUPPORT_KB_PUBLIC_ACCESS",
+          "required": false,
+          "description": "Support Kb Public Access"
+        },
+        {
+          "name": "SUPPORT_KB_SUGGEST_ARTICLES",
+          "required": false,
+          "description": "Support Kb Suggest Articles"
+        },
+        {
+          "name": "SUPPORT_NOTIFY_ON_NEW_TICKET",
+          "required": false,
+          "description": "Support Notify On New Ticket"
+        },
+        {
+          "name": "SUPPORT_NOTIFY_ON_ASSIGNMENT",
+          "required": false,
+          "description": "Support Notify On Assignment"
+        },
+        {
+          "name": "SUPPORT_NOTIFY_ON_SLA_BREACH",
+          "required": false,
+          "description": "Support Notify On Sla Breach"
+        },
+        {
+          "name": "SUPPORT_NOTIFY_ON_CUSTOMER_REPLY",
+          "required": false,
+          "description": "Support Notify On Customer Reply"
+        },
+        {
+          "name": "SUPPORT_API_KEY",
+          "required": false,
+          "description": "Support Api Key"
+        },
+        {
+          "name": "SUPPORT_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Support Rate Limit Max"
+        },
+        {
+          "name": "SUPPORT_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Support Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "tmdb": {
+      "name": "tmdb",
+      "version": "1.0.0",
+      "description": "Media metadata enrichment from TMDB/IMDb with auto-matching and manual review queue",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/tmdb",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/tmdb",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "tmdb",
+        "metadata",
+        "movies",
+        "tv-shows",
+        "imdb",
+        "media",
+        "matching"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-tmdb",
+        "defaultPort": 3205,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "tmdb_movies",
+        "tmdb_tv_shows",
+        "tmdb_tv_seasons",
+        "tmdb_tv_episodes",
+        "tmdb_genres",
+        "tmdb_match_queue",
+        "tmdb_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "TMDB_API_KEY",
+          "required": true,
+          "description": "Tmdb Api Key"
+        },
+        {
+          "name": "TMDB_PLUGIN_PORT",
+          "required": false,
+          "description": "Tmdb Plugin Port"
+        },
+        {
+          "name": "TMDB_APP_IDS",
+          "required": false,
+          "description": "Tmdb App Ids"
+        },
+        {
+          "name": "TMDB_API_READ_ACCESS_TOKEN",
+          "required": false,
+          "description": "Tmdb Api Read Access Token"
+        },
+        {
+          "name": "OMDB_API_KEY",
+          "required": false,
+          "description": "Omdb Api Key"
+        },
+        {
+          "name": "TMDB_AUTO_ACCEPT_THRESHOLD",
+          "required": false,
+          "description": "Tmdb Auto Accept Threshold"
+        },
+        {
+          "name": "TMDB_DEFAULT_LANGUAGE",
+          "required": false,
+          "description": "Tmdb Default Language"
+        },
+        {
+          "name": "TMDB_CACHE_TTL_DAYS",
+          "required": false,
+          "description": "Tmdb Cache Ttl Days"
+        },
+        {
+          "name": "TMDB_REFRESH_CRON",
+          "required": false,
+          "description": "Tmdb Refresh Cron"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "tokens": {
+      "name": "tokens",
+      "version": "1.0.0",
+      "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/tokens",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/tokens",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "tokens",
+        "signed-urls",
+        "encryption",
+        "hls",
+        "drm",
+        "entitlement",
+        "access-control"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-tokens",
+        "defaultPort": 3307,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "tokens_signing_keys",
+        "tokens_issued",
+        "tokens_encryption_keys",
+        "tokens_entitlements",
+        "tokens_webhook_events"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "TOKENS_ENCRYPTION_KEY",
+          "required": true,
+          "description": "Tokens Encryption Key"
+        },
+        {
+          "name": "TOKENS_PLUGIN_PORT",
+          "required": false,
+          "description": "Tokens Plugin Port"
+        },
+        {
+          "name": "TOKENS_APP_IDS",
+          "required": false,
+          "description": "Tokens App Ids"
+        },
+        {
+          "name": "TOKENS_DEFAULT_TTL_SECONDS",
+          "required": false,
+          "description": "Tokens Default Ttl Seconds"
+        },
+        {
+          "name": "TOKENS_HLS_ENCRYPTION_ENABLED",
+          "required": false,
+          "description": "Tokens Hls Encryption Enabled"
+        },
+        {
+          "name": "TOKENS_DEFAULT_ENTITLEMENT_CHECK",
+          "required": false,
+          "description": "Tokens Default Entitlement Check"
+        },
+        {
+          "name": "TOKENS_ALLOW_ALL_IF_NO_ENTITLEMENTS",
+          "required": false,
+          "description": "Tokens Allow All If No Entitlements"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "web3": {
+      "name": "web3",
+      "version": "1.0.0",
+      "description": "Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/web3",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/web3",
+      "minNselfVersion": "0.4.8",
+      "category": "web3",
+      "tags": [
+        "web3",
+        "blockchain",
+        "nft",
+        "token-gating",
+        "dao",
+        "wallet",
+        "ethereum",
+        "defi"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-web3",
+        "defaultPort": 3715,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "web3_wallets",
+        "web3_nfts",
+        "web3_collections",
+        "web3_tokens",
+        "web3_token_balances",
+        "web3_token_gates",
+        "web3_gate_checks",
+        "web3_daos",
+        "web3_proposals",
+        "web3_votes",
+        "web3_transactions",
+        "web3_events"
+      ],
+      "webhooks": [
+        "wallet.connected",
+        "wallet.verified",
+        "nft.transferred",
+        "nft.minted",
+        "collection.indexed",
+        "token_gate.passed",
+        "token_gate.failed",
+        "proposal.created",
+        "proposal.executed",
+        "vote.cast",
+        "transaction.confirmed"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "WEB3_PLUGIN_PORT",
+          "required": false,
+          "description": "Web3 Plugin Port"
+        },
+        {
+          "name": "WEB3_DEFAULT_CHAIN_ID",
+          "required": false,
+          "description": "Web3 Default Chain Id"
+        },
+        {
+          "name": "WEB3_SUPPORTED_CHAINS",
+          "required": false,
+          "description": "Web3 Supported Chains"
+        },
+        {
+          "name": "WEB3_GATE_CHECK_CACHE_TTL",
+          "required": false,
+          "description": "Web3 Gate Check Cache Ttl"
+        },
+        {
+          "name": "WEB3_API_KEY",
+          "required": false,
+          "description": "Web3 Api Key"
+        },
+        {
+          "name": "WEB3_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Web3 Rate Limit Max"
+        },
+        {
+          "name": "WEB3_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Web3 Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "webhooks": {
+      "name": "webhooks",
+      "version": "1.0.0",
+      "description": "Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/webhooks",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/webhooks",
+      "minNselfVersion": "0.4.8",
+      "category": "communication",
+      "tags": [
+        "webhooks",
+        "events",
+        "notifications",
+        "delivery",
+        "integration"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-webhooks",
+        "defaultPort": 3403,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "webhook_endpoints",
+        "webhook_deliveries",
+        "webhook_event_types",
+        "webhook_dead_letters"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "Database Url"
+        },
+        {
+          "name": "WEBHOOKS_PLUGIN_PORT",
+          "required": false,
+          "description": "Webhooks Plugin Port"
+        },
+        {
+          "name": "WEBHOOKS_MAX_ATTEMPTS",
+          "required": false,
+          "description": "Webhooks Max Attempts"
+        },
+        {
+          "name": "WEBHOOKS_REQUEST_TIMEOUT_MS",
+          "required": false,
+          "description": "Webhooks Request Timeout Ms"
+        },
+        {
+          "name": "WEBHOOKS_MAX_PAYLOAD_SIZE",
+          "required": false,
+          "description": "Webhooks Max Payload Size"
+        },
+        {
+          "name": "WEBHOOKS_CONCURRENT_DELIVERIES",
+          "required": false,
+          "description": "Webhooks Concurrent Deliveries"
+        },
+        {
+          "name": "WEBHOOKS_RETRY_DELAYS",
+          "required": false,
+          "description": "Webhooks Retry Delays"
+        },
+        {
+          "name": "WEBHOOKS_AUTO_DISABLE_THRESHOLD",
+          "required": false,
+          "description": "Webhooks Auto Disable Threshold"
+        },
+        {
+          "name": "WEBHOOKS_API_KEY",
+          "required": false,
+          "description": "Webhooks Api Key"
+        },
+        {
+          "name": "WEBHOOKS_RATE_LIMIT_MAX",
+          "required": false,
+          "description": "Webhooks Rate Limit Max"
+        },
+        {
+          "name": "WEBHOOKS_RATE_LIMIT_WINDOW_MS",
+          "required": false,
+          "description": "Webhooks Rate Limit Window Ms"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
+    },
+    "workflows": {
+      "name": "workflows",
+      "version": "1.0.0",
+      "description": "Automation engine providing trigger-action workflow chains, conditional logic, scheduled tasks, webhook integrations, and cross-plugin orchestration",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/workflows",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/workflows",
+      "minNselfVersion": "0.4.8",
+      "category": "automation",
+      "tags": [
+        "workflows",
+        "automation",
+        "triggers",
+        "actions",
+        "scheduling",
+        "webhooks",
+        "orchestration"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-workflows",
+        "defaultPort": 3712,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "workflows_workflows",
+        "workflows_executions",
+        "workflows_execution_steps",
+        "workflows_triggers",
+        "workflows_actions",
+        "workflows_templates",
+        "workflows_variables",
+        "workflows_webhook_logs",
+        "workflows_approvals"
+      ],
+      "webhooks": [
+        "workflow.created",
+        "workflow.published",
+        "workflow.archived",
+        "execution.started",
+        "execution.completed",
+        "execution.failed",
+        "execution.timeout",
+        "approval.required",
+        "approval.responded",
+        "trigger.fired"
+      ],
+      "envVars": [
+        {
+          "name": "WORKFLOWS_PLUGIN_PORT",
+          "required": false,
+          "description": "Workflows Plugin Port"
+        },
+        {
+          "name": "WORKFLOWS_DEFAULT_TIMEOUT",
+          "required": false,
+          "description": "Workflows Default Timeout"
+        },
+        {
+          "name": "WORKFLOWS_MAX_CONCURRENT",
+          "required": false,
+          "description": "Workflows Max Concurrent"
+        },
+        {
+          "name": "WORKFLOWS_WORKER_POOL_SIZE",
+          "required": false,
+          "description": "Workflows Worker Pool Size"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      }
     }
   },
   "categories": {
@@ -2943,6 +8541,86 @@
       "name": "Donations & Fundraising",
       "description": "Donation platforms, campaign management, and fundraising tools",
       "icon": "heart"
+    },
+    "security": {
+      "name": "Security",
+      "description": "Access control, authorization, and security management",
+      "icon": "shield"
+    },
+    "content": {
+      "name": "Content",
+      "description": "Content management, social features, and activity feeds",
+      "icon": "file-text"
+    },
+    "media": {
+      "name": "Media",
+      "description": "Media processing, streaming, and content delivery",
+      "icon": "video"
+    },
+    "external-data": {
+      "name": "External Data",
+      "description": "External data sources and API integrations",
+      "icon": "database"
+    },
+    "automation": {
+      "name": "Automation",
+      "description": "Workflow automation, bots, and scheduled tasks",
+      "icon": "zap"
+    },
+    "streaming": {
+      "name": "Streaming",
+      "description": "Live streaming, stream governance, and recording",
+      "icon": "radio"
+    },
+    "voice-video": {
+      "name": "Voice & Video",
+      "description": "Voice, video, and real-time communication infrastructure",
+      "icon": "phone"
+    },
+    "data-services": {
+      "name": "Data Services",
+      "description": "Location services, document management, and data processing",
+      "icon": "layers"
+    },
+    "monetization": {
+      "name": "Monetization",
+      "description": "Entitlements, subscriptions, and billing management",
+      "icon": "dollar"
+    },
+    "ai-ml": {
+      "name": "AI & Machine Learning",
+      "description": "AI models, embeddings, and machine learning services",
+      "icon": "cpu"
+    },
+    "data-management": {
+      "name": "Data Management",
+      "description": "Data export, import, migration, and backup",
+      "icon": "hard-drive"
+    },
+    "web3": {
+      "name": "Web3 & Blockchain",
+      "description": "Blockchain integration, NFTs, and decentralized services",
+      "icon": "link"
+    },
+    "content-enhancement": {
+      "name": "Content Enhancement",
+      "description": "Link previews, metadata extraction, and content enrichment",
+      "icon": "eye"
+    },
+    "privacy-legal": {
+      "name": "Privacy & Legal",
+      "description": "GDPR/CCPA compliance, consent management, and privacy tools",
+      "icon": "shield"
+    },
+    "customer-support": {
+      "name": "Customer Support",
+      "description": "Helpdesk, ticketing, SLA management, and knowledge base",
+      "icon": "headphones"
+    },
+    "content-safety": {
+      "name": "Content Safety",
+      "description": "Content moderation, toxicity detection, and safety tools",
+      "icon": "alert-triangle"
     }
   }
 }

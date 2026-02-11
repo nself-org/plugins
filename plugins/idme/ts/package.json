@@ -29,6 +29,7 @@
   "dependencies": {
     "@nself/plugin-utils": "file:../../../shared",
     "fastify": "^4.28.1",
+    "@fastify/cookie": "^10.0.1",
     "commander": "^12.1.0",
     "pg": "^8.13.1",
     "dotenv": "^16.4.7"

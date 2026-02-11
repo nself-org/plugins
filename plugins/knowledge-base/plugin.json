@@ -1,0 +1,89 @@
+{
+  "name": "knowledge-base",
+  "version": "1.0.0",
+  "description": "Knowledge base with documentation, FAQ, semantic search, versioning, translations, and analytics",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/knowledge-base",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "content",
+  "tags": ["knowledge-base", "documentation", "faq", "search", "versioning", "translations"],
+
+  "tables": [
+    "kb_documents",
+    "kb_collections",
+    "kb_faqs",
+    "kb_attachments",
+    "kb_comments",
+    "kb_analytics",
+    "kb_translations",
+    "kb_review_requests"
+  ],
+
+  "webhooks": {
+    "document.created": "New document created",
+    "document.updated": "Document updated",
+    "document.published": "Document published",
+    "document.archived": "Document archived",
+    "faq.created": "FAQ created",
+    "faq.updated": "FAQ updated",
+    "comment.created": "Comment added",
+    "search.performed": "Search performed",
+    "review.requested": "Review requested",
+    "review.completed": "Review completed"
+  },
+
+  "actions": {
+    "documents": "Manage knowledge base documents",
+    "collections": "Manage collections",
+    "faqs": "Manage FAQs",
+    "search": "Search knowledge base",
+    "analytics": "View knowledge base analytics",
+    "reviews": "Manage review requests"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "KB_PLUGIN_PORT",
+      "KB_SEMANTIC_SEARCH_ENABLED",
+      "KB_DEFAULT_LANGUAGE",
+      "KB_MAX_DOCUMENT_SIZE",
+      "KB_CACHE_ENABLED",
+      "KB_CACHE_TTL",
+      "KB_API_KEY",
+      "KB_RATE_LIMIT_MAX",
+      "KB_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "port": 3713,
+    "defaultLanguage": "en",
+    "maxDocumentSize": 10485760,
+    "cacheTTL": 3600,
+    "semanticSearchEnabled": false
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["logs"]
+  }
+}

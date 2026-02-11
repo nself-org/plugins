@@ -1,0 +1,92 @@
+{
+  "name": "object-storage",
+  "version": "1.0.0",
+  "description": "Multi-provider object storage with S3-compatible API, local storage, presigned URLs, and multipart uploads",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/object-storage",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": ["storage", "s3", "minio", "r2", "gcs", "azure", "b2", "uploads", "presigned"],
+
+  "tables": [
+    "os_buckets",
+    "os_objects",
+    "os_upload_sessions",
+    "os_access_logs",
+    "os_webhook_events"
+  ],
+
+  "webhooks": {
+    "bucket.created": "Sync new bucket to database",
+    "bucket.updated": "Update bucket configuration",
+    "bucket.deleted": "Mark bucket as deleted",
+    "object.created": "Track new object upload",
+    "object.deleted": "Remove object from tracking",
+    "upload.completed": "Mark multipart upload as completed",
+    "upload.aborted": "Mark multipart upload as aborted"
+  },
+
+  "actions": {
+    "init": "Initialize object storage schema",
+    "server": "Start HTTP server for uploads and API",
+    "buckets": "Manage storage buckets",
+    "objects": "Manage stored objects",
+    "upload": "Upload files to storage",
+    "download": "Download files from storage",
+    "presign": "Generate presigned URLs",
+    "usage": "View storage usage statistics",
+    "lifecycle": "Manage lifecycle rules"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "OS_PLUGIN_PORT",
+      "OS_STORAGE_BASE_PATH",
+      "OS_DEFAULT_PROVIDER",
+      "OS_S3_ENDPOINT",
+      "OS_S3_REGION",
+      "OS_S3_ACCESS_KEY",
+      "OS_S3_SECRET_KEY",
+      "OS_S3_BUCKET_PREFIX",
+      "OS_PRESIGN_EXPIRY_SECONDS",
+      "OS_MAX_UPLOAD_SIZE",
+      "OS_MULTIPART_THRESHOLD",
+      "OS_API_KEY",
+      "OS_RATE_LIMIT_MAX",
+      "OS_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "defaultProvider": "local",
+    "storageBasePath": "/data/object-storage",
+    "presignExpirySeconds": 3600,
+    "maxUploadSize": 1073741824,
+    "multipartThreshold": 104857600,
+    "port": 3301
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["s3.amazonaws.com", "*.r2.cloudflarestorage.com", "storage.googleapis.com", "*.blob.core.windows.net"],
+    "filesystem": ["logs", "cache", "storage"]
+  }
+}

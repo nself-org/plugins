@@ -1,0 +1,109 @@
+{
+  "name": "content-moderation",
+  "version": "1.0.0",
+  "description": "Content moderation and safety service with automated review, manual queue, and appeals",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-moderation",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "security",
+  "tags": [
+    "moderation",
+    "content-safety",
+    "review",
+    "appeals",
+    "automated-moderation"
+  ],
+  "tables": [
+    "mod_reviews",
+    "mod_policies",
+    "mod_appeals",
+    "mod_user_strikes",
+    "mod_webhook_events"
+  ],
+  "webhooks": {
+    "mod.review.approved": "Content auto-approved",
+    "mod.review.flagged": "Content flagged for manual review",
+    "mod.review.rejected": "Content rejected",
+    "mod.review.manual.completed": "Manual review completed",
+    "mod.appeal.submitted": "Appeal submitted",
+    "mod.appeal.resolved": "Appeal resolved",
+    "mod.user.strike.added": "Strike added to user",
+    "mod.user.strike.threshold": "User reached strike threshold"
+  },
+  "actions": {
+    "init": "Initialize content-moderation database schema",
+    "server": "Start content-moderation HTTP server",
+    "queue": "View moderation queue",
+    "review": "Make review decision",
+    "appeals": "Manage appeals",
+    "user-status": "Check user moderation status",
+    "policies": "Manage moderation policies",
+    "stats": "Show moderation statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "MOD_PROVIDER"
+    ],
+    "optional": [
+      "MOD_PLUGIN_PORT",
+      "MOD_PLUGIN_HOST",
+      "MOD_LOG_LEVEL",
+      "MOD_APP_IDS",
+      "MOD_OPENAI_API_KEY",
+      "MOD_GOOGLE_VISION_KEY",
+      "MOD_AWS_REKOGNITION_KEY",
+      "MOD_AWS_REKOGNITION_SECRET",
+      "MOD_AWS_REKOGNITION_REGION",
+      "MOD_AUTO_APPROVE_BELOW",
+      "MOD_AUTO_REJECT_ABOVE",
+      "MOD_FLAG_THRESHOLD",
+      "MOD_STRIKE_WARN_THRESHOLD",
+      "MOD_STRIKE_BAN_THRESHOLD",
+      "MOD_STRIKE_EXPIRY_DAYS",
+      "MOD_REVIEW_SLA_HOURS",
+      "MOD_QUEUE_WORKER_CONCURRENCY"
+    ]
+  },
+  "config": {
+    "port": 3028,
+    "autoApproveBelow": 0.1,
+    "autoRejectAbove": 0.9,
+    "flagThreshold": 0.5,
+    "strikeWarnThreshold": 3,
+    "strikeBanThreshold": 5,
+    "strikeExpiryDays": 90,
+    "reviewSlaHours": 24,
+    "queueWorkerConcurrency": 5
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "api.openai.com",
+      "vision.googleapis.com",
+      "rekognition.*.amazonaws.com"
+    ],
+    "filesystem": [
+      "logs",
+      "temp"
+    ]
+  }
+}

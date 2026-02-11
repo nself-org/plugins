@@ -8,15 +8,24 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "security",
-  "tags": ["audit", "logging", "compliance", "siem", "immutable", "forensics", "soc2", "hipaa", "gdpr", "pci"],
-
+  "tags": [
+    "audit",
+    "logging",
+    "compliance",
+    "siem",
+    "immutable",
+    "forensics",
+    "soc2",
+    "hipaa",
+    "gdpr",
+    "pci"
+  ],
   "tables": [
     "audit_events",
     "audit_retention_policies",
     "audit_alert_rules",
     "audit_webhook_events"
   ],
-
   "webhooks": {
     "audit.event.created": "Audit event created (append-only)",
     "audit.event.exported": "Audit events exported to external system",
@@ -24,7 +33,6 @@
     "audit.retention.executed": "Retention policy executed",
     "audit.compliance.report_generated": "Compliance report generated"
   },
-
   "actions": {
     "init": "Initialize audit database schema (with immutability triggers)",
     "server": "Start audit HTTP server",
@@ -37,9 +45,10 @@
     "verify": "Verify event integrity using checksums",
     "stats": "Show audit plugin statistics"
   },
-
   "envVars": {
-    "required": [],
+    "required": [
+      "DATABASE_URL"
+    ],
     "optional": [
       "AUDIT_PLUGIN_PORT",
       "AUDIT_PLUGIN_HOST",
@@ -59,31 +68,41 @@
       "AUDIT_EXPORT_MAX_ROWS"
     ]
   },
-
   "config": {
     "port": 3303,
     "webhookPath": "/webhooks/audit",
     "defaultRetentionDays": 2555,
     "exportMaxRows": 100000,
-    "complianceFrameworks": ["SOC2", "HIPAA", "GDPR", "PCI"]
+    "complianceFrameworks": [
+      "SOC2",
+      "HIPAA",
+      "GDPR",
+      "PCI"
+    ]
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "app_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read"],
-    "network": ["splunk.com", "elastic.co", "datadoghq.com"],
-    "filesystem": ["logs"]
+    "database": [
+      "create",
+      "read"
+    ],
+    "network": [
+      "splunk.com",
+      "elastic.co",
+      "datadoghq.com"
+    ],
+    "filesystem": [
+      "logs"
+    ]
   }
 }

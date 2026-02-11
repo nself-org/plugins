@@ -1,0 +1,72 @@
+{
+  "name": "access-controls",
+  "version": "1.0.0",
+  "description": "Role-based and attribute-based access control (RBAC + ABAC) with policy engine",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/access-controls",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "security",
+  "tags": ["access-control", "rbac", "abac", "authorization", "policies", "permissions"],
+
+  "tables": [
+    "acl_roles",
+    "acl_permissions",
+    "acl_role_permissions",
+    "acl_user_roles",
+    "acl_policies",
+    "acl_webhook_events"
+  ],
+
+  "webhooks": {},
+
+  "actions": {
+    "server": "Start the access control API server",
+    "authorize": "Check if user has permission for resource/action",
+    "roles": "Manage roles and role hierarchy",
+    "permissions": "Manage permissions",
+    "policies": "Manage ABAC policies"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "ACL_PLUGIN_PORT",
+      "ACL_CACHE_TTL_SECONDS",
+      "ACL_MAX_ROLE_DEPTH",
+      "ACL_DEFAULT_DENY",
+      "ACL_API_KEY",
+      "ACL_RATE_LIMIT_MAX",
+      "ACL_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "port": 3027,
+    "cacheTtlSeconds": 300,
+    "maxRoleDepth": 10,
+    "defaultDeny": true
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["logs", "cache"]
+  }
+}

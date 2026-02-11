@@ -1,0 +1,81 @@
+{
+  "name": "documents",
+  "version": "1.0.0",
+  "description": "Document management and generation service with templates, versioning, and sharing",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/documents",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "data-services",
+  "tags": [
+    "documents",
+    "pdf",
+    "templates",
+    "generation",
+    "versioning",
+    "sharing"
+  ],
+  "tables": [
+    "docs_documents",
+    "docs_templates",
+    "docs_versions",
+    "docs_shares",
+    "docs_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "list": "List documents",
+    "generate": "Generate document from template",
+    "templates": "Manage templates",
+    "search": "Search documents",
+    "stats": "Show document statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "DOCS_PLUGIN_PORT",
+      "DOCS_APP_IDS",
+      "DOCS_PDF_ENGINE",
+      "DOCS_DEFAULT_TEMPLATE_ENGINE",
+      "DOCS_STORAGE_PROVIDER",
+      "DOCS_MAX_DOCUMENT_SIZE_MB"
+    ]
+  },
+  "config": {
+    "defaultPort": 3029,
+    "pdfEngine": "puppeteer",
+    "defaultTemplateEngine": "handlebars",
+    "storageProvider": "local",
+    "maxDocumentSizeMb": 50,
+    "shareDefaultExpiryDays": 30,
+    "versionRetention": 10
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
+  }
+}

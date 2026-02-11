@@ -4,6 +4,7 @@
  */
 
 import Fastify from 'fastify';
+import fastifyCookie from '@fastify/cookie';
 import { createLogger, getAppContext } from '@nself/plugin-utils';
 import { createIDmeClient } from './client.js';
 import { IDmeDatabase, createDatabase } from './database.js';
@@ -13,6 +14,10 @@ const logger = createLogger('idme:server');
 
 export async function createServer() {
   const fastify = Fastify({ logger: false });
+
+  // Register cookie plugin
+  await fastify.register(fastifyCookie);
+
   const config = loadConfig();
   const client = createIDmeClient(config);
   const db = createDatabase();
@@ -45,7 +50,7 @@ export async function createServer() {
     const url = client.getAuthorizationUrl(encodedState);
 
     // Store nonce in cookie for CSRF verification
-    reply.setCookie('idme_state', nonce, {
+    reply.cookie('idme_state', nonce, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 600, // 10 minutes

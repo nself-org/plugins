@@ -8,8 +8,13 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "payments",
-  "tags": ["payments", "donations", "subscriptions", "paypal", "webhooks"],
-
+  "tags": [
+    "payments",
+    "donations",
+    "subscriptions",
+    "paypal",
+    "webhooks"
+  ],
   "tables": [
     "paypal_transactions",
     "paypal_orders",
@@ -26,7 +31,6 @@
     "paypal_balances",
     "paypal_webhook_events"
   ],
-
   "webhooks": {
     "PAYMENT.CAPTURE.COMPLETED": "Handle completed payment capture",
     "PAYMENT.CAPTURE.DENIED": "Handle denied payment capture",
@@ -53,16 +57,15 @@
     "INVOICING.INVOICE.CANCELLED": "Handle cancelled invoice",
     "PAYMENT.SALE.REFUNDED": "Handle refunded sale"
   },
-
   "actions": {
     "sync": "Sync all PayPal data to database",
     "reconcile": "Re-sync recent data to catch gaps from missed webhooks",
     "server": "Start the PayPal plugin server",
     "status": "Show sync status and statistics"
   },
-
   "envVars": {
     "required": [
+      "DATABASE_URL",
       "PAYPAL_CLIENT_ID",
       "PAYPAL_CLIENT_SECRET"
     ],
@@ -76,14 +79,12 @@
       "PAYPAL_SYNC_INTERVAL"
     ]
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "config": {
     "syncInterval": 3600,
     "webhookPath": "/webhooks/paypal",
@@ -91,16 +92,26 @@
     "retryDelay": 1000,
     "port": 3004
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["paypal.com", "api-m.paypal.com", "api-m.sandbox.paypal.com"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "paypal.com",
+      "api-m.paypal.com",
+      "api-m.sandbox.paypal.com"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

@@ -1,0 +1,96 @@
+{
+  "name": "geolocation",
+  "version": "1.0.0",
+  "description": "Real-time location sharing, history tracking, geofencing, and proximity queries",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/geolocation",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "data-services",
+  "tags": [
+    "geolocation",
+    "gps",
+    "location",
+    "geofence",
+    "tracking",
+    "proximity"
+  ],
+  "tables": [
+    "geo_locations",
+    "geo_latest",
+    "geo_fences",
+    "geo_fence_events",
+    "geo_webhook_events"
+  ],
+  "webhooks": {
+    "geo.location.updated": "Location updated",
+    "geo.geofence.enter": "User entered geofence",
+    "geo.geofence.exit": "User exited geofence",
+    "geo.geofence.created": "New geofence created",
+    "geo.geofence.deleted": "Geofence deleted",
+    "geo.sos.triggered": "Emergency SOS triggered",
+    "geo.battery.low": "Device battery below threshold"
+  },
+  "actions": {
+    "init": "Initialize geolocation database schema",
+    "server": "Start geolocation HTTP server",
+    "locate": "Get current location",
+    "history": "View location history",
+    "fences": "Manage geofences",
+    "nearby": "Find nearby users",
+    "stats": "Show location statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "GEO_PLUGIN_PORT",
+      "GEO_PLUGIN_HOST",
+      "GEO_LOG_LEVEL",
+      "GEO_APP_IDS",
+      "GEO_POSTGIS_ENABLED",
+      "GEO_HISTORY_RETENTION_DAYS",
+      "GEO_BATCH_MAX_POINTS",
+      "GEO_MIN_UPDATE_INTERVAL_SECONDS",
+      "GEO_GEOFENCE_CHECK_ON_UPDATE",
+      "GEO_REVERSE_GEOCODE_ENABLED",
+      "GEO_REVERSE_GEOCODE_PROVIDER",
+      "GEO_REVERSE_GEOCODE_API_KEY",
+      "GEO_LOW_BATTERY_THRESHOLD"
+    ]
+  },
+  "config": {
+    "port": 3026,
+    "postgisEnabled": true,
+    "historyRetentionDays": 365,
+    "batchMaxPoints": 1000,
+    "minUpdateIntervalSeconds": 30,
+    "geofenceCheckOnUpdate": true,
+    "lowBatteryThreshold": 15
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs"
+    ]
+  }
+}

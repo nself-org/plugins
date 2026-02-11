@@ -1,0 +1,81 @@
+{
+  "name": "backup",
+  "version": "1.0.0",
+  "description": "PostgreSQL backup and restore automation with scheduling",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/backup",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": ["backup", "restore", "database", "automation", "disaster-recovery"],
+
+  "tables": [
+    "backup_schedules",
+    "backup_artifacts",
+    "backup_restore_jobs",
+    "backup_webhook_events"
+  ],
+
+  "webhooks": {},
+
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start backup automation server",
+    "status": "Show backup status and statistics",
+    "create-schedule": "Create a new backup schedule",
+    "list-schedules": "List all backup schedules",
+    "run-backup": "Run a backup immediately",
+    "list-backups": "List all backup artifacts",
+    "restore": "Restore from a backup artifact",
+    "download": "Download a backup artifact"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "BACKUP_PLUGIN_PORT",
+      "BACKUP_STORAGE_PATH",
+      "BACKUP_S3_ENDPOINT",
+      "BACKUP_S3_BUCKET",
+      "BACKUP_S3_ACCESS_KEY",
+      "BACKUP_S3_SECRET_KEY",
+      "BACKUP_S3_REGION",
+      "BACKUP_ENCRYPTION_KEY",
+      "BACKUP_DEFAULT_RETENTION_DAYS",
+      "BACKUP_MAX_CONCURRENT",
+      "BACKUP_PG_DUMP_PATH",
+      "BACKUP_API_KEY",
+      "BACKUP_RATE_LIMIT_MAX",
+      "BACKUP_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "defaultPort": 3013,
+    "defaultStoragePath": "/tmp/nself-backups",
+    "defaultRetentionDays": 30,
+    "maxConcurrentBackups": 2
+  },
+
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["s3"],
+    "filesystem": ["read", "write"]
+  }
+}

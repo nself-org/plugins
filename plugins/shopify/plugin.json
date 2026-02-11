@@ -8,8 +8,13 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "ecommerce",
-  "tags": ["shopify", "ecommerce", "orders", "products", "inventory"],
-
+  "tags": [
+    "shopify",
+    "ecommerce",
+    "orders",
+    "products",
+    "inventory"
+  ],
   "tables": [
     "shopify_shops",
     "shopify_products",
@@ -21,7 +26,6 @@
     "shopify_inventory",
     "shopify_webhook_events"
   ],
-
   "webhooks": {
     "orders/create": "New order placed",
     "orders/updated": "Order updated",
@@ -37,7 +41,6 @@
     "refunds/create": "Refund issued",
     "fulfillments/create": "Fulfillment created"
   },
-
   "actions": {
     "sync": "Sync store data",
     "products": "List and manage products",
@@ -46,11 +49,11 @@
     "inventory": "Check inventory levels",
     "webhook": "Manage webhook events"
   },
-
   "envVars": {
     "required": [
-      "SHOPIFY_SHOP_DOMAIN",
-      "SHOPIFY_ACCESS_TOKEN"
+      "DATABASE_URL",
+      "SHOPIFY_ACCESS_TOKEN",
+      "SHOPIFY_SHOP_DOMAIN"
     ],
     "optional": [
       "SHOPIFY_API_VERSION",
@@ -62,7 +65,6 @@
       "SHOPIFY_WEBHOOK_SECRETS"
     ]
   },
-
   "multiApp": {
     "supported": true,
     "pkStrategy": "composite",
@@ -71,7 +73,6 @@
       "labels": "SHOPIFY_ACCOUNT_LABELS"
     }
   },
-
   "config": {
     "apiVersion": "2024-01",
     "webhookPath": "/webhooks/shopify",

@@ -1,0 +1,97 @@
+{
+  "name": "livekit",
+  "version": "1.0.0",
+  "description": "LiveKit voice/video infrastructure - room management, participant tracking, recording/egress, quality monitoring",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/livekit",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "voice-video",
+  "tags": ["livekit", "webrtc", "voice", "video", "streaming", "recording", "egress", "sfu"],
+
+  "tables": [
+    "nchat_livekit_rooms",
+    "nchat_livekit_participants",
+    "nchat_livekit_egress_jobs",
+    "nchat_livekit_tokens",
+    "nchat_livekit_quality_metrics",
+    "nchat_livekit_webhook_events"
+  ],
+
+  "webhooks": {
+    "room.created": "LiveKit room created",
+    "room.closed": "LiveKit room closed",
+    "participant.joined": "Participant joined room",
+    "participant.left": "Participant left room",
+    "egress.started": "Egress job started",
+    "egress.completed": "Egress job completed",
+    "egress.failed": "Egress job failed"
+  },
+
+  "actions": {
+    "rooms:list": "List LiveKit rooms",
+    "rooms:info": "Get room details",
+    "rooms:close": "Close a room",
+    "rooms:cleanup": "Clean up stale rooms",
+    "token:create": "Generate access token",
+    "tokens:list": "List active tokens",
+    "recordings:list": "List egress jobs",
+    "health": "Health check"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "LIVEKIT_URL",
+      "LIVEKIT_API_KEY",
+      "LIVEKIT_API_SECRET"
+    ],
+    "optional": [
+      "LIVEKIT_PLUGIN_PORT",
+      "LIVEKIT_EGRESS_ENABLED",
+      "LIVEKIT_RECORDINGS_PATH",
+      "LIVEKIT_RECORDINGS_S3_BUCKET",
+      "LIVEKIT_QUALITY_MONITORING_ENABLED",
+      "LIVEKIT_QUALITY_SAMPLE_INTERVAL",
+      "LIVEKIT_TOKEN_DEFAULT_TTL",
+      "LIVEKIT_TOKEN_MAX_TTL",
+      "LIVEKIT_ROOM_DEFAULT_MAX_PARTICIPANTS",
+      "LIVEKIT_ROOM_EMPTY_TIMEOUT",
+      "LIVEKIT_MAX_CONCURRENT_ROOMS",
+      "LIVEKIT_MAX_PARTICIPANTS_PER_ROOM",
+      "LIVEKIT_API_KEY_AUTH",
+      "LIVEKIT_RATE_LIMIT_MAX",
+      "LIVEKIT_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "defaultPort": 3707,
+    "tokenDefaultTtl": 3600,
+    "tokenMaxTtl": 86400,
+    "roomDefaultMaxParticipants": 100,
+    "roomEmptyTimeout": 300,
+    "maxConcurrentRooms": 100,
+    "maxParticipantsPerRoom": 200
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["livekit"],
+    "filesystem": ["logs", "recordings"]
+  }
+}

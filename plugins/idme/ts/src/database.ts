@@ -482,6 +482,6 @@ export class IDmeDatabase {
 /**
  * Helper to create database instance
  */
-export function createDatabase(connectionString?: string): IDmeDatabase {
-  return new IDmeDatabase(connectionString);
+export function createDatabase(_connectionString?: string): IDmeDatabase {
+  return new IDmeDatabase();
 }

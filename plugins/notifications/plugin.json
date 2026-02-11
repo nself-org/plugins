@@ -8,8 +8,15 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["notifications", "email", "push", "sms", "messaging", "alerts", "templates"],
-
+  "tags": [
+    "notifications",
+    "email",
+    "push",
+    "sms",
+    "messaging",
+    "alerts",
+    "templates"
+  ],
   "tables": [
     "notification_templates",
     "notification_preferences",
@@ -18,7 +25,6 @@
     "notification_providers",
     "notification_batches"
   ],
-
   "webhooks": {
     "delivery.succeeded": "Notification delivered successfully",
     "delivery.failed": "Notification delivery failed",
@@ -28,7 +34,6 @@
     "click": "Email link clicked",
     "unsubscribe": "User unsubscribed from notifications"
   },
-
   "actions": {
     "init": "Initialize notification system",
     "server": "Start notification server",
@@ -37,9 +42,10 @@
     "test": "Send test notifications",
     "stats": "View notification statistics"
   },
-
   "envVars": {
-    "required": [],
+    "required": [
+      "DATABASE_URL"
+    ],
     "optional": [
       "NOTIFICATIONS_EMAIL_PROVIDER",
       "NOTIFICATIONS_EMAIL_API_KEY",
@@ -56,7 +62,6 @@
       "NOTIFICATIONS_RETRY_DELAY"
     ]
   },
-
   "config": {
     "port": 3102,
     "webhookPath": "/webhooks/notifications",
@@ -80,23 +85,31 @@
       }
     }
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache", "templates"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "templates"
+    ]
   }
 }

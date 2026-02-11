@@ -1,0 +1,43 @@
+{
+  "name": "@nself/plugin-cloudflare",
+  "version": "1.0.0",
+  "description": "Cloudflare zone, DNS, R2, cache, and analytics management plugin for nself",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "nself-cloudflare": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "nself",
+    "cloudflare",
+    "cdn",
+    "dns",
+    "r2",
+    "cache",
+    "analytics"
+  ],
+  "author": "nself",
+  "license": "Source-Available",
+  "dependencies": {
+    "@nself/plugin-utils": "file:../../../shared",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "@fastify/cors": "^10.0.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

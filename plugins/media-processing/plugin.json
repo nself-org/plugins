@@ -1,0 +1,91 @@
+{
+  "name": "media-processing",
+  "version": "1.0.0",
+  "description": "FFmpeg-based media encoding and processing with HLS streaming support",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/media-processing",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": ["media", "video", "encoding", "ffmpeg", "hls", "streaming", "transcoding"],
+
+  "tables": [
+    "mp_encoding_profiles",
+    "mp_jobs",
+    "mp_job_outputs",
+    "mp_hls_manifests",
+    "mp_subtitles",
+    "mp_trickplay",
+    "mp_webhook_events"
+  ],
+
+  "webhooks": {
+    "job.created": "Job submitted for processing",
+    "job.downloading": "Downloading input file",
+    "job.analyzing": "Analyzing media file",
+    "job.encoding": "Encoding in progress",
+    "job.packaging": "Creating HLS manifests",
+    "job.uploading": "Uploading outputs",
+    "job.completed": "Job completed successfully",
+    "job.failed": "Job failed",
+    "job.cancelled": "Job cancelled by user",
+    "job.progress": "Encoding progress update"
+  },
+
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start HTTP API server",
+    "submit": "Submit new encoding job",
+    "jobs": "List and manage jobs",
+    "profiles": "Manage encoding profiles",
+    "analyze": "Analyze media file metadata",
+    "stats": "View processing statistics"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "MP_PLUGIN_PORT",
+      "MP_FFMPEG_PATH",
+      "MP_FFPROBE_PATH",
+      "MP_OUTPUT_BASE_PATH",
+      "MP_MAX_CONCURRENT_JOBS",
+      "MP_MAX_INPUT_SIZE_GB",
+      "MP_HARDWARE_ACCEL",
+      "MP_API_KEY",
+      "MP_RATE_LIMIT_MAX",
+      "MP_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "port": 3019,
+    "maxConcurrentJobs": 2,
+    "maxInputSizeGb": 50,
+    "outputBasePath": "/data/media-processing",
+    "ffmpegPath": "ffmpeg",
+    "ffprobePath": "ffprobe"
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["*"],
+    "filesystem": ["logs", "cache", "media"]
+  }
+}

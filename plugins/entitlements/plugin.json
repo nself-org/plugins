@@ -1,0 +1,89 @@
+{
+  "name": "entitlements",
+  "version": "1.0.0",
+  "description": "Feature gating, subscription plan management, usage quota tracking, and metered billing",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/entitlements",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "monetization",
+  "tags": ["entitlements", "subscriptions", "plans", "quotas", "billing", "feature-gating"],
+
+  "tables": [
+    "entitlement_plans",
+    "entitlement_subscriptions",
+    "entitlement_features",
+    "entitlement_quotas",
+    "entitlement_usage",
+    "entitlement_addons",
+    "entitlement_grants",
+    "entitlement_events"
+  ],
+
+  "webhooks": {
+    "subscription.created": "Subscription created",
+    "subscription.updated": "Subscription updated",
+    "subscription.canceled": "Subscription canceled",
+    "subscription.renewed": "Subscription renewed",
+    "trial.started": "Trial started",
+    "trial.ended": "Trial ended",
+    "quota.exceeded": "Quota exceeded",
+    "quota.reset": "Quota reset",
+    "grant.created": "Feature grant created",
+    "grant.revoked": "Feature grant revoked",
+    "addon.added": "Addon added",
+    "addon.removed": "Addon removed",
+    "plan.upgraded": "Plan upgraded",
+    "plan.downgraded": "Plan downgraded"
+  },
+
+  "actions": {
+    "plans": "Manage entitlement plans",
+    "subscriptions": "Manage subscriptions",
+    "features": "Check feature access",
+    "quotas": "Track and check quotas",
+    "grants": "Manage feature grants",
+    "usage": "Track usage"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "ENTITLEMENTS_PLUGIN_PORT",
+      "ENTITLEMENTS_DEFAULT_CURRENCY",
+      "ENTITLEMENTS_DEFAULT_TRIAL_DAYS",
+      "ENTITLEMENTS_API_KEY",
+      "ENTITLEMENTS_RATE_LIMIT_MAX",
+      "ENTITLEMENTS_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "port": 3714,
+    "defaultCurrency": "USD",
+    "defaultTrialDays": 14,
+    "quotaWarningThreshold": 80
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["logs"]
+  }
+}

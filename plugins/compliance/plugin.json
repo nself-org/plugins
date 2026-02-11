@@ -1,0 +1,103 @@
+{
+  "name": "compliance",
+  "version": "1.0.0",
+  "description": "GDPR/CCPA compliance management with DSARs, consent tracking, data retention, breach notification, and audit trails",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/compliance",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "privacy-legal",
+  "tags": ["compliance", "gdpr", "ccpa", "privacy", "dsar", "consent", "retention", "breach", "audit"],
+
+  "tables": [
+    "compliance_dsars",
+    "compliance_dsar_activities",
+    "compliance_consents",
+    "compliance_consent_history",
+    "compliance_privacy_policies",
+    "compliance_policy_acceptances",
+    "compliance_retention_policies",
+    "compliance_retention_executions",
+    "compliance_processing_records",
+    "compliance_data_processors",
+    "compliance_data_breaches",
+    "compliance_breach_notifications",
+    "compliance_audit_log"
+  ],
+
+  "webhooks": {
+    "dsar.created": "New DSAR submitted",
+    "dsar.completed": "DSAR processing completed",
+    "dsar.overdue": "DSAR deadline approaching",
+    "consent.granted": "User granted consent",
+    "consent.withdrawn": "User withdrew consent",
+    "policy.published": "New privacy policy published",
+    "retention.executed": "Data retention policy executed",
+    "breach.created": "New data breach recorded",
+    "breach.notified": "Breach notification sent"
+  },
+
+  "actions": {
+    "dsars": "Manage Data Subject Access Requests",
+    "consent": "Manage user consent records",
+    "retention": "Manage and execute data retention policies",
+    "breaches": "Track and manage data breaches",
+    "policies": "Manage privacy policy versions",
+    "processors": "Track third-party data processors",
+    "audit": "View compliance audit logs",
+    "export": "Export user data packages"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "COMPLIANCE_PLUGIN_PORT",
+      "COMPLIANCE_GDPR_ENABLED",
+      "COMPLIANCE_CCPA_ENABLED",
+      "COMPLIANCE_DSAR_DEADLINE_DAYS",
+      "COMPLIANCE_BREACH_NOTIFICATION_HOURS",
+      "COMPLIANCE_CONSENT_REQUIRED",
+      "COMPLIANCE_CONSENT_EXPIRY_DAYS",
+      "COMPLIANCE_RETENTION_ENABLED",
+      "COMPLIANCE_AUDIT_ENABLED",
+      "COMPLIANCE_AUDIT_RETENTION_DAYS",
+      "COMPLIANCE_EXPORT_FORMAT",
+      "COMPLIANCE_EXPORT_EXPIRY_HOURS",
+      "COMPLIANCE_API_KEY",
+      "COMPLIANCE_RATE_LIMIT_MAX",
+      "COMPLIANCE_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "defaultPort": 3706,
+    "gdprEnabled": true,
+    "ccpaEnabled": true,
+    "dsarDeadlineDays": 30,
+    "breachNotificationHours": 72,
+    "consentExpiryDays": 365,
+    "auditRetentionDays": 2555
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["logs", "exports"]
+  }
+}

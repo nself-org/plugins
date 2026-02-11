@@ -8,8 +8,15 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "authentication",
-  "tags": ["authentication", "oauth", "idme", "identity", "verification", "military", "veterans"],
-
+  "tags": [
+    "authentication",
+    "oauth",
+    "idme",
+    "identity",
+    "verification",
+    "military",
+    "veterans"
+  ],
   "tables": [
     "idme_verifications",
     "idme_groups",
@@ -17,7 +24,6 @@
     "idme_attributes",
     "idme_webhook_events"
   ],
-
   "webhooks": {
     "verification.created": "New verification created",
     "verification.updated": "Verification status updated",
@@ -27,16 +33,15 @@
     "group.revoked": "Group verification revoked",
     "attribute.updated": "User attribute updated"
   },
-
   "actions": {
     "init": "Initialize OAuth configuration",
     "verify": "Check verification status",
     "groups": "List verified groups",
     "test": "Test OAuth connection"
   },
-
   "envVars": {
     "required": [
+      "DATABASE_URL",
       "IDME_CLIENT_ID",
       "IDME_CLIENT_SECRET",
       "IDME_REDIRECT_URI"
@@ -47,7 +52,6 @@
       "IDME_WEBHOOK_SECRET"
     ]
   },
-
   "config": {
     "apiVersion": "v3",
     "baseUrl": "https://api.id.me",
@@ -56,22 +60,30 @@
     "defaultScopes": "openid,email,profile",
     "port": 3010
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh"
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["id.me", "idmelabs.com"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "id.me",
+      "idmelabs.com"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

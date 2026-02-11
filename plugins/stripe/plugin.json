@@ -8,8 +8,13 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "billing",
-  "tags": ["payments", "billing", "subscriptions", "stripe", "webhooks"],
-
+  "tags": [
+    "payments",
+    "billing",
+    "subscriptions",
+    "stripe",
+    "webhooks"
+  ],
   "tables": [
     "stripe_customers",
     "stripe_products",
@@ -35,7 +40,6 @@
     "stripe_tax_rates",
     "stripe_webhook_events"
   ],
-
   "webhooks": {
     "customer.created": "Sync new customer to database",
     "customer.updated": "Update customer data",
@@ -133,7 +137,6 @@
     "payout.reconciliation_completed": "Handle payout reconciliation",
     "payout.updated": "Update payout data"
   },
-
   "actions": {
     "sync": "Sync all Stripe data to database",
     "reconcile": "Re-sync recent data to catch gaps from missed webhooks",
@@ -142,9 +145,9 @@
     "invoices": "View invoice history",
     "webhook": "Manage webhook endpoint"
   },
-
   "envVars": {
     "required": [
+      "DATABASE_URL",
       "STRIPE_API_KEY"
     ],
     "optional": [
@@ -157,7 +160,6 @@
       "STRIPE_API_VERSION"
     ]
   },
-
   "config": {
     "syncInterval": 3600,
     "apiVersion": "2024-12-18.acacia",
@@ -165,23 +167,30 @@
     "retryAttempts": 3,
     "retryDelay": 1000
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["stripe.com"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "stripe.com"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

@@ -1,0 +1,98 @@
+{
+  "name": "moderation",
+  "version": "1.0.0",
+  "description": "Comprehensive content moderation with profanity filtering, toxicity detection, automated actions, and manual review workflows",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/moderation",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "content-safety",
+  "tags": ["moderation", "profanity", "toxicity", "content-filter", "safety", "review-queue", "appeals"],
+
+  "tables": [
+    "moderation_rules",
+    "moderation_wordlists",
+    "moderation_actions",
+    "moderation_flags",
+    "moderation_appeals",
+    "moderation_reports",
+    "moderation_toxicity_scores",
+    "moderation_user_stats",
+    "moderation_audit_log"
+  ],
+
+  "webhooks": {
+    "action.created": "New moderation action taken",
+    "action.revoked": "Moderation action revoked",
+    "flag.created": "Content flagged for review",
+    "flag.reviewed": "Flagged content reviewed",
+    "appeal.created": "New appeal submitted",
+    "appeal.reviewed": "Appeal reviewed",
+    "report.created": "New user report submitted",
+    "rule.created": "New moderation rule created",
+    "rule.updated": "Moderation rule updated"
+  },
+
+  "actions": {
+    "analyze": "Analyze content for moderation issues",
+    "check-profanity": "Check content for profanity matches",
+    "queue": "View and manage the moderation review queue",
+    "actions": "Manage moderation actions (warn, mute, ban)",
+    "appeals": "Manage user appeals",
+    "rules": "Manage moderation rules and wordlists",
+    "stats": "View moderation statistics"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "MODERATION_PLUGIN_PORT",
+      "MODERATION_TOXICITY_ENABLED",
+      "MODERATION_TOXICITY_PROVIDER",
+      "MODERATION_TOXICITY_THRESHOLD",
+      "MODERATION_AUTO_DELETE_ENABLED",
+      "MODERATION_AUTO_DELETE_THRESHOLD",
+      "MODERATION_AUTO_MUTE_ENABLED",
+      "MODERATION_AUTO_MUTE_VIOLATIONS",
+      "MODERATION_APPEALS_ENABLED",
+      "MODERATION_APPEALS_TIME_LIMIT_DAYS",
+      "MODERATION_CLEANUP_ENABLED",
+      "MODERATION_CLEANUP_INTERVAL_MINUTES",
+      "MODERATION_API_KEY",
+      "MODERATION_RATE_LIMIT_MAX",
+      "MODERATION_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+
+  "config": {
+    "defaultPort": 3704,
+    "toxicityEnabled": false,
+    "toxicityThreshold": 0.8,
+    "autoDeleteEnabled": true,
+    "autoDeleteThreshold": 0.95,
+    "appealsEnabled": true,
+    "appealsTimeLimitDays": 7
+  },
+
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["logs"]
+  }
+}

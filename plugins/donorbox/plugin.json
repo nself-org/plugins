@@ -8,8 +8,13 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "donations",
-  "tags": ["donations", "fundraising", "campaigns", "donorbox", "webhooks"],
-
+  "tags": [
+    "donations",
+    "fundraising",
+    "campaigns",
+    "donorbox",
+    "webhooks"
+  ],
   "tables": [
     "donorbox_campaigns",
     "donorbox_donors",
@@ -19,22 +24,20 @@
     "donorbox_tickets",
     "donorbox_webhook_events"
   ],
-
   "webhooks": {
     "donation.created": "Sync new donation to database"
   },
-
   "actions": {
     "sync": "Sync all Donorbox data to database",
     "reconcile": "Re-sync recent data to catch gaps from missed webhooks",
     "server": "Start the Donorbox plugin server",
     "status": "Show sync status and statistics"
   },
-
   "envVars": {
     "required": [
-      "DONORBOX_EMAIL",
-      "DONORBOX_API_KEY"
+      "DATABASE_URL",
+      "DONORBOX_API_KEY",
+      "DONORBOX_EMAIL"
     ],
     "optional": [
       "DONORBOX_EMAILS",
@@ -45,14 +48,12 @@
       "DONORBOX_SYNC_INTERVAL"
     ]
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "config": {
     "syncInterval": 3600,
     "webhookPath": "/webhooks/donorbox",
@@ -60,16 +61,24 @@
     "retryDelay": 1000,
     "port": 3005
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["donorbox.org"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "donorbox.org"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

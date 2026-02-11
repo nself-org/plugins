@@ -1,0 +1,91 @@
+{
+  "name": "streaming",
+  "version": "1.0.0",
+  "description": "Live streaming and broadcasting with RTMP/HLS, viewer analytics, chat integration, multi-quality streams, DVR playback, and moderation",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/streaming",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "communication",
+  "tags": ["streaming", "live", "rtmp", "hls", "video", "chat", "broadcast", "vod"],
+
+  "tables": [
+    "streaming_streams",
+    "streaming_keys",
+    "streaming_viewers",
+    "streaming_recordings",
+    "streaming_clips",
+    "streaming_analytics",
+    "streaming_moderators",
+    "streaming_chat_messages",
+    "streaming_reports",
+    "streaming_schedule"
+  ],
+
+  "webhooks": {
+    "stream.started": "A live stream started",
+    "stream.ended": "A live stream ended",
+    "stream.flagged": "A stream was flagged for moderation",
+    "stream.taken_down": "A stream was taken down",
+    "recording.ready": "A recording finished processing",
+    "clip.ready": "A clip finished processing",
+    "viewer.joined": "A viewer joined a stream",
+    "viewer.left": "A viewer left a stream",
+    "chat.message": "A chat message was sent",
+    "report.created": "A stream was reported"
+  },
+
+  "actions": {
+    "init": "Initialize streaming system",
+    "server": "Start streaming server",
+    "status": "View system status",
+    "streams": "Manage streams",
+    "recordings": "Manage recordings",
+    "schedule": "Manage scheduled streams"
+  },
+
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "STREAMING_PLUGIN_PORT",
+      "S3_BUCKET",
+      "S3_REGION",
+      "S3_ACCESS_KEY",
+      "S3_SECRET_KEY",
+      "CDN_URL"
+    ]
+  },
+
+  "config": {
+    "port": 3711,
+    "webhookPath": "/webhooks/streaming",
+    "rtmpPort": 1935,
+    "hlsSegmentDuration": 4,
+    "dvrWindowSeconds": 7200,
+    "analyticsBucketMinutes": 5,
+    "chatRateLimitMessages": 5,
+    "chatRateLimitWindow": 10
+  },
+
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": ["*"],
+    "filesystem": ["logs", "cache", "recordings"]
+  }
+}

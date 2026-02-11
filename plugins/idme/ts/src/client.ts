@@ -75,13 +75,13 @@ export class IDmeClient {
       throw new Error(`Failed to exchange authorization code: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, unknown>;
 
     return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresIn: data.expires_in,
-      expiresAt: new Date(Date.now() + data.expires_in * 1000),
+      accessToken: data.access_token as string,
+      refreshToken: data.refresh_token as string,
+      expiresIn: data.expires_in as number,
+      expiresAt: new Date(Date.now() + (data.expires_in as number) * 1000),
     };
   }
 
@@ -110,13 +110,13 @@ export class IDmeClient {
       throw new Error(`Failed to refresh token: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, unknown>;
 
     return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token || refreshToken,
-      expiresIn: data.expires_in,
-      expiresAt: new Date(Date.now() + data.expires_in * 1000),
+      accessToken: data.access_token as string,
+      refreshToken: (data.refresh_token as string) || refreshToken,
+      expiresIn: data.expires_in as number,
+      expiresAt: new Date(Date.now() + (data.expires_in as number) * 1000),
     };
   }
 
@@ -138,15 +138,15 @@ export class IDmeClient {
       throw new Error(`Failed to fetch user profile: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, unknown>;
 
     return {
-      firstName: data.fname,
-      lastName: data.lname,
-      email: data.email,
-      birthDate: data.birth_date,
-      zip: data.zip,
-      phone: data.phone,
+      firstName: data.fname as string | undefined,
+      lastName: data.lname as string | undefined,
+      email: data.email as string | undefined,
+      birthDate: data.birth_date as string | undefined,
+      zip: data.zip as string | undefined,
+      phone: data.phone as string | undefined,
     };
   }
 
@@ -168,85 +168,92 @@ export class IDmeClient {
       throw new Error(`Failed to fetch verifications: ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as Record<string, unknown>;
     const groups: IDmeGroup[] = [];
     const attributes: IDmeAttributes = {};
 
     // Parse verification groups
     if (data.military) {
+      const military = data.military as Record<string, unknown>;
       groups.push({
         id: 'military',
         name: 'Military',
         type: 'military',
         verified: true,
-        verifiedAt: data.military.verified_at,
+        verifiedAt: military.verified_at as string | undefined,
       });
     }
 
     if (data.veteran) {
+      const veteran = data.veteran as Record<string, unknown>;
       groups.push({
         id: 'veteran',
         name: 'Veteran',
         type: 'veteran',
         verified: true,
-        verifiedAt: data.veteran.verified_at,
+        verifiedAt: veteran.verified_at as string | undefined,
       });
 
       // Extract veteran-specific attributes
-      if (data.veteran.affiliation) attributes.affiliation = data.veteran.affiliation;
-      if (data.veteran.branch) attributes.branch = data.veteran.branch;
-      if (data.veteran.service_era) attributes.serviceEra = data.veteran.service_era;
-      if (data.veteran.rank) attributes.rank = data.veteran.rank;
-      if (data.veteran.status) attributes.status = data.veteran.status;
+      if (veteran.affiliation) attributes.affiliation = veteran.affiliation as string;
+      if (veteran.branch) attributes.branch = veteran.branch as string;
+      if (veteran.service_era) attributes.serviceEra = veteran.service_era as string;
+      if (veteran.rank) attributes.rank = veteran.rank as string;
+      if (veteran.status) attributes.status = veteran.status as string;
     }
 
     if (data.first_responder) {
+      const firstResponder = data.first_responder as Record<string, unknown>;
       groups.push({
         id: 'first_responder',
         name: 'First Responder',
         type: 'first_responder',
         verified: true,
-        verifiedAt: data.first_responder.verified_at,
+        verifiedAt: firstResponder.verified_at as string | undefined,
       });
     }
 
     if (data.government) {
+      const government = data.government as Record<string, unknown>;
       groups.push({
         id: 'government',
         name: 'Government Employee',
         type: 'government',
         verified: true,
-        verifiedAt: data.government.verified_at,
+        verifiedAt: government.verified_at as string | undefined,
       });
     }
 
     if (data.teacher) {
+      const teacher = data.teacher as Record<string, unknown>;
       groups.push({
         id: 'teacher',
         name: 'Teacher',
         type: 'teacher',
         verified: true,
-        verifiedAt: data.teacher.verified_at,
+        verifiedAt: teacher.verified_at as string | undefined,
       });
     }
 
     if (data.student) {
+      const student = data.student as Record<string, unknown>;
       groups.push({
         id: 'student',
         name: 'Student',
         type: 'student',
         verified: true,
-        verifiedAt: data.student.verified_at,
+        verifiedAt: student.verified_at as string | undefined,
       });
     }
 
     if (data.nurse) {
+      const nurse = data.nurse as Record<string, unknown>;
       groups.push({
         id: 'nurse',
         name: 'Nurse',
         type: 'nurse',
         verified: true,
-        verifiedAt: data.nurse.verified_at,
+        verifiedAt: nurse.verified_at as string | undefined,
       });
     }
 
