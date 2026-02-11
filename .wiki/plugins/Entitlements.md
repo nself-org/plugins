@@ -741,18 +741,18 @@ The entitlements plugin emits the following webhook events:
 | `plan.upgraded` | Subscription upgraded to higher plan |
 | `plan.downgraded` | Subscription downgraded to lower plan |
 
-These events are stored in the `entitlement_events` table and can be consumed via the `/api/entitlements/events` endpoint or via external webhook delivery systems.
+These events are stored in the `np_entitlements_events` table and can be consumed via the `/api/entitlements/events` endpoint or via external webhook delivery systems.
 
 ---
 
 ## Database Schema
 
-### entitlement_plans
+### np_entitlements_plans
 
 Subscription plan definitions.
 
 ```sql
-CREATE TABLE entitlement_plans (
+CREATE TABLE np_entitlements_plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name TEXT NOT NULL,
@@ -774,10 +774,10 @@ CREATE TABLE entitlement_plans (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_entitlement_plans_source_account ON entitlement_plans(source_account_id);
-CREATE INDEX idx_entitlement_plans_slug ON entitlement_plans(source_account_id, slug);
-CREATE INDEX idx_entitlement_plans_type ON entitlement_plans(plan_type);
-CREATE INDEX idx_entitlement_plans_features ON entitlement_plans USING GIN(features);
+CREATE INDEX idx_entitlement_plans_source_account ON np_entitlements_plans(source_account_id);
+CREATE INDEX idx_entitlement_plans_slug ON np_entitlements_plans(source_account_id, slug);
+CREATE INDEX idx_entitlement_plans_type ON np_entitlements_plans(plan_type);
+CREATE INDEX idx_entitlement_plans_features ON np_entitlements_plans USING GIN(features);
 ```
 
 **Columns:**
@@ -801,17 +801,17 @@ CREATE INDEX idx_entitlement_plans_features ON entitlement_plans USING GIN(featu
 | `metadata` | JSONB | Custom metadata |
 | `display_order` | INTEGER | Sort order for display |
 
-### entitlement_subscriptions
+### np_entitlements_subscriptions
 
 Active and historical subscriptions.
 
 ```sql
-CREATE TABLE entitlement_subscriptions (
+CREATE TABLE np_entitlements_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   workspace_id VARCHAR(255),
   user_id VARCHAR(255),
-  plan_id UUID NOT NULL REFERENCES entitlement_plans(id) ON DELETE RESTRICT,
+  plan_id UUID NOT NULL REFERENCES np_entitlements_plans(id) ON DELETE RESTRICT,
   status VARCHAR(32) NOT NULL DEFAULT 'active',
   billing_interval VARCHAR(32) NOT NULL,
   price_cents INTEGER NOT NULL,
@@ -837,18 +837,18 @@ CREATE TABLE entitlement_subscriptions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_entitlement_subscriptions_source_account ON entitlement_subscriptions(source_account_id);
-CREATE INDEX idx_entitlement_subscriptions_workspace ON entitlement_subscriptions(workspace_id);
-CREATE INDEX idx_entitlement_subscriptions_user ON entitlement_subscriptions(user_id);
-CREATE INDEX idx_entitlement_subscriptions_status ON entitlement_subscriptions(status);
+CREATE INDEX idx_entitlement_subscriptions_source_account ON np_entitlements_subscriptions(source_account_id);
+CREATE INDEX idx_entitlement_subscriptions_workspace ON np_entitlements_subscriptions(workspace_id);
+CREATE INDEX idx_entitlement_subscriptions_user ON np_entitlements_subscriptions(user_id);
+CREATE INDEX idx_entitlement_subscriptions_status ON np_entitlements_subscriptions(status);
 ```
 
-### entitlement_features
+### np_entitlements_features
 
 Feature flag definitions.
 
 ```sql
-CREATE TABLE entitlement_features (
+CREATE TABLE np_entitlements_features (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   key TEXT NOT NULL,
@@ -864,17 +864,17 @@ CREATE TABLE entitlement_features (
 );
 ```
 
-### entitlement_quotas
+### np_entitlements_quotas
 
 Quota instances per subscription.
 
 ```sql
-CREATE TABLE entitlement_quotas (
+CREATE TABLE np_entitlements_quotas (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   workspace_id VARCHAR(255),
   user_id VARCHAR(255),
-  subscription_id UUID NOT NULL REFERENCES entitlement_subscriptions(id) ON DELETE CASCADE,
+  subscription_id UUID NOT NULL REFERENCES np_entitlements_subscriptions(id) ON DELETE CASCADE,
   quota_key TEXT NOT NULL,
   quota_name TEXT NOT NULL,
   limit_value BIGINT,
@@ -889,17 +889,17 @@ CREATE TABLE entitlement_quotas (
 );
 ```
 
-### entitlement_usage
+### np_entitlements_usage
 
 Usage records for quota tracking.
 
 ```sql
-CREATE TABLE entitlement_usage (
+CREATE TABLE np_entitlements_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   workspace_id VARCHAR(255),
   user_id VARCHAR(255),
-  quota_id UUID NOT NULL REFERENCES entitlement_quotas(id) ON DELETE CASCADE,
+  quota_id UUID NOT NULL REFERENCES np_entitlements_quotas(id) ON DELETE CASCADE,
   quota_key TEXT NOT NULL,
   usage_amount BIGINT NOT NULL DEFAULT 1,
   resource_type TEXT,
@@ -909,16 +909,16 @@ CREATE TABLE entitlement_usage (
 );
 ```
 
-### entitlement_addons
+### np_entitlements_addons
 
 Addon subscriptions attached to base subscriptions.
 
 ```sql
-CREATE TABLE entitlement_addons (
+CREATE TABLE np_entitlements_addons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  addon_plan_id UUID NOT NULL REFERENCES entitlement_plans(id) ON DELETE RESTRICT,
-  subscription_id UUID NOT NULL REFERENCES entitlement_subscriptions(id) ON DELETE CASCADE,
+  addon_plan_id UUID NOT NULL REFERENCES np_entitlements_plans(id) ON DELETE RESTRICT,
+  subscription_id UUID NOT NULL REFERENCES np_entitlements_subscriptions(id) ON DELETE CASCADE,
   quantity INTEGER NOT NULL DEFAULT 1,
   price_cents INTEGER NOT NULL,
   currency VARCHAR(8) NOT NULL DEFAULT 'USD',
@@ -932,12 +932,12 @@ CREATE TABLE entitlement_addons (
 );
 ```
 
-### entitlement_grants
+### np_entitlements_grants
 
 Manual feature grants (overrides).
 
 ```sql
-CREATE TABLE entitlement_grants (
+CREATE TABLE np_entitlements_grants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   workspace_id VARCHAR(255),
@@ -954,19 +954,19 @@ CREATE TABLE entitlement_grants (
 );
 ```
 
-### entitlement_events
+### np_entitlements_events
 
 Event log for audit trail.
 
 ```sql
-CREATE TABLE entitlement_events (
+CREATE TABLE np_entitlements_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(64) NOT NULL,
   workspace_id VARCHAR(255),
   user_id VARCHAR(255),
-  subscription_id UUID REFERENCES entitlement_subscriptions(id) ON DELETE SET NULL,
-  plan_id UUID REFERENCES entitlement_plans(id) ON DELETE SET NULL,
+  subscription_id UUID REFERENCES np_entitlements_subscriptions(id) ON DELETE SET NULL,
+  plan_id UUID REFERENCES np_entitlements_plans(id) ON DELETE SET NULL,
   event_data JSONB,
   actor_user_id VARCHAR(255),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -981,7 +981,7 @@ CREATE TABLE entitlement_events (
 
 ```sql
 -- Create free plan
-INSERT INTO entitlement_plans (name, slug, billing_interval, price_cents, plan_type, features, quotas)
+INSERT INTO np_entitlements_plans (name, slug, billing_interval, price_cents, plan_type, features, quotas)
 VALUES (
   'Free',
   'free',
@@ -993,7 +993,7 @@ VALUES (
 );
 
 -- Create pro plan
-INSERT INTO entitlement_plans (name, slug, billing_interval, price_cents, plan_type, features, quotas)
+INSERT INTO np_entitlements_plans (name, slug, billing_interval, price_cents, plan_type, features, quotas)
 VALUES (
   'Pro',
   'pro-monthly',
@@ -1079,7 +1079,7 @@ curl -X POST http://localhost:3714/api/entitlements/grants \
 
 ```sql
 -- Check if quota exists
-SELECT * FROM entitlement_quotas
+SELECT * FROM np_entitlements_quotas
 WHERE subscription_id = 'your-subscription-id'
 AND quota_key = 'api_requests';
 
@@ -1094,8 +1094,8 @@ AND quota_key = 'api_requests';
 
 ```sql
 -- Verify plan features
-SELECT features FROM entitlement_plans WHERE id = (
-  SELECT plan_id FROM entitlement_subscriptions WHERE id = 'sub-id'
+SELECT features FROM np_entitlements_plans WHERE id = (
+  SELECT plan_id FROM np_entitlements_subscriptions WHERE id = 'sub-id'
 );
 ```
 
@@ -1107,7 +1107,7 @@ SELECT features FROM entitlement_plans WHERE id = (
 
 ```sql
 SELECT status, COUNT(*), SUM(price_cents)
-FROM entitlement_subscriptions
+FROM np_entitlements_subscriptions
 GROUP BY status;
 ```
 

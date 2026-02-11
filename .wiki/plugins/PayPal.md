@@ -36,20 +36,20 @@ The PayPal plugin provides complete synchronization of your PayPal account data 
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Transactions | Transaction Search API results | `paypal_transactions` |
-| Orders | Checkout orders | `paypal_orders` |
-| Captures | Payment captures | `paypal_captures` |
-| Authorizations | Payment authorizations | `paypal_authorizations` |
-| Refunds | Refund records | `paypal_refunds` |
-| Subscriptions | Billing subscriptions | `paypal_subscriptions` |
-| Subscription Plans | Plan definitions | `paypal_subscription_plans` |
-| Products | Catalog products | `paypal_products` |
-| Disputes | Payment disputes | `paypal_disputes` |
-| Payouts | Payout batches | `paypal_payouts` |
-| Invoices | Invoice records | `paypal_invoices` |
-| Payers | Deduplicated payer records | `paypal_payers` |
-| Balances | Balance snapshots | `paypal_balances` |
-| Webhook Events | Raw event log | `paypal_webhook_events` |
+| Transactions | Transaction Search API results | `np_paypal_transactions` |
+| Orders | Checkout orders | `np_paypal_orders` |
+| Captures | Payment captures | `np_paypal_captures` |
+| Authorizations | Payment authorizations | `np_paypal_authorizations` |
+| Refunds | Refund records | `np_paypal_refunds` |
+| Subscriptions | Billing subscriptions | `np_paypal_subscriptions` |
+| Subscription Plans | Plan definitions | `np_paypal_subscription_plans` |
+| Products | Catalog products | `np_paypal_products` |
+| Disputes | Payment disputes | `np_paypal_disputes` |
+| Payouts | Payout batches | `np_paypal_payouts` |
+| Invoices | Invoice records | `np_paypal_invoices` |
+| Payers | Deduplicated payer records | `np_paypal_payers` |
+| Balances | Balance snapshots | `np_paypal_balances` |
+| Webhook Events | Raw event log | `np_paypal_webhook_events` |
 
 ---
 
@@ -294,10 +294,10 @@ PayPal webhook verification uses postback to PayPal's API rather than local HMAC
 
 All tables include `source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'` for multi-account support.
 
-### paypal_transactions
+### np_paypal_transactions
 
 ```sql
-CREATE TABLE paypal_transactions (
+CREATE TABLE np_paypal_transactions (
     id VARCHAR(255) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     event_code VARCHAR(50),
@@ -320,10 +320,10 @@ CREATE TABLE paypal_transactions (
 );
 ```
 
-### paypal_orders
+### np_paypal_orders
 
 ```sql
-CREATE TABLE paypal_orders (
+CREATE TABLE np_paypal_orders (
     id VARCHAR(255) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     status VARCHAR(50),
@@ -342,10 +342,10 @@ CREATE TABLE paypal_orders (
 );
 ```
 
-### paypal_captures
+### np_paypal_captures
 
 ```sql
-CREATE TABLE paypal_captures (
+CREATE TABLE np_paypal_captures (
     id VARCHAR(255) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     order_id VARCHAR(255),
@@ -365,10 +365,10 @@ CREATE TABLE paypal_captures (
 );
 ```
 
-### paypal_subscriptions
+### np_paypal_subscriptions
 
 ```sql
-CREATE TABLE paypal_subscriptions (
+CREATE TABLE np_paypal_subscriptions (
     id VARCHAR(255) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     plan_id VARCHAR(255),
@@ -392,10 +392,10 @@ CREATE TABLE paypal_subscriptions (
 );
 ```
 
-### paypal_disputes
+### np_paypal_disputes
 
 ```sql
-CREATE TABLE paypal_disputes (
+CREATE TABLE np_paypal_disputes (
     id VARCHAR(255) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     reason VARCHAR(100),
@@ -416,10 +416,10 @@ CREATE TABLE paypal_disputes (
 );
 ```
 
-### paypal_payers
+### np_paypal_payers
 
 ```sql
-CREATE TABLE paypal_payers (
+CREATE TABLE np_paypal_payers (
     id VARCHAR(255) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     email VARCHAR(255),
@@ -437,10 +437,10 @@ CREATE TABLE paypal_payers (
 );
 ```
 
-### paypal_webhook_events
+### np_paypal_webhook_events
 
 ```sql
-CREATE TABLE paypal_webhook_events (
+CREATE TABLE np_paypal_webhook_events (
     id VARCHAR(255) PRIMARY KEY,
     event_type VARCHAR(255),
     resource_type VARCHAR(255),
@@ -455,65 +455,65 @@ CREATE TABLE paypal_webhook_events (
 );
 ```
 
-Additional tables: `paypal_authorizations`, `paypal_refunds`, `paypal_subscription_plans`, `paypal_products`, `paypal_payouts`, `paypal_invoices`, `paypal_balances`.
+Additional tables: `np_paypal_authorizations`, `np_paypal_refunds`, `np_paypal_subscription_plans`, `np_paypal_products`, `np_paypal_payouts`, `np_paypal_invoices`, `np_paypal_balances`.
 
 ---
 
 ## Analytics Views
 
-### paypal_donation_summary
+### np_paypal_donation_summary
 
 Aggregate donations by payer with total amounts and donation count.
 
 ```sql
-SELECT * FROM paypal_donation_summary;
+SELECT * FROM np_paypal_donation_summary;
 -- payer_id, payer_email, payer_name, source_account_id,
 -- donation_count, total_donated, first_donation, last_donation, currency
 ```
 
-### paypal_active_subscriptions
+### np_paypal_active_subscriptions
 
 Active subscriptions with plan details.
 
 ```sql
-SELECT * FROM paypal_active_subscriptions;
+SELECT * FROM np_paypal_active_subscriptions;
 -- id, plan_id, plan_name, subscriber_email, subscriber_name,
 -- start_time, next_billing_time, last_payment_amount, currency
 ```
 
-### paypal_recurring_revenue
+### np_paypal_recurring_revenue
 
 Estimated monthly recurring revenue by account.
 
 ```sql
-SELECT * FROM paypal_recurring_revenue;
+SELECT * FROM np_paypal_recurring_revenue;
 -- source_account_id, currency, active_subscriptions, estimated_mrr
 ```
 
-### paypal_dispute_summary
+### np_paypal_dispute_summary
 
 Dispute statistics grouped by status.
 
 ```sql
-SELECT * FROM paypal_dispute_summary;
+SELECT * FROM np_paypal_dispute_summary;
 -- source_account_id, status, dispute_count, total_disputed, currency
 ```
 
-### paypal_top_donors
+### np_paypal_top_donors
 
 Ranked donors by total amount.
 
 ```sql
-SELECT * FROM paypal_top_donors;
+SELECT * FROM np_paypal_top_donors;
 -- payer_id, email, name, total_amount, transaction_count, first_seen, last_seen
 ```
 
-### paypal_unified_payments
+### np_paypal_unified_payments
 
 Cross-account payment aggregation view.
 
 ```sql
-SELECT * FROM paypal_unified_payments;
+SELECT * FROM np_paypal_unified_payments;
 -- payment_id, payment_type, source_account_id, payer_id, payer_email,
 -- amount, fee_amount, net_amount, currency, status, description, created_at
 ```
@@ -522,18 +522,18 @@ SELECT * FROM paypal_unified_payments;
 
 ## Cross-Plugin Integration
 
-The PayPal plugin integrates with the Donorbox plugin through cross-reference columns. Donorbox donations include `paypal_transaction_id` which can be joined with `paypal_transactions.id`:
+The PayPal plugin integrates with the Donorbox plugin through cross-reference columns. Donorbox donations include `np_paypal_transaction_id` which can be joined with `np_paypal_transactions.id`:
 
 ```sql
 -- Find PayPal fee for a Donorbox donation
 SELECT
     dd.donor_name,
-    dd.amount AS donorbox_amount,
-    pt.fee_amount AS paypal_fee,
-    pt.amount AS paypal_amount
-FROM donorbox_donations dd
-JOIN paypal_transactions pt ON dd.paypal_transaction_id = pt.id
-WHERE dd.paypal_transaction_id IS NOT NULL;
+    dd.amount AS np_donorbox_amount,
+    pt.fee_amount AS np_paypal_fee,
+    pt.amount AS np_paypal_amount
+FROM np_donorbox_donations dd
+JOIN np_paypal_transactions pt ON dd.np_paypal_transaction_id = pt.id
+WHERE dd.np_paypal_transaction_id IS NOT NULL;
 ```
 
 ---

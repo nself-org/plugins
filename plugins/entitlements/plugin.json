@@ -7,20 +7,25 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/entitlements",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "monetization",
-  "tags": ["entitlements", "subscriptions", "plans", "quotas", "billing", "feature-gating"],
-
-  "tables": [
-    "entitlement_plans",
-    "entitlement_subscriptions",
-    "entitlement_features",
-    "entitlement_quotas",
-    "entitlement_usage",
-    "entitlement_addons",
-    "entitlement_grants",
-    "entitlement_events"
+  "category": "commerce",
+  "tags": [
+    "entitlements",
+    "subscriptions",
+    "plans",
+    "quotas",
+    "billing",
+    "feature-gating"
   ],
-
+  "tables": [
+    "np_entitlements_plans",
+    "np_entitlements_subscriptions",
+    "np_entitlements_features",
+    "np_entitlements_quotas",
+    "np_entitlements_usage",
+    "np_entitlements_addons",
+    "np_entitlements_grants",
+    "np_entitlements_events"
+  ],
   "webhooks": {
     "subscription.created": "Subscription created",
     "subscription.updated": "Subscription updated",
@@ -37,7 +42,6 @@
     "plan.upgraded": "Plan upgraded",
     "plan.downgraded": "Plan downgraded"
   },
-
   "actions": {
     "plans": "Manage entitlement plans",
     "subscriptions": "Manage subscriptions",
@@ -46,7 +50,6 @@
     "grants": "Manage feature grants",
     "usage": "Track usage"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -60,30 +63,33 @@
       "ENTITLEMENTS_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3714,
     "defaultCurrency": "USD",
     "defaultTrialDays": 14,
     "quotaWarningThreshold": 80
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs"]
+    "filesystem": [
+      "logs"
+    ]
   }
 }

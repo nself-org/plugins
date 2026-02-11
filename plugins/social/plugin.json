@@ -8,18 +8,24 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "content",
-  "tags": ["social", "posts", "comments", "reactions", "follows", "bookmarks", "content"],
-
-  "tables": [
-    "social_posts",
-    "social_comments",
-    "social_reactions",
-    "social_follows",
-    "social_bookmarks",
-    "social_shares",
-    "social_webhook_events"
+  "tags": [
+    "social",
+    "posts",
+    "comments",
+    "reactions",
+    "follows",
+    "bookmarks",
+    "content"
   ],
-
+  "tables": [
+    "np_social_posts",
+    "np_social_comments",
+    "np_social_reactions",
+    "np_social_follows",
+    "np_social_bookmarks",
+    "np_social_shares",
+    "np_social_webhook_events"
+  ],
   "webhooks": {
     "post.created": "Handle new post creation",
     "post.updated": "Handle post updates",
@@ -35,7 +41,6 @@
     "bookmark.deleted": "Handle bookmark removal",
     "share.created": "Handle new share/repost"
   },
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start webhook and API server",
@@ -46,7 +51,6 @@
     "follows": "Manage follows",
     "stats": "Show detailed statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -63,33 +67,44 @@
       "SOCIAL_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3502,
     "maxPostLength": 5000,
     "maxCommentLength": 2000,
     "maxCommentDepth": 5,
     "editWindowMinutes": 30,
-    "reactionsAllowed": ["👍", "❤️", "😂", "😮", "😢", "🔥"],
+    "reactionsAllowed": [
+      "👍",
+      "❤️",
+      "😂",
+      "😮",
+      "😢",
+      "🔥"
+    ],
     "webhookPath": "/webhooks/social"
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

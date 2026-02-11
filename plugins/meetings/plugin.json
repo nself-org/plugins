@@ -7,21 +7,27 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/meetings",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "productivity",
-  "tags": ["meetings", "calendar", "rooms", "scheduling", "availability", "google-calendar", "outlook"],
-
-  "tables": [
-    "meetings_events",
-    "meetings_attendees",
-    "meetings_rooms",
-    "meetings_calendars",
-    "meetings_calendar_shares",
-    "meetings_external_calendars",
-    "meetings_templates",
-    "meetings_reminders",
-    "meetings_waitlist"
+  "category": "development",
+  "tags": [
+    "meetings",
+    "calendar",
+    "rooms",
+    "scheduling",
+    "availability",
+    "google-calendar",
+    "outlook"
   ],
-
+  "tables": [
+    "np_meetings_events",
+    "np_meetings_attendees",
+    "np_meetings_rooms",
+    "np_meetings_calendars",
+    "np_meetings_calendar_shares",
+    "np_meetings_external_calendars",
+    "np_meetings_templates",
+    "np_meetings_reminders",
+    "np_meetings_waitlist"
+  ],
   "webhooks": {
     "event.created": "A new meeting event was created",
     "event.updated": "A meeting event was updated",
@@ -33,7 +39,6 @@
     "sync.completed": "External calendar sync completed",
     "reminder.sent": "A meeting reminder was sent"
   },
-
   "actions": {
     "init": "Initialize meetings system",
     "server": "Start meetings server",
@@ -43,7 +48,6 @@
     "calendars": "Manage calendars",
     "templates": "Manage meeting templates"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -58,7 +62,6 @@
       "OUTLOOK_CALENDAR_REDIRECT_URI"
     ]
   },
-
   "config": {
     "port": 3710,
     "webhookPath": "/webhooks/meetings",
@@ -69,23 +72,30 @@
     "defaultBufferMinutes": 15,
     "maxAdvanceBookingDays": 90
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

@@ -8,23 +8,25 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["cdn", "cache", "cloudflare", "bunnycdn", "edge"],
-
+  "tags": [
+    "cdn",
+    "cache",
+    "cloudflare",
+    "bunnycdn",
+    "edge"
+  ],
   "tables": [
-    "cdn_zones",
-    "cdn_purge_requests",
-    "cdn_analytics",
-    "cdn_signed_urls"
+    "np_cdn_zones",
+    "np_cdn_purge_requests",
+    "np_cdn_analytics",
+    "np_cdn_signed_urls"
   ],
-
   "views": [
-    "cdn_bandwidth_by_zone",
-    "cdn_cache_hit_rate",
-    "cdn_top_paths"
+    "np_cdn_bandwidth_by_zone",
+    "np_cdn_cache_hit_rate",
+    "np_cdn_top_paths"
   ],
-
   "webhooks": {},
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start the API server",
@@ -34,7 +36,6 @@
     "sign": "Generate signed URLs",
     "analytics": "View and sync analytics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -55,30 +56,36 @@
       "CDN_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3204,
     "webhookPath": "/webhooks/cdn",
     "retryAttempts": 3,
     "retryDelay": 1000
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

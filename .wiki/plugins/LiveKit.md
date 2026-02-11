@@ -726,8 +726,8 @@ Get egress job details.
     "egress_type": "room",
     "output_type": "file",
     "status": "completed",
-    "file_url": "https://cdn.example.com/recordings/room-123.mp4",
-    "file_size_bytes": 524288000,
+    "np_fileproc_url": "https://cdn.example.com/recordings/room-123.mp4",
+    "np_fileproc_size_bytes": 524288000,
     "duration_seconds": 3600
   }
 }
@@ -1055,12 +1055,12 @@ Triggered when an egress job fails.
 
 ## Database Schema
 
-### nchat_livekit_rooms
+### np_livekit_rooms
 
 Stores LiveKit room configurations and states.
 
 ```sql
-CREATE TABLE nchat_livekit_rooms (
+CREATE TABLE np_livekit_rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   livekit_room_name VARCHAR(255) NOT NULL,
@@ -1079,27 +1079,27 @@ CREATE TABLE nchat_livekit_rooms (
   UNIQUE(source_account_id, livekit_room_name)
 );
 
-CREATE INDEX idx_livekit_rooms_account ON nchat_livekit_rooms(source_account_id);
-CREATE INDEX idx_livekit_rooms_name ON nchat_livekit_rooms(livekit_room_name);
-CREATE INDEX idx_livekit_rooms_sid ON nchat_livekit_rooms(livekit_room_sid);
-CREATE INDEX idx_livekit_rooms_status ON nchat_livekit_rooms(status);
-CREATE INDEX idx_livekit_rooms_call ON nchat_livekit_rooms(call_id) WHERE call_id IS NOT NULL;
-CREATE INDEX idx_livekit_rooms_stream ON nchat_livekit_rooms(stream_id) WHERE stream_id IS NOT NULL;
+CREATE INDEX idx_livekit_rooms_account ON np_livekit_rooms(source_account_id);
+CREATE INDEX idx_livekit_rooms_name ON np_livekit_rooms(livekit_room_name);
+CREATE INDEX idx_livekit_rooms_sid ON np_livekit_rooms(livekit_room_sid);
+CREATE INDEX idx_livekit_rooms_status ON np_livekit_rooms(status);
+CREATE INDEX idx_livekit_rooms_call ON np_livekit_rooms(call_id) WHERE call_id IS NOT NULL;
+CREATE INDEX idx_livekit_rooms_stream ON np_livekit_rooms(stream_id) WHERE stream_id IS NOT NULL;
 ```
 
 **Status values:** `creating`, `active`, `closed`
 
 **Room types:** `conference`, `webinar`, `broadcast`, `audio`, `custom`
 
-### nchat_livekit_participants
+### np_livekit_participants
 
 Tracks participants in LiveKit rooms.
 
 ```sql
-CREATE TABLE nchat_livekit_participants (
+CREATE TABLE np_livekit_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  room_id UUID NOT NULL REFERENCES nchat_livekit_rooms(id) ON DELETE CASCADE,
+  room_id UUID NOT NULL REFERENCES np_livekit_rooms(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   livekit_participant_sid VARCHAR(255),
   livekit_identity VARCHAR(255) NOT NULL,
@@ -1120,32 +1120,32 @@ CREATE TABLE nchat_livekit_participants (
   UNIQUE(source_account_id, room_id, user_id)
 );
 
-CREATE INDEX idx_livekit_participants_account ON nchat_livekit_participants(source_account_id);
-CREATE INDEX idx_livekit_participants_room ON nchat_livekit_participants(room_id);
-CREATE INDEX idx_livekit_participants_user ON nchat_livekit_participants(user_id);
-CREATE INDEX idx_livekit_participants_sid ON nchat_livekit_participants(livekit_participant_sid);
-CREATE INDEX idx_livekit_participants_status ON nchat_livekit_participants(status);
+CREATE INDEX idx_livekit_participants_account ON np_livekit_participants(source_account_id);
+CREATE INDEX idx_livekit_participants_room ON np_livekit_participants(room_id);
+CREATE INDEX idx_livekit_participants_user ON np_livekit_participants(user_id);
+CREATE INDEX idx_livekit_participants_sid ON np_livekit_participants(livekit_participant_sid);
+CREATE INDEX idx_livekit_participants_status ON np_livekit_participants(status);
 ```
 
 **Status values:** `joining`, `joined`, `reconnecting`, `disconnected`
 
-### nchat_livekit_egress_jobs
+### np_livekit_egress_jobs
 
 Manages recording and egress jobs.
 
 ```sql
-CREATE TABLE nchat_livekit_egress_jobs (
+CREATE TABLE np_livekit_egress_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  room_id UUID NOT NULL REFERENCES nchat_livekit_rooms(id) ON DELETE CASCADE,
+  room_id UUID NOT NULL REFERENCES np_livekit_rooms(id) ON DELETE CASCADE,
   recording_id UUID,
   livekit_egress_id VARCHAR(255) NOT NULL,
   egress_type VARCHAR(50) NOT NULL,
   output_type VARCHAR(50) NOT NULL,
   config JSONB NOT NULL DEFAULT '{}'::jsonb,
   status VARCHAR(50) NOT NULL DEFAULT 'pending',
-  file_url TEXT,
-  file_size_bytes BIGINT,
+  np_fileproc_url TEXT,
+  np_fileproc_size_bytes BIGINT,
   duration_seconds INTEGER,
   playlist_url TEXT,
   error_message TEXT,
@@ -1157,12 +1157,12 @@ CREATE TABLE nchat_livekit_egress_jobs (
   UNIQUE(source_account_id, livekit_egress_id)
 );
 
-CREATE INDEX idx_livekit_egress_account ON nchat_livekit_egress_jobs(source_account_id);
-CREATE INDEX idx_livekit_egress_room ON nchat_livekit_egress_jobs(room_id);
-CREATE INDEX idx_livekit_egress_recording ON nchat_livekit_egress_jobs(recording_id);
-CREATE INDEX idx_livekit_egress_id ON nchat_livekit_egress_jobs(livekit_egress_id);
-CREATE INDEX idx_livekit_egress_status ON nchat_livekit_egress_jobs(status);
-CREATE INDEX idx_livekit_egress_type ON nchat_livekit_egress_jobs(egress_type, output_type);
+CREATE INDEX idx_livekit_egress_account ON np_livekit_egress_jobs(source_account_id);
+CREATE INDEX idx_livekit_egress_room ON np_livekit_egress_jobs(room_id);
+CREATE INDEX idx_livekit_egress_recording ON np_livekit_egress_jobs(recording_id);
+CREATE INDEX idx_livekit_egress_id ON np_livekit_egress_jobs(livekit_egress_id);
+CREATE INDEX idx_livekit_egress_status ON np_livekit_egress_jobs(status);
+CREATE INDEX idx_livekit_egress_type ON np_livekit_egress_jobs(egress_type, output_type);
 ```
 
 **Status values:** `pending`, `active`, `ending`, `completed`, `failed`
@@ -1171,15 +1171,15 @@ CREATE INDEX idx_livekit_egress_type ON nchat_livekit_egress_jobs(egress_type, o
 
 **Output types:** `file`, `stream`, `segments`
 
-### nchat_livekit_tokens
+### np_livekit_tokens
 
 Tracks issued access tokens.
 
 ```sql
-CREATE TABLE nchat_livekit_tokens (
+CREATE TABLE np_livekit_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  room_id UUID NOT NULL REFERENCES nchat_livekit_rooms(id) ON DELETE CASCADE,
+  room_id UUID NOT NULL REFERENCES np_livekit_rooms(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   token_hash VARCHAR(255) NOT NULL,
   grants JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -1195,23 +1195,23 @@ CREATE TABLE nchat_livekit_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_livekit_tokens_account ON nchat_livekit_tokens(source_account_id);
-CREATE INDEX idx_livekit_tokens_room ON nchat_livekit_tokens(room_id);
-CREATE INDEX idx_livekit_tokens_user ON nchat_livekit_tokens(user_id);
-CREATE INDEX idx_livekit_tokens_expires ON nchat_livekit_tokens(expires_at);
-CREATE INDEX idx_livekit_tokens_revoked ON nchat_livekit_tokens(revoked_at) WHERE revoked_at IS NOT NULL;
+CREATE INDEX idx_livekit_tokens_account ON np_livekit_tokens(source_account_id);
+CREATE INDEX idx_livekit_tokens_room ON np_livekit_tokens(room_id);
+CREATE INDEX idx_livekit_tokens_user ON np_livekit_tokens(user_id);
+CREATE INDEX idx_livekit_tokens_expires ON np_livekit_tokens(expires_at);
+CREATE INDEX idx_livekit_tokens_revoked ON np_livekit_tokens(revoked_at) WHERE revoked_at IS NOT NULL;
 ```
 
-### nchat_livekit_quality_metrics
+### np_livekit_quality_metrics
 
 Stores quality metrics samples for monitoring.
 
 ```sql
-CREATE TABLE nchat_livekit_quality_metrics (
+CREATE TABLE np_livekit_quality_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  room_id UUID NOT NULL REFERENCES nchat_livekit_rooms(id) ON DELETE CASCADE,
-  participant_id UUID REFERENCES nchat_livekit_participants(id) ON DELETE CASCADE,
+  room_id UUID NOT NULL REFERENCES np_livekit_rooms(id) ON DELETE CASCADE,
+  participant_id UUID REFERENCES np_livekit_participants(id) ON DELETE CASCADE,
   metric_type VARCHAR(50) NOT NULL,
   bitrate_kbps INTEGER,
   latency_ms INTEGER,
@@ -1226,23 +1226,23 @@ CREATE TABLE nchat_livekit_quality_metrics (
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_livekit_quality_account ON nchat_livekit_quality_metrics(source_account_id);
-CREATE INDEX idx_livekit_quality_room ON nchat_livekit_quality_metrics(room_id);
-CREATE INDEX idx_livekit_quality_participant ON nchat_livekit_quality_metrics(participant_id);
-CREATE INDEX idx_livekit_quality_type ON nchat_livekit_quality_metrics(metric_type);
-CREATE INDEX idx_livekit_quality_time ON nchat_livekit_quality_metrics(recorded_at DESC);
+CREATE INDEX idx_livekit_quality_account ON np_livekit_quality_metrics(source_account_id);
+CREATE INDEX idx_livekit_quality_room ON np_livekit_quality_metrics(room_id);
+CREATE INDEX idx_livekit_quality_participant ON np_livekit_quality_metrics(participant_id);
+CREATE INDEX idx_livekit_quality_type ON np_livekit_quality_metrics(metric_type);
+CREATE INDEX idx_livekit_quality_time ON np_livekit_quality_metrics(recorded_at DESC);
 ```
 
 **Metric types:** `video`, `audio`, `connection`, `datachannel`
 
 **Connection types:** `wifi`, `ethernet`, `cellular`, `unknown`
 
-### nchat_livekit_webhook_events
+### np_livekit_webhook_events
 
 Stores webhook events from LiveKit Server.
 
 ```sql
-CREATE TABLE nchat_livekit_webhook_events (
+CREATE TABLE np_livekit_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128),
@@ -1253,10 +1253,10 @@ CREATE TABLE nchat_livekit_webhook_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_livekit_webhook_events_account ON nchat_livekit_webhook_events(source_account_id);
-CREATE INDEX idx_livekit_webhook_events_type ON nchat_livekit_webhook_events(event_type);
-CREATE INDEX idx_livekit_webhook_events_processed ON nchat_livekit_webhook_events(processed);
-CREATE INDEX idx_livekit_webhook_events_created ON nchat_livekit_webhook_events(created_at);
+CREATE INDEX idx_livekit_webhook_events_account ON np_livekit_webhook_events(source_account_id);
+CREATE INDEX idx_livekit_webhook_events_type ON np_livekit_webhook_events(event_type);
+CREATE INDEX idx_livekit_webhook_events_processed ON np_livekit_webhook_events(processed);
+CREATE INDEX idx_livekit_webhook_events_created ON np_livekit_webhook_events(created_at);
 ```
 
 ## Examples
@@ -1439,7 +1439,7 @@ curl -X DELETE http://localhost:3707/api/livekit/rooms/550e8400-e29b-41d4-a716-4
 2. Look for high packet loss (>5%) or latency (>150ms):
    ```sql
    SELECT AVG(packet_loss_pct), AVG(latency_ms)
-   FROM nchat_livekit_quality_metrics
+   FROM np_livekit_quality_metrics
    WHERE room_id = 'YOUR_ROOM_ID'
    AND recorded_at > NOW() - INTERVAL '5 minutes';
    ```
@@ -1451,7 +1451,7 @@ curl -X DELETE http://localhost:3707/api/livekit/rooms/550e8400-e29b-41d4-a716-4
 4. Check TURN server is being used for NAT traversal:
    ```sql
    SELECT DISTINCT turn_server
-   FROM nchat_livekit_quality_metrics
+   FROM np_livekit_quality_metrics
    WHERE room_id = 'YOUR_ROOM_ID';
    ```
 
@@ -1531,7 +1531,7 @@ curl -X DELETE http://localhost:3707/api/livekit/rooms/550e8400-e29b-41d4-a716-4
    ```sql
    SELECT query, mean_exec_time, calls
    FROM pg_stat_statements
-   WHERE query LIKE '%nchat_livekit%'
+   WHERE query LIKE '%np_livekit%'
    ORDER BY mean_exec_time DESC
    LIMIT 10;
    ```
@@ -1550,19 +1550,19 @@ curl -X DELETE http://localhost:3707/api/livekit/rooms/550e8400-e29b-41d4-a716-4
 
 2. Remove old quality metrics:
    ```sql
-   DELETE FROM nchat_livekit_quality_metrics
+   DELETE FROM np_livekit_quality_metrics
    WHERE recorded_at < NOW() - INTERVAL '7 days';
    ```
 
 3. Clean up expired tokens:
    ```sql
-   DELETE FROM nchat_livekit_tokens
+   DELETE FROM np_livekit_tokens
    WHERE expires_at < NOW() - INTERVAL '7 days';
    ```
 
 4. Archive completed egress jobs:
    ```sql
-   UPDATE nchat_livekit_egress_jobs
+   UPDATE np_livekit_egress_jobs
    SET metadata = metadata || '{"archived": true}'::jsonb
    WHERE status = 'completed'
    AND ended_at < NOW() - INTERVAL '30 days';

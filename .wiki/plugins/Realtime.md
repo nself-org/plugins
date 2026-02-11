@@ -230,12 +230,12 @@ N/A - internal service. The Realtime plugin does not receive external webhooks. 
 
 ## Database Schema
 
-### realtime_connections
+### np_realtime_connections
 
 Tracks active WebSocket connections.
 
 ```sql
-CREATE TABLE realtime_connections (
+CREATE TABLE np_realtime_connections (
     id UUID PRIMARY KEY,
     socket_id VARCHAR(255) NOT NULL,
     user_id VARCHAR(255),
@@ -247,12 +247,12 @@ CREATE TABLE realtime_connections (
 );
 ```
 
-### realtime_rooms
+### np_realtime_rooms
 
 Chat rooms and channels.
 
 ```sql
-CREATE TABLE realtime_rooms (
+CREATE TABLE np_realtime_rooms (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     type VARCHAR(50),                      -- channel, dm, group, broadcast
@@ -262,26 +262,26 @@ CREATE TABLE realtime_rooms (
 );
 ```
 
-### realtime_room_members
+### np_realtime_room_members
 
 Room membership tracking.
 
 ```sql
-CREATE TABLE realtime_room_members (
+CREATE TABLE np_realtime_room_members (
     id UUID PRIMARY KEY,
-    room_id UUID REFERENCES realtime_rooms(id),
+    room_id UUID REFERENCES np_realtime_rooms(id),
     user_id VARCHAR(255) NOT NULL,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     left_at TIMESTAMP WITH TIME ZONE
 );
 ```
 
-### realtime_presence
+### np_realtime_presence
 
 User presence status.
 
 ```sql
-CREATE TABLE realtime_presence (
+CREATE TABLE np_realtime_presence (
     user_id VARCHAR(255) PRIMARY KEY,
     status VARCHAR(20) NOT NULL,           -- online, away, busy, offline
     custom_status JSONB,                   -- {text, emoji}
@@ -290,12 +290,12 @@ CREATE TABLE realtime_presence (
 );
 ```
 
-### realtime_typing
+### np_realtime_typing
 
 Typing indicator state.
 
 ```sql
-CREATE TABLE realtime_typing (
+CREATE TABLE np_realtime_typing (
     id UUID PRIMARY KEY,
     room_name VARCHAR(255) NOT NULL,
     user_id VARCHAR(255) NOT NULL,
@@ -305,12 +305,12 @@ CREATE TABLE realtime_typing (
 );
 ```
 
-### realtime_events
+### np_realtime_events
 
 Event audit log.
 
 ```sql
-CREATE TABLE realtime_events (
+CREATE TABLE np_realtime_events (
     id UUID PRIMARY KEY,
     type VARCHAR(100) NOT NULL,            -- connect, disconnect, message, error, etc.
     user_id VARCHAR(255),
@@ -319,20 +319,20 @@ CREATE TABLE realtime_events (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_realtime_events_type ON realtime_events(type);
-CREATE INDEX idx_realtime_events_created ON realtime_events(created_at DESC);
+CREATE INDEX idx_realtime_events_type ON np_realtime_events(type);
+CREATE INDEX idx_realtime_events_created ON np_realtime_events(created_at DESC);
 ```
 
 ---
 
 ## Analytics Views
 
-### realtime_active_connections
+### np_realtime_active_connections
 
 Active connections with presence information.
 
 ```sql
-CREATE VIEW realtime_active_connections AS
+CREATE VIEW np_realtime_active_connections AS
 SELECT
     c.socket_id,
     c.user_id,
@@ -341,56 +341,56 @@ SELECT
     c.last_activity,
     p.status AS presence_status,
     p.custom_status
-FROM realtime_connections c
-LEFT JOIN realtime_presence p ON c.user_id = p.user_id
+FROM np_realtime_connections c
+LEFT JOIN np_realtime_presence p ON c.user_id = p.user_id
 WHERE c.disconnected_at IS NULL
 ORDER BY c.connected_at DESC;
 ```
 
-### realtime_room_stats
+### np_realtime_room_stats
 
 Room statistics and member counts.
 
 ```sql
-CREATE VIEW realtime_room_stats AS
+CREATE VIEW np_realtime_room_stats AS
 SELECT
     r.name,
     r.type,
     r.visibility,
     COUNT(rm.id) AS member_count,
     r.created_at
-FROM realtime_rooms r
-LEFT JOIN realtime_room_members rm ON r.id = rm.room_id AND rm.left_at IS NULL
+FROM np_realtime_rooms r
+LEFT JOIN np_realtime_room_members rm ON r.id = rm.room_id AND rm.left_at IS NULL
 GROUP BY r.id, r.name, r.type, r.visibility, r.created_at
 ORDER BY member_count DESC;
 ```
 
-### realtime_current_typing
+### np_realtime_current_typing
 
 Non-expired typing indicators.
 
 ```sql
-CREATE VIEW realtime_current_typing AS
+CREATE VIEW np_realtime_current_typing AS
 SELECT
     room_name,
     user_id,
     thread_id,
     started_at
-FROM realtime_typing
+FROM np_realtime_typing
 WHERE expires_at > NOW()
 ORDER BY room_name, started_at;
 ```
 
-### realtime_presence_summary
+### np_realtime_presence_summary
 
 Summary of presence status counts.
 
 ```sql
-CREATE VIEW realtime_presence_summary AS
+CREATE VIEW np_realtime_presence_summary AS
 SELECT
     status,
     COUNT(*) AS user_count
-FROM realtime_presence
+FROM np_realtime_presence
 WHERE last_seen > NOW() - INTERVAL '1 hour'
 GROUP BY status
 ORDER BY user_count DESC;
@@ -553,7 +553,7 @@ Deploy multiple server instances behind a load balancer:
 
 ```nginx
 # nginx.conf for WebSocket load balancing
-upstream realtime_servers {
+upstream np_realtime_servers {
     ip_hash;  # Sticky sessions (important for Socket.io)
 
     server 10.0.1.10:3101 max_fails=3 fail_timeout=30s;
@@ -566,7 +566,7 @@ server {
     server_name realtime.example.com;
 
     location /socket.io/ {
-        proxy_pass http://realtime_servers;
+        proxy_pass http://np_realtime_servers;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -745,8 +745,8 @@ socket.on('room:join', async ({ roomName }) => {
 async function checkRoomAccess(userId: string, roomName: string): Promise<boolean> {
   // Query database for room membership
   const result = await db.query(
-    `SELECT 1 FROM realtime_room_members rm
-     JOIN realtime_rooms r ON r.id = rm.room_id
+    `SELECT 1 FROM np_realtime_room_members rm
+     JOIN np_realtime_rooms r ON r.id = rm.room_id
      WHERE r.name = $1 AND rm.user_id = $2 AND rm.left_at IS NULL`,
     [roomName, userId]
   );
@@ -1689,8 +1689,8 @@ SELECT
     p.status,
     COUNT(DISTINCT c.socket_id) AS connection_count,
     AVG(EXTRACT(EPOCH FROM (NOW() - c.last_activity))) AS avg_idle_seconds
-FROM realtime_connections c
-LEFT JOIN realtime_presence p ON c.user_id = p.user_id
+FROM np_realtime_connections c
+LEFT JOIN np_realtime_presence p ON c.user_id = p.user_id
 WHERE c.disconnected_at IS NULL
 GROUP BY p.status;
 
@@ -1706,7 +1706,7 @@ SELECT
     COUNT(*) AS connection_count
 FROM (
     SELECT NOW() - connected_at AS duration
-    FROM realtime_connections
+    FROM np_realtime_connections
     WHERE disconnected_at IS NULL
 ) AS durations
 GROUP BY duration_bucket
@@ -1716,7 +1716,7 @@ ORDER BY duration_bucket;
 SELECT
     DATE_TRUNC('hour', connected_at) AS hour,
     COUNT(*) AS connections
-FROM realtime_connections
+FROM np_realtime_connections
 WHERE connected_at > NOW() - INTERVAL '24 hours'
 GROUP BY hour
 ORDER BY hour DESC;
@@ -1731,7 +1731,7 @@ Monitor message volume and patterns:
 SELECT
     DATE_TRUNC('minute', created_at) AS minute,
     COUNT(*) AS message_count
-FROM realtime_events
+FROM np_realtime_events
 WHERE type = 'message'
   AND created_at > NOW() - INTERVAL '1 hour'
 GROUP BY minute
@@ -1743,7 +1743,7 @@ SELECT
     room_name,
     COUNT(*) AS message_count,
     COUNT(DISTINCT user_id) AS unique_users
-FROM realtime_events
+FROM np_realtime_events
 WHERE type = 'message'
   AND created_at > NOW() - INTERVAL '1 hour'
 GROUP BY room_name
@@ -1755,7 +1755,7 @@ SELECT
     room_name,
     AVG(EXTRACT(EPOCH FROM (created_at - (data->>'client_timestamp')::TIMESTAMP))) AS avg_latency_seconds,
     PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (created_at - (data->>'client_timestamp')::TIMESTAMP))) AS p95_latency
-FROM realtime_events
+FROM np_realtime_events
 WHERE type = 'message'
   AND data->>'client_timestamp' IS NOT NULL
   AND created_at > NOW() - INTERVAL '1 hour'
@@ -1773,14 +1773,14 @@ SELECT
     COUNT(DISTINCT CASE WHEN p.status = 'online' THEN rm.user_id END) AS online_count,
     (
         SELECT COUNT(*)
-        FROM realtime_events e
+        FROM np_realtime_events e
         WHERE e.room_name = r.name
           AND e.type = 'message'
           AND e.created_at > NOW() - INTERVAL '24 hours'
     ) AS messages_24h
-FROM realtime_rooms r
-LEFT JOIN realtime_room_members rm ON r.id = rm.room_id AND rm.left_at IS NULL
-LEFT JOIN realtime_presence p ON rm.user_id = p.user_id
+FROM np_realtime_rooms r
+LEFT JOIN np_realtime_room_members rm ON r.id = rm.room_id AND rm.left_at IS NULL
+LEFT JOIN np_realtime_presence p ON rm.user_id = p.user_id
 GROUP BY r.id, r.name, r.type
 ORDER BY messages_24h DESC;
 
@@ -1789,7 +1789,7 @@ SELECT
     DATE(joined_at) AS date,
     room_id,
     COUNT(*) AS new_members
-FROM realtime_room_members
+FROM np_realtime_room_members
 WHERE joined_at > NOW() - INTERVAL '30 days'
 GROUP BY DATE(joined_at), room_id
 ORDER BY date DESC, new_members DESC;
@@ -1804,7 +1804,7 @@ SELECT
     COUNT(*) AS error_count,
     COUNT(DISTINCT user_id) AS affected_users,
     MAX(created_at) AS last_occurrence
-FROM realtime_events
+FROM np_realtime_events
 WHERE type = 'error'
   AND created_at > NOW() - INTERVAL '24 hours'
 GROUP BY error_code
@@ -1815,7 +1815,7 @@ SELECT
     DATE_TRUNC('hour', created_at) AS hour,
     COUNT(*) AS failure_count,
     data->>'reason' AS failure_reason
-FROM realtime_events
+FROM np_realtime_events
 WHERE type IN ('disconnect', 'connection_error')
   AND created_at > NOW() - INTERVAL '24 hours'
 GROUP BY hour, failure_reason
@@ -1834,14 +1834,14 @@ const register = new Registry();
 
 // Connection metrics
 const connectionsTotal = new Counter({
-  name: 'realtime_connections_total',
+  name: 'np_realtime_connections_total',
   help: 'Total number of connections',
   labelNames: ['type'], // authenticated, anonymous
   registers: [register]
 });
 
 const connectionsActive = new Gauge({
-  name: 'realtime_connections_active',
+  name: 'np_realtime_connections_active',
   help: 'Currently active connections',
   labelNames: ['status'], // online, away, busy
   registers: [register]
@@ -1849,14 +1849,14 @@ const connectionsActive = new Gauge({
 
 // Message metrics
 const messagesTotal = new Counter({
-  name: 'realtime_messages_total',
+  name: 'np_realtime_messages_total',
   help: 'Total messages sent',
   labelNames: ['room_type'],
   registers: [register]
 });
 
 const messageLatency = new Histogram({
-  name: 'realtime_message_latency_seconds',
+  name: 'np_realtime_message_latency_seconds',
   help: 'Message delivery latency',
   buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1],
   registers: [register]
@@ -1864,7 +1864,7 @@ const messageLatency = new Histogram({
 
 // Room metrics
 const roomsActive = new Gauge({
-  name: 'realtime_rooms_active',
+  name: 'np_realtime_rooms_active',
   help: 'Number of active rooms',
   labelNames: ['type'],
   registers: [register]
@@ -1872,7 +1872,7 @@ const roomsActive = new Gauge({
 
 // Error metrics
 const errorsTotal = new Counter({
-  name: 'realtime_errors_total',
+  name: 'np_realtime_errors_total',
   help: 'Total errors',
   labelNames: ['error_code'],
   registers: [register]
@@ -1889,8 +1889,8 @@ async function updateMetrics() {
   // Active connections
   const { rows } = await db.query(`
     SELECT p.status, COUNT(*) AS count
-    FROM realtime_connections c
-    LEFT JOIN realtime_presence p ON c.user_id = p.user_id
+    FROM np_realtime_connections c
+    LEFT JOIN np_realtime_presence p ON c.user_id = p.user_id
     WHERE c.disconnected_at IS NULL
     GROUP BY p.status
   `);
@@ -1902,9 +1902,9 @@ async function updateMetrics() {
   // Active rooms
   const roomStats = await db.query(`
     SELECT r.type, COUNT(*) AS count
-    FROM realtime_rooms r
+    FROM np_realtime_rooms r
     WHERE EXISTS (
-      SELECT 1 FROM realtime_room_members rm
+      SELECT 1 FROM np_realtime_room_members rm
       WHERE rm.room_id = r.id AND rm.left_at IS NULL
     )
     GROUP BY r.type
@@ -1925,20 +1925,20 @@ Example Grafana queries for visualization:
 
 ```promql
 # Active connections
-realtime_connections_active{status="online"}
+np_realtime_connections_active{status="online"}
 
 # Message rate (per second)
-rate(realtime_messages_total[1m])
+rate(np_realtime_messages_total[1m])
 
 # P95 message latency
-histogram_quantile(0.95, rate(realtime_message_latency_seconds_bucket[5m]))
+histogram_quantile(0.95, rate(np_realtime_message_latency_seconds_bucket[5m]))
 
 # Error rate
-rate(realtime_errors_total[5m])
+rate(np_realtime_errors_total[5m])
 
 # Connection churn (connects - disconnects)
-rate(realtime_connections_total{type="authenticated"}[5m]) -
-rate(realtime_disconnections_total[5m])
+rate(np_realtime_connections_total{type="authenticated"}[5m]) -
+rate(np_realtime_disconnections_total[5m])
 ```
 
 ### Alerting Rules
@@ -1953,7 +1953,7 @@ groups:
     rules:
       # High error rate
       - alert: HighErrorRate
-        expr: rate(realtime_errors_total[5m]) > 10
+        expr: rate(np_realtime_errors_total[5m]) > 10
         for: 5m
         labels:
           severity: warning
@@ -1963,7 +1963,7 @@ groups:
 
       # Connection drop
       - alert: ConnectionDrop
-        expr: rate(realtime_connections_active[5m]) < -100
+        expr: rate(np_realtime_connections_active[5m]) < -100
         for: 2m
         labels:
           severity: critical
@@ -1973,7 +1973,7 @@ groups:
 
       # High latency
       - alert: HighMessageLatency
-        expr: histogram_quantile(0.95, rate(realtime_message_latency_seconds_bucket[5m])) > 1
+        expr: histogram_quantile(0.95, rate(np_realtime_message_latency_seconds_bucket[5m])) > 1
         for: 5m
         labels:
           severity: warning
@@ -1983,7 +1983,7 @@ groups:
 
       # Database connection pool exhausted
       - alert: DatabasePoolExhausted
-        expr: realtime_db_pool_idle_connections < 2
+        expr: np_realtime_db_pool_idle_connections < 2
         for: 5m
         labels:
           severity: critical
@@ -2040,7 +2040,7 @@ if (( $(echo "$error_rate > $THRESHOLD_ERROR_RATE" | bc -l) )); then
 fi
 
 # Check database
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM realtime_connections WHERE disconnected_at IS NULL" > /dev/null
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM np_realtime_connections WHERE disconnected_at IS NULL" > /dev/null
 if [ $? -ne 0 ]; then
     echo "ERROR: Database connection failed"
     exit 1

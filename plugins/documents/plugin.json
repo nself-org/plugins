@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/documents",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "data-services",
+  "category": "data",
   "tags": [
     "documents",
     "pdf",
@@ -17,11 +17,11 @@
     "sharing"
   ],
   "tables": [
-    "docs_documents",
-    "docs_templates",
-    "docs_versions",
-    "docs_shares",
-    "docs_webhook_events"
+    "np_documents_documents",
+    "np_documents_templates",
+    "np_documents_versions",
+    "np_documents_shares",
+    "np_documents_webhook_events"
   ],
   "webhooks": {},
   "actions": {

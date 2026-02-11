@@ -289,7 +289,7 @@ Update playback progress.
   "content_type": "video",
   "position_seconds": 245,
   "duration_seconds": 600,
-  "progress_percent": 40.83,
+  "np_progress_percent": 40.83,
   "completed": false,
   "device_id": "device789",
   "updated_at": "2026-02-11T10:30:00Z"
@@ -307,7 +307,7 @@ Get progress for specific content.
   "content_type": "video",
   "position_seconds": 245,
   "duration_seconds": 600,
-  "progress_percent": 40.83,
+  "np_progress_percent": 40.83,
   "completed": false,
   "last_watched_at": "2026-02-11T10:30:00Z",
   "device_id": "device789",
@@ -335,7 +335,7 @@ Get all progress for a user.
       "content_type": "video",
       "position_seconds": 245,
       "duration_seconds": 600,
-      "progress_percent": 40.83,
+      "np_progress_percent": 40.83,
       "completed": false,
       "last_watched_at": "2026-02-11T10:30:00Z"
     }
@@ -375,7 +375,7 @@ Get continue watching list.
       "content_type": "video",
       "position_seconds": 245,
       "duration_seconds": 600,
-      "progress_percent": 40.83,
+      "np_progress_percent": 40.83,
       "last_watched_at": "2026-02-11T10:30:00Z",
       "metadata": {
         "title": "Episode 5",
@@ -664,9 +664,9 @@ Triggered when content is removed from favorites.
 
 ## Database Schema
 
-### `progress_positions`
+### `np_progress_positions`
 ```sql
-CREATE TABLE progress_positions (
+CREATE TABLE np_progress_positions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -674,7 +674,7 @@ CREATE TABLE progress_positions (
   content_type VARCHAR(64) NOT NULL,
   position_seconds INTEGER NOT NULL DEFAULT 0,
   duration_seconds INTEGER,
-  progress_percent DECIMAL(5,2) GENERATED ALWAYS AS (
+  np_progress_percent DECIMAL(5,2) GENERATED ALWAYS AS (
     CASE WHEN duration_seconds > 0
     THEN (position_seconds::decimal / duration_seconds * 100)
     ELSE 0 END
@@ -690,9 +690,9 @@ CREATE TABLE progress_positions (
 );
 ```
 
-### `progress_history`
+### `np_progress_history`
 ```sql
-CREATE TABLE progress_history (
+CREATE TABLE np_progress_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -705,9 +705,9 @@ CREATE TABLE progress_history (
 );
 ```
 
-### `progress_watchlists`
+### `np_progress_watchlists`
 ```sql
-CREATE TABLE progress_watchlists (
+CREATE TABLE np_progress_watchlists (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -719,9 +719,9 @@ CREATE TABLE progress_watchlists (
 );
 ```
 
-### `progress_favorites`
+### `np_progress_favorites`
 ```sql
-CREATE TABLE progress_favorites (
+CREATE TABLE np_progress_favorites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -733,9 +733,9 @@ CREATE TABLE progress_favorites (
 );
 ```
 
-### `progress_webhook_events`
+### `np_progress_webhook_events`
 ```sql
-CREATE TABLE progress_webhook_events (
+CREATE TABLE np_progress_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -789,7 +789,7 @@ if (progress.position_seconds > 0) {
 curl http://localhost:3022/v1/users/user123/continue-watching?limit=10
 
 # Display in UI with progress bars
-# position_seconds / duration_seconds * 100 = progress_percent
+# position_seconds / duration_seconds * 100 = np_progress_percent
 ```
 
 ### Example 3: E-learning Course Progress
@@ -885,7 +885,7 @@ curl http://localhost:3022/v1/users/user123/watchlist
 export PROGRESS_HISTORY_RETENTION_DAYS=180
 
 # Manual cleanup
-DELETE FROM progress_history
+DELETE FROM np_progress_history
 WHERE created_at < NOW() - INTERVAL '180 days';
 ```
 

@@ -1109,12 +1109,12 @@ Bot review submitted.
 
 ## Database Schema
 
-### nchat_bots
+### np_bots
 
 Stores bot configurations.
 
 ```sql
-CREATE TABLE nchat_bots (
+CREATE TABLE np_bots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(100) NOT NULL,
@@ -1153,29 +1153,29 @@ CREATE TABLE nchat_bots (
   UNIQUE(source_account_id, username)
 );
 
-CREATE INDEX idx_bots_account ON nchat_bots(source_account_id);
-CREATE INDEX idx_bots_username ON nchat_bots(username);
-CREATE INDEX idx_bots_owner ON nchat_bots(owner_id);
-CREATE INDEX idx_bots_workspace ON nchat_bots(workspace_id);
-CREATE INDEX idx_bots_public ON nchat_bots(is_public) WHERE is_public = true;
-CREATE INDEX idx_bots_verified ON nchat_bots(is_verified) WHERE is_verified = true;
-CREATE INDEX idx_bots_category ON nchat_bots(category) WHERE category IS NOT NULL;
-CREATE INDEX idx_bots_tags ON nchat_bots USING GIN(tags);
+CREATE INDEX idx_bots_account ON np_bots(source_account_id);
+CREATE INDEX idx_bots_username ON np_bots(username);
+CREATE INDEX idx_bots_owner ON np_bots(owner_id);
+CREATE INDEX idx_bots_workspace ON np_bots(workspace_id);
+CREATE INDEX idx_bots_public ON np_bots(is_public) WHERE is_public = true;
+CREATE INDEX idx_bots_verified ON np_bots(is_verified) WHERE is_verified = true;
+CREATE INDEX idx_bots_category ON np_bots(category) WHERE category IS NOT NULL;
+CREATE INDEX idx_bots_tags ON np_bots USING GIN(tags);
 ```
 
 **Bot types:** `custom`, `integration`, `workflow`, `notification`, `ai`
 
 **Categories:** `productivity`, `devops`, `support`, `analytics`, `games`, `other`
 
-### nchat_bot_commands
+### np_bot_commands
 
 Stores slash commands.
 
 ```sql
-CREATE TABLE nchat_bot_commands (
+CREATE TABLE np_bot_commands (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   command VARCHAR(50) NOT NULL,
   description TEXT NOT NULL,
   usage_hint TEXT,
@@ -1194,32 +1194,32 @@ CREATE TABLE nchat_bot_commands (
   UNIQUE(source_account_id, bot_id, command)
 );
 
-CREATE INDEX idx_bot_commands_account ON nchat_bot_commands(source_account_id);
-CREATE INDEX idx_bot_commands_bot ON nchat_bot_commands(bot_id);
-CREATE INDEX idx_bot_commands_command ON nchat_bot_commands(command);
-CREATE INDEX idx_bot_commands_enabled ON nchat_bot_commands(is_enabled) WHERE is_enabled = true;
+CREATE INDEX idx_bot_commands_account ON np_bot_commands(source_account_id);
+CREATE INDEX idx_bot_commands_bot ON np_bot_commands(bot_id);
+CREATE INDEX idx_bot_commands_command ON np_bot_commands(command);
+CREATE INDEX idx_bot_commands_enabled ON np_bot_commands(is_enabled) WHERE is_enabled = true;
 ```
 
 **Command types:** `message`, `user`, `shortcut`
 
 **Scopes:** `all`, `workspace`, `channel`, `dm`
 
-### nchat_bot_subscriptions
+### np_bot_subscriptions
 
 Event subscriptions for webhooks.
 
 ```sql
-CREATE TABLE nchat_bot_subscriptions (
+CREATE TABLE np_bot_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   workspace_id UUID,
   channel_id UUID,
   event_type VARCHAR(100) NOT NULL,
   filters JSONB DEFAULT '{}'::jsonb,
   delivery_mode VARCHAR(50) NOT NULL DEFAULT 'webhook',
-  webhook_url TEXT,
-  webhook_secret VARCHAR(255),
+  np_webhooks_url TEXT,
+  np_webhooks_secret VARCHAR(255),
   is_active BOOLEAN NOT NULL DEFAULT true,
   event_count INTEGER DEFAULT 0,
   last_event_at TIMESTAMPTZ,
@@ -1232,25 +1232,25 @@ CREATE TABLE nchat_bot_subscriptions (
   UNIQUE(source_account_id, bot_id, workspace_id, channel_id, event_type)
 );
 
-CREATE INDEX idx_bot_subscriptions_account ON nchat_bot_subscriptions(source_account_id);
-CREATE INDEX idx_bot_subscriptions_bot ON nchat_bot_subscriptions(bot_id);
-CREATE INDEX idx_bot_subscriptions_workspace ON nchat_bot_subscriptions(workspace_id);
-CREATE INDEX idx_bot_subscriptions_channel ON nchat_bot_subscriptions(channel_id);
-CREATE INDEX idx_bot_subscriptions_event ON nchat_bot_subscriptions(event_type);
-CREATE INDEX idx_bot_subscriptions_active ON nchat_bot_subscriptions(is_active) WHERE is_active = true;
+CREATE INDEX idx_bot_subscriptions_account ON np_bot_subscriptions(source_account_id);
+CREATE INDEX idx_bot_subscriptions_bot ON np_bot_subscriptions(bot_id);
+CREATE INDEX idx_bot_subscriptions_workspace ON np_bot_subscriptions(workspace_id);
+CREATE INDEX idx_bot_subscriptions_channel ON np_bot_subscriptions(channel_id);
+CREATE INDEX idx_bot_subscriptions_event ON np_bot_subscriptions(event_type);
+CREATE INDEX idx_bot_subscriptions_active ON np_bot_subscriptions(is_active) WHERE is_active = true;
 ```
 
 **Event types:** `message.created`, `message.updated`, `channel.created`, `user.joined`, etc.
 
-### nchat_bot_installations
+### np_bot_installations
 
 Bot installations in workspaces.
 
 ```sql
-CREATE TABLE nchat_bot_installations (
+CREATE TABLE np_bot_installations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   workspace_id UUID NOT NULL,
   installed_by UUID NOT NULL,
   scope VARCHAR(50) NOT NULL DEFAULT 'workspace',
@@ -1272,22 +1272,22 @@ CREATE TABLE nchat_bot_installations (
   UNIQUE(source_account_id, bot_id, workspace_id, channel_id)
 );
 
-CREATE INDEX idx_bot_installations_account ON nchat_bot_installations(source_account_id);
-CREATE INDEX idx_bot_installations_bot ON nchat_bot_installations(bot_id);
-CREATE INDEX idx_bot_installations_workspace ON nchat_bot_installations(workspace_id);
-CREATE INDEX idx_bot_installations_channel ON nchat_bot_installations(channel_id);
-CREATE INDEX idx_bot_installations_active ON nchat_bot_installations(is_active) WHERE is_active = true;
+CREATE INDEX idx_bot_installations_account ON np_bot_installations(source_account_id);
+CREATE INDEX idx_bot_installations_bot ON np_bot_installations(bot_id);
+CREATE INDEX idx_bot_installations_workspace ON np_bot_installations(workspace_id);
+CREATE INDEX idx_bot_installations_channel ON np_bot_installations(channel_id);
+CREATE INDEX idx_bot_installations_active ON np_bot_installations(is_active) WHERE is_active = true;
 ```
 
-### nchat_bot_messages
+### np_bot_messages
 
 Tracks bot messages.
 
 ```sql
-CREATE TABLE nchat_bot_messages (
+CREATE TABLE np_bot_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   message_id UUID NOT NULL,
   channel_id UUID NOT NULL,
   message_type VARCHAR(50) NOT NULL,
@@ -1297,22 +1297,22 @@ CREATE TABLE nchat_bot_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_bot_messages_account ON nchat_bot_messages(source_account_id);
-CREATE INDEX idx_bot_messages_bot ON nchat_bot_messages(bot_id);
-CREATE INDEX idx_bot_messages_message ON nchat_bot_messages(message_id);
-CREATE INDEX idx_bot_messages_channel ON nchat_bot_messages(channel_id);
-CREATE INDEX idx_bot_messages_created ON nchat_bot_messages(created_at DESC);
+CREATE INDEX idx_bot_messages_account ON np_bot_messages(source_account_id);
+CREATE INDEX idx_bot_messages_bot ON np_bot_messages(bot_id);
+CREATE INDEX idx_bot_messages_message ON np_bot_messages(message_id);
+CREATE INDEX idx_bot_messages_channel ON np_bot_messages(channel_id);
+CREATE INDEX idx_bot_messages_created ON np_bot_messages(created_at DESC);
 ```
 
-### nchat_bot_interactions
+### np_bot_interactions
 
 User interactions with bot messages.
 
 ```sql
-CREATE TABLE nchat_bot_interactions (
+CREATE TABLE np_bot_interactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   message_id UUID NOT NULL,
   user_id UUID NOT NULL,
   interaction_type VARCHAR(50) NOT NULL,
@@ -1324,25 +1324,25 @@ CREATE TABLE nchat_bot_interactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_bot_interactions_account ON nchat_bot_interactions(source_account_id);
-CREATE INDEX idx_bot_interactions_bot ON nchat_bot_interactions(bot_id);
-CREATE INDEX idx_bot_interactions_message ON nchat_bot_interactions(message_id);
-CREATE INDEX idx_bot_interactions_user ON nchat_bot_interactions(user_id);
-CREATE INDEX idx_bot_interactions_type ON nchat_bot_interactions(interaction_type);
-CREATE INDEX idx_bot_interactions_created ON nchat_bot_interactions(created_at DESC);
+CREATE INDEX idx_bot_interactions_account ON np_bot_interactions(source_account_id);
+CREATE INDEX idx_bot_interactions_bot ON np_bot_interactions(bot_id);
+CREATE INDEX idx_bot_interactions_message ON np_bot_interactions(message_id);
+CREATE INDEX idx_bot_interactions_user ON np_bot_interactions(user_id);
+CREATE INDEX idx_bot_interactions_type ON np_bot_interactions(interaction_type);
+CREATE INDEX idx_bot_interactions_created ON np_bot_interactions(created_at DESC);
 ```
 
 **Interaction types:** `button_click`, `menu_select`, `modal_submit`, `overflow_select`
 
-### nchat_bot_reviews
+### np_bot_reviews
 
 Bot reviews and ratings.
 
 ```sql
-CREATE TABLE nchat_bot_reviews (
+CREATE TABLE np_bot_reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
   title VARCHAR(200),
@@ -1351,29 +1351,29 @@ CREATE TABLE nchat_bot_reviews (
   is_flagged BOOLEAN NOT NULL DEFAULT false,
   moderated_at TIMESTAMPTZ,
   moderated_by UUID,
-  moderation_reason TEXT,
+  np_moderation_reason TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(source_account_id, bot_id, user_id)
 );
 
-CREATE INDEX idx_bot_reviews_account ON nchat_bot_reviews(source_account_id);
-CREATE INDEX idx_bot_reviews_bot ON nchat_bot_reviews(bot_id);
-CREATE INDEX idx_bot_reviews_user ON nchat_bot_reviews(user_id);
-CREATE INDEX idx_bot_reviews_rating ON nchat_bot_reviews(rating);
-CREATE INDEX idx_bot_reviews_published ON nchat_bot_reviews(is_published) WHERE is_published = true;
+CREATE INDEX idx_bot_reviews_account ON np_bot_reviews(source_account_id);
+CREATE INDEX idx_bot_reviews_bot ON np_bot_reviews(bot_id);
+CREATE INDEX idx_bot_reviews_user ON np_bot_reviews(user_id);
+CREATE INDEX idx_bot_reviews_rating ON np_bot_reviews(rating);
+CREATE INDEX idx_bot_reviews_published ON np_bot_reviews(is_published) WHERE is_published = true;
 ```
 
-### nchat_bot_api_keys
+### np_bot_api_keys
 
 API keys for bot authentication.
 
 ```sql
-CREATE TABLE nchat_bot_api_keys (
+CREATE TABLE np_bot_api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  bot_id UUID NOT NULL REFERENCES nchat_bots(id) ON DELETE CASCADE,
+  bot_id UUID NOT NULL REFERENCES np_bots(id) ON DELETE CASCADE,
   key_name VARCHAR(100) NOT NULL,
   key_hash VARCHAR(255) NOT NULL,
   key_prefix VARCHAR(20) NOT NULL,
@@ -1394,21 +1394,21 @@ CREATE TABLE nchat_bot_api_keys (
   UNIQUE(source_account_id, key_hash)
 );
 
-CREATE INDEX idx_bot_api_keys_account ON nchat_bot_api_keys(source_account_id);
-CREATE INDEX idx_bot_api_keys_bot ON nchat_bot_api_keys(bot_id);
-CREATE INDEX idx_bot_api_keys_hash ON nchat_bot_api_keys(key_hash);
-CREATE INDEX idx_bot_api_keys_active ON nchat_bot_api_keys(is_active) WHERE is_active = true;
-CREATE INDEX idx_bot_api_keys_expires ON nchat_bot_api_keys(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_bot_api_keys_account ON np_bot_api_keys(source_account_id);
+CREATE INDEX idx_bot_api_keys_bot ON np_bot_api_keys(bot_id);
+CREATE INDEX idx_bot_api_keys_hash ON np_bot_api_keys(key_hash);
+CREATE INDEX idx_bot_api_keys_active ON np_bot_api_keys(is_active) WHERE is_active = true;
+CREATE INDEX idx_bot_api_keys_expires ON np_bot_api_keys(expires_at) WHERE expires_at IS NOT NULL;
 ```
 
 **Key prefixes:** `sk_live_`, `sk_test_`
 
-### nchat_bots_webhook_events
+### np_bots_webhook_events
 
 Webhook events log.
 
 ```sql
-CREATE TABLE nchat_bots_webhook_events (
+CREATE TABLE np_bots_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128),
@@ -1419,9 +1419,9 @@ CREATE TABLE nchat_bots_webhook_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_bots_webhook_events_account ON nchat_bots_webhook_events(source_account_id);
-CREATE INDEX idx_bots_webhook_events_type ON nchat_bots_webhook_events(event_type);
-CREATE INDEX idx_bots_webhook_events_processed ON nchat_bots_webhook_events(processed);
+CREATE INDEX idx_bots_webhook_events_account ON np_bots_webhook_events(source_account_id);
+CREATE INDEX idx_bots_webhook_events_type ON np_bots_webhook_events(event_type);
+CREATE INDEX idx_bots_webhook_events_processed ON np_bots_webhook_events(processed);
 ```
 
 ## Examples
@@ -1542,7 +1542,7 @@ curl -X POST http://localhost:3708/api/marketplace/bots/BOT_ID/reviews \
 
 3. Review failed deliveries:
    ```sql
-   SELECT * FROM nchat_bot_subscriptions
+   SELECT * FROM np_bot_subscriptions
    WHERE bot_id = 'BOT_ID'
    AND failed_delivery_count > 0;
    ```
@@ -1562,7 +1562,7 @@ curl -X POST http://localhost:3708/api/marketplace/bots/BOT_ID/reviews \
 2. Check rate limits:
    ```sql
    SELECT usage_count, last_used_at, rate_limit_per_minute
-   FROM nchat_bot_commands
+   FROM np_bot_commands
    WHERE bot_id = 'BOT_ID' AND command = 'your-command';
    ```
 
@@ -1587,7 +1587,7 @@ curl -X POST http://localhost:3708/api/marketplace/bots/BOT_ID/reviews \
 **Solutions:**
 1. Verify bot is marked as public:
    ```sql
-   UPDATE nchat_bots
+   UPDATE np_bots
    SET is_public = true
    WHERE id = 'BOT_ID';
    ```

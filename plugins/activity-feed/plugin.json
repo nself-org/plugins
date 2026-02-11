@@ -8,15 +8,19 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "content",
-  "tags": ["activity", "feed", "notifications", "social", "events"],
-
-  "tables": [
-    "feed_activities",
-    "feed_user_feeds",
-    "feed_subscriptions",
-    "feed_webhook_events"
+  "tags": [
+    "activity",
+    "feed",
+    "notifications",
+    "social",
+    "events"
   ],
-
+  "tables": [
+    "np_activityfeed_activities",
+    "np_activityfeed_user_feeds",
+    "np_activityfeed_subscriptions",
+    "np_activityfeed_webhook_events"
+  ],
   "webhooks": {
     "activity.created": "Record new activity to the system",
     "activity.updated": "Update existing activity data",
@@ -26,7 +30,6 @@
     "feed.read": "Mark feed items as read",
     "feed.hidden": "Hide activities from user feed"
   },
-
   "actions": {
     "activities": "Manage and query activities",
     "feed": "View personalized activity feeds",
@@ -34,7 +37,6 @@
     "fanout": "Trigger manual fan-out operations",
     "stats": "View feed statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -50,7 +52,6 @@
       "FEED_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3503,
     "strategy": "read",
@@ -58,23 +59,28 @@
     "aggregationWindowMinutes": 60,
     "retentionDays": 90
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

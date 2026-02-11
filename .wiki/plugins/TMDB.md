@@ -171,12 +171,12 @@ Match a media file to TMDB:
 ```bash
 # Auto-match from filename
 nself plugin tmdb match \
-  --media-id "file_12345" \
+  --media-id "np_fileproc_12345" \
   --filename "The.Matrix.1999.1080p.BluRay.x264.mkv"
 
 # Provide explicit title and year
 nself plugin tmdb match \
-  --media-id "file_12345" \
+  --media-id "np_fileproc_12345" \
   --title "The Matrix" \
   --year 1999 \
   --type movie
@@ -388,7 +388,7 @@ Headers:
   X-App-Name: primary
 Body:
 {
-  "mediaId": "file_12345",
+  "mediaId": "np_fileproc_12345",
   "filename": "The.Matrix.1999.1080p.BluRay.x264.mkv",
   "title": "The Matrix",  // optional
   "year": 1999,           // optional
@@ -427,11 +427,11 @@ Body:
 {
   "items": [
     {
-      "mediaId": "file_001",
+      "mediaId": "np_fileproc_001",
       "filename": "The.Matrix.1999.1080p.mkv"
     },
     {
-      "mediaId": "file_002",
+      "mediaId": "np_fileproc_002",
       "filename": "The.Matrix.Reloaded.2003.1080p.mkv"
     }
   ]
@@ -580,12 +580,12 @@ Response:
 
 ## Database Schema
 
-### tmdb_movies
+### np_tmdb_movies
 
 Full movie metadata from TMDB.
 
 ```sql
-CREATE TABLE tmdb_movies (
+CREATE TABLE np_tmdb_movies (
   id INTEGER PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   imdb_id VARCHAR(20),
@@ -614,9 +614,9 @@ CREATE TABLE tmdb_movies (
   synced_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_tmdb_movies_source_app ON tmdb_movies(source_account_id);
-CREATE INDEX idx_tmdb_movies_imdb ON tmdb_movies(imdb_id);
-CREATE INDEX idx_tmdb_movies_title ON tmdb_movies(title);
+CREATE INDEX idx_tmdb_movies_source_app ON np_tmdb_movies(source_account_id);
+CREATE INDEX idx_tmdb_movies_imdb ON np_tmdb_movies(imdb_id);
+CREATE INDEX idx_tmdb_movies_title ON np_tmdb_movies(title);
 ```
 
 **Columns:**
@@ -649,12 +649,12 @@ CREATE INDEX idx_tmdb_movies_title ON tmdb_movies(title);
 | content_rating | VARCHAR(20) | YES | MPAA rating (G, PG, PG-13, R, NC-17) |
 | synced_at | TIMESTAMPTZ | NO | Last sync timestamp |
 
-### tmdb_tv_shows
+### np_tmdb_tv_shows
 
 Full TV show metadata from TMDB.
 
 ```sql
-CREATE TABLE tmdb_tv_shows (
+CREATE TABLE np_tmdb_tv_shows (
   id INTEGER PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   imdb_id VARCHAR(20),
@@ -682,19 +682,19 @@ CREATE TABLE tmdb_tv_shows (
   synced_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_tmdb_tv_source_app ON tmdb_tv_shows(source_account_id);
-CREATE INDEX idx_tmdb_tv_imdb ON tmdb_tv_shows(imdb_id);
+CREATE INDEX idx_tmdb_tv_source_app ON np_tmdb_tv_shows(source_account_id);
+CREATE INDEX idx_tmdb_tv_imdb ON np_tmdb_tv_shows(imdb_id);
 ```
 
-### tmdb_tv_seasons
+### np_tmdb_tv_seasons
 
 TV season metadata.
 
 ```sql
-CREATE TABLE tmdb_tv_seasons (
+CREATE TABLE np_tmdb_tv_seasons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  show_id INTEGER NOT NULL REFERENCES tmdb_tv_shows(id),
+  show_id INTEGER NOT NULL REFERENCES np_tmdb_tv_shows(id),
   season_number INTEGER NOT NULL,
   name VARCHAR(500),
   overview TEXT,
@@ -705,18 +705,18 @@ CREATE TABLE tmdb_tv_seasons (
   UNIQUE(show_id, season_number)
 );
 
-CREATE INDEX idx_tmdb_seasons_source_app ON tmdb_tv_seasons(source_account_id);
+CREATE INDEX idx_tmdb_seasons_source_app ON np_tmdb_tv_seasons(source_account_id);
 ```
 
-### tmdb_tv_episodes
+### np_tmdb_tv_episodes
 
 TV episode metadata.
 
 ```sql
-CREATE TABLE tmdb_tv_episodes (
+CREATE TABLE np_tmdb_tv_episodes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  show_id INTEGER NOT NULL REFERENCES tmdb_tv_shows(id),
+  show_id INTEGER NOT NULL REFERENCES np_tmdb_tv_shows(id),
   season_number INTEGER NOT NULL,
   episode_number INTEGER NOT NULL,
   name VARCHAR(500),
@@ -731,30 +731,30 @@ CREATE TABLE tmdb_tv_episodes (
   UNIQUE(show_id, season_number, episode_number)
 );
 
-CREATE INDEX idx_tmdb_episodes_source_app ON tmdb_tv_episodes(source_account_id);
+CREATE INDEX idx_tmdb_episodes_source_app ON np_tmdb_tv_episodes(source_account_id);
 ```
 
-### tmdb_genres
+### np_tmdb_genres
 
 Genre reference data.
 
 ```sql
-CREATE TABLE tmdb_genres (
+CREATE TABLE np_tmdb_genres (
   id INTEGER PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(100) NOT NULL,
   media_type VARCHAR(10) NOT NULL
 );
 
-CREATE INDEX idx_tmdb_genres_source_app ON tmdb_genres(source_account_id);
+CREATE INDEX idx_tmdb_genres_source_app ON np_tmdb_genres(source_account_id);
 ```
 
-### tmdb_match_queue
+### np_tmdb_match_queue
 
 Match review queue for ambiguous matches.
 
 ```sql
-CREATE TABLE tmdb_match_queue (
+CREATE TABLE np_tmdb_match_queue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   media_id VARCHAR(255) NOT NULL,
@@ -774,19 +774,19 @@ CREATE TABLE tmdb_match_queue (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_tmdb_match_source_app ON tmdb_match_queue(source_account_id);
-CREATE INDEX idx_tmdb_match_status ON tmdb_match_queue(source_account_id, status);
-CREATE INDEX idx_tmdb_match_media ON tmdb_match_queue(source_account_id, media_id);
+CREATE INDEX idx_tmdb_match_source_app ON np_tmdb_match_queue(source_account_id);
+CREATE INDEX idx_tmdb_match_status ON np_tmdb_match_queue(source_account_id, status);
+CREATE INDEX idx_tmdb_match_media ON np_tmdb_match_queue(source_account_id, media_id);
 ```
 
 **Status values:** `pending`, `accepted`, `rejected`, `manual`
 
-### tmdb_webhook_events
+### np_tmdb_webhook_events
 
 Internal webhook event log.
 
 ```sql
-CREATE TABLE tmdb_webhook_events (
+CREATE TABLE np_tmdb_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -798,7 +798,7 @@ CREATE TABLE tmdb_webhook_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_tmdb_webhook_events_source_app ON tmdb_webhook_events(source_account_id);
+CREATE INDEX idx_tmdb_webhook_events_source_app ON np_tmdb_webhook_events(source_account_id);
 ```
 
 ---
@@ -849,7 +849,7 @@ curl -X POST http://localhost:3020/api/match \
   -H "Content-Type: application/json" \
   -H "X-App-Name: primary" \
   -d '{
-    "mediaId": "file_12345",
+    "mediaId": "np_fileproc_12345",
     "filename": "The.Matrix.1999.1080p.BluRay.x264.mkv"
   }'
 
@@ -877,7 +877,7 @@ curl -X POST http://localhost:3020/api/match \
   -H "Content-Type: application/json" \
   -H "X-App-Name: primary" \
   -d '{
-    "mediaId": "file_67890",
+    "mediaId": "np_fileproc_67890",
     "filename": "Matrix.2003.mkv"
   }'
 
@@ -914,15 +914,15 @@ curl -X POST http://localhost:3020/api/match/batch \
   -d '{
     "items": [
       {
-        "mediaId": "file_001",
+        "mediaId": "np_fileproc_001",
         "filename": "The.Matrix.1999.1080p.mkv"
       },
       {
-        "mediaId": "file_002",
+        "mediaId": "np_fileproc_002",
         "filename": "The.Matrix.Reloaded.2003.1080p.mkv"
       },
       {
-        "mediaId": "file_003",
+        "mediaId": "np_fileproc_003",
         "filename": "The.Matrix.Revolutions.2003.1080p.mkv"
       }
     ]
@@ -945,7 +945,7 @@ SELECT
   e.air_date,
   e.runtime,
   e.vote_average
-FROM tmdb_tv_episodes e
+FROM np_tmdb_tv_episodes e
 WHERE e.show_id = 1396
   AND e.season_number = 1
   AND e.source_account_id = 'primary'
@@ -961,7 +961,7 @@ SELECT
   vote_count,
   release_date,
   popularity
-FROM tmdb_movies
+FROM np_tmdb_movies
 WHERE source_account_id = 'primary'
   AND vote_count >= 1000
 ORDER BY vote_average DESC

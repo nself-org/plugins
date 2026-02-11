@@ -793,9 +793,9 @@ Triggered when template is updated.
 
 ## Database Schema
 
-### `inv_invitations`
+### `np_invites_invitations`
 ```sql
-CREATE TABLE inv_invitations (
+CREATE TABLE np_invites_invitations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   code VARCHAR(64) NOT NULL UNIQUE,
@@ -822,9 +822,9 @@ CREATE TABLE inv_invitations (
 );
 ```
 
-### `inv_templates`
+### `np_invites_templates`
 ```sql
-CREATE TABLE inv_templates (
+CREATE TABLE np_invites_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -839,9 +839,9 @@ CREATE TABLE inv_templates (
 );
 ```
 
-### `inv_bulk_sends`
+### `np_invites_bulk_sends`
 ```sql
-CREATE TABLE inv_bulk_sends (
+CREATE TABLE np_invites_bulk_sends (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   invited_by VARCHAR(255) NOT NULL,
@@ -858,9 +858,9 @@ CREATE TABLE inv_bulk_sends (
 );
 ```
 
-### `inv_webhook_events`
+### `np_invites_webhook_events`
 ```sql
-CREATE TABLE inv_webhook_events (
+CREATE TABLE np_invites_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,

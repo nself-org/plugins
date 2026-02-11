@@ -7,21 +7,25 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/link-preview",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "content-enhancement",
-  "tags": ["link-preview", "oembed", "open-graph", "metadata", "caching", "url"],
-
-  "tables": [
-    "lp_link_previews",
-    "lp_link_preview_usage",
-    "lp_preview_templates",
-    "lp_oembed_providers",
-    "lp_url_blocklist",
-    "lp_preview_settings",
-    "lp_preview_analytics"
+  "category": "content",
+  "tags": [
+    "link-preview",
+    "oembed",
+    "open-graph",
+    "metadata",
+    "caching",
+    "url"
   ],
-
+  "tables": [
+    "np_linkprev_link_previews",
+    "np_linkprev_link_preview_usage",
+    "np_linkprev_preview_templates",
+    "np_linkprev_oembed_providers",
+    "np_linkprev_url_blocklist",
+    "np_linkprev_preview_settings",
+    "np_linkprev_preview_analytics"
+  ],
   "webhooks": {},
-
   "actions": {
     "fetch": "Fetch preview for a URL",
     "refresh": "Refresh a cached preview",
@@ -37,7 +41,6 @@
     "cleanup": "Remove expired previews",
     "status": "Show cache overview"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -65,7 +68,6 @@
       "LP_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3718,
     "cacheTtlHours": 168,
@@ -80,23 +82,30 @@
     "rateLimitMax": 200,
     "rateLimitWindowMs": 60000
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["outbound-http"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "outbound-http"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

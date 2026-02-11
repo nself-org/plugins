@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/paypal",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "payments",
+  "category": "commerce",
   "tags": [
     "payments",
     "donations",
@@ -16,20 +16,20 @@
     "webhooks"
   ],
   "tables": [
-    "paypal_transactions",
-    "paypal_orders",
-    "paypal_captures",
-    "paypal_authorizations",
-    "paypal_refunds",
-    "paypal_subscriptions",
-    "paypal_subscription_plans",
-    "paypal_products",
-    "paypal_disputes",
-    "paypal_payouts",
-    "paypal_invoices",
-    "paypal_payers",
-    "paypal_balances",
-    "paypal_webhook_events"
+    "np_paypal_transactions",
+    "np_paypal_orders",
+    "np_paypal_captures",
+    "np_paypal_authorizations",
+    "np_paypal_refunds",
+    "np_paypal_subscriptions",
+    "np_paypal_subscription_plans",
+    "np_paypal_products",
+    "np_paypal_disputes",
+    "np_paypal_payouts",
+    "np_paypal_invoices",
+    "np_paypal_payers",
+    "np_paypal_balances",
+    "np_paypal_webhook_events"
   ],
   "webhooks": {
     "PAYMENT.CAPTURE.COMPLETED": "Handle completed payment capture",

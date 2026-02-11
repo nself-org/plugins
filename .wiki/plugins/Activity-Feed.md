@@ -839,11 +839,11 @@ Triggered when a feed item is hidden.
 
 ## Database Schema
 
-### `feed_activities`
+### `np_activityfeed_activities`
 Stores all activities in the system.
 
 ```sql
-CREATE TABLE feed_activities (
+CREATE TABLE np_activityfeed_activities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   actor_id VARCHAR(255) NOT NULL,
@@ -860,13 +860,13 @@ CREATE TABLE feed_activities (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_feed_activities_source_account ON feed_activities(source_account_id);
-CREATE INDEX idx_feed_activities_actor ON feed_activities(source_account_id, actor_id);
-CREATE INDEX idx_feed_activities_object ON feed_activities(source_account_id, object_type, object_id);
-CREATE INDEX idx_feed_activities_target ON feed_activities(source_account_id, target_type, target_id);
-CREATE INDEX idx_feed_activities_created ON feed_activities(source_account_id, created_at DESC);
-CREATE INDEX idx_feed_activities_verb ON feed_activities(source_account_id, verb);
-CREATE INDEX idx_feed_activities_aggregatable ON feed_activities(
+CREATE INDEX idx_feed_activities_source_account ON np_activityfeed_activities(source_account_id);
+CREATE INDEX idx_feed_activities_actor ON np_activityfeed_activities(source_account_id, actor_id);
+CREATE INDEX idx_feed_activities_object ON np_activityfeed_activities(source_account_id, object_type, object_id);
+CREATE INDEX idx_feed_activities_target ON np_activityfeed_activities(source_account_id, target_type, target_id);
+CREATE INDEX idx_feed_activities_created ON np_activityfeed_activities(source_account_id, created_at DESC);
+CREATE INDEX idx_feed_activities_verb ON np_activityfeed_activities(source_account_id, verb);
+CREATE INDEX idx_feed_activities_aggregatable ON np_activityfeed_activities(
   source_account_id, is_aggregatable, verb, object_type, object_id, created_at DESC
 ) WHERE is_aggregatable = true;
 ```
@@ -887,15 +887,15 @@ CREATE INDEX idx_feed_activities_aggregatable ON feed_activities(
 - `is_aggregatable`: Whether this activity can be aggregated
 - `created_at`: Activity creation timestamp
 
-### `feed_user_feeds`
+### `np_activityfeed_user_feeds`
 Pre-materialized user feeds (fan-out-on-write strategy).
 
 ```sql
-CREATE TABLE feed_user_feeds (
+CREATE TABLE np_activityfeed_user_feeds (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
-  activity_id UUID NOT NULL REFERENCES feed_activities(id) ON DELETE CASCADE,
+  activity_id UUID NOT NULL REFERENCES np_activityfeed_activities(id) ON DELETE CASCADE,
   is_read BOOLEAN DEFAULT false,
   read_at TIMESTAMP WITH TIME ZONE,
   is_hidden BOOLEAN DEFAULT false,
@@ -903,11 +903,11 @@ CREATE TABLE feed_user_feeds (
   UNIQUE(source_account_id, user_id, activity_id)
 );
 
-CREATE INDEX idx_feed_user_feeds_source_account ON feed_user_feeds(source_account_id);
-CREATE INDEX idx_feed_user_feeds_user ON feed_user_feeds(source_account_id, user_id, created_at DESC);
-CREATE INDEX idx_feed_user_feeds_activity ON feed_user_feeds(activity_id);
-CREATE INDEX idx_feed_user_feeds_unread ON feed_user_feeds(source_account_id, user_id, is_read) WHERE is_read = false;
-CREATE INDEX idx_feed_user_feeds_visible ON feed_user_feeds(source_account_id, user_id, is_hidden) WHERE is_hidden = false;
+CREATE INDEX idx_feed_user_feeds_source_account ON np_activityfeed_user_feeds(source_account_id);
+CREATE INDEX idx_feed_user_feeds_user ON np_activityfeed_user_feeds(source_account_id, user_id, created_at DESC);
+CREATE INDEX idx_feed_user_feeds_activity ON np_activityfeed_user_feeds(activity_id);
+CREATE INDEX idx_feed_user_feeds_unread ON np_activityfeed_user_feeds(source_account_id, user_id, is_read) WHERE is_read = false;
+CREATE INDEX idx_feed_user_feeds_visible ON np_activityfeed_user_feeds(source_account_id, user_id, is_hidden) WHERE is_hidden = false;
 ```
 
 **Columns:**
@@ -920,11 +920,11 @@ CREATE INDEX idx_feed_user_feeds_visible ON feed_user_feeds(source_account_id, u
 - `is_hidden`: Whether user has hidden this item
 - `created_at`: When item was added to feed
 
-### `feed_subscriptions`
+### `np_activityfeed_subscriptions`
 User subscriptions to actors/entities.
 
 ```sql
-CREATE TABLE feed_subscriptions (
+CREATE TABLE np_activityfeed_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -935,10 +935,10 @@ CREATE TABLE feed_subscriptions (
   UNIQUE(source_account_id, user_id, target_type, target_id)
 );
 
-CREATE INDEX idx_feed_subscriptions_source_account ON feed_subscriptions(source_account_id);
-CREATE INDEX idx_feed_subscriptions_user ON feed_subscriptions(source_account_id, user_id);
-CREATE INDEX idx_feed_subscriptions_target ON feed_subscriptions(source_account_id, target_type, target_id);
-CREATE INDEX idx_feed_subscriptions_enabled ON feed_subscriptions(source_account_id, enabled) WHERE enabled = true;
+CREATE INDEX idx_feed_subscriptions_source_account ON np_activityfeed_subscriptions(source_account_id);
+CREATE INDEX idx_feed_subscriptions_user ON np_activityfeed_subscriptions(source_account_id, user_id);
+CREATE INDEX idx_feed_subscriptions_target ON np_activityfeed_subscriptions(source_account_id, target_type, target_id);
+CREATE INDEX idx_feed_subscriptions_enabled ON np_activityfeed_subscriptions(source_account_id, enabled) WHERE enabled = true;
 ```
 
 **Columns:**
@@ -950,11 +950,11 @@ CREATE INDEX idx_feed_subscriptions_enabled ON feed_subscriptions(source_account
 - `enabled`: Whether subscription is active
 - `created_at`: Subscription creation timestamp
 
-### `feed_webhook_events`
+### `np_activityfeed_webhook_events`
 Webhook event log.
 
 ```sql
-CREATE TABLE feed_webhook_events (
+CREATE TABLE np_activityfeed_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128),
@@ -965,10 +965,10 @@ CREATE TABLE feed_webhook_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_feed_webhook_events_source_account ON feed_webhook_events(source_account_id);
-CREATE INDEX idx_feed_webhook_events_type ON feed_webhook_events(source_account_id, event_type);
-CREATE INDEX idx_feed_webhook_events_processed ON feed_webhook_events(source_account_id, processed);
-CREATE INDEX idx_feed_webhook_events_created ON feed_webhook_events(source_account_id, created_at DESC);
+CREATE INDEX idx_feed_webhook_events_source_account ON np_activityfeed_webhook_events(source_account_id);
+CREATE INDEX idx_feed_webhook_events_type ON np_activityfeed_webhook_events(source_account_id, event_type);
+CREATE INDEX idx_feed_webhook_events_processed ON np_activityfeed_webhook_events(source_account_id, processed);
+CREATE INDEX idx_feed_webhook_events_created ON np_activityfeed_webhook_events(source_account_id, created_at DESC);
 ```
 
 ---

@@ -43,12 +43,12 @@ The Analytics plugin provides a comprehensive analytics engine for tracking even
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Events | Tracked user and system events | `analytics_events` |
-| Counters | Aggregated counters with rollup | `analytics_counters` |
-| Funnels | Multi-step conversion funnels | `analytics_funnels` |
-| Quotas | Usage quotas and limits | `analytics_quotas` |
-| Quota Violations | Logged quota violations | `analytics_quota_violations` |
-| Webhook Events | Outbound webhook event log | `analytics_webhook_events` |
+| Events | Tracked user and system events | `np_analytics_events` |
+| Counters | Aggregated counters with rollup | `np_analytics_counters` |
+| Funnels | Multi-step conversion funnels | `np_analytics_funnels` |
+| Quotas | Usage quotas and limits | `np_analytics_quotas` |
+| Quota Violations | Logged quota violations | `np_analytics_quota_violations` |
+| Webhook Events | Outbound webhook event log | `np_analytics_webhook_events` |
 
 ---
 
@@ -866,12 +866,12 @@ The Analytics plugin can dispatch webhooks for key events:
 
 ## Database Schema
 
-### analytics_events
+### np_analytics_events
 
 Stores raw tracked events.
 
 ```sql
-CREATE TABLE analytics_events (
+CREATE TABLE np_analytics_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_name VARCHAR(255) NOT NULL,
@@ -882,20 +882,20 @@ CREATE TABLE analytics_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_analytics_events_source_account ON analytics_events(source_account_id);
-CREATE INDEX idx_analytics_events_event_name ON analytics_events(event_name);
-CREATE INDEX idx_analytics_events_user_id ON analytics_events(user_id);
-CREATE INDEX idx_analytics_events_session_id ON analytics_events(session_id);
-CREATE INDEX idx_analytics_events_timestamp ON analytics_events(timestamp DESC);
-CREATE INDEX idx_analytics_events_properties ON analytics_events USING GIN(properties);
+CREATE INDEX idx_analytics_events_source_account ON np_analytics_events(source_account_id);
+CREATE INDEX idx_analytics_events_event_name ON np_analytics_events(event_name);
+CREATE INDEX idx_analytics_events_user_id ON np_analytics_events(user_id);
+CREATE INDEX idx_analytics_events_session_id ON np_analytics_events(session_id);
+CREATE INDEX idx_analytics_events_timestamp ON np_analytics_events(timestamp DESC);
+CREATE INDEX idx_analytics_events_properties ON np_analytics_events USING GIN(properties);
 ```
 
-### analytics_counters
+### np_analytics_counters
 
 Stores counter values with dimensions.
 
 ```sql
-CREATE TABLE analytics_counters (
+CREATE TABLE np_analytics_counters (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -909,20 +909,20 @@ CREATE TABLE analytics_counters (
   UNIQUE(source_account_id, name, dimensions, granularity, period_start)
 );
 
-CREATE INDEX idx_analytics_counters_source_account ON analytics_counters(source_account_id);
-CREATE INDEX idx_analytics_counters_name ON analytics_counters(name);
-CREATE INDEX idx_analytics_counters_dimensions ON analytics_counters USING GIN(dimensions);
-CREATE INDEX idx_analytics_counters_granularity ON analytics_counters(granularity);
-CREATE INDEX idx_analytics_counters_period ON analytics_counters(period_start, period_end);
-CREATE INDEX idx_analytics_counters_updated ON analytics_counters(last_updated DESC);
+CREATE INDEX idx_analytics_counters_source_account ON np_analytics_counters(source_account_id);
+CREATE INDEX idx_analytics_counters_name ON np_analytics_counters(name);
+CREATE INDEX idx_analytics_counters_dimensions ON np_analytics_counters USING GIN(dimensions);
+CREATE INDEX idx_analytics_counters_granularity ON np_analytics_counters(granularity);
+CREATE INDEX idx_analytics_counters_period ON np_analytics_counters(period_start, period_end);
+CREATE INDEX idx_analytics_counters_updated ON np_analytics_counters(last_updated DESC);
 ```
 
-### analytics_funnels
+### np_analytics_funnels
 
 Defines conversion funnels.
 
 ```sql
-CREATE TABLE analytics_funnels (
+CREATE TABLE np_analytics_funnels (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -935,16 +935,16 @@ CREATE TABLE analytics_funnels (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_analytics_funnels_source_account ON analytics_funnels(source_account_id);
-CREATE INDEX idx_analytics_funnels_name ON analytics_funnels(name);
+CREATE INDEX idx_analytics_funnels_source_account ON np_analytics_funnels(source_account_id);
+CREATE INDEX idx_analytics_funnels_name ON np_analytics_funnels(name);
 ```
 
-### analytics_quotas
+### np_analytics_quotas
 
 Defines usage quotas and limits.
 
 ```sql
-CREATE TABLE analytics_quotas (
+CREATE TABLE np_analytics_quotas (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -954,27 +954,27 @@ CREATE TABLE analytics_quotas (
   scope VARCHAR(64) NOT NULL,
   scope_id VARCHAR(255),
   reset_on_violation BOOLEAN DEFAULT FALSE,
-  webhook_on_violation BOOLEAN DEFAULT TRUE,
+  np_webhooks_on_violation BOOLEAN DEFAULT TRUE,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(source_account_id, name, scope, scope_id)
 );
 
-CREATE INDEX idx_analytics_quotas_source_account ON analytics_quotas(source_account_id);
-CREATE INDEX idx_analytics_quotas_name ON analytics_quotas(name);
-CREATE INDEX idx_analytics_quotas_scope ON analytics_quotas(scope, scope_id);
+CREATE INDEX idx_analytics_quotas_source_account ON np_analytics_quotas(source_account_id);
+CREATE INDEX idx_analytics_quotas_name ON np_analytics_quotas(name);
+CREATE INDEX idx_analytics_quotas_scope ON np_analytics_quotas(scope, scope_id);
 ```
 
-### analytics_quota_violations
+### np_analytics_quota_violations
 
 Logs quota violations.
 
 ```sql
-CREATE TABLE analytics_quota_violations (
+CREATE TABLE np_analytics_quota_violations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  quota_id UUID REFERENCES analytics_quotas(id) ON DELETE CASCADE,
+  quota_id UUID REFERENCES np_analytics_quotas(id) ON DELETE CASCADE,
   quota_name VARCHAR(255) NOT NULL,
   scope_id VARCHAR(255),
   quota_limit BIGINT NOT NULL,
@@ -983,18 +983,18 @@ CREATE TABLE analytics_quota_violations (
   timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_analytics_quota_violations_source_account ON analytics_quota_violations(source_account_id);
-CREATE INDEX idx_analytics_quota_violations_quota ON analytics_quota_violations(quota_id);
-CREATE INDEX idx_analytics_quota_violations_scope ON analytics_quota_violations(scope_id);
-CREATE INDEX idx_analytics_quota_violations_timestamp ON analytics_quota_violations(timestamp DESC);
+CREATE INDEX idx_analytics_quota_violations_source_account ON np_analytics_quota_violations(source_account_id);
+CREATE INDEX idx_analytics_quota_violations_quota ON np_analytics_quota_violations(quota_id);
+CREATE INDEX idx_analytics_quota_violations_scope ON np_analytics_quota_violations(scope_id);
+CREATE INDEX idx_analytics_quota_violations_timestamp ON np_analytics_quota_violations(timestamp DESC);
 ```
 
-### analytics_webhook_events
+### np_analytics_webhook_events
 
 Tracks outbound webhook events.
 
 ```sql
-CREATE TABLE analytics_webhook_events (
+CREATE TABLE np_analytics_webhook_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -1004,10 +1004,10 @@ CREATE TABLE analytics_webhook_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_analytics_webhook_events_source_account ON analytics_webhook_events(source_account_id);
-CREATE INDEX idx_analytics_webhook_events_type ON analytics_webhook_events(event_type);
-CREATE INDEX idx_analytics_webhook_events_dispatched ON analytics_webhook_events(dispatched);
-CREATE INDEX idx_analytics_webhook_events_created ON analytics_webhook_events(created_at DESC);
+CREATE INDEX idx_analytics_webhook_events_source_account ON np_analytics_webhook_events(source_account_id);
+CREATE INDEX idx_analytics_webhook_events_type ON np_analytics_webhook_events(event_type);
+CREATE INDEX idx_analytics_webhook_events_dispatched ON np_analytics_webhook_events(dispatched);
+CREATE INDEX idx_analytics_webhook_events_created ON np_analytics_webhook_events(created_at DESC);
 ```
 
 ---
@@ -1109,19 +1109,19 @@ Counters are automatically rolled up at configured intervals:
 
 ```sql
 -- Raw counter (real-time)
-SELECT value FROM analytics_counters
+SELECT value FROM np_analytics_counters
 WHERE name = 'api_requests'
   AND granularity = 'raw'
   AND dimensions = '{}';
 
 -- Hourly rollup
-SELECT value FROM analytics_counters
+SELECT value FROM np_analytics_counters
 WHERE name = 'api_requests'
   AND granularity = 'hour'
   AND period_start = '2026-02-11 10:00:00';
 
 -- Daily rollup
-SELECT value FROM analytics_counters
+SELECT value FROM np_analytics_counters
 WHERE name = 'api_requests'
   AND granularity = 'day'
   AND period_start = '2026-02-11 00:00:00';
@@ -1457,7 +1457,7 @@ export ANALYTICS_BATCH_SIZE=50
 nself plugin analytics rollup
 
 # Purge old events
-DELETE FROM analytics_events
+DELETE FROM np_analytics_events
 WHERE created_at < NOW() - INTERVAL '30 days';
 ```
 
@@ -1468,13 +1468,13 @@ WHERE created_at < NOW() - INTERVAL '30 days';
 **Solutions:**
 ```sql
 -- Add indexes for common queries
-CREATE INDEX idx_custom_query ON analytics_events(user_id, event_name, timestamp DESC);
+CREATE INDEX idx_custom_query ON np_analytics_events(user_id, event_name, timestamp DESC);
 
 -- Use counter aggregates instead of event queries
 -- Query counters, not raw events
 
 -- Partition large tables by time
-ALTER TABLE analytics_events PARTITION BY RANGE (timestamp);
+ALTER TABLE np_analytics_events PARTITION BY RANGE (timestamp);
 ```
 
 ---

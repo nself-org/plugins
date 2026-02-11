@@ -409,17 +409,17 @@ Download specific version.
 
 ## Database Schema
 
-### docs_documents
+### np_documents_documents
 
 ```sql
-CREATE TABLE IF NOT EXISTS docs_documents (
+CREATE TABLE IF NOT EXISTS np_documents_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   title VARCHAR(500) NOT NULL,
   format VARCHAR(20) NOT NULL,
   creator_id VARCHAR(255) NOT NULL,
   current_version INTEGER DEFAULT 1,
-  file_size BIGINT,
+  np_fileproc_size BIGINT,
   storage_path TEXT,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -427,10 +427,10 @@ CREATE TABLE IF NOT EXISTS docs_documents (
 );
 ```
 
-### docs_templates
+### np_documents_templates
 
 ```sql
-CREATE TABLE IF NOT EXISTS docs_templates (
+CREATE TABLE IF NOT EXISTS np_documents_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -445,16 +445,16 @@ CREATE TABLE IF NOT EXISTS docs_templates (
 );
 ```
 
-### docs_versions
+### np_documents_versions
 
 ```sql
-CREATE TABLE IF NOT EXISTS docs_versions (
+CREATE TABLE IF NOT EXISTS np_documents_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID NOT NULL REFERENCES docs_documents(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES np_documents_documents(id) ON DELETE CASCADE,
   version INTEGER NOT NULL,
   content TEXT,
-  file_size BIGINT,
+  np_fileproc_size BIGINT,
   storage_path TEXT,
   created_by VARCHAR(255),
   comment TEXT,
@@ -463,13 +463,13 @@ CREATE TABLE IF NOT EXISTS docs_versions (
 );
 ```
 
-### docs_shares
+### np_documents_shares
 
 ```sql
-CREATE TABLE IF NOT EXISTS docs_shares (
+CREATE TABLE IF NOT EXISTS np_documents_shares (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID NOT NULL REFERENCES docs_documents(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES np_documents_documents(id) ON DELETE CASCADE,
   share_token VARCHAR(255) UNIQUE NOT NULL,
   created_by VARCHAR(255),
   expires_at TIMESTAMPTZ,
@@ -524,8 +524,8 @@ SELECT
   d.current_version,
   COUNT(v.version) as total_versions,
   MAX(v.created_at) as last_updated
-FROM docs_documents d
-LEFT JOIN docs_versions v ON v.document_id = d.id
+FROM np_documents_documents d
+LEFT JOIN np_documents_versions v ON v.document_id = d.id
 WHERE d.source_account_id = 'primary'
 GROUP BY d.id
 ORDER BY last_updated DESC;

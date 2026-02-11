@@ -19,10 +19,10 @@
     "workers"
   ],
   "tables": [
-    "jobs_tasks",
-    "job_results",
-    "job_schedules",
-    "job_failures"
+    "np_jobs_tasks",
+    "np_jobs_job_results",
+    "np_jobs_job_schedules",
+    "np_jobs_job_failures"
   ],
   "webhooks": {},
   "actions": {

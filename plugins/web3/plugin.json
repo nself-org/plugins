@@ -7,24 +7,31 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/web3",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "web3",
-  "tags": ["web3", "blockchain", "nft", "token-gating", "dao", "wallet", "ethereum", "defi"],
-
-  "tables": [
-    "web3_wallets",
-    "web3_nfts",
-    "web3_collections",
-    "web3_tokens",
-    "web3_token_balances",
-    "web3_token_gates",
-    "web3_gate_checks",
-    "web3_daos",
-    "web3_proposals",
-    "web3_votes",
-    "web3_transactions",
-    "web3_events"
+  "category": "integrations",
+  "tags": [
+    "web3",
+    "blockchain",
+    "nft",
+    "token-gating",
+    "dao",
+    "wallet",
+    "ethereum",
+    "defi"
   ],
-
+  "tables": [
+    "np_web3_wallets",
+    "np_web3_nfts",
+    "np_web3_collections",
+    "np_web3_tokens",
+    "np_web3_token_balances",
+    "np_web3_token_gates",
+    "np_web3_gate_checks",
+    "np_web3_daos",
+    "np_web3_proposals",
+    "np_web3_votes",
+    "np_web3_transactions",
+    "np_web3_events"
+  ],
   "webhooks": {
     "wallet.connected": "Wallet connected",
     "wallet.verified": "Wallet verified",
@@ -38,7 +45,6 @@
     "vote.cast": "DAO vote cast",
     "transaction.confirmed": "Transaction confirmed"
   },
-
   "actions": {
     "wallets": "Manage web3 wallets",
     "nfts": "Browse and manage NFTs",
@@ -49,7 +55,6 @@
     "proposals": "Manage DAO proposals",
     "transactions": "View blockchain transactions"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -64,29 +69,32 @@
       "WEB3_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3715,
     "defaultChainId": 1,
     "gateCheckCacheTtl": 300
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs"]
+    "filesystem": [
+      "logs"
+    ]
   }
 }

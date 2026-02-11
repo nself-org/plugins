@@ -292,7 +292,7 @@ Create a new event.
 **Request Body:**
 ```json
 {
-  "calendar_id": "cal_123",
+  "np_calendar_id": "cal_123",
   "title": "Team Meeting",
   "description": "Weekly sync",
   "event_type": "meeting",
@@ -325,7 +325,7 @@ Create a new event.
 List events with filters.
 
 **Query Parameters:**
-- `calendar_id`: Filter by calendar
+- `np_calendar_id`: Filter by calendar
 - `start`: ISO date for range start
 - `end`: ISO date for range end
 - `type`: Event type filter
@@ -366,7 +366,7 @@ Get events in a date range with recurring event expansion.
 **Query Parameters (required):**
 - `start`: ISO date
 - `end`: ISO date
-- `calendar_id` (optional): Filter by calendar
+- `np_calendar_id` (optional): Filter by calendar
 
 **Response:** Returns all event occurrences in the range, including expanded recurring events.
 
@@ -428,7 +428,7 @@ Create an iCal feed for a calendar.
 **Request Body:**
 ```json
 {
-  "calendar_id": "cal_123",
+  "np_calendar_id": "cal_123",
   "name": "My Public Calendar"
 }
 ```
@@ -439,7 +439,7 @@ Create an iCal feed for a calendar.
 List iCal feeds.
 
 **Query Parameters:**
-- `calendar_id` (optional): Filter by calendar
+- `np_calendar_id` (optional): Filter by calendar
 
 #### DELETE /v1/ical-feeds/:id
 Delete an iCal feed.
@@ -457,7 +457,7 @@ Public endpoint to download iCal feed (no authentication).
 Check calendar availability.
 
 **Query Parameters:**
-- `calendar_id` (required): Calendar to check
+- `np_calendar_id` (required): Calendar to check
 - `start` (required): ISO date
 - `end` (required): ISO date
 - `duration`: Meeting duration in minutes (default: 60)
@@ -465,7 +465,7 @@ Check calendar availability.
 **Response:**
 ```json
 {
-  "calendar_id": "cal_123",
+  "np_calendar_id": "cal_123",
   "start": "2026-02-11T08:00:00Z",
   "end": "2026-02-11T18:00:00Z",
   "duration_minutes": 60,
@@ -543,7 +543,7 @@ Generate an RRULE from parameters.
 
 ## Database Schema
 
-### calendar_calendars
+### np_calendar_calendars
 
 Stores calendar definitions.
 
@@ -569,7 +569,7 @@ Stores calendar definitions.
 
 ---
 
-### calendar_events
+### np_calendar_events
 
 Stores calendar events.
 
@@ -577,7 +577,7 @@ Stores calendar events.
 |--------|------|-------------|
 | `id` | UUID | Primary key |
 | `source_account_id` | VARCHAR(128) | Multi-account isolation |
-| `calendar_id` | UUID | Foreign key to calendars |
+| `np_calendar_id` | UUID | Foreign key to calendars |
 | `title` | VARCHAR(500) | Event title |
 | `description` | TEXT | Event description |
 | `event_type` | VARCHAR(32) | event, meeting, birthday, etc. |
@@ -607,7 +607,7 @@ Stores calendar events.
 
 **Indexes:**
 - `idx_calendar_events_source_account` on `source_account_id`
-- `idx_calendar_events_calendar` on `calendar_id`
+- `idx_calendar_events_calendar` on `np_calendar_id`
 - `idx_calendar_events_start` on `start_at`
 - `idx_calendar_events_end` on `end_at`
 - `idx_calendar_events_series` on `series_id`
@@ -615,7 +615,7 @@ Stores calendar events.
 
 ---
 
-### calendar_attendees
+### np_calendar_attendees
 
 Stores event attendees and RSVP status.
 
@@ -644,7 +644,7 @@ Stores event attendees and RSVP status.
 
 ---
 
-### calendar_reminders
+### np_calendar_reminders
 
 Stores scheduled reminders.
 
@@ -668,7 +668,7 @@ Stores scheduled reminders.
 
 ---
 
-### calendar_ical_feeds
+### np_calendar_ical_feeds
 
 Stores iCal feed configurations.
 
@@ -676,7 +676,7 @@ Stores iCal feed configurations.
 |--------|------|-------------|
 | `id` | UUID | Primary key |
 | `source_account_id` | VARCHAR(128) | Multi-account isolation |
-| `calendar_id` | UUID | Foreign key to calendars |
+| `np_calendar_id` | UUID | Foreign key to calendars |
 | `token` | VARCHAR(128) | Unique feed token |
 | `name` | VARCHAR(255) | Feed name |
 | `enabled` | BOOLEAN | Enabled status |
@@ -688,12 +688,12 @@ Stores iCal feed configurations.
 
 **Indexes:**
 - `idx_calendar_ical_feeds_source_account` on `source_account_id`
-- `idx_calendar_ical_feeds_calendar` on `calendar_id`
+- `idx_calendar_ical_feeds_calendar` on `np_calendar_id`
 - `idx_calendar_ical_feeds_token` on `token`
 
 ---
 
-### calendar_webhook_events
+### np_calendar_webhook_events
 
 Stores received webhook events (if webhooks are implemented).
 
@@ -770,7 +770,7 @@ Generate public iCal feeds for calendar subscriptions.
 curl -X POST http://localhost:3505/v1/ical-feeds \
   -H "Content-Type: application/json" \
   -d '{
-    "calendar_id": "cal_123",
+    "np_calendar_id": "cal_123",
     "name": "Public Work Calendar"
   }'
 ```
@@ -861,7 +861,7 @@ curl -X POST http://localhost:3505/v1/calendars \
 curl -X POST http://localhost:3505/v1/events \
   -H "Content-Type: application/json" \
   -d '{
-    "calendar_id": "cal_abc123",
+    "np_calendar_id": "cal_abc123",
     "title": "Project Kickoff Meeting",
     "description": "Q1 planning session",
     "event_type": "meeting",
@@ -893,7 +893,7 @@ curl -X POST http://localhost:3505/v1/events \
 curl -X POST http://localhost:3505/v1/events \
   -H "Content-Type: application/json" \
   -d '{
-    "calendar_id": "cal_abc123",
+    "np_calendar_id": "cal_abc123",
     "title": "Weekly Team Sync",
     "event_type": "meeting",
     "start_at": "2026-02-11T10:00:00Z",
@@ -938,7 +938,7 @@ curl -X POST http://localhost:3505/v1/events/evt_123/checkin \
 curl -X POST http://localhost:3505/v1/ical-feeds \
   -H "Content-Type: application/json" \
   -d '{
-    "calendar_id": "cal_abc123",
+    "np_calendar_id": "cal_abc123",
     "name": "My Public Calendar"
   }'
 ```
@@ -946,8 +946,8 @@ curl -X POST http://localhost:3505/v1/ical-feeds \
 Response:
 ```json
 {
-  "id": "feed_xyz",
-  "calendar_id": "cal_abc123",
+  "id": "np_activityfeed_xyz",
+  "np_calendar_id": "cal_abc123",
   "token": "a1b2c3d4e5f6...",
   "name": "My Public Calendar",
   "enabled": true,
@@ -962,8 +962,8 @@ Subscribe URL: `http://localhost:3505/v1/ical/a1b2c3d4e5f6...`
 **Get all events for a user's calendars:**
 ```sql
 SELECT e.*
-FROM calendar_events e
-JOIN calendar_calendars c ON e.calendar_id = c.id
+FROM np_calendar_events e
+JOIN np_calendar_calendars c ON e.np_calendar_id = c.id
 WHERE c.owner_id = 'user_123'
   AND c.source_account_id = 'primary'
   AND e.source_account_id = 'primary'
@@ -973,8 +973,8 @@ ORDER BY e.start_at;
 **Find conflicting events:**
 ```sql
 SELECT e1.id, e1.title, e1.start_at, e1.end_at
-FROM calendar_events e1
-JOIN calendar_events e2 ON e1.calendar_id = e2.calendar_id
+FROM np_calendar_events e1
+JOIN np_calendar_events e2 ON e1.np_calendar_id = e2.np_calendar_id
 WHERE e1.id != e2.id
   AND e1.source_account_id = 'primary'
   AND e2.source_account_id = 'primary'
@@ -989,7 +989,7 @@ WHERE e1.id != e2.id
 SELECT
   rsvp_status,
   COUNT(*) as count
-FROM calendar_attendees
+FROM np_calendar_attendees
 WHERE event_id = 'evt_123'
   AND source_account_id = 'primary'
 GROUP BY rsvp_status;
@@ -1000,8 +1000,8 @@ GROUP BY rsvp_status;
 SELECT
   c.owner_id,
   COUNT(e.id) as event_count
-FROM calendar_calendars c
-JOIN calendar_events e ON c.id = e.calendar_id
+FROM np_calendar_calendars c
+JOIN np_calendar_events e ON c.id = e.np_calendar_id
 WHERE c.source_account_id = 'primary'
   AND e.source_account_id = 'primary'
 GROUP BY c.owner_id
@@ -1045,12 +1045,12 @@ Check:
 If `attendee_count` doesn't match actual attendees, the database trigger may need repair. Manually update:
 
 ```sql
-UPDATE calendar_events
+UPDATE np_calendar_events
 SET attendee_count = (
   SELECT COUNT(*)
-  FROM calendar_attendees
-  WHERE event_id = calendar_events.id
-    AND source_account_id = calendar_events.source_account_id
+  FROM np_calendar_attendees
+  WHERE event_id = np_calendar_events.id
+    AND source_account_id = np_calendar_events.source_account_id
 )
 WHERE source_account_id = 'primary';
 ```

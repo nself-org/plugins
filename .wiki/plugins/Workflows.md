@@ -484,12 +484,12 @@ A trigger was fired.
 
 ## Database Schema
 
-### workflows_workflows
+### np_workflows_workflows
 
 Workflow definitions.
 
 ```sql
-CREATE TABLE workflows_workflows (
+CREATE TABLE np_workflows_workflows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(200) NOT NULL,
@@ -515,21 +515,21 @@ CREATE TABLE workflows_workflows (
   archived_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_workflows_account ON workflows_workflows(source_account_id);
-CREATE INDEX idx_workflows_status ON workflows_workflows(status);
-CREATE INDEX idx_workflows_active ON workflows_workflows(is_active) WHERE is_active = true;
-CREATE INDEX idx_workflows_trigger ON workflows_workflows(trigger_type);
+CREATE INDEX idx_workflows_account ON np_workflows_workflows(source_account_id);
+CREATE INDEX idx_workflows_status ON np_workflows_workflows(status);
+CREATE INDEX idx_workflows_active ON np_workflows_workflows(is_active) WHERE is_active = true;
+CREATE INDEX idx_workflows_trigger ON np_workflows_workflows(trigger_type);
 ```
 
-### workflows_executions
+### np_workflows_executions
 
 Workflow execution records.
 
 ```sql
-CREATE TABLE workflows_executions (
+CREATE TABLE np_workflows_executions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  workflow_id UUID NOT NULL REFERENCES workflows_workflows(id) ON DELETE CASCADE,
+  workflow_id UUID NOT NULL REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
   workflow_version INTEGER NOT NULL,
   trigger_type VARCHAR(50) NOT NULL,
   trigger_data JSONB DEFAULT '{}'::jsonb,
@@ -546,21 +546,21 @@ CREATE TABLE workflows_executions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_executions_account ON workflows_executions(source_account_id);
-CREATE INDEX idx_executions_workflow ON workflows_executions(workflow_id);
-CREATE INDEX idx_executions_status ON workflows_executions(status);
-CREATE INDEX idx_executions_started ON workflows_executions(started_at DESC);
+CREATE INDEX idx_executions_account ON np_workflows_executions(source_account_id);
+CREATE INDEX idx_executions_workflow ON np_workflows_executions(workflow_id);
+CREATE INDEX idx_executions_status ON np_workflows_executions(status);
+CREATE INDEX idx_executions_started ON np_workflows_executions(started_at DESC);
 ```
 
-### workflows_execution_steps
+### np_workflows_execution_steps
 
 Individual execution steps.
 
 ```sql
-CREATE TABLE workflows_execution_steps (
+CREATE TABLE np_workflows_execution_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  execution_id UUID NOT NULL REFERENCES workflows_executions(id) ON DELETE CASCADE,
+  execution_id UUID NOT NULL REFERENCES np_workflows_executions(id) ON DELETE CASCADE,
   step_id VARCHAR(100) NOT NULL,
   step_type VARCHAR(50) NOT NULL,
   step_config JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -575,20 +575,20 @@ CREATE TABLE workflows_execution_steps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_execution_steps_account ON workflows_execution_steps(source_account_id);
-CREATE INDEX idx_execution_steps_execution ON workflows_execution_steps(execution_id);
-CREATE INDEX idx_execution_steps_status ON workflows_execution_steps(status);
+CREATE INDEX idx_execution_steps_account ON np_workflows_execution_steps(source_account_id);
+CREATE INDEX idx_execution_steps_execution ON np_workflows_execution_steps(execution_id);
+CREATE INDEX idx_execution_steps_status ON np_workflows_execution_steps(status);
 ```
 
-### workflows_triggers
+### np_workflows_triggers
 
 Configured triggers.
 
 ```sql
-CREATE TABLE workflows_triggers (
+CREATE TABLE np_workflows_triggers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  workflow_id UUID NOT NULL REFERENCES workflows_workflows(id) ON DELETE CASCADE,
+  workflow_id UUID NOT NULL REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
   trigger_type VARCHAR(50) NOT NULL,
   config JSONB NOT NULL DEFAULT '{}'::jsonb,
   is_active BOOLEAN NOT NULL DEFAULT true,
@@ -599,17 +599,17 @@ CREATE TABLE workflows_triggers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_triggers_account ON workflows_triggers(source_account_id);
-CREATE INDEX idx_triggers_workflow ON workflows_triggers(workflow_id);
-CREATE INDEX idx_triggers_active ON workflows_triggers(is_active) WHERE is_active = true;
+CREATE INDEX idx_triggers_account ON np_workflows_triggers(source_account_id);
+CREATE INDEX idx_triggers_workflow ON np_workflows_triggers(workflow_id);
+CREATE INDEX idx_triggers_active ON np_workflows_triggers(is_active) WHERE is_active = true;
 ```
 
-### workflows_actions
+### np_workflows_actions
 
 Action definitions.
 
 ```sql
-CREATE TABLE workflows_actions (
+CREATE TABLE np_workflows_actions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(200) NOT NULL,
@@ -623,17 +623,17 @@ CREATE TABLE workflows_actions (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_actions_account ON workflows_actions(source_account_id);
-CREATE INDEX idx_actions_type ON workflows_actions(action_type);
-CREATE INDEX idx_actions_active ON workflows_actions(is_active) WHERE is_active = true;
+CREATE INDEX idx_actions_account ON np_workflows_actions(source_account_id);
+CREATE INDEX idx_actions_type ON np_workflows_actions(action_type);
+CREATE INDEX idx_actions_active ON np_workflows_actions(is_active) WHERE is_active = true;
 ```
 
-### workflows_templates
+### np_workflows_templates
 
 Workflow templates.
 
 ```sql
-CREATE TABLE workflows_templates (
+CREATE TABLE np_workflows_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(200) NOT NULL,
@@ -648,20 +648,20 @@ CREATE TABLE workflows_templates (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_templates_account ON workflows_templates(source_account_id);
-CREATE INDEX idx_templates_category ON workflows_templates(category);
-CREATE INDEX idx_templates_public ON workflows_templates(is_public) WHERE is_public = true;
+CREATE INDEX idx_templates_account ON np_workflows_templates(source_account_id);
+CREATE INDEX idx_templates_category ON np_workflows_templates(category);
+CREATE INDEX idx_templates_public ON np_workflows_templates(is_public) WHERE is_public = true;
 ```
 
-### workflows_variables
+### np_workflows_variables
 
 Workflow variables storage.
 
 ```sql
-CREATE TABLE workflows_variables (
+CREATE TABLE np_workflows_variables (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  workflow_id UUID NOT NULL REFERENCES workflows_workflows(id) ON DELETE CASCADE,
+  workflow_id UUID NOT NULL REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
   value TEXT,
   value_encrypted TEXT,
@@ -672,20 +672,20 @@ CREATE TABLE workflows_variables (
   UNIQUE(source_account_id, workflow_id, name)
 );
 
-CREATE INDEX idx_variables_account ON workflows_variables(source_account_id);
-CREATE INDEX idx_variables_workflow ON workflows_variables(workflow_id);
+CREATE INDEX idx_variables_account ON np_workflows_variables(source_account_id);
+CREATE INDEX idx_variables_workflow ON np_workflows_variables(workflow_id);
 ```
 
-### workflows_webhook_logs
+### np_workflows_webhook_logs
 
 Webhook delivery logs.
 
 ```sql
-CREATE TABLE workflows_webhook_logs (
+CREATE TABLE np_workflows_webhook_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  workflow_id UUID NOT NULL REFERENCES workflows_workflows(id) ON DELETE CASCADE,
-  execution_id UUID REFERENCES workflows_executions(id) ON DELETE CASCADE,
+  workflow_id UUID NOT NULL REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
+  execution_id UUID REFERENCES np_workflows_executions(id) ON DELETE CASCADE,
   url TEXT NOT NULL,
   method VARCHAR(10) NOT NULL,
   request_headers JSONB,
@@ -698,20 +698,20 @@ CREATE TABLE workflows_webhook_logs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_webhook_logs_account ON workflows_webhook_logs(source_account_id);
-CREATE INDEX idx_webhook_logs_workflow ON workflows_webhook_logs(workflow_id);
-CREATE INDEX idx_webhook_logs_execution ON workflows_webhook_logs(execution_id);
+CREATE INDEX idx_webhook_logs_account ON np_workflows_webhook_logs(source_account_id);
+CREATE INDEX idx_webhook_logs_workflow ON np_workflows_webhook_logs(workflow_id);
+CREATE INDEX idx_webhook_logs_execution ON np_workflows_webhook_logs(execution_id);
 ```
 
-### workflows_approvals
+### np_workflows_approvals
 
 Approval gate tracking.
 
 ```sql
-CREATE TABLE workflows_approvals (
+CREATE TABLE np_workflows_approvals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  execution_id UUID NOT NULL REFERENCES workflows_executions(id) ON DELETE CASCADE,
+  execution_id UUID NOT NULL REFERENCES np_workflows_executions(id) ON DELETE CASCADE,
   step_id VARCHAR(100) NOT NULL,
   approvers UUID[] NOT NULL,
   required_approvals INTEGER DEFAULT 1,
@@ -725,10 +725,10 @@ CREATE TABLE workflows_approvals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_approvals_account ON workflows_approvals(source_account_id);
-CREATE INDEX idx_approvals_execution ON workflows_approvals(execution_id);
-CREATE INDEX idx_approvals_status ON workflows_approvals(status);
-CREATE INDEX idx_approvals_pending ON workflows_approvals(status, expires_at) WHERE status = 'pending';
+CREATE INDEX idx_approvals_account ON np_workflows_approvals(source_account_id);
+CREATE INDEX idx_approvals_execution ON np_workflows_approvals(execution_id);
+CREATE INDEX idx_approvals_status ON np_workflows_approvals(status);
+CREATE INDEX idx_approvals_pending ON np_workflows_approvals(status, expires_at) WHERE status = 'pending';
 ```
 
 ## Examples
@@ -890,7 +890,7 @@ curl -X POST http://localhost:3712/api/workflows/executions/EXECUTION_ID/retry
 **Problem:** Triggers not firing
 
 **Solutions:**
-1. Verify trigger is active: `SELECT * FROM workflows_triggers WHERE is_active = true`
+1. Verify trigger is active: `SELECT * FROM np_workflows_triggers WHERE is_active = true`
 2. Check cron syntax for scheduled triggers
 3. Verify webhook URLs are accessible
 4. Review event subscriptions for event triggers

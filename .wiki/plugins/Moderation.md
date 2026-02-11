@@ -60,15 +60,15 @@ The plugin creates **17 comprehensive tables**:
 
 | Table | Purpose |
 |-------|---------|
-| `moderation_rules` | Custom moderation rules with conditions and actions |
-| `moderation_wordlists` | Profanity and allowed word lists |
-| `moderation_actions` | All moderation actions (warn, mute, ban) taken against users |
-| `moderation_flags` | Content flagged for review with severity and status |
-| `moderation_appeals` | User appeals against moderation actions |
-| `moderation_reports` | User-submitted reports of violating content |
-| `moderation_toxicity_scores` | AI toxicity analysis results |
-| `moderation_user_stats` | Per-user violation and action statistics |
-| `moderation_audit_log` | Complete audit trail of all moderation activities |
+| `np_moderation_rules` | Custom moderation rules with conditions and actions |
+| `np_moderation_wordlists` | Profanity and allowed word lists |
+| `np_moderation_actions` | All moderation actions (warn, mute, ban) taken against users |
+| `np_moderation_flags` | Content flagged for review with severity and status |
+| `np_moderation_appeals` | User appeals against moderation actions |
+| `np_moderation_reports` | User-submitted reports of violating content |
+| `np_moderation_toxicity_scores` | AI toxicity analysis results |
+| `np_moderation_user_stats` | Per-user violation and action statistics |
+| `np_moderation_audit_log` | Complete audit trail of all moderation activities |
 | `mod_reviews` | Automated and manual content review records |
 | `mod_policies` | Content policies with configured thresholds |
 | `mod_user_strikes` | User strike tracking with expiration |
@@ -77,7 +77,7 @@ The plugin creates **17 comprehensive tables**:
 | `cp_evaluations` | Policy evaluation results for content |
 | `cp_word_lists` | Word lists for policy matching |
 | `cp_overrides` | Manual policy overrides for specific content |
-| `moderation_webhook_events` | Received webhook event log |
+| `np_moderation_webhook_events` | Received webhook event log |
 
 ---
 
@@ -363,15 +363,15 @@ MODERATION_APP_IDS=app1,app2,app3
 
 The Moderation plugin creates 17 tables for comprehensive content moderation:
 
-1. **moderation_rules** - Custom rules with conditions and actions
-2. **moderation_wordlists** - Profanity and allowed word lists
-3. **moderation_actions** - Actions taken against users (warn, mute, ban)
-4. **moderation_flags** - Content flagged for review
-5. **moderation_appeals** - User appeals against actions
-6. **moderation_reports** - User-submitted reports
-7. **moderation_toxicity_scores** - AI toxicity analysis results
-8. **moderation_user_stats** - Per-user statistics
-9. **moderation_audit_log** - Complete audit trail
+1. **np_moderation_rules** - Custom rules with conditions and actions
+2. **np_moderation_wordlists** - Profanity and allowed word lists
+3. **np_moderation_actions** - Actions taken against users (warn, mute, ban)
+4. **np_moderation_flags** - Content flagged for review
+5. **np_moderation_appeals** - User appeals against actions
+6. **np_moderation_reports** - User-submitted reports
+7. **np_moderation_toxicity_scores** - AI toxicity analysis results
+8. **np_moderation_user_stats** - Per-user statistics
+9. **np_moderation_audit_log** - Complete audit trail
 10. **mod_reviews** - Content review records
 11. **mod_policies** - Content policies with thresholds
 12. **mod_user_strikes** - Strike tracking with expiration
@@ -380,29 +380,29 @@ The Moderation plugin creates 17 tables for comprehensive content moderation:
 15. **cp_evaluations** - Policy evaluation results
 16. **cp_word_lists** - Word lists for policies
 17. **cp_overrides** - Manual policy overrides
-18. **moderation_webhook_events** - Webhook event log
+18. **np_moderation_webhook_events** - Webhook event log
 
 ### Key Schema Details
 
-#### moderation_rules
+#### np_moderation_rules
 
 Columns: `id`, `name`, `description`, `rule_type`, `condition` (JSONB), `action`, `severity`, `enabled`, `priority`, `metadata` (JSONB), `source_account_id`, `created_at`, `updated_at`, `synced_at`
 
 Indexes: `rule_type`, `enabled`, `priority`, `source_account_id`
 
-#### moderation_actions
+#### np_moderation_actions
 
 Columns: `id`, `user_id`, `action_type`, `reason`, `content_id`, `moderator_id`, `duration_seconds`, `expires_at`, `revoked`, `revoked_at`, `revoked_by`, `revoke_reason`, `metadata` (JSONB), `source_account_id`, `created_at`, `synced_at`
 
 Indexes: `user_id`, `action_type`, `moderator_id`, `created_at`, `expires_at`, `source_account_id`
 
-#### moderation_flags
+#### np_moderation_flags
 
 Columns: `id`, `content_id`, `content_type`, `user_id`, `flag_reason`, `severity`, `status`, `toxicity_score`, `matched_rules` (TEXT[]), `matched_words` (TEXT[]), `reporter_id`, `reviewer_id`, `reviewed_at`, `review_decision`, `review_notes`, `metadata` (JSONB), `source_account_id`, `created_at`, `synced_at`
 
 Indexes: `content_id`, `user_id`, `status`, `severity`, `reviewer_id`, `created_at`, `source_account_id`
 
-#### moderation_user_stats
+#### np_moderation_user_stats
 
 Columns: `user_id`, `total_flags`, `total_violations`, `total_warnings`, `total_mutes`, `total_bans`, `active_strikes`, `total_strikes`, `last_violation_at`, `last_action_at`, `reputation_score`, `is_currently_muted`, `is_currently_banned`, `metadata` (JSONB), `source_account_id`, `updated_at`, `synced_at`
 
@@ -993,7 +993,7 @@ nself plugin moderation appeals review appeal_123 approve \
 
 ```sql
 SELECT id, content_id, severity, toxicity_score, created_at
-FROM moderation_flags
+FROM np_moderation_flags
 WHERE status = 'pending'
 ORDER BY severity DESC, created_at ASC;
 ```
@@ -1002,7 +1002,7 @@ ORDER BY severity DESC, created_at ASC;
 
 ```sql
 SELECT user_id, active_strikes, total_violations, reputation_score
-FROM moderation_user_stats
+FROM np_moderation_user_stats
 WHERE active_strikes >= 2
 ORDER BY active_strikes DESC;
 ```
@@ -1014,7 +1014,7 @@ SELECT
   severity,
   COUNT(*) as count,
   AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/3600) as avg_age_hours
-FROM moderation_flags
+FROM np_moderation_flags
 WHERE status = 'pending'
 GROUP BY severity;
 ```
@@ -1023,9 +1023,9 @@ GROUP BY severity;
 
 ```sql
 SELECT r.name, COUNT(*) as violation_count
-FROM moderation_flags f
+FROM np_moderation_flags f
 CROSS JOIN LATERAL unnest(f.matched_rules) AS rule_id
-JOIN moderation_rules r ON r.id = rule_id
+JOIN np_moderation_rules r ON r.id = rule_id
 WHERE f.created_at >= NOW() - INTERVAL '30 days'
 GROUP BY r.id, r.name
 ORDER BY violation_count DESC
@@ -1083,7 +1083,7 @@ MOD_QUEUE_WORKER_CONCURRENCY=10
 **Solution:**
 ```bash
 # Check webhook log
-SELECT * FROM moderation_webhook_events
+SELECT * FROM np_moderation_webhook_events
 WHERE processed = false
 ORDER BY created_at DESC;
 ```

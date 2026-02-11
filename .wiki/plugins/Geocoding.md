@@ -682,11 +682,11 @@ Get overall plugin statistics.
 
 ## Database Schema
 
-### geo_cache
+### np_geoc_cache
 Stores geocoding results with hit tracking.
 
 ```sql
-CREATE TABLE geo_cache (
+CREATE TABLE np_geoc_cache (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   query_type VARCHAR(16) NOT NULL,
@@ -716,18 +716,18 @@ CREATE TABLE geo_cache (
   UNIQUE(source_account_id, query_hash, provider)
 );
 
-CREATE INDEX idx_geo_cache_source_account ON geo_cache(source_account_id);
-CREATE INDEX idx_geo_cache_hash ON geo_cache(query_hash);
-CREATE INDEX idx_geo_cache_coords ON geo_cache(lat, lng);
-CREATE INDEX idx_geo_cache_city ON geo_cache(city, state_code);
-CREATE INDEX idx_geo_cache_expires ON geo_cache(expires_at);
+CREATE INDEX idx_geo_cache_source_account ON np_geoc_cache(source_account_id);
+CREATE INDEX idx_geo_cache_hash ON np_geoc_cache(query_hash);
+CREATE INDEX idx_geo_cache_coords ON np_geoc_cache(lat, lng);
+CREATE INDEX idx_geo_cache_city ON np_geoc_cache(city, state_code);
+CREATE INDEX idx_geo_cache_expires ON np_geoc_cache(expires_at);
 ```
 
-### geo_geofences
+### np_geoc_geofences
 Stores geofence definitions.
 
 ```sql
-CREATE TABLE geo_geofences (
+CREATE TABLE np_geoc_geofences (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -748,19 +748,19 @@ CREATE TABLE geo_geofences (
   deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_geo_geofences_source_account ON geo_geofences(source_account_id);
-CREATE INDEX idx_geo_geofences_center ON geo_geofences(center_lat, center_lng);
-CREATE INDEX idx_geo_geofences_active ON geo_geofences(active);
+CREATE INDEX idx_geo_geofences_source_account ON np_geoc_geofences(source_account_id);
+CREATE INDEX idx_geo_geofences_center ON np_geoc_geofences(center_lat, center_lng);
+CREATE INDEX idx_geo_geofences_active ON np_geoc_geofences(active);
 ```
 
-### geo_geofence_events
+### np_geoc_geofence_events
 Logs geofence entry/exit events.
 
 ```sql
-CREATE TABLE geo_geofence_events (
+CREATE TABLE np_geoc_geofence_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  geofence_id UUID REFERENCES geo_geofences(id),
+  geofence_id UUID REFERENCES np_geoc_geofences(id),
   event_type VARCHAR(16) NOT NULL,
   entity_id VARCHAR(255) NOT NULL,
   entity_type VARCHAR(64) NOT NULL DEFAULT 'user',
@@ -771,16 +771,16 @@ CREATE TABLE geo_geofence_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_geo_events_source_account ON geo_geofence_events(source_account_id);
-CREATE INDEX idx_geo_events_fence ON geo_geofence_events(geofence_id);
-CREATE INDEX idx_geo_events_entity ON geo_geofence_events(entity_id);
+CREATE INDEX idx_geo_events_source_account ON np_geoc_geofence_events(source_account_id);
+CREATE INDEX idx_geo_events_fence ON np_geoc_geofence_events(geofence_id);
+CREATE INDEX idx_geo_events_entity ON np_geoc_geofence_events(entity_id);
 ```
 
-### geo_places
+### np_geoc_places
 Stores place information from searches.
 
 ```sql
-CREATE TABLE geo_places (
+CREATE TABLE np_geoc_places (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   provider VARCHAR(64) NOT NULL,
@@ -802,19 +802,19 @@ CREATE TABLE geo_places (
   UNIQUE(source_account_id, provider, provider_place_id)
 );
 
-CREATE INDEX idx_geo_places_source_account ON geo_places(source_account_id);
-CREATE INDEX idx_geo_places_coords ON geo_places(lat, lng);
-CREATE INDEX idx_geo_places_name ON geo_places(name);
-CREATE INDEX idx_geo_places_category ON geo_places(category);
+CREATE INDEX idx_geo_places_source_account ON np_geoc_places(source_account_id);
+CREATE INDEX idx_geo_places_coords ON np_geoc_places(lat, lng);
+CREATE INDEX idx_geo_places_name ON np_geoc_places(name);
+CREATE INDEX idx_geo_places_category ON np_geoc_places(category);
 ```
 
 ### Analytics Views
 
-#### geo_cache_hit_rate
+#### np_geoc_cache_hit_rate
 Cache performance metrics by query type.
 
 ```sql
-CREATE OR REPLACE VIEW geo_cache_hit_rate AS
+CREATE OR REPLACE VIEW np_geoc_cache_hit_rate AS
 SELECT source_account_id,
        query_type,
        COUNT(*) AS total_entries,
@@ -822,32 +822,32 @@ SELECT source_account_id,
        ROUND(AVG(hit_count), 2) AS avg_hits_per_entry,
        COUNT(*) FILTER (WHERE hit_count > 1) AS reused_entries,
        ROUND(100.0 * COUNT(*) FILTER (WHERE hit_count > 1) / NULLIF(COUNT(*), 0), 1) AS reuse_pct
-FROM geo_cache
+FROM np_geoc_cache
 WHERE expires_at IS NULL OR expires_at > NOW()
 GROUP BY source_account_id, query_type;
 ```
 
-#### geo_volume_daily
+#### np_geoc_volume_daily
 Daily geocoding volume.
 
 ```sql
-CREATE OR REPLACE VIEW geo_volume_daily AS
+CREATE OR REPLACE VIEW np_geoc_volume_daily AS
 SELECT source_account_id,
        provider,
        DATE(created_at) AS day,
        COUNT(*) AS geocode_count,
        COUNT(DISTINCT query_hash) AS unique_queries
-FROM geo_cache
+FROM np_geoc_cache
 WHERE created_at > NOW() - INTERVAL '30 days'
 GROUP BY source_account_id, provider, DATE(created_at)
 ORDER BY day DESC;
 ```
 
-#### geo_geofence_activity
+#### np_geoc_geofence_activity
 Geofence event statistics.
 
 ```sql
-CREATE OR REPLACE VIEW geo_geofence_activity AS
+CREATE OR REPLACE VIEW np_geoc_geofence_activity AS
 SELECT g.source_account_id,
        g.id AS geofence_id,
        g.name AS geofence_name,
@@ -857,8 +857,8 @@ SELECT g.source_account_id,
        COUNT(e.id) FILTER (WHERE e.event_type = 'exit') AS exit_count,
        COUNT(DISTINCT e.entity_id) AS unique_entities,
        MAX(e.created_at) AS last_event_at
-FROM geo_geofences g
-LEFT JOIN geo_geofence_events e ON g.id = e.geofence_id
+FROM np_geoc_geofences g
+LEFT JOIN np_geoc_geofence_events e ON g.id = e.geofence_id
 WHERE g.active = TRUE AND g.deleted_at IS NULL
 GROUP BY g.source_account_id, g.id, g.name, g.fence_type;
 ```
@@ -969,7 +969,7 @@ SELECT
   SUM(hit_count) as total_hits,
   ROUND(AVG(hit_count), 2) as avg_hits_per_entry,
   ROUND(100.0 * COUNT(*) FILTER (WHERE hit_count > 1) / COUNT(*), 1) as reuse_pct
-FROM geo_cache
+FROM np_geoc_cache
 WHERE source_account_id = 'primary'
 GROUP BY provider;
 
@@ -979,13 +979,13 @@ SELECT
   provider,
   hit_count,
   formatted_address
-FROM geo_cache
+FROM np_geoc_cache
 WHERE source_account_id = 'primary'
 ORDER BY hit_count DESC
 LIMIT 20;
 
 -- Daily geocoding volume
-SELECT * FROM geo_volume_daily
+SELECT * FROM np_geoc_volume_daily
 WHERE source_account_id = 'primary'
 ORDER BY day DESC
 LIMIT 30;
@@ -1037,14 +1037,14 @@ LIMIT 30;
    ```
 3. Verify database connection:
    ```bash
-   psql $DATABASE_URL -c "SELECT COUNT(*) FROM geo_cache;"
+   psql $DATABASE_URL -c "SELECT COUNT(*) FROM np_geoc_cache;"
    ```
 4. Check query normalization:
    ```sql
    -- Queries are normalized (lowercase, trimmed)
    -- "123 Main St" and "123 main st" should have same query_hash
    SELECT query_text, query_hash, hit_count
-   FROM geo_cache
+   FROM np_geoc_cache
    WHERE query_text ILIKE '%main%'
    LIMIT 10;
    ```
@@ -1057,7 +1057,7 @@ LIMIT 30;
 1. Verify geofence is active:
    ```sql
    SELECT id, name, active, center_lat, center_lng, radius_meters
-   FROM geo_geofences
+   FROM np_geoc_geofences
    WHERE deleted_at IS NULL;
    ```
 2. Check distance calculation:
@@ -1113,7 +1113,7 @@ LIMIT 30;
      provider,
      COUNT(*) FILTER (WHERE hit_count = 1) as new_queries,
      COUNT(*) FILTER (WHERE hit_count > 1) as cached_queries
-   FROM geo_cache
+   FROM np_geoc_cache
    WHERE created_at > NOW() - INTERVAL '30 days'
    GROUP BY DATE(created_at), provider
    ORDER BY day DESC;
@@ -1154,7 +1154,7 @@ LIMIT 30;
 **Solution:**
 1. Verify places are in database:
    ```sql
-   SELECT COUNT(*) FROM geo_places WHERE source_account_id = 'primary';
+   SELECT COUNT(*) FROM np_geoc_places WHERE source_account_id = 'primary';
    ```
 2. Places are only stored after successful searches:
    ```bash

@@ -1329,12 +1329,12 @@ Knowledge base article published.
 
 ## Database Schema
 
-### nchat_support_sla_policies
+### np_support_sla_policies
 
 SLA policies with priority-based targets.
 
 ```sql
-CREATE TABLE nchat_support_sla_policies (
+CREATE TABLE np_support_sla_policies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(100) NOT NULL,
@@ -1360,17 +1360,17 @@ CREATE TABLE nchat_support_sla_policies (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_sla_policies_account ON nchat_support_sla_policies(source_account_id);
-CREATE INDEX idx_sla_policies_active ON nchat_support_sla_policies(is_active) WHERE is_active = true;
-CREATE INDEX idx_sla_policies_default ON nchat_support_sla_policies(is_default) WHERE is_default = true;
+CREATE INDEX idx_sla_policies_account ON np_support_sla_policies(source_account_id);
+CREATE INDEX idx_sla_policies_active ON np_support_sla_policies(is_active) WHERE is_active = true;
+CREATE INDEX idx_sla_policies_default ON np_support_sla_policies(is_default) WHERE is_default = true;
 ```
 
-### nchat_support_teams
+### np_support_teams
 
 Support teams with routing configuration.
 
 ```sql
-CREATE TABLE nchat_support_teams (
+CREATE TABLE np_support_teams (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(100) NOT NULL,
@@ -1381,7 +1381,7 @@ CREATE TABLE nchat_support_teams (
   timezone VARCHAR(50) DEFAULT 'UTC',
   auto_assignment_enabled BOOLEAN NOT NULL DEFAULT true,
   assignment_method VARCHAR(50) DEFAULT 'round_robin',
-  default_sla_policy_id UUID REFERENCES nchat_support_sla_policies(id) ON DELETE SET NULL,
+  default_sla_policy_id UUID REFERENCES np_support_sla_policies(id) ON DELETE SET NULL,
   open_tickets_count INTEGER DEFAULT 0,
   member_count INTEGER DEFAULT 0,
   metadata JSONB DEFAULT '{}'::jsonb,
@@ -1390,21 +1390,21 @@ CREATE TABLE nchat_support_teams (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_support_teams_account ON nchat_support_teams(source_account_id);
-CREATE INDEX idx_support_teams_active ON nchat_support_teams(is_active) WHERE is_active = true;
+CREATE INDEX idx_support_teams_account ON np_support_teams(source_account_id);
+CREATE INDEX idx_support_teams_active ON np_support_teams(is_active) WHERE is_active = true;
 ```
 
 **Assignment methods:** `round_robin`, `least_busy`, `skill_based`, `manual`
 
-### nchat_support_team_members
+### np_support_team_members
 
 Team members with skills and performance tracking.
 
 ```sql
-CREATE TABLE nchat_support_team_members (
+CREATE TABLE np_support_team_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  team_id UUID NOT NULL REFERENCES nchat_support_teams(id) ON DELETE CASCADE,
+  team_id UUID NOT NULL REFERENCES np_support_teams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   role VARCHAR(50) NOT NULL DEFAULT 'agent',
   skills TEXT[] DEFAULT '{}',
@@ -1423,23 +1423,23 @@ CREATE TABLE nchat_support_team_members (
   UNIQUE(source_account_id, team_id, user_id)
 );
 
-CREATE INDEX idx_support_team_members_account ON nchat_support_team_members(source_account_id);
-CREATE INDEX idx_support_team_members_team ON nchat_support_team_members(team_id);
-CREATE INDEX idx_support_team_members_user ON nchat_support_team_members(user_id);
-CREATE INDEX idx_support_team_members_active ON nchat_support_team_members(is_active) WHERE is_active = true;
-CREATE INDEX idx_support_team_members_available ON nchat_support_team_members(is_available) WHERE is_available = true;
+CREATE INDEX idx_support_team_members_account ON np_support_team_members(source_account_id);
+CREATE INDEX idx_support_team_members_team ON np_support_team_members(team_id);
+CREATE INDEX idx_support_team_members_user ON np_support_team_members(user_id);
+CREATE INDEX idx_support_team_members_active ON np_support_team_members(is_active) WHERE is_active = true;
+CREATE INDEX idx_support_team_members_available ON np_support_team_members(is_available) WHERE is_available = true;
 ```
 
 **Roles:** `agent`, `lead`, `supervisor`, `manager`
 
 **Availability statuses:** `available`, `busy`, `away`, `offline`
 
-### nchat_support_tickets
+### np_support_tickets
 
 Support tickets with SLA tracking.
 
 ```sql
-CREATE TABLE nchat_support_tickets (
+CREATE TABLE np_support_tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   ticket_number VARCHAR(50) NOT NULL,
@@ -1453,12 +1453,12 @@ CREATE TABLE nchat_support_tickets (
   priority VARCHAR(50) NOT NULL DEFAULT 'medium',
   assigned_to UUID,
   assigned_at TIMESTAMPTZ,
-  team_id UUID REFERENCES nchat_support_teams(id) ON DELETE SET NULL,
+  team_id UUID REFERENCES np_support_teams(id) ON DELETE SET NULL,
   channel_id UUID,
   source VARCHAR(50) NOT NULL DEFAULT 'chat',
   category VARCHAR(100),
   tags TEXT[] DEFAULT '{}',
-  sla_policy_id UUID REFERENCES nchat_support_sla_policies(id) ON DELETE SET NULL,
+  sla_policy_id UUID REFERENCES np_support_sla_policies(id) ON DELETE SET NULL,
   first_response_due_at TIMESTAMPTZ,
   first_response_at TIMESTAMPTZ,
   resolution_due_at TIMESTAMPTZ,
@@ -1476,16 +1476,16 @@ CREATE TABLE nchat_support_tickets (
   UNIQUE(source_account_id, ticket_number)
 );
 
-CREATE INDEX idx_support_tickets_account ON nchat_support_tickets(source_account_id);
-CREATE INDEX idx_support_tickets_number ON nchat_support_tickets(ticket_number);
-CREATE INDEX idx_support_tickets_customer ON nchat_support_tickets(customer_id);
-CREATE INDEX idx_support_tickets_assigned ON nchat_support_tickets(assigned_to);
-CREATE INDEX idx_support_tickets_team ON nchat_support_tickets(team_id);
-CREATE INDEX idx_support_tickets_status ON nchat_support_tickets(status);
-CREATE INDEX idx_support_tickets_priority ON nchat_support_tickets(priority);
-CREATE INDEX idx_support_tickets_created ON nchat_support_tickets(created_at DESC);
-CREATE INDEX idx_support_tickets_tags ON nchat_support_tickets USING GIN(tags);
-CREATE INDEX idx_support_tickets_sla_breach ON nchat_support_tickets(first_response_breached, resolution_breached);
+CREATE INDEX idx_support_tickets_account ON np_support_tickets(source_account_id);
+CREATE INDEX idx_support_tickets_number ON np_support_tickets(ticket_number);
+CREATE INDEX idx_support_tickets_customer ON np_support_tickets(customer_id);
+CREATE INDEX idx_support_tickets_assigned ON np_support_tickets(assigned_to);
+CREATE INDEX idx_support_tickets_team ON np_support_tickets(team_id);
+CREATE INDEX idx_support_tickets_status ON np_support_tickets(status);
+CREATE INDEX idx_support_tickets_priority ON np_support_tickets(priority);
+CREATE INDEX idx_support_tickets_created ON np_support_tickets(created_at DESC);
+CREATE INDEX idx_support_tickets_tags ON np_support_tickets USING GIN(tags);
+CREATE INDEX idx_support_tickets_sla_breach ON np_support_tickets(first_response_breached, resolution_breached);
 ```
 
 **Statuses:** `new`, `open`, `pending`, `resolved`, `closed`, `reopened`
@@ -1494,15 +1494,15 @@ CREATE INDEX idx_support_tickets_sla_breach ON nchat_support_tickets(first_respo
 
 **Sources:** `chat`, `email`, `api`, `web_form`, `phone`
 
-### nchat_support_ticket_messages
+### np_support_ticket_messages
 
 Ticket messages and communications.
 
 ```sql
-CREATE TABLE nchat_support_ticket_messages (
+CREATE TABLE np_support_ticket_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  ticket_id UUID NOT NULL REFERENCES nchat_support_tickets(id) ON DELETE CASCADE,
+  ticket_id UUID NOT NULL REFERENCES np_support_tickets(id) ON DELETE CASCADE,
   user_id UUID,
   content TEXT NOT NULL,
   is_internal BOOLEAN NOT NULL DEFAULT false,
@@ -1514,21 +1514,21 @@ CREATE TABLE nchat_support_ticket_messages (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_ticket_messages_account ON nchat_support_ticket_messages(source_account_id);
-CREATE INDEX idx_ticket_messages_ticket ON nchat_support_ticket_messages(ticket_id);
-CREATE INDEX idx_ticket_messages_user ON nchat_support_ticket_messages(user_id);
-CREATE INDEX idx_ticket_messages_created ON nchat_support_ticket_messages(created_at DESC);
+CREATE INDEX idx_ticket_messages_account ON np_support_ticket_messages(source_account_id);
+CREATE INDEX idx_ticket_messages_ticket ON np_support_ticket_messages(ticket_id);
+CREATE INDEX idx_ticket_messages_user ON np_support_ticket_messages(user_id);
+CREATE INDEX idx_ticket_messages_created ON np_support_ticket_messages(created_at DESC);
 ```
 
-### nchat_support_ticket_events
+### np_support_ticket_events
 
 Audit trail for ticket changes.
 
 ```sql
-CREATE TABLE nchat_support_ticket_events (
+CREATE TABLE np_support_ticket_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  ticket_id UUID NOT NULL REFERENCES nchat_support_tickets(id) ON DELETE CASCADE,
+  ticket_id UUID NOT NULL REFERENCES np_support_tickets(id) ON DELETE CASCADE,
   user_id UUID,
   event_type VARCHAR(100) NOT NULL,
   field_name VARCHAR(100),
@@ -1538,20 +1538,20 @@ CREATE TABLE nchat_support_ticket_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_ticket_events_account ON nchat_support_ticket_events(source_account_id);
-CREATE INDEX idx_ticket_events_ticket ON nchat_support_ticket_events(ticket_id);
-CREATE INDEX idx_ticket_events_type ON nchat_support_ticket_events(event_type);
-CREATE INDEX idx_ticket_events_created ON nchat_support_ticket_events(created_at DESC);
+CREATE INDEX idx_ticket_events_account ON np_support_ticket_events(source_account_id);
+CREATE INDEX idx_ticket_events_ticket ON np_support_ticket_events(ticket_id);
+CREATE INDEX idx_ticket_events_type ON np_support_ticket_events(event_type);
+CREATE INDEX idx_ticket_events_created ON np_support_ticket_events(created_at DESC);
 ```
 
 **Event types:** `created`, `updated`, `assigned`, `status_changed`, `priority_changed`, `resolved`, `closed`, `reopened`
 
-### nchat_support_canned_responses
+### np_support_canned_responses
 
 Pre-written responses.
 
 ```sql
-CREATE TABLE nchat_support_canned_responses (
+CREATE TABLE np_support_canned_responses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   title VARCHAR(200) NOT NULL,
@@ -1560,7 +1560,7 @@ CREATE TABLE nchat_support_canned_responses (
   category VARCHAR(100),
   tags TEXT[] DEFAULT '{}',
   visibility VARCHAR(50) NOT NULL DEFAULT 'team',
-  team_id UUID REFERENCES nchat_support_teams(id) ON DELETE CASCADE,
+  team_id UUID REFERENCES np_support_teams(id) ON DELETE CASCADE,
   created_by UUID NOT NULL,
   attachments JSONB DEFAULT '[]'::jsonb,
   usage_count INTEGER DEFAULT 0,
@@ -1572,21 +1572,21 @@ CREATE TABLE nchat_support_canned_responses (
   UNIQUE(source_account_id, shortcut)
 );
 
-CREATE INDEX idx_canned_responses_account ON nchat_support_canned_responses(source_account_id);
-CREATE INDEX idx_canned_responses_shortcut ON nchat_support_canned_responses(shortcut);
-CREATE INDEX idx_canned_responses_category ON nchat_support_canned_responses(category);
-CREATE INDEX idx_canned_responses_team ON nchat_support_canned_responses(team_id);
-CREATE INDEX idx_canned_responses_active ON nchat_support_canned_responses(is_active) WHERE is_active = true;
+CREATE INDEX idx_canned_responses_account ON np_support_canned_responses(source_account_id);
+CREATE INDEX idx_canned_responses_shortcut ON np_support_canned_responses(shortcut);
+CREATE INDEX idx_canned_responses_category ON np_support_canned_responses(category);
+CREATE INDEX idx_canned_responses_team ON np_support_canned_responses(team_id);
+CREATE INDEX idx_canned_responses_active ON np_support_canned_responses(is_active) WHERE is_active = true;
 ```
 
 **Visibility:** `private`, `team`, `public`
 
-### nchat_support_kb_articles
+### np_support_kb_articles
 
 Knowledge base articles.
 
 ```sql
-CREATE TABLE nchat_support_kb_articles (
+CREATE TABLE np_support_kb_articles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   title VARCHAR(500) NOT NULL,
@@ -1614,20 +1614,20 @@ CREATE TABLE nchat_support_kb_articles (
   UNIQUE(source_account_id, slug)
 );
 
-CREATE INDEX idx_kb_articles_account ON nchat_support_kb_articles(source_account_id);
-CREATE INDEX idx_kb_articles_slug ON nchat_support_kb_articles(slug);
-CREATE INDEX idx_kb_articles_author ON nchat_support_kb_articles(author_id);
-CREATE INDEX idx_kb_articles_category ON nchat_support_kb_articles(category);
-CREATE INDEX idx_kb_articles_tags ON nchat_support_kb_articles USING GIN(tags);
-CREATE INDEX idx_kb_articles_published ON nchat_support_kb_articles(is_published) WHERE is_published = true;
+CREATE INDEX idx_kb_articles_account ON np_support_kb_articles(source_account_id);
+CREATE INDEX idx_kb_articles_slug ON np_support_kb_articles(slug);
+CREATE INDEX idx_kb_articles_author ON np_support_kb_articles(author_id);
+CREATE INDEX idx_kb_articles_category ON np_support_kb_articles(category);
+CREATE INDEX idx_kb_articles_tags ON np_support_kb_articles USING GIN(tags);
+CREATE INDEX idx_kb_articles_published ON np_support_kb_articles(is_published) WHERE is_published = true;
 ```
 
-### nchat_support_webhook_events
+### np_support_webhook_events
 
 Webhook events log.
 
 ```sql
-CREATE TABLE nchat_support_webhook_events (
+CREATE TABLE np_support_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128),
@@ -1638,9 +1638,9 @@ CREATE TABLE nchat_support_webhook_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_support_webhook_events_account ON nchat_support_webhook_events(source_account_id);
-CREATE INDEX idx_support_webhook_events_type ON nchat_support_webhook_events(event_type);
-CREATE INDEX idx_support_webhook_events_processed ON nchat_support_webhook_events(processed);
+CREATE INDEX idx_support_webhook_events_account ON np_support_webhook_events(source_account_id);
+CREATE INDEX idx_support_webhook_events_type ON np_support_webhook_events(event_type);
+CREATE INDEX idx_support_webhook_events_processed ON np_support_webhook_events(processed);
 ```
 
 ## Examples
@@ -1761,7 +1761,7 @@ curl "http://localhost:3709/api/support/analytics?startDate=2024-02-01&endDate=2
 **Solutions:**
 1. Verify SLA policy is active and set as default:
    ```sql
-   SELECT * FROM nchat_support_sla_policies
+   SELECT * FROM np_support_sla_policies
    WHERE is_default = true AND is_active = true;
    ```
 
@@ -1785,7 +1785,7 @@ curl "http://localhost:3709/api/support/analytics?startDate=2024-02-01&endDate=2
 
 2. Check agents are available:
    ```sql
-   SELECT * FROM nchat_support_team_members
+   SELECT * FROM np_support_team_members
    WHERE team_id = 'TEAM_ID'
    AND is_active = true
    AND is_available = true
@@ -1821,14 +1821,14 @@ curl "http://localhost:3709/api/support/analytics?startDate=2024-02-01&endDate=2
    ```sql
    SELECT query, mean_exec_time
    FROM pg_stat_statements
-   WHERE query LIKE '%nchat_support_tickets%'
+   WHERE query LIKE '%np_support_tickets%'
    ORDER BY mean_exec_time DESC;
    ```
 
 2. Ensure indexes are present:
    ```sql
    SELECT indexname FROM pg_indexes
-   WHERE tablename = 'nchat_support_tickets';
+   WHERE tablename = 'np_support_tickets';
    ```
 
 3. Consider partitioning for large ticket volumes

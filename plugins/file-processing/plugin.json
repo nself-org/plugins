@@ -17,10 +17,10 @@
     "virus-scanning"
   ],
   "tables": [
-    "file_processing_jobs",
-    "file_thumbnails",
-    "file_scans",
-    "file_metadata"
+    "np_fileproc_processing_jobs",
+    "np_fileproc_thumbnails",
+    "np_fileproc_scans",
+    "np_fileproc_metadata"
   ],
   "actions": {
     "init": "Initialize file processing service",

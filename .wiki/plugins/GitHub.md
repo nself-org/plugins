@@ -512,7 +512,7 @@ const expected = 'sha256=' + hmac('sha256', secret, rawBody);
 
 Each webhook event is:
 1. Verified for signature
-2. Stored in `github_webhook_events` table
+2. Stored in `np_github_webhook_events` table
 3. Processed by appropriate handler
 4. Used to update synced data
 
@@ -522,10 +522,10 @@ Each webhook event is:
 
 ### Tables
 
-#### github_repositories
+#### np_github_repositories
 
 ```sql
-CREATE TABLE github_repositories (
+CREATE TABLE np_github_repositories (
     id BIGINT PRIMARY KEY,
     node_id VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -553,13 +553,13 @@ CREATE TABLE github_repositories (
 );
 ```
 
-#### github_issues
+#### np_github_issues
 
 ```sql
-CREATE TABLE github_issues (
+CREATE TABLE np_github_issues (
     id BIGINT PRIMARY KEY,
     node_id VARCHAR(255) NOT NULL,
-    repo_id BIGINT REFERENCES github_repositories(id) ON DELETE CASCADE,
+    repo_id BIGINT REFERENCES np_github_repositories(id) ON DELETE CASCADE,
     number INTEGER NOT NULL,
     title TEXT NOT NULL,
     body TEXT,
@@ -581,13 +581,13 @@ CREATE TABLE github_issues (
 );
 ```
 
-#### github_pull_requests
+#### np_github_pull_requests
 
 ```sql
-CREATE TABLE github_pull_requests (
+CREATE TABLE np_github_pull_requests (
     id BIGINT PRIMARY KEY,
     node_id VARCHAR(255) NOT NULL,
-    repo_id BIGINT REFERENCES github_repositories(id) ON DELETE CASCADE,
+    repo_id BIGINT REFERENCES np_github_repositories(id) ON DELETE CASCADE,
     number INTEGER NOT NULL,
     title TEXT NOT NULL,
     body TEXT,
@@ -621,12 +621,12 @@ CREATE TABLE github_pull_requests (
 );
 ```
 
-#### github_commits
+#### np_github_commits
 
 ```sql
-CREATE TABLE github_commits (
+CREATE TABLE np_github_commits (
     sha VARCHAR(40) PRIMARY KEY,
-    repo_id BIGINT REFERENCES github_repositories(id) ON DELETE CASCADE,
+    repo_id BIGINT REFERENCES np_github_repositories(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
     author_name VARCHAR(255),
     author_email VARCHAR(255),
@@ -644,12 +644,12 @@ CREATE TABLE github_commits (
 );
 ```
 
-#### github_releases
+#### np_github_releases
 
 ```sql
-CREATE TABLE github_releases (
+CREATE TABLE np_github_releases (
     id BIGINT PRIMARY KEY,
-    repo_id BIGINT REFERENCES github_repositories(id) ON DELETE CASCADE,
+    repo_id BIGINT REFERENCES np_github_repositories(id) ON DELETE CASCADE,
     tag_name VARCHAR(255) NOT NULL,
     name VARCHAR(255),
     body TEXT,
@@ -664,12 +664,12 @@ CREATE TABLE github_releases (
 );
 ```
 
-#### github_workflow_runs
+#### np_github_workflow_runs
 
 ```sql
-CREATE TABLE github_workflow_runs (
+CREATE TABLE np_github_workflow_runs (
     id BIGINT PRIMARY KEY,
-    repo_id BIGINT REFERENCES github_repositories(id) ON DELETE CASCADE,
+    repo_id BIGINT REFERENCES np_github_repositories(id) ON DELETE CASCADE,
     name VARCHAR(255),
     workflow_id BIGINT,
     head_branch VARCHAR(255),
@@ -688,10 +688,10 @@ CREATE TABLE github_workflow_runs (
 );
 ```
 
-#### github_webhook_events
+#### np_github_webhook_events
 
 ```sql
-CREATE TABLE github_webhook_events (
+CREATE TABLE np_github_webhook_events (
     id VARCHAR(255) PRIMARY KEY,
     event_type VARCHAR(100) NOT NULL,
     action VARCHAR(100),
@@ -708,20 +708,20 @@ CREATE TABLE github_webhook_events (
 
 ### Additional Tables
 
-- `github_branches` - Branch information with protection status
-- `github_tags` - Git tags
-- `github_milestones` - Milestone tracking
-- `github_labels` - Repository labels
-- `github_workflow_jobs` - Individual workflow job details
-- `github_check_suites` - Check suite results
-- `github_check_runs` - Individual check run results
-- `github_deployments` - Deployment records
-- `github_pr_reviews` - Pull request reviews
-- `github_issue_comments` - Issue and PR comments
-- `github_pr_review_comments` - PR diff comments
-- `github_commit_comments` - Commit comments
-- `github_teams` - Organization teams
-- `github_collaborators` - Repository collaborators
+- `np_github_branches` - Branch information with protection status
+- `np_github_tags` - Git tags
+- `np_github_milestones` - Milestone tracking
+- `np_github_labels` - Repository labels
+- `np_github_workflow_jobs` - Individual workflow job details
+- `np_github_check_suites` - Check suite results
+- `np_github_check_runs` - Individual check run results
+- `np_github_deployments` - Deployment records
+- `np_github_pr_reviews` - Pull request reviews
+- `np_github_issue_comments` - Issue and PR comments
+- `np_github_pr_review_comments` - PR diff comments
+- `np_github_commit_comments` - Commit comments
+- `np_github_teams` - Organization teams
+- `np_github_collaborators` - Repository collaborators
 
 ---
 
@@ -729,10 +729,10 @@ CREATE TABLE github_webhook_events (
 
 Pre-built SQL views for common queries:
 
-### github_open_items
+### np_github_open_items
 
 ```sql
-CREATE VIEW github_open_items AS
+CREATE VIEW np_github_open_items AS
 SELECT
     r.full_name AS repository,
     'issue' AS type,
@@ -741,8 +741,8 @@ SELECT
     i.user_login AS author,
     i.created_at,
     i.updated_at
-FROM github_issues i
-JOIN github_repositories r ON i.repo_id = r.id
+FROM np_github_issues i
+JOIN np_github_repositories r ON i.repo_id = r.id
 WHERE i.state = 'open'
 UNION ALL
 SELECT
@@ -753,16 +753,16 @@ SELECT
     p.user_login,
     p.created_at,
     p.updated_at
-FROM github_pull_requests p
-JOIN github_repositories r ON p.repo_id = r.id
+FROM np_github_pull_requests p
+JOIN np_github_repositories r ON p.repo_id = r.id
 WHERE p.state = 'open'
 ORDER BY updated_at DESC;
 ```
 
-### github_recent_activity
+### np_github_recent_activity
 
 ```sql
-CREATE VIEW github_recent_activity AS
+CREATE VIEW np_github_recent_activity AS
 SELECT
     r.full_name AS repository,
     c.sha,
@@ -770,16 +770,16 @@ SELECT
     c.author_name,
     c.author_date AS activity_date,
     'commit' AS activity_type
-FROM github_commits c
-JOIN github_repositories r ON c.repo_id = r.id
+FROM np_github_commits c
+JOIN np_github_repositories r ON c.repo_id = r.id
 WHERE c.author_date > NOW() - INTERVAL '7 days'
 ORDER BY c.author_date DESC;
 ```
 
-### github_workflow_stats
+### np_github_workflow_stats
 
 ```sql
-CREATE VIEW github_workflow_stats AS
+CREATE VIEW np_github_workflow_stats AS
 SELECT
     r.full_name AS repository,
     w.name AS workflow,
@@ -793,8 +793,8 @@ SELECT
     AVG(
         EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))
     ) AS avg_duration_seconds
-FROM github_workflow_runs w
-JOIN github_repositories r ON w.repo_id = r.id
+FROM np_github_workflow_runs w
+JOIN np_github_repositories r ON w.repo_id = r.id
 WHERE w.created_at > NOW() - INTERVAL '30 days'
 GROUP BY r.full_name, w.name;
 ```
@@ -831,30 +831,30 @@ For optimal performance with large repositories:
 ```sql
 -- Create additional indexes for common query patterns
 CREATE INDEX CONCURRENTLY idx_github_issues_labels
-    ON github_issues USING GIN(labels);
+    ON np_github_issues USING GIN(labels);
 
 CREATE INDEX CONCURRENTLY idx_github_prs_merged_at
-    ON github_pull_requests(merged_at DESC) WHERE merged = TRUE;
+    ON np_github_pull_requests(merged_at DESC) WHERE merged = TRUE;
 
 CREATE INDEX CONCURRENTLY idx_github_commits_author_email
-    ON github_commits(author_email);
+    ON np_github_commits(author_email);
 
 CREATE INDEX CONCURRENTLY idx_github_workflow_runs_conclusion
-    ON github_workflow_runs(conclusion) WHERE conclusion != 'success';
+    ON np_github_workflow_runs(conclusion) WHERE conclusion != 'success';
 
 -- Partial index for open items only
 CREATE INDEX CONCURRENTLY idx_github_issues_open
-    ON github_issues(created_at DESC) WHERE state = 'open';
+    ON np_github_issues(created_at DESC) WHERE state = 'open';
 
 CREATE INDEX CONCURRENTLY idx_github_prs_open
-    ON github_pull_requests(created_at DESC) WHERE state = 'open';
+    ON np_github_pull_requests(created_at DESC) WHERE state = 'open';
 
 -- Analyze tables for query optimization
-ANALYZE github_repositories;
-ANALYZE github_issues;
-ANALYZE github_pull_requests;
-ANALYZE github_commits;
-ANALYZE github_workflow_runs;
+ANALYZE np_github_repositories;
+ANALYZE np_github_issues;
+ANALYZE np_github_pull_requests;
+ANALYZE np_github_commits;
+ANALYZE np_github_workflow_runs;
 ```
 
 ### Sync Optimization
@@ -1008,18 +1008,18 @@ iptables -A INPUT -p tcp --dport 3002 -s 140.82.112.0/20 -j ACCEPT
 **Database Permissions:**
 ```sql
 -- Create read-only user for analytics
-CREATE USER github_readonly WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE nself TO github_readonly;
-GRANT USAGE ON SCHEMA public TO github_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO github_readonly;
+CREATE USER np_github_readonly WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO np_github_readonly;
+GRANT USAGE ON SCHEMA public TO np_github_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO np_github_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT SELECT ON TABLES TO github_readonly;
+    GRANT SELECT ON TABLES TO np_github_readonly;
 
 -- Create restricted user for plugin (no DELETE)
-CREATE USER github_plugin WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE nself TO github_plugin;
-GRANT USAGE ON SCHEMA public TO github_plugin;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO github_plugin;
+CREATE USER np_github_plugin WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO np_github_plugin;
+GRANT USAGE ON SCHEMA public TO np_github_plugin;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO np_github_plugin;
 ```
 
 **API Access Logging:**
@@ -1049,7 +1049,7 @@ octokit.hook.after('request', async (response, options) => {
 
 ```sql
 -- Audit log for sensitive operations
-CREATE TABLE github_audit_log (
+CREATE TABLE np_github_audit_log (
     id SERIAL PRIMARY KEY,
     action VARCHAR(100) NOT NULL,
     user_id VARCHAR(255),
@@ -1061,24 +1061,24 @@ CREATE TABLE github_audit_log (
 );
 
 -- Log webhook processing
-INSERT INTO github_audit_log (action, resource_type, resource_id, details)
-VALUES ('webhook_received', 'pull_request', $1, $2);
+INSERT INTO np_github_audit_log (action, resource_type, resource_id, details)
+VALUES ('np_webhooks_received', 'pull_request', $1, $2);
 ```
 
 **GDPR Compliance:**
 ```sql
 -- Anonymize user data for GDPR compliance
-UPDATE github_issues
+UPDATE np_github_issues
 SET user_login = 'anonymized_user_' || id,
     assignees = '[]'::jsonb
 WHERE user_id = $1;
 
-UPDATE github_pull_requests
+UPDATE np_github_pull_requests
 SET user_login = 'anonymized_user_' || id,
     assignees = '[]'::jsonb
 WHERE user_id = $1;
 
-UPDATE github_commits
+UPDATE np_github_commits
 SET author_email = 'anonymized@example.com',
     committer_email = 'anonymized@example.com'
 WHERE author_email = $1 OR committer_email = $1;
@@ -1089,10 +1089,10 @@ WHERE author_email = $1 OR committer_email = $1;
 **Rate Limiting:**
 ```nginx
 # Nginx rate limiting for webhook endpoint
-limit_req_zone $binary_remote_addr zone=github_webhook:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=np_github_webhook:10m rate=10r/s;
 
 location /webhook {
-    limit_req zone=github_webhook burst=20;
+    limit_req zone=np_github_webhook burst=20;
     proxy_pass http://localhost:3002;
 }
 ```
@@ -1145,7 +1145,7 @@ async function calculateCICDMetrics(repoId: bigint, days: number = 30) {
       PERCENTILE_CONT(0.5) WITHIN GROUP (
         ORDER BY EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))
       )::INTEGER AS median_duration_seconds
-    FROM github_workflow_runs w
+    FROM np_github_workflow_runs w
     WHERE w.repo_id = $1
       AND w.created_at > NOW() - INTERVAL '${days} days'
       AND w.status = 'completed'
@@ -1163,7 +1163,7 @@ Analyze team contributions and velocity:
 
 ```sql
 -- Developer productivity metrics
-CREATE VIEW github_developer_metrics AS
+CREATE VIEW np_github_developer_metrics AS
 WITH developer_commits AS (
   SELECT
     c.author_name,
@@ -1174,7 +1174,7 @@ WITH developer_commits AS (
     SUM(c.deletions) AS lines_deleted,
     SUM(c.additions + c.deletions) AS lines_changed,
     COUNT(DISTINCT c.repo_id) AS repos_contributed
-  FROM github_commits c
+  FROM np_github_commits c
   WHERE c.author_date > NOW() - INTERVAL '90 days'
   GROUP BY c.author_name, c.author_email, DATE_TRUNC('week', c.author_date)
 ),
@@ -1187,7 +1187,7 @@ developer_prs AS (
     AVG(
       EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600
     ) AS avg_merge_time_hours
-  FROM github_pull_requests p
+  FROM np_github_pull_requests p
   WHERE p.created_at > NOW() - INTERVAL '90 days'
   GROUP BY p.user_login, DATE_TRUNC('week', p.created_at)
 ),
@@ -1198,7 +1198,7 @@ developer_reviews AS (
     COUNT(*) AS reviews_submitted,
     COUNT(*) FILTER (WHERE r.state = 'approved') AS reviews_approved,
     COUNT(*) FILTER (WHERE r.state = 'changes_requested') AS reviews_requested_changes
-  FROM github_pr_reviews r
+  FROM np_github_pr_reviews r
   WHERE r.submitted_at > NOW() - INTERVAL '90 days'
   GROUP BY r.user_login, DATE_TRUNC('week', r.submitted_at)
 )
@@ -1246,25 +1246,25 @@ async function analyzeCodeReviewMetrics(repoId: bigint) {
         p.changed_files,
         (
           SELECT COUNT(*)
-          FROM github_pr_reviews r
+          FROM np_github_pr_reviews r
           WHERE r.pull_request_id = p.id
         ) AS review_count,
         (
           SELECT COUNT(DISTINCT user_login)
-          FROM github_pr_reviews r
+          FROM np_github_pr_reviews r
           WHERE r.pull_request_id = p.id
         ) AS unique_reviewers,
         (
           SELECT MIN(submitted_at)
-          FROM github_pr_reviews r
+          FROM np_github_pr_reviews r
           WHERE r.pull_request_id = p.id
         ) AS first_review_at,
         (
           SELECT COUNT(*)
-          FROM github_pr_review_comments c
+          FROM np_github_pr_review_comments c
           WHERE c.pull_request_id = p.id
         ) AS review_comments
-      FROM github_pull_requests p
+      FROM np_github_pull_requests p
       WHERE p.repo_id = $1
         AND p.merged = TRUE
         AND p.merged_at > NOW() - INTERVAL '90 days'
@@ -1307,8 +1307,8 @@ async function trackDeploymentMetrics() {
         AVG(
           EXTRACT(EPOCH FROM (d.updated_at - d.created_at))
         )::INTEGER AS avg_duration_seconds
-      FROM github_deployments d
-      JOIN github_repositories r ON d.repo_id = r.id
+      FROM np_github_deployments d
+      JOIN np_github_repositories r ON d.repo_id = r.id
       WHERE d.created_at > NOW() - INTERVAL '90 days'
       GROUP BY r.full_name, d.environment, DATE_TRUNC('week', d.created_at)
     )
@@ -1338,7 +1338,7 @@ async function autoTriageIssues() {
 
   // Identify stale issues
   await db.query(`
-    UPDATE github_issues
+    UPDATE np_github_issues
     SET metadata = metadata || jsonb_build_object('triage_status', 'stale')
     WHERE state = 'open'
       AND updated_at < NOW() - INTERVAL '90 days'
@@ -1347,7 +1347,7 @@ async function autoTriageIssues() {
 
   // Identify high-priority bugs
   await db.query(`
-    UPDATE github_issues
+    UPDATE np_github_issues
     SET metadata = metadata || jsonb_build_object('priority', 'high')
     WHERE state = 'open'
       AND EXISTS (
@@ -1394,8 +1394,8 @@ async function autoTriageIssues() {
         ) THEN 'BREACHED'
         ELSE 'OK'
       END AS sla_status
-    FROM github_issues i
-    JOIN github_repositories r ON i.repo_id = r.id
+    FROM np_github_issues i
+    JOIN np_github_repositories r ON i.repo_id = r.id
     WHERE i.state = 'open'
     ORDER BY days_open DESC
   `);
@@ -1419,20 +1419,20 @@ async function generateReleaseNotes(
   const notes = await db.query(`
     WITH release_commits AS (
       SELECT c.*
-      FROM github_commits c
+      FROM np_github_commits c
       WHERE c.repo_id = $1
         AND c.author_date >= (
-          SELECT created_at FROM github_releases
+          SELECT created_at FROM np_github_releases
           WHERE repo_id = $1 AND tag_name = $2
         )
         AND c.author_date <= (
-          SELECT created_at FROM github_releases
+          SELECT created_at FROM np_github_releases
           WHERE repo_id = $1 AND tag_name = $3
         )
     ),
     release_prs AS (
       SELECT DISTINCT p.*
-      FROM github_pull_requests p
+      FROM np_github_pull_requests p
       JOIN release_commits c ON p.merge_commit_sha = c.sha
       WHERE p.repo_id = $1
         AND p.merged = TRUE
@@ -1516,7 +1516,7 @@ async function generateReleaseNotes(
 */5 * * * * curl -s http://localhost:3002/health | jq -e '.status == "ok"' || alert-team
 
 # Monitor webhook processing
-*/10 * * * * psql $DATABASE_URL -c "SELECT COUNT(*) FROM github_webhook_events WHERE processed = FALSE AND received_at < NOW() - INTERVAL '1 hour'" | grep -q "^0$" || alert-team
+*/10 * * * * psql $DATABASE_URL -c "SELECT COUNT(*) FROM np_github_webhook_events WHERE processed = FALSE AND received_at < NOW() - INTERVAL '1 hour'" | grep -q "^0$" || alert-team
 
 # Monitor rate limit
 */15 * * * * curl -s http://localhost:3002/api/status | jq -e '.rate_limit.remaining > 1000' || alert-team
@@ -1527,7 +1527,7 @@ async function generateReleaseNotes(
 ```sql
 -- Failed webhook events
 SELECT COUNT(*) AS failed_webhooks
-FROM github_webhook_events
+FROM np_github_webhook_events
 WHERE processed = FALSE
   AND received_at > NOW() - INTERVAL '24 hours';
 
@@ -1536,23 +1536,23 @@ SELECT
   'repositories' AS resource,
   MAX(synced_at) AS last_sync,
   NOW() - MAX(synced_at) AS lag
-FROM github_repositories
+FROM np_github_repositories
 UNION ALL
 SELECT
   'issues' AS resource,
   MAX(synced_at) AS last_sync,
   NOW() - MAX(synced_at) AS lag
-FROM github_issues
+FROM np_github_issues
 UNION ALL
 SELECT
   'pull_requests' AS resource,
   MAX(synced_at) AS last_sync,
   NOW() - MAX(synced_at) AS lag
-FROM github_pull_requests;
+FROM np_github_pull_requests;
 
 -- Failed workflow runs (last 24h)
 SELECT COUNT(*) AS failed_workflows
-FROM github_workflow_runs
+FROM np_github_workflow_runs
 WHERE conclusion = 'failure'
   AND created_at > NOW() - INTERVAL '24 hours';
 
@@ -1565,7 +1565,7 @@ SELECT
     ELSE '90+ days'
   END AS age_bucket,
   COUNT(*) AS count
-FROM github_issues
+FROM np_github_issues
 WHERE state = 'open'
 GROUP BY age_bucket
 ORDER BY age_bucket;
@@ -1574,7 +1574,7 @@ ORDER BY age_bucket;
 WITH pr_merge_times AS (
   SELECT
     EXTRACT(EPOCH FROM (merged_at - created_at)) / 3600 AS hours_to_merge
-  FROM github_pull_requests
+  FROM np_github_pull_requests
   WHERE merged = TRUE
     AND merged_at > NOW() - INTERVAL '30 days'
 )
@@ -1599,14 +1599,14 @@ const registry = new Registry();
 
 // Define metrics
 const webhookCounter = new Counter({
-  name: 'github_webhooks_total',
+  name: 'np_github_webhooks_total',
   help: 'Total GitHub webhooks received',
   labelNames: ['event_type', 'status'],
   registers: [registry]
 });
 
 const syncDuration = new Histogram({
-  name: 'github_sync_duration_seconds',
+  name: 'np_github_sync_duration_seconds',
   help: 'GitHub sync duration',
   labelNames: ['resource'],
   buckets: [1, 5, 10, 30, 60, 120, 300, 600],
@@ -1614,25 +1614,25 @@ const syncDuration = new Histogram({
 });
 
 const rateLimitGauge = new Gauge({
-  name: 'github_rate_limit_remaining',
+  name: 'np_github_rate_limit_remaining',
   help: 'GitHub API rate limit remaining',
   registers: [registry]
 });
 
 const openIssuesGauge = new Gauge({
-  name: 'github_open_issues_total',
+  name: 'np_github_open_issues_total',
   help: 'Total open issues across all repositories',
   registers: [registry]
 });
 
 const openPRsGauge = new Gauge({
-  name: 'github_open_prs_total',
+  name: 'np_github_open_prs_total',
   help: 'Total open pull requests across all repositories',
   registers: [registry]
 });
 
 const workflowFailuresCounter = new Counter({
-  name: 'github_workflow_failures_total',
+  name: 'np_github_workflow_failures_total',
   help: 'Total failed workflow runs',
   labelNames: ['repository', 'workflow'],
   registers: [registry]
@@ -1648,14 +1648,14 @@ async function updateMetrics() {
 
   // Update open issues
   const { rows: issueCount } = await db.query(
-    'SELECT COUNT(*) FROM github_issues WHERE state = $1',
+    'SELECT COUNT(*) FROM np_github_issues WHERE state = $1',
     ['open']
   );
   openIssuesGauge.set(parseInt(issueCount[0].count));
 
   // Update open PRs
   const { rows: prCount } = await db.query(
-    'SELECT COUNT(*) FROM github_pull_requests WHERE state = $1',
+    'SELECT COUNT(*) FROM np_github_pull_requests WHERE state = $1',
     ['open']
   );
   openPRsGauge.set(parseInt(prCount[0].count));
@@ -1675,23 +1675,23 @@ Example queries for Grafana:
 
 ```promql
 # Webhook processing rate
-rate(github_webhooks_total[5m])
+rate(np_github_webhooks_total[5m])
 
 # Failed webhooks percentage
-sum(rate(github_webhooks_total{status="failed"}[5m])) /
-sum(rate(github_webhooks_total[5m])) * 100
+sum(rate(np_github_webhooks_total{status="failed"}[5m])) /
+sum(rate(np_github_webhooks_total[5m])) * 100
 
 # Average sync duration by resource
-avg(github_sync_duration_seconds) by (resource)
+avg(np_github_sync_duration_seconds) by (resource)
 
 # Rate limit usage
-100 - (github_rate_limit_remaining / 5000 * 100)
+100 - (np_github_rate_limit_remaining / 5000 * 100)
 
 # Open issues trend
-github_open_issues_total
+np_github_open_issues_total
 
 # Workflow failure rate
-rate(github_workflow_failures_total[1h])
+rate(np_github_workflow_failures_total[1h])
 ```
 
 ### Alerting Rules
@@ -1699,11 +1699,11 @@ rate(github_workflow_failures_total[1h])
 ```yaml
 # Prometheus alerting rules
 groups:
-  - name: github_plugin
+  - name: np_github_plugin
     interval: 1m
     rules:
       - alert: GitHubRateLimitLow
-        expr: github_rate_limit_remaining < 500
+        expr: np_github_rate_limit_remaining < 500
         for: 5m
         labels:
           severity: warning
@@ -1712,7 +1712,7 @@ groups:
           description: "Only {{ $value }} requests remaining"
 
       - alert: GitHubSyncStale
-        expr: time() - max(github_sync_last_timestamp) > 3600
+        expr: time() - max(np_github_sync_last_timestamp) > 3600
         for: 10m
         labels:
           severity: warning
@@ -1721,7 +1721,7 @@ groups:
           description: "Last sync was {{ $value }}s ago"
 
       - alert: GitHubWebhookFailures
-        expr: rate(github_webhooks_total{status="failed"}[15m]) > 0.1
+        expr: rate(np_github_webhooks_total{status="failed"}[15m]) > 0.1
         for: 5m
         labels:
           severity: critical
@@ -1730,7 +1730,7 @@ groups:
           description: "{{ $value }} webhooks failing per second"
 
       - alert: GitHubWorkflowFailures
-        expr: increase(github_workflow_failures_total[1h]) > 10
+        expr: increase(np_github_workflow_failures_total[1h]) > 10
         for: 5m
         labels:
           severity: warning
@@ -1755,7 +1755,7 @@ SELECT
     COUNT(*) AS commits,
     SUM(additions) AS lines_added,
     SUM(deletions) AS lines_deleted
-FROM github_commits
+FROM np_github_commits
 WHERE author_date > NOW() - INTERVAL '3 months'
 GROUP BY author_name, week
 ORDER BY week DESC, commits DESC;
@@ -1767,8 +1767,8 @@ SELECT
     PERCENTILE_CONT(0.5) WITHIN GROUP (
       ORDER BY EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600
     ) AS median_hours_to_merge
-FROM github_pull_requests p
-JOIN github_repositories r ON p.repo_id = r.id
+FROM np_github_pull_requests p
+JOIN np_github_repositories r ON p.repo_id = r.id
 WHERE p.merged = TRUE
   AND p.merged_at > NOW() - INTERVAL '30 days'
 GROUP BY r.full_name;
@@ -1791,8 +1791,8 @@ SELECT
       SELECT SUM((asset->>'download_count')::INTEGER)
       FROM jsonb_array_elements(rel.assets) AS asset
     ) AS total_downloads
-FROM github_releases rel
-JOIN github_repositories r ON rel.repo_id = r.id
+FROM np_github_releases rel
+JOIN np_github_repositories r ON rel.repo_id = r.id
 ORDER BY rel.published_at DESC
 LIMIT 20;
 
@@ -1806,8 +1806,8 @@ SELECT
       COUNT(*)::NUMERIC /
       NULLIF(EXTRACT(DAYS FROM NOW() - MIN(rel.published_at)), 0) * 30, 2
     ) AS avg_releases_per_month
-FROM github_releases rel
-JOIN github_repositories r ON rel.repo_id = r.id
+FROM np_github_releases rel
+JOIN np_github_repositories r ON rel.repo_id = r.id
 WHERE rel.published_at > NOW() - INTERVAL '1 year'
 GROUP BY r.full_name
 ORDER BY avg_releases_per_month DESC;
@@ -1829,11 +1829,11 @@ SELECT
     w.created_at,
     (
       SELECT COUNT(*)
-      FROM github_workflow_jobs j
+      FROM np_github_workflow_jobs j
       WHERE j.run_id = w.id AND j.conclusion = 'failure'
     ) AS failed_jobs
-FROM github_workflow_runs w
-JOIN github_repositories r ON w.repo_id = r.id
+FROM np_github_workflow_runs w
+JOIN np_github_repositories r ON w.repo_id = r.id
 WHERE w.conclusion = 'failure'
   AND w.created_at > NOW() - INTERVAL '24 hours'
 ORDER BY w.created_at DESC;
@@ -1849,8 +1849,8 @@ SELECT
       COUNT(*) FILTER (WHERE w.conclusion = 'success')::NUMERIC /
       NULLIF(COUNT(*), 0) * 100, 2
     ) AS success_rate
-FROM github_workflow_runs w
-JOIN github_repositories r ON w.repo_id = r.id
+FROM np_github_workflow_runs w
+JOIN np_github_repositories r ON w.repo_id = r.id
 WHERE w.created_at > NOW() - INTERVAL '30 days'
   AND w.status = 'completed'
 GROUP BY r.full_name, w.name, DATE_TRUNC('day', w.created_at)
@@ -1868,7 +1868,7 @@ SELECT
     COUNT(*) AS count,
     ROUND(AVG(EXTRACT(DAYS FROM NOW() - i.created_at)), 1) AS avg_age_days,
     COUNT(*) FILTER (WHERE i.created_at > NOW() - INTERVAL '7 days') AS new_this_week
-FROM github_issues i,
+FROM np_github_issues i,
      LATERAL jsonb_array_elements(i.labels) AS label
 WHERE i.state = 'open'
 GROUP BY label->>'name'
@@ -1882,7 +1882,7 @@ SELECT
     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (
       ORDER BY EXTRACT(EPOCH FROM (i.closed_at - i.created_at)) / 3600
     ), 2) AS median_hours_to_close
-FROM github_issues i,
+FROM np_github_issues i,
      LATERAL jsonb_array_elements(i.labels) AS label
 WHERE i.state = 'closed'
   AND i.closed_at > NOW() - INTERVAL '90 days'
@@ -1910,12 +1910,12 @@ SELECT
       SELECT AVG(comment_count)::INTEGER
       FROM (
         SELECT COUNT(*) AS comment_count
-        FROM github_pr_review_comments c
+        FROM np_github_pr_review_comments c
         WHERE c.user_login = r.user_login
         GROUP BY c.pull_request_id
       ) AS comment_counts
     ) AS avg_comments_per_pr
-FROM github_pr_reviews r
+FROM np_github_pr_reviews r
 WHERE r.submitted_at > NOW() - INTERVAL '90 days'
 GROUP BY r.user_login
 HAVING COUNT(DISTINCT r.pull_request_id) >= 10
@@ -1927,7 +1927,7 @@ ORDER BY prs_reviewed DESC;
 Calculate repository health metrics:
 
 ```sql
-CREATE VIEW github_repository_health AS
+CREATE VIEW np_github_repository_health AS
 WITH repo_metrics AS (
   SELECT
     r.id,
@@ -1939,19 +1939,19 @@ WITH repo_metrics AS (
     -- Recent activity
     (
       SELECT COUNT(*)
-      FROM github_commits c
+      FROM np_github_commits c
       WHERE c.repo_id = r.id
         AND c.author_date > NOW() - INTERVAL '30 days'
     ) AS commits_last_30d,
     (
       SELECT COUNT(*)
-      FROM github_pull_requests p
+      FROM np_github_pull_requests p
       WHERE p.repo_id = r.id
         AND p.created_at > NOW() - INTERVAL '30 days'
     ) AS prs_last_30d,
     (
       SELECT COUNT(*)
-      FROM github_issues i
+      FROM np_github_issues i
       WHERE i.repo_id = r.id
         AND i.state = 'open'
         AND i.created_at < NOW() - INTERVAL '90 days'
@@ -1961,14 +1961,14 @@ WITH repo_metrics AS (
       SELECT
         COUNT(*) FILTER (WHERE merged = TRUE)::NUMERIC /
         NULLIF(COUNT(*), 0)
-      FROM github_pull_requests p
+      FROM np_github_pull_requests p
       WHERE p.repo_id = r.id
         AND p.created_at > NOW() - INTERVAL '90 days'
     ) AS pr_merge_rate,
     -- Average PR review time
     (
       SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at)) / 3600)
-      FROM github_pull_requests p
+      FROM np_github_pull_requests p
       WHERE p.repo_id = r.id
         AND p.merged = TRUE
         AND p.merged_at > NOW() - INTERVAL '90 days'
@@ -1978,11 +1978,11 @@ WITH repo_metrics AS (
       SELECT
         COUNT(*) FILTER (WHERE conclusion = 'success')::NUMERIC /
         NULLIF(COUNT(*), 0)
-      FROM github_workflow_runs w
+      FROM np_github_workflow_runs w
       WHERE w.repo_id = r.id
         AND w.created_at > NOW() - INTERVAL '30 days'
     ) AS ci_success_rate
-  FROM github_repositories r
+  FROM np_github_repositories r
 )
 SELECT
   *,
@@ -2010,7 +2010,7 @@ SELECT
     EXTRACT(DOW FROM author_date) AS day_of_week,
     EXTRACT(HOUR FROM author_date) AS hour,
     COUNT(*) AS commits
-FROM github_commits
+FROM np_github_commits
 WHERE author_date > NOW() - INTERVAL '90 days'
 GROUP BY author_name, day_of_week, hour
 ORDER BY author_name, day_of_week, hour;
@@ -2022,7 +2022,7 @@ SELECT
     MIN(c.author_date) AS first_commit,
     COUNT(*) AS total_commits,
     COUNT(DISTINCT c.repo_id) AS repos_contributed
-FROM github_commits c
+FROM np_github_commits c
 WHERE c.author_date > NOW() - INTERVAL '90 days'
 GROUP BY c.author_name, c.author_email
 HAVING MIN(c.author_date) > NOW() - INTERVAL '30 days'
@@ -2040,7 +2040,7 @@ WITH weekly_completed AS (
     DATE_TRUNC('week', closed_at) AS week,
     COUNT(*) AS issues_completed,
     AVG(EXTRACT(DAYS FROM (closed_at - created_at))) AS avg_days_to_close
-  FROM github_issues
+  FROM np_github_issues
   WHERE state = 'closed'
     AND closed_at > NOW() - INTERVAL '90 days'
   GROUP BY DATE_TRUNC('week', closed_at)
@@ -2075,13 +2075,13 @@ SELECT
   COALESCE(i.created_at, p.created_at) AS created_at,
   COALESCE(i.closed_at, p.merged_at) AS resolved_at,
   EXTRACT(DAYS FROM NOW() - COALESCE(i.created_at, p.created_at)) AS days_open
-FROM github_repositories r
-LEFT JOIN github_issues i ON r.id = i.repo_id
+FROM np_github_repositories r
+LEFT JOIN np_github_issues i ON r.id = i.repo_id
   AND EXISTS (
     SELECT 1 FROM jsonb_array_elements(i.labels) AS l
     WHERE l->>'name' IN ('security', 'vulnerability', 'cve')
   )
-LEFT JOIN github_pull_requests p ON r.id = p.repo_id
+LEFT JOIN np_github_pull_requests p ON r.id = p.repo_id
   AND EXISTS (
     SELECT 1 FROM jsonb_array_elements(p.labels) AS l
     WHERE l->>'name' IN ('security', 'vulnerability', 'cve')
@@ -2105,8 +2105,8 @@ SELECT
   AVG(
     EXTRACT(EPOCH FROM (p.merged_at - p.created_at)) / 3600
   )::INTEGER AS avg_hours_to_merge
-FROM github_pull_requests p
-JOIN github_repositories r ON p.repo_id = r.id
+FROM np_github_pull_requests p
+JOIN np_github_repositories r ON p.repo_id = r.id
 WHERE p.user_login IN ('dependabot[bot]', 'renovate[bot]')
   AND p.created_at > NOW() - INTERVAL '6 months'
 GROUP BY r.full_name, DATE_TRUNC('month', p.created_at)
@@ -2125,8 +2125,8 @@ SELECT
     array_agg(DISTINCT r.full_name ORDER BY r.full_name) AS repositories,
     COUNT(*) AS total_commits,
     SUM(c.additions + c.deletions) AS total_lines_changed
-FROM github_commits c
-JOIN github_repositories r ON c.repo_id = r.id
+FROM np_github_commits c
+JOIN np_github_repositories r ON c.repo_id = r.id
 WHERE c.author_date > NOW() - INTERVAL '30 days'
 GROUP BY c.author_name
 HAVING COUNT(DISTINCT c.repo_id) > 1
@@ -2143,7 +2143,7 @@ WITH doc_changes AS (
   SELECT
     repo_id,
     COUNT(*) AS doc_commits
-  FROM github_commits c,
+  FROM np_github_commits c,
        LATERAL jsonb_array_elements(c.files) AS file
   WHERE file->>'filename' ~* '\.(md|rst|txt|adoc)$'
     AND c.author_date > NOW() - INTERVAL '90 days'
@@ -2153,7 +2153,7 @@ code_changes AS (
   SELECT
     repo_id,
     COUNT(*) AS code_commits
-  FROM github_commits c,
+  FROM np_github_commits c,
        LATERAL jsonb_array_elements(c.files) AS file
   WHERE file->>'filename' ~* '\.(ts|js|py|go|java|rb|php)$'
     AND c.author_date > NOW() - INTERVAL '90 days'
@@ -2167,7 +2167,7 @@ SELECT
     COALESCE(dc.doc_commits, 0)::NUMERIC /
     NULLIF(cc.code_commits, 0) * 100, 2
   ) AS doc_coverage_pct
-FROM github_repositories r
+FROM np_github_repositories r
 LEFT JOIN doc_changes dc ON r.id = dc.repo_id
 LEFT JOIN code_changes cc ON r.id = cc.repo_id
 WHERE cc.code_commits > 0

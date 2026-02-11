@@ -209,7 +209,7 @@ nself plugin link .
 nself plugin compliance init
 
 # Verify tables were created
-psql $DATABASE_URL -c "\dt compliance_*"
+psql $DATABASE_URL -c "\dt np_compliance_*"
 psql $DATABASE_URL -c "\dt audit_*"
 ```
 
@@ -308,7 +308,7 @@ AUDIT_SIEM_DATADOG_SITE=datadoghq.com
 
 ```bash
 # Database
-DATABASE_URL=postgresql://compliance:secure_password@localhost:5432/compliance_db
+DATABASE_URL=postgresql://compliance:secure_password@localhost:5432/np_compliance_db
 
 # Server
 COMPLIANCE_PLUGIN_PORT=3706
@@ -365,7 +365,7 @@ The plugin supports multi-application isolation using the `source_account_id` co
 COMPLIANCE_APP_IDS=app1,app2,app3
 
 # All records will be tagged with source_account_id
-# Query per app: SELECT * FROM compliance_dsars WHERE source_account_id = 'app1'
+# Query per app: SELECT * FROM np_compliance_dsars WHERE source_account_id = 'app1'
 ```
 
 ---
@@ -376,7 +376,7 @@ The plugin creates **15 tables** for comprehensive compliance and audit tracking
 
 ### Compliance Tables (12 tables)
 
-#### 1. compliance_dsars
+#### 1. np_compliance_dsars
 
 Data Subject Access Requests with 30-day deadline tracking.
 
@@ -407,14 +407,14 @@ Data Subject Access Requests with 30-day deadline tracking.
 - `idx_compliance_dsars_deadline` on `deadline`
 - `idx_compliance_dsars_account` on `source_account_id`
 
-#### 2. compliance_dsar_activities
+#### 2. np_compliance_dsar_activities
 
 Activity timeline for each DSAR (audit trail of processing steps).
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | VARCHAR(255) | Primary key (generated UUID) |
-| `dsar_id` | VARCHAR(255) | Foreign key to compliance_dsars |
+| `dsar_id` | VARCHAR(255) | Foreign key to np_compliance_dsars |
 | `source_account_id` | VARCHAR(255) | Application identifier |
 | `activity_type` | VARCHAR(50) | created, assigned, status_changed, note_added, completed |
 | `description` | TEXT | Activity description |
@@ -428,7 +428,7 @@ Activity timeline for each DSAR (audit trail of processing steps).
 - `idx_compliance_dsar_activities_dsar` on `dsar_id`
 - `idx_compliance_dsar_activities_created` on `created_at`
 
-#### 3. compliance_consents
+#### 3. np_compliance_consents
 
 User consent records for various processing purposes.
 
@@ -459,14 +459,14 @@ User consent records for various processing purposes.
 - `idx_compliance_consents_purpose` on `purpose`
 - `idx_compliance_consents_account` on `source_account_id`
 
-#### 4. compliance_consent_history
+#### 4. np_compliance_consent_history
 
 Complete audit trail of all consent changes.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | VARCHAR(255) | Primary key (generated UUID) |
-| `consent_id` | VARCHAR(255) | Foreign key to compliance_consents |
+| `consent_id` | VARCHAR(255) | Foreign key to np_compliance_consents |
 | `source_account_id` | VARCHAR(255) | Application identifier |
 | `action` | VARCHAR(50) | granted, withdrawn, updated, expired |
 | `consent_given` | BOOLEAN | Consent status after action |
@@ -480,7 +480,7 @@ Complete audit trail of all consent changes.
 - `idx_compliance_consent_history_consent` on `consent_id`
 - `idx_compliance_consent_history_created` on `created_at`
 
-#### 5. compliance_privacy_policies
+#### 5. np_compliance_privacy_policies
 
 Version-controlled privacy policy documents.
 
@@ -506,14 +506,14 @@ Version-controlled privacy policy documents.
 - `idx_compliance_privacy_policies_status` on `status`
 - `idx_compliance_privacy_policies_published` on `published_at`
 
-#### 6. compliance_policy_acceptances
+#### 6. np_compliance_policy_acceptances
 
 User acceptance tracking for privacy policies.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | VARCHAR(255) | Primary key (generated UUID) |
-| `policy_id` | VARCHAR(255) | Foreign key to compliance_privacy_policies |
+| `policy_id` | VARCHAR(255) | Foreign key to np_compliance_privacy_policies |
 | `source_account_id` | VARCHAR(255) | Application identifier |
 | `user_id` | VARCHAR(255) | User identifier |
 | `user_email` | VARCHAR(255) | User email address |
@@ -529,7 +529,7 @@ User acceptance tracking for privacy policies.
 - `idx_compliance_policy_acceptances_policy` on `policy_id`
 - `idx_compliance_policy_acceptances_accepted` on `accepted_at`
 
-#### 7. compliance_retention_policies
+#### 7. np_compliance_retention_policies
 
 Data retention rules and schedules.
 
@@ -555,14 +555,14 @@ Data retention rules and schedules.
 - `idx_compliance_retention_policies_enabled` on `enabled`
 - `idx_compliance_retention_policies_next_exec` on `next_execution_at`
 
-#### 8. compliance_retention_executions
+#### 8. np_compliance_retention_executions
 
 History of retention policy executions.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | VARCHAR(255) | Primary key (generated UUID) |
-| `policy_id` | VARCHAR(255) | Foreign key to compliance_retention_policies |
+| `policy_id` | VARCHAR(255) | Foreign key to np_compliance_retention_policies |
 | `source_account_id` | VARCHAR(255) | Application identifier |
 | `status` | VARCHAR(50) | success, failed, partial |
 | `records_affected` | INTEGER | Number of records processed |
@@ -580,7 +580,7 @@ History of retention policy executions.
 - `idx_compliance_retention_executions_policy` on `policy_id`
 - `idx_compliance_retention_executions_started` on `started_at`
 
-#### 9. compliance_processing_records
+#### 9. np_compliance_processing_records
 
 Records of Processing Activities (ROPA) for GDPR Article 30.
 
@@ -607,7 +607,7 @@ Records of Processing Activities (ROPA) for GDPR Article 30.
 - `idx_compliance_processing_records_activity` on `activity_name`
 - `idx_compliance_processing_records_account` on `source_account_id`
 
-#### 10. compliance_data_processors
+#### 10. np_compliance_data_processors
 
 Third-party data processor tracking and DPA management.
 
@@ -637,7 +637,7 @@ Third-party data processor tracking and DPA management.
 - `idx_compliance_data_processors_status` on `status`
 - `idx_compliance_data_processors_dpa_expiry` on `dpa_expiry_date`
 
-#### 11. compliance_data_breaches
+#### 11. np_compliance_data_breaches
 
 Data breach tracking with 72-hour notification requirement.
 
@@ -656,8 +656,8 @@ Data breach tracking with 72-hour notification requirement.
 | `resolved_at` | TIMESTAMP | When breach was fully resolved |
 | `root_cause` | TEXT | Root cause analysis |
 | `mitigation_steps` | TEXT | Steps taken to mitigate |
-| `notification_required` | BOOLEAN | Whether notification is required |
-| `notification_deadline` | TIMESTAMP | Notification deadline (72 hours) |
+| `np_notifications_required` | BOOLEAN | Whether notification is required |
+| `np_notifications_deadline` | TIMESTAMP | Notification deadline (72 hours) |
 | `authority_notified` | BOOLEAN | Whether authority was notified |
 | `users_notified` | BOOLEAN | Whether affected users were notified |
 | `public_disclosure` | BOOLEAN | Whether public disclosure was made |
@@ -669,18 +669,18 @@ Data breach tracking with 72-hour notification requirement.
 **Indexes:**
 - `idx_compliance_data_breaches_severity` on `severity`
 - `idx_compliance_data_breaches_discovered` on `discovered_at`
-- `idx_compliance_data_breaches_deadline` on `notification_deadline`
+- `idx_compliance_data_breaches_deadline` on `np_notifications_deadline`
 
-#### 12. compliance_breach_notifications
+#### 12. np_compliance_breach_notifications
 
 Tracking of breach notifications sent to authorities and users.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | VARCHAR(255) | Primary key (generated UUID) |
-| `breach_id` | VARCHAR(255) | Foreign key to compliance_data_breaches |
+| `breach_id` | VARCHAR(255) | Foreign key to np_compliance_data_breaches |
 | `source_account_id` | VARCHAR(255) | Application identifier |
-| `notification_type` | VARCHAR(50) | authority, user, public |
+| `np_notifications_type` | VARCHAR(50) | authority, user, public |
 | `recipient` | VARCHAR(255) | Recipient name/authority |
 | `recipient_email` | VARCHAR(255) | Recipient email address |
 | `subject` | VARCHAR(255) | Notification subject line |
@@ -694,7 +694,7 @@ Tracking of breach notifications sent to authorities and users.
 - `idx_compliance_breach_notifications_breach` on `breach_id`
 - `idx_compliance_breach_notifications_sent` on `sent_at`
 
-#### 13. compliance_audit_log
+#### 13. np_compliance_audit_log
 
 Audit log for compliance operations (separate from main audit system).
 
@@ -743,7 +743,7 @@ Immutable append-only audit trail with cryptographic integrity.
 | `metadata` | JSONB | Additional event context |
 | `checksum` | VARCHAR(64) | SHA-256 checksum for integrity verification |
 | `previous_checksum` | VARCHAR(64) | Checksum of previous event (chain integrity) |
-| `compliance_frameworks` | TEXT[] | Applicable frameworks (SOC2, HIPAA, etc.) |
+| `np_compliance_frameworks` | TEXT[] | Applicable frameworks (SOC2, HIPAA, etc.) |
 | `created_at` | TIMESTAMP | Record insertion time |
 
 **Indexes:**
@@ -752,7 +752,7 @@ Immutable append-only audit trail with cryptographic integrity.
 - `idx_audit_events_actor` on `actor_id`
 - `idx_audit_events_resource` on `resource_type, resource_id`
 - `idx_audit_events_account` on `source_account_id`
-- `idx_audit_events_frameworks` on `compliance_frameworks` (GIN index)
+- `idx_audit_events_frameworks` on `np_compliance_frameworks` (GIN index)
 
 #### 15. audit_retention_policies
 
@@ -766,7 +766,7 @@ Retention policies specifically for audit logs.
 | `description` | TEXT | Policy description |
 | `retention_days` | INTEGER | How long to retain audit events |
 | `event_filters` | JSONB | Filters to match events (action, actor_type, etc.) |
-| `compliance_framework` | VARCHAR(50) | Framework this policy supports |
+| `np_compliance_framework` | VARCHAR(50) | Framework this policy supports |
 | `enabled` | BOOLEAN | Whether policy is active |
 | `last_executed_at` | TIMESTAMP | Last execution time |
 | `next_execution_at` | TIMESTAMP | Scheduled next execution |
@@ -792,8 +792,8 @@ Alert rules for compliance violations and suspicious activity.
 | `conditions` | JSONB | Rule conditions (JSON expression) |
 | `severity` | VARCHAR(50) | low, medium, high, critical |
 | `enabled` | BOOLEAN | Whether rule is active |
-| `notification_channels` | TEXT[] | email, slack, webhook, pagerduty |
-| `notification_config` | JSONB | Channel-specific configuration |
+| `np_notifications_channels` | TEXT[] | email, slack, webhook, pagerduty |
+| `np_notifications_config` | JSONB | Channel-specific configuration |
 | `last_triggered_at` | TIMESTAMP | Last time rule was triggered |
 | `trigger_count` | INTEGER | Total number of triggers |
 | `metadata` | JSONB | Additional rule data |
@@ -1612,7 +1612,7 @@ Send breach notification.
 curl -X POST http://localhost:3706/api/breaches/breach_abc123/notify \
   -H "Content-Type: application/json" \
   -d '{
-    "notification_type": "authority",
+    "np_notifications_type": "authority",
     "recipient": "data-protection@regulator.gov",
     "subject": "Data Breach Notification",
     "message": "Notification message..."
@@ -1707,7 +1707,7 @@ curl -X POST http://localhost:3706/api/alerts \
       "window": "5m"
     },
     "severity": "high",
-    "notification_channels": ["email", "webhook"],
+    "np_notifications_channels": ["email", "webhook"],
     "enabled": true
   }'
 ```
@@ -2028,7 +2028,7 @@ COMPLIANCE_CONSENT_EXPIRY_DAYS=0
 
 ### Consent Audit Trail
 
-Every consent change is logged in `compliance_consent_history`:
+Every consent change is logged in `np_compliance_consent_history`:
 
 ```sql
 SELECT
@@ -2037,8 +2037,8 @@ SELECT
   h.reason,
   h.created_at,
   c.purpose
-FROM compliance_consent_history h
-JOIN compliance_consents c ON h.consent_id = c.id
+FROM np_compliance_consent_history h
+JOIN np_compliance_consents c ON h.consent_id = c.id
 WHERE c.user_email = 'user@example.com'
 ORDER BY h.created_at DESC;
 ```
@@ -2086,10 +2086,10 @@ Track which users have accepted which policy versions:
 -- Users who haven't accepted latest policy
 SELECT DISTINCT u.id, u.email
 FROM users u
-LEFT JOIN compliance_policy_acceptances pa
+LEFT JOIN np_compliance_policy_acceptances pa
   ON u.id = pa.user_id
   AND pa.accepted_version = (
-    SELECT version FROM compliance_privacy_policies
+    SELECT version FROM np_compliance_privacy_policies
     WHERE status = 'published'
     ORDER BY published_at DESC
     LIMIT 1
@@ -2180,8 +2180,8 @@ SELECT
   e.records_anonymized,
   e.duration_seconds,
   e.status
-FROM compliance_retention_executions e
-JOIN compliance_retention_policies p ON e.policy_id = p.id
+FROM np_compliance_retention_executions e
+JOIN np_compliance_retention_policies p ON e.policy_id = p.id
 ORDER BY e.started_at DESC
 LIMIT 10;
 ```
@@ -2316,7 +2316,7 @@ nself plugin compliance verify --from-id 1000 --to-id 2000
   },
   "checksum": "a1b2c3d4...",
   "previous_checksum": "x7y8z9...",
-  "compliance_frameworks": ["SOC2", "HIPAA"]
+  "np_compliance_frameworks": ["SOC2", "HIPAA"]
 }
 ```
 
@@ -2404,7 +2404,7 @@ Events are sent as JSON with standardized fields:
   },
   "status": "success",
   "metadata": {...},
-  "compliance_frameworks": ["SOC2", "HIPAA"]
+  "np_compliance_frameworks": ["SOC2", "HIPAA"]
 }
 ```
 
@@ -2485,7 +2485,7 @@ SELECT
 FROM audit_events
 WHERE action = 'user.login'
   AND status = 'failure'
-  AND 'SOC2' = ANY(compliance_frameworks)
+  AND 'SOC2' = ANY(np_compliance_frameworks)
 GROUP BY DATE(timestamp)
 ORDER BY date DESC;
 
@@ -2498,7 +2498,7 @@ SELECT
 FROM audit_events
 WHERE resource_type = 'phi'
   AND action = 'data.read'
-  AND 'HIPAA' = ANY(compliance_frameworks)
+  AND 'HIPAA' = ANY(np_compliance_frameworks)
 GROUP BY actor_id
 ORDER BY access_count DESC;
 
@@ -2508,7 +2508,7 @@ SELECT
   COUNT(*) as total_dsars,
   SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
   ROUND(100.0 * SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / COUNT(*), 2) as completion_rate
-FROM compliance_dsars
+FROM np_compliance_dsars
 GROUP BY DATE_TRUNC('month', created_at)
 ORDER BY month DESC;
 ```
@@ -2527,7 +2527,7 @@ SELECT
   request_type,
   deadline,
   EXTRACT(DAY FROM (NOW() - deadline)) as days_overdue
-FROM compliance_dsars
+FROM np_compliance_dsars
 WHERE status IN ('pending', 'in_progress')
   AND deadline < NOW()
 ORDER BY days_overdue DESC;
@@ -2538,7 +2538,7 @@ SELECT
   AVG(EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400) as avg_days,
   MIN(EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400) as min_days,
   MAX(EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400) as max_days
-FROM compliance_dsars
+FROM np_compliance_dsars
 WHERE status = 'completed'
 GROUP BY request_type;
 
@@ -2547,7 +2547,7 @@ SELECT
   DATE_TRUNC('month', created_at) as month,
   request_type,
   COUNT(*) as count
-FROM compliance_dsars
+FROM np_compliance_dsars
 GROUP BY DATE_TRUNC('month', created_at), request_type
 ORDER BY month DESC, request_type;
 ```
@@ -2561,7 +2561,7 @@ SELECT
   consent_method,
   created_at as granted_at,
   expires_at
-FROM compliance_consents
+FROM np_compliance_consents
 WHERE purpose = 'marketing'
   AND consent_given = true
   AND (expires_at IS NULL OR expires_at > NOW())
@@ -2574,7 +2574,7 @@ SELECT
   COUNT(*) as total_consents,
   SUM(CASE WHEN withdrawn_at IS NOT NULL THEN 1 ELSE 0 END) as withdrawn,
   ROUND(100.0 * SUM(CASE WHEN withdrawn_at IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 2) as withdrawal_rate
-FROM compliance_consents
+FROM np_compliance_consents
 GROUP BY purpose
 ORDER BY withdrawal_rate DESC;
 
@@ -2584,7 +2584,7 @@ SELECT
   purpose,
   expires_at,
   EXTRACT(DAY FROM (expires_at - NOW())) as days_until_expiry
-FROM compliance_consents
+FROM np_compliance_consents
 WHERE consent_given = true
   AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '30 days'
 ORDER BY expires_at;
@@ -2597,12 +2597,12 @@ ORDER BY expires_at;
 SELECT u.id, u.email, pp.version as latest_version
 FROM users u
 CROSS JOIN (
-  SELECT version FROM compliance_privacy_policies
+  SELECT version FROM np_compliance_privacy_policies
   WHERE status = 'published'
   ORDER BY published_at DESC
   LIMIT 1
 ) pp
-LEFT JOIN compliance_policy_acceptances pa
+LEFT JOIN np_compliance_policy_acceptances pa
   ON u.id = pa.user_id
   AND pa.accepted_version = pp.version
 WHERE pa.id IS NULL;
@@ -2613,8 +2613,8 @@ SELECT
   COUNT(DISTINCT pa.user_id) as users_accepted,
   (SELECT COUNT(*) FROM users) as total_users,
   ROUND(100.0 * COUNT(DISTINCT pa.user_id) / (SELECT COUNT(*) FROM users), 2) as acceptance_rate
-FROM compliance_privacy_policies p
-LEFT JOIN compliance_policy_acceptances pa ON p.id = pa.policy_id
+FROM np_compliance_privacy_policies p
+LEFT JOIN np_compliance_policy_acceptances pa ON p.id = pa.policy_id
 WHERE p.status = 'published'
 GROUP BY p.version
 ORDER BY p.published_at DESC;
@@ -2630,8 +2630,8 @@ SELECT
   e.records_deleted + e.records_anonymized as total_affected,
   e.duration_seconds,
   e.status
-FROM compliance_retention_executions e
-JOIN compliance_retention_policies p ON e.policy_id = p.id
+FROM np_compliance_retention_executions e
+JOIN np_compliance_retention_policies p ON e.policy_id = p.id
 WHERE e.started_at > NOW() - INTERVAL '30 days'
 ORDER BY e.started_at DESC;
 
@@ -2653,17 +2653,17 @@ SELECT
   title,
   severity,
   discovered_at,
-  notification_deadline,
+  np_notifications_deadline,
   authority_notified,
   CASE
     WHEN authority_notified AND
-         (SELECT MIN(sent_at) FROM compliance_breach_notifications
-          WHERE breach_id = b.id AND notification_type = 'authority') < notification_deadline
+         (SELECT MIN(sent_at) FROM np_compliance_breach_notifications
+          WHERE breach_id = b.id AND np_notifications_type = 'authority') < np_notifications_deadline
     THEN 'Compliant'
     ELSE 'Non-Compliant'
-  END as compliance_status
-FROM compliance_data_breaches b
-WHERE notification_required = true;
+  END as np_compliance_status
+FROM np_compliance_data_breaches b
+WHERE np_notifications_required = true;
 
 -- Breach impact summary
 SELECT
@@ -2671,7 +2671,7 @@ SELECT
   COUNT(*) as breach_count,
   SUM(affected_users) as total_users_affected,
   SUM(affected_records) as total_records_affected
-FROM compliance_data_breaches
+FROM np_compliance_data_breaches
 GROUP BY severity
 ORDER BY
   CASE severity
@@ -2722,7 +2722,7 @@ ORDER BY hour;
 
 -- Compliance framework coverage
 SELECT
-  UNNEST(compliance_frameworks) as framework,
+  UNNEST(np_compliance_frameworks) as framework,
   COUNT(*) as event_count
 FROM audit_events
 WHERE timestamp > NOW() - INTERVAL '30 days'
@@ -2757,7 +2757,7 @@ pg_isready
 **Solution:**
 ```sql
 -- Update existing DSARs with deadline
-UPDATE compliance_dsars
+UPDATE np_compliance_dsars
 SET deadline = created_at + INTERVAL '30 days'
 WHERE deadline IS NULL;
 ```
@@ -2773,7 +2773,7 @@ echo $COMPLIANCE_CONSENT_EXPIRY_DAYS
 
 # Manually expire old consents
 psql $DATABASE_URL <<SQL
-UPDATE compliance_consents
+UPDATE np_compliance_consents
 SET consent_given = false
 WHERE expires_at < NOW()
   AND consent_given = true;

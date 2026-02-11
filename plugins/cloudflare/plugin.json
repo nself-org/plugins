@@ -17,12 +17,12 @@
     "analytics"
   ],
   "tables": [
-    "cf_zones",
-    "cf_dns_records",
-    "cf_r2_buckets",
-    "cf_cache_purge_log",
-    "cf_analytics",
-    "cf_webhook_events"
+    "np_cf_zones",
+    "np_cf_dns_records",
+    "np_cf_r2_buckets",
+    "np_cf_cache_purge_log",
+    "np_cf_analytics",
+    "np_cf_webhook_events"
   ],
   "webhooks": {
     "cf.zone.synced": "Zone data synced from Cloudflare",

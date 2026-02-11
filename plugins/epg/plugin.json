@@ -18,12 +18,12 @@
     "iptv"
   ],
   "tables": [
-    "epg_channels",
-    "epg_programs",
-    "epg_schedules",
-    "epg_channel_groups",
-    "epg_channel_group_members",
-    "epg_webhook_events"
+    "np_epg_channels",
+    "np_epg_programs",
+    "np_epg_schedules",
+    "np_epg_channel_groups",
+    "np_epg_channel_group_members",
+    "np_epg_webhook_events"
   ],
   "webhooks": {},
   "actions": {

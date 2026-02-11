@@ -842,9 +842,9 @@ Triggered when a tag is removed.
 
 ## Database Schema
 
-### `cms_content_types`
+### `np_cms_content_types`
 ```sql
-CREATE TABLE cms_content_types (
+CREATE TABLE np_cms_content_types (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(64) NOT NULL,
@@ -860,9 +860,9 @@ CREATE TABLE cms_content_types (
 );
 ```
 
-### `cms_posts`
+### `np_cms_posts`
 ```sql
-CREATE TABLE cms_posts (
+CREATE TABLE np_cms_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   content_type VARCHAR(64) NOT NULL DEFAULT 'post',
@@ -899,12 +899,12 @@ CREATE TABLE cms_posts (
 );
 ```
 
-### `cms_post_versions`
+### `np_cms_post_versions`
 ```sql
-CREATE TABLE cms_post_versions (
+CREATE TABLE np_cms_post_versions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  post_id UUID NOT NULL REFERENCES cms_posts(id) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES np_cms_posts(id) ON DELETE CASCADE,
   version INTEGER NOT NULL,
   title VARCHAR(500),
   body TEXT,
@@ -916,15 +916,15 @@ CREATE TABLE cms_post_versions (
 );
 ```
 
-### `cms_categories`
+### `np_cms_categories`
 ```sql
-CREATE TABLE cms_categories (
+CREATE TABLE np_cms_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
   slug VARCHAR(255) NOT NULL,
   description TEXT,
-  parent_id UUID REFERENCES cms_categories(id) ON DELETE SET NULL,
+  parent_id UUID REFERENCES np_cms_categories(id) ON DELETE SET NULL,
   sort_order INTEGER DEFAULT 0,
   post_count INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -933,9 +933,9 @@ CREATE TABLE cms_categories (
 );
 ```
 
-### `cms_tags`
+### `np_cms_tags`
 ```sql
-CREATE TABLE cms_tags (
+CREATE TABLE np_cms_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(128) NOT NULL,
@@ -946,27 +946,27 @@ CREATE TABLE cms_tags (
 );
 ```
 
-### `cms_post_categories`
+### `np_cms_post_categories`
 ```sql
-CREATE TABLE cms_post_categories (
-  post_id UUID NOT NULL REFERENCES cms_posts(id) ON DELETE CASCADE,
-  category_id UUID NOT NULL REFERENCES cms_categories(id) ON DELETE CASCADE,
+CREATE TABLE np_cms_post_categories (
+  post_id UUID NOT NULL REFERENCES np_cms_posts(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES np_cms_categories(id) ON DELETE CASCADE,
   PRIMARY KEY(post_id, category_id)
 );
 ```
 
-### `cms_post_tags`
+### `np_cms_post_tags`
 ```sql
-CREATE TABLE cms_post_tags (
-  post_id UUID NOT NULL REFERENCES cms_posts(id) ON DELETE CASCADE,
-  tag_id UUID NOT NULL REFERENCES cms_tags(id) ON DELETE CASCADE,
+CREATE TABLE np_cms_post_tags (
+  post_id UUID NOT NULL REFERENCES np_cms_posts(id) ON DELETE CASCADE,
+  tag_id UUID NOT NULL REFERENCES np_cms_tags(id) ON DELETE CASCADE,
   PRIMARY KEY(post_id, tag_id)
 );
 ```
 
-### `cms_webhook_events`
+### `np_cms_webhook_events`
 ```sql
-CREATE TABLE cms_webhook_events (
+CREATE TABLE np_cms_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,

@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/shopify",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "ecommerce",
+  "category": "commerce",
   "tags": [
     "shopify",
     "ecommerce",
@@ -16,15 +16,15 @@
     "inventory"
   ],
   "tables": [
-    "shopify_shops",
-    "shopify_products",
-    "shopify_variants",
-    "shopify_collections",
-    "shopify_customers",
-    "shopify_orders",
-    "shopify_order_items",
-    "shopify_inventory",
-    "shopify_webhook_events"
+    "np_shopify_shops",
+    "np_shopify_products",
+    "np_shopify_variants",
+    "np_shopify_collections",
+    "np_shopify_customers",
+    "np_shopify_orders",
+    "np_shopify_order_items",
+    "np_shopify_inventory",
+    "np_shopify_webhook_events"
   ],
   "webhooks": {
     "orders/create": "New order placed",
@@ -67,11 +67,9 @@
   },
   "multiApp": {
     "supported": true,
+    "isolationColumn": "source_account_id",
     "pkStrategy": "composite",
-    "envVars": {
-      "apiKeys": "SHOPIFY_ACCESS_TOKENS",
-      "labels": "SHOPIFY_ACCOUNT_LABELS"
-    }
+    "defaultValue": "primary"
   },
   "config": {
     "apiVersion": "2024-01",

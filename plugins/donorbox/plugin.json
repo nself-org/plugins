@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/donorbox",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "donations",
+  "category": "commerce",
   "tags": [
     "donations",
     "fundraising",
@@ -16,13 +16,13 @@
     "webhooks"
   ],
   "tables": [
-    "donorbox_campaigns",
-    "donorbox_donors",
-    "donorbox_donations",
-    "donorbox_plans",
-    "donorbox_events",
-    "donorbox_tickets",
-    "donorbox_webhook_events"
+    "np_donorbox_campaigns",
+    "np_donorbox_donors",
+    "np_donorbox_donations",
+    "np_donorbox_plans",
+    "np_donorbox_events",
+    "np_donorbox_tickets",
+    "np_donorbox_webhook_events"
   ],
   "webhooks": {
     "donation.created": "Sync new donation to database"

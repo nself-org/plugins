@@ -8,17 +8,21 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "communication",
-  "tags": ["chat", "messaging", "conversations", "communication", "moderation"],
-
-  "tables": [
-    "chat_conversations",
-    "chat_participants",
-    "chat_messages",
-    "chat_read_receipts",
-    "chat_moderation_actions",
-    "chat_webhook_events"
+  "tags": [
+    "chat",
+    "messaging",
+    "conversations",
+    "communication",
+    "moderation"
   ],
-
+  "tables": [
+    "np_chat_conversations",
+    "np_chat_participants",
+    "np_chat_messages",
+    "np_chat_read_receipts",
+    "np_chat_moderation_actions",
+    "np_chat_webhook_events"
+  ],
   "webhooks": {
     "conversation.created": "New conversation created",
     "conversation.updated": "Conversation metadata updated",
@@ -35,7 +39,6 @@
     "message.reaction_removed": "Reaction removed from message",
     "moderation.action_taken": "Moderation action executed"
   },
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start HTTP server",
@@ -44,7 +47,6 @@
     "messages": "List messages in a conversation",
     "stats": "Show database statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -61,7 +63,6 @@
       "CHAT_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3401,
     "webhookPath": "/webhooks/chat",
@@ -71,23 +72,28 @@
     "maxParticipants": 100,
     "maxPinned": 50
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

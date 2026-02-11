@@ -211,7 +211,7 @@ POST /api/jobs
 Content-Type: application/json
 
 {
-  "fileId": "file_123",
+  "fileId": "np_fileproc_123",
   "filePath": "uploads/photo.jpg",
   "fileName": "photo.jpg",
   "fileSize": 1024000,
@@ -264,7 +264,7 @@ When a processing job completes, the plugin sends an HTTP POST to the configured
 {
   "event": "job.completed",
   "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "fileId": "file_123",
+  "fileId": "np_fileproc_123",
   "status": "completed",
   "thumbnails": [
     { "width": 100, "height": 100, "url": "https://storage/thumbnails/thumb_100.jpg" }
@@ -281,23 +281,23 @@ When a processing job completes, the plugin sends an HTTP POST to the configured
 
 ## Database Schema
 
-### file_processing_jobs
+### np_fileproc_processing_jobs
 
 Processing queue and job history.
 
 ```sql
-CREATE TABLE file_processing_jobs (
+CREATE TABLE np_fileproc_processing_jobs (
     id UUID PRIMARY KEY,
-    file_id VARCHAR(255) NOT NULL,
-    file_path TEXT NOT NULL,
-    file_name VARCHAR(255),
-    file_size BIGINT,
+    np_fileproc_id VARCHAR(255) NOT NULL,
+    np_fileproc_path TEXT NOT NULL,
+    np_fileproc_name VARCHAR(255),
+    np_fileproc_size BIGINT,
     mime_type VARCHAR(255),
     operations JSONB DEFAULT '[]',         -- ["thumbnail", "optimize", "metadata"]
     priority INTEGER DEFAULT 0,
     status VARCHAR(50) NOT NULL,           -- pending, processing, completed, failed
-    webhook_url TEXT,
-    webhook_secret VARCHAR(255),
+    np_webhooks_url TEXT,
+    np_webhooks_secret VARCHAR(255),
     callback_data JSONB,
     duration_ms INTEGER,
     error TEXT,
@@ -306,20 +306,20 @@ CREATE TABLE file_processing_jobs (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_file_processing_jobs_status ON file_processing_jobs(status);
-CREATE INDEX idx_file_processing_jobs_file ON file_processing_jobs(file_id);
-CREATE INDEX idx_file_processing_jobs_created ON file_processing_jobs(created_at DESC);
+CREATE INDEX idx_file_processing_jobs_status ON np_fileproc_processing_jobs(status);
+CREATE INDEX idx_file_processing_jobs_file ON np_fileproc_processing_jobs(np_fileproc_id);
+CREATE INDEX idx_file_processing_jobs_created ON np_fileproc_processing_jobs(created_at DESC);
 ```
 
-### file_thumbnails
+### np_fileproc_thumbnails
 
 Generated thumbnail metadata and URLs.
 
 ```sql
-CREATE TABLE file_thumbnails (
+CREATE TABLE np_fileproc_thumbnails (
     id UUID PRIMARY KEY,
-    job_id UUID REFERENCES file_processing_jobs(id),
-    file_id VARCHAR(255) NOT NULL,
+    job_id UUID REFERENCES np_fileproc_processing_jobs(id),
+    np_fileproc_id VARCHAR(255) NOT NULL,
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     format VARCHAR(50),                    -- jpeg, png, webp
@@ -329,38 +329,38 @@ CREATE TABLE file_thumbnails (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_file_thumbnails_job ON file_thumbnails(job_id);
-CREATE INDEX idx_file_thumbnails_file ON file_thumbnails(file_id);
+CREATE INDEX idx_file_thumbnails_job ON np_fileproc_thumbnails(job_id);
+CREATE INDEX idx_file_thumbnails_file ON np_fileproc_thumbnails(np_fileproc_id);
 ```
 
-### file_scans
+### np_fileproc_scans
 
 Virus scan results.
 
 ```sql
-CREATE TABLE file_scans (
+CREATE TABLE np_fileproc_scans (
     id UUID PRIMARY KEY,
-    job_id UUID REFERENCES file_processing_jobs(id),
-    file_id VARCHAR(255) NOT NULL,
+    job_id UUID REFERENCES np_fileproc_processing_jobs(id),
+    np_fileproc_id VARCHAR(255) NOT NULL,
     clean BOOLEAN NOT NULL,
     threats JSONB DEFAULT '[]',
     scanner VARCHAR(50),                   -- clamav
     scanned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_file_scans_file ON file_scans(file_id);
-CREATE INDEX idx_file_scans_clean ON file_scans(clean);
+CREATE INDEX idx_file_scans_file ON np_fileproc_scans(np_fileproc_id);
+CREATE INDEX idx_file_scans_clean ON np_fileproc_scans(clean);
 ```
 
-### file_metadata
+### np_fileproc_metadata
 
 Extracted EXIF and file metadata.
 
 ```sql
-CREATE TABLE file_metadata (
+CREATE TABLE np_fileproc_metadata (
     id UUID PRIMARY KEY,
-    job_id UUID REFERENCES file_processing_jobs(id),
-    file_id VARCHAR(255) NOT NULL,
+    job_id UUID REFERENCES np_fileproc_processing_jobs(id),
+    np_fileproc_id VARCHAR(255) NOT NULL,
     width INTEGER,
     height INTEGER,
     format VARCHAR(50),
@@ -374,63 +374,63 @@ CREATE TABLE file_metadata (
     extracted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_file_metadata_file ON file_metadata(file_id);
+CREATE INDEX idx_file_metadata_file ON np_fileproc_metadata(np_fileproc_id);
 ```
 
 ---
 
 ## Analytics Views
 
-### file_processing_queue
+### np_fileproc_processing_queue
 
 Pending jobs ordered by priority.
 
 ```sql
-CREATE VIEW file_processing_queue AS
-SELECT id, file_id, file_name, priority, operations, created_at
-FROM file_processing_jobs
+CREATE VIEW np_fileproc_processing_queue AS
+SELECT id, np_fileproc_id, np_fileproc_name, priority, operations, created_at
+FROM np_fileproc_processing_jobs
 WHERE status = 'pending'
 ORDER BY priority DESC, created_at ASC;
 ```
 
-### file_processing_failures
+### np_fileproc_processing_failures
 
 Failed jobs requiring attention.
 
 ```sql
-CREATE VIEW file_processing_failures AS
-SELECT id, file_id, file_name, error, created_at, completed_at
-FROM file_processing_jobs
+CREATE VIEW np_fileproc_processing_failures AS
+SELECT id, np_fileproc_id, np_fileproc_name, error, created_at, completed_at
+FROM np_fileproc_processing_jobs
 WHERE status = 'failed'
 ORDER BY completed_at DESC;
 ```
 
-### file_security_alerts
+### np_fileproc_security_alerts
 
 Infected files detected by virus scanning.
 
 ```sql
-CREATE VIEW file_security_alerts AS
-SELECT s.file_id, s.threats, s.scanned_at, j.file_name, j.file_path
-FROM file_scans s
-JOIN file_processing_jobs j ON s.job_id = j.id
+CREATE VIEW np_fileproc_security_alerts AS
+SELECT s.np_fileproc_id, s.threats, s.scanned_at, j.np_fileproc_name, j.np_fileproc_path
+FROM np_fileproc_scans s
+JOIN np_fileproc_processing_jobs j ON s.job_id = j.id
 WHERE s.clean = FALSE
 ORDER BY s.scanned_at DESC;
 ```
 
-### file_processing_stats
+### np_fileproc_processing_stats
 
 Processing statistics aggregated by status.
 
 ```sql
-CREATE VIEW file_processing_stats AS
+CREATE VIEW np_fileproc_processing_stats AS
 SELECT
     status,
     COUNT(*) AS job_count,
     AVG(duration_ms) AS avg_duration_ms,
     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 GROUP BY status;
 ```
 
@@ -446,7 +446,7 @@ SELECT
     format,
     COUNT(*) AS count,
     AVG(size) AS avg_size
-FROM file_thumbnails
+FROM np_fileproc_thumbnails
 GROUP BY width, height, format
 ORDER BY count DESC;
 ```
@@ -1073,7 +1073,7 @@ async function quarantineFile(fileId: string, threats: string[]): Promise<void> 
 
   // Log security incident
   await db.execute(
-    `INSERT INTO security_incidents (file_id, threat_type, action, created_at)
+    `INSERT INTO security_incidents (np_fileproc_id, threat_type, action, created_at)
      VALUES ($1, $2, 'quarantined', NOW())`,
     [fileId, JSON.stringify(threats)]
   );
@@ -1791,35 +1791,35 @@ async function batchProcessFiles(
 
 ```sql
 -- Real-time queue depth by status
-CREATE VIEW file_queue_depth AS
+CREATE VIEW np_fileproc_queue_depth AS
 SELECT
     status,
     COUNT(*) AS count,
     MIN(created_at) AS oldest_job,
     MAX(created_at) AS newest_job,
     EXTRACT(EPOCH FROM (NOW() - MIN(created_at))) AS oldest_age_seconds
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 WHERE status IN ('pending', 'processing')
 GROUP BY status;
 
 -- Queue wait times (percentiles)
-CREATE VIEW file_queue_wait_times AS
+CREATE VIEW np_fileproc_queue_wait_times AS
 SELECT
     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (started_at - created_at))) AS p50_wait_seconds,
     PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (started_at - created_at))) AS p95_wait_seconds,
     PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (started_at - created_at))) AS p99_wait_seconds
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 WHERE started_at IS NOT NULL
   AND created_at > NOW() - INTERVAL '24 hours';
 
 -- Processing throughput (jobs per hour)
-CREATE VIEW file_processing_throughput AS
+CREATE VIEW np_fileproc_processing_throughput AS
 SELECT
     DATE_TRUNC('hour', completed_at) AS hour,
-    COUNT(*) AS jobs_completed,
+    COUNT(*) AS np_jobs_completed,
     AVG(duration_ms) AS avg_duration_ms,
-    SUM(file_size) AS total_bytes_processed
-FROM file_processing_jobs
+    SUM(np_fileproc_size) AS total_bytes_processed
+FROM np_fileproc_processing_jobs
 WHERE status = 'completed'
   AND completed_at > NOW() - INTERVAL '7 days'
 GROUP BY DATE_TRUNC('hour', completed_at)
@@ -1832,9 +1832,9 @@ ORDER BY hour DESC;
 // Monitor queue health
 async function checkQueueHealth(): Promise<QueueHealth> {
   const [depth, waitTimes, throughput] = await Promise.all([
-    db.query('SELECT * FROM file_queue_depth'),
-    db.query('SELECT * FROM file_queue_wait_times'),
-    db.query('SELECT * FROM file_processing_throughput WHERE hour > NOW() - INTERVAL \'1 hour\'')
+    db.query('SELECT * FROM np_fileproc_queue_depth'),
+    db.query('SELECT * FROM np_fileproc_queue_wait_times'),
+    db.query('SELECT * FROM np_fileproc_processing_throughput WHERE hour > NOW() - INTERVAL \'1 hour\'')
   ]);
 
   const pendingCount = depth.rows.find(r => r.status === 'pending')?.count || 0;
@@ -1855,7 +1855,7 @@ async function checkQueueHealth(): Promise<QueueHealth> {
       processingCount,
       oldestJobAgeSeconds: oldestAge,
       p95WaitSeconds: waitTimes.rows[0]?.p95_wait_seconds || 0,
-      throughputLastHour: throughput.rows[0]?.jobs_completed || 0
+      throughputLastHour: throughput.rows[0]?.np_jobs_completed || 0
     },
     alerts: [
       ...(pendingCount > 1000 ? ['Queue backlog: pending jobs exceeds 1000'] : []),
@@ -1889,14 +1889,14 @@ setInterval(monitorQueue, 60000);
 
 ```sql
 -- Storage usage by file type
-CREATE VIEW file_storage_by_type AS
+CREATE VIEW np_fileproc_storage_by_type AS
 SELECT
     mime_type,
-    COUNT(*) AS file_count,
-    SUM(file_size) AS total_bytes,
-    ROUND(SUM(file_size) / 1024.0 / 1024.0 / 1024.0, 2) AS total_gb,
-    AVG(file_size) AS avg_file_size
-FROM file_processing_jobs
+    COUNT(*) AS np_fileproc_count,
+    SUM(np_fileproc_size) AS total_bytes,
+    ROUND(SUM(np_fileproc_size) / 1024.0 / 1024.0 / 1024.0, 2) AS total_gb,
+    AVG(np_fileproc_size) AS avg_file_size
+FROM np_fileproc_processing_jobs
 WHERE status = 'completed'
 GROUP BY mime_type
 ORDER BY total_bytes DESC;
@@ -1910,7 +1910,7 @@ SELECT
     COUNT(*) AS thumbnail_count,
     SUM(size) AS total_bytes,
     ROUND(SUM(size) / 1024.0 / 1024.0, 2) AS total_mb
-FROM file_thumbnails
+FROM np_fileproc_thumbnails
 GROUP BY width, height, format
 ORDER BY total_bytes DESC;
 
@@ -1918,10 +1918,10 @@ ORDER BY total_bytes DESC;
 CREATE VIEW storage_growth_daily AS
 SELECT
     DATE(created_at) AS date,
-    SUM(file_size) AS original_bytes,
-    SUM((SELECT SUM(size) FROM file_thumbnails t WHERE t.job_id = j.id)) AS thumbnail_bytes,
-    SUM(file_size) + COALESCE(SUM((SELECT SUM(size) FROM file_thumbnails t WHERE t.job_id = j.id)), 0) AS total_bytes
-FROM file_processing_jobs j
+    SUM(np_fileproc_size) AS original_bytes,
+    SUM((SELECT SUM(size) FROM np_fileproc_thumbnails t WHERE t.job_id = j.id)) AS thumbnail_bytes,
+    SUM(np_fileproc_size) + COALESCE(SUM((SELECT SUM(size) FROM np_fileproc_thumbnails t WHERE t.job_id = j.id)), 0) AS total_bytes
+FROM np_fileproc_processing_jobs j
 WHERE status = 'completed'
 GROUP BY DATE(created_at)
 ORDER BY date DESC;
@@ -1950,9 +1950,9 @@ async function checkStorageUsage(): Promise<StorageAlert[]> {
   // Check total storage
   const { rows: [usage] } = await db.query(`
     SELECT
-      SUM(file_size) AS total_bytes,
-      COUNT(*) AS file_count
-    FROM file_processing_jobs
+      SUM(np_fileproc_size) AS total_bytes,
+      COUNT(*) AS np_fileproc_count
+    FROM np_fileproc_processing_jobs
     WHERE status = 'completed'
   `);
 
@@ -1989,8 +1989,8 @@ async function cleanupOldFiles(retentionDays: number = 90): Promise<CleanupResul
 
   // Find old completed jobs
   const { rows: oldJobs } = await db.query(
-    `SELECT id, file_id, file_path
-     FROM file_processing_jobs
+    `SELECT id, np_fileproc_id, np_fileproc_path
+     FROM np_fileproc_processing_jobs
      WHERE completed_at < $1 AND status = 'completed'`,
     [cutoffDate]
   );
@@ -2003,12 +2003,12 @@ async function cleanupOldFiles(retentionDays: number = 90): Promise<CleanupResul
       // Delete from storage
       await storage.deleteObject({
         bucket: process.env.FILE_STORAGE_BUCKET!,
-        key: job.file_path
+        key: job.np_fileproc_path
       });
 
       // Delete thumbnails
       const { rows: thumbnails } = await db.query(
-        'SELECT storage_path FROM file_thumbnails WHERE job_id = $1',
+        'SELECT storage_path FROM np_fileproc_thumbnails WHERE job_id = $1',
         [job.id]
       );
 
@@ -2020,7 +2020,7 @@ async function cleanupOldFiles(retentionDays: number = 90): Promise<CleanupResul
       }
 
       // Delete database records
-      await db.execute('DELETE FROM file_processing_jobs WHERE id = $1', [job.id]);
+      await db.execute('DELETE FROM np_fileproc_processing_jobs WHERE id = $1', [job.id]);
 
       deletedFiles++;
     } catch (error) {
@@ -2046,10 +2046,10 @@ CREATE VIEW failure_analysis AS
 SELECT
     SUBSTRING(error FROM 1 FOR 100) AS error_type,
     COUNT(*) AS occurrence_count,
-    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM file_processing_jobs WHERE status = 'failed'), 2) AS percentage,
+    ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM np_fileproc_processing_jobs WHERE status = 'failed'), 2) AS percentage,
     MIN(created_at) AS first_seen,
     MAX(created_at) AS last_seen
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 WHERE status = 'failed'
   AND created_at > NOW() - INTERVAL '7 days'
 GROUP BY SUBSTRING(error FROM 1 FOR 100)
@@ -2062,17 +2062,17 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'completed') AS successful,
     COUNT(*) FILTER (WHERE status = 'failed') AS failed,
     ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / COUNT(*), 2) AS success_rate
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 WHERE completed_at > NOW() - INTERVAL '24 hours'
 GROUP BY DATE_TRUNC('hour', completed_at)
 ORDER BY hour DESC;
 
 -- Jobs requiring retry
-CREATE VIEW jobs_needing_retry AS
+CREATE VIEW np_jobs_needing_retry AS
 SELECT
     id,
-    file_id,
-    file_name,
+    np_fileproc_id,
+    np_fileproc_name,
     error,
     created_at,
     CASE
@@ -2082,7 +2082,7 @@ SELECT
         WHEN error LIKE '%rate limit%' THEN 'retry_delayed'
         ELSE 'manual_review'
     END AS retry_recommendation
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 WHERE status = 'failed'
   AND created_at > NOW() - INTERVAL '24 hours'
 ORDER BY created_at DESC;
@@ -2098,7 +2098,7 @@ async function checkFailureRate(): Promise<FailureAlert | null> {
       COUNT(*) FILTER (WHERE status = 'completed') AS successful,
       COUNT(*) FILTER (WHERE status = 'failed') AS failed,
       ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'failed') / COUNT(*), 2) AS failure_rate
-    FROM file_processing_jobs
+    FROM np_fileproc_processing_jobs
     WHERE completed_at > NOW() - INTERVAL '1 hour'
   `);
 
@@ -2128,8 +2128,8 @@ async function checkFailureRate(): Promise<FailureAlert | null> {
 // Automated retry for transient failures
 async function retryFailedJobs(): Promise<RetryResult> {
   const { rows: retryableJobs } = await db.query(`
-    SELECT id, file_id, file_path, file_name, mime_type, operations
-    FROM jobs_needing_retry
+    SELECT id, np_fileproc_id, np_fileproc_path, np_fileproc_name, mime_type, operations
+    FROM np_jobs_needing_retry
     WHERE retry_recommendation = 'retry'
     LIMIT 100
   `);
@@ -2141,9 +2141,9 @@ async function retryFailedJobs(): Promise<RetryResult> {
     try {
       // Create new job with same parameters
       await createJob({
-        fileId: job.file_id,
-        filePath: job.file_path,
-        fileName: job.file_name,
+        fileId: job.np_fileproc_id,
+        filePath: job.np_fileproc_path,
+        fileName: job.np_fileproc_name,
         mimeType: job.mime_type,
         operations: job.operations,
         priority: 7 // Higher priority for retries
@@ -2151,7 +2151,7 @@ async function retryFailedJobs(): Promise<RetryResult> {
 
       // Mark original as retried
       await db.execute(
-        `UPDATE file_processing_jobs
+        `UPDATE np_fileproc_processing_jobs
          SET error = error || ' [RETRIED]'
          WHERE id = $1`,
         [job.id]
@@ -2183,7 +2183,7 @@ FROM (
     SELECT
         unnest(operations::text[]) AS operation,
         duration_ms
-    FROM file_processing_jobs
+    FROM np_fileproc_processing_jobs
     WHERE status = 'completed'
       AND completed_at > NOW() - INTERVAL '24 hours'
 ) subquery
@@ -2194,7 +2194,7 @@ SELECT
     DATE_TRUNC('minute', started_at) AS minute,
     COUNT(*) AS concurrent_jobs,
     MAX(COUNT(*)) OVER () AS max_concurrent
-FROM file_processing_jobs
+FROM np_fileproc_processing_jobs
 WHERE status = 'processing'
   AND started_at > NOW() - INTERVAL '1 hour'
 GROUP BY DATE_TRUNC('minute', started_at)
@@ -2409,7 +2409,7 @@ async function processSocialMediaPost(postId: string, mediaPath: string, platfor
   }
 
   return await createJob({
-    fileId: `social_${postId}`,
+    fileId: `np_social_${postId}`,
     filePath: mediaPath,
     operations,
     priority: 9,
@@ -2669,7 +2669,7 @@ Error: Connection refused
 **Solutions:**
 1. Verify PostgreSQL is running
 2. Test connection: `psql $DATABASE_URL -c "SELECT 1"`
-3. Check schema exists: `psql $DATABASE_URL -c "\dt file_*"`
+3. Check schema exists: `psql $DATABASE_URL -c "\dt np_fileproc_*"`
 
 ### Debug Mode
 

@@ -8,20 +8,26 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "automation",
-  "tags": ["workflows", "automation", "triggers", "actions", "scheduling", "webhooks", "orchestration"],
-
-  "tables": [
-    "workflows_workflows",
-    "workflows_executions",
-    "workflows_execution_steps",
-    "workflows_triggers",
-    "workflows_actions",
-    "workflows_templates",
-    "workflows_variables",
-    "workflows_webhook_logs",
-    "workflows_approvals"
+  "tags": [
+    "workflows",
+    "automation",
+    "triggers",
+    "actions",
+    "scheduling",
+    "webhooks",
+    "orchestration"
   ],
-
+  "tables": [
+    "np_workflows_workflows",
+    "np_workflows_executions",
+    "np_workflows_execution_steps",
+    "np_workflows_triggers",
+    "np_workflows_actions",
+    "np_workflows_templates",
+    "np_workflows_variables",
+    "np_workflows_webhook_logs",
+    "np_workflows_approvals"
+  ],
   "webhooks": {
     "workflow.created": "A workflow was created",
     "workflow.published": "A workflow was published",
@@ -34,7 +40,6 @@
     "approval.responded": "An approval was approved or rejected",
     "trigger.fired": "A trigger was fired"
   },
-
   "actions": {
     "init": "Initialize workflows system",
     "server": "Start workflows server",
@@ -45,7 +50,6 @@
     "templates": "Manage templates",
     "variables": "Manage variables"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -57,7 +61,6 @@
       "WORKFLOWS_WORKER_POOL_SIZE"
     ]
   },
-
   "config": {
     "port": 3712,
     "webhookPath": "/webhooks/workflows",
@@ -68,23 +71,30 @@
     "scheduleCheckInterval": 60,
     "maxWebhooksPerWorkflow": 5
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

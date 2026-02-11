@@ -43,11 +43,11 @@ The Search plugin provides comprehensive full-text search capabilities for your 
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Search Indexes | Index configurations and metadata | `search_indexes` |
-| Search Documents | Indexed documents with search vectors | `search_documents` |
-| Search Synonyms | Word synonyms for query expansion | `search_synonyms` |
-| Search Queries | Query analytics and history | `search_queries` |
-| Webhook Events | Inbound webhook event log | `search_webhook_events` |
+| Search Indexes | Index configurations and metadata | `np_search_indexes` |
+| Search Documents | Indexed documents with search vectors | `np_search_documents` |
+| Search Synonyms | Word synonyms for query expansion | `np_search_synonyms` |
+| Search Queries | Query analytics and history | `np_search_queries` |
+| Webhook Events | Inbound webhook event log | `np_search_webhook_events` |
 
 ---
 
@@ -810,12 +810,12 @@ The plugin emits webhook events for search operations:
 
 ## Database Schema
 
-### search_indexes
+### np_search_indexes
 
 Stores search index configurations.
 
 ```sql
-CREATE TABLE search_indexes (
+CREATE TABLE np_search_indexes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -836,9 +836,9 @@ CREATE TABLE search_indexes (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_search_indexes_account ON search_indexes(source_account_id);
-CREATE INDEX idx_search_indexes_name ON search_indexes(name);
-CREATE INDEX idx_search_indexes_enabled ON search_indexes(enabled);
+CREATE INDEX idx_search_indexes_account ON np_search_indexes(source_account_id);
+CREATE INDEX idx_search_indexes_name ON np_search_indexes(name);
+CREATE INDEX idx_search_indexes_enabled ON np_search_indexes(enabled);
 ```
 
 **Columns:**
@@ -863,27 +863,27 @@ CREATE INDEX idx_search_indexes_enabled ON search_indexes(enabled);
 | `created_at` | TIMESTAMP | No | NOW() | Index creation time |
 | `updated_at` | TIMESTAMP | No | NOW() | Last update time |
 
-### search_documents
+### np_search_documents
 
 Stores indexed documents with search vectors.
 
 ```sql
-CREATE TABLE search_documents (
+CREATE TABLE np_search_documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   index_name VARCHAR(255) NOT NULL,
   source_id VARCHAR(255) NOT NULL,
   content JSONB NOT NULL,
-  search_vector tsvector,
+  np_search_vector tsvector,
   indexed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(source_account_id, index_name, source_id)
 );
 
-CREATE INDEX idx_search_documents_account ON search_documents(source_account_id);
-CREATE INDEX idx_search_documents_index ON search_documents(index_name);
-CREATE INDEX idx_search_documents_source_id ON search_documents(source_id);
-CREATE INDEX idx_search_documents_vector ON search_documents USING GIN(search_vector);
-CREATE INDEX idx_search_documents_content ON search_documents USING GIN(content);
+CREATE INDEX idx_search_documents_account ON np_search_documents(source_account_id);
+CREATE INDEX idx_search_documents_index ON np_search_documents(index_name);
+CREATE INDEX idx_search_documents_source_id ON np_search_documents(source_id);
+CREATE INDEX idx_search_documents_vector ON np_search_documents USING GIN(np_search_vector);
+CREATE INDEX idx_search_documents_content ON np_search_documents USING GIN(content);
 ```
 
 **Columns:**
@@ -895,15 +895,15 @@ CREATE INDEX idx_search_documents_content ON search_documents USING GIN(content)
 | `index_name` | VARCHAR(255) | No | - | Associated index name |
 | `source_id` | VARCHAR(255) | No | - | Original document ID |
 | `content` | JSONB | No | - | Document data |
-| `search_vector` | tsvector | Yes | NULL | PostgreSQL FTS vector |
+| `np_search_vector` | tsvector | Yes | NULL | PostgreSQL FTS vector |
 | `indexed_at` | TIMESTAMP | No | NOW() | Document indexing time |
 
-### search_synonyms
+### np_search_synonyms
 
 Stores word synonyms for query expansion.
 
 ```sql
-CREATE TABLE search_synonyms (
+CREATE TABLE np_search_synonyms (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   index_name VARCHAR(255) NOT NULL,
@@ -913,9 +913,9 @@ CREATE TABLE search_synonyms (
   UNIQUE(source_account_id, index_name, word)
 );
 
-CREATE INDEX idx_search_synonyms_account ON search_synonyms(source_account_id);
-CREATE INDEX idx_search_synonyms_index ON search_synonyms(index_name);
-CREATE INDEX idx_search_synonyms_word ON search_synonyms(word);
+CREATE INDEX idx_search_synonyms_account ON np_search_synonyms(source_account_id);
+CREATE INDEX idx_search_synonyms_index ON np_search_synonyms(index_name);
+CREATE INDEX idx_search_synonyms_word ON np_search_synonyms(word);
 ```
 
 **Columns:**
@@ -929,12 +929,12 @@ CREATE INDEX idx_search_synonyms_word ON search_synonyms(word);
 | `synonyms` | TEXT[] | No | - | Array of synonyms |
 | `created_at` | TIMESTAMP | No | NOW() | Creation time |
 
-### search_queries
+### np_search_queries
 
 Stores search query analytics.
 
 ```sql
-CREATE TABLE search_queries (
+CREATE TABLE np_search_queries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   index_name VARCHAR(255),
@@ -947,10 +947,10 @@ CREATE TABLE search_queries (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_search_queries_account ON search_queries(source_account_id);
-CREATE INDEX idx_search_queries_index ON search_queries(index_name);
-CREATE INDEX idx_search_queries_text ON search_queries USING GIN(to_tsvector('english', query_text));
-CREATE INDEX idx_search_queries_created ON search_queries(created_at);
+CREATE INDEX idx_search_queries_account ON np_search_queries(source_account_id);
+CREATE INDEX idx_search_queries_index ON np_search_queries(index_name);
+CREATE INDEX idx_search_queries_text ON np_search_queries USING GIN(to_tsvector('english', query_text));
+CREATE INDEX idx_search_queries_created ON np_search_queries(created_at);
 ```
 
 **Columns:**
@@ -968,12 +968,12 @@ CREATE INDEX idx_search_queries_created ON search_queries(created_at);
 | `clicked_result_id` | VARCHAR(255) | Yes | NULL | Clicked result (for CTR tracking) |
 | `created_at` | TIMESTAMP | No | NOW() | Query time |
 
-### search_webhook_events
+### np_search_webhook_events
 
 Stores inbound webhook events.
 
 ```sql
-CREATE TABLE search_webhook_events (
+CREATE TABLE np_search_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128),
@@ -984,10 +984,10 @@ CREATE TABLE search_webhook_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_search_webhook_events_account ON search_webhook_events(source_account_id);
-CREATE INDEX idx_search_webhook_events_type ON search_webhook_events(event_type);
-CREATE INDEX idx_search_webhook_events_processed ON search_webhook_events(processed);
-CREATE INDEX idx_search_webhook_events_created ON search_webhook_events(created_at);
+CREATE INDEX idx_search_webhook_events_account ON np_search_webhook_events(source_account_id);
+CREATE INDEX idx_search_webhook_events_type ON np_search_webhook_events(event_type);
+CREATE INDEX idx_search_webhook_events_processed ON np_search_webhook_events(processed);
+CREATE INDEX idx_search_webhook_events_created ON np_search_webhook_events(created_at);
 ```
 
 **Columns:**
@@ -1126,10 +1126,10 @@ curl -X POST http://localhost:3302/v1/search \
 
 ```sql
 -- Search across multiple indexes
-SELECT * FROM search_documents
+SELECT * FROM np_search_documents
 WHERE index_name IN ('products', 'articles', 'support')
-  AND search_vector @@ websearch_to_tsquery('english', 'laptop repair')
-ORDER BY ts_rank_cd(search_vector, websearch_to_tsquery('english', 'laptop repair')) DESC
+  AND np_search_vector @@ websearch_to_tsquery('english', 'laptop repair')
+ORDER BY ts_rank_cd(np_search_vector, websearch_to_tsquery('english', 'laptop repair')) DESC
 LIMIT 20;
 ```
 
@@ -1161,13 +1161,13 @@ curl -X POST http://localhost:3302/v1/search \
 ```sql
 SELECT
   query_text,
-  COUNT(*) as search_count,
+  COUNT(*) as np_search_count,
   AVG(result_count) as avg_results,
   AVG(took_ms) as avg_time_ms
-FROM search_queries
+FROM np_search_queries
 WHERE created_at > NOW() - INTERVAL '7 days'
 GROUP BY query_text
-ORDER BY search_count DESC
+ORDER BY np_search_count DESC
 LIMIT 20;
 ```
 
@@ -1178,7 +1178,7 @@ SELECT
   query_text,
   COUNT(*) as attempts,
   MAX(created_at) as last_attempt
-FROM search_queries
+FROM np_search_queries
 WHERE result_count = 0
   AND created_at > NOW() - INTERVAL '30 days'
 GROUP BY query_text
@@ -1222,8 +1222,8 @@ Search returns 0 results even for known documents
 2. Verify search vector is populated:
    ```sql
    SELECT index_name, COUNT(*) as doc_count
-   FROM search_documents
-   WHERE search_vector IS NOT NULL
+   FROM np_search_documents
+   WHERE np_search_vector IS NOT NULL
    GROUP BY index_name;
    ```
 
@@ -1306,14 +1306,14 @@ For large datasets:
 ```sql
 -- Create additional indexes for common filters
 CREATE INDEX idx_search_documents_category
-  ON search_documents((content->>'category'));
+  ON np_search_documents((content->>'category'));
 
 CREATE INDEX idx_search_documents_brand
-  ON search_documents((content->>'brand'));
+  ON np_search_documents((content->>'brand'));
 
 -- Analyze tables
-ANALYZE search_documents;
-ANALYZE search_indexes;
+ANALYZE np_search_documents;
+ANALYZE np_search_indexes;
 ```
 
 ---

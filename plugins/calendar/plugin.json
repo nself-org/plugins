@@ -8,19 +8,23 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "content",
-  "tags": ["calendar", "events", "scheduling", "ical", "recurring", "rsvp"],
-
-  "tables": [
-    "calendar_calendars",
-    "calendar_events",
-    "calendar_attendees",
-    "calendar_reminders",
-    "calendar_ical_feeds",
-    "calendar_webhook_events"
+  "tags": [
+    "calendar",
+    "events",
+    "scheduling",
+    "ical",
+    "recurring",
+    "rsvp"
   ],
-
+  "tables": [
+    "np_calendar_calendars",
+    "np_calendar_events",
+    "np_calendar_attendees",
+    "np_calendar_reminders",
+    "np_calendar_ical_feeds",
+    "np_calendar_webhook_events"
+  ],
   "webhooks": {},
-
   "actions": {
     "server": "Start the calendar API server",
     "events": "Manage calendar events",
@@ -29,7 +33,6 @@
     "ical": "Manage iCalendar feeds",
     "stats": "View calendar statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -46,7 +49,6 @@
       "CALENDAR_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "defaultPort": 3505,
     "defaultTimezone": "UTC",
@@ -55,23 +57,28 @@
     "maxRecurrenceExpand": 365,
     "icalTokenLength": 64
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

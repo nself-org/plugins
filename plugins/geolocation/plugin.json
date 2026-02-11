@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/geolocation",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "data-services",
+  "category": "data",
   "tags": [
     "geolocation",
     "gps",
@@ -17,11 +17,11 @@
     "proximity"
   ],
   "tables": [
-    "geo_locations",
-    "geo_latest",
-    "geo_fences",
-    "geo_fence_events",
-    "geo_webhook_events"
+    "np_geoloc_locations",
+    "np_geoloc_latest",
+    "np_geoloc_fences",
+    "np_geoloc_fence_events",
+    "np_geoloc_webhook_events"
   ],
   "webhooks": {
     "geo.location.updated": "Location updated",

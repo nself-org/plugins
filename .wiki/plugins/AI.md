@@ -464,7 +464,7 @@ Add a message to a conversation (and get AI response).
   "message_id": "msg_xyz789",
   "response": {
     "content": "I don't have access to real-time weather data...",
-    "tokens_used": 45,
+    "np_tokens_used": 45,
     "cost": 0.00045
   }
 }
@@ -784,7 +784,7 @@ List enabled AI features.
   "features": [
     {
       "id": "feat_uuid",
-      "feature_name": "chat_assistant",
+      "feature_name": "np_chat_assistant",
       "feature_type": "chat",
       "is_enabled": true,
       "usage_count": 1234
@@ -812,7 +812,7 @@ Summarize multiple messages.
 ```json
 {
   "summary": "This is a summary of the messages...",
-  "tokens_used": 145
+  "np_tokens_used": 145
 }
 ```
 
@@ -857,11 +857,11 @@ Analyze sentiment.
 
 ## Database Schema
 
-### `ai_models`
+### `np_ai_models`
 Stores AI model configurations.
 
 ```sql
-CREATE TABLE ai_models (
+CREATE TABLE np_ai_models (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   provider VARCHAR(50) NOT NULL,
@@ -888,10 +888,10 @@ CREATE TABLE ai_models (
   UNIQUE(source_account_id, provider, model_id)
 );
 
-CREATE INDEX idx_ai_models_account ON ai_models(source_account_id);
-CREATE INDEX idx_ai_models_enabled ON ai_models(source_account_id, is_enabled, priority);
-CREATE INDEX idx_ai_models_type ON ai_models(source_account_id, model_type, is_enabled);
-CREATE INDEX idx_ai_models_default ON ai_models(source_account_id, is_default) WHERE is_default = true;
+CREATE INDEX idx_ai_models_account ON np_ai_models(source_account_id);
+CREATE INDEX idx_ai_models_enabled ON np_ai_models(source_account_id, is_enabled, priority);
+CREATE INDEX idx_ai_models_type ON np_ai_models(source_account_id, model_type, is_enabled);
+CREATE INDEX idx_ai_models_default ON np_ai_models(source_account_id, is_default) WHERE is_default = true;
 ```
 
 **Columns:**
@@ -923,17 +923,17 @@ CREATE INDEX idx_ai_models_default ON ai_models(source_account_id, is_default) W
 
 ---
 
-### `ai_conversations`
+### `np_ai_conversations`
 Stores multi-turn conversation contexts.
 
 ```sql
-CREATE TABLE ai_conversations (
+CREATE TABLE np_ai_conversations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id VARCHAR(255),
   context_type VARCHAR(50),
   context_id VARCHAR(255),
-  model_id UUID REFERENCES ai_models(id) ON DELETE SET NULL,
+  model_id UUID REFERENCES np_ai_models(id) ON DELETE SET NULL,
   system_prompt TEXT,
   temperature DECIMAL(3,2),
   max_tokens INTEGER,
@@ -948,9 +948,9 @@ CREATE TABLE ai_conversations (
   last_message_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_ai_conversations_account ON ai_conversations(source_account_id);
-CREATE INDEX idx_ai_conversations_user ON ai_conversations(source_account_id, user_id, created_at DESC);
-CREATE INDEX idx_ai_conversations_context ON ai_conversations(source_account_id, context_type, context_id);
+CREATE INDEX idx_ai_conversations_account ON np_ai_conversations(source_account_id);
+CREATE INDEX idx_ai_conversations_user ON np_ai_conversations(source_account_id, user_id, created_at DESC);
+CREATE INDEX idx_ai_conversations_context ON np_ai_conversations(source_account_id, context_type, context_id);
 ```
 
 **Columns:**
@@ -961,7 +961,7 @@ CREATE INDEX idx_ai_conversations_context ON ai_conversations(source_account_id,
 | `user_id` | VARCHAR(255) | Yes | User identifier |
 | `context_type` | VARCHAR(50) | Yes | Context type (channel, ticket, etc.) |
 | `context_id` | VARCHAR(255) | Yes | Context identifier |
-| `model_id` | UUID | Yes | Reference to ai_models |
+| `model_id` | UUID | Yes | Reference to np_ai_models |
 | `system_prompt` | TEXT | Yes | System prompt for conversation |
 | `temperature` | DECIMAL(3,2) | Yes | Conversation temperature |
 | `max_tokens` | INTEGER | Yes | Max tokens per message |
@@ -977,20 +977,20 @@ CREATE INDEX idx_ai_conversations_context ON ai_conversations(source_account_id,
 
 ---
 
-### `ai_messages`
+### `np_ai_messages`
 Stores individual messages within conversations.
 
 ```sql
-CREATE TABLE ai_messages (
+CREATE TABLE np_ai_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  conversation_id UUID NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
+  conversation_id UUID NOT NULL REFERENCES np_ai_conversations(id) ON DELETE CASCADE,
   role VARCHAR(50) NOT NULL,
   content TEXT NOT NULL,
   function_name VARCHAR(255),
   function_arguments JSONB,
   function_response JSONB,
-  tokens_used INTEGER,
+  np_tokens_used INTEGER,
   model_used VARCHAR(255),
   finish_reason VARCHAR(50),
   cost DECIMAL(10,6),
@@ -998,22 +998,22 @@ CREATE TABLE ai_messages (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_ai_messages_account ON ai_messages(source_account_id);
-CREATE INDEX idx_ai_messages_conversation ON ai_messages(conversation_id, created_at);
-CREATE INDEX idx_ai_messages_role ON ai_messages(role);
+CREATE INDEX idx_ai_messages_account ON np_ai_messages(source_account_id);
+CREATE INDEX idx_ai_messages_conversation ON np_ai_messages(conversation_id, created_at);
+CREATE INDEX idx_ai_messages_role ON np_ai_messages(role);
 ```
 
 ---
 
-### `ai_requests`
+### `np_ai_requests`
 Tracks all AI requests for monitoring and debugging.
 
 ```sql
-CREATE TABLE ai_requests (
+CREATE TABLE np_ai_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id VARCHAR(255),
-  model_id UUID REFERENCES ai_models(id) ON DELETE SET NULL,
+  model_id UUID REFERENCES np_ai_models(id) ON DELETE SET NULL,
   provider VARCHAR(50) NOT NULL,
   model_name VARCHAR(255) NOT NULL,
   request_type VARCHAR(50) NOT NULL,
@@ -1021,9 +1021,9 @@ CREATE TABLE ai_requests (
   output_data JSONB,
   status VARCHAR(20) NOT NULL DEFAULT 'pending',
   error_message TEXT,
-  tokens_input INTEGER,
-  tokens_output INTEGER,
-  tokens_total INTEGER,
+  np_tokens_input INTEGER,
+  np_tokens_output INTEGER,
+  np_tokens_total INTEGER,
   cost DECIMAL(10,6),
   started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMP WITH TIME ZONE,
@@ -1031,47 +1031,47 @@ CREATE TABLE ai_requests (
   metadata JSONB DEFAULT '{}'
 );
 
-CREATE INDEX idx_ai_requests_account ON ai_requests(source_account_id);
-CREATE INDEX idx_ai_requests_user ON ai_requests(source_account_id, user_id, started_at DESC);
-CREATE INDEX idx_ai_requests_status ON ai_requests(source_account_id, status, started_at);
-CREATE INDEX idx_ai_requests_provider ON ai_requests(source_account_id, provider, started_at DESC);
+CREATE INDEX idx_ai_requests_account ON np_ai_requests(source_account_id);
+CREATE INDEX idx_ai_requests_user ON np_ai_requests(source_account_id, user_id, started_at DESC);
+CREATE INDEX idx_ai_requests_status ON np_ai_requests(source_account_id, status, started_at);
+CREATE INDEX idx_ai_requests_provider ON np_ai_requests(source_account_id, provider, started_at DESC);
 ```
 
 ---
 
-### `ai_embeddings`
+### `np_ai_embeddings`
 Stores vector embeddings for semantic search.
 
 ```sql
-CREATE TABLE ai_embeddings (
+CREATE TABLE np_ai_embeddings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   content_type VARCHAR(50) NOT NULL,
   content_id VARCHAR(255) NOT NULL,
   content_text TEXT NOT NULL,
   content_hash VARCHAR(64),
-  model_id UUID REFERENCES ai_models(id) ON DELETE SET NULL,
+  model_id UUID REFERENCES np_ai_models(id) ON DELETE SET NULL,
   embedding_dimensions INTEGER NOT NULL DEFAULT 1536,
   embedding_data JSONB,
-  tokens_used INTEGER,
+  np_tokens_used INTEGER,
   cost DECIMAL(10,6),
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(source_account_id, content_type, content_id, model_id)
 );
 
-CREATE INDEX idx_ai_embeddings_account ON ai_embeddings(source_account_id);
-CREATE INDEX idx_ai_embeddings_content ON ai_embeddings(source_account_id, content_type, content_id);
-CREATE INDEX idx_ai_embeddings_hash ON ai_embeddings(content_hash) WHERE content_hash IS NOT NULL;
+CREATE INDEX idx_ai_embeddings_account ON np_ai_embeddings(source_account_id);
+CREATE INDEX idx_ai_embeddings_content ON np_ai_embeddings(source_account_id, content_type, content_id);
+CREATE INDEX idx_ai_embeddings_hash ON np_ai_embeddings(content_hash) WHERE content_hash IS NOT NULL;
 ```
 
 ---
 
-### `ai_prompt_templates`
+### `np_ai_prompt_templates`
 Reusable prompt templates with variable substitution.
 
 ```sql
-CREATE TABLE ai_prompt_templates (
+CREATE TABLE np_ai_prompt_templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -1080,7 +1080,7 @@ CREATE TABLE ai_prompt_templates (
   system_prompt TEXT,
   user_prompt_template TEXT NOT NULL,
   variables JSONB DEFAULT '[]',
-  recommended_model_id UUID REFERENCES ai_models(id) ON DELETE SET NULL,
+  recommended_model_id UUID REFERENCES np_ai_models(id) ON DELETE SET NULL,
   default_temperature DECIMAL(3,2) DEFAULT 0.7,
   default_max_tokens INTEGER DEFAULT 1000,
   usage_count INTEGER NOT NULL DEFAULT 0,
@@ -1092,17 +1092,17 @@ CREATE TABLE ai_prompt_templates (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_prompt_templates_account ON ai_prompt_templates(source_account_id);
-CREATE INDEX idx_prompt_templates_category ON ai_prompt_templates(source_account_id, category, is_enabled);
+CREATE INDEX idx_prompt_templates_account ON np_ai_prompt_templates(source_account_id);
+CREATE INDEX idx_prompt_templates_category ON np_ai_prompt_templates(source_account_id, category, is_enabled);
 ```
 
 ---
 
-### `ai_functions`
+### `np_ai_functions`
 Defines callable functions for AI agents.
 
 ```sql
-CREATE TABLE ai_functions (
+CREATE TABLE np_ai_functions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -1121,22 +1121,22 @@ CREATE TABLE ai_functions (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_ai_functions_account ON ai_functions(source_account_id);
-CREATE INDEX idx_ai_functions_enabled ON ai_functions(source_account_id, is_enabled);
+CREATE INDEX idx_ai_functions_account ON np_ai_functions(source_account_id);
+CREATE INDEX idx_ai_functions_enabled ON np_ai_functions(source_account_id, is_enabled);
 ```
 
 ---
 
-### `ai_function_calls`
+### `np_ai_function_calls`
 Logs all function calls made by AI models.
 
 ```sql
-CREATE TABLE ai_function_calls (
+CREATE TABLE np_ai_function_calls (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  function_id UUID NOT NULL REFERENCES ai_functions(id) ON DELETE CASCADE,
-  message_id UUID REFERENCES ai_messages(id) ON DELETE SET NULL,
-  conversation_id UUID REFERENCES ai_conversations(id) ON DELETE SET NULL,
+  function_id UUID NOT NULL REFERENCES np_ai_functions(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES np_ai_messages(id) ON DELETE SET NULL,
+  conversation_id UUID REFERENCES np_ai_conversations(id) ON DELETE SET NULL,
   user_id VARCHAR(255),
   arguments JSONB NOT NULL,
   response JSONB,
@@ -1147,23 +1147,23 @@ CREATE TABLE ai_function_calls (
   latency_ms INTEGER
 );
 
-CREATE INDEX idx_function_calls_account ON ai_function_calls(source_account_id);
-CREATE INDEX idx_function_calls_function ON ai_function_calls(function_id, started_at DESC);
-CREATE INDEX idx_function_calls_conversation ON ai_function_calls(conversation_id);
+CREATE INDEX idx_function_calls_account ON np_ai_function_calls(source_account_id);
+CREATE INDEX idx_function_calls_function ON np_ai_function_calls(function_id, started_at DESC);
+CREATE INDEX idx_function_calls_conversation ON np_ai_function_calls(conversation_id);
 ```
 
 ---
 
-### `ai_usage_quotas`
+### `np_ai_usage_quotas`
 Defines and tracks usage quotas.
 
 ```sql
-CREATE TABLE ai_usage_quotas (
+CREATE TABLE np_ai_usage_quotas (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   quota_type VARCHAR(50) NOT NULL,
   scope_id VARCHAR(255),
-  model_id UUID REFERENCES ai_models(id) ON DELETE CASCADE,
+  model_id UUID REFERENCES np_ai_models(id) ON DELETE CASCADE,
   max_requests_per_day INTEGER,
   max_tokens_per_day INTEGER,
   max_cost_per_day DECIMAL(10,2),
@@ -1176,24 +1176,24 @@ CREATE TABLE ai_usage_quotas (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_usage_quotas_account ON ai_usage_quotas(source_account_id);
-CREATE INDEX idx_usage_quotas_scope ON ai_usage_quotas(source_account_id, quota_type, scope_id);
+CREATE INDEX idx_usage_quotas_account ON np_ai_usage_quotas(source_account_id);
+CREATE INDEX idx_usage_quotas_scope ON np_ai_usage_quotas(source_account_id, quota_type, scope_id);
 ```
 
 ---
 
-### `ai_features`
+### `np_ai_features`
 Tracks enabled AI features (summarization, translation, etc.).
 
 ```sql
-CREATE TABLE ai_features (
+CREATE TABLE np_ai_features (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   feature_name VARCHAR(255) NOT NULL,
   feature_type VARCHAR(100) NOT NULL,
   description TEXT,
-  prompt_template_id UUID REFERENCES ai_prompt_templates(id) ON DELETE SET NULL,
-  default_model_id UUID REFERENCES ai_models(id) ON DELETE SET NULL,
+  prompt_template_id UUID REFERENCES np_ai_prompt_templates(id) ON DELETE SET NULL,
+  default_model_id UUID REFERENCES np_ai_models(id) ON DELETE SET NULL,
   is_enabled BOOLEAN NOT NULL DEFAULT true,
   requires_permission BOOLEAN NOT NULL DEFAULT false,
   allowed_roles TEXT[] DEFAULT ARRAY['admin', 'owner'],
@@ -1203,8 +1203,8 @@ CREATE TABLE ai_features (
   UNIQUE(source_account_id, feature_name)
 );
 
-CREATE INDEX idx_ai_features_account ON ai_features(source_account_id);
-CREATE INDEX idx_ai_features_enabled ON ai_features(source_account_id, is_enabled);
+CREATE INDEX idx_ai_features_account ON np_ai_features(source_account_id);
+CREATE INDEX idx_ai_features_enabled ON np_ai_features(source_account_id, is_enabled);
 ```
 
 ---
@@ -1254,11 +1254,11 @@ curl -X POST http://localhost:3705/api/ai/chat/completions \
 
 ```sql
 -- Create a conversation
-SELECT id FROM ai_conversations WHERE user_id = 'user_123' ORDER BY created_at DESC LIMIT 1;
+SELECT id FROM np_ai_conversations WHERE user_id = 'user_123' ORDER BY created_at DESC LIMIT 1;
 
 -- Get conversation messages
-SELECT role, content, tokens_used, created_at
-FROM ai_messages
+SELECT role, content, np_tokens_used, created_at
+FROM np_ai_messages
 WHERE source_account_id = 'primary'
   AND conversation_id = 'conv_abc123'
 ORDER BY created_at ASC;
@@ -1316,9 +1316,9 @@ POST /api/ai/embeddings/search
 SELECT
   provider,
   COUNT(*) as requests,
-  SUM(tokens_total) as total_tokens,
+  SUM(np_tokens_total) as total_tokens,
   SUM(cost) as total_cost
-FROM ai_requests
+FROM np_ai_requests
 WHERE source_account_id = 'primary'
   AND started_at >= CURRENT_DATE
 GROUP BY provider;
@@ -1327,9 +1327,9 @@ GROUP BY provider;
 SELECT
   user_id,
   COUNT(*) as requests,
-  SUM(tokens_total) as tokens,
+  SUM(np_tokens_total) as tokens,
   SUM(cost) as cost
-FROM ai_requests
+FROM np_ai_requests
 WHERE source_account_id = 'primary'
   AND started_at >= DATE_TRUNC('month', CURRENT_DATE)
 GROUP BY user_id
@@ -1402,10 +1402,10 @@ POST /api/ai/prompts/tmpl_xyz789/render
 
 ```sql
 -- Check enabled models
-SELECT * FROM ai_models WHERE source_account_id = 'primary' AND is_enabled = true;
+SELECT * FROM np_ai_models WHERE source_account_id = 'primary' AND is_enabled = true;
 
 -- Enable a model
-UPDATE ai_models SET is_enabled = true WHERE id = 'model_uuid';
+UPDATE np_ai_models SET is_enabled = true WHERE id = 'model_uuid';
 ```
 
 ---
@@ -1445,7 +1445,7 @@ curl -X POST http://localhost:3705/api/ai/quota \
 ```bash
 # Check recent failed requests
 SELECT id, provider, model_name, error_message, started_at
-FROM ai_requests
+FROM np_ai_requests
 WHERE source_account_id = 'primary'
   AND status = 'failed'
 ORDER BY started_at DESC
@@ -1466,7 +1466,7 @@ LIMIT 10;
 ```sql
 -- Find slow requests
 SELECT id, provider, model_name, latency_ms, started_at
-FROM ai_requests
+FROM np_ai_requests
 WHERE source_account_id = 'primary'
   AND latency_ms > 5000
 ORDER BY latency_ms DESC
@@ -1486,7 +1486,7 @@ LIMIT 20;
 ```sql
 -- Check embeddings
 SELECT content_type, COUNT(*) as count, model_id
-FROM ai_embeddings
+FROM np_ai_embeddings
 WHERE source_account_id = 'primary'
 GROUP BY content_type, model_id;
 ```
@@ -1503,7 +1503,7 @@ GROUP BY content_type, model_id;
 
 ```sql
 -- Check template variables
-SELECT name, variables FROM ai_prompt_templates WHERE id = 'template_id';
+SELECT name, variables FROM np_ai_prompt_templates WHERE id = 'template_id';
 ```
 
 ---

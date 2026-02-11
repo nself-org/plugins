@@ -7,29 +7,43 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/compliance",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "privacy-legal",
-  "tags": ["compliance", "gdpr", "ccpa", "hipaa", "soc2", "pci", "privacy", "dsar", "consent", "retention", "breach", "audit", "siem", "immutable", "forensics"],
-
-  "tables": [
-    "compliance_dsars",
-    "compliance_dsar_activities",
-    "compliance_consents",
-    "compliance_consent_history",
-    "compliance_privacy_policies",
-    "compliance_policy_acceptances",
-    "compliance_retention_policies",
-    "compliance_retention_executions",
-    "compliance_processing_records",
-    "compliance_data_processors",
-    "compliance_data_breaches",
-    "compliance_breach_notifications",
-    "compliance_audit_log",
-    "audit_events",
-    "audit_retention_policies",
-    "audit_alert_rules",
-    "audit_webhook_events"
+  "category": "compliance",
+  "tags": [
+    "compliance",
+    "gdpr",
+    "ccpa",
+    "hipaa",
+    "soc2",
+    "pci",
+    "privacy",
+    "dsar",
+    "consent",
+    "retention",
+    "breach",
+    "audit",
+    "siem",
+    "immutable",
+    "forensics"
   ],
-
+  "tables": [
+    "np_compliance_dsars",
+    "np_compliance_dsar_activities",
+    "np_compliance_consents",
+    "np_compliance_consent_history",
+    "np_compliance_privacy_policies",
+    "np_compliance_policy_acceptances",
+    "np_compliance_retention_policies",
+    "np_compliance_retention_executions",
+    "np_compliance_processing_records",
+    "np_compliance_data_processors",
+    "np_compliance_data_breaches",
+    "np_compliance_breach_notifications",
+    "np_compliance_audit_log",
+    "np_compliance_audit_events",
+    "np_compliance_audit_retention_policies",
+    "np_compliance_audit_alert_rules",
+    "np_compliance_audit_webhook_events"
+  ],
   "webhooks": {
     "dsar.created": "New DSAR submitted",
     "dsar.completed": "DSAR processing completed",
@@ -46,7 +60,6 @@
     "audit.retention.executed": "Audit retention policy executed",
     "audit.compliance.report_generated": "Compliance report generated"
   },
-
   "actions": {
     "init": "Initialize compliance and audit database schema",
     "server": "Start compliance and audit HTTP server",
@@ -65,7 +78,6 @@
     "verify": "Verify audit event integrity using checksums",
     "stats": "Show compliance and audit statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -106,7 +118,6 @@
       "AUDIT_ALERT_WEBHOOK_URL"
     ]
   },
-
   "config": {
     "defaultPort": 3706,
     "gdprEnabled": true,
@@ -119,25 +130,40 @@
     "consentExpiryDays": 365,
     "auditRetentionDays": 2555,
     "exportMaxRows": 100000,
-    "complianceFrameworks": ["SOC2", "HIPAA", "GDPR", "CCPA", "PCI"]
+    "complianceFrameworks": [
+      "SOC2",
+      "HIPAA",
+      "GDPR",
+      "CCPA",
+      "PCI"
+    ]
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["splunk.com", "elastic.co", "datadoghq.com"],
-    "filesystem": ["logs", "exports"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "splunk.com",
+      "elastic.co",
+      "datadoghq.com"
+    ],
+    "filesystem": [
+      "logs",
+      "exports"
+    ]
   }
 }

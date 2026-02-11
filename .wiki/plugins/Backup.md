@@ -407,7 +407,7 @@ Run a backup immediately.
 **Response:**
 ```json
 {
-  "id": "backup_uuid",
+  "id": "np_backup_uuid",
   "status": "running",
   "startedAt": "2026-02-11T12:00:00Z"
 }
@@ -435,7 +435,7 @@ List all backup artifacts.
       "backupType": "full",
       "status": "completed",
       "fileSize": 1073741824,
-      "filePath": "s3://nself-backups/prod/backup_20260211_020000.dump.gz.enc",
+      "filePath": "s3://nself-backups/prod/np_backup_20260211_020000.dump.gz.enc",
       "compression": "gzip",
       "encrypted": true,
       "startedAt": "2026-02-11T02:00:00Z",
@@ -475,7 +475,7 @@ Initiate a restore operation.
 **Request:**
 ```json
 {
-  "artifactId": "backup_uuid",
+  "artifactId": "np_backup_uuid",
   "targetDatabase": "nself_restored",
   "createDatabase": true,
   "noOwner": true,
@@ -487,7 +487,7 @@ Initiate a restore operation.
 ```json
 {
   "id": "restore_uuid",
-  "artifactId": "backup_uuid",
+  "artifactId": "np_backup_uuid",
   "status": "running",
   "startedAt": "2026-02-11T12:00:00Z"
 }
@@ -505,7 +505,7 @@ Get restore operation status.
 ```json
 {
   "id": "restore_uuid",
-  "artifactId": "backup_uuid",
+  "artifactId": "np_backup_uuid",
   "targetDatabase": "nself_restored",
   "status": "completed",
   "startedAt": "2026-02-11T12:00:00Z",
@@ -519,17 +519,17 @@ Get restore operation status.
 
 ## Database Schema
 
-### backup_schedules
+### np_backup_schedules
 
 Backup schedule definitions.
 
 ```sql
-CREATE TABLE backup_schedules (
+CREATE TABLE np_backup_schedules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
   schedule_cron VARCHAR(128) NOT NULL,
-  backup_type VARCHAR(32) DEFAULT 'full' CHECK (backup_type IN ('full', 'incremental', 'schema_only', 'data_only')),
+  np_backup_type VARCHAR(32) DEFAULT 'full' CHECK (np_backup_type IN ('full', 'incremental', 'schema_only', 'data_only')),
   target_provider VARCHAR(32) DEFAULT 'local' CHECK (target_provider IN ('local', 's3', 'r2', 'gcs')),
   target_config JSONB DEFAULT '{}',
   include_tables TEXT[] DEFAULT '{}',
@@ -546,25 +546,25 @@ CREATE TABLE backup_schedules (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_backup_schedules_source_account ON backup_schedules(source_account_id);
-CREATE INDEX idx_backup_schedules_enabled ON backup_schedules(enabled) WHERE enabled = true;
-CREATE INDEX idx_backup_schedules_next_run ON backup_schedules(next_run_at) WHERE enabled = true;
+CREATE INDEX idx_backup_schedules_source_account ON np_backup_schedules(source_account_id);
+CREATE INDEX idx_backup_schedules_enabled ON np_backup_schedules(enabled) WHERE enabled = true;
+CREATE INDEX idx_backup_schedules_next_run ON np_backup_schedules(next_run_at) WHERE enabled = true;
 ```
 
-### backup_artifacts
+### np_backup_artifacts
 
 Backup file records.
 
 ```sql
-CREATE TABLE backup_artifacts (
+CREATE TABLE np_backup_artifacts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  schedule_id UUID REFERENCES backup_schedules(id) ON DELETE SET NULL,
-  backup_type VARCHAR(32) NOT NULL,
+  schedule_id UUID REFERENCES np_backup_schedules(id) ON DELETE SET NULL,
+  np_backup_type VARCHAR(32) NOT NULL,
   status VARCHAR(32) DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
   target_provider VARCHAR(32) NOT NULL,
-  file_path TEXT NOT NULL,
-  file_size BIGINT,
+  np_fileproc_path TEXT NOT NULL,
+  np_fileproc_size BIGINT,
   compression VARCHAR(16),
   encrypted BOOLEAN DEFAULT false,
   checksum VARCHAR(64),
@@ -576,22 +576,22 @@ CREATE TABLE backup_artifacts (
   expires_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_backup_artifacts_source_account ON backup_artifacts(source_account_id);
-CREATE INDEX idx_backup_artifacts_schedule ON backup_artifacts(schedule_id);
-CREATE INDEX idx_backup_artifacts_status ON backup_artifacts(status);
-CREATE INDEX idx_backup_artifacts_started ON backup_artifacts(started_at DESC);
-CREATE INDEX idx_backup_artifacts_expires ON backup_artifacts(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_backup_artifacts_source_account ON np_backup_artifacts(source_account_id);
+CREATE INDEX idx_backup_artifacts_schedule ON np_backup_artifacts(schedule_id);
+CREATE INDEX idx_backup_artifacts_status ON np_backup_artifacts(status);
+CREATE INDEX idx_backup_artifacts_started ON np_backup_artifacts(started_at DESC);
+CREATE INDEX idx_backup_artifacts_expires ON np_backup_artifacts(expires_at) WHERE expires_at IS NOT NULL;
 ```
 
-### backup_restore_jobs
+### np_backup_restore_jobs
 
 Restore operation tracking.
 
 ```sql
-CREATE TABLE backup_restore_jobs (
+CREATE TABLE np_backup_restore_jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  artifact_id UUID REFERENCES backup_artifacts(id) ON DELETE CASCADE,
+  artifact_id UUID REFERENCES np_backup_artifacts(id) ON DELETE CASCADE,
   target_database VARCHAR(255) NOT NULL,
   status VARCHAR(32) DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
   options JSONB DEFAULT '{}',
@@ -602,17 +602,17 @@ CREATE TABLE backup_restore_jobs (
   restored_by VARCHAR(255)
 );
 
-CREATE INDEX idx_backup_restore_jobs_source_account ON backup_restore_jobs(source_account_id);
-CREATE INDEX idx_backup_restore_jobs_artifact ON backup_restore_jobs(artifact_id);
-CREATE INDEX idx_backup_restore_jobs_status ON backup_restore_jobs(status);
+CREATE INDEX idx_backup_restore_jobs_source_account ON np_backup_restore_jobs(source_account_id);
+CREATE INDEX idx_backup_restore_jobs_artifact ON np_backup_restore_jobs(artifact_id);
+CREATE INDEX idx_backup_restore_jobs_status ON np_backup_restore_jobs(status);
 ```
 
-### backup_webhook_events
+### np_backup_webhook_events
 
 Webhook event log.
 
 ```sql
-CREATE TABLE backup_webhook_events (
+CREATE TABLE np_backup_webhook_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(255) NOT NULL,
@@ -624,8 +624,8 @@ CREATE TABLE backup_webhook_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_backup_webhook_events_source_account ON backup_webhook_events(source_account_id);
-CREATE INDEX idx_backup_webhook_events_delivered ON backup_webhook_events(delivered);
+CREATE INDEX idx_backup_webhook_events_source_account ON np_backup_webhook_events(source_account_id);
+CREATE INDEX idx_backup_webhook_events_delivered ON np_backup_webhook_events(delivered);
 ```
 
 ---
@@ -935,7 +935,7 @@ Restore complete database from full backup.
 
 ```bash
 npm run cli -- restore \
-  --artifact-id <backup_uuid> \
+  --artifact-id <np_backup_uuid> \
   --target-database nself \
   --clean true
 ```
@@ -1038,13 +1038,13 @@ npm run cli -- create-schedule \
 ```sql
 SELECT
   id,
-  backup_type,
+  np_backup_type,
   status,
-  file_size / 1024 / 1024 AS size_mb,
+  np_fileproc_size / 1024 / 1024 AS size_mb,
   duration_seconds,
   started_at,
   completed_at
-FROM backup_artifacts
+FROM np_backup_artifacts
 WHERE source_account_id = 'primary'
   AND status = 'completed'
   AND started_at > NOW() - INTERVAL '7 days'
@@ -1057,9 +1057,9 @@ LIMIT 10;
 ```sql
 SELECT
   target_provider,
-  COUNT(*) AS backup_count,
-  SUM(file_size) / 1024 / 1024 / 1024 AS total_gb
-FROM backup_artifacts
+  COUNT(*) AS np_backup_count,
+  SUM(np_fileproc_size) / 1024 / 1024 / 1024 AS total_gb
+FROM np_backup_artifacts
 WHERE source_account_id = 'primary'
   AND status = 'completed'
 GROUP BY target_provider;
@@ -1074,8 +1074,8 @@ SELECT
   COUNT(*) AS failure_count,
   MAX(b.started_at) AS last_failure,
   b.error_message
-FROM backup_artifacts b
-JOIN backup_schedules s ON b.schedule_id = s.id
+FROM np_backup_artifacts b
+JOIN np_backup_schedules s ON b.schedule_id = s.id
 WHERE b.source_account_id = 'primary'
   AND b.status = 'failed'
   AND b.started_at > NOW() - INTERVAL '30 days'
@@ -1256,7 +1256,7 @@ For databases > 100GB:
 
 1. **Use parallel dump:**
 ```bash
-pg_dump --format=directory --jobs=4 --file=backup_dir
+pg_dump --format=directory --jobs=4 --file=np_backup_dir
 ```
 
 2. **Split by table:**

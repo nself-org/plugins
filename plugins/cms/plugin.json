@@ -8,19 +8,23 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "content",
-  "tags": ["cms", "content", "blog", "posts", "headless"],
-
-  "tables": [
-    "cms_content_types",
-    "cms_posts",
-    "cms_post_versions",
-    "cms_categories",
-    "cms_tags",
-    "cms_post_categories",
-    "cms_post_tags",
-    "cms_webhook_events"
+  "tags": [
+    "cms",
+    "content",
+    "blog",
+    "posts",
+    "headless"
   ],
-
+  "tables": [
+    "np_cms_content_types",
+    "np_cms_posts",
+    "np_cms_post_versions",
+    "np_cms_categories",
+    "np_cms_tags",
+    "np_cms_post_categories",
+    "np_cms_post_tags",
+    "np_cms_webhook_events"
+  ],
   "webhooks": {
     "post.created": "Sync new post to database",
     "post.updated": "Update post data and create version",
@@ -34,7 +38,6 @@
     "tag.updated": "Update tag data",
     "tag.deleted": "Remove tag"
   },
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start the HTTP server",
@@ -46,7 +49,6 @@
     "publish": "Publish a post",
     "stats": "Show content statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -64,30 +66,34 @@
       "CMS_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3501,
     "webhookPath": "/webhooks/cms",
     "retryAttempts": 3,
     "retryDelay": 1000
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

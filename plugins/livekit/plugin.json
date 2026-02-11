@@ -7,18 +7,25 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/livekit",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "voice-video",
-  "tags": ["livekit", "webrtc", "voice", "video", "streaming", "recording", "egress", "sfu"],
-
-  "tables": [
-    "nchat_livekit_rooms",
-    "nchat_livekit_participants",
-    "nchat_livekit_egress_jobs",
-    "nchat_livekit_tokens",
-    "nchat_livekit_quality_metrics",
-    "nchat_livekit_webhook_events"
+  "category": "communication",
+  "tags": [
+    "livekit",
+    "webrtc",
+    "voice",
+    "video",
+    "streaming",
+    "recording",
+    "egress",
+    "sfu"
   ],
-
+  "tables": [
+    "np_livekit_livekit_rooms",
+    "np_livekit_livekit_participants",
+    "np_livekit_livekit_egress_jobs",
+    "np_livekit_livekit_tokens",
+    "np_livekit_livekit_quality_metrics",
+    "np_livekit_livekit_webhook_events"
+  ],
   "webhooks": {
     "room.created": "LiveKit room created",
     "room.closed": "LiveKit room closed",
@@ -28,7 +35,6 @@
     "egress.completed": "Egress job completed",
     "egress.failed": "Egress job failed"
   },
-
   "actions": {
     "rooms:list": "List LiveKit rooms",
     "rooms:info": "Get room details",
@@ -39,7 +45,6 @@
     "recordings:list": "List egress jobs",
     "health": "Health check"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL",
@@ -65,7 +70,6 @@
       "LIVEKIT_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "defaultPort": 3707,
     "tokenDefaultTtl": 3600,
@@ -75,23 +79,30 @@
     "maxConcurrentRooms": 100,
     "maxParticipantsPerRoom": 200
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["livekit"],
-    "filesystem": ["logs", "recordings"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "livekit"
+    ],
+    "filesystem": [
+      "logs",
+      "recordings"
+    ]
   }
 }

@@ -716,7 +716,7 @@ Get gateway statistics.
 
 ## Database Schema
 
-### sg_stream_sessions
+### np_streamgw_stream_sessions
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -754,7 +754,7 @@ Get gateway statistics.
 - `idx_sg_sessions_status` - status (partial WHERE status = 'active')
 - `idx_sg_sessions_heartbeat` - last_heartbeat_at (partial WHERE status = 'active')
 
-### sg_streams
+### np_streamgw_streams
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -792,7 +792,7 @@ Get gateway statistics.
 **Unique Constraint:**
 - `(source_account_id, app_id, stream_id)`
 
-### sg_admission_rules
+### np_streamgw_admission_rules
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -827,7 +827,7 @@ Get gateway statistics.
 - `idx_sg_rules_priority` - priority DESC
 - `idx_sg_rules_active` - active
 
-### sg_viewer_analytics
+### np_streamgw_viewer_analytics
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -851,7 +851,7 @@ Get gateway statistics.
 
 ## Analytics Views
 
-### sg_concurrent_viewers_over_time
+### np_streamgw_concurrent_viewers_over_time
 
 Concurrent viewers over time for streams.
 
@@ -860,12 +860,12 @@ SELECT
   stream_id,
   timestamp,
   concurrent_viewers
-FROM sg_viewer_analytics
+FROM np_streamgw_viewer_analytics
 WHERE timestamp >= NOW() - INTERVAL '24 hours'
 ORDER BY timestamp DESC;
 ```
 
-### sg_denial_rates
+### np_streamgw_denial_rates
 
 Denial rates by stream.
 
@@ -875,12 +875,12 @@ SELECT
   COUNT(*) FILTER (WHERE status = 'denied') as denied,
   COUNT(*) as total,
   ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'denied') / COUNT(*), 2) as denial_rate
-FROM sg_stream_sessions
+FROM np_streamgw_stream_sessions
 WHERE created_at >= NOW() - INTERVAL '7 days'
 GROUP BY stream_id;
 ```
 
-### sg_stream_duration_distribution
+### np_streamgw_stream_duration_distribution
 
 Distribution of viewing durations.
 
@@ -893,14 +893,14 @@ SELECT
     ELSE '> 1 hour'
   END as duration_bucket,
   COUNT(*) as count
-FROM sg_stream_sessions
+FROM np_streamgw_stream_sessions
 WHERE status IN ('ended', 'evicted')
   AND created_at >= NOW() - INTERVAL '30 days'
 GROUP BY duration_bucket
 ORDER BY count DESC;
 ```
 
-### sg_device_type_breakdown
+### np_streamgw_device_type_breakdown
 
 Viewers by device type.
 
@@ -910,7 +910,7 @@ SELECT
   COUNT(*) as sessions,
   AVG(duration_seconds) as avg_duration,
   SUM(bytes_transferred) / 1024 / 1024 / 1024 as total_gb
-FROM sg_stream_sessions
+FROM np_streamgw_stream_sessions
 WHERE created_at >= NOW() - INTERVAL '7 days'
 GROUP BY device_type
 ORDER BY sessions DESC;
@@ -1013,7 +1013,7 @@ SELECT
   DATE_TRUNC('hour', timestamp) as hour,
   MAX(concurrent_viewers) as peak_viewers,
   AVG(concurrent_viewers) as avg_viewers
-FROM sg_viewer_analytics
+FROM np_streamgw_viewer_analytics
 WHERE timestamp >= NOW() - INTERVAL '7 days'
 GROUP BY hour
 ORDER BY hour DESC;
@@ -1025,8 +1025,8 @@ SELECT
   COUNT(DISTINCT ss.user_id) as unique_viewers,
   s.peak_viewers,
   AVG(ss.duration_seconds) / 60 as avg_watch_minutes
-FROM sg_streams s
-JOIN sg_stream_sessions ss ON ss.stream_id = s.stream_id
+FROM np_streamgw_streams s
+JOIN np_streamgw_stream_sessions ss ON ss.stream_id = s.stream_id
 WHERE s.created_at >= NOW() - INTERVAL '30 days'
 GROUP BY s.stream_id, s.title, s.peak_viewers
 ORDER BY unique_viewers DESC
@@ -1037,7 +1037,7 @@ SELECT
   DATE_TRUNC('day', created_at) as date,
   device_type,
   COUNT(*) as sessions
-FROM sg_stream_sessions
+FROM np_streamgw_stream_sessions
 WHERE created_at >= NOW() - INTERVAL '30 days'
 GROUP BY date, device_type
 ORDER BY date DESC, sessions DESC;
@@ -1135,7 +1135,7 @@ Sessions remain active after user leaves.
 ```sql
 -- Find stale sessions (no heartbeat in 2 minutes)
 SELECT id, stream_id, user_id, last_heartbeat_at
-FROM sg_stream_sessions
+FROM np_streamgw_stream_sessions
 WHERE status = 'active'
   AND last_heartbeat_at < NOW() - INTERVAL '2 minutes';
 

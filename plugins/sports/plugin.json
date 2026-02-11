@@ -7,34 +7,42 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/sports",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "external-data",
-  "tags": ["sports", "nfl", "nba", "mlb", "scores", "schedules", "standings", "live-data", "espn", "players", "teams"],
-
+  "category": "sports",
+  "tags": [
+    "sports",
+    "nfl",
+    "nba",
+    "mlb",
+    "scores",
+    "schedules",
+    "standings",
+    "live-data",
+    "espn",
+    "players",
+    "teams"
+  ],
   "tables": [
-    "sports_leagues",
-    "sports_teams",
-    "sports_events",
-    "sports_games",
-    "sports_standings",
-    "sports_players",
-    "sports_favorites",
-    "sports_provider_syncs",
-    "sports_schedule_cache",
-    "sports_sync_state",
-    "sports_webhook_events"
+    "np_sports_leagues",
+    "np_sports_teams",
+    "np_sports_events",
+    "np_sports_games",
+    "np_sports_standings",
+    "np_sports_players",
+    "np_sports_favorites",
+    "np_sports_provider_syncs",
+    "np_sports_schedule_cache",
+    "np_sports_sync_state",
+    "np_sports_webhook_events"
   ],
-
   "views": [
-    "sports_upcoming_events",
-    "sports_live_events",
-    "sports_untriggered_recordings"
+    "np_sports_upcoming_events",
+    "np_sports_live_events",
+    "np_sports_untriggered_recordings"
   ],
-
   "webhooks": {
     "game.score_updated": "Live score update during game",
     "game.started": "Game has started"
   },
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start the API server",
@@ -55,7 +63,6 @@
     "cache": "Manage schedule cache",
     "stats": "Show sports data statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -89,30 +96,38 @@
       "SPORTS_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3201,
     "webhookPath": "/webhooks/sports",
     "retryAttempts": 3,
     "retryDelay": 1000
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["site.api.espn.com", "api.sportsdata.io", "thesportsdb.com"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "site.api.espn.com",
+      "api.sportsdata.io",
+      "thesportsdb.com"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

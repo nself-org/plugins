@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-11T17:25:52.995Z",
+  "lastUpdated": "2026-02-11T20:23:17.411Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -13,7 +13,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/stripe",
       "minNselfVersion": "0.4.8",
-      "category": "billing",
+      "category": "commerce",
       "tags": [
         "payments",
         "billing",
@@ -32,29 +32,29 @@
         "framework": "fastify"
       },
       "tables": [
-        "stripe_customers",
-        "stripe_products",
-        "stripe_prices",
-        "stripe_coupons",
-        "stripe_promotion_codes",
-        "stripe_subscriptions",
-        "stripe_subscription_items",
-        "stripe_subscription_schedules",
-        "stripe_invoices",
-        "stripe_invoice_items",
-        "stripe_credit_notes",
-        "stripe_charges",
-        "stripe_refunds",
-        "stripe_disputes",
-        "stripe_payment_intents",
-        "stripe_setup_intents",
-        "stripe_payment_methods",
-        "stripe_balance_transactions",
-        "stripe_checkout_sessions",
-        "stripe_checkout_session_line_items",
-        "stripe_tax_ids",
-        "stripe_tax_rates",
-        "stripe_webhook_events"
+        "np_stripe_customers",
+        "np_stripe_products",
+        "np_stripe_prices",
+        "np_stripe_coupons",
+        "np_stripe_promotion_codes",
+        "np_stripe_subscriptions",
+        "np_stripe_subscription_items",
+        "np_stripe_subscription_schedules",
+        "np_stripe_invoices",
+        "np_stripe_invoice_items",
+        "np_stripe_credit_notes",
+        "np_stripe_charges",
+        "np_stripe_refunds",
+        "np_stripe_disputes",
+        "np_stripe_payment_intents",
+        "np_stripe_setup_intents",
+        "np_stripe_payment_methods",
+        "np_stripe_balance_transactions",
+        "np_stripe_checkout_sessions",
+        "np_stripe_checkout_session_line_items",
+        "np_stripe_tax_ids",
+        "np_stripe_tax_rates",
+        "np_stripe_webhook_events"
       ],
       "views": [
         "stripe_active_subscriptions",
@@ -414,7 +414,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/github",
       "minNselfVersion": "0.4.8",
-      "category": "devops",
+      "category": "development",
       "tags": [
         "github",
         "git",
@@ -435,14 +435,14 @@
         "framework": "fastify"
       },
       "tables": [
-        "github_repositories",
-        "github_issues",
-        "github_pull_requests",
-        "github_commits",
-        "github_releases",
-        "github_workflow_runs",
-        "github_deployments",
-        "github_webhook_events"
+        "np_github_repositories",
+        "np_github_issues",
+        "np_github_pull_requests",
+        "np_github_commits",
+        "np_github_releases",
+        "np_github_workflow_runs",
+        "np_github_deployments",
+        "np_github_webhook_events"
       ],
       "views": [
         "github_open_items",
@@ -601,7 +601,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/shopify",
       "minNselfVersion": "0.4.8",
-      "category": "ecommerce",
+      "category": "commerce",
       "tags": [
         "shopify",
         "ecommerce",
@@ -621,15 +621,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "shopify_shops",
-        "shopify_products",
-        "shopify_variants",
-        "shopify_collections",
-        "shopify_customers",
-        "shopify_orders",
-        "shopify_order_items",
-        "shopify_inventory",
-        "shopify_webhook_events"
+        "np_shopify_shops",
+        "np_shopify_products",
+        "np_shopify_variants",
+        "np_shopify_collections",
+        "np_shopify_customers",
+        "np_shopify_orders",
+        "np_shopify_order_items",
+        "np_shopify_inventory",
+        "np_shopify_webhook_events"
       ],
       "views": [
         "shopify_sales_overview",
@@ -856,12 +856,12 @@
         "framework": "socket.io"
       },
       "tables": [
-        "realtime_connections",
-        "realtime_rooms",
-        "realtime_room_members",
-        "realtime_presence",
-        "realtime_typing",
-        "realtime_events"
+        "np_realtime_connections",
+        "np_realtime_rooms",
+        "np_realtime_room_members",
+        "np_realtime_presence",
+        "np_realtime_typing",
+        "np_realtime_events"
       ],
       "views": [
         "realtime_active_connections",
@@ -1027,10 +1027,10 @@
         "framework": "fastify"
       },
       "tables": [
-        "file_processing_jobs",
-        "file_thumbnails",
-        "file_scans",
-        "file_metadata"
+        "np_fileproc_processing_jobs",
+        "np_fileproc_thumbnails",
+        "np_fileproc_scans",
+        "np_fileproc_metadata"
       ],
       "views": [
         "file_processing_queue",
@@ -1219,10 +1219,10 @@
         "framework": "fastify"
       },
       "tables": [
-        "jobs_tasks",
-        "job_results",
-        "job_schedules",
-        "job_failures"
+        "np_jobs_tasks",
+        "np_jobs_job_results",
+        "np_jobs_job_schedules",
+        "np_jobs_job_failures"
       ],
       "views": [
         "jobs_active",
@@ -1400,12 +1400,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "notification_templates",
-        "notification_preferences",
-        "notification_messages",
-        "notification_queue",
-        "notification_providers",
-        "notification_batches"
+        "np_notifications_templates",
+        "np_notifications_preferences",
+        "np_notifications_messages",
+        "np_notifications_queue",
+        "np_notifications_providers",
+        "np_notifications_batches"
       ],
       "views": [
         "notification_delivery_rates",
@@ -1625,11 +1625,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "idme_verifications",
-        "idme_groups",
-        "idme_badges",
-        "idme_attributes",
-        "idme_webhook_events"
+        "np_idme_verifications",
+        "np_idme_groups",
+        "np_idme_badges",
+        "np_idme_attributes",
+        "np_idme_webhook_events"
       ],
       "views": [
         "idme_verified_users",
@@ -1771,7 +1771,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/paypal",
       "minNselfVersion": "0.4.8",
-      "category": "payments",
+      "category": "commerce",
       "tags": [
         "payments",
         "donations",
@@ -1791,20 +1791,20 @@
         "framework": "fastify"
       },
       "tables": [
-        "paypal_transactions",
-        "paypal_orders",
-        "paypal_captures",
-        "paypal_authorizations",
-        "paypal_refunds",
-        "paypal_subscriptions",
-        "paypal_subscription_plans",
-        "paypal_products",
-        "paypal_disputes",
-        "paypal_payouts",
-        "paypal_invoices",
-        "paypal_payers",
-        "paypal_balances",
-        "paypal_webhook_events"
+        "np_paypal_transactions",
+        "np_paypal_orders",
+        "np_paypal_captures",
+        "np_paypal_authorizations",
+        "np_paypal_refunds",
+        "np_paypal_subscriptions",
+        "np_paypal_subscription_plans",
+        "np_paypal_products",
+        "np_paypal_disputes",
+        "np_paypal_payouts",
+        "np_paypal_invoices",
+        "np_paypal_payers",
+        "np_paypal_balances",
+        "np_paypal_webhook_events"
       ],
       "views": [
         "paypal_donation_summary",
@@ -2027,7 +2027,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/donorbox",
       "minNselfVersion": "0.4.8",
-      "category": "donations",
+      "category": "commerce",
       "tags": [
         "donations",
         "fundraising",
@@ -2047,13 +2047,13 @@
         "framework": "fastify"
       },
       "tables": [
-        "donorbox_campaigns",
-        "donorbox_donors",
-        "donorbox_donations",
-        "donorbox_plans",
-        "donorbox_events",
-        "donorbox_tickets",
-        "donorbox_webhook_events"
+        "np_donorbox_campaigns",
+        "np_donorbox_donors",
+        "np_donorbox_donations",
+        "np_donorbox_plans",
+        "np_donorbox_events",
+        "np_donorbox_tickets",
+        "np_donorbox_webhook_events"
       ],
       "views": [
         "donorbox_unified_donations",
@@ -2265,13 +2265,13 @@
         "framework": "fastify"
       },
       "tables": [
-        "auth_oauth_providers",
-        "auth_passkeys",
-        "auth_mfa_enrollments",
-        "auth_device_codes",
-        "auth_magic_links",
-        "auth_sessions",
-        "auth_login_attempts"
+        "np_auth_oauth_providers",
+        "np_auth_passkeys",
+        "np_auth_mfa_enrollments",
+        "np_auth_device_codes",
+        "np_auth_magic_links",
+        "np_auth_sessions",
+        "np_auth_login_attempts"
       ],
       "views": [],
       "webhooks": [
@@ -2613,7 +2613,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/access-controls",
       "minNselfVersion": "0.4.8",
-      "category": "security",
+      "category": "authentication",
       "tags": [
         "access-control",
         "rbac",
@@ -2634,12 +2634,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "acl_roles",
-        "acl_permissions",
-        "acl_role_permissions",
-        "acl_user_roles",
-        "acl_policies",
-        "acl_webhook_events"
+        "np_acl_roles",
+        "np_acl_permissions",
+        "np_acl_role_permissions",
+        "np_acl_user_roles",
+        "np_acl_policies",
+        "np_acl_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -2724,10 +2724,10 @@
         "framework": "fastify"
       },
       "tables": [
-        "feed_activities",
-        "feed_user_feeds",
-        "feed_subscriptions",
-        "feed_webhook_events"
+        "np_activityfeed_activities",
+        "np_activityfeed_user_feeds",
+        "np_activityfeed_subscriptions",
+        "np_activityfeed_webhook_events"
       ],
       "webhooks": [
         "activity.created",
@@ -2805,7 +2805,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/ai",
       "minNselfVersion": "0.4.8",
-      "category": "ai-ml",
+      "category": "integrations",
       "tags": [
         "ai",
         "llm",
@@ -2828,16 +2828,16 @@
         "framework": "fastify"
       },
       "tables": [
-        "ai_models",
-        "ai_conversations",
-        "ai_messages",
-        "ai_requests",
-        "ai_embeddings",
-        "ai_prompt_templates",
-        "ai_functions",
-        "ai_function_calls",
-        "ai_usage_quotas",
-        "ai_features"
+        "np_ai_models",
+        "np_ai_conversations",
+        "np_ai_messages",
+        "np_ai_requests",
+        "np_ai_embeddings",
+        "np_ai_prompt_templates",
+        "np_ai_functions",
+        "np_ai_function_calls",
+        "np_ai_usage_quotas",
+        "np_ai_features"
       ],
       "webhooks": [
         "conversation.created",
@@ -3000,12 +3000,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "analytics_events",
-        "analytics_counters",
-        "analytics_funnels",
-        "analytics_quotas",
-        "analytics_quota_violations",
-        "analytics_webhook_events"
+        "np_analytics_events",
+        "np_analytics_counters",
+        "np_analytics_funnels",
+        "np_analytics_quotas",
+        "np_analytics_quota_violations",
+        "np_analytics_webhook_events"
       ],
       "webhooks": [
         "event.tracked",
@@ -3101,10 +3101,10 @@
         "framework": "fastify"
       },
       "tables": [
-        "backup_schedules",
-        "backup_artifacts",
-        "backup_restore_jobs",
-        "backup_webhook_events"
+        "np_backup_schedules",
+        "np_backup_artifacts",
+        "np_backup_restore_jobs",
+        "np_backup_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -3226,15 +3226,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "nchat_bots",
-        "nchat_bot_commands",
-        "nchat_bot_subscriptions",
-        "nchat_bot_installations",
-        "nchat_bot_messages",
-        "nchat_bot_interactions",
-        "nchat_bot_reviews",
-        "nchat_bot_api_keys",
-        "nchat_bots_webhook_events"
+        "np_bot_bots",
+        "np_bot_bot_commands",
+        "np_bot_bot_subscriptions",
+        "np_bot_bot_installations",
+        "np_bot_bot_messages",
+        "np_bot_bot_interactions",
+        "np_bot_bot_reviews",
+        "np_bot_bot_api_keys",
+        "np_bot_bots_webhook_events"
       ],
       "webhooks": [
         "bot.created",
@@ -3380,12 +3380,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "calendar_calendars",
-        "calendar_events",
-        "calendar_attendees",
-        "calendar_reminders",
-        "calendar_ical_feeds",
-        "calendar_webhook_events"
+        "np_calendar_calendars",
+        "np_calendar_events",
+        "np_calendar_attendees",
+        "np_calendar_reminders",
+        "np_calendar_ical_feeds",
+        "np_calendar_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -3480,15 +3480,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "cdn_zones",
-        "cdn_purge_requests",
-        "cdn_analytics",
-        "cdn_signed_urls"
+        "np_cdn_zones",
+        "np_cdn_purge_requests",
+        "np_cdn_analytics",
+        "np_cdn_signed_urls"
       ],
       "views": [
-        "cdn_bandwidth_by_zone",
-        "cdn_cache_hit_rate",
-        "cdn_top_paths"
+        "np_cdn_bandwidth_by_zone",
+        "np_cdn_cache_hit_rate",
+        "np_cdn_top_paths"
       ],
       "webhooks": [],
       "envVars": [
@@ -3603,12 +3603,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "chat_conversations",
-        "chat_participants",
-        "chat_messages",
-        "chat_read_receipts",
-        "chat_moderation_actions",
-        "chat_webhook_events"
+        "np_chat_conversations",
+        "np_chat_participants",
+        "np_chat_messages",
+        "np_chat_read_receipts",
+        "np_chat_moderation_actions",
+        "np_chat_webhook_events"
       ],
       "webhooks": [
         "conversation.created",
@@ -3719,12 +3719,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "cf_zones",
-        "cf_dns_records",
-        "cf_r2_buckets",
-        "cf_cache_purge_log",
-        "cf_analytics",
-        "cf_webhook_events"
+        "np_cf_zones",
+        "np_cf_dns_records",
+        "np_cf_r2_buckets",
+        "np_cf_cache_purge_log",
+        "np_cf_analytics",
+        "np_cf_webhook_events"
       ],
       "webhooks": [
         "cf.zone.synced",
@@ -3827,14 +3827,14 @@
         "framework": "fastify"
       },
       "tables": [
-        "cms_content_types",
-        "cms_posts",
-        "cms_post_versions",
-        "cms_categories",
-        "cms_tags",
-        "cms_post_categories",
-        "cms_post_tags",
-        "cms_webhook_events"
+        "np_cms_content_types",
+        "np_cms_posts",
+        "np_cms_post_versions",
+        "np_cms_categories",
+        "np_cms_tags",
+        "np_cms_post_categories",
+        "np_cms_post_tags",
+        "np_cms_webhook_events"
       ],
       "webhooks": [
         "post.created",
@@ -3926,7 +3926,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/compliance",
       "minNselfVersion": "0.4.8",
-      "category": "privacy-legal",
+      "category": "compliance",
       "tags": [
         "compliance",
         "gdpr",
@@ -3950,23 +3950,23 @@
         "framework": "fastify"
       },
       "tables": [
-        "compliance_dsars",
-        "compliance_dsar_activities",
-        "compliance_consents",
-        "compliance_consent_history",
-        "compliance_privacy_policies",
-        "compliance_policy_acceptances",
-        "compliance_retention_policies",
-        "compliance_retention_executions",
-        "compliance_processing_records",
-        "compliance_data_processors",
-        "compliance_data_breaches",
-        "compliance_breach_notifications",
-        "compliance_audit_log",
-        "audit_events",
-        "audit_retention_policies",
-        "audit_alert_rules",
-        "audit_webhook_events"
+        "np_compliance_dsars",
+        "np_compliance_dsar_activities",
+        "np_compliance_consents",
+        "np_compliance_consent_history",
+        "np_compliance_privacy_policies",
+        "np_compliance_policy_acceptances",
+        "np_compliance_retention_policies",
+        "np_compliance_retention_executions",
+        "np_compliance_processing_records",
+        "np_compliance_data_processors",
+        "np_compliance_data_breaches",
+        "np_compliance_breach_notifications",
+        "np_compliance_audit_log",
+        "np_compliance_audit_events",
+        "np_compliance_audit_retention_policies",
+        "np_compliance_audit_alert_rules",
+        "np_compliance_audit_webhook_events"
       ],
       "webhooks": [
         "dsar.created",
@@ -4102,11 +4102,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "progress_positions",
-        "progress_history",
-        "progress_watchlists",
-        "progress_favorites",
-        "progress_webhook_events"
+        "np_progress_positions",
+        "np_progress_history",
+        "np_progress_watchlists",
+        "np_progress_favorites",
+        "np_progress_webhook_events"
       ],
       "webhooks": [
         "progress.updated",
@@ -4199,17 +4199,17 @@
         "framework": "fastify"
       },
       "tables": [
-        "dev_devices",
-        "dev_commands",
-        "dev_telemetry",
-        "dev_ingest_sessions",
-        "dev_audit_log"
+        "np_dev_devices",
+        "np_dev_commands",
+        "np_dev_telemetry",
+        "np_dev_ingest_sessions",
+        "np_dev_audit_log"
       ],
       "views": [
-        "dev_devices_by_status",
-        "dev_command_success_rate",
-        "dev_ingest_uptime",
-        "dev_health_trends"
+        "np_dev_devices_by_status",
+        "np_dev_command_success_rate",
+        "np_dev_ingest_uptime",
+        "np_dev_health_trends"
       ],
       "webhooks": [],
       "envVars": [
@@ -4329,7 +4329,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/documents",
       "minNselfVersion": "0.4.8",
-      "category": "data-services",
+      "category": "data",
       "tags": [
         "documents",
         "pdf",
@@ -4350,11 +4350,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "docs_documents",
-        "docs_templates",
-        "docs_versions",
-        "docs_shares",
-        "docs_webhook_events"
+        "np_documents_documents",
+        "np_documents_templates",
+        "np_documents_versions",
+        "np_documents_shares",
+        "np_documents_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -4409,7 +4409,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/entitlements",
       "minNselfVersion": "0.4.8",
-      "category": "monetization",
+      "category": "commerce",
       "tags": [
         "entitlements",
         "subscriptions",
@@ -4430,14 +4430,14 @@
         "framework": "fastify"
       },
       "tables": [
-        "entitlement_plans",
-        "entitlement_subscriptions",
-        "entitlement_features",
-        "entitlement_quotas",
-        "entitlement_usage",
-        "entitlement_addons",
-        "entitlement_grants",
-        "entitlement_events"
+        "np_entitlements_plans",
+        "np_entitlements_subscriptions",
+        "np_entitlements_features",
+        "np_entitlements_quotas",
+        "np_entitlements_usage",
+        "np_entitlements_addons",
+        "np_entitlements_grants",
+        "np_entitlements_events"
       ],
       "webhooks": [
         "subscription.created",
@@ -4534,12 +4534,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "epg_channels",
-        "epg_programs",
-        "epg_schedules",
-        "epg_channel_groups",
-        "epg_channel_group_members",
-        "epg_webhook_events"
+        "np_epg_channels",
+        "np_epg_programs",
+        "np_epg_schedules",
+        "np_epg_channel_groups",
+        "np_epg_channel_group_members",
+        "np_epg_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -4619,11 +4619,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "ff_flags",
-        "ff_rules",
-        "ff_segments",
-        "ff_evaluations",
-        "ff_webhook_events"
+        "np_flags_flags",
+        "np_flags_rules",
+        "np_flags_segments",
+        "np_flags_evaluations",
+        "np_flags_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -4708,15 +4708,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "geo_cache",
-        "geo_geofences",
-        "geo_geofence_events",
-        "geo_places"
+        "np_geoc_cache",
+        "np_geoc_geofences",
+        "np_geoc_geofence_events",
+        "np_geoc_places"
       ],
       "views": [
-        "geo_cache_hit_rate",
-        "geo_volume_daily",
-        "geo_geofence_activity"
+        "np_geoc_cache_hit_rate",
+        "np_geoc_volume_daily",
+        "np_geoc_geofence_activity"
       ],
       "webhooks": [],
       "envVars": [
@@ -4821,7 +4821,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/geolocation",
       "minNselfVersion": "0.4.8",
-      "category": "data-services",
+      "category": "data",
       "tags": [
         "geolocation",
         "gps",
@@ -4842,11 +4842,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "geo_locations",
-        "geo_latest",
-        "geo_fences",
-        "geo_fence_events",
-        "geo_webhook_events"
+        "np_geoloc_locations",
+        "np_geoloc_latest",
+        "np_geoloc_fences",
+        "np_geoloc_fence_events",
+        "np_geoloc_webhook_events"
       ],
       "webhooks": [
         "geo.location.updated",
@@ -4965,10 +4965,10 @@
         "framework": "fastify"
       },
       "tables": [
-        "inv_invitations",
-        "inv_templates",
-        "inv_bulk_sends",
-        "inv_webhook_events"
+        "np_invites_invitations",
+        "np_invites_templates",
+        "np_invites_bulk_sends",
+        "np_invites_webhook_events"
       ],
       "webhooks": [
         "invitation.created",
@@ -5071,14 +5071,14 @@
         "framework": "fastify"
       },
       "tables": [
-        "kb_documents",
-        "kb_collections",
-        "kb_faqs",
-        "kb_attachments",
-        "kb_comments",
-        "kb_analytics",
-        "kb_translations",
-        "kb_review_requests"
+        "np_kb_documents",
+        "np_kb_collections",
+        "np_kb_faqs",
+        "np_kb_attachments",
+        "np_kb_comments",
+        "np_kb_analytics",
+        "np_kb_translations",
+        "np_kb_review_requests"
       ],
       "webhooks": [
         "document.created",
@@ -5164,7 +5164,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/link-preview",
       "minNselfVersion": "0.4.8",
-      "category": "content-enhancement",
+      "category": "content",
       "tags": [
         "link-preview",
         "oembed",
@@ -5185,13 +5185,13 @@
         "framework": "fastify"
       },
       "tables": [
-        "lp_link_previews",
-        "lp_link_preview_usage",
-        "lp_preview_templates",
-        "lp_oembed_providers",
-        "lp_url_blocklist",
-        "lp_preview_settings",
-        "lp_preview_analytics"
+        "np_linkprev_link_previews",
+        "np_linkprev_link_preview_usage",
+        "np_linkprev_preview_templates",
+        "np_linkprev_oembed_providers",
+        "np_linkprev_url_blocklist",
+        "np_linkprev_preview_settings",
+        "np_linkprev_preview_analytics"
       ],
       "webhooks": [],
       "envVars": [
@@ -5321,7 +5321,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/livekit",
       "minNselfVersion": "0.4.8",
-      "category": "voice-video",
+      "category": "communication",
       "tags": [
         "livekit",
         "webrtc",
@@ -5344,12 +5344,12 @@
         "framework": "fastify"
       },
       "tables": [
-        "nchat_livekit_rooms",
-        "nchat_livekit_participants",
-        "nchat_livekit_egress_jobs",
-        "nchat_livekit_tokens",
-        "nchat_livekit_quality_metrics",
-        "nchat_livekit_webhook_events"
+        "np_livekit_livekit_rooms",
+        "np_livekit_livekit_participants",
+        "np_livekit_livekit_egress_jobs",
+        "np_livekit_livekit_tokens",
+        "np_livekit_livekit_quality_metrics",
+        "np_livekit_livekit_webhook_events"
       ],
       "webhooks": [
         "room.created",
@@ -5499,13 +5499,13 @@
         "framework": "fastify"
       },
       "tables": [
-        "mp_encoding_profiles",
-        "mp_jobs",
-        "mp_job_outputs",
-        "mp_hls_manifests",
-        "mp_subtitles",
-        "mp_trickplay",
-        "mp_webhook_events"
+        "np_mediap_encoding_profiles",
+        "np_mediap_jobs",
+        "np_mediap_job_outputs",
+        "np_mediap_hls_manifests",
+        "np_mediap_subtitles",
+        "np_mediap_trickplay",
+        "np_mediap_webhook_events"
       ],
       "webhooks": [
         "job.created",
@@ -5596,7 +5596,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/meetings",
       "minNselfVersion": "0.4.8",
-      "category": "productivity",
+      "category": "development",
       "tags": [
         "meetings",
         "calendar",
@@ -5618,15 +5618,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "meetings_events",
-        "meetings_attendees",
-        "meetings_rooms",
-        "meetings_calendars",
-        "meetings_calendar_shares",
-        "meetings_external_calendars",
-        "meetings_templates",
-        "meetings_reminders",
-        "meetings_waitlist"
+        "np_meetings_events",
+        "np_meetings_attendees",
+        "np_meetings_rooms",
+        "np_meetings_calendars",
+        "np_meetings_calendar_shares",
+        "np_meetings_external_calendars",
+        "np_meetings_templates",
+        "np_meetings_reminders",
+        "np_meetings_waitlist"
       ],
       "webhooks": [
         "event.created",
@@ -5696,7 +5696,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/moderation",
       "minNselfVersion": "0.4.8",
-      "category": "content-safety",
+      "category": "content",
       "tags": [
         "moderation",
         "profanity",
@@ -5718,24 +5718,24 @@
         "framework": "fastify"
       },
       "tables": [
-        "moderation_rules",
-        "moderation_wordlists",
-        "moderation_actions",
-        "moderation_flags",
-        "moderation_appeals",
-        "moderation_reports",
-        "moderation_toxicity_scores",
-        "moderation_user_stats",
-        "moderation_audit_log",
-        "mod_reviews",
-        "mod_policies",
-        "mod_user_strikes",
-        "cp_policies",
-        "cp_rules",
-        "cp_evaluations",
-        "cp_word_lists",
-        "cp_overrides",
-        "moderation_webhook_events"
+        "np_moderation_rules",
+        "np_moderation_wordlists",
+        "np_moderation_actions",
+        "np_moderation_flags",
+        "np_moderation_appeals",
+        "np_moderation_reports",
+        "np_moderation_toxicity_scores",
+        "np_moderation_user_stats",
+        "np_moderation_audit_log",
+        "np_moderation_mod_reviews",
+        "np_moderation_mod_policies",
+        "np_moderation_mod_user_strikes",
+        "np_moderation_cp_policies",
+        "np_moderation_cp_rules",
+        "np_moderation_cp_evaluations",
+        "np_moderation_cp_word_lists",
+        "np_moderation_cp_overrides",
+        "np_moderation_webhook_events"
       ],
       "webhooks": [
         "action.created",
@@ -5874,11 +5874,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "os_buckets",
-        "os_objects",
-        "os_upload_sessions",
-        "os_access_logs",
-        "os_webhook_events"
+        "np_objstore_buckets",
+        "np_objstore_objects",
+        "np_objstore_upload_sessions",
+        "np_objstore_access_logs",
+        "np_objstore_webhook_events"
       ],
       "webhooks": [
         "bucket.created",
@@ -6008,11 +6008,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "photos_albums",
-        "photos_items",
-        "photos_tags",
-        "photos_faces",
-        "photos_webhook_events"
+        "np_photos_albums",
+        "np_photos_items",
+        "np_photos_tags",
+        "np_photos_faces",
+        "np_photos_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -6097,15 +6097,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "rec_recordings",
-        "rec_schedules",
-        "rec_encode_jobs"
+        "np_rec_recordings",
+        "np_rec_schedules",
+        "np_rec_encode_jobs"
       ],
       "views": [
-        "rec_recordings_by_status",
-        "rec_storage_by_type",
-        "rec_success_rate",
-        "rec_scheduled_vs_completed"
+        "np_rec_recordings_by_status",
+        "np_rec_storage_by_type",
+        "np_rec_success_rate",
+        "np_rec_scheduled_vs_completed"
       ],
       "webhooks": [
         "sports",
@@ -6254,11 +6254,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "search_indexes",
-        "search_documents",
-        "search_synonyms",
-        "search_queries",
-        "search_webhook_events"
+        "np_search_indexes",
+        "np_search_documents",
+        "np_search_synonyms",
+        "np_search_queries",
+        "np_search_webhook_events"
       ],
       "webhooks": [
         "index.created",
@@ -6377,13 +6377,13 @@
         "framework": "fastify"
       },
       "tables": [
-        "social_posts",
-        "social_comments",
-        "social_reactions",
-        "social_follows",
-        "social_bookmarks",
-        "social_shares",
-        "social_webhook_events"
+        "np_social_posts",
+        "np_social_comments",
+        "np_social_reactions",
+        "np_social_follows",
+        "np_social_bookmarks",
+        "np_social_shares",
+        "np_social_webhook_events"
       ],
       "webhooks": [
         "post.created",
@@ -6472,7 +6472,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/sports",
       "minNselfVersion": "0.4.8",
-      "category": "external-data",
+      "category": "sports",
       "tags": [
         "sports",
         "nfl",
@@ -6493,22 +6493,22 @@
         "framework": "fastify"
       },
       "tables": [
-        "sports_leagues",
-        "sports_teams",
-        "sports_events",
-        "sports_games",
-        "sports_standings",
-        "sports_players",
-        "sports_favorites",
-        "sports_provider_syncs",
-        "sports_schedule_cache",
-        "sports_sync_state",
-        "sports_webhook_events"
+        "np_sports_leagues",
+        "np_sports_teams",
+        "np_sports_events",
+        "np_sports_games",
+        "np_sports_standings",
+        "np_sports_players",
+        "np_sports_favorites",
+        "np_sports_provider_syncs",
+        "np_sports_schedule_cache",
+        "np_sports_sync_state",
+        "np_sports_webhook_events"
       ],
       "views": [
-        "sports_upcoming_events",
-        "sports_live_events",
-        "sports_untriggered_recordings"
+        "np_sports_upcoming_events",
+        "np_sports_live_events",
+        "np_sports_untriggered_recordings"
       ],
       "webhooks": [
         "game.score_updated",
@@ -6666,16 +6666,16 @@
         "framework": "fastify"
       },
       "tables": [
-        "sg_stream_sessions",
-        "sg_streams",
-        "sg_admission_rules",
-        "sg_viewer_analytics"
+        "np_streamgw_stream_sessions",
+        "np_streamgw_streams",
+        "np_streamgw_admission_rules",
+        "np_streamgw_viewer_analytics"
       ],
       "views": [
-        "sg_concurrent_viewers_over_time",
-        "sg_denial_rates",
-        "sg_stream_duration_distribution",
-        "sg_device_type_breakdown"
+        "np_streamgw_concurrent_viewers_over_time",
+        "np_streamgw_denial_rates",
+        "np_streamgw_stream_duration_distribution",
+        "np_streamgw_device_type_breakdown"
       ],
       "webhooks": [],
       "envVars": [
@@ -6788,16 +6788,16 @@
         "framework": "fastify"
       },
       "tables": [
-        "streaming_streams",
-        "streaming_keys",
-        "streaming_viewers",
-        "streaming_recordings",
-        "streaming_clips",
-        "streaming_analytics",
-        "streaming_moderators",
-        "streaming_chat_messages",
-        "streaming_reports",
-        "streaming_schedule"
+        "np_streaming_streams",
+        "np_streaming_keys",
+        "np_streaming_viewers",
+        "np_streaming_recordings",
+        "np_streaming_clips",
+        "np_streaming_analytics",
+        "np_streaming_moderators",
+        "np_streaming_chat_messages",
+        "np_streaming_reports",
+        "np_streaming_schedule"
       ],
       "webhooks": [
         "stream.started",
@@ -6863,7 +6863,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/support",
       "minNselfVersion": "0.4.8",
-      "category": "customer-support",
+      "category": "content",
       "tags": [
         "support",
         "helpdesk",
@@ -6886,15 +6886,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "nchat_support_sla_policies",
-        "nchat_support_teams",
-        "nchat_support_team_members",
-        "nchat_support_tickets",
-        "nchat_support_ticket_messages",
-        "nchat_support_ticket_events",
-        "nchat_support_canned_responses",
-        "nchat_support_kb_articles",
-        "nchat_support_webhook_events"
+        "np_support_support_sla_policies",
+        "np_support_support_teams",
+        "np_support_support_team_members",
+        "np_support_support_tickets",
+        "np_support_support_ticket_messages",
+        "np_support_support_ticket_events",
+        "np_support_support_canned_responses",
+        "np_support_support_kb_articles",
+        "np_support_support_webhook_events"
       ],
       "webhooks": [
         "ticket.created",
@@ -7096,13 +7096,13 @@
         "framework": "fastify"
       },
       "tables": [
-        "tmdb_movies",
-        "tmdb_tv_shows",
-        "tmdb_tv_seasons",
-        "tmdb_tv_episodes",
-        "tmdb_genres",
-        "tmdb_match_queue",
-        "tmdb_webhook_events"
+        "np_tmdb_movies",
+        "np_tmdb_tv_shows",
+        "np_tmdb_tv_seasons",
+        "np_tmdb_tv_episodes",
+        "np_tmdb_genres",
+        "np_tmdb_match_queue",
+        "np_tmdb_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -7194,11 +7194,11 @@
         "framework": "fastify"
       },
       "tables": [
-        "tokens_signing_keys",
-        "tokens_issued",
-        "tokens_encryption_keys",
-        "tokens_entitlements",
-        "tokens_webhook_events"
+        "np_tokens_signing_keys",
+        "np_tokens_issued",
+        "np_tokens_encryption_keys",
+        "np_tokens_entitlements",
+        "np_tokens_webhook_events"
       ],
       "webhooks": [],
       "envVars": [
@@ -7258,7 +7258,7 @@
       "repository": "https://github.com/acamarata/nself-plugins",
       "path": "plugins/web3",
       "minNselfVersion": "0.4.8",
-      "category": "web3",
+      "category": "integrations",
       "tags": [
         "web3",
         "blockchain",
@@ -7281,18 +7281,18 @@
         "framework": "fastify"
       },
       "tables": [
-        "web3_wallets",
-        "web3_nfts",
-        "web3_collections",
-        "web3_tokens",
-        "web3_token_balances",
-        "web3_token_gates",
-        "web3_gate_checks",
-        "web3_daos",
-        "web3_proposals",
-        "web3_votes",
-        "web3_transactions",
-        "web3_events"
+        "np_web3_wallets",
+        "np_web3_nfts",
+        "np_web3_collections",
+        "np_web3_tokens",
+        "np_web3_token_balances",
+        "np_web3_token_gates",
+        "np_web3_gate_checks",
+        "np_web3_daos",
+        "np_web3_proposals",
+        "np_web3_votes",
+        "np_web3_transactions",
+        "np_web3_events"
       ],
       "webhooks": [
         "wallet.connected",
@@ -7389,10 +7389,10 @@
         "framework": "fastify"
       },
       "tables": [
-        "webhook_endpoints",
-        "webhook_deliveries",
-        "webhook_event_types",
-        "webhook_dead_letters"
+        "np_webhooks_endpoints",
+        "np_webhooks_deliveries",
+        "np_webhooks_event_types",
+        "np_webhooks_dead_letters"
       ],
       "webhooks": [],
       "envVars": [
@@ -7494,15 +7494,15 @@
         "framework": "fastify"
       },
       "tables": [
-        "workflows_workflows",
-        "workflows_executions",
-        "workflows_execution_steps",
-        "workflows_triggers",
-        "workflows_actions",
-        "workflows_templates",
-        "workflows_variables",
-        "workflows_webhook_logs",
-        "workflows_approvals"
+        "np_workflows_workflows",
+        "np_workflows_executions",
+        "np_workflows_execution_steps",
+        "np_workflows_triggers",
+        "np_workflows_actions",
+        "np_workflows_templates",
+        "np_workflows_variables",
+        "np_workflows_webhook_logs",
+        "np_workflows_approvals"
       ],
       "webhooks": [
         "workflow.created",
@@ -7554,23 +7554,23 @@
       "description": "Comprehensive data operations platform with GDPR-compliant export/deletion, bulk import/export, cross-platform migration, backup/restore, and data portability",
       "author": "nself",
       "license": "Source-Available",
-      "category": "data-management",
+      "category": "data",
       "path": "plugins/data-operations",
       "language": "backend-service",
       "minNselfVersion": "0.4.8",
       "repository": "https://github.com/acamarata/nself-plugins",
       "tables": [
-        "dataops_export_requests",
-        "dataops_import_requests",
-        "dataops_deletion_requests",
-        "dataops_migration_jobs",
-        "dataops_backup_snapshots",
-        "dataops_restore_jobs",
-        "dataops_transform_templates",
-        "dataops_plugin_registry",
-        "dataops_transfer_audit",
-        "dataops_backup_schedule",
-        "dataops_webhook_events"
+        "np_dataops_export_requests",
+        "np_dataops_import_requests",
+        "np_dataops_deletion_requests",
+        "np_dataops_migration_jobs",
+        "np_dataops_backup_snapshots",
+        "np_dataops_restore_jobs",
+        "np_dataops_transform_templates",
+        "np_dataops_plugin_registry",
+        "np_dataops_transfer_audit",
+        "np_dataops_backup_schedule",
+        "np_dataops_webhook_events"
       ],
       "webhooks": [
         "export.completed",

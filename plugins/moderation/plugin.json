@@ -7,30 +7,39 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/moderation",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "content-safety",
-  "tags": ["moderation", "profanity", "toxicity", "content-filter", "safety", "review-queue", "appeals", "policy-engine", "ai-moderation", "strikes"],
-
-  "tables": [
-    "moderation_rules",
-    "moderation_wordlists",
-    "moderation_actions",
-    "moderation_flags",
-    "moderation_appeals",
-    "moderation_reports",
-    "moderation_toxicity_scores",
-    "moderation_user_stats",
-    "moderation_audit_log",
-    "mod_reviews",
-    "mod_policies",
-    "mod_user_strikes",
-    "cp_policies",
-    "cp_rules",
-    "cp_evaluations",
-    "cp_word_lists",
-    "cp_overrides",
-    "moderation_webhook_events"
+  "category": "content",
+  "tags": [
+    "moderation",
+    "profanity",
+    "toxicity",
+    "content-filter",
+    "safety",
+    "review-queue",
+    "appeals",
+    "policy-engine",
+    "ai-moderation",
+    "strikes"
   ],
-
+  "tables": [
+    "np_moderation_rules",
+    "np_moderation_wordlists",
+    "np_moderation_actions",
+    "np_moderation_flags",
+    "np_moderation_appeals",
+    "np_moderation_reports",
+    "np_moderation_toxicity_scores",
+    "np_moderation_user_stats",
+    "np_moderation_audit_log",
+    "np_moderation_mod_reviews",
+    "np_moderation_mod_policies",
+    "np_moderation_mod_user_strikes",
+    "np_moderation_cp_policies",
+    "np_moderation_cp_rules",
+    "np_moderation_cp_evaluations",
+    "np_moderation_cp_word_lists",
+    "np_moderation_cp_overrides",
+    "np_moderation_webhook_events"
+  ],
   "webhooks": {
     "action.created": "New moderation action taken",
     "action.revoked": "Moderation action revoked",
@@ -48,7 +57,6 @@
     "user.strike.added": "Strike added to user",
     "user.strike.threshold": "User reached strike threshold"
   },
-
   "actions": {
     "init": "Initialize moderation database schema",
     "server": "Start moderation HTTP server",
@@ -65,7 +73,6 @@
     "user-status": "Check user moderation status and strikes",
     "stats": "View moderation statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -109,7 +116,6 @@
       "CP_EVALUATION_LOG_ENABLED"
     ]
   },
-
   "config": {
     "defaultPort": 3704,
     "toxicityEnabled": false,
@@ -119,23 +125,33 @@
     "appealsEnabled": true,
     "appealsTimeLimitDays": 7
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["api.openai.com", "vision.googleapis.com", "rekognition.*.amazonaws.com"],
-    "filesystem": ["logs", "cache", "temp"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "api.openai.com",
+      "vision.googleapis.com",
+      "rekognition.*.amazonaws.com"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
   }
 }

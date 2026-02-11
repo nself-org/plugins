@@ -36,27 +36,27 @@ The Stripe plugin provides complete synchronization of your Stripe account data 
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Customers | Customer profiles with metadata | `stripe_customers` |
-| Products | Product catalog | `stripe_products` |
-| Prices | Pricing information | `stripe_prices` |
-| Subscriptions | Active and past subscriptions | `stripe_subscriptions` |
-| Subscription Items | Individual subscription line items | `stripe_subscription_items` |
-| Invoices | All invoices | `stripe_invoices` |
-| Invoice Items | Individual invoice line items | `stripe_invoice_items` |
-| Payment Intents | Payment attempts | `stripe_payment_intents` |
-| Payment Methods | Saved payment methods | `stripe_payment_methods` |
-| Charges | Completed charges | `stripe_charges` |
-| Refunds | Refund records | `stripe_refunds` |
-| Disputes | Chargebacks and disputes | `stripe_disputes` |
-| Balance Transactions | Account balance history | `stripe_balance_transactions` |
-| Payouts | Payout records | `stripe_payouts` |
-| Coupons | Discount coupons | `stripe_coupons` |
-| Promotion Codes | Promo codes | `stripe_promotion_codes` |
-| Tax Rates | Tax rate definitions | `stripe_tax_rates` |
-| Setup Intents | Payment method setup attempts | `stripe_setup_intents` |
-| Checkout Sessions | Checkout session records | `stripe_checkout_sessions` |
-| Events | Stripe event log | `stripe_events` |
-| Webhook Events | Received webhook events | `stripe_webhook_events` |
+| Customers | Customer profiles with metadata | `np_stripe_customers` |
+| Products | Product catalog | `np_stripe_products` |
+| Prices | Pricing information | `np_stripe_prices` |
+| Subscriptions | Active and past subscriptions | `np_stripe_subscriptions` |
+| Subscription Items | Individual subscription line items | `np_stripe_subscription_items` |
+| Invoices | All invoices | `np_stripe_invoices` |
+| Invoice Items | Individual invoice line items | `np_stripe_invoice_items` |
+| Payment Intents | Payment attempts | `np_stripe_payment_intents` |
+| Payment Methods | Saved payment methods | `np_stripe_payment_methods` |
+| Charges | Completed charges | `np_stripe_charges` |
+| Refunds | Refund records | `np_stripe_refunds` |
+| Disputes | Chargebacks and disputes | `np_stripe_disputes` |
+| Balance Transactions | Account balance history | `np_stripe_balance_transactions` |
+| Payouts | Payout records | `np_stripe_payouts` |
+| Coupons | Discount coupons | `np_stripe_coupons` |
+| Promotion Codes | Promo codes | `np_stripe_promotion_codes` |
+| Tax Rates | Tax rate definitions | `np_stripe_tax_rates` |
+| Setup Intents | Payment method setup attempts | `np_stripe_setup_intents` |
+| Checkout Sessions | Checkout session records | `np_stripe_checkout_sessions` |
+| Events | Stripe event log | `np_stripe_events` |
+| Webhook Events | Received webhook events | `np_stripe_webhook_events` |
 
 ---
 
@@ -623,10 +623,10 @@ The plugin handles all Stripe webhook events. Here's the complete list:
 
 ## Database Schema
 
-### stripe_customers
+### np_stripe_customers
 
 ```sql
-CREATE TABLE stripe_customers (
+CREATE TABLE np_stripe_customers (
     id VARCHAR(255) PRIMARY KEY,              -- cus_xxx
     email VARCHAR(255),
     name VARCHAR(255),
@@ -650,15 +650,15 @@ CREATE TABLE stripe_customers (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_customers_email ON stripe_customers(email);
-CREATE INDEX idx_stripe_customers_created ON stripe_customers(created_at DESC);
-CREATE INDEX idx_stripe_customers_synced ON stripe_customers(synced_at DESC);
+CREATE INDEX idx_stripe_customers_email ON np_stripe_customers(email);
+CREATE INDEX idx_stripe_customers_created ON np_stripe_customers(created_at DESC);
+CREATE INDEX idx_stripe_customers_synced ON np_stripe_customers(synced_at DESC);
 ```
 
-### stripe_products
+### np_stripe_products
 
 ```sql
-CREATE TABLE stripe_products (
+CREATE TABLE np_stripe_products (
     id VARCHAR(255) PRIMARY KEY,              -- prod_xxx
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -681,16 +681,16 @@ CREATE TABLE stripe_products (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_products_active ON stripe_products(active);
-CREATE INDEX idx_stripe_products_type ON stripe_products(type);
+CREATE INDEX idx_stripe_products_active ON np_stripe_products(active);
+CREATE INDEX idx_stripe_products_type ON np_stripe_products(type);
 ```
 
-### stripe_prices
+### np_stripe_prices
 
 ```sql
-CREATE TABLE stripe_prices (
+CREATE TABLE np_stripe_prices (
     id VARCHAR(255) PRIMARY KEY,              -- price_xxx
-    product_id VARCHAR(255) REFERENCES stripe_products(id),
+    product_id VARCHAR(255) REFERENCES np_stripe_products(id),
     active BOOLEAN DEFAULT TRUE,
     currency VARCHAR(3) NOT NULL,
     unit_amount INTEGER,                      -- Amount in cents (null for metered)
@@ -714,17 +714,17 @@ CREATE TABLE stripe_prices (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_prices_product ON stripe_prices(product_id);
-CREATE INDEX idx_stripe_prices_active ON stripe_prices(active);
-CREATE INDEX idx_stripe_prices_type ON stripe_prices(type);
+CREATE INDEX idx_stripe_prices_product ON np_stripe_prices(product_id);
+CREATE INDEX idx_stripe_prices_active ON np_stripe_prices(active);
+CREATE INDEX idx_stripe_prices_type ON np_stripe_prices(type);
 ```
 
-### stripe_subscriptions
+### np_stripe_subscriptions
 
 ```sql
-CREATE TABLE stripe_subscriptions (
+CREATE TABLE np_stripe_subscriptions (
     id VARCHAR(255) PRIMARY KEY,              -- sub_xxx
-    customer_id VARCHAR(255) REFERENCES stripe_customers(id),
+    customer_id VARCHAR(255) REFERENCES np_stripe_customers(id),
     status VARCHAR(20) NOT NULL,              -- active, past_due, unpaid, canceled, incomplete, incomplete_expired, trialing, paused
     current_period_start TIMESTAMP WITH TIME ZONE,
     current_period_end TIMESTAMP WITH TIME ZONE,
@@ -763,18 +763,18 @@ CREATE TABLE stripe_subscriptions (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_subscriptions_customer ON stripe_subscriptions(customer_id);
-CREATE INDEX idx_stripe_subscriptions_status ON stripe_subscriptions(status);
-CREATE INDEX idx_stripe_subscriptions_created ON stripe_subscriptions(created_at DESC);
-CREATE INDEX idx_stripe_subscriptions_period ON stripe_subscriptions(current_period_end);
+CREATE INDEX idx_stripe_subscriptions_customer ON np_stripe_subscriptions(customer_id);
+CREATE INDEX idx_stripe_subscriptions_status ON np_stripe_subscriptions(status);
+CREATE INDEX idx_stripe_subscriptions_created ON np_stripe_subscriptions(created_at DESC);
+CREATE INDEX idx_stripe_subscriptions_period ON np_stripe_subscriptions(current_period_end);
 ```
 
-### stripe_invoices
+### np_stripe_invoices
 
 ```sql
-CREATE TABLE stripe_invoices (
+CREATE TABLE np_stripe_invoices (
     id VARCHAR(255) PRIMARY KEY,              -- in_xxx
-    customer_id VARCHAR(255) REFERENCES stripe_customers(id),
+    customer_id VARCHAR(255) REFERENCES np_stripe_customers(id),
     subscription_id VARCHAR(255),
     status VARCHAR(20),                       -- draft, open, paid, uncollectible, void
     collection_method VARCHAR(20),
@@ -851,17 +851,17 @@ CREATE TABLE stripe_invoices (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_invoices_customer ON stripe_invoices(customer_id);
-CREATE INDEX idx_stripe_invoices_subscription ON stripe_invoices(subscription_id);
-CREATE INDEX idx_stripe_invoices_status ON stripe_invoices(status);
-CREATE INDEX idx_stripe_invoices_created ON stripe_invoices(created_at DESC);
-CREATE INDEX idx_stripe_invoices_due ON stripe_invoices(due_date);
+CREATE INDEX idx_stripe_invoices_customer ON np_stripe_invoices(customer_id);
+CREATE INDEX idx_stripe_invoices_subscription ON np_stripe_invoices(subscription_id);
+CREATE INDEX idx_stripe_invoices_status ON np_stripe_invoices(status);
+CREATE INDEX idx_stripe_invoices_created ON np_stripe_invoices(created_at DESC);
+CREATE INDEX idx_stripe_invoices_due ON np_stripe_invoices(due_date);
 ```
 
-### stripe_payment_intents
+### np_stripe_payment_intents
 
 ```sql
-CREATE TABLE stripe_payment_intents (
+CREATE TABLE np_stripe_payment_intents (
     id VARCHAR(255) PRIMARY KEY,              -- pi_xxx
     customer_id VARCHAR(255),
     amount INTEGER NOT NULL,
@@ -904,15 +904,15 @@ CREATE TABLE stripe_payment_intents (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_payment_intents_customer ON stripe_payment_intents(customer_id);
-CREATE INDEX idx_stripe_payment_intents_status ON stripe_payment_intents(status);
-CREATE INDEX idx_stripe_payment_intents_created ON stripe_payment_intents(created_at DESC);
+CREATE INDEX idx_stripe_payment_intents_customer ON np_stripe_payment_intents(customer_id);
+CREATE INDEX idx_stripe_payment_intents_status ON np_stripe_payment_intents(status);
+CREATE INDEX idx_stripe_payment_intents_created ON np_stripe_payment_intents(created_at DESC);
 ```
 
-### stripe_charges
+### np_stripe_charges
 
 ```sql
-CREATE TABLE stripe_charges (
+CREATE TABLE np_stripe_charges (
     id VARCHAR(255) PRIMARY KEY,              -- ch_xxx
     customer_id VARCHAR(255),
     payment_intent VARCHAR(255),
@@ -963,18 +963,18 @@ CREATE TABLE stripe_charges (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_charges_customer ON stripe_charges(customer_id);
-CREATE INDEX idx_stripe_charges_payment_intent ON stripe_charges(payment_intent);
-CREATE INDEX idx_stripe_charges_status ON stripe_charges(status);
-CREATE INDEX idx_stripe_charges_created ON stripe_charges(created_at DESC);
+CREATE INDEX idx_stripe_charges_customer ON np_stripe_charges(customer_id);
+CREATE INDEX idx_stripe_charges_payment_intent ON np_stripe_charges(payment_intent);
+CREATE INDEX idx_stripe_charges_status ON np_stripe_charges(status);
+CREATE INDEX idx_stripe_charges_created ON np_stripe_charges(created_at DESC);
 ```
 
-### stripe_refunds
+### np_stripe_refunds
 
 ```sql
-CREATE TABLE stripe_refunds (
+CREATE TABLE np_stripe_refunds (
     id VARCHAR(255) PRIMARY KEY,              -- re_xxx
-    charge_id VARCHAR(255) REFERENCES stripe_charges(id),
+    charge_id VARCHAR(255) REFERENCES np_stripe_charges(id),
     payment_intent VARCHAR(255),
     amount INTEGER NOT NULL,
     currency VARCHAR(3) NOT NULL,
@@ -995,17 +995,17 @@ CREATE TABLE stripe_refunds (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_refunds_charge ON stripe_refunds(charge_id);
-CREATE INDEX idx_stripe_refunds_status ON stripe_refunds(status);
-CREATE INDEX idx_stripe_refunds_created ON stripe_refunds(created_at DESC);
+CREATE INDEX idx_stripe_refunds_charge ON np_stripe_refunds(charge_id);
+CREATE INDEX idx_stripe_refunds_status ON np_stripe_refunds(status);
+CREATE INDEX idx_stripe_refunds_created ON np_stripe_refunds(created_at DESC);
 ```
 
-### stripe_disputes
+### np_stripe_disputes
 
 ```sql
-CREATE TABLE stripe_disputes (
+CREATE TABLE np_stripe_disputes (
     id VARCHAR(255) PRIMARY KEY,              -- dp_xxx
-    charge_id VARCHAR(255) REFERENCES stripe_charges(id),
+    charge_id VARCHAR(255) REFERENCES np_stripe_charges(id),
     payment_intent VARCHAR(255),
     amount INTEGER NOT NULL,
     currency VARCHAR(3) NOT NULL,
@@ -1024,15 +1024,15 @@ CREATE TABLE stripe_disputes (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_disputes_charge ON stripe_disputes(charge_id);
-CREATE INDEX idx_stripe_disputes_status ON stripe_disputes(status);
-CREATE INDEX idx_stripe_disputes_created ON stripe_disputes(created_at DESC);
+CREATE INDEX idx_stripe_disputes_charge ON np_stripe_disputes(charge_id);
+CREATE INDEX idx_stripe_disputes_status ON np_stripe_disputes(status);
+CREATE INDEX idx_stripe_disputes_created ON np_stripe_disputes(created_at DESC);
 ```
 
-### stripe_balance_transactions
+### np_stripe_balance_transactions
 
 ```sql
-CREATE TABLE stripe_balance_transactions (
+CREATE TABLE np_stripe_balance_transactions (
     id VARCHAR(255) PRIMARY KEY,              -- txn_xxx
     amount INTEGER NOT NULL,
     available_on TIMESTAMP WITH TIME ZONE,
@@ -1050,16 +1050,16 @@ CREATE TABLE stripe_balance_transactions (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_balance_transactions_source ON stripe_balance_transactions(source);
-CREATE INDEX idx_stripe_balance_transactions_type ON stripe_balance_transactions(type);
-CREATE INDEX idx_stripe_balance_transactions_created ON stripe_balance_transactions(created_at DESC);
-CREATE INDEX idx_stripe_balance_transactions_available ON stripe_balance_transactions(available_on);
+CREATE INDEX idx_stripe_balance_transactions_source ON np_stripe_balance_transactions(source);
+CREATE INDEX idx_stripe_balance_transactions_type ON np_stripe_balance_transactions(type);
+CREATE INDEX idx_stripe_balance_transactions_created ON np_stripe_balance_transactions(created_at DESC);
+CREATE INDEX idx_stripe_balance_transactions_available ON np_stripe_balance_transactions(available_on);
 ```
 
-### stripe_payouts
+### np_stripe_payouts
 
 ```sql
-CREATE TABLE stripe_payouts (
+CREATE TABLE np_stripe_payouts (
     id VARCHAR(255) PRIMARY KEY,              -- po_xxx
     amount INTEGER NOT NULL,
     currency VARCHAR(3) NOT NULL,
@@ -1086,15 +1086,15 @@ CREATE TABLE stripe_payouts (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_payouts_status ON stripe_payouts(status);
-CREATE INDEX idx_stripe_payouts_created ON stripe_payouts(created_at DESC);
-CREATE INDEX idx_stripe_payouts_arrival ON stripe_payouts(arrival_date);
+CREATE INDEX idx_stripe_payouts_status ON np_stripe_payouts(status);
+CREATE INDEX idx_stripe_payouts_created ON np_stripe_payouts(created_at DESC);
+CREATE INDEX idx_stripe_payouts_arrival ON np_stripe_payouts(arrival_date);
 ```
 
-### stripe_coupons
+### np_stripe_coupons
 
 ```sql
-CREATE TABLE stripe_coupons (
+CREATE TABLE np_stripe_coupons (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255),
     amount_off INTEGER,
@@ -1115,13 +1115,13 @@ CREATE TABLE stripe_coupons (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_coupons_valid ON stripe_coupons(valid);
+CREATE INDEX idx_stripe_coupons_valid ON np_stripe_coupons(valid);
 ```
 
-### stripe_webhook_events
+### np_stripe_webhook_events
 
 ```sql
-CREATE TABLE stripe_webhook_events (
+CREATE TABLE np_stripe_webhook_events (
     id VARCHAR(255) PRIMARY KEY,              -- evt_xxx or generated
     type VARCHAR(100) NOT NULL,               -- Event type
     data JSONB NOT NULL,                      -- Full event payload
@@ -1134,21 +1134,21 @@ CREATE TABLE stripe_webhook_events (
     received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_stripe_webhook_events_type ON stripe_webhook_events(type);
-CREATE INDEX idx_stripe_webhook_events_processed ON stripe_webhook_events(processed);
-CREATE INDEX idx_stripe_webhook_events_received ON stripe_webhook_events(received_at DESC);
+CREATE INDEX idx_stripe_webhook_events_type ON np_stripe_webhook_events(type);
+CREATE INDEX idx_stripe_webhook_events_processed ON np_stripe_webhook_events(processed);
+CREATE INDEX idx_stripe_webhook_events_received ON np_stripe_webhook_events(received_at DESC);
 ```
 
 ---
 
 ## Analytics Views
 
-### stripe_active_subscriptions
+### np_stripe_active_subscriptions
 
 Active subscriptions with customer details.
 
 ```sql
-CREATE VIEW stripe_active_subscriptions AS
+CREATE VIEW np_stripe_active_subscriptions AS
 SELECT
     s.id AS subscription_id,
     s.status,
@@ -1161,19 +1161,19 @@ SELECT
     s.items,
     s.metadata,
     s.created_at
-FROM stripe_subscriptions s
-JOIN stripe_customers c ON s.customer_id = c.id
+FROM np_stripe_subscriptions s
+JOIN np_stripe_customers c ON s.customer_id = c.id
 WHERE s.status IN ('active', 'trialing')
   AND c.deleted_at IS NULL
 ORDER BY s.created_at DESC;
 ```
 
-### stripe_mrr
+### np_stripe_mrr
 
 Monthly recurring revenue calculation.
 
 ```sql
-CREATE VIEW stripe_mrr AS
+CREATE VIEW np_stripe_mrr AS
 WITH active_subs AS (
     SELECT
         s.id,
@@ -1181,7 +1181,7 @@ WITH active_subs AS (
         s.items,
         s.current_period_start,
         s.current_period_end
-    FROM stripe_subscriptions s
+    FROM np_stripe_subscriptions s
     WHERE s.status = 'active'
 ),
 sub_amounts AS (
@@ -1215,12 +1215,12 @@ SELECT
 FROM monthly_amounts;
 ```
 
-### stripe_failed_payments
+### np_stripe_failed_payments
 
 Recent failed payment attempts.
 
 ```sql
-CREATE VIEW stripe_failed_payments AS
+CREATE VIEW np_stripe_failed_payments AS
 SELECT
     pi.id AS payment_intent_id,
     pi.amount / 100.0 AS amount,
@@ -1232,20 +1232,20 @@ SELECT
     c.email AS customer_email,
     c.name AS customer_name,
     pi.created_at
-FROM stripe_payment_intents pi
-LEFT JOIN stripe_customers c ON pi.customer_id = c.id
+FROM np_stripe_payment_intents pi
+LEFT JOIN np_stripe_customers c ON pi.customer_id = c.id
 WHERE pi.status IN ('requires_payment_method', 'canceled')
   AND pi.last_payment_error IS NOT NULL
 ORDER BY pi.created_at DESC
 LIMIT 100;
 ```
 
-### stripe_revenue_by_month
+### np_stripe_revenue_by_month
 
 Revenue aggregated by month.
 
 ```sql
-CREATE VIEW stripe_revenue_by_month AS
+CREATE VIEW np_stripe_revenue_by_month AS
 SELECT
     DATE_TRUNC('month', created_at) AS month,
     SUM(amount) AS gross_amount_cents,
@@ -1254,18 +1254,18 @@ SELECT
     SUM(CASE WHEN refunded THEN amount_refunded ELSE 0 END) AS refunded_cents,
     SUM(amount - COALESCE(amount_refunded, 0)) AS net_amount_cents,
     (SUM(amount) - SUM(COALESCE(amount_refunded, 0))) / 100.0 AS net_amount
-FROM stripe_charges
+FROM np_stripe_charges
 WHERE status = 'succeeded'
 GROUP BY DATE_TRUNC('month', created_at)
 ORDER BY month DESC;
 ```
 
-### stripe_customer_lifetime_value
+### np_stripe_customer_lifetime_value
 
 Customer lifetime value calculation.
 
 ```sql
-CREATE VIEW stripe_customer_lifetime_value AS
+CREATE VIEW np_stripe_customer_lifetime_value AS
 SELECT
     c.id AS customer_id,
     c.email,
@@ -1276,32 +1276,32 @@ SELECT
     AVG(ch.amount) / 100.0 AS average_charge,
     MAX(ch.created_at) AS last_charge_date,
     EXTRACT(DAYS FROM NOW() - c.created_at) AS customer_age_days
-FROM stripe_customers c
-LEFT JOIN stripe_charges ch ON c.id = ch.customer_id AND ch.status = 'succeeded'
+FROM np_stripe_customers c
+LEFT JOIN np_stripe_charges ch ON c.id = ch.customer_id AND ch.status = 'succeeded'
 WHERE c.deleted_at IS NULL
 GROUP BY c.id, c.email, c.name, c.created_at
 HAVING COUNT(ch.id) > 0
 ORDER BY SUM(ch.amount) DESC;
 ```
 
-### stripe_subscription_churn
+### np_stripe_subscription_churn
 
 Subscription churn metrics.
 
 ```sql
-CREATE VIEW stripe_subscription_churn AS
+CREATE VIEW np_stripe_subscription_churn AS
 WITH monthly_data AS (
     SELECT
         DATE_TRUNC('month', created_at) AS month,
         COUNT(*) AS new_subscriptions
-    FROM stripe_subscriptions
+    FROM np_stripe_subscriptions
     GROUP BY DATE_TRUNC('month', created_at)
 ),
 canceled_data AS (
     SELECT
         DATE_TRUNC('month', canceled_at) AS month,
         COUNT(*) AS canceled_subscriptions
-    FROM stripe_subscriptions
+    FROM np_stripe_subscriptions
     WHERE canceled_at IS NOT NULL
     GROUP BY DATE_TRUNC('month', canceled_at)
 )
@@ -1398,7 +1398,7 @@ async function* listAllCustomers(): AsyncGenerator<Stripe.Customer[]> {
 ```typescript
 async function upsertCustomer(customer: CustomerRecord): Promise<void> {
     await db.query(`
-        INSERT INTO stripe_customers (id, email, name, metadata, created_at, synced_at)
+        INSERT INTO np_stripe_customers (id, email, name, metadata, created_at, synced_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
         ON CONFLICT (id) DO UPDATE SET
             email = EXCLUDED.email,
@@ -1469,10 +1469,10 @@ SELECT
             ELSE 0
         END
     ) / 100.0 AS monthly_value
-FROM stripe_subscriptions s
-JOIN stripe_customers c ON s.customer_id = c.id
-JOIN stripe_subscription_items si ON s.id = si.subscription_id
-JOIN stripe_prices p ON si.price_id = p.id
+FROM np_stripe_subscriptions s
+JOIN np_stripe_customers c ON s.customer_id = c.id
+JOIN np_stripe_subscription_items si ON s.id = si.subscription_id
+JOIN np_stripe_prices p ON si.price_id = p.id
 WHERE s.status = 'active'
 GROUP BY c.email, s.status
 ORDER BY monthly_value DESC;
@@ -1488,9 +1488,9 @@ SELECT
     s.cancel_at_period_end,
     i.amount / 100.0 AS last_invoice_amount,
     i.status AS last_invoice_status
-FROM stripe_customers c
-JOIN stripe_subscriptions s ON c.id = s.customer_id
-LEFT JOIN stripe_invoices i ON s.latest_invoice = i.id
+FROM np_stripe_customers c
+JOIN np_stripe_subscriptions s ON c.id = s.customer_id
+LEFT JOIN np_stripe_invoices i ON s.latest_invoice = i.id
 WHERE s.status = 'active'
   AND (
       s.cancel_at_period_end = TRUE
@@ -1510,10 +1510,10 @@ SELECT
     p.currency,
     COUNT(DISTINCT s.id) AS active_subscriptions,
     SUM(p.unit_amount) / 100.0 AS total_mrr
-FROM stripe_products pr
-JOIN stripe_prices p ON pr.id = p.product_id
-JOIN stripe_subscription_items si ON p.id = si.price_id
-JOIN stripe_subscriptions s ON si.subscription_id = s.id
+FROM np_stripe_products pr
+JOIN np_stripe_prices p ON pr.id = p.product_id
+JOIN np_stripe_subscription_items si ON p.id = si.price_id
+JOIN np_stripe_subscriptions s ON si.subscription_id = s.id
 WHERE s.status = 'active'
 GROUP BY pr.name, p.nickname, p.unit_amount, p.currency
 ORDER BY total_mrr DESC;
@@ -1639,18 +1639,18 @@ For optimal performance with large datasets:
 ```sql
 -- Create additional indexes for common query patterns
 CREATE INDEX CONCURRENTLY idx_stripe_subscriptions_cancel_at
-    ON stripe_subscriptions(cancel_at) WHERE cancel_at IS NOT NULL;
+    ON np_stripe_subscriptions(cancel_at) WHERE cancel_at IS NOT NULL;
 
 CREATE INDEX CONCURRENTLY idx_stripe_invoices_amount
-    ON stripe_invoices(amount_due DESC) WHERE status = 'open';
+    ON np_stripe_invoices(amount_due DESC) WHERE status = 'open';
 
 CREATE INDEX CONCURRENTLY idx_stripe_customers_balance
-    ON stripe_customers(balance) WHERE balance != 0;
+    ON np_stripe_customers(balance) WHERE balance != 0;
 
 -- Analyze tables for query optimization
-ANALYZE stripe_customers;
-ANALYZE stripe_subscriptions;
-ANALYZE stripe_invoices;
+ANALYZE np_stripe_customers;
+ANALYZE np_stripe_subscriptions;
+ANALYZE np_stripe_invoices;
 ```
 
 ### Sync Optimization
@@ -1746,7 +1746,7 @@ function verifyWebhookSignature(
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Example: Encrypt customer notes (if needed)
-ALTER TABLE stripe_customers
+ALTER TABLE np_stripe_customers
     ADD COLUMN encrypted_notes BYTEA;
 
 -- Store encrypted:
@@ -1766,18 +1766,18 @@ ALTER TABLE stripe_customers
 **Database Permissions:**
 ```sql
 -- Create read-only user for analytics
-CREATE USER stripe_readonly WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE nself TO stripe_readonly;
-GRANT USAGE ON SCHEMA public TO stripe_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO stripe_readonly;
+CREATE USER np_stripe_readonly WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO np_stripe_readonly;
+GRANT USAGE ON SCHEMA public TO np_stripe_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO np_stripe_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT SELECT ON TABLES TO stripe_readonly;
+    GRANT SELECT ON TABLES TO np_stripe_readonly;
 
 -- Create restricted user for plugin (no DELETE)
-CREATE USER stripe_plugin WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE nself TO stripe_plugin;
-GRANT USAGE ON SCHEMA public TO stripe_plugin;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO stripe_plugin;
+CREATE USER np_stripe_plugin WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO np_stripe_plugin;
+GRANT USAGE ON SCHEMA public TO np_stripe_plugin;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO np_stripe_plugin;
 ```
 
 ### Network Security
@@ -1796,10 +1796,10 @@ iptables -A INPUT -p tcp --dport 3001 -s 3.130.192.231/32 -j ACCEPT
 **Rate Limiting:**
 ```nginx
 # Nginx rate limiting for webhook endpoint
-limit_req_zone $binary_remote_addr zone=stripe_webhook:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=np_stripe_webhook:10m rate=10r/s;
 
 location /webhook {
-    limit_req zone=stripe_webhook burst=20;
+    limit_req zone=np_stripe_webhook burst=20;
     proxy_pass http://localhost:3001;
 }
 ```
@@ -1849,9 +1849,9 @@ async function calculateRealTimeMRR(): Promise<number> {
         ELSE 0
       END * si.quantity
     ) AS mrr_cents
-    FROM stripe_subscriptions s
-    JOIN stripe_subscription_items si ON s.id = si.subscription_id
-    JOIN stripe_prices p ON si.price_id = p.id
+    FROM np_stripe_subscriptions s
+    JOIN np_stripe_subscription_items si ON s.id = si.subscription_id
+    JOIN np_stripe_prices p ON si.price_id = p.id
     WHERE s.status IN ('active', 'trialing')
   `);
 
@@ -1874,11 +1874,11 @@ async function identifyChurnRisk() {
       s.cancel_at_period_end,
       COUNT(i.*) FILTER (WHERE i.status = 'open') AS unpaid_invoices,
       COUNT(pi.*) FILTER (WHERE pi.status = 'requires_payment_method') AS failed_payments
-    FROM stripe_customers c
-    JOIN stripe_subscriptions s ON c.id = s.customer_id
-    LEFT JOIN stripe_invoices i ON c.id = i.customer_id
+    FROM np_stripe_customers c
+    JOIN np_stripe_subscriptions s ON c.id = s.customer_id
+    LEFT JOIN np_stripe_invoices i ON c.id = i.customer_id
         AND i.created_at > NOW() - INTERVAL '30 days'
-    LEFT JOIN stripe_payment_intents pi ON c.id = pi.customer_id
+    LEFT JOIN np_stripe_payment_intents pi ON c.id = pi.customer_id
         AND pi.created_at > NOW() - INTERVAL '30 days'
     WHERE s.status = 'active'
       AND (
@@ -1948,7 +1948,7 @@ async function handleFailedPayment(invoice: Stripe.Invoice) {
 
 ```sql
 -- Create dunning management view
-CREATE VIEW stripe_dunning_candidates AS
+CREATE VIEW np_stripe_dunning_candidates AS
 SELECT
   c.id AS customer_id,
   c.email,
@@ -1963,9 +1963,9 @@ SELECT
     WHEN i.attempt_count = 2 THEN 'Send urgent notice'
     WHEN i.attempt_count >= 3 THEN 'Pause subscription'
   END AS recommended_action
-FROM stripe_customers c
-JOIN stripe_subscriptions s ON c.id = s.customer_id
-JOIN stripe_invoices i ON s.latest_invoice = i.id
+FROM np_stripe_customers c
+JOIN np_stripe_subscriptions s ON c.id = s.customer_id
+JOIN np_stripe_invoices i ON s.latest_invoice = i.id
 WHERE i.status IN ('open', 'uncollectible')
   AND s.status = 'active'
 ORDER BY i.attempt_count DESC, i.next_payment_attempt;
@@ -1975,7 +1975,7 @@ ORDER BY i.attempt_count DESC, i.next_payment_attempt;
 
 ```sql
 -- Deferred revenue calculation
-CREATE VIEW stripe_deferred_revenue AS
+CREATE VIEW np_stripe_deferred_revenue AS
 SELECT
   DATE_TRUNC('month', s.current_period_start) AS period_month,
   SUM(
@@ -1985,9 +1985,9 @@ SELECT
     END * si.quantity
   ) / 100.0 AS monthly_recognized_revenue,
   COUNT(DISTINCT s.id) AS active_subscriptions
-FROM stripe_subscriptions s
-JOIN stripe_subscription_items si ON s.id = si.subscription_id
-JOIN stripe_prices p ON si.price_id = p.id
+FROM np_stripe_subscriptions s
+JOIN np_stripe_subscription_items si ON s.id = si.subscription_id
+JOIN np_stripe_prices p ON si.price_id = p.id
 WHERE s.status IN ('active', 'trialing')
   AND s.current_period_start >= DATE_TRUNC('month', NOW() - INTERVAL '12 months')
 GROUP BY DATE_TRUNC('month', s.current_period_start)
@@ -2005,37 +2005,37 @@ ORDER BY period_month DESC;
 */5 * * * * curl -s http://localhost:3001/health | jq -e '.status == "ok"' || alert-team
 
 # Monitor webhook processing
-*/10 * * * * psql $DATABASE_URL -c "SELECT COUNT(*) FROM stripe_webhook_events WHERE processed = FALSE AND received_at < NOW() - INTERVAL '1 hour'" | grep -q "^0$" || alert-team
+*/10 * * * * psql $DATABASE_URL -c "SELECT COUNT(*) FROM np_stripe_webhook_events WHERE processed = FALSE AND received_at < NOW() - INTERVAL '1 hour'" | grep -q "^0$" || alert-team
 ```
 
 ### Key Metrics to Monitor
 
 ```sql
 -- Failed webhook events
-SELECT COUNT(*) FROM stripe_webhook_events
+SELECT COUNT(*) FROM np_stripe_webhook_events
 WHERE processed = FALSE
   AND received_at > NOW() - INTERVAL '24 hours';
 
 -- Sync lag (time since last successful sync)
 SELECT MAX(synced_at) AS last_sync,
        NOW() - MAX(synced_at) AS lag
-FROM stripe_customers;
+FROM np_stripe_customers;
 
 -- Failed payments last 24h
-SELECT COUNT(*) FROM stripe_payment_intents
+SELECT COUNT(*) FROM np_stripe_payment_intents
 WHERE status IN ('requires_payment_method', 'canceled')
   AND created_at > NOW() - INTERVAL '24 hours';
 
 -- Subscription churn rate (monthly)
 WITH current_month AS (
   SELECT COUNT(*) AS total
-  FROM stripe_subscriptions
+  FROM np_stripe_subscriptions
   WHERE status = 'active'
     AND created_at < DATE_TRUNC('month', NOW())
 ),
 churned_this_month AS (
   SELECT COUNT(*) AS churned
-  FROM stripe_subscriptions
+  FROM np_stripe_subscriptions
   WHERE status = 'canceled'
     AND canceled_at >= DATE_TRUNC('month', NOW())
 )
@@ -2053,21 +2053,21 @@ const registry = new Registry();
 
 // Define metrics
 const webhookCounter = new Counter({
-  name: 'stripe_webhooks_total',
+  name: 'np_stripe_webhooks_total',
   help: 'Total Stripe webhooks received',
   labelNames: ['type', 'status'],
   registers: [registry]
 });
 
 const syncDuration = new Histogram({
-  name: 'stripe_sync_duration_seconds',
+  name: 'np_stripe_sync_duration_seconds',
   help: 'Stripe sync duration',
   labelNames: ['resource'],
   registers: [registry]
 });
 
 const mrrGauge = new Gauge({
-  name: 'stripe_mrr_cents',
+  name: 'np_stripe_mrr_cents',
   help: 'Monthly recurring revenue in cents',
   registers: [registry]
 });

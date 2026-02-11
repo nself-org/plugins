@@ -1238,12 +1238,12 @@ The Link Preview Plugin does **not** expose webhook endpoints. All operations ar
 
 The plugin creates **7 tables** in PostgreSQL for link preview data, templates, oEmbed providers, blocklist, settings, usage tracking, and analytics.
 
-### Table: `lp_link_previews`
+### Table: `np_linkprev_link_previews`
 
 Link preview cache with metadata.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_link_previews (
+CREATE TABLE IF NOT EXISTS np_linkprev_link_previews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   url TEXT NOT NULL,
@@ -1281,13 +1281,13 @@ CREATE TABLE IF NOT EXISTS lp_link_previews (
   UNIQUE(source_account_id, url_hash)
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_previews_source_account ON lp_link_previews(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_previews_hash ON lp_link_previews(url_hash);
-CREATE INDEX IF NOT EXISTS idx_lp_previews_url ON lp_link_previews(url);
-CREATE INDEX IF NOT EXISTS idx_lp_previews_expires ON lp_link_previews(cache_expires_at);
-CREATE INDEX IF NOT EXISTS idx_lp_previews_site ON lp_link_previews(site_name);
-CREATE INDEX IF NOT EXISTS idx_lp_previews_created ON lp_link_previews(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_lp_previews_status ON lp_link_previews(status);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_source_account ON np_linkprev_link_previews(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_hash ON np_linkprev_link_previews(url_hash);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_url ON np_linkprev_link_previews(url);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_expires ON np_linkprev_link_previews(cache_expires_at);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_site ON np_linkprev_link_previews(site_name);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_created ON np_linkprev_link_previews(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lp_previews_status ON np_linkprev_link_previews(status);
 ```
 
 **Key Columns:**
@@ -1300,15 +1300,15 @@ CREATE INDEX IF NOT EXISTS idx_lp_previews_status ON lp_link_previews(status);
 
 ---
 
-### Table: `lp_link_preview_usage`
+### Table: `np_linkprev_link_preview_usage`
 
 Usage tracking for previews.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_link_preview_usage (
+CREATE TABLE IF NOT EXISTS np_linkprev_link_preview_usage (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  preview_id UUID NOT NULL REFERENCES lp_link_previews(id) ON DELETE CASCADE,
+  preview_id UUID NOT NULL REFERENCES np_linkprev_link_previews(id) ON DELETE CASCADE,
   message_id VARCHAR(255),
   user_id VARCHAR(255),
   channel_id VARCHAR(255),
@@ -1317,23 +1317,23 @@ CREATE TABLE IF NOT EXISTS lp_link_preview_usage (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_usage_source_account ON lp_link_preview_usage(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_usage_preview ON lp_link_preview_usage(preview_id);
-CREATE INDEX IF NOT EXISTS idx_lp_usage_message ON lp_link_preview_usage(message_id);
-CREATE INDEX IF NOT EXISTS idx_lp_usage_user ON lp_link_preview_usage(user_id);
-CREATE INDEX IF NOT EXISTS idx_lp_usage_created ON lp_link_preview_usage(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_lp_usage_source_account ON np_linkprev_link_preview_usage(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_usage_preview ON np_linkprev_link_preview_usage(preview_id);
+CREATE INDEX IF NOT EXISTS idx_lp_usage_message ON np_linkprev_link_preview_usage(message_id);
+CREATE INDEX IF NOT EXISTS idx_lp_usage_user ON np_linkprev_link_preview_usage(user_id);
+CREATE INDEX IF NOT EXISTS idx_lp_usage_created ON np_linkprev_link_preview_usage(created_at DESC);
 ```
 
 **Purpose:** Tracks when and where previews are displayed, and records clicks for CTR analytics.
 
 ---
 
-### Table: `lp_preview_templates`
+### Table: `np_linkprev_preview_templates`
 
 Custom preview templates for specific URL patterns.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_preview_templates (
+CREATE TABLE IF NOT EXISTS np_linkprev_preview_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -1349,20 +1349,20 @@ CREATE TABLE IF NOT EXISTS lp_preview_templates (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_templates_source_account ON lp_preview_templates(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_templates_active ON lp_preview_templates(is_active, priority DESC);
+CREATE INDEX IF NOT EXISTS idx_lp_templates_source_account ON np_linkprev_preview_templates(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_templates_active ON np_linkprev_preview_templates(is_active, priority DESC);
 ```
 
 **Purpose:** Define custom HTML/CSS templates for specific URL patterns (e.g., YouTube, GitHub repos).
 
 ---
 
-### Table: `lp_oembed_providers`
+### Table: `np_linkprev_oembed_providers`
 
 oEmbed provider registry.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_oembed_providers (
+CREATE TABLE IF NOT EXISTS np_linkprev_oembed_providers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   provider_name VARCHAR(255) NOT NULL,
@@ -1379,20 +1379,20 @@ CREATE TABLE IF NOT EXISTS lp_oembed_providers (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_oembed_source_account ON lp_oembed_providers(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_oembed_active ON lp_oembed_providers(is_active);
+CREATE INDEX IF NOT EXISTS idx_lp_oembed_source_account ON np_linkprev_oembed_providers(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_oembed_active ON np_linkprev_oembed_providers(is_active);
 ```
 
 **Purpose:** Register oEmbed providers (YouTube, Vimeo, Twitter, etc.) with URL schemes and endpoint URLs.
 
 ---
 
-### Table: `lp_url_blocklist`
+### Table: `np_linkprev_url_blocklist`
 
 URL blocklist for spam, phishing, malware, and offensive content.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_url_blocklist (
+CREATE TABLE IF NOT EXISTS np_linkprev_url_blocklist (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   url_pattern TEXT NOT NULL,
@@ -1404,9 +1404,9 @@ CREATE TABLE IF NOT EXISTS lp_url_blocklist (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_blocklist_source_account ON lp_url_blocklist(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_blocklist_pattern ON lp_url_blocklist(url_pattern);
-CREATE INDEX IF NOT EXISTS idx_lp_blocklist_expires ON lp_url_blocklist(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_lp_blocklist_source_account ON np_linkprev_url_blocklist(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_blocklist_pattern ON np_linkprev_url_blocklist(url_pattern);
+CREATE INDEX IF NOT EXISTS idx_lp_blocklist_expires ON np_linkprev_url_blocklist(expires_at) WHERE expires_at IS NOT NULL;
 ```
 
 **Key Columns:**
@@ -1416,12 +1416,12 @@ CREATE INDEX IF NOT EXISTS idx_lp_blocklist_expires ON lp_url_blocklist(expires_
 
 ---
 
-### Table: `lp_preview_settings`
+### Table: `np_linkprev_preview_settings`
 
 Per-channel/user preview settings.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_preview_settings (
+CREATE TABLE IF NOT EXISTS np_linkprev_preview_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   scope VARCHAR(20) NOT NULL,
@@ -1440,8 +1440,8 @@ CREATE TABLE IF NOT EXISTS lp_preview_settings (
   UNIQUE(source_account_id, scope, scope_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_settings_source_account ON lp_preview_settings(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_settings_scope ON lp_preview_settings(scope, scope_id);
+CREATE INDEX IF NOT EXISTS idx_lp_settings_source_account ON np_linkprev_preview_settings(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_settings_scope ON np_linkprev_preview_settings(scope, scope_id);
 ```
 
 **Key Columns:**
@@ -1451,16 +1451,16 @@ CREATE INDEX IF NOT EXISTS idx_lp_settings_scope ON lp_preview_settings(scope, s
 
 ---
 
-### Table: `lp_preview_analytics`
+### Table: `np_linkprev_preview_analytics`
 
 Daily analytics for preview performance.
 
 ```sql
-CREATE TABLE IF NOT EXISTS lp_preview_analytics (
+CREATE TABLE IF NOT EXISTS np_linkprev_preview_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   date DATE NOT NULL,
-  preview_id UUID REFERENCES lp_link_previews(id) ON DELETE CASCADE,
+  preview_id UUID REFERENCES np_linkprev_link_previews(id) ON DELETE CASCADE,
   views_count INTEGER DEFAULT 0,
   clicks_count INTEGER DEFAULT 0,
   unique_users_count INTEGER DEFAULT 0,
@@ -1469,9 +1469,9 @@ CREATE TABLE IF NOT EXISTS lp_preview_analytics (
   UNIQUE(source_account_id, date, preview_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_lp_analytics_source_account ON lp_preview_analytics(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_lp_analytics_date ON lp_preview_analytics(date DESC);
-CREATE INDEX IF NOT EXISTS idx_lp_analytics_preview ON lp_preview_analytics(preview_id);
+CREATE INDEX IF NOT EXISTS idx_lp_analytics_source_account ON np_linkprev_preview_analytics(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_lp_analytics_date ON np_linkprev_preview_analytics(date DESC);
+CREATE INDEX IF NOT EXISTS idx_lp_analytics_preview ON np_linkprev_preview_analytics(preview_id);
 ```
 
 **Purpose:** Aggregate daily views, clicks, and CTR for each preview.
@@ -1876,7 +1876,7 @@ Test database connectivity:
 nself-link-preview status
 
 # Via SQL
-psql -h localhost -U postgres -d nself -c "SELECT COUNT(*) FROM lp_link_previews"
+psql -h localhost -U postgres -d nself -c "SELECT COUNT(*) FROM np_linkprev_link_previews"
 ```
 
 ---

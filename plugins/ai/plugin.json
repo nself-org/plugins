@@ -7,22 +7,29 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/ai",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "ai-ml",
-  "tags": ["ai", "llm", "openai", "anthropic", "embeddings", "semantic-search", "chat", "completions"],
-
-  "tables": [
-    "ai_models",
-    "ai_conversations",
-    "ai_messages",
-    "ai_requests",
-    "ai_embeddings",
-    "ai_prompt_templates",
-    "ai_functions",
-    "ai_function_calls",
-    "ai_usage_quotas",
-    "ai_features"
+  "category": "integrations",
+  "tags": [
+    "ai",
+    "llm",
+    "openai",
+    "anthropic",
+    "embeddings",
+    "semantic-search",
+    "chat",
+    "completions"
   ],
-
+  "tables": [
+    "np_ai_models",
+    "np_ai_conversations",
+    "np_ai_messages",
+    "np_ai_requests",
+    "np_ai_embeddings",
+    "np_ai_prompt_templates",
+    "np_ai_functions",
+    "np_ai_function_calls",
+    "np_ai_usage_quotas",
+    "np_ai_features"
+  ],
   "webhooks": {
     "conversation.created": "New AI conversation started",
     "conversation.completed": "AI conversation finished",
@@ -32,7 +39,6 @@
     "model.enabled": "AI model enabled",
     "model.disabled": "AI model disabled"
   },
-
   "actions": {
     "chat": "Send chat completions to AI models",
     "embed": "Generate embeddings for text",
@@ -42,7 +48,6 @@
     "usage": "View usage statistics",
     "quota": "Manage usage quotas"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -100,7 +105,6 @@
       "LOG_LEVEL"
     ]
   },
-
   "config": {
     "defaultPort": 3705,
     "defaultProvider": "openai",
@@ -109,23 +113,31 @@
     "embeddingsEnabled": true,
     "embeddingsDimensions": 1536
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["openai", "anthropic", "google"],
-    "filesystem": ["logs"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "openai",
+      "anthropic",
+      "google"
+    ],
+    "filesystem": [
+      "logs"
+    ]
   }
 }

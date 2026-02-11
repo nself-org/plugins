@@ -17,17 +17,17 @@
     "ingest"
   ],
   "tables": [
-    "dev_devices",
-    "dev_commands",
-    "dev_telemetry",
-    "dev_ingest_sessions",
-    "dev_audit_log"
+    "np_dev_devices",
+    "np_dev_commands",
+    "np_dev_telemetry",
+    "np_dev_ingest_sessions",
+    "np_dev_audit_log"
   ],
   "views": [
-    "dev_devices_by_status",
-    "dev_command_success_rate",
-    "dev_ingest_uptime",
-    "dev_health_trends"
+    "np_dev_devices_by_status",
+    "np_dev_command_success_rate",
+    "np_dev_ingest_uptime",
+    "np_dev_health_trends"
   ],
   "webhooks": {},
   "actions": {
@@ -119,7 +119,7 @@
   },
   "multiApp": {
     "supported": true,
-    "isolationColumn": "app_id",
+    "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "default"
   },

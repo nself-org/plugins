@@ -640,12 +640,12 @@ Get geolocation statistics.
 
 ## Database Schema
 
-### geo_locations
+### np_geoc_locations
 
 Stores historical location data.
 
 ```sql
-CREATE TABLE IF NOT EXISTS geo_locations (
+CREATE TABLE IF NOT EXISTS np_geoc_locations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -665,17 +665,17 @@ CREATE TABLE IF NOT EXISTS geo_locations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_geo_locations_source_app ON geo_locations(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_geo_locations_user ON geo_locations(source_account_id, user_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_geo_locations_recorded ON geo_locations(recorded_at);
+CREATE INDEX IF NOT EXISTS idx_geo_locations_source_app ON np_geoc_locations(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_geo_locations_user ON np_geoc_locations(source_account_id, user_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_geo_locations_recorded ON np_geoc_locations(recorded_at);
 ```
 
-### geo_latest
+### np_geoc_latest
 
 Stores current location for each user (one row per user).
 
 ```sql
-CREATE TABLE IF NOT EXISTS geo_latest (
+CREATE TABLE IF NOT EXISTS np_geoc_latest (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -694,15 +694,15 @@ CREATE TABLE IF NOT EXISTS geo_latest (
   UNIQUE(source_account_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_geo_latest_source_app ON geo_latest(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_geo_latest_source_app ON np_geoc_latest(source_account_id);
 ```
 
-### geo_fences
+### np_geoc_fences
 
 Stores geofences with circular or polygon boundaries.
 
 ```sql
-CREATE TABLE IF NOT EXISTS geo_fences (
+CREATE TABLE IF NOT EXISTS np_geoc_fences (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   owner_id VARCHAR(255) NOT NULL,
@@ -723,19 +723,19 @@ CREATE TABLE IF NOT EXISTS geo_fences (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_geo_fences_source_app ON geo_fences(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_geo_fences_owner ON geo_fences(source_account_id, owner_id);
+CREATE INDEX IF NOT EXISTS idx_geo_fences_source_app ON np_geoc_fences(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_geo_fences_owner ON np_geoc_fences(source_account_id, owner_id);
 ```
 
-### geo_fence_events
+### np_geoc_fence_events
 
 Stores geofence enter/exit events.
 
 ```sql
-CREATE TABLE IF NOT EXISTS geo_fence_events (
+CREATE TABLE IF NOT EXISTS np_geoc_fence_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  fence_id UUID NOT NULL REFERENCES geo_fences(id) ON DELETE CASCADE,
+  fence_id UUID NOT NULL REFERENCES np_geoc_fences(id) ON DELETE CASCADE,
   user_id VARCHAR(255) NOT NULL,
   event_type VARCHAR(10) NOT NULL,
   latitude DOUBLE PRECISION NOT NULL,
@@ -743,17 +743,17 @@ CREATE TABLE IF NOT EXISTS geo_fence_events (
   triggered_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_geo_fence_events_source_app ON geo_fence_events(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_geo_fence_events_fence ON geo_fence_events(fence_id, triggered_at DESC);
-CREATE INDEX IF NOT EXISTS idx_geo_fence_events_user ON geo_fence_events(source_account_id, user_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_geo_fence_events_source_app ON np_geoc_fence_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_geo_fence_events_fence ON np_geoc_fence_events(fence_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_geo_fence_events_user ON np_geoc_fence_events(source_account_id, user_id, triggered_at DESC);
 ```
 
-### geo_webhook_events
+### np_geoc_webhook_events
 
 Stores webhook events for asynchronous processing.
 
 ```sql
-CREATE TABLE IF NOT EXISTS geo_webhook_events (
+CREATE TABLE IF NOT EXISTS np_geoc_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -765,7 +765,7 @@ CREATE TABLE IF NOT EXISTS geo_webhook_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_geo_webhook_events_source_app ON geo_webhook_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_geo_webhook_events_source_app ON np_geoc_webhook_events(source_account_id);
 ```
 
 ## Examples
@@ -806,7 +806,7 @@ nself plugin geolocation history --user user123 --limit 10
 
 ```sql
 -- Create home geofence
-INSERT INTO geo_fences (
+INSERT INTO np_geoc_fences (
   source_account_id, owner_id, name, fence_type,
   latitude, longitude, radius_meters, trigger_on
 ) VALUES (
@@ -822,8 +822,8 @@ SELECT
   gfe.longitude,
   gfe.triggered_at,
   gf.name as fence_name
-FROM geo_fence_events gfe
-JOIN geo_fences gf ON gf.id = gfe.fence_id
+FROM np_geoc_fence_events gfe
+JOIN np_geoc_fences gf ON gf.id = gfe.fence_id
 WHERE gfe.source_account_id = 'primary'
   AND DATE(gfe.triggered_at) = CURRENT_DATE
 ORDER BY gfe.triggered_at DESC;
@@ -849,7 +849,7 @@ SELECT
   AVG(speed) as avg_speed,
   MODE() WITHIN GROUP (ORDER BY activity_type) as primary_activity,
   MAX(battery_level) - MIN(battery_level) as battery_consumption
-FROM geo_locations
+FROM np_geoc_locations
 WHERE source_account_id = 'primary'
   AND recorded_at >= NOW() - INTERVAL '7 days'
 GROUP BY user_id, DATE(recorded_at)
@@ -878,7 +878,7 @@ fetch('http://localhost:3026/api/location', {
 });
 
 // Server-side: Monitor for SOS events
-SELECT * FROM geo_webhook_events
+SELECT * FROM np_geoc_webhook_events
 WHERE event_type = 'geo.sos.triggered'
   AND processed = false
 ORDER BY created_at;
@@ -913,7 +913,7 @@ ORDER BY created_at;
 - Implement client-side throttling to reduce update frequency
 - Clean up old history:
   ```sql
-  DELETE FROM geo_locations
+  DELETE FROM np_geoc_locations
   WHERE recorded_at < NOW() - INTERVAL '90 days';
   ```
 
@@ -924,7 +924,7 @@ ORDER BY created_at;
 **Solutions:**
 - Verify geofence is active:
   ```sql
-  SELECT * FROM geo_fences WHERE id = 'fence-uuid';
+  SELECT * FROM np_geoc_fences WHERE id = 'fence-uuid';
   ```
 - Check geofence trigger setting (`trigger_on` should be 'both', 'enter', or 'exit')
 - Ensure `GEO_GEOFENCE_CHECK_ON_UPDATE=true`
@@ -935,7 +935,7 @@ ORDER BY created_at;
       ST_MakePoint(-122.4194, 37.7749)::geography,
       ST_MakePoint(longitude, latitude)::geography
     ) as distance_meters
-  FROM geo_latest
+  FROM np_geoc_latest
   WHERE user_id = 'user123';
   ```
 
@@ -959,7 +959,7 @@ ORDER BY created_at;
 - Add spatial index if using PostGIS:
   ```sql
   CREATE INDEX idx_geo_latest_location
-  ON geo_latest USING GIST (ST_MakePoint(longitude, latitude)::geography);
+  ON np_geoc_latest USING GIST (ST_MakePoint(longitude, latitude)::geography);
   ```
 - Reduce search radius to improve query performance
 - Limit number of results: use smaller `limit` parameter

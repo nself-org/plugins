@@ -559,7 +559,7 @@ nself plugin data-operations migrate \
 nself plugin data-operations migrate \
   --source-plugin stripe \
   --target-plugin custom-billing \
-  --mapping '{"stripe_customers": "billing_users", "stripe_subscriptions": "billing_plans"}'
+  --mapping '{"np_stripe_customers": "billing_users", "np_stripe_subscriptions": "billing_plans"}'
 
 # Start migration job
 nself plugin data-operations migrate start job_abc123
@@ -697,7 +697,7 @@ nself plugin data-operations transform test stripe-to-billing \
 nself plugin data-operations plugins register \
   --name stripe \
   --version 1.0.0 \
-  --tables stripe_customers,stripe_subscriptions,stripe_invoices \
+  --tables np_stripe_customers,np_stripe_subscriptions,np_stripe_invoices \
   --user-id-field customer_id
 
 # List registered plugins
@@ -711,7 +711,7 @@ nself plugin data-operations plugins unregister stripe
 
 # Update plugin registration
 nself plugin data-operations plugins update stripe \
-  --tables stripe_customers,stripe_subscriptions,stripe_invoices,stripe_charges
+  --tables np_stripe_customers,np_stripe_subscriptions,np_stripe_invoices,np_stripe_charges
 ```
 
 ### Audit Commands
@@ -916,7 +916,7 @@ Content-Type: application/json
   "description": "Migrate Stripe to custom billing",
   "template": "stripe-to-billing",
   "mapping": {
-    "stripe_customers": "billing_users"
+    "np_stripe_customers": "billing_users"
   },
   "batch_size": 100
 }
@@ -1055,7 +1055,7 @@ Content-Type: application/json
   "template": {
     "mappings": [
       {
-        "source": "stripe_customers",
+        "source": "np_stripe_customers",
         "target": "billing_users",
         "fields": {
           "id": "customer_id",
@@ -1107,7 +1107,7 @@ Content-Type: application/json
 {
   "name": "stripe",
   "version": "1.0.0",
-  "tables": ["stripe_customers", "stripe_subscriptions"],
+  "tables": ["np_stripe_customers", "np_stripe_subscriptions"],
   "user_id_field": "customer_id"
 }
 ```
@@ -1160,7 +1160,7 @@ DATAOPS_WEBHOOK_SECRET=your_webhook_secret
 
 | Event | Description | Payload Fields |
 |-------|-------------|----------------|
-| `export.completed` | Data export completed successfully | `request_id`, `user_id`, `format`, `file_size`, `download_url` |
+| `export.completed` | Data export completed successfully | `request_id`, `user_id`, `format`, `np_fileproc_size`, `download_url` |
 | `export.failed` | Data export failed | `request_id`, `user_id`, `error`, `reason` |
 | `import.completed` | Data import completed successfully | `request_id`, `table`, `records_imported`, `duration_ms` |
 | `import.failed` | Data import failed | `request_id`, `table`, `error`, `records_processed` |
@@ -1179,7 +1179,7 @@ DATAOPS_WEBHOOK_SECRET=your_webhook_secret
     "request_id": "req_abc123",
     "user_id": "user_123",
     "format": "json",
-    "file_size": 1048576,
+    "np_fileproc_size": 1048576,
     "download_url": "https://storage.example.com/exports/req_abc123.json",
     "expires_at": "2024-01-16T10:30:00Z"
   },
@@ -1252,12 +1252,12 @@ app.post('/webhooks/data-operations', express.raw({ type: 'application/json' }),
 
 ## Database Schema
 
-### dataops_export_requests
+### np_dataops_export_requests
 
 Tracks GDPR data export requests.
 
 ```sql
-CREATE TABLE dataops_export_requests (
+CREATE TABLE np_dataops_export_requests (
     id VARCHAR(255) PRIMARY KEY,              -- req_xxx
     user_id VARCHAR(255) NOT NULL,            -- User identifier
     status VARCHAR(50) NOT NULL,              -- pending, processing, completed, failed, expired
@@ -1265,8 +1265,8 @@ CREATE TABLE dataops_export_requests (
     plugins JSONB DEFAULT '[]',               -- Plugins to export from
     email VARCHAR(255),                        -- Email to notify
     reason TEXT,                               -- User-provided reason
-    file_path VARCHAR(2048),                   -- Path to export file
-    file_size_bytes BIGINT,                    -- Export file size
+    np_fileproc_path VARCHAR(2048),                   -- Path to export file
+    np_fileproc_size_bytes BIGINT,                    -- Export file size
     download_url VARCHAR(2048),                -- Signed download URL
     download_expires_at TIMESTAMP WITH TIME ZONE,
     error_message TEXT,                        -- Error if failed
@@ -1278,23 +1278,23 @@ CREATE TABLE dataops_export_requests (
     expires_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_export_requests_user ON dataops_export_requests(user_id);
-CREATE INDEX idx_dataops_export_requests_status ON dataops_export_requests(status);
-CREATE INDEX idx_dataops_export_requests_created ON dataops_export_requests(created_at DESC);
-CREATE INDEX idx_dataops_export_requests_expires ON dataops_export_requests(expires_at);
+CREATE INDEX idx_dataops_export_requests_user ON np_dataops_export_requests(user_id);
+CREATE INDEX idx_dataops_export_requests_status ON np_dataops_export_requests(status);
+CREATE INDEX idx_dataops_export_requests_created ON np_dataops_export_requests(created_at DESC);
+CREATE INDEX idx_dataops_export_requests_expires ON np_dataops_export_requests(expires_at);
 ```
 
-### dataops_import_requests
+### np_dataops_import_requests
 
 Tracks bulk import operations.
 
 ```sql
-CREATE TABLE dataops_import_requests (
+CREATE TABLE np_dataops_import_requests (
     id VARCHAR(255) PRIMARY KEY,              -- req_xxx
     status VARCHAR(50) NOT NULL,              -- pending, processing, completed, failed, canceled
     format VARCHAR(20) NOT NULL,              -- json, csv, sql
-    file_path VARCHAR(2048) NOT NULL,         -- Path to import file
-    file_size_bytes BIGINT,                   -- Import file size
+    np_fileproc_path VARCHAR(2048) NOT NULL,         -- Path to import file
+    np_fileproc_size_bytes BIGINT,                   -- Import file size
     target_table VARCHAR(255),                 -- Target table name
     template_name VARCHAR(255),                -- Transformation template
     options JSONB DEFAULT '{}',                -- Import options (delimiter, encoding, etc.)
@@ -1309,17 +1309,17 @@ CREATE TABLE dataops_import_requests (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_import_requests_status ON dataops_import_requests(status);
-CREATE INDEX idx_dataops_import_requests_created ON dataops_import_requests(created_at DESC);
-CREATE INDEX idx_dataops_import_requests_table ON dataops_import_requests(target_table);
+CREATE INDEX idx_dataops_import_requests_status ON np_dataops_import_requests(status);
+CREATE INDEX idx_dataops_import_requests_created ON np_dataops_import_requests(created_at DESC);
+CREATE INDEX idx_dataops_import_requests_table ON np_dataops_import_requests(target_table);
 ```
 
-### dataops_deletion_requests
+### np_dataops_deletion_requests
 
 Tracks GDPR deletion requests (right to be forgotten).
 
 ```sql
-CREATE TABLE dataops_deletion_requests (
+CREATE TABLE np_dataops_deletion_requests (
     id VARCHAR(255) PRIMARY KEY,              -- req_xxx
     user_id VARCHAR(255) NOT NULL,            -- User to delete
     status VARCHAR(50) NOT NULL,              -- pending, verified, processing, completed, failed, canceled
@@ -1341,18 +1341,18 @@ CREATE TABLE dataops_deletion_requests (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_deletion_requests_user ON dataops_deletion_requests(user_id);
-CREATE INDEX idx_dataops_deletion_requests_status ON dataops_deletion_requests(status);
-CREATE INDEX idx_dataops_deletion_requests_created ON dataops_deletion_requests(created_at DESC);
-CREATE INDEX idx_dataops_deletion_requests_cooldown ON dataops_deletion_requests(cooldown_until);
+CREATE INDEX idx_dataops_deletion_requests_user ON np_dataops_deletion_requests(user_id);
+CREATE INDEX idx_dataops_deletion_requests_status ON np_dataops_deletion_requests(status);
+CREATE INDEX idx_dataops_deletion_requests_created ON np_dataops_deletion_requests(created_at DESC);
+CREATE INDEX idx_dataops_deletion_requests_cooldown ON np_dataops_deletion_requests(cooldown_until);
 ```
 
-### dataops_migration_jobs
+### np_dataops_migration_jobs
 
 Tracks cross-platform data migration jobs.
 
 ```sql
-CREATE TABLE dataops_migration_jobs (
+CREATE TABLE np_dataops_migration_jobs (
     id VARCHAR(255) PRIMARY KEY,              -- job_xxx
     status VARCHAR(50) NOT NULL,              -- pending, running, paused, completed, failed, canceled
     source_plugin VARCHAR(255) NOT NULL,       -- Source plugin name
@@ -1366,7 +1366,7 @@ CREATE TABLE dataops_migration_jobs (
     records_migrated INTEGER DEFAULT 0,        -- Successfully migrated
     records_failed INTEGER DEFAULT 0,          -- Failed records
     current_table VARCHAR(255),                -- Currently processing table
-    progress_pct DECIMAL(5,2) DEFAULT 0.00,   -- Progress percentage
+    np_progress_pct DECIMAL(5,2) DEFAULT 0.00,   -- Progress percentage
     error_message TEXT,                        -- Error if failed
     metadata JSONB DEFAULT '{}',               -- Additional metadata
     source_account_id VARCHAR(255) DEFAULT 'primary',
@@ -1376,18 +1376,18 @@ CREATE TABLE dataops_migration_jobs (
     paused_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_migration_jobs_status ON dataops_migration_jobs(status);
-CREATE INDEX idx_dataops_migration_jobs_created ON dataops_migration_jobs(created_at DESC);
-CREATE INDEX idx_dataops_migration_jobs_source ON dataops_migration_jobs(source_plugin);
-CREATE INDEX idx_dataops_migration_jobs_target ON dataops_migration_jobs(target_plugin);
+CREATE INDEX idx_dataops_migration_jobs_status ON np_dataops_migration_jobs(status);
+CREATE INDEX idx_dataops_migration_jobs_created ON np_dataops_migration_jobs(created_at DESC);
+CREATE INDEX idx_dataops_migration_jobs_source ON np_dataops_migration_jobs(source_plugin);
+CREATE INDEX idx_dataops_migration_jobs_target ON np_dataops_migration_jobs(target_plugin);
 ```
 
-### dataops_backup_snapshots
+### np_dataops_backup_snapshots
 
 Tracks backup snapshots.
 
 ```sql
-CREATE TABLE dataops_backup_snapshots (
+CREATE TABLE np_dataops_backup_snapshots (
     id VARCHAR(255) PRIMARY KEY,              -- snap_xxx
     name VARCHAR(255) NOT NULL,                -- Backup name
     description TEXT,                          -- Backup description
@@ -1410,18 +1410,18 @@ CREATE TABLE dataops_backup_snapshots (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_backup_snapshots_status ON dataops_backup_snapshots(status);
-CREATE INDEX idx_dataops_backup_snapshots_created ON dataops_backup_snapshots(created_at DESC);
-CREATE INDEX idx_dataops_backup_snapshots_name ON dataops_backup_snapshots(name);
-CREATE INDEX idx_dataops_backup_snapshots_expires ON dataops_backup_snapshots(expires_at);
+CREATE INDEX idx_dataops_backup_snapshots_status ON np_dataops_backup_snapshots(status);
+CREATE INDEX idx_dataops_backup_snapshots_created ON np_dataops_backup_snapshots(created_at DESC);
+CREATE INDEX idx_dataops_backup_snapshots_name ON np_dataops_backup_snapshots(name);
+CREATE INDEX idx_dataops_backup_snapshots_expires ON np_dataops_backup_snapshots(expires_at);
 ```
 
-### dataops_restore_jobs
+### np_dataops_restore_jobs
 
 Tracks restore operations.
 
 ```sql
-CREATE TABLE dataops_restore_jobs (
+CREATE TABLE np_dataops_restore_jobs (
     id VARCHAR(255) PRIMARY KEY,              -- job_xxx
     snapshot_id VARCHAR(255) NOT NULL,         -- Backup snapshot to restore
     status VARCHAR(50) NOT NULL,              -- pending, running, completed, failed, canceled
@@ -1438,17 +1438,17 @@ CREATE TABLE dataops_restore_jobs (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_restore_jobs_status ON dataops_restore_jobs(status);
-CREATE INDEX idx_dataops_restore_jobs_snapshot ON dataops_restore_jobs(snapshot_id);
-CREATE INDEX idx_dataops_restore_jobs_created ON dataops_restore_jobs(created_at DESC);
+CREATE INDEX idx_dataops_restore_jobs_status ON np_dataops_restore_jobs(status);
+CREATE INDEX idx_dataops_restore_jobs_snapshot ON np_dataops_restore_jobs(snapshot_id);
+CREATE INDEX idx_dataops_restore_jobs_created ON np_dataops_restore_jobs(created_at DESC);
 ```
 
-### dataops_transform_templates
+### np_dataops_transform_templates
 
 Stores data transformation templates.
 
 ```sql
-CREATE TABLE dataops_transform_templates (
+CREATE TABLE np_dataops_transform_templates (
     id VARCHAR(255) PRIMARY KEY,              -- Generated ID
     name VARCHAR(255) UNIQUE NOT NULL,        -- Template name
     description TEXT,                          -- Template description
@@ -1461,16 +1461,16 @@ CREATE TABLE dataops_transform_templates (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_dataops_transform_templates_name ON dataops_transform_templates(name);
-CREATE INDEX idx_dataops_transform_templates_active ON dataops_transform_templates(is_active);
+CREATE INDEX idx_dataops_transform_templates_name ON np_dataops_transform_templates(name);
+CREATE INDEX idx_dataops_transform_templates_active ON np_dataops_transform_templates(is_active);
 ```
 
-### dataops_plugin_registry
+### np_dataops_plugin_registry
 
 Registry of plugins for coordinated operations.
 
 ```sql
-CREATE TABLE dataops_plugin_registry (
+CREATE TABLE np_dataops_plugin_registry (
     id VARCHAR(255) PRIMARY KEY,              -- Generated ID
     name VARCHAR(255) UNIQUE NOT NULL,        -- Plugin name
     version VARCHAR(50),                       -- Plugin version
@@ -1483,15 +1483,15 @@ CREATE TABLE dataops_plugin_registry (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_dataops_plugin_registry_name ON dataops_plugin_registry(name);
+CREATE INDEX idx_dataops_plugin_registry_name ON np_dataops_plugin_registry(name);
 ```
 
-### dataops_transfer_audit
+### np_dataops_transfer_audit
 
 Audit log of all data operations.
 
 ```sql
-CREATE TABLE dataops_transfer_audit (
+CREATE TABLE np_dataops_transfer_audit (
     id VARCHAR(255) PRIMARY KEY,              -- audit_xxx
     operation VARCHAR(50) NOT NULL,           -- export, import, delete, migrate, backup, restore
     operation_id VARCHAR(255),                 -- Request/job ID
@@ -1506,18 +1506,18 @@ CREATE TABLE dataops_transfer_audit (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_dataops_transfer_audit_operation ON dataops_transfer_audit(operation);
-CREATE INDEX idx_dataops_transfer_audit_user ON dataops_transfer_audit(user_id);
-CREATE INDEX idx_dataops_transfer_audit_created ON dataops_transfer_audit(created_at DESC);
-CREATE INDEX idx_dataops_transfer_audit_status ON dataops_transfer_audit(status);
+CREATE INDEX idx_dataops_transfer_audit_operation ON np_dataops_transfer_audit(operation);
+CREATE INDEX idx_dataops_transfer_audit_user ON np_dataops_transfer_audit(user_id);
+CREATE INDEX idx_dataops_transfer_audit_created ON np_dataops_transfer_audit(created_at DESC);
+CREATE INDEX idx_dataops_transfer_audit_status ON np_dataops_transfer_audit(status);
 ```
 
-### dataops_backup_schedule
+### np_dataops_backup_schedule
 
 Automated backup schedules.
 
 ```sql
-CREATE TABLE dataops_backup_schedule (
+CREATE TABLE np_dataops_backup_schedule (
     id VARCHAR(255) PRIMARY KEY,              -- sched_xxx
     name VARCHAR(255) NOT NULL,                -- Schedule name
     description TEXT,                          -- Schedule description
@@ -1535,16 +1535,16 @@ CREATE TABLE dataops_backup_schedule (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_dataops_backup_schedule_active ON dataops_backup_schedule(is_active);
-CREATE INDEX idx_dataops_backup_schedule_next_run ON dataops_backup_schedule(next_run_at);
+CREATE INDEX idx_dataops_backup_schedule_active ON np_dataops_backup_schedule(is_active);
+CREATE INDEX idx_dataops_backup_schedule_next_run ON np_dataops_backup_schedule(next_run_at);
 ```
 
-### dataops_webhook_events
+### np_dataops_webhook_events
 
 Webhook event log.
 
 ```sql
-CREATE TABLE dataops_webhook_events (
+CREATE TABLE np_dataops_webhook_events (
     id VARCHAR(255) PRIMARY KEY,              -- evt_xxx
     event VARCHAR(100) NOT NULL,              -- Event type
     payload JSONB NOT NULL,                   -- Event payload
@@ -1558,9 +1558,9 @@ CREATE TABLE dataops_webhook_events (
     sent_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX idx_dataops_webhook_events_event ON dataops_webhook_events(event);
-CREATE INDEX idx_dataops_webhook_events_status ON dataops_webhook_events(status);
-CREATE INDEX idx_dataops_webhook_events_created ON dataops_webhook_events(created_at DESC);
+CREATE INDEX idx_dataops_webhook_events_event ON np_dataops_webhook_events(event);
+CREATE INDEX idx_dataops_webhook_events_status ON np_dataops_webhook_events(status);
+CREATE INDEX idx_dataops_webhook_events_created ON np_dataops_webhook_events(created_at DESC);
 ```
 
 ---
@@ -1575,11 +1575,11 @@ SELECT
     status,
     format,
     plugins,
-    file_size_bytes / 1024.0 / 1024.0 AS file_size_mb,
+    np_fileproc_size_bytes / 1024.0 / 1024.0 AS np_fileproc_size_mb,
     download_url,
     download_expires_at,
     created_at
-FROM dataops_export_requests
+FROM np_dataops_export_requests
 WHERE user_id = 'user_123'
 ORDER BY created_at DESC;
 ```
@@ -1596,7 +1596,7 @@ SELECT
     cooldown_until,
     cooldown_until - NOW() AS time_remaining,
     created_at
-FROM dataops_deletion_requests
+FROM np_dataops_deletion_requests
 WHERE status = 'verified'
   AND cooldown_until > NOW()
 ORDER BY cooldown_until;
@@ -1611,9 +1611,9 @@ SELECT
     status,
     COUNT(*) AS job_count,
     SUM(records_migrated) AS total_records_migrated,
-    AVG(progress_pct) AS avg_progress,
+    AVG(np_progress_pct) AS avg_progress,
     AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) AS avg_duration_seconds
-FROM dataops_migration_jobs
+FROM np_dataops_migration_jobs
 GROUP BY source_plugin, target_plugin, status
 ORDER BY source_plugin, target_plugin;
 ```
@@ -1628,7 +1628,7 @@ SELECT
     SUM(size_bytes) / 1024.0 / 1024.0 / 1024.0 AS total_size_gb,
     SUM(size_uncompressed_bytes) / 1024.0 / 1024.0 / 1024.0 AS uncompressed_size_gb,
     AVG(size_bytes::FLOAT / NULLIF(size_uncompressed_bytes, 0)) AS avg_compression_ratio
-FROM dataops_backup_snapshots
+FROM np_dataops_backup_snapshots
 WHERE status = 'completed'
 GROUP BY storage_backend, compression;
 ```
@@ -1640,11 +1640,11 @@ SELECT
     id,
     user_id,
     format,
-    file_path,
-    file_size_bytes / 1024.0 / 1024.0 AS file_size_mb,
+    np_fileproc_path,
+    np_fileproc_size_bytes / 1024.0 / 1024.0 AS np_fileproc_size_mb,
     expires_at,
     NOW() - expires_at AS expired_for
-FROM dataops_export_requests
+FROM np_dataops_export_requests
 WHERE status = 'completed'
   AND expires_at < NOW()
 ORDER BY expires_at;
@@ -1659,7 +1659,7 @@ SELECT
     status,
     details,
     created_at
-FROM dataops_transfer_audit
+FROM np_dataops_transfer_audit
 WHERE user_id = 'user_123'
 ORDER BY created_at DESC
 LIMIT 50;
@@ -1674,7 +1674,7 @@ SELECT
     user_id,
     error_message,
     created_at
-FROM dataops_export_requests
+FROM np_dataops_export_requests
 WHERE status = 'failed'
 
 UNION ALL
@@ -1685,7 +1685,7 @@ SELECT
     NULL AS user_id,
     error_message,
     created_at
-FROM dataops_import_requests
+FROM np_dataops_import_requests
 WHERE status = 'failed'
 
 UNION ALL
@@ -1696,7 +1696,7 @@ SELECT
     user_id,
     error_message,
     created_at
-FROM dataops_deletion_requests
+FROM np_dataops_deletion_requests
 WHERE status = 'failed'
 
 ORDER BY created_at DESC;
@@ -1711,7 +1711,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'processing') AS processing,
     COUNT(*) FILTER (WHERE status = 'completed') AS completed,
     COUNT(*) FILTER (WHERE status = 'failed') AS failed
-FROM dataops_export_requests
+FROM np_dataops_export_requests
 
 UNION ALL
 
@@ -1721,7 +1721,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'processing'),
     COUNT(*) FILTER (WHERE status = 'completed'),
     COUNT(*) FILTER (WHERE status = 'failed')
-FROM dataops_import_requests
+FROM np_dataops_import_requests
 
 UNION ALL
 
@@ -1731,7 +1731,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'processing'),
     COUNT(*) FILTER (WHERE status = 'completed'),
     COUNT(*) FILTER (WHERE status = 'failed')
-FROM dataops_deletion_requests
+FROM np_dataops_deletion_requests
 
 UNION ALL
 
@@ -1741,7 +1741,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'running'),
     COUNT(*) FILTER (WHERE status = 'completed'),
     COUNT(*) FILTER (WHERE status = 'failed')
-FROM dataops_migration_jobs;
+FROM np_dataops_migration_jobs;
 ```
 
 ### Upcoming Scheduled Backups
@@ -1756,7 +1756,7 @@ SELECT
     last_run_at,
     retention_days,
     plugins
-FROM dataops_backup_schedule
+FROM np_dataops_backup_schedule
 WHERE is_active = TRUE
 ORDER BY next_run_at;
 ```
@@ -1783,7 +1783,7 @@ nself plugin data-operations export \
 2. **System Actions:**
    - Generates unique request ID (e.g., `req_abc123`)
    - Queries all registered plugins for user data
-   - Collects data from tables: `stripe_customers`, `github_users`, etc.
+   - Collects data from tables: `np_stripe_customers`, `np_github_users`, etc.
    - Creates JSON export with structure:
      ```json
      {
@@ -1849,7 +1849,7 @@ nself plugin data-operations delete verify \
 
 5. **Audit Record:**
 ```sql
-SELECT * FROM dataops_transfer_audit
+SELECT * FROM np_dataops_transfer_audit
 WHERE operation = 'delete' AND user_id = 'user_123';
 ```
 
@@ -1866,20 +1866,20 @@ cat > stripe-to-billing.json <<EOF
   "name": "stripe-to-billing",
   "mappings": [
     {
-      "source": "stripe_customers",
+      "source": "np_stripe_customers",
       "target": "billing_users",
       "fields": {
-        "id": "stripe_customer_id",
+        "id": "np_stripe_customer_id",
         "email": "user_email",
         "name": "display_name",
         "metadata": "custom_fields"
       }
     },
     {
-      "source": "stripe_subscriptions",
+      "source": "np_stripe_subscriptions",
       "target": "billing_subscriptions",
       "fields": {
-        "id": "stripe_subscription_id",
+        "id": "np_stripe_subscription_id",
         "customer_id": "user_id",
         "status": "subscription_status"
       }
@@ -2010,12 +2010,12 @@ nself plugin data-operations import get req_mno345
 ```bash
 nself plugin data-operations plugins register \
   --name stripe --version 1.0.0 \
-  --tables stripe_customers,stripe_subscriptions,stripe_invoices \
+  --tables np_stripe_customers,np_stripe_subscriptions,np_stripe_invoices \
   --user-id-field customer_id
 
 nself plugin data-operations plugins register \
   --name github --version 1.0.0 \
-  --tables github_users,github_repositories \
+  --tables np_github_users,np_github_repositories \
   --user-id-field user_id
 ```
 
@@ -2078,7 +2078,7 @@ nself plugin data-operations export \
 - Compressed for efficient transfer
 
 **4. Audit Trail**
-- Every operation logged in `dataops_transfer_audit`
+- Every operation logged in `np_dataops_transfer_audit`
 - IP address and user agent recorded
 - Timestamps for all actions
 - Export audit log for compliance reporting
@@ -2191,10 +2191,10 @@ Transformation templates define how data is mapped and transformed during migrat
   "version": 1,
   "mappings": [
     {
-      "source": "stripe_customers",
+      "source": "np_stripe_customers",
       "target": "billing_users",
       "fields": {
-        "id": "stripe_customer_id",
+        "id": "np_stripe_customer_id",
         "email": "user_email",
         "name": "display_name",
         "created_at": "registered_at"
@@ -2404,10 +2404,10 @@ Similar pros/cons to S3.
 **Basic Field Mapping:**
 ```json
 {
-  "source": "stripe_customers",
+  "source": "np_stripe_customers",
   "target": "billing_users",
   "fields": {
-    "id": "stripe_id",
+    "id": "np_stripe_id",
     "email": "user_email",
     "name": "full_name"
   }
@@ -2576,29 +2576,29 @@ DATAOPS_SSL_KEY=/path/to/key.pem
 **Role-Based Access Control:**
 ```sql
 -- Create roles
-CREATE ROLE dataops_admin;
-CREATE ROLE dataops_operator;
-CREATE ROLE dataops_viewer;
+CREATE ROLE np_dataops_admin;
+CREATE ROLE np_dataops_operator;
+CREATE ROLE np_dataops_viewer;
 
 -- Grant permissions
-GRANT ALL ON dataops_* TO dataops_admin;
-GRANT SELECT, INSERT, UPDATE ON dataops_* TO dataops_operator;
-GRANT SELECT ON dataops_* TO dataops_viewer;
+GRANT ALL ON np_dataops_* TO np_dataops_admin;
+GRANT SELECT, INSERT, UPDATE ON np_dataops_* TO np_dataops_operator;
+GRANT SELECT ON np_dataops_* TO np_dataops_viewer;
 ```
 
 ### Audit Logging
 
-All operations are logged in `dataops_transfer_audit` table:
+All operations are logged in `np_dataops_transfer_audit` table:
 
 ```sql
 -- View recent operations
-SELECT * FROM dataops_transfer_audit
+SELECT * FROM np_dataops_transfer_audit
 ORDER BY created_at DESC
 LIMIT 100;
 
 -- Suspicious activity
 SELECT user_id, COUNT(*) AS attempt_count
-FROM dataops_transfer_audit
+FROM np_dataops_transfer_audit
 WHERE operation = 'delete'
   AND status = 'failure'
   AND created_at > NOW() - INTERVAL '1 hour'
@@ -2753,7 +2753,7 @@ DATAOPS_MAX_EXPORT_SIZE_MB=100
 
 # Check for large JSONB fields
 SELECT id, pg_column_size(metadata) AS size_bytes
-FROM stripe_customers
+FROM np_stripe_customers
 ORDER BY size_bytes DESC
 LIMIT 10;
 ```
@@ -2824,14 +2824,14 @@ DATAOPS_QUEUE_CONCURRENCY=2
 ```sql
 -- Add indexes for common queries
 CREATE INDEX idx_export_user_status
-    ON dataops_export_requests(user_id, status);
+    ON np_dataops_export_requests(user_id, status);
 
 CREATE INDEX idx_audit_user_created
-    ON dataops_transfer_audit(user_id, created_at DESC);
+    ON np_dataops_transfer_audit(user_id, created_at DESC);
 
 -- Analyze tables
-ANALYZE dataops_export_requests;
-ANALYZE dataops_import_requests;
+ANALYZE np_dataops_export_requests;
+ANALYZE np_dataops_import_requests;
 ```
 
 ### Benchmarks

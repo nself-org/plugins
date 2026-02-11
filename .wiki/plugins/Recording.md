@@ -349,7 +349,7 @@ List recordings.
       "title": "Live Event Recording",
       "status": "completed",
       "duration_seconds": 7200,
-      "file_size": 15728640000,
+      "np_fileproc_size": 15728640000,
       "scheduled_start": "2026-02-11T18:00:00.000Z",
       "actual_start": "2026-02-11T17:55:00.000Z"
     }
@@ -384,15 +384,15 @@ Get recording details.
     "actual_start": "2026-02-11T17:55:00.000Z",
     "actual_end": "2026-02-11T20:02:00.000Z",
     "duration_seconds": 7620,
-    "file_path": "/data/recordings/2026/02/live-event.ts",
-    "file_size": 15728640000,
-    "file_format": "mpegts",
+    "np_fileproc_path": "/data/recordings/2026/02/live-event.ts",
+    "np_fileproc_size": 15728640000,
+    "np_fileproc_format": "mpegts",
     "thumbnail_url": "https://storage.example.com/thumbs/recording.jpg",
     "encode_status": "completed",
     "encode_progress": 100,
     "publish_status": "unpublished",
     "storage_object_id": "obj_abc123",
-    "sports_event_id": "evt_xyz789",
+    "np_sports_event_id": "evt_xyz789",
     "media_metadata_id": "123456",
     "enrichment_status": "completed",
     "tags": ["football", "nfl"],
@@ -553,7 +553,7 @@ Create recording from sports event.
   "data": {
     "id": "uuid",
     "title": "Team A vs Team B",
-    "sports_event_id": "evt_xyz789",
+    "np_sports_event_id": "evt_xyz789",
     "scheduled_start": "2026-02-11T19:00:00.000Z",
     "scheduled_end": "2026-02-11T22:30:00.000Z"
   }
@@ -615,7 +615,7 @@ The plugin consumes webhooks from other services:
 
 ## Database Schema
 
-### rec_recordings
+### np_rec_recordings
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -635,9 +635,9 @@ The plugin consumes webhooks from other services:
 | `actual_start` | TIMESTAMPTZ | Actual start time |
 | `actual_end` | TIMESTAMPTZ | Actual end time |
 | `duration_seconds` | INTEGER | Recording duration |
-| `file_path` | TEXT | File path |
-| `file_size` | BIGINT | File size (bytes) |
-| `file_format` | VARCHAR(16) | File format |
+| `np_fileproc_path` | TEXT | File path |
+| `np_fileproc_size` | BIGINT | File size (bytes) |
+| `np_fileproc_format` | VARCHAR(16) | File format |
 | `thumbnail_url` | TEXT | Thumbnail URL |
 | `encode_status` | VARCHAR(32) | Encoding status |
 | `encode_progress` | FLOAT | Encoding progress (0-100) |
@@ -646,7 +646,7 @@ The plugin consumes webhooks from other services:
 | `publish_status` | VARCHAR(32) | Publishing status |
 | `published_at` | TIMESTAMPTZ | Publication timestamp |
 | `storage_object_id` | VARCHAR(255) | Object storage ID |
-| `sports_event_id` | VARCHAR(255) | Sports event reference |
+| `np_sports_event_id` | VARCHAR(255) | Sports event reference |
 | `media_metadata_id` | VARCHAR(255) | TMDB metadata ID |
 | `enrichment_status` | VARCHAR(32) | Enrichment status |
 | `tags` | JSONB | Tags array |
@@ -679,12 +679,12 @@ The plugin consumes webhooks from other services:
 - `idx_rec_scheduled` - scheduled_start
 - `idx_rec_source` - (source_type, source_id)
 - `idx_rec_device` - source_device_id
-- `idx_rec_sports` - sports_event_id
+- `idx_rec_sports` - np_sports_event_id
 - `idx_rec_published` - (publish_status, published_at)
 - `idx_rec_tags` - tags (GIN)
 - `idx_rec_category` - category
 
-### rec_schedules
+### np_rec_schedules
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -699,8 +699,8 @@ The plugin consumes webhooks from other services:
 | `duration_minutes` | INTEGER | Recording duration |
 | `lead_time_minutes` | INTEGER | Lead time before start |
 | `trail_time_minutes` | INTEGER | Trail time after end |
-| `sports_league` | VARCHAR(64) | Sports league filter |
-| `sports_team_id` | VARCHAR(255) | Team filter |
+| `np_sports_league` | VARCHAR(64) | Sports league filter |
+| `np_sports_team_id` | VARCHAR(255) | Team filter |
 | `auto_enrich` | BOOLEAN | Auto-enrich enabled |
 | `auto_publish` | BOOLEAN | Auto-publish enabled |
 | `priority` | VARCHAR(16) | Priority |
@@ -718,7 +718,7 @@ The plugin consumes webhooks from other services:
 - `idx_rec_schedules_app` - app_id
 - `idx_rec_schedules_active` - active
 
-### rec_encode_jobs
+### np_rec_encode_jobs
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -751,7 +751,7 @@ The plugin consumes webhooks from other services:
 
 ## Analytics Views
 
-### rec_recordings_by_status
+### np_rec_recordings_by_status
 
 Recordings grouped by status.
 
@@ -759,13 +759,13 @@ Recordings grouped by status.
 SELECT
   status,
   COUNT(*) as count,
-  SUM(file_size) as total_bytes
-FROM rec_recordings
+  SUM(np_fileproc_size) as total_bytes
+FROM np_rec_recordings
 WHERE deleted_at IS NULL
 GROUP BY status;
 ```
 
-### rec_storage_by_type
+### np_rec_storage_by_type
 
 Storage usage by source type.
 
@@ -773,14 +773,14 @@ Storage usage by source type.
 SELECT
   source_type,
   COUNT(*) as count,
-  SUM(file_size) / 1024 / 1024 / 1024 as total_gb
-FROM rec_recordings
+  SUM(np_fileproc_size) / 1024 / 1024 / 1024 as total_gb
+FROM np_rec_recordings
 WHERE status = 'completed'
   AND deleted_at IS NULL
 GROUP BY source_type;
 ```
 
-### rec_success_rate
+### np_rec_success_rate
 
 Recording success rate over time.
 
@@ -790,13 +790,13 @@ SELECT
   COUNT(*) as total,
   COUNT(*) FILTER (WHERE status = 'completed') as completed,
   ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / COUNT(*), 2) as success_rate
-FROM rec_recordings
+FROM np_rec_recordings
 WHERE created_at >= NOW() - INTERVAL '30 days'
 GROUP BY DATE_TRUNC('day', created_at)
 ORDER BY date DESC;
 ```
 
-### rec_scheduled_vs_completed
+### np_rec_scheduled_vs_completed
 
 Scheduled vs completed recordings.
 
@@ -806,7 +806,7 @@ SELECT
   COUNT(*) as scheduled,
   COUNT(*) FILTER (WHERE status = 'completed') as completed,
   COUNT(*) FILTER (WHERE status = 'failed') as failed
-FROM rec_recordings
+FROM np_rec_recordings
 WHERE scheduled_start >= NOW() - INTERVAL '30 days'
 GROUP BY DATE_TRUNC('day', scheduled_start)
 ORDER BY date DESC;
@@ -898,9 +898,9 @@ done
 SELECT
   id,
   title,
-  file_path,
+  np_fileproc_path,
   media_metadata_id
-FROM rec_recordings
+FROM np_rec_recordings
 WHERE status = 'completed'
   AND enrichment_status = 'completed'
   AND publish_status = 'unpublished'
@@ -920,16 +920,16 @@ ORDER BY created_at DESC;
 SELECT
   category,
   COUNT(*) as recordings,
-  SUM(file_size) / 1024 / 1024 / 1024 as size_gb,
+  SUM(np_fileproc_size) / 1024 / 1024 / 1024 as size_gb,
   AVG(duration_seconds) / 60 as avg_duration_minutes
-FROM rec_recordings
+FROM np_rec_recordings
 WHERE status = 'completed'
   AND deleted_at IS NULL
 GROUP BY category
 ORDER BY size_gb DESC;
 
 -- Cleanup old recordings
-DELETE FROM rec_recordings
+DELETE FROM np_rec_recordings
 WHERE status = 'completed'
   AND published_at < NOW() - INTERVAL '90 days'
   AND deleted_at IS NULL;

@@ -7,21 +7,28 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/support",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "customer-support",
-  "tags": ["support", "helpdesk", "ticketing", "sla", "knowledge-base", "canned-responses", "csat", "analytics"],
-
-  "tables": [
-    "nchat_support_sla_policies",
-    "nchat_support_teams",
-    "nchat_support_team_members",
-    "nchat_support_tickets",
-    "nchat_support_ticket_messages",
-    "nchat_support_ticket_events",
-    "nchat_support_canned_responses",
-    "nchat_support_kb_articles",
-    "nchat_support_webhook_events"
+  "category": "content",
+  "tags": [
+    "support",
+    "helpdesk",
+    "ticketing",
+    "sla",
+    "knowledge-base",
+    "canned-responses",
+    "csat",
+    "analytics"
   ],
-
+  "tables": [
+    "np_support_support_sla_policies",
+    "np_support_support_teams",
+    "np_support_support_team_members",
+    "np_support_support_tickets",
+    "np_support_support_ticket_messages",
+    "np_support_support_ticket_events",
+    "np_support_support_canned_responses",
+    "np_support_support_kb_articles",
+    "np_support_support_webhook_events"
+  ],
   "webhooks": {
     "ticket.created": "New support ticket created",
     "ticket.updated": "Ticket updated (status, priority, assignment)",
@@ -38,7 +45,6 @@
     "team.member.added": "Member added to team",
     "kb.article.published": "Knowledge base article published"
   },
-
   "actions": {
     "support:ticket:create": "Create a support ticket",
     "support:tickets:list": "List tickets",
@@ -59,7 +65,6 @@
     "support:dashboard": "View support dashboard",
     "health": "Health check"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -94,7 +99,6 @@
       "SUPPORT_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "defaultPort": 3709,
     "defaultFirstResponseMinutes": 60,
@@ -105,23 +109,30 @@
     "csatEnabled": true,
     "kbEnabled": true
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["webhooks", "email"],
-    "filesystem": ["logs"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "webhooks",
+      "email"
+    ],
+    "filesystem": [
+      "logs"
+    ]
   }
 }

@@ -601,7 +601,7 @@ function verifyShopifySignature(
 
 Each webhook event is:
 1. Verified for signature
-2. Stored in `shopify_webhook_events` table
+2. Stored in `np_shopify_webhook_events` table
 3. Processed by appropriate handler
 4. Used to update synced data in real-time
 
@@ -611,10 +611,10 @@ Each webhook event is:
 
 ### Tables
 
-#### shopify_shops
+#### np_shopify_shops
 
 ```sql
-CREATE TABLE shopify_shops (
+CREATE TABLE np_shopify_shops (
     id BIGINT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
@@ -641,10 +641,10 @@ CREATE TABLE shopify_shops (
 );
 ```
 
-#### shopify_products
+#### np_shopify_products
 
 ```sql
-CREATE TABLE shopify_products (
+CREATE TABLE np_shopify_products (
     id BIGINT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     body_html TEXT,
@@ -666,12 +666,12 @@ CREATE TABLE shopify_products (
 );
 ```
 
-#### shopify_variants
+#### np_shopify_variants
 
 ```sql
-CREATE TABLE shopify_variants (
+CREATE TABLE np_shopify_variants (
     id BIGINT PRIMARY KEY,
-    product_id BIGINT REFERENCES shopify_products(id) ON DELETE CASCADE,
+    product_id BIGINT REFERENCES np_shopify_products(id) ON DELETE CASCADE,
     title VARCHAR(255),
     sku VARCHAR(255),
     barcode VARCHAR(255),
@@ -698,10 +698,10 @@ CREATE TABLE shopify_variants (
 );
 ```
 
-#### shopify_customers
+#### np_shopify_customers
 
 ```sql
-CREATE TABLE shopify_customers (
+CREATE TABLE np_shopify_customers (
     id BIGINT PRIMARY KEY,
     email VARCHAR(255),
     first_name VARCHAR(255),
@@ -730,16 +730,16 @@ CREATE TABLE shopify_customers (
 );
 ```
 
-#### shopify_orders
+#### np_shopify_orders
 
 ```sql
-CREATE TABLE shopify_orders (
+CREATE TABLE np_shopify_orders (
     id BIGINT PRIMARY KEY,
     order_number INTEGER,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255),
     phone VARCHAR(50),
-    customer_id BIGINT REFERENCES shopify_customers(id) ON DELETE SET NULL,
+    customer_id BIGINT REFERENCES np_shopify_customers(id) ON DELETE SET NULL,
     financial_status VARCHAR(100),
     fulfillment_status VARCHAR(100),
     cancel_reason VARCHAR(100),
@@ -786,12 +786,12 @@ CREATE TABLE shopify_orders (
 );
 ```
 
-#### shopify_order_items
+#### np_shopify_order_items
 
 ```sql
-CREATE TABLE shopify_order_items (
+CREATE TABLE np_shopify_order_items (
     id BIGINT PRIMARY KEY,
-    order_id BIGINT REFERENCES shopify_orders(id) ON DELETE CASCADE,
+    order_id BIGINT REFERENCES np_shopify_orders(id) ON DELETE CASCADE,
     product_id BIGINT,
     variant_id BIGINT,
     title VARCHAR(255),
@@ -816,10 +816,10 @@ CREATE TABLE shopify_order_items (
 );
 ```
 
-#### shopify_inventory
+#### np_shopify_inventory
 
 ```sql
-CREATE TABLE shopify_inventory (
+CREATE TABLE np_shopify_inventory (
     inventory_item_id BIGINT NOT NULL,
     location_id BIGINT NOT NULL,
     available INTEGER DEFAULT 0,
@@ -836,10 +836,10 @@ CREATE TABLE shopify_inventory (
 );
 ```
 
-#### shopify_webhook_events
+#### np_shopify_webhook_events
 
 ```sql
-CREATE TABLE shopify_webhook_events (
+CREATE TABLE np_shopify_webhook_events (
     id VARCHAR(255) PRIMARY KEY,
     topic VARCHAR(100) NOT NULL,
     shop_id BIGINT,
@@ -854,17 +854,17 @@ CREATE TABLE shopify_webhook_events (
 
 ### Additional Tables
 
-- `shopify_collections` - Product collections
-- `shopify_locations` - Store locations/warehouses
-- `shopify_fulfillments` - Fulfillment/shipment records
-- `shopify_refunds` - Refund transactions
-- `shopify_transactions` - Payment transactions
-- `shopify_draft_orders` - Draft orders
-- `shopify_checkouts` - Abandoned checkouts
-- `shopify_price_rules` - Discount rules
-- `shopify_discount_codes` - Discount codes
-- `shopify_gift_cards` - Gift card records
-- `shopify_metafields` - Resource metafields
+- `np_shopify_collections` - Product collections
+- `np_shopify_locations` - Store locations/warehouses
+- `np_shopify_fulfillments` - Fulfillment/shipment records
+- `np_shopify_refunds` - Refund transactions
+- `np_shopify_transactions` - Payment transactions
+- `np_shopify_draft_orders` - Draft orders
+- `np_shopify_checkouts` - Abandoned checkouts
+- `np_shopify_price_rules` - Discount rules
+- `np_shopify_discount_codes` - Discount codes
+- `np_shopify_gift_cards` - Gift card records
+- `np_shopify_metafields` - Resource metafields
 
 ---
 
@@ -872,10 +872,10 @@ CREATE TABLE shopify_webhook_events (
 
 Pre-built SQL views for common e-commerce analytics:
 
-### shopify_sales_overview
+### np_shopify_sales_overview
 
 ```sql
-CREATE VIEW shopify_sales_overview AS
+CREATE VIEW np_shopify_sales_overview AS
 SELECT
     DATE(created_at) AS date,
     COUNT(*) AS order_count,
@@ -883,16 +883,16 @@ SELECT
     AVG(total_price) AS avg_order_value,
     SUM(total_discounts) AS total_discounts,
     COUNT(DISTINCT customer_id) AS unique_customers
-FROM shopify_orders
+FROM np_shopify_orders
 WHERE financial_status = 'paid'
 GROUP BY DATE(created_at)
 ORDER BY date DESC;
 ```
 
-### shopify_top_products
+### np_shopify_top_products
 
 ```sql
-CREATE VIEW shopify_top_products AS
+CREATE VIEW np_shopify_top_products AS
 SELECT
     p.id,
     p.title,
@@ -901,18 +901,18 @@ SELECT
     COUNT(DISTINCT oi.order_id) AS order_count,
     SUM(oi.quantity) AS units_sold,
     SUM(oi.quantity * oi.price) AS revenue
-FROM shopify_products p
-JOIN shopify_order_items oi ON oi.product_id = p.id
-JOIN shopify_orders o ON oi.order_id = o.id
+FROM np_shopify_products p
+JOIN np_shopify_order_items oi ON oi.product_id = p.id
+JOIN np_shopify_orders o ON oi.order_id = o.id
 WHERE o.financial_status = 'paid'
 GROUP BY p.id, p.title, p.vendor, p.product_type
 ORDER BY revenue DESC;
 ```
 
-### shopify_low_inventory
+### np_shopify_low_inventory
 
 ```sql
-CREATE VIEW shopify_low_inventory AS
+CREATE VIEW np_shopify_low_inventory AS
 SELECT
     p.id AS product_id,
     p.title AS product_title,
@@ -922,18 +922,18 @@ SELECT
     i.available,
     i.on_hand,
     l.name AS location
-FROM shopify_inventory i
-JOIN shopify_variants v ON v.inventory_item_id = i.inventory_item_id
-JOIN shopify_products p ON v.product_id = p.id
-JOIN shopify_locations l ON i.location_id = l.id
+FROM np_shopify_inventory i
+JOIN np_shopify_variants v ON v.inventory_item_id = i.inventory_item_id
+JOIN np_shopify_products p ON v.product_id = p.id
+JOIN np_shopify_locations l ON i.location_id = l.id
 WHERE i.available < 10
 ORDER BY i.available ASC;
 ```
 
-### shopify_customer_value
+### np_shopify_customer_value
 
 ```sql
-CREATE VIEW shopify_customer_value AS
+CREATE VIEW np_shopify_customer_value AS
 SELECT
     c.id,
     c.email,
@@ -948,21 +948,21 @@ SELECT
         ELSE 'New'
     END AS customer_tier,
     c.created_at AS customer_since
-FROM shopify_customers c
+FROM np_shopify_customers c
 ORDER BY c.total_spent DESC;
 ```
 
-### shopify_monthly_revenue
+### np_shopify_monthly_revenue
 
 ```sql
-CREATE VIEW shopify_monthly_revenue AS
+CREATE VIEW np_shopify_monthly_revenue AS
 SELECT
     DATE_TRUNC('month', created_at) AS month,
     COUNT(*) AS order_count,
     SUM(total_price) AS revenue,
     AVG(total_price) AS avg_order_value,
     COUNT(DISTINCT customer_id) AS unique_customers
-FROM shopify_orders
+FROM np_shopify_orders
 WHERE financial_status = 'paid'
 GROUP BY DATE_TRUNC('month', created_at)
 ORDER BY month DESC;
@@ -1040,27 +1040,27 @@ nself-shopify server --port 3003
 ```sql
 -- Orders performance indexes
 CREATE INDEX CONCURRENTLY idx_shopify_orders_customer_id
-    ON shopify_orders(customer_id) WHERE customer_id IS NOT NULL;
+    ON np_shopify_orders(customer_id) WHERE customer_id IS NOT NULL;
 CREATE INDEX CONCURRENTLY idx_shopify_orders_created_at
-    ON shopify_orders(created_at DESC);
+    ON np_shopify_orders(created_at DESC);
 CREATE INDEX CONCURRENTLY idx_shopify_orders_financial_status
-    ON shopify_orders(financial_status);
+    ON np_shopify_orders(financial_status);
 CREATE INDEX CONCURRENTLY idx_shopify_orders_fulfillment_status
-    ON shopify_orders(fulfillment_status);
+    ON np_shopify_orders(fulfillment_status);
 
 -- Products performance indexes
 CREATE INDEX CONCURRENTLY idx_shopify_products_vendor
-    ON shopify_products(vendor);
+    ON np_shopify_products(vendor);
 CREATE INDEX CONCURRENTLY idx_shopify_products_product_type
-    ON shopify_products(product_type);
+    ON np_shopify_products(product_type);
 CREATE INDEX CONCURRENTLY idx_shopify_products_status
-    ON shopify_products(status);
+    ON np_shopify_products(status);
 CREATE INDEX CONCURRENTLY idx_shopify_products_created_at
-    ON shopify_products(created_at DESC);
+    ON np_shopify_products(created_at DESC);
 
 -- Full-text search on products
 CREATE INDEX CONCURRENTLY idx_shopify_products_search
-    ON shopify_products USING gin(to_tsvector('english',
+    ON np_shopify_products USING gin(to_tsvector('english',
         COALESCE(title, '') || ' ' ||
         COALESCE(body_html, '') || ' ' ||
         COALESCE(tags, '')
@@ -1068,25 +1068,25 @@ CREATE INDEX CONCURRENTLY idx_shopify_products_search
 
 -- Customers performance indexes
 CREATE INDEX CONCURRENTLY idx_shopify_customers_email
-    ON shopify_customers(email);
+    ON np_shopify_customers(email);
 CREATE INDEX CONCURRENTLY idx_shopify_customers_orders_count
-    ON shopify_customers(orders_count DESC);
+    ON np_shopify_customers(orders_count DESC);
 CREATE INDEX CONCURRENTLY idx_shopify_customers_total_spent
-    ON shopify_customers(total_spent DESC);
+    ON np_shopify_customers(total_spent DESC);
 
 -- Order items performance
 CREATE INDEX CONCURRENTLY idx_shopify_order_items_order_id
-    ON shopify_order_items(order_id);
+    ON np_shopify_order_items(order_id);
 CREATE INDEX CONCURRENTLY idx_shopify_order_items_product_id
-    ON shopify_order_items(product_id);
+    ON np_shopify_order_items(product_id);
 CREATE INDEX CONCURRENTLY idx_shopify_order_items_variant_id
-    ON shopify_order_items(variant_id);
+    ON np_shopify_order_items(variant_id);
 
 -- Inventory tracking
 CREATE INDEX CONCURRENTLY idx_shopify_inventory_location_id
-    ON shopify_inventory(location_id);
+    ON np_shopify_inventory(location_id);
 CREATE INDEX CONCURRENTLY idx_shopify_inventory_available
-    ON shopify_inventory(available) WHERE available < 10;
+    ON np_shopify_inventory(available) WHERE available < 10;
 ```
 
 #### Partitioning for Large Datasets
@@ -1095,13 +1095,13 @@ For stores with millions of orders:
 
 ```sql
 -- Partition orders by year
-CREATE TABLE shopify_orders_2024 PARTITION OF shopify_orders
+CREATE TABLE np_shopify_orders_2024 PARTITION OF np_shopify_orders
     FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
 
-CREATE TABLE shopify_orders_2025 PARTITION OF shopify_orders
+CREATE TABLE np_shopify_orders_2025 PARTITION OF np_shopify_orders
     FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
 
-CREATE TABLE shopify_orders_2026 PARTITION OF shopify_orders
+CREATE TABLE np_shopify_orders_2026 PARTITION OF np_shopify_orders
     FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
 
 -- Automatically create partitions
@@ -1114,11 +1114,11 @@ DECLARE
     end_date TEXT;
 BEGIN
     partition_year := EXTRACT(YEAR FROM NOW() + INTERVAL '1 year');
-    partition_name := 'shopify_orders_' || partition_year;
+    partition_name := 'np_shopify_orders_' || partition_year;
     start_date := partition_year || '-01-01';
     end_date := (partition_year + 1) || '-01-01';
 
-    EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF shopify_orders
+    EXECUTE format('CREATE TABLE IF NOT EXISTS %I PARTITION OF np_shopify_orders
                    FOR VALUES FROM (%L) TO (%L)',
                    partition_name, start_date, end_date);
 END;
@@ -1151,7 +1151,7 @@ async upsertProductsBatch(products: ShopifyProduct[]): Promise<void> {
     ]);
 
     await this.db.execute(`
-      INSERT INTO shopify_products
+      INSERT INTO np_shopify_products
         (id, title, body_html, vendor, product_type, handle,
          status, tags, images, synced_at)
       VALUES ${values}
@@ -1318,7 +1318,7 @@ The Shopify plugin does **not** store payment card data. However:
 
 ```sql
 -- Anonymize customer data after 2 years (GDPR compliance)
-UPDATE shopify_customers
+UPDATE np_shopify_customers
 SET
     email = 'deleted_' || id || '@example.com',
     first_name = 'Deleted',
@@ -1331,11 +1331,11 @@ WHERE updated_at < NOW() - INTERVAL '2 years'
   AND state != 'disabled';
 
 -- Archive old orders
-CREATE TABLE shopify_orders_archive AS
-SELECT * FROM shopify_orders
+CREATE TABLE np_shopify_orders_archive AS
+SELECT * FROM np_shopify_orders
 WHERE created_at < NOW() - INTERVAL '7 years';
 
-DELETE FROM shopify_orders
+DELETE FROM np_shopify_orders
 WHERE created_at < NOW() - INTERVAL '7 years';
 ```
 
@@ -1343,18 +1343,18 @@ WHERE created_at < NOW() - INTERVAL '7 years';
 
 ```sql
 -- Create read-only user for analytics
-CREATE USER shopify_readonly WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE nself TO shopify_readonly;
-GRANT USAGE ON SCHEMA public TO shopify_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO shopify_readonly;
+CREATE USER np_shopify_readonly WITH PASSWORD 'secure_password';
+GRANT CONNECT ON DATABASE nself TO np_shopify_readonly;
+GRANT USAGE ON SCHEMA public TO np_shopify_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO np_shopify_readonly;
 
 -- Prevent data modification
-REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM shopify_readonly;
+REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM np_shopify_readonly;
 
 -- Row-level security (if multi-tenant)
-ALTER TABLE shopify_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE np_shopify_orders ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY shop_isolation ON shopify_orders
+CREATE POLICY shop_isolation ON np_shopify_orders
     FOR ALL
     USING (shop_id = current_setting('app.current_shop_id')::BIGINT);
 ```
@@ -1394,8 +1394,8 @@ async function generateInventoryAlerts(): Promise<InventoryAlert[]> {
           sku,
           DATE(o.created_at) AS sale_date,
           SUM(quantity) AS daily_quantity
-        FROM shopify_order_items oi
-        JOIN shopify_orders o ON oi.order_id = o.id
+        FROM np_shopify_order_items oi
+        JOIN np_shopify_orders o ON oi.order_id = o.id
         WHERE o.financial_status = 'paid'
           AND o.created_at > NOW() - INTERVAL '30 days'
         GROUP BY product_id, variant_id, sku, DATE(o.created_at)
@@ -1408,8 +1408,8 @@ async function generateInventoryAlerts(): Promise<InventoryAlert[]> {
         v.id AS variant_id,
         v.sku,
         SUM(i.available) AS total_available
-      FROM shopify_variants v
-      JOIN shopify_inventory i ON v.inventory_item_id = i.inventory_item_id
+      FROM np_shopify_variants v
+      JOIN np_shopify_inventory i ON v.inventory_item_id = i.inventory_item_id
       GROUP BY v.product_id, v.id, v.sku
     )
     SELECT
@@ -1474,8 +1474,8 @@ WITH rfm_metrics AS (
     COUNT(DISTINCT o.id) AS frequency,
     -- Monetary: total spend
     SUM(o.total_price) AS monetary
-  FROM shopify_customers c
-  LEFT JOIN shopify_orders o ON c.id = o.customer_id
+  FROM np_shopify_customers c
+  LEFT JOIN np_shopify_orders o ON c.id = o.customer_id
   WHERE o.financial_status = 'paid'
   GROUP BY c.id, c.email, c.first_name, c.last_name
 ),
@@ -1539,7 +1539,7 @@ async function analyzeRevenueAttribution(startDate: Date, endDate: Date) {
       SUM(total_price) AS revenue,
       AVG(total_price) AS avg_order_value,
       SUM(total_price) / COUNT(DISTINCT customer_id) AS customer_lifetime_value
-    FROM shopify_orders
+    FROM np_shopify_orders
     WHERE financial_status = 'paid'
       AND created_at BETWEEN $1 AND $2
     GROUP BY channel
@@ -1565,7 +1565,7 @@ async function multiTouchAttribution() {
         END AS source,
         ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at ASC) AS touch_rank_first,
         ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) AS touch_rank_last
-      FROM shopify_orders
+      FROM np_shopify_orders
       WHERE financial_status = 'paid'
     )
     SELECT
@@ -1615,14 +1615,14 @@ async function findAbandonedCarts(hoursAgo: number = 2): Promise<AbandonedCart[]
       c.line_items AS items,
       EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 3600 AS abandoned_hours_ago,
       c.abandoned_checkout_url AS recovery_url
-    FROM shopify_checkouts c
+    FROM np_shopify_checkouts c
     WHERE c.completed_at IS NULL
       AND c.email IS NOT NULL
       AND c.created_at > NOW() - INTERVAL '24 hours'
       AND c.created_at < NOW() - INTERVAL '${hoursAgo} hours'
       -- Exclude if customer already ordered
       AND NOT EXISTS (
-        SELECT 1 FROM shopify_orders o
+        SELECT 1 FROM np_shopify_orders o
         WHERE o.email = c.email
           AND o.created_at > c.created_at
       )
@@ -1678,14 +1678,14 @@ WITH customer_cohorts AS (
   SELECT
     id AS customer_id,
     DATE_TRUNC('month', created_at) AS cohort_month
-  FROM shopify_customers
+  FROM np_shopify_customers
 ),
 customer_orders AS (
   SELECT
     o.customer_id,
     DATE_TRUNC('month', o.created_at) AS order_month,
     SUM(o.total_price) AS month_revenue
-  FROM shopify_orders o
+  FROM np_shopify_orders o
   WHERE o.financial_status = 'paid'
   GROUP BY o.customer_id, DATE_TRUNC('month', o.created_at)
 )
@@ -1767,7 +1767,7 @@ async function getStoreHealthMetrics(): Promise<StoreHealthMetrics> {
         WHERE o.created_at > DATE_TRUNC('week', NOW()) - INTERVAL '1 week'
           AND o.created_at < DATE_TRUNC('week', NOW())
       ), 0) AS revenue_last_week
-    FROM shopify_orders o
+    FROM np_shopify_orders o
     WHERE o.financial_status = 'paid';
   `;
 
@@ -1779,8 +1779,8 @@ async function getStoreHealthMetrics(): Promise<StoreHealthMetrics> {
       COUNT(*) FILTER (WHERE i.available < 10 AND i.available > 0) AS low_stock_count,
       COUNT(*) FILTER (WHERE i.available = 0) AS out_of_stock_count,
       SUM(i.available * v.price) AS inventory_value
-    FROM shopify_inventory i
-    JOIN shopify_variants v ON v.inventory_item_id = i.inventory_item_id;
+    FROM np_shopify_inventory i
+    JOIN np_shopify_variants v ON v.inventory_item_id = i.inventory_item_id;
   `);
 
   // Webhook metrics
@@ -1792,7 +1792,7 @@ async function getStoreHealthMetrics(): Promise<StoreHealthMetrics> {
           AND processed = false
       ) AS failed_last_hour,
       AVG(EXTRACT(EPOCH FROM (processed_at - received_at)) * 1000) AS avg_processing_ms
-    FROM shopify_webhook_events
+    FROM np_shopify_webhook_events
     WHERE received_at > NOW() - INTERVAL '24 hours';
   `);
 
@@ -1856,7 +1856,7 @@ async function detectSalesAnomalies(): Promise<SalesAlert[]> {
       SELECT
         COUNT(*) AS orders,
         COALESCE(SUM(total_price), 0) AS revenue
-      FROM shopify_orders
+      FROM np_shopify_orders
       WHERE created_at > NOW() - INTERVAL '1 hour'
         AND financial_status = 'paid'
     ),
@@ -1864,7 +1864,7 @@ async function detectSalesAnomalies(): Promise<SalesAlert[]> {
       SELECT
         COUNT(*) AS orders,
         COALESCE(SUM(total_price), 0) AS revenue
-      FROM shopify_orders
+      FROM np_shopify_orders
       WHERE created_at > NOW() - INTERVAL '1 week' - INTERVAL '1 hour'
         AND created_at < NOW() - INTERVAL '1 week'
         AND financial_status = 'paid'
@@ -1930,7 +1930,7 @@ Proactive notifications for inventory issues:
 
 ```sql
 -- Critical inventory alerts view
-CREATE VIEW shopify_inventory_alerts AS
+CREATE VIEW np_shopify_inventory_alerts AS
 WITH sales_velocity AS (
   SELECT
     oi.variant_id,
@@ -1940,8 +1940,8 @@ WITH sales_velocity AS (
       oi.variant_id,
       DATE(o.created_at) AS sale_date,
       SUM(oi.quantity) AS daily_qty
-    FROM shopify_order_items oi
-    JOIN shopify_orders o ON oi.order_id = o.id
+    FROM np_shopify_order_items oi
+    JOIN np_shopify_orders o ON oi.order_id = o.id
     WHERE o.financial_status = 'paid'
       AND o.created_at > NOW() - INTERVAL '14 days'
     GROUP BY oi.variant_id, DATE(o.created_at)
@@ -1968,9 +1968,9 @@ SELECT
     ELSE 999
   END AS days_of_stock,
   CEIL(sv.avg_daily_sales * 30 - i.available) AS recommended_reorder_qty
-FROM shopify_inventory i
-JOIN shopify_variants v ON v.inventory_item_id = i.inventory_item_id
-JOIN shopify_products p ON v.product_id = p.id
+FROM np_shopify_inventory i
+JOIN np_shopify_variants v ON v.inventory_item_id = i.inventory_item_id
+JOIN np_shopify_products p ON v.product_id = p.id
 LEFT JOIN sales_velocity sv ON sv.variant_id = v.id
 WHERE i.available < 50 OR sv.avg_daily_sales > i.available / 7
 ORDER BY
@@ -1998,9 +1998,9 @@ SELECT
     v.sku,
     SUM(i.available) AS total_available,
     SUM(i.on_hand) AS total_on_hand
-FROM shopify_inventory i
-JOIN shopify_variants v ON v.inventory_item_id = i.inventory_item_id
-JOIN shopify_products p ON v.product_id = p.id
+FROM np_shopify_inventory i
+JOIN np_shopify_variants v ON v.inventory_item_id = i.inventory_item_id
+JOIN np_shopify_products p ON v.product_id = p.id
 GROUP BY p.title, v.sku
 ORDER BY total_available ASC;
 ```
@@ -2018,7 +2018,7 @@ SELECT
     orders_count,
     total_spent,
     created_at AS customer_since
-FROM shopify_customers
+FROM np_shopify_customers
 WHERE orders_count > 0
 ORDER BY total_spent DESC
 LIMIT 100;
@@ -2034,7 +2034,7 @@ SELECT
     DATE(created_at) AS date,
     COUNT(*) AS orders,
     SUM(total_price) AS revenue
-FROM shopify_orders
+FROM np_shopify_orders
 WHERE financial_status = 'paid'
   AND created_at > NOW() - INTERVAL '30 days'
 GROUP BY DATE(created_at)
@@ -2052,9 +2052,9 @@ SELECT
     p.vendor,
     SUM(oi.quantity) AS units_sold,
     SUM(oi.quantity * oi.price) AS revenue
-FROM shopify_order_items oi
-JOIN shopify_products p ON oi.product_id = p.id
-JOIN shopify_orders o ON oi.order_id = o.id
+FROM np_shopify_order_items oi
+JOIN np_shopify_products p ON oi.product_id = p.id
+JOIN np_shopify_orders o ON oi.order_id = o.id
 WHERE o.financial_status = 'paid'
   AND o.created_at > DATE_TRUNC('month', NOW())
 GROUP BY p.id, p.title, p.vendor
@@ -2073,7 +2073,7 @@ SELECT
     total_price,
     created_at,
     abandoned_checkout_url
-FROM shopify_checkouts
+FROM np_shopify_checkouts
 WHERE completed_at IS NULL
   AND created_at > NOW() - INTERVAL '7 days'
 ORDER BY total_price DESC;
@@ -2090,8 +2090,8 @@ WITH order_pairs AS (
     a.product_id AS product_a,
     b.product_id AS product_b,
     COUNT(DISTINCT a.order_id) AS times_bought_together
-  FROM shopify_order_items a
-  JOIN shopify_order_items b ON a.order_id = b.order_id
+  FROM np_shopify_order_items a
+  JOIN np_shopify_order_items b ON a.order_id = b.order_id
   WHERE a.product_id < b.product_id -- Avoid duplicates
   GROUP BY a.product_id, b.product_id
   HAVING COUNT(DISTINCT a.order_id) >= 5
@@ -2101,11 +2101,11 @@ SELECT
   pb.title AS product_b_title,
   op.times_bought_together,
   op.times_bought_together::FLOAT /
-    NULLIF((SELECT COUNT(*) FROM shopify_orders WHERE financial_status = 'paid'), 0) * 100
+    NULLIF((SELECT COUNT(*) FROM np_shopify_orders WHERE financial_status = 'paid'), 0) * 100
     AS affinity_pct
 FROM order_pairs op
-JOIN shopify_products pa ON op.product_a = pa.id
-JOIN shopify_products pb ON op.product_b = pb.id
+JOIN np_shopify_products pa ON op.product_a = pa.id
+JOIN np_shopify_products pb ON op.product_b = pb.id
 ORDER BY times_bought_together DESC
 LIMIT 50;
 ```
@@ -2126,9 +2126,9 @@ SELECT
   COUNT(*) FILTER (
     WHERE f.created_at - o.created_at < INTERVAL '24 hours'
   )::FLOAT / NULLIF(COUNT(*), 0) * 100 AS same_day_fulfillment_pct
-FROM shopify_fulfillments f
-JOIN shopify_orders o ON f.order_id = o.id
-JOIN shopify_locations l ON f.location_id = l.id
+FROM np_shopify_fulfillments f
+JOIN np_shopify_orders o ON f.order_id = o.id
+JOIN np_shopify_locations l ON f.location_id = l.id
 WHERE f.status = 'success'
   AND f.created_at > NOW() - INTERVAL '30 days'
 GROUP BY l.id, l.name
@@ -2149,7 +2149,7 @@ WITH discount_usage AS (
     o.id AS order_id,
     o.total_price,
     o.created_at
-  FROM shopify_orders o,
+  FROM np_shopify_orders o,
   jsonb_array_elements(o.discount_codes) AS dc
   WHERE o.financial_status = 'paid'
     AND o.created_at > NOW() - INTERVAL '90 days'
@@ -2190,8 +2190,8 @@ WITH customer_last_order AS (
          NULLIF(c.orders_count - 1, 0))
       ELSE NULL
     END AS avg_days_between_orders
-  FROM shopify_customers c
-  JOIN shopify_orders o ON c.id = o.customer_id
+  FROM np_shopify_customers c
+  JOIN np_shopify_orders o ON c.id = o.customer_id
   WHERE o.financial_status = 'paid'
   GROUP BY c.id, c.email, c.first_name, c.last_name, c.total_spent, c.orders_count
 )
@@ -2234,8 +2234,8 @@ WITH product_sales AS (
   SELECT
     oi.product_id,
     SUM(oi.quantity) AS total_units_sold
-  FROM shopify_order_items oi
-  JOIN shopify_orders o ON oi.order_id = o.id
+  FROM np_shopify_order_items oi
+  JOIN np_shopify_orders o ON oi.order_id = o.id
   WHERE o.financial_status = 'paid'
     AND o.created_at > NOW() - INTERVAL '6 months'
   GROUP BY oi.product_id
@@ -2245,9 +2245,9 @@ product_returns AS (
     oi.product_id,
     COUNT(DISTINCT r.id) AS return_count,
     SUM((ri->>'quantity')::INTEGER) AS total_units_returned
-  FROM shopify_refunds r
-  JOIN shopify_orders o ON r.order_id = o.id
-  JOIN shopify_order_items oi ON oi.order_id = o.id,
+  FROM np_shopify_refunds r
+  JOIN np_shopify_orders o ON r.order_id = o.id
+  JOIN np_shopify_order_items oi ON oi.order_id = o.id,
   jsonb_array_elements(r.refund_line_items) AS ri
   WHERE o.created_at > NOW() - INTERVAL '6 months'
     AND (ri->>'line_item_id')::BIGINT = oi.id
@@ -2262,7 +2262,7 @@ SELECT
   COALESCE(pr.total_units_returned, 0) AS units_returned,
   COALESCE(pr.total_units_returned::FLOAT / NULLIF(ps.total_units_sold, 0) * 100, 0) AS return_rate_pct,
   pr.return_count
-FROM shopify_products p
+FROM np_shopify_products p
 LEFT JOIN product_sales ps ON p.id = ps.product_id
 LEFT JOIN product_returns pr ON p.id = pr.product_id
 WHERE ps.total_units_sold > 10 -- Minimum sales threshold
@@ -2288,10 +2288,10 @@ WITH customer_acquisition AS (
       ELSE 'Direct/Other'
     END AS acquisition_channel,
     c.total_spent AS lifetime_value
-  FROM shopify_customers c
+  FROM np_shopify_customers c
   LEFT JOIN LATERAL (
     SELECT landing_site, referring_site
-    FROM shopify_orders
+    FROM np_shopify_orders
     WHERE customer_id = c.id
     ORDER BY created_at ASC
     LIMIT 1
@@ -2322,7 +2322,7 @@ SELECT
   COUNT(*) AS order_count,
   SUM(total_price) AS revenue,
   AVG(total_price) AS avg_order_value
-FROM shopify_orders
+FROM np_shopify_orders
 WHERE financial_status = 'paid'
   AND created_at > NOW() - INTERVAL '90 days'
 GROUP BY day_of_week, hour_of_day
@@ -2335,7 +2335,7 @@ SELECT
   COUNT(*) AS orders,
   SUM(total_price) AS revenue,
   AVG(total_price) AS avg_order_value
-FROM shopify_orders
+FROM np_shopify_orders
 WHERE financial_status = 'paid'
 GROUP BY DATE_TRUNC('month', created_at), EXTRACT(YEAR FROM created_at)
 ORDER BY month DESC, year DESC;
@@ -2566,7 +2566,7 @@ async function processWebhook(event: WebhookEvent) {
 
   // Check if already processed
   const existing = await db.query(
-    'SELECT id FROM shopify_webhook_events WHERE id = $1',
+    'SELECT id FROM np_shopify_webhook_events WHERE id = $1',
     [webhookId]
   );
 
@@ -2615,12 +2615,12 @@ SELECT
     THEN metadata->>'key'
     ELSE NULL
   END AS metadata_value
-FROM shopify_products;
+FROM np_shopify_products;
 
 -- Use COALESCE for default values
 SELECT
   COALESCE(discount_codes->0->>'code', 'NO_DISCOUNT') AS first_discount
-FROM shopify_orders;
+FROM np_shopify_orders;
 ```
 
 #### Webhook Endpoint Not Receiving Events
@@ -2727,7 +2727,7 @@ Verify plugin health:
 
 ```bash
 # Database connectivity
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM shopify_products;"
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM np_shopify_products;"
 
 # API connectivity
 curl -X GET "https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2024-01/shop.json" \
@@ -2751,13 +2751,13 @@ SELECT
   COUNT(*) AS total_records,
   MAX(synced_at) AS last_sync,
   NOW() - MAX(synced_at) AS sync_age
-FROM shopify_products
+FROM np_shopify_products
 UNION ALL
 SELECT 'orders', COUNT(*), MAX(synced_at), NOW() - MAX(synced_at)
-FROM shopify_orders
+FROM np_shopify_orders
 UNION ALL
 SELECT 'customers', COUNT(*), MAX(synced_at), NOW() - MAX(synced_at)
-FROM shopify_customers;
+FROM np_shopify_customers;
 
 -- Webhook processing health
 SELECT
@@ -2766,7 +2766,7 @@ SELECT
   COUNT(*) FILTER (WHERE processed = true) AS processed,
   COUNT(*) FILTER (WHERE processed = false) AS failed,
   AVG(EXTRACT(EPOCH FROM (processed_at - received_at))) AS avg_processing_seconds
-FROM shopify_webhook_events
+FROM np_shopify_webhook_events
 WHERE received_at > NOW() - INTERVAL '24 hours'
 GROUP BY hour
 ORDER BY hour DESC;
@@ -2782,7 +2782,7 @@ When reporting issues, include:
 4. Error message with stack trace
 5. Debug logs (`DEBUG=shopify:*`)
 6. Webhook event payload (if applicable)
-7. Database table sizes (`\dt+ shopify_*` in psql)
+7. Database table sizes (`\dt+ np_shopify_*` in psql)
 
 **Support Resources**:
 - [GitHub Issues](https://github.com/acamarata/nself-plugins/issues)
@@ -2800,42 +2800,42 @@ Pre-built dashboard queries for common metrics:
 
 ```sql
 -- Executive Dashboard
-CREATE VIEW shopify_executive_dashboard AS
+CREATE VIEW np_shopify_executive_dashboard AS
 SELECT
   -- Today's metrics
-  (SELECT COUNT(*) FROM shopify_orders
+  (SELECT COUNT(*) FROM np_shopify_orders
    WHERE DATE(created_at) = CURRENT_DATE
      AND financial_status = 'paid') AS orders_today,
 
-  (SELECT COALESCE(SUM(total_price), 0) FROM shopify_orders
+  (SELECT COALESCE(SUM(total_price), 0) FROM np_shopify_orders
    WHERE DATE(created_at) = CURRENT_DATE
      AND financial_status = 'paid') AS revenue_today,
 
   -- This week
-  (SELECT COUNT(*) FROM shopify_orders
+  (SELECT COUNT(*) FROM np_shopify_orders
    WHERE created_at > DATE_TRUNC('week', NOW())
      AND financial_status = 'paid') AS orders_this_week,
 
-  (SELECT COALESCE(SUM(total_price), 0) FROM shopify_orders
+  (SELECT COALESCE(SUM(total_price), 0) FROM np_shopify_orders
    WHERE created_at > DATE_TRUNC('week', NOW())
      AND financial_status = 'paid') AS revenue_this_week,
 
   -- This month
-  (SELECT COUNT(*) FROM shopify_orders
+  (SELECT COUNT(*) FROM np_shopify_orders
    WHERE created_at > DATE_TRUNC('month', NOW())
      AND financial_status = 'paid') AS orders_this_month,
 
-  (SELECT COALESCE(SUM(total_price), 0) FROM shopify_orders
+  (SELECT COALESCE(SUM(total_price), 0) FROM np_shopify_orders
    WHERE created_at > DATE_TRUNC('month', NOW())
      AND financial_status = 'paid') AS revenue_this_month,
 
   -- Inventory
-  (SELECT COUNT(*) FROM shopify_inventory WHERE available = 0) AS out_of_stock_count,
-  (SELECT COUNT(*) FROM shopify_inventory WHERE available < 10 AND available > 0) AS low_stock_count,
+  (SELECT COUNT(*) FROM np_shopify_inventory WHERE available = 0) AS out_of_stock_count,
+  (SELECT COUNT(*) FROM np_shopify_inventory WHERE available < 10 AND available > 0) AS low_stock_count,
 
   -- Customers
-  (SELECT COUNT(*) FROM shopify_customers WHERE created_at > NOW() - INTERVAL '7 days') AS new_customers_week,
-  (SELECT COUNT(*) FROM shopify_customers) AS total_customers;
+  (SELECT COUNT(*) FROM np_shopify_customers WHERE created_at > NOW() - INTERVAL '7 days') AS new_customers_week,
+  (SELECT COUNT(*) FROM np_shopify_customers) AS total_customers;
 ```
 
 ### Automation Scripts
@@ -2875,7 +2875,7 @@ async function sendDailySalesSummary() {
       SUM(total_price) AS revenue,
       AVG(total_price) AS aov,
       COUNT(DISTINCT customer_id) AS unique_customers
-    FROM shopify_orders
+    FROM np_shopify_orders
     WHERE DATE(created_at) = CURRENT_DATE
       AND financial_status = 'paid';
   `;
@@ -2909,14 +2909,14 @@ async function sendDailySalesSummary() {
 // Export to data warehouse (Snowflake, BigQuery, etc.)
 async function exportToWarehouse() {
   const orders = await db.query(`
-    SELECT * FROM shopify_orders
+    SELECT * FROM np_shopify_orders
     WHERE synced_at > NOW() - INTERVAL '1 hour'
   `);
 
   // Stream to BigQuery
   const bigquery = new BigQuery();
   const dataset = bigquery.dataset('ecommerce');
-  const table = dataset.table('shopify_orders');
+  const table = dataset.table('np_shopify_orders');
 
   await table.insert(orders.rows);
 }

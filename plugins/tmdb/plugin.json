@@ -6,8 +6,24 @@
   "license": "Source-Available",
   "minNselfVersion": "0.4.8",
   "category": "media",
-  "tags": ["tmdb", "metadata", "movies", "tv-shows", "imdb", "media", "matching"],
-  "tables": ["tmdb_movies", "tmdb_tv_shows", "tmdb_tv_seasons", "tmdb_tv_episodes", "tmdb_genres", "tmdb_match_queue", "tmdb_webhook_events"],
+  "tags": [
+    "tmdb",
+    "metadata",
+    "movies",
+    "tv-shows",
+    "imdb",
+    "media",
+    "matching"
+  ],
+  "tables": [
+    "np_tmdb_movies",
+    "np_tmdb_tv_shows",
+    "np_tmdb_tv_seasons",
+    "np_tmdb_tv_episodes",
+    "np_tmdb_genres",
+    "np_tmdb_match_queue",
+    "np_tmdb_webhook_events"
+  ],
   "webhooks": {},
   "actions": {
     "search": "Search TMDB for movies/TV shows",
@@ -20,8 +36,20 @@
     "status": "Show sync status"
   },
   "envVars": {
-    "required": ["DATABASE_URL", "TMDB_API_KEY"],
-    "optional": ["TMDB_PLUGIN_PORT", "TMDB_APP_IDS", "TMDB_API_READ_ACCESS_TOKEN", "OMDB_API_KEY", "TMDB_AUTO_ACCEPT_THRESHOLD", "TMDB_DEFAULT_LANGUAGE", "TMDB_CACHE_TTL_DAYS", "TMDB_REFRESH_CRON"]
+    "required": [
+      "DATABASE_URL",
+      "TMDB_API_KEY"
+    ],
+    "optional": [
+      "TMDB_PLUGIN_PORT",
+      "TMDB_APP_IDS",
+      "TMDB_API_READ_ACCESS_TOKEN",
+      "OMDB_API_KEY",
+      "TMDB_AUTO_ACCEPT_THRESHOLD",
+      "TMDB_DEFAULT_LANGUAGE",
+      "TMDB_CACHE_TTL_DAYS",
+      "TMDB_REFRESH_CRON"
+    ]
   },
   "multiApp": {
     "supported": true,
@@ -38,8 +66,19 @@
     "backdropSize": "w1280"
   },
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["api.themoviedb.org", "www.omdbapi.com"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "api.themoviedb.org",
+      "www.omdbapi.com"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

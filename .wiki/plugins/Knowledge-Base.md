@@ -542,15 +542,15 @@ Review completed.
 
 ## Database Schema
 
-### kb_documents
+### np_kb_documents
 
 Knowledge base documents.
 
 ```sql
-CREATE TABLE kb_documents (
+CREATE TABLE np_kb_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  collection_id UUID REFERENCES kb_collections(id) ON DELETE SET NULL,
+  collection_id UUID REFERENCES np_kb_collections(id) ON DELETE SET NULL,
   title VARCHAR(500) NOT NULL,
   slug VARCHAR(500) NOT NULL,
   content TEXT NOT NULL,
@@ -577,26 +577,26 @@ CREATE TABLE kb_documents (
   UNIQUE(source_account_id, slug, language)
 );
 
-CREATE INDEX idx_kb_documents_account ON kb_documents(source_account_id);
-CREATE INDEX idx_kb_documents_collection ON kb_documents(collection_id);
-CREATE INDEX idx_kb_documents_slug ON kb_documents(slug);
-CREATE INDEX idx_kb_documents_author ON kb_documents(author_id);
-CREATE INDEX idx_kb_documents_status ON kb_documents(status);
-CREATE INDEX idx_kb_documents_language ON kb_documents(language);
-CREATE INDEX idx_kb_documents_tags ON kb_documents USING GIN(tags);
-CREATE INDEX idx_kb_documents_public ON kb_documents(is_public) WHERE is_public = true;
-CREATE INDEX idx_kb_documents_search ON kb_documents USING GIN(to_tsvector('english', title || ' ' || content));
+CREATE INDEX idx_kb_documents_account ON np_kb_documents(source_account_id);
+CREATE INDEX idx_kb_documents_collection ON np_kb_documents(collection_id);
+CREATE INDEX idx_kb_documents_slug ON np_kb_documents(slug);
+CREATE INDEX idx_kb_documents_author ON np_kb_documents(author_id);
+CREATE INDEX idx_kb_documents_status ON np_kb_documents(status);
+CREATE INDEX idx_kb_documents_language ON np_kb_documents(language);
+CREATE INDEX idx_kb_documents_tags ON np_kb_documents USING GIN(tags);
+CREATE INDEX idx_kb_documents_public ON np_kb_documents(is_public) WHERE is_public = true;
+CREATE INDEX idx_kb_documents_search ON np_kb_documents USING GIN(to_tsvector('english', title || ' ' || content));
 ```
 
-### kb_collections
+### np_kb_collections
 
 Document collections/categories.
 
 ```sql
-CREATE TABLE kb_collections (
+CREATE TABLE np_kb_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  parent_id UUID REFERENCES kb_collections(id) ON DELETE CASCADE,
+  parent_id UUID REFERENCES np_kb_collections(id) ON DELETE CASCADE,
   name VARCHAR(200) NOT NULL,
   slug VARCHAR(200) NOT NULL,
   description TEXT,
@@ -611,21 +611,21 @@ CREATE TABLE kb_collections (
   UNIQUE(source_account_id, slug)
 );
 
-CREATE INDEX idx_kb_collections_account ON kb_collections(source_account_id);
-CREATE INDEX idx_kb_collections_parent ON kb_collections(parent_id);
-CREATE INDEX idx_kb_collections_slug ON kb_collections(slug);
-CREATE INDEX idx_kb_collections_order ON kb_collections(order_index);
+CREATE INDEX idx_kb_collections_account ON np_kb_collections(source_account_id);
+CREATE INDEX idx_kb_collections_parent ON np_kb_collections(parent_id);
+CREATE INDEX idx_kb_collections_slug ON np_kb_collections(slug);
+CREATE INDEX idx_kb_collections_order ON np_kb_collections(order_index);
 ```
 
-### kb_faqs
+### np_kb_faqs
 
 Frequently asked questions.
 
 ```sql
-CREATE TABLE kb_faqs (
+CREATE TABLE np_kb_faqs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  collection_id UUID REFERENCES kb_collections(id) ON DELETE SET NULL,
+  collection_id UUID REFERENCES np_kb_collections(id) ON DELETE SET NULL,
   question TEXT NOT NULL,
   answer TEXT NOT NULL,
   tags TEXT[] DEFAULT '{}',
@@ -641,45 +641,45 @@ CREATE TABLE kb_faqs (
   published_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_kb_faqs_account ON kb_faqs(source_account_id);
-CREATE INDEX idx_kb_faqs_collection ON kb_faqs(collection_id);
-CREATE INDEX idx_kb_faqs_tags ON kb_faqs USING GIN(tags);
-CREATE INDEX idx_kb_faqs_published ON kb_faqs(is_published) WHERE is_published = true;
-CREATE INDEX idx_kb_faqs_search ON kb_faqs USING GIN(to_tsvector('english', question || ' ' || answer));
+CREATE INDEX idx_kb_faqs_account ON np_kb_faqs(source_account_id);
+CREATE INDEX idx_kb_faqs_collection ON np_kb_faqs(collection_id);
+CREATE INDEX idx_kb_faqs_tags ON np_kb_faqs USING GIN(tags);
+CREATE INDEX idx_kb_faqs_published ON np_kb_faqs(is_published) WHERE is_published = true;
+CREATE INDEX idx_kb_faqs_search ON np_kb_faqs USING GIN(to_tsvector('english', question || ' ' || answer));
 ```
 
-### kb_attachments
+### np_kb_attachments
 
 Document attachments.
 
 ```sql
-CREATE TABLE kb_attachments (
+CREATE TABLE np_kb_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES np_kb_documents(id) ON DELETE CASCADE,
   filename VARCHAR(255) NOT NULL,
-  file_url TEXT NOT NULL,
-  file_type VARCHAR(100),
-  file_size INTEGER,
+  np_fileproc_url TEXT NOT NULL,
+  np_fileproc_type VARCHAR(100),
+  np_fileproc_size INTEGER,
   uploaded_by UUID NOT NULL,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_kb_attachments_account ON kb_attachments(source_account_id);
-CREATE INDEX idx_kb_attachments_document ON kb_attachments(document_id);
+CREATE INDEX idx_kb_attachments_account ON np_kb_attachments(source_account_id);
+CREATE INDEX idx_kb_attachments_document ON np_kb_attachments(document_id);
 ```
 
-### kb_comments
+### np_kb_comments
 
 Document comments.
 
 ```sql
-CREATE TABLE kb_comments (
+CREATE TABLE np_kb_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
-  parent_comment_id UUID REFERENCES kb_comments(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES np_kb_documents(id) ON DELETE CASCADE,
+  parent_comment_id UUID REFERENCES np_kb_comments(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   content TEXT NOT NULL,
   is_deleted BOOLEAN NOT NULL DEFAULT false,
@@ -689,50 +689,50 @@ CREATE TABLE kb_comments (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_kb_comments_account ON kb_comments(source_account_id);
-CREATE INDEX idx_kb_comments_document ON kb_comments(document_id);
-CREATE INDEX idx_kb_comments_parent ON kb_comments(parent_comment_id);
-CREATE INDEX idx_kb_comments_user ON kb_comments(user_id);
-CREATE INDEX idx_kb_comments_active ON kb_comments(is_deleted) WHERE is_deleted = false;
+CREATE INDEX idx_kb_comments_account ON np_kb_comments(source_account_id);
+CREATE INDEX idx_kb_comments_document ON np_kb_comments(document_id);
+CREATE INDEX idx_kb_comments_parent ON np_kb_comments(parent_comment_id);
+CREATE INDEX idx_kb_comments_user ON np_kb_comments(user_id);
+CREATE INDEX idx_kb_comments_active ON np_kb_comments(is_deleted) WHERE is_deleted = false;
 ```
 
-### kb_analytics
+### np_kb_analytics
 
 Analytics tracking.
 
 ```sql
-CREATE TABLE kb_analytics (
+CREATE TABLE np_kb_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID REFERENCES kb_documents(id) ON DELETE CASCADE,
+  document_id UUID REFERENCES np_kb_documents(id) ON DELETE CASCADE,
   event_type VARCHAR(50) NOT NULL,
   user_id UUID,
   session_id VARCHAR(255),
   ip_address VARCHAR(45),
   user_agent TEXT,
   referer TEXT,
-  search_query TEXT,
+  np_search_query TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_kb_analytics_account ON kb_analytics(source_account_id);
-CREATE INDEX idx_kb_analytics_document ON kb_analytics(document_id);
-CREATE INDEX idx_kb_analytics_event ON kb_analytics(event_type);
-CREATE INDEX idx_kb_analytics_created ON kb_analytics(created_at DESC);
+CREATE INDEX idx_kb_analytics_account ON np_kb_analytics(source_account_id);
+CREATE INDEX idx_kb_analytics_document ON np_kb_analytics(document_id);
+CREATE INDEX idx_kb_analytics_event ON np_kb_analytics(event_type);
+CREATE INDEX idx_kb_analytics_created ON np_kb_analytics(created_at DESC);
 ```
 
 **Event types:** `view`, `search`, `helpful`, `not_helpful`, `comment`
 
-### kb_translations
+### np_kb_translations
 
 Document translations.
 
 ```sql
-CREATE TABLE kb_translations (
+CREATE TABLE np_kb_translations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES np_kb_documents(id) ON DELETE CASCADE,
   language VARCHAR(10) NOT NULL,
   title VARCHAR(500) NOT NULL,
   content TEXT NOT NULL,
@@ -746,20 +746,20 @@ CREATE TABLE kb_translations (
   UNIQUE(source_account_id, document_id, language)
 );
 
-CREATE INDEX idx_kb_translations_account ON kb_translations(source_account_id);
-CREATE INDEX idx_kb_translations_document ON kb_translations(document_id);
-CREATE INDEX idx_kb_translations_language ON kb_translations(language);
+CREATE INDEX idx_kb_translations_account ON np_kb_translations(source_account_id);
+CREATE INDEX idx_kb_translations_document ON np_kb_translations(document_id);
+CREATE INDEX idx_kb_translations_language ON np_kb_translations(language);
 ```
 
-### kb_review_requests
+### np_kb_review_requests
 
 Document review tracking.
 
 ```sql
-CREATE TABLE kb_review_requests (
+CREATE TABLE np_kb_review_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  document_id UUID NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
+  document_id UUID NOT NULL REFERENCES np_kb_documents(id) ON DELETE CASCADE,
   requested_by UUID NOT NULL,
   reviewer_id UUID NOT NULL,
   status VARCHAR(50) NOT NULL DEFAULT 'pending',
@@ -774,10 +774,10 @@ CREATE TABLE kb_review_requests (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_kb_reviews_account ON kb_review_requests(source_account_id);
-CREATE INDEX idx_kb_reviews_document ON kb_review_requests(document_id);
-CREATE INDEX idx_kb_reviews_reviewer ON kb_review_requests(reviewer_id);
-CREATE INDEX idx_kb_reviews_status ON kb_review_requests(status);
+CREATE INDEX idx_kb_reviews_account ON np_kb_review_requests(source_account_id);
+CREATE INDEX idx_kb_reviews_document ON np_kb_review_requests(document_id);
+CREATE INDEX idx_kb_reviews_reviewer ON np_kb_review_requests(reviewer_id);
+CREATE INDEX idx_kb_reviews_status ON np_kb_review_requests(status);
 ```
 
 ## Examples

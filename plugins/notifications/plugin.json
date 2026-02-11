@@ -18,12 +18,12 @@
     "templates"
   ],
   "tables": [
-    "notification_templates",
-    "notification_preferences",
-    "notification_messages",
-    "notification_queue",
-    "notification_providers",
-    "notification_batches"
+    "np_notifications_templates",
+    "np_notifications_preferences",
+    "np_notifications_messages",
+    "np_notifications_queue",
+    "np_notifications_providers",
+    "np_notifications_batches"
   ],
   "webhooks": {
     "delivery.succeeded": "Notification delivered successfully",

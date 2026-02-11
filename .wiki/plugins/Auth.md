@@ -917,7 +917,7 @@ Get recent login attempts.
 
 ## Database Schema
 
-### auth_oauth_providers
+### np_auth_oauth_providers
 
 OAuth provider account connections.
 
@@ -947,7 +947,7 @@ OAuth provider account connections.
 - `(source_account_id, provider, provider_user_id)`
 - `(source_account_id, user_id, provider)`
 
-### auth_passkeys
+### np_auth_passkeys
 
 WebAuthn/FIDO2 passkey credentials.
 
@@ -973,7 +973,7 @@ WebAuthn/FIDO2 passkey credentials.
 **Unique Constraints:**
 - `(source_account_id, credential_id)`
 
-### auth_mfa_enrollments
+### np_auth_mfa_enrollments
 
 TOTP 2FA enrollments.
 
@@ -988,8 +988,8 @@ TOTP 2FA enrollments.
 | `digits` | INTEGER | Code length (6 or 8) |
 | `period` | INTEGER | Time period (seconds) |
 | `verified` | BOOLEAN | Enrollment verified |
-| `backup_codes_encrypted` | TEXT | Encrypted backup codes |
-| `backup_codes_remaining` | INTEGER | Remaining codes |
+| `np_backup_codes_encrypted` | TEXT | Encrypted backup codes |
+| `np_backup_codes_remaining` | INTEGER | Remaining codes |
 | `enabled` | BOOLEAN | Currently enabled |
 | `last_used_at` | TIMESTAMPTZ | Last verification |
 | `created_at` | TIMESTAMPTZ | Enrollment time |
@@ -1001,7 +1001,7 @@ TOTP 2FA enrollments.
 **Unique Constraints:**
 - `(source_account_id, user_id, method)`
 
-### auth_device_codes
+### np_auth_device_codes
 
 Device code flow (TV login).
 
@@ -1030,7 +1030,7 @@ Device code flow (TV login).
 - `(source_account_id, device_code)`
 - `(source_account_id, user_code)`
 
-### auth_magic_links
+### np_auth_magic_links
 
 Magic link tokens.
 
@@ -1054,7 +1054,7 @@ Magic link tokens.
 **Unique Constraints:**
 - `(source_account_id, token_hash)`
 
-### auth_sessions
+### np_auth_sessions
 
 User sessions.
 
@@ -1070,7 +1070,7 @@ User sessions.
 | `user_agent` | TEXT | User agent string |
 | `location_city` | VARCHAR(128) | City (from IP) |
 | `location_country` | VARCHAR(10) | Country code |
-| `auth_method` | VARCHAR(50) | password, oauth, passkey, magic_link, device_code |
+| `np_auth_method` | VARCHAR(50) | password, oauth, passkey, magic_link, device_code |
 | `token_hash` | VARCHAR(128) | Session token hash |
 | `is_active` | BOOLEAN | Currently active |
 | `last_activity_at` | TIMESTAMPTZ | Last activity |
@@ -1084,7 +1084,7 @@ User sessions.
 - `idx_auth_sessions_user` on `(source_account_id, user_id)`
 - `idx_auth_sessions_active` on `(source_account_id, user_id, is_active)`
 
-### auth_login_attempts
+### np_auth_login_attempts
 
 Login attempt tracking.
 

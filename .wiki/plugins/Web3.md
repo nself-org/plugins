@@ -965,12 +965,12 @@ The Web3 plugin emits webhook events for key blockchain activities:
 
 ## Database Schema
 
-### web3_wallets
+### np_web3_wallets
 
 Stores connected Web3 wallets.
 
 ```sql
-CREATE TABLE web3_wallets (
+CREATE TABLE np_web3_wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
@@ -992,11 +992,11 @@ CREATE TABLE web3_wallets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_wallets_source ON web3_wallets(source_account_id);
-CREATE INDEX idx_web3_wallets_user ON web3_wallets(source_account_id, user_id);
-CREATE INDEX idx_web3_wallets_address ON web3_wallets(source_account_id, address);
-CREATE INDEX idx_web3_wallets_chain ON web3_wallets(source_account_id, chain_id);
-CREATE INDEX idx_web3_wallets_ens ON web3_wallets(ens_name) WHERE ens_name IS NOT NULL;
+CREATE INDEX idx_web3_wallets_source ON np_web3_wallets(source_account_id);
+CREATE INDEX idx_web3_wallets_user ON np_web3_wallets(source_account_id, user_id);
+CREATE INDEX idx_web3_wallets_address ON np_web3_wallets(source_account_id, address);
+CREATE INDEX idx_web3_wallets_chain ON np_web3_wallets(source_account_id, chain_id);
+CREATE INDEX idx_web3_wallets_ens ON np_web3_wallets(ens_name) WHERE ens_name IS NOT NULL;
 ```
 
 **Columns:**
@@ -1022,12 +1022,12 @@ CREATE INDEX idx_web3_wallets_ens ON web3_wallets(ens_name) WHERE ens_name IS NO
 | `created_at` | TIMESTAMPTZ | No | NOW() | Creation timestamp |
 | `updated_at` | TIMESTAMPTZ | No | NOW() | Last update timestamp |
 
-### web3_collections
+### np_web3_collections
 
 Stores NFT collection metadata.
 
 ```sql
-CREATE TABLE web3_collections (
+CREATE TABLE np_web3_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   contract_address TEXT NOT NULL,
@@ -1059,17 +1059,17 @@ CREATE TABLE web3_collections (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_collections_source ON web3_collections(source_account_id);
-CREATE INDEX idx_web3_collections_contract ON web3_collections(source_account_id, contract_address, chain_id);
-CREATE INDEX idx_web3_collections_slug ON web3_collections(source_account_id, slug);
+CREATE INDEX idx_web3_collections_source ON np_web3_collections(source_account_id);
+CREATE INDEX idx_web3_collections_contract ON np_web3_collections(source_account_id, contract_address, chain_id);
+CREATE INDEX idx_web3_collections_slug ON np_web3_collections(source_account_id, slug);
 ```
 
-### web3_nfts
+### np_web3_nfts
 
 Stores NFT ownership and metadata.
 
 ```sql
-CREATE TABLE web3_nfts (
+CREATE TABLE np_web3_nfts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   contract_address TEXT NOT NULL,
@@ -1087,7 +1087,7 @@ CREATE TABLE web3_nfts (
   attributes JSONB,
   metadata_uri TEXT,
   metadata JSONB,
-  collection_id UUID REFERENCES web3_collections(id) ON DELETE SET NULL,
+  collection_id UUID REFERENCES np_web3_collections(id) ON DELETE SET NULL,
   rarity_score DECIMAL(10,2),
   rarity_rank INTEGER,
   is_verified BOOLEAN DEFAULT false,
@@ -1099,19 +1099,19 @@ CREATE TABLE web3_nfts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_nfts_source ON web3_nfts(source_account_id);
-CREATE INDEX idx_web3_nfts_contract ON web3_nfts(source_account_id, contract_address, chain_id);
-CREATE INDEX idx_web3_nfts_owner ON web3_nfts(source_account_id, owner_address);
-CREATE INDEX idx_web3_nfts_collection ON web3_nfts(source_account_id, collection_id);
-CREATE INDEX idx_web3_nfts_attributes ON web3_nfts USING GIN(attributes);
+CREATE INDEX idx_web3_nfts_source ON np_web3_nfts(source_account_id);
+CREATE INDEX idx_web3_nfts_contract ON np_web3_nfts(source_account_id, contract_address, chain_id);
+CREATE INDEX idx_web3_nfts_owner ON np_web3_nfts(source_account_id, owner_address);
+CREATE INDEX idx_web3_nfts_collection ON np_web3_nfts(source_account_id, collection_id);
+CREATE INDEX idx_web3_nfts_attributes ON np_web3_nfts USING GIN(attributes);
 ```
 
-### web3_tokens
+### np_web3_tokens
 
 Stores ERC-20 token information.
 
 ```sql
-CREATE TABLE web3_tokens (
+CREATE TABLE np_web3_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   contract_address TEXT NOT NULL,
@@ -1132,22 +1132,22 @@ CREATE TABLE web3_tokens (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_tokens_source ON web3_tokens(source_account_id);
-CREATE INDEX idx_web3_tokens_contract ON web3_tokens(source_account_id, contract_address, chain_id);
-CREATE INDEX idx_web3_tokens_symbol ON web3_tokens(source_account_id, symbol);
+CREATE INDEX idx_web3_tokens_source ON np_web3_tokens(source_account_id);
+CREATE INDEX idx_web3_tokens_contract ON np_web3_tokens(source_account_id, contract_address, chain_id);
+CREATE INDEX idx_web3_tokens_symbol ON np_web3_tokens(source_account_id, symbol);
 ```
 
-### web3_token_balances
+### np_web3_token_balances
 
 Stores token balances for wallets.
 
 ```sql
-CREATE TABLE web3_token_balances (
+CREATE TABLE np_web3_token_balances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   wallet_address TEXT NOT NULL,
   user_id VARCHAR(255),
-  token_id UUID NOT NULL REFERENCES web3_tokens(id) ON DELETE CASCADE,
+  token_id UUID NOT NULL REFERENCES np_web3_tokens(id) ON DELETE CASCADE,
   balance TEXT NOT NULL,
   balance_formatted DECIMAL(30,8),
   value_usd DECIMAL(20,2),
@@ -1155,17 +1155,17 @@ CREATE TABLE web3_token_balances (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_token_balances_source ON web3_token_balances(source_account_id);
-CREATE INDEX idx_web3_token_balances_wallet ON web3_token_balances(source_account_id, wallet_address);
-CREATE INDEX idx_web3_token_balances_user ON web3_token_balances(source_account_id, user_id);
+CREATE INDEX idx_web3_token_balances_source ON np_web3_token_balances(source_account_id);
+CREATE INDEX idx_web3_token_balances_wallet ON np_web3_token_balances(source_account_id, wallet_address);
+CREATE INDEX idx_web3_token_balances_user ON np_web3_token_balances(source_account_id, user_id);
 ```
 
-### web3_token_gates
+### np_web3_token_gates
 
 Stores token-gated access rules.
 
 ```sql
-CREATE TABLE web3_token_gates (
+CREATE TABLE np_web3_token_gates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   workspace_id VARCHAR(255) NOT NULL,
@@ -1181,21 +1181,21 @@ CREATE TABLE web3_token_gates (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_token_gates_source ON web3_token_gates(source_account_id);
-CREATE INDEX idx_web3_token_gates_workspace ON web3_token_gates(source_account_id, workspace_id);
-CREATE INDEX idx_web3_token_gates_target ON web3_token_gates(source_account_id, target_type, target_id);
-CREATE INDEX idx_web3_token_gates_rules ON web3_token_gates USING GIN(rules);
+CREATE INDEX idx_web3_token_gates_source ON np_web3_token_gates(source_account_id);
+CREATE INDEX idx_web3_token_gates_workspace ON np_web3_token_gates(source_account_id, workspace_id);
+CREATE INDEX idx_web3_token_gates_target ON np_web3_token_gates(source_account_id, target_type, target_id);
+CREATE INDEX idx_web3_token_gates_rules ON np_web3_token_gates USING GIN(rules);
 ```
 
-### web3_gate_checks
+### np_web3_gate_checks
 
 Stores token gate check results (with caching).
 
 ```sql
-CREATE TABLE web3_gate_checks (
+CREATE TABLE np_web3_gate_checks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  gate_id UUID NOT NULL REFERENCES web3_token_gates(id) ON DELETE CASCADE,
+  gate_id UUID NOT NULL REFERENCES np_web3_token_gates(id) ON DELETE CASCADE,
   user_id VARCHAR(255) NOT NULL,
   wallet_address TEXT NOT NULL,
   passed BOOLEAN NOT NULL,
@@ -1205,18 +1205,18 @@ CREATE TABLE web3_gate_checks (
   checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_gate_checks_source ON web3_gate_checks(source_account_id);
-CREATE INDEX idx_web3_gate_checks_gate ON web3_gate_checks(source_account_id, gate_id);
-CREATE INDEX idx_web3_gate_checks_user ON web3_gate_checks(source_account_id, user_id);
-CREATE INDEX idx_web3_gate_checks_expires ON web3_gate_checks(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_web3_gate_checks_source ON np_web3_gate_checks(source_account_id);
+CREATE INDEX idx_web3_gate_checks_gate ON np_web3_gate_checks(source_account_id, gate_id);
+CREATE INDEX idx_web3_gate_checks_user ON np_web3_gate_checks(source_account_id, user_id);
+CREATE INDEX idx_web3_gate_checks_expires ON np_web3_gate_checks(expires_at) WHERE expires_at IS NOT NULL;
 ```
 
-### web3_daos
+### np_web3_daos
 
 Stores DAO information.
 
 ```sql
-CREATE TABLE web3_daos (
+CREATE TABLE np_web3_daos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   workspace_id VARCHAR(255),
@@ -1239,20 +1239,20 @@ CREATE TABLE web3_daos (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_daos_source ON web3_daos(source_account_id);
-CREATE INDEX idx_web3_daos_workspace ON web3_daos(source_account_id, workspace_id);
-CREATE INDEX idx_web3_daos_slug ON web3_daos(source_account_id, slug);
+CREATE INDEX idx_web3_daos_source ON np_web3_daos(source_account_id);
+CREATE INDEX idx_web3_daos_workspace ON np_web3_daos(source_account_id, workspace_id);
+CREATE INDEX idx_web3_daos_slug ON np_web3_daos(source_account_id, slug);
 ```
 
-### web3_proposals
+### np_web3_proposals
 
 Stores DAO proposals.
 
 ```sql
-CREATE TABLE web3_proposals (
+CREATE TABLE np_web3_proposals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  dao_id UUID NOT NULL REFERENCES web3_daos(id) ON DELETE CASCADE,
+  dao_id UUID NOT NULL REFERENCES np_web3_daos(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   proposer_address TEXT NOT NULL,
@@ -1275,20 +1275,20 @@ CREATE TABLE web3_proposals (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_proposals_source ON web3_proposals(source_account_id);
-CREATE INDEX idx_web3_proposals_dao ON web3_proposals(source_account_id, dao_id);
-CREATE INDEX idx_web3_proposals_status ON web3_proposals(source_account_id, status);
+CREATE INDEX idx_web3_proposals_source ON np_web3_proposals(source_account_id);
+CREATE INDEX idx_web3_proposals_dao ON np_web3_proposals(source_account_id, dao_id);
+CREATE INDEX idx_web3_proposals_status ON np_web3_proposals(source_account_id, status);
 ```
 
-### web3_votes
+### np_web3_votes
 
 Stores DAO votes.
 
 ```sql
-CREATE TABLE web3_votes (
+CREATE TABLE np_web3_votes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  proposal_id UUID NOT NULL REFERENCES web3_proposals(id) ON DELETE CASCADE,
+  proposal_id UUID NOT NULL REFERENCES np_web3_proposals(id) ON DELETE CASCADE,
   voter_address TEXT NOT NULL,
   voter_user_id VARCHAR(255),
   support TEXT NOT NULL CHECK (support IN ('for', 'against', 'abstain')),
@@ -1299,17 +1299,17 @@ CREATE TABLE web3_votes (
   voted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_votes_source ON web3_votes(source_account_id);
-CREATE INDEX idx_web3_votes_proposal ON web3_votes(source_account_id, proposal_id);
-CREATE INDEX idx_web3_votes_voter ON web3_votes(source_account_id, voter_address);
+CREATE INDEX idx_web3_votes_source ON np_web3_votes(source_account_id);
+CREATE INDEX idx_web3_votes_proposal ON np_web3_votes(source_account_id, proposal_id);
+CREATE INDEX idx_web3_votes_voter ON np_web3_votes(source_account_id, voter_address);
 ```
 
-### web3_transactions
+### np_web3_transactions
 
 Stores blockchain transactions.
 
 ```sql
-CREATE TABLE web3_transactions (
+CREATE TABLE np_web3_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   transaction_hash TEXT NOT NULL,
@@ -1331,20 +1331,20 @@ CREATE TABLE web3_transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_transactions_source ON web3_transactions(source_account_id);
-CREATE INDEX idx_web3_transactions_hash ON web3_transactions(source_account_id, transaction_hash);
-CREATE INDEX idx_web3_transactions_chain ON web3_transactions(source_account_id, chain_id);
-CREATE INDEX idx_web3_transactions_from ON web3_transactions(source_account_id, from_address);
-CREATE INDEX idx_web3_transactions_to ON web3_transactions(source_account_id, to_address);
-CREATE INDEX idx_web3_transactions_block ON web3_transactions(block_number DESC);
+CREATE INDEX idx_web3_transactions_source ON np_web3_transactions(source_account_id);
+CREATE INDEX idx_web3_transactions_hash ON np_web3_transactions(source_account_id, transaction_hash);
+CREATE INDEX idx_web3_transactions_chain ON np_web3_transactions(source_account_id, chain_id);
+CREATE INDEX idx_web3_transactions_from ON np_web3_transactions(source_account_id, from_address);
+CREATE INDEX idx_web3_transactions_to ON np_web3_transactions(source_account_id, to_address);
+CREATE INDEX idx_web3_transactions_block ON np_web3_transactions(block_number DESC);
 ```
 
-### web3_events
+### np_web3_events
 
 Stores blockchain events.
 
 ```sql
-CREATE TABLE web3_events (
+CREATE TABLE np_web3_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_name TEXT NOT NULL,
@@ -1356,17 +1356,17 @@ CREATE TABLE web3_events (
   block_timestamp TIMESTAMPTZ,
   event_data JSONB NOT NULL,
   decoded_data JSONB,
-  related_nft_id UUID REFERENCES web3_nfts(id) ON DELETE SET NULL,
+  related_nft_id UUID REFERENCES np_web3_nfts(id) ON DELETE SET NULL,
   related_user_id VARCHAR(255),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_web3_events_source ON web3_events(source_account_id);
-CREATE INDEX idx_web3_events_contract ON web3_events(source_account_id, contract_address, chain_id);
-CREATE INDEX idx_web3_events_name ON web3_events(source_account_id, event_name);
-CREATE INDEX idx_web3_events_tx ON web3_events(source_account_id, transaction_hash);
-CREATE INDEX idx_web3_events_block ON web3_events(block_number DESC);
-CREATE INDEX idx_web3_events_data ON web3_events USING GIN(event_data);
+CREATE INDEX idx_web3_events_source ON np_web3_events(source_account_id);
+CREATE INDEX idx_web3_events_contract ON np_web3_events(source_account_id, contract_address, chain_id);
+CREATE INDEX idx_web3_events_name ON np_web3_events(source_account_id, event_name);
+CREATE INDEX idx_web3_events_tx ON np_web3_events(source_account_id, transaction_hash);
+CREATE INDEX idx_web3_events_block ON np_web3_events(block_number DESC);
+CREATE INDEX idx_web3_events_data ON np_web3_events USING GIN(event_data);
 ```
 
 ---
@@ -1442,8 +1442,8 @@ SELECT
   n.rarity_rank,
   n.image_url,
   c.name AS collection_name
-FROM web3_nfts n
-JOIN web3_collections c ON n.collection_id = c.id
+FROM np_web3_nfts n
+JOIN np_web3_collections c ON n.collection_id = c.id
 WHERE c.slug = 'bored-ape-yacht-club'
   AND n.source_account_id = 'primary'
 ORDER BY n.rarity_rank ASC
@@ -1461,8 +1461,8 @@ SELECT
       'image_url', n.image_url
     )
   ) AS nfts
-FROM web3_nfts n
-JOIN web3_collections c ON n.collection_id = c.id
+FROM np_web3_nfts n
+JOIN np_web3_collections c ON n.collection_id = c.id
 JOIN users u ON n.owner_user_id = u.id
 WHERE n.source_account_id = 'primary'
 GROUP BY u.id, u.name
@@ -1509,8 +1509,8 @@ SELECT
   p.votes_abstain,
   COUNT(v.id) AS total_votes,
   COUNT(DISTINCT v.voter_address) AS unique_voters
-FROM web3_proposals p
-LEFT JOIN web3_votes v ON p.id = v.proposal_id
+FROM np_web3_proposals p
+LEFT JOIN np_web3_votes v ON p.id = v.proposal_id
 WHERE p.dao_id = 'dao-uuid'
   AND p.source_account_id = 'primary'
 GROUP BY p.id, p.title, p.status, p.votes_for, p.votes_against, p.votes_abstain;
@@ -1527,9 +1527,9 @@ SELECT
   tb.balance_formatted,
   tb.value_usd,
   tb.last_updated_at
-FROM web3_token_balances tb
-JOIN web3_tokens t ON tb.token_id = t.id
-LEFT JOIN web3_wallets w ON tb.wallet_address = w.address
+FROM np_web3_token_balances tb
+JOIN np_web3_tokens t ON tb.token_id = t.id
+LEFT JOIN np_web3_wallets w ON tb.wallet_address = w.address
 WHERE t.symbol = 'UNI'
   AND tb.source_account_id = 'primary'
 ORDER BY tb.balance_formatted DESC
@@ -1543,8 +1543,8 @@ SELECT
   tb.value_usd,
   t.price_usd,
   (tb.balance_formatted * t.price_usd) AS calculated_value
-FROM web3_token_balances tb
-JOIN web3_tokens t ON tb.token_id = t.id
+FROM np_web3_token_balances tb
+JOIN np_web3_tokens t ON tb.token_id = t.id
 WHERE tb.user_id = 'user123'
   AND tb.source_account_id = 'primary'
 ORDER BY tb.value_usd DESC;

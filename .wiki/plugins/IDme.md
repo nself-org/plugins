@@ -260,15 +260,15 @@ ID.me sends webhooks for verification lifecycle events. Configure your webhook U
 
 ## Database Schema
 
-### idme_verifications
+### np_idme_verifications
 
 Main verification records with OAuth tokens.
 
 ```sql
-CREATE TABLE idme_verifications (
+CREATE TABLE np_idme_verifications (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,                 -- your application user ID
-    idme_user_id VARCHAR(255) NOT NULL,    -- ID.me user ID
+    np_idme_user_id VARCHAR(255) NOT NULL,    -- ID.me user ID
     email VARCHAR(255),
     first_name VARCHAR(255),
     last_name VARCHAR(255),
@@ -283,20 +283,20 @@ CREATE TABLE idme_verifications (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_idme_verifications_user ON idme_verifications(user_id);
-CREATE INDEX idx_idme_verifications_idme_user ON idme_verifications(idme_user_id);
-CREATE INDEX idx_idme_verifications_email ON idme_verifications(email);
-CREATE INDEX idx_idme_verifications_status ON idme_verifications(status);
+CREATE INDEX idx_idme_verifications_user ON np_idme_verifications(user_id);
+CREATE INDEX idx_idme_verifications_idme_user ON np_idme_verifications(np_idme_user_id);
+CREATE INDEX idx_idme_verifications_email ON np_idme_verifications(email);
+CREATE INDEX idx_idme_verifications_status ON np_idme_verifications(status);
 ```
 
-### idme_groups
+### np_idme_groups
 
 Verification group membership.
 
 ```sql
-CREATE TABLE idme_groups (
+CREATE TABLE np_idme_groups (
     id UUID PRIMARY KEY,
-    verification_id UUID REFERENCES idme_verifications(id),
+    verification_id UUID REFERENCES np_idme_verifications(id),
     user_id UUID NOT NULL,
     group_type VARCHAR(50) NOT NULL,       -- military, veteran, first_responder, government, teacher, student, nurse
     verified BOOLEAN DEFAULT FALSE,
@@ -305,17 +305,17 @@ CREATE TABLE idme_groups (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_idme_groups_user ON idme_groups(user_id);
-CREATE INDEX idx_idme_groups_type ON idme_groups(group_type);
-CREATE INDEX idx_idme_groups_verified ON idme_groups(verified);
+CREATE INDEX idx_idme_groups_user ON np_idme_groups(user_id);
+CREATE INDEX idx_idme_groups_type ON np_idme_groups(group_type);
+CREATE INDEX idx_idme_groups_verified ON np_idme_groups(verified);
 ```
 
-### idme_badges
+### np_idme_badges
 
 Visual badges for verified groups.
 
 ```sql
-CREATE TABLE idme_badges (
+CREATE TABLE np_idme_badges (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     group_type VARCHAR(50) NOT NULL,
@@ -327,18 +327,18 @@ CREATE TABLE idme_badges (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_idme_badges_user ON idme_badges(user_id);
-CREATE INDEX idx_idme_badges_active ON idme_badges(active);
+CREATE INDEX idx_idme_badges_user ON np_idme_badges(user_id);
+CREATE INDEX idx_idme_badges_active ON np_idme_badges(active);
 ```
 
-### idme_attributes
+### np_idme_attributes
 
 Additional verified attributes (branch, rank, school, etc.).
 
 ```sql
-CREATE TABLE idme_attributes (
+CREATE TABLE np_idme_attributes (
     id UUID PRIMARY KEY,
-    verification_id UUID REFERENCES idme_verifications(id),
+    verification_id UUID REFERENCES np_idme_verifications(id),
     user_id UUID NOT NULL,
     attribute_name VARCHAR(100) NOT NULL,  -- branch, rank, school, department, etc.
     attribute_value TEXT,
@@ -347,16 +347,16 @@ CREATE TABLE idme_attributes (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_idme_attributes_user ON idme_attributes(user_id);
-CREATE INDEX idx_idme_attributes_name ON idme_attributes(attribute_name);
+CREATE INDEX idx_idme_attributes_user ON np_idme_attributes(user_id);
+CREATE INDEX idx_idme_attributes_name ON np_idme_attributes(attribute_name);
 ```
 
-### idme_webhook_events
+### np_idme_webhook_events
 
 Webhook event audit log.
 
 ```sql
-CREATE TABLE idme_webhook_events (
+CREATE TABLE np_idme_webhook_events (
     id UUID PRIMARY KEY,
     event_type VARCHAR(100) NOT NULL,
     data JSONB NOT NULL,
@@ -367,21 +367,21 @@ CREATE TABLE idme_webhook_events (
     received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_idme_webhook_events_type ON idme_webhook_events(event_type);
-CREATE INDEX idx_idme_webhook_events_processed ON idme_webhook_events(processed);
-CREATE INDEX idx_idme_webhook_events_received ON idme_webhook_events(received_at DESC);
+CREATE INDEX idx_idme_webhook_events_type ON np_idme_webhook_events(event_type);
+CREATE INDEX idx_idme_webhook_events_processed ON np_idme_webhook_events(processed);
+CREATE INDEX idx_idme_webhook_events_received ON np_idme_webhook_events(received_at DESC);
 ```
 
 ---
 
 ## Analytics Views
 
-### idme_verified_users
+### np_idme_verified_users
 
 All verified users with their groups and badges.
 
 ```sql
-CREATE VIEW idme_verified_users AS
+CREATE VIEW np_idme_verified_users AS
 SELECT
     v.user_id,
     v.email,
@@ -393,35 +393,35 @@ SELECT
     ARRAY_AGG(DISTINCT g.group_type) FILTER (WHERE g.verified = TRUE) AS verified_groups,
     COUNT(DISTINCT g.id) FILTER (WHERE g.verified = TRUE) AS group_count,
     COUNT(DISTINCT b.id) FILTER (WHERE b.active = TRUE) AS badge_count
-FROM idme_verifications v
-LEFT JOIN idme_groups g ON v.id = g.verification_id
-LEFT JOIN idme_badges b ON v.user_id = b.user_id
+FROM np_idme_verifications v
+LEFT JOIN np_idme_groups g ON v.id = g.verification_id
+LEFT JOIN np_idme_badges b ON v.user_id = b.user_id
 GROUP BY v.user_id, v.email, v.first_name, v.last_name, v.verified, v.verified_at, v.status
 ORDER BY v.verified_at DESC;
 ```
 
-### idme_group_summary
+### np_idme_group_summary
 
 Verification counts by group type.
 
 ```sql
-CREATE VIEW idme_group_summary AS
+CREATE VIEW np_idme_group_summary AS
 SELECT
     group_type,
     COUNT(*) AS total,
     COUNT(*) FILTER (WHERE verified = TRUE) AS verified,
     COUNT(*) FILTER (WHERE verified = FALSE) AS pending
-FROM idme_groups
+FROM np_idme_groups
 GROUP BY group_type
 ORDER BY verified DESC;
 ```
 
-### idme_recent_verifications
+### np_idme_recent_verifications
 
 Verifications from the last 30 days.
 
 ```sql
-CREATE VIEW idme_recent_verifications AS
+CREATE VIEW np_idme_recent_verifications AS
 SELECT
     v.user_id,
     v.email,
@@ -430,8 +430,8 @@ SELECT
     v.status,
     v.verified_at,
     ARRAY_AGG(DISTINCT g.group_type) FILTER (WHERE g.verified = TRUE) AS groups
-FROM idme_verifications v
-LEFT JOIN idme_groups g ON v.id = g.verification_id
+FROM np_idme_verifications v
+LEFT JOIN np_idme_groups g ON v.id = g.verification_id
 WHERE v.created_at > NOW() - INTERVAL '30 days'
 GROUP BY v.user_id, v.email, v.first_name, v.last_name, v.status, v.verified_at
 ORDER BY v.created_at DESC;
@@ -538,7 +538,7 @@ Implement a background job to refresh tokens before expiry:
 async function refreshExpiringTokens() {
   const expiringVerifications = await db.query(`
     SELECT id, user_id, refresh_token, token_expires_at
-    FROM idme_verifications
+    FROM np_idme_verifications
     WHERE token_expires_at < NOW() + INTERVAL '24 hours'
       AND token_expires_at > NOW()
       AND refresh_token IS NOT NULL
@@ -556,7 +556,7 @@ async function refreshExpiringTokens() {
       const newTokens = await refreshAccessToken(verification.refresh_token);
 
       await db.query(`
-        UPDATE idme_verifications
+        UPDATE np_idme_verifications
         SET access_token = $1,
             refresh_token = $2,
             token_expires_at = $3,
@@ -603,7 +603,7 @@ For real-time requests, check token expiry and refresh if needed:
 async function getValidAccessToken(userId: string): Promise<string> {
   const verification = await db.query(`
     SELECT access_token, refresh_token, token_expires_at
-    FROM idme_verifications
+    FROM np_idme_verifications
     WHERE user_id = $1 AND status = 'verified'
     ORDER BY created_at DESC LIMIT 1
   `, [userId]);
@@ -622,7 +622,7 @@ async function getValidAccessToken(userId: string): Promise<string> {
     const newTokens = await refreshAccessToken(refresh_token);
 
     await db.query(`
-      UPDATE idme_verifications
+      UPDATE np_idme_verifications
       SET access_token = $1,
           refresh_token = $2,
           token_expires_at = $3,
@@ -667,7 +667,7 @@ async function getUserBadges(userId: string): Promise<Badge[]> {
 
   // Fetch from database
   const badges = await db.query(`
-    SELECT * FROM idme_badges
+    SELECT * FROM np_idme_badges
     WHERE user_id = $1 AND active = TRUE
     ORDER BY display_order ASC
   `, [userId]);
@@ -738,11 +738,11 @@ LIMIT 10;
 
 -- Add composite indexes for common joins
 CREATE INDEX idx_idme_groups_user_type
-  ON idme_groups(user_id, group_type)
+  ON np_idme_groups(user_id, group_type)
   WHERE verified = TRUE;
 
 CREATE INDEX idx_idme_badges_user_active
-  ON idme_badges(user_id, active)
+  ON np_idme_badges(user_id, active)
   WHERE active = TRUE;
 ```
 
@@ -766,7 +766,7 @@ async function batchInsertGroups(groups: GroupRecord[]) {
   ]);
 
   await db.query(`
-    INSERT INTO idme_groups
+    INSERT INTO np_idme_groups
       (id, verification_id, user_id, group_type, verified, verified_at)
     VALUES ${values}
     ON CONFLICT (id) DO UPDATE SET
@@ -1012,7 +1012,7 @@ function decryptToken(encryptedToken: string): string {
 // Use in database operations
 async function storeVerification(data: VerificationData) {
   await db.query(`
-    INSERT INTO idme_verifications
+    INSERT INTO np_idme_verifications
       (id, user_id, access_token, refresh_token, ...)
     VALUES ($1, $2, $3, $4, ...)
   `, [
@@ -1026,7 +1026,7 @@ async function storeVerification(data: VerificationData) {
 
 async function getAccessToken(userId: string): Promise<string> {
   const result = await db.query(`
-    SELECT access_token FROM idme_verifications
+    SELECT access_token FROM np_idme_verifications
     WHERE user_id = $1 AND status = 'verified'
     ORDER BY created_at DESC LIMIT 1
   `, [userId]);
@@ -1143,7 +1143,7 @@ async function processWebhookEvent(event: WebhookEvent) {
 
   // Check if already processed
   const existing = await db.query(`
-    SELECT id FROM idme_webhook_events
+    SELECT id FROM np_idme_webhook_events
     WHERE id = $1
   `, [eventId]);
 
@@ -1154,7 +1154,7 @@ async function processWebhookEvent(event: WebhookEvent) {
 
   // Store and process
   await db.query(`
-    INSERT INTO idme_webhook_events
+    INSERT INTO np_idme_webhook_events
       (id, event_type, data, signature, received_at)
     VALUES ($1, $2, $3, $4, NOW())
   `, [eventId, event.type, JSON.stringify(event.data), event.signature]);
@@ -1164,7 +1164,7 @@ async function processWebhookEvent(event: WebhookEvent) {
 
   // Mark as processed
   await db.query(`
-    UPDATE idme_webhook_events
+    UPDATE np_idme_webhook_events
     SET processed = TRUE, processed_at = NOW()
     WHERE id = $1
   `, [eventId]);
@@ -1202,7 +1202,7 @@ server.get('/api/verifications/:userId', async (request, reply) => {
 async function enforceDataRetention() {
   // Delete verifications older than 7 years (HIPAA requirement)
   await db.query(`
-    DELETE FROM idme_verifications
+    DELETE FROM np_idme_verifications
     WHERE created_at < NOW() - INTERVAL '7 years'
   `);
 }
@@ -1495,8 +1495,8 @@ server.get('/callback/idme', async (request, reply) => {
     const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
     await db.query(`
-      INSERT INTO idme_verifications
-        (id, user_id, idme_user_id, email, first_name, last_name,
+      INSERT INTO np_idme_verifications
+        (id, user_id, np_idme_user_id, email, first_name, last_name,
          access_token, refresh_token, token_expires_at,
          verified, verified_at, status, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, NOW())
@@ -1517,7 +1517,7 @@ server.get('/callback/idme', async (request, reply) => {
     // Store groups
     for (const group of groups) {
       await db.query(`
-        INSERT INTO idme_groups
+        INSERT INTO np_idme_groups
           (id, verification_id, user_id, group_type, verified, verified_at)
         VALUES ($1, $2, $3, $4, $5, $6)
       `, [
@@ -1531,7 +1531,7 @@ server.get('/callback/idme', async (request, reply) => {
 
       // Create badge
       await db.query(`
-        INSERT INTO idme_badges
+        INSERT INTO np_idme_badges
           (id, user_id, group_type, badge_name, icon, color, active)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
@@ -1548,7 +1548,7 @@ server.get('/callback/idme', async (request, reply) => {
     // Store attributes
     for (const attr of attributes) {
       await db.query(`
-        INSERT INTO idme_attributes
+        INSERT INTO np_idme_attributes
           (id, verification_id, user_id, attribute_name, attribute_value, verified)
         VALUES ($1, $2, $3, $4, $5, $6)
       `, [
@@ -1656,7 +1656,7 @@ async function checkMultiGroupVerification(
 ): Promise<{ verified: boolean; missingGroups: string[] }> {
   const result = await db.query(`
     SELECT group_type
-    FROM idme_groups
+    FROM np_idme_groups
     WHERE user_id = $1
       AND verified = TRUE
       AND group_type = ANY($2)
@@ -1896,7 +1896,7 @@ SELECT
     NULLIF(COUNT(*), 0) * 100,
     2
   ) AS success_rate_pct
-FROM idme_verifications
+FROM np_idme_verifications
 WHERE created_at > NOW() - INTERVAL '24 hours';
 
 -- Group verification breakdown
@@ -1909,7 +1909,7 @@ SELECT
     NULLIF(COUNT(*), 0) * 100,
     2
   ) AS verification_rate_pct
-FROM idme_groups
+FROM np_idme_groups
 WHERE created_at > NOW() - INTERVAL '7 days'
 GROUP BY group_type
 ORDER BY total DESC;
@@ -1934,7 +1934,7 @@ async function checkFailedVerifications(): Promise<Alert[]> {
         NULLIF(COUNT(*), 0) * 100,
         2
       ) AS failure_rate
-    FROM idme_verifications
+    FROM np_idme_verifications
     WHERE created_at > NOW() - INTERVAL '1 hour'
   `);
 
@@ -1975,7 +1975,7 @@ SELECT
   COUNT(*) AS expiring_soon,
   COUNT(*) FILTER (WHERE token_expires_at < NOW() + INTERVAL '1 hour') AS expiring_very_soon,
   COUNT(*) FILTER (WHERE token_expires_at < NOW()) AS already_expired
-FROM idme_verifications
+FROM np_idme_verifications
 WHERE status = 'verified'
   AND token_expires_at < NOW() + INTERVAL '24 hours';
 
@@ -1985,7 +1985,7 @@ SELECT
   email,
   token_expires_at,
   AGE(NOW(), token_expires_at) AS expired_for
-FROM idme_verifications
+FROM np_idme_verifications
 WHERE status = 'verified'
   AND token_expires_at < NOW()
 ORDER BY token_expires_at DESC
@@ -2005,7 +2005,7 @@ SELECT
   COUNT(*) FILTER (WHERE processed = FALSE) AS pending,
   COUNT(*) FILTER (WHERE error IS NOT NULL) AS errors,
   AVG(EXTRACT(EPOCH FROM (processed_at - received_at))) AS avg_processing_time_seconds
-FROM idme_webhook_events
+FROM np_idme_webhook_events
 WHERE received_at > NOW() - INTERVAL '24 hours'
 GROUP BY event_type
 ORDER BY total DESC;
@@ -2016,8 +2016,8 @@ SELECT
   event_type,
   received_at,
   error,
-  data->>'idme_user_id' AS idme_user_id
-FROM idme_webhook_events
+  data->>'np_idme_user_id' AS np_idme_user_id
+FROM np_idme_webhook_events
 WHERE processed = FALSE
   AND error IS NOT NULL
   AND received_at > NOW() - INTERVAL '1 day'
@@ -2033,25 +2033,25 @@ import promClient from 'prom-client';
 
 // Create metrics
 const verificationCounter = new promClient.Counter({
-  name: 'idme_verifications_total',
+  name: 'np_idme_verifications_total',
   help: 'Total number of verification attempts',
   labelNames: ['status', 'group_type']
 });
 
 const verificationDuration = new promClient.Histogram({
-  name: 'idme_verification_duration_seconds',
+  name: 'np_idme_verification_duration_seconds',
   help: 'Verification flow duration',
   buckets: [0.5, 1, 2, 5, 10, 30]
 });
 
 const tokenRefreshCounter = new promClient.Counter({
-  name: 'idme_token_refresh_total',
+  name: 'np_idme_token_refresh_total',
   help: 'Total token refresh attempts',
   labelNames: ['status']
 });
 
 const webhookCounter = new promClient.Counter({
-  name: 'idme_webhooks_total',
+  name: 'np_idme_webhooks_total',
   help: 'Total webhook events received',
   labelNames: ['event_type', 'status']
 });
@@ -2122,23 +2122,23 @@ Create monitoring dashboards with these queries:
 
 ```promql
 # Verification success rate (%)
-rate(idme_verifications_total{status="success"}[5m]) /
-rate(idme_verifications_total[5m]) * 100
+rate(np_idme_verifications_total{status="success"}[5m]) /
+rate(np_idme_verifications_total[5m]) * 100
 
 # Verification duration p95
 histogram_quantile(0.95,
-  rate(idme_verification_duration_seconds_bucket[5m])
+  rate(np_idme_verification_duration_seconds_bucket[5m])
 )
 
 # Token refresh failure rate
-rate(idme_token_refresh_total{status="failed"}[5m])
+rate(np_idme_token_refresh_total{status="failed"}[5m])
 
 # Webhook processing lag
-idme_webhooks_total{status="pending"}
+np_idme_webhooks_total{status="pending"}
 
 # Verifications by group type
 sum by (group_type) (
-  rate(idme_verifications_total{status="success"}[1h])
+  rate(np_idme_verifications_total{status="success"}[1h])
 )
 ```
 
@@ -2155,8 +2155,8 @@ groups:
       # High verification failure rate
       - alert: HighVerificationFailureRate
         expr: |
-          rate(idme_verifications_total{status="failed"}[5m]) /
-          rate(idme_verifications_total[5m]) > 0.25
+          rate(np_idme_verifications_total{status="failed"}[5m]) /
+          rate(np_idme_verifications_total[5m]) > 0.25
         for: 5m
         labels:
           severity: critical
@@ -2168,7 +2168,7 @@ groups:
       - alert: SlowVerificationFlow
         expr: |
           histogram_quantile(0.95,
-            rate(idme_verification_duration_seconds_bucket[5m])
+            rate(np_idme_verification_duration_seconds_bucket[5m])
           ) > 10
         for: 10m
         labels:
@@ -2180,7 +2180,7 @@ groups:
       # Token refresh failures
       - alert: TokenRefreshFailures
         expr: |
-          rate(idme_token_refresh_total{status="failed"}[5m]) > 0.1
+          rate(np_idme_token_refresh_total{status="failed"}[5m]) > 0.1
         for: 5m
         labels:
           severity: warning
@@ -2190,7 +2190,7 @@ groups:
 
       # Webhook processing lag
       - alert: WebhookProcessingLag
-        expr: idme_webhooks_total{status="pending"} > 100
+        expr: np_idme_webhooks_total{status="pending"} > 100
         for: 15m
         labels:
           severity: warning
@@ -2201,7 +2201,7 @@ groups:
       # No verifications in last hour
       - alert: NoRecentVerifications
         expr: |
-          rate(idme_verifications_total[1h]) == 0
+          rate(np_idme_verifications_total[1h]) == 0
         for: 1h
         labels:
           severity: info
@@ -2250,16 +2250,16 @@ server.get('/health', async (request, reply) => {
   try {
     const response = await fetch(`${config.baseUrl}/.well-known/openid-configuration`);
     if (response.ok) {
-      health.checks.idme_api = { status: 'up' };
+      health.checks.np_idme_api = { status: 'up' };
     } else {
-      health.checks.idme_api = {
+      health.checks.np_idme_api = {
         status: 'down',
         statusCode: response.status
       };
     }
   } catch (error) {
     health.status = 'unhealthy';
-    health.checks.idme_api = {
+    health.checks.np_idme_api = {
       status: 'down',
       error: error.message
     };
@@ -2269,7 +2269,7 @@ server.get('/health', async (request, reply) => {
   try {
     const result = await db.query(`
       SELECT COUNT(*) as count
-      FROM idme_verifications
+      FROM np_idme_verifications
       WHERE created_at > NOW() - INTERVAL '1 hour'
     `);
     health.checks.recent_verifications = {
@@ -2303,8 +2303,8 @@ async function applyMilitaryDiscount(userId: string, cartTotal: number) {
   // Check military verification
   const verification = await db.query(`
     SELECT g.verified, g.verified_at
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
     WHERE v.user_id = $1
       AND g.group_type = 'military'
       AND g.verified = TRUE
@@ -2355,9 +2355,9 @@ async function checkVeteranAccess(userId: string) {
       v.verified_at,
       a.attribute_name,
       a.attribute_value
-    FROM idme_verifications v
-    JOIN idme_groups g ON v.id = g.verification_id
-    LEFT JOIN idme_attributes a ON v.id = a.verification_id
+    FROM np_idme_verifications v
+    JOIN np_idme_groups g ON v.id = g.verification_id
+    LEFT JOIN np_idme_attributes a ON v.id = a.verification_id
     WHERE v.user_id = $1
       AND g.group_type = 'veteran'
       AND g.verified = TRUE
@@ -2415,9 +2415,9 @@ async function grantFirstResponderAccess(userId: string) {
       g.verified,
       a.attribute_name,
       a.attribute_value
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
-    LEFT JOIN idme_attributes a ON v.id = a.verification_id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
+    LEFT JOIN np_idme_attributes a ON v.id = a.verification_id
     WHERE v.user_id = $1
       AND g.group_type = 'first_responder'
       AND g.verified = TRUE
@@ -2471,9 +2471,9 @@ async function unlockTeacherResources(userId: string) {
       g.verified,
       a.attribute_name,
       a.attribute_value
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
-    LEFT JOIN idme_attributes a ON v.id = a.verification_id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
+    LEFT JOIN np_idme_attributes a ON v.id = a.verification_id
     WHERE v.user_id = $1
       AND g.group_type = 'teacher'
       AND g.verified = TRUE
@@ -2532,9 +2532,9 @@ async function applyStudentPricing(userId: string, productPrice: number) {
       g.expires_at,
       a.attribute_name,
       a.attribute_value
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
-    LEFT JOIN idme_attributes a ON v.id = a.verification_id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
+    LEFT JOIN np_idme_attributes a ON v.id = a.verification_id
     WHERE v.user_id = $1
       AND g.group_type = 'student'
       AND g.verified = TRUE
@@ -2594,9 +2594,9 @@ async function grantHealthcareAccess(userId: string) {
       g.verified,
       a.attribute_name,
       a.attribute_value
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
-    LEFT JOIN idme_attributes a ON v.id = a.verification_id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
+    LEFT JOIN np_idme_attributes a ON v.id = a.verification_id
     WHERE v.user_id = $1
       AND g.group_type = 'nurse'
       AND g.verified = TRUE
@@ -2650,9 +2650,9 @@ async function verifyGovernmentEmployee(userId: string) {
       g.verified,
       a.attribute_name,
       a.attribute_value
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
-    LEFT JOIN idme_attributes a ON v.id = a.verification_id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
+    LEFT JOIN np_idme_attributes a ON v.id = a.verification_id
     WHERE v.user_id = $1
       AND g.group_type = 'government'
       AND g.verified = TRUE
@@ -2717,8 +2717,8 @@ async function checkExclusiveAccess(userId: string) {
     SELECT
       v.user_id,
       ARRAY_AGG(DISTINCT g.group_type) FILTER (WHERE g.verified = TRUE) AS verified_groups
-    FROM idme_verifications v
-    JOIN idme_groups g ON v.id = g.verification_id
+    FROM np_idme_verifications v
+    JOIN np_idme_groups g ON v.id = g.verification_id
     WHERE v.user_id = $1
       AND v.status = 'verified'
     GROUP BY v.user_id
@@ -2780,8 +2780,8 @@ async function determineMembershipTier(userId: string) {
     SELECT
       ARRAY_AGG(DISTINCT g.group_type) FILTER (WHERE g.verified = TRUE) AS verified_groups,
       COUNT(DISTINCT g.group_type) FILTER (WHERE g.verified = TRUE) AS group_count
-    FROM idme_groups g
-    JOIN idme_verifications v ON g.verification_id = v.id
+    FROM np_idme_groups g
+    JOIN np_idme_verifications v ON g.verification_id = v.id
     WHERE v.user_id = $1
       AND v.status = 'verified'
     GROUP BY v.user_id
@@ -2873,10 +2873,10 @@ Error: Client authentication failed
 
 **Solution:** Verify `IDME_CLIENT_ID` and `IDME_CLIENT_SECRET` are correct. Ensure you are using the right credentials for the environment (sandbox vs production).
 
-#### "relation idme_verifications does not exist"
+#### "relation np_idme_verifications does not exist"
 
 ```
-Error: relation "idme_verifications" does not exist
+Error: relation "np_idme_verifications" does not exist
 ```
 
 **Solution:** Run the installer to create tables.

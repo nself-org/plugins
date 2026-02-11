@@ -8,18 +8,24 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "media",
-  "tags": ["media", "video", "encoding", "ffmpeg", "hls", "streaming", "transcoding"],
-
-  "tables": [
-    "mp_encoding_profiles",
-    "mp_jobs",
-    "mp_job_outputs",
-    "mp_hls_manifests",
-    "mp_subtitles",
-    "mp_trickplay",
-    "mp_webhook_events"
+  "tags": [
+    "media",
+    "video",
+    "encoding",
+    "ffmpeg",
+    "hls",
+    "streaming",
+    "transcoding"
   ],
-
+  "tables": [
+    "np_mediap_encoding_profiles",
+    "np_mediap_jobs",
+    "np_mediap_job_outputs",
+    "np_mediap_hls_manifests",
+    "np_mediap_subtitles",
+    "np_mediap_trickplay",
+    "np_mediap_webhook_events"
+  ],
   "webhooks": {
     "job.created": "Job submitted for processing",
     "job.downloading": "Downloading input file",
@@ -32,7 +38,6 @@
     "job.cancelled": "Job cancelled by user",
     "job.progress": "Encoding progress update"
   },
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start HTTP API server",
@@ -42,7 +47,6 @@
     "analyze": "Analyze media file metadata",
     "stats": "View processing statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -60,7 +64,6 @@
       "MP_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3019,
     "maxConcurrentJobs": 2,
@@ -69,23 +72,31 @@
     "ffmpegPath": "ffmpeg",
     "ffprobePath": "ffprobe"
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache", "media"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "media"
+    ]
   }
 }

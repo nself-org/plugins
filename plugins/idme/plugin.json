@@ -18,11 +18,11 @@
     "veterans"
   ],
   "tables": [
-    "idme_verifications",
-    "idme_groups",
-    "idme_badges",
-    "idme_attributes",
-    "idme_webhook_events"
+    "np_idme_verifications",
+    "np_idme_groups",
+    "np_idme_badges",
+    "np_idme_attributes",
+    "np_idme_webhook_events"
   ],
   "webhooks": {
     "verification.created": "New verification created",

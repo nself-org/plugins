@@ -16,15 +16,15 @@
     "schedule"
   ],
   "tables": [
-    "rec_recordings",
-    "rec_schedules",
-    "rec_encode_jobs"
+    "np_rec_recordings",
+    "np_rec_schedules",
+    "np_rec_encode_jobs"
   ],
   "views": [
-    "rec_recordings_by_status",
-    "rec_storage_by_type",
-    "rec_success_rate",
-    "rec_scheduled_vs_completed"
+    "np_rec_recordings_by_status",
+    "np_rec_storage_by_type",
+    "np_rec_success_rate",
+    "np_rec_scheduled_vs_completed"
   ],
   "webhooks": {
     "sports": "Receive sports event triggers for auto-scheduling recordings",
@@ -120,7 +120,7 @@
   },
   "multiApp": {
     "supported": true,
-    "isolationColumn": "app_id",
+    "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "default"
   },

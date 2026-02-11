@@ -477,8 +477,8 @@ Get job outputs.
       "job_id": "uuid",
       "output_type": "video",
       "resolution_label": "1080p",
-      "file_path": "/data/media/job_123/1080p.mp4",
-      "file_size_bytes": 524288000,
+      "np_fileproc_path": "/data/media/job_123/1080p.mp4",
+      "np_fileproc_size_bytes": 524288000,
       "width": 1920,
       "height": 1080,
       "bitrate": 5000000
@@ -525,7 +525,7 @@ Get extracted subtitles.
       "language": "en",
       "label": "English",
       "format": "vtt",
-      "file_path": "/data/media/job_123/en.vtt",
+      "np_fileproc_path": "/data/media/job_123/en.vtt",
       "is_default": true
     }
   ]
@@ -547,7 +547,7 @@ Get trickplay tile information.
     "columns": 10,
     "rows": 10,
     "interval_seconds": 10,
-    "file_path": "/data/media/job_123/trickplay.jpg",
+    "np_fileproc_path": "/data/media/job_123/trickplay.jpg",
     "total_thumbnails": 72
   }
 }
@@ -681,8 +681,8 @@ The plugin emits these webhook events for job lifecycle tracking:
     "outputs": [
       {
         "resolution": "1080p",
-        "file_path": "/data/media/job_123/1080p.mp4",
-        "file_size_bytes": 524288000
+        "np_fileproc_path": "/data/media/job_123/1080p.mp4",
+        "np_fileproc_size_bytes": 524288000
       }
     ],
     "duration_seconds": 1800
@@ -694,7 +694,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 
 ## Database Schema
 
-### mp_encoding_profiles
+### np_mediap_encoding_profiles
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -727,7 +727,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 **Unique Constraint:**
 - `(source_account_id, name)`
 
-### mp_jobs
+### np_mediap_jobs
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -743,7 +743,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 | `output_base_path` | TEXT | Output directory path |
 | `error_message` | TEXT | Error message if failed |
 | `duration_seconds` | DOUBLE PRECISION | Processing duration |
-| `file_size_bytes` | BIGINT | Input file size |
+| `np_fileproc_size_bytes` | BIGINT | Input file size |
 | `started_at` | TIMESTAMPTZ | Start timestamp |
 | `completed_at` | TIMESTAMPTZ | Completion timestamp |
 | `created_at` | TIMESTAMPTZ | Creation timestamp |
@@ -767,7 +767,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 - `idx_mp_jobs_created` - created_at DESC
 - `idx_mp_jobs_priority` - (priority DESC, created_at ASC) WHERE status = 'pending'
 
-### mp_job_outputs
+### np_mediap_job_outputs
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -776,8 +776,8 @@ The plugin emits these webhook events for job lifecycle tracking:
 | `job_id` | UUID | Parent job reference |
 | `output_type` | VARCHAR(32) | Output type |
 | `resolution_label` | VARCHAR(16) | Resolution label (1080p, 720p, etc.) |
-| `file_path` | TEXT | Output file path |
-| `file_size_bytes` | BIGINT | File size |
+| `np_fileproc_path` | TEXT | Output file path |
+| `np_fileproc_size_bytes` | BIGINT | File size |
 | `content_type` | VARCHAR(128) | MIME type |
 | `width` | INTEGER | Video width |
 | `height` | INTEGER | Video height |
@@ -799,7 +799,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 - `idx_mp_outputs_job` - job_id
 - `idx_mp_outputs_type` - output_type
 
-### mp_hls_manifests
+### np_mediap_hls_manifests
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -816,7 +816,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 - `idx_mp_hls_account` - source_account_id
 - `idx_mp_hls_job` - job_id
 
-### mp_subtitles
+### np_mediap_subtitles
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -826,7 +826,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 | `language` | VARCHAR(16) | Language code |
 | `label` | VARCHAR(64) | Display label |
 | `format` | VARCHAR(8) | Subtitle format (vtt, srt, ass) |
-| `file_path` | TEXT | Subtitle file path |
+| `np_fileproc_path` | TEXT | Subtitle file path |
 | `is_default` | BOOLEAN | Default subtitle flag |
 | `is_forced` | BOOLEAN | Forced subtitle flag |
 | `created_at` | TIMESTAMPTZ | Creation timestamp |
@@ -835,7 +835,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 - `idx_mp_subtitles_account` - source_account_id
 - `idx_mp_subtitles_job` - job_id
 
-### mp_trickplay
+### np_mediap_trickplay
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -847,7 +847,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 | `columns` | INTEGER | Columns per image |
 | `rows` | INTEGER | Rows per image |
 | `interval_seconds` | INTEGER | Thumbnail interval |
-| `file_path` | TEXT | Tile image path |
+| `np_fileproc_path` | TEXT | Tile image path |
 | `index_path` | TEXT | Index file path |
 | `total_thumbnails` | INTEGER | Total thumbnail count |
 | `created_at` | TIMESTAMPTZ | Creation timestamp |
@@ -856,7 +856,7 @@ The plugin emits these webhook events for job lifecycle tracking:
 - `idx_mp_trickplay_account` - source_account_id
 - `idx_mp_trickplay_job` - job_id
 
-### mp_webhook_events
+### np_mediap_webhook_events
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1062,7 +1062,7 @@ SELECT
   COUNT(*) FILTER (WHERE status = 'completed') as completed,
   COUNT(*) FILTER (WHERE status = 'failed') as failed,
   ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / COUNT(*), 2) as success_rate
-FROM mp_jobs
+FROM np_mediap_jobs
 WHERE source_account_id = 'primary';
 
 -- Average processing time by resolution
@@ -1070,8 +1070,8 @@ SELECT
   o.resolution_label,
   COUNT(*) as job_count,
   AVG(EXTRACT(EPOCH FROM (j.completed_at - j.started_at))) as avg_seconds
-FROM mp_jobs j
-JOIN mp_job_outputs o ON o.job_id = j.id
+FROM np_mediap_jobs j
+JOIN np_mediap_job_outputs o ON o.job_id = j.id
 WHERE j.status = 'completed'
   AND j.source_account_id = 'primary'
 GROUP BY o.resolution_label
@@ -1081,11 +1081,11 @@ ORDER BY o.resolution_label;
 SELECT
   j.input_url,
   o.resolution_label,
-  o.file_size_bytes / 1024 / 1024 as size_mb
-FROM mp_job_outputs o
-JOIN mp_jobs j ON j.id = o.job_id
+  o.np_fileproc_size_bytes / 1024 / 1024 as size_mb
+FROM np_mediap_job_outputs o
+JOIN np_mediap_jobs j ON j.id = o.job_id
 WHERE o.source_account_id = 'primary'
-ORDER BY o.file_size_bytes DESC
+ORDER BY o.np_fileproc_size_bytes DESC
 LIMIT 10;
 ```
 

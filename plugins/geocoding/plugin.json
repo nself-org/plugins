@@ -8,23 +8,25 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["geocoding", "maps", "location", "geofencing", "places"],
-
+  "tags": [
+    "geocoding",
+    "maps",
+    "location",
+    "geofencing",
+    "places"
+  ],
   "tables": [
-    "geo_cache",
-    "geo_geofences",
-    "geo_geofence_events",
-    "geo_places"
+    "np_geoc_cache",
+    "np_geoc_geofences",
+    "np_geoc_geofence_events",
+    "np_geoc_places"
   ],
-
   "views": [
-    "geo_cache_hit_rate",
-    "geo_volume_daily",
-    "geo_geofence_activity"
+    "np_geoc_cache_hit_rate",
+    "np_geoc_volume_daily",
+    "np_geoc_geofence_activity"
   ],
-
   "webhooks": {},
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start the API server",
@@ -36,7 +38,6 @@
     "cache": "Manage geocoding cache",
     "status": "Show overall statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -59,30 +60,36 @@
       "GEOCODING_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3203,
     "webhookPath": "/webhooks/geocoding",
     "retryAttempts": 3,
     "retryDelay": 1000
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

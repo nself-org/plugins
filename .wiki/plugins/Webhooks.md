@@ -41,10 +41,10 @@ The Webhooks plugin provides a robust outbound webhook delivery system for sendi
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Webhook Endpoints | Configured webhook destinations | `webhook_endpoints` |
-| Webhook Deliveries | Delivery attempts and results | `webhook_deliveries` |
-| Event Types | Registered event type definitions | `webhook_event_types` |
-| Dead Letters | Failed deliveries for manual review | `webhook_dead_letters` |
+| Webhook Endpoints | Configured webhook destinations | `np_webhooks_endpoints` |
+| Webhook Deliveries | Delivery attempts and results | `np_webhooks_deliveries` |
+| Event Types | Registered event type definitions | `np_webhooks_event_types` |
+| Dead Letters | Failed deliveries for manual review | `np_webhooks_dead_letters` |
 
 ---
 
@@ -818,12 +818,12 @@ app.post('/webhooks', (req, res) => {
 
 ## Database Schema
 
-### webhook_endpoints
+### np_webhooks_endpoints
 
 Stores webhook endpoint configurations.
 
 ```sql
-CREATE TABLE webhook_endpoints (
+CREATE TABLE np_webhooks_endpoints (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   url TEXT NOT NULL,
@@ -842,21 +842,21 @@ CREATE TABLE webhook_endpoints (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_webhook_endpoints_source_account ON webhook_endpoints(source_account_id);
-CREATE INDEX idx_webhook_endpoints_enabled ON webhook_endpoints(enabled);
-CREATE INDEX idx_webhook_endpoints_events ON webhook_endpoints USING GIN(events);
-CREATE INDEX idx_webhook_endpoints_created ON webhook_endpoints(created_at DESC);
+CREATE INDEX idx_webhook_endpoints_source_account ON np_webhooks_endpoints(source_account_id);
+CREATE INDEX idx_webhook_endpoints_enabled ON np_webhooks_endpoints(enabled);
+CREATE INDEX idx_webhook_endpoints_events ON np_webhooks_endpoints USING GIN(events);
+CREATE INDEX idx_webhook_endpoints_created ON np_webhooks_endpoints(created_at DESC);
 ```
 
-### webhook_deliveries
+### np_webhooks_deliveries
 
 Tracks webhook delivery attempts and results.
 
 ```sql
-CREATE TABLE webhook_deliveries (
+CREATE TABLE np_webhooks_deliveries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  endpoint_id UUID NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
+  endpoint_id UUID NOT NULL REFERENCES np_webhooks_endpoints(id) ON DELETE CASCADE,
   event_type VARCHAR(128) NOT NULL,
   payload JSONB NOT NULL,
   status VARCHAR(32) DEFAULT 'pending',
@@ -872,20 +872,20 @@ CREATE TABLE webhook_deliveries (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_webhook_deliveries_source_account ON webhook_deliveries(source_account_id);
-CREATE INDEX idx_webhook_deliveries_endpoint ON webhook_deliveries(endpoint_id);
-CREATE INDEX idx_webhook_deliveries_status ON webhook_deliveries(status);
-CREATE INDEX idx_webhook_deliveries_event_type ON webhook_deliveries(event_type);
-CREATE INDEX idx_webhook_deliveries_next_retry ON webhook_deliveries(next_retry_at) WHERE status = 'pending';
-CREATE INDEX idx_webhook_deliveries_created ON webhook_deliveries(created_at DESC);
+CREATE INDEX idx_webhook_deliveries_source_account ON np_webhooks_deliveries(source_account_id);
+CREATE INDEX idx_webhook_deliveries_endpoint ON np_webhooks_deliveries(endpoint_id);
+CREATE INDEX idx_webhook_deliveries_status ON np_webhooks_deliveries(status);
+CREATE INDEX idx_webhook_deliveries_event_type ON np_webhooks_deliveries(event_type);
+CREATE INDEX idx_webhook_deliveries_next_retry ON np_webhooks_deliveries(next_retry_at) WHERE status = 'pending';
+CREATE INDEX idx_webhook_deliveries_created ON np_webhooks_deliveries(created_at DESC);
 ```
 
-### webhook_event_types
+### np_webhooks_event_types
 
 Registry of supported event types.
 
 ```sql
-CREATE TABLE webhook_event_types (
+CREATE TABLE np_webhooks_event_types (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -897,21 +897,21 @@ CREATE TABLE webhook_event_types (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_webhook_event_types_source_account ON webhook_event_types(source_account_id);
-CREATE INDEX idx_webhook_event_types_name ON webhook_event_types(name);
-CREATE INDEX idx_webhook_event_types_source_plugin ON webhook_event_types(source_plugin);
+CREATE INDEX idx_webhook_event_types_source_account ON np_webhooks_event_types(source_account_id);
+CREATE INDEX idx_webhook_event_types_name ON np_webhooks_event_types(name);
+CREATE INDEX idx_webhook_event_types_source_plugin ON np_webhooks_event_types(source_plugin);
 ```
 
-### webhook_dead_letters
+### np_webhooks_dead_letters
 
 Failed deliveries that exceeded retry limits.
 
 ```sql
-CREATE TABLE webhook_dead_letters (
+CREATE TABLE np_webhooks_dead_letters (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  delivery_id UUID REFERENCES webhook_deliveries(id),
-  endpoint_id UUID REFERENCES webhook_endpoints(id),
+  delivery_id UUID REFERENCES np_webhooks_deliveries(id),
+  endpoint_id UUID REFERENCES np_webhooks_endpoints(id),
   event_type VARCHAR(128),
   payload JSONB,
   last_error TEXT,
@@ -921,11 +921,11 @@ CREATE TABLE webhook_dead_letters (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_webhook_dead_letters_source_account ON webhook_dead_letters(source_account_id);
-CREATE INDEX idx_webhook_dead_letters_delivery ON webhook_dead_letters(delivery_id);
-CREATE INDEX idx_webhook_dead_letters_endpoint ON webhook_dead_letters(endpoint_id);
-CREATE INDEX idx_webhook_dead_letters_resolved ON webhook_dead_letters(resolved);
-CREATE INDEX idx_webhook_dead_letters_created ON webhook_dead_letters(created_at DESC);
+CREATE INDEX idx_webhook_dead_letters_source_account ON np_webhooks_dead_letters(source_account_id);
+CREATE INDEX idx_webhook_dead_letters_delivery ON np_webhooks_dead_letters(delivery_id);
+CREATE INDEX idx_webhook_dead_letters_endpoint ON np_webhooks_dead_letters(endpoint_id);
+CREATE INDEX idx_webhook_dead_letters_resolved ON np_webhooks_dead_letters(resolved);
+CREATE INDEX idx_webhook_dead_letters_created ON np_webhooks_dead_letters(created_at DESC);
 ```
 
 ---
@@ -969,7 +969,7 @@ Endpoints are automatically disabled after consecutive failures exceed `WEBHOOKS
 ```sql
 -- Check auto-disabled endpoints
 SELECT id, url, failure_count, disabled_at, disabled_reason
-FROM webhook_endpoints
+FROM np_webhooks_endpoints
 WHERE enabled = false AND disabled_at IS NOT NULL
 ORDER BY disabled_at DESC;
 ```
@@ -1015,15 +1015,15 @@ nself plugin webhooks dead-letters resolve <id>
 ```sql
 -- Dead letters by event type
 SELECT event_type, COUNT(*) as count
-FROM webhook_dead_letters
+FROM np_webhooks_dead_letters
 WHERE resolved = false
 GROUP BY event_type
 ORDER BY count DESC;
 
 -- Dead letters by endpoint
 SELECT e.url, COUNT(d.id) as count
-FROM webhook_dead_letters d
-JOIN webhook_endpoints e ON d.endpoint_id = e.id
+FROM np_webhooks_dead_letters d
+JOIN np_webhooks_endpoints e ON d.endpoint_id = e.id
 WHERE d.resolved = false
 GROUP BY e.url
 ORDER BY count DESC;

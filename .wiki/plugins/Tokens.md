@@ -442,7 +442,7 @@ Response (allowed):
 ```json
 {
   "allowed": true,
-  "reason": "entitlement_active",
+  "reason": "np_entitlements_active",
   "restrictions": {"maxResolution": "4K"},
   "expiresAt": "2025-12-31T23:59:59.000Z"
 }
@@ -493,16 +493,16 @@ Headers:
 
 ## Database Schema
 
-### tokens_signing_keys
+### np_tokens_signing_keys
 ```sql
-CREATE TABLE tokens_signing_keys (
+CREATE TABLE np_tokens_signing_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
   algorithm VARCHAR(20) NOT NULL DEFAULT 'hmac-sha256',
   key_material_encrypted TEXT NOT NULL,
   is_active BOOLEAN DEFAULT true,
-  rotated_from UUID REFERENCES tokens_signing_keys(id),
+  rotated_from UUID REFERENCES np_tokens_signing_keys(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   rotated_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ,
@@ -510,14 +510,14 @@ CREATE TABLE tokens_signing_keys (
 );
 ```
 
-### tokens_issued
+### np_tokens_issued
 ```sql
-CREATE TABLE tokens_issued (
+CREATE TABLE np_tokens_issued (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   token_hash VARCHAR(128) NOT NULL,
   token_type VARCHAR(50) NOT NULL DEFAULT 'playback',
-  signing_key_id UUID REFERENCES tokens_signing_keys(id),
+  signing_key_id UUID REFERENCES np_tokens_signing_keys(id),
   user_id VARCHAR(255) NOT NULL,
   device_id VARCHAR(255),
   content_id VARCHAR(255) NOT NULL,
@@ -534,9 +534,9 @@ CREATE TABLE tokens_issued (
 );
 ```
 
-### tokens_encryption_keys
+### np_tokens_encryption_keys
 ```sql
-CREATE TABLE tokens_encryption_keys (
+CREATE TABLE np_tokens_encryption_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   content_id VARCHAR(255) NOT NULL,
@@ -551,27 +551,27 @@ CREATE TABLE tokens_encryption_keys (
 );
 ```
 
-### tokens_entitlements
+### np_tokens_entitlements
 ```sql
-CREATE TABLE tokens_entitlements (
+CREATE TABLE np_tokens_entitlements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
   content_id VARCHAR(255) NOT NULL,
   content_type VARCHAR(50),
-  entitlement_type VARCHAR(50) NOT NULL DEFAULT 'stream',
+  np_entitlements_type VARCHAR(50) NOT NULL DEFAULT 'stream',
   granted_by VARCHAR(50) DEFAULT 'system',
   granted_at TIMESTAMPTZ DEFAULT NOW(),
   expires_at TIMESTAMPTZ,
   revoked BOOLEAN DEFAULT false,
   metadata JSONB DEFAULT '{}',
-  UNIQUE(source_account_id, user_id, content_id, entitlement_type)
+  UNIQUE(source_account_id, user_id, content_id, np_entitlements_type)
 );
 ```
 
-### tokens_webhook_events
+### np_tokens_webhook_events
 ```sql
-CREATE TABLE tokens_webhook_events (
+CREATE TABLE np_tokens_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -694,11 +694,11 @@ segment2.ts
 ### Example 3: Entitlement-Based Access
 ```sql
 -- Grant user access to premium content
-INSERT INTO tokens_entitlements (
+INSERT INTO np_tokens_entitlements (
   source_account_id,
   user_id,
   content_id,
-  entitlement_type,
+  np_entitlements_type,
   expires_at,
   metadata
 ) VALUES (
@@ -713,10 +713,10 @@ INSERT INTO tokens_entitlements (
 -- Query user's active entitlements
 SELECT
   content_id,
-  entitlement_type,
+  np_entitlements_type,
   expires_at,
   metadata
-FROM tokens_entitlements
+FROM np_tokens_entitlements
 WHERE source_account_id = 'primary'
   AND user_id = 'user123'
   AND revoked = false
@@ -750,10 +750,10 @@ curl -X POST http://localhost:3021/api/keys \
 **Debug:**
 ```bash
 # Check token record
-SELECT * FROM tokens_issued WHERE token_hash = 'hash_here';
+SELECT * FROM np_tokens_issued WHERE token_hash = 'hash_here';
 
 # Check if signing key is active
-SELECT * FROM tokens_signing_keys WHERE id = 'key_id_here';
+SELECT * FROM np_tokens_signing_keys WHERE id = 'key_id_here';
 ```
 
 ### Issue: Entitlement check denies access

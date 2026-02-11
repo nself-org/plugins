@@ -909,7 +909,7 @@ Get user statistics.
 
 ## Database Schema
 
-### social_posts
+### np_social_posts
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -942,7 +942,7 @@ Get user statistics.
 - `idx_social_posts_hashtags` - hashtags (GIN)
 - `idx_social_posts_deleted` - deleted_at (partial)
 
-### social_comments
+### np_social_comments
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -970,7 +970,7 @@ Get user statistics.
 - `idx_social_comments_created` - created_at DESC
 - `idx_social_comments_deleted` - deleted_at (partial)
 
-### social_reactions
+### np_social_reactions
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -991,7 +991,7 @@ Get user statistics.
 **Unique Constraint:**
 - `(source_account_id, target_type, target_id, user_id)` - One reaction per user per target
 
-### social_follows
+### np_social_follows
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1009,7 +1009,7 @@ Get user statistics.
 **Unique Constraint:**
 - `(source_account_id, follower_id, following_id)` - One follow per user pair
 
-### social_bookmarks
+### np_social_bookmarks
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1028,7 +1028,7 @@ Get user statistics.
 **Unique Constraint:**
 - `(source_account_id, user_id, target_type, target_id)` - One bookmark per user per target
 
-### social_shares
+### np_social_shares
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1045,7 +1045,7 @@ Get user statistics.
 - `idx_social_shares_user` - user_id
 - `idx_social_shares_source` - (source_type, source_id)
 
-### social_webhook_events
+### np_social_webhook_events
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1163,7 +1163,7 @@ SELECT
   p.reaction_count,
   p.comment_count,
   p.share_count
-FROM social_posts p
+FROM np_social_posts p
 WHERE p.deleted_at IS NULL
   AND p.created_at >= NOW() - INTERVAL '7 days'
 ORDER BY p.reaction_count DESC
@@ -1173,7 +1173,7 @@ LIMIT 20;
 SELECT
   hashtag,
   COUNT(*) as post_count
-FROM social_posts,
+FROM np_social_posts,
   UNNEST(hashtags) as hashtag
 WHERE created_at >= NOW() - INTERVAL '24 hours'
   AND deleted_at IS NULL
@@ -1186,7 +1186,7 @@ SELECT
   author_id,
   COUNT(*) as post_count,
   SUM(reaction_count) as total_reactions
-FROM social_posts
+FROM np_social_posts
 WHERE created_at >= NOW() - INTERVAL '30 days'
   AND deleted_at IS NULL
 GROUP BY author_id

@@ -8,21 +8,28 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "communication",
-  "tags": ["streaming", "live", "rtmp", "hls", "video", "chat", "broadcast", "vod"],
-
-  "tables": [
-    "streaming_streams",
-    "streaming_keys",
-    "streaming_viewers",
-    "streaming_recordings",
-    "streaming_clips",
-    "streaming_analytics",
-    "streaming_moderators",
-    "streaming_chat_messages",
-    "streaming_reports",
-    "streaming_schedule"
+  "tags": [
+    "streaming",
+    "live",
+    "rtmp",
+    "hls",
+    "video",
+    "chat",
+    "broadcast",
+    "vod"
   ],
-
+  "tables": [
+    "np_streaming_streams",
+    "np_streaming_keys",
+    "np_streaming_viewers",
+    "np_streaming_recordings",
+    "np_streaming_clips",
+    "np_streaming_analytics",
+    "np_streaming_moderators",
+    "np_streaming_chat_messages",
+    "np_streaming_reports",
+    "np_streaming_schedule"
+  ],
   "webhooks": {
     "stream.started": "A live stream started",
     "stream.ended": "A live stream ended",
@@ -35,7 +42,6 @@
     "chat.message": "A chat message was sent",
     "report.created": "A stream was reported"
   },
-
   "actions": {
     "init": "Initialize streaming system",
     "server": "Start streaming server",
@@ -44,7 +50,6 @@
     "recordings": "Manage recordings",
     "schedule": "Manage scheduled streams"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -58,7 +63,6 @@
       "CDN_URL"
     ]
   },
-
   "config": {
     "port": 3711,
     "webhookPath": "/webhooks/streaming",
@@ -69,23 +73,31 @@
     "chatRateLimitMessages": 5,
     "chatRateLimitWindow": 10
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["*"],
-    "filesystem": ["logs", "cache", "recordings"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "recordings"
+    ]
   }
 }

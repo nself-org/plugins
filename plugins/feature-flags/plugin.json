@@ -8,18 +8,21 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["feature-flags", "feature-toggles", "toggles", "configuration", "infrastructure"],
-
-  "tables": [
-    "ff_flags",
-    "ff_rules",
-    "ff_segments",
-    "ff_evaluations",
-    "ff_webhook_events"
+  "tags": [
+    "feature-flags",
+    "feature-toggles",
+    "toggles",
+    "configuration",
+    "infrastructure"
   ],
-
+  "tables": [
+    "np_flags_flags",
+    "np_flags_rules",
+    "np_flags_segments",
+    "np_flags_evaluations",
+    "np_flags_webhook_events"
+  ],
   "webhooks": {},
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start the API server",
@@ -28,7 +31,6 @@
     "segments": "Manage user segments",
     "stats": "View flag statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -43,30 +45,34 @@
       "FF_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3305,
     "evaluationLogEnabled": true,
     "evaluationLogSampleRate": 100,
     "cacheTtlSeconds": 30
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

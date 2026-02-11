@@ -16,11 +16,11 @@
     "gallery"
   ],
   "tables": [
-    "photos_albums",
-    "photos_items",
-    "photos_tags",
-    "photos_faces",
-    "photos_webhook_events"
+    "np_photos_albums",
+    "np_photos_items",
+    "np_photos_tags",
+    "np_photos_faces",
+    "np_photos_webhook_events"
   ],
   "webhooks": {},
   "actions": {

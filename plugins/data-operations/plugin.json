@@ -7,23 +7,32 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/data-operations",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "data-management",
-  "tags": ["gdpr", "export", "import", "migration", "backup", "restore", "deletion", "compliance", "privacy", "data-transfer"],
-
-  "tables": [
-    "dataops_export_requests",
-    "dataops_import_requests",
-    "dataops_deletion_requests",
-    "dataops_migration_jobs",
-    "dataops_backup_snapshots",
-    "dataops_restore_jobs",
-    "dataops_transform_templates",
-    "dataops_plugin_registry",
-    "dataops_transfer_audit",
-    "dataops_backup_schedule",
-    "dataops_webhook_events"
+  "category": "data",
+  "tags": [
+    "gdpr",
+    "export",
+    "import",
+    "migration",
+    "backup",
+    "restore",
+    "deletion",
+    "compliance",
+    "privacy",
+    "data-transfer"
   ],
-
+  "tables": [
+    "np_dataops_export_requests",
+    "np_dataops_import_requests",
+    "np_dataops_deletion_requests",
+    "np_dataops_migration_jobs",
+    "np_dataops_backup_snapshots",
+    "np_dataops_restore_jobs",
+    "np_dataops_transform_templates",
+    "np_dataops_plugin_registry",
+    "np_dataops_transfer_audit",
+    "np_dataops_backup_schedule",
+    "np_dataops_webhook_events"
+  ],
   "webhooks": {
     "export.completed": "Data export completed",
     "export.failed": "Data export failed",
@@ -34,7 +43,6 @@
     "backup.completed": "Backup snapshot created",
     "restore.completed": "Data restore completed"
   },
-
   "actions": {
     "init": "Initialize data-operations database schema",
     "server": "Start data-operations HTTP server",
@@ -50,7 +58,6 @@
     "status": "View overall statistics and job statuses",
     "stats": "View detailed statistics"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -80,7 +87,6 @@
       "DATAOPS_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3306,
     "storagePath": "/tmp/nself-data-operations",
@@ -100,23 +106,31 @@
     "rateLimitMax": 100,
     "rateLimitWindowMs": 60000
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "exports", "imports", "backups", "temp"]
+    "filesystem": [
+      "logs",
+      "exports",
+      "imports",
+      "backups",
+      "temp"
+    ]
   }
 }

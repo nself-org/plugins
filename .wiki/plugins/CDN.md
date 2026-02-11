@@ -439,7 +439,7 @@ Get purge request status.
   "purge_type": "urls",
   "urls": ["https://cdn.example.com/image1.jpg"],
   "status": "completed",
-  "provider_request_id": "cf_purge_12345",
+  "provider_request_id": "np_cf_purge_12345",
   "requested_by": "admin",
   "completed_at": "2026-02-11T10:00:05.000Z",
   "created_at": "2026-02-11T10:00:00.000Z"
@@ -598,7 +598,7 @@ Get overall plugin statistics.
   "pending_purges": 2,
   "total_signed_urls": 1234,
   "active_signed_urls": 245,
-  "analytics_days_tracked": 365,
+  "np_analytics_days_tracked": 365,
   "total_requests_tracked": 15234567,
   "total_bandwidth_tracked": 10485760000000,
   "by_provider": {
@@ -612,11 +612,11 @@ Get overall plugin statistics.
 
 ## Database Schema
 
-### cdn_zones
+### np_cdn_zones
 Stores CDN zone configurations.
 
 ```sql
-CREATE TABLE cdn_zones (
+CREATE TABLE np_cdn_zones (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   provider VARCHAR(64) NOT NULL,
@@ -634,19 +634,19 @@ CREATE TABLE cdn_zones (
   UNIQUE(source_account_id, provider, zone_id)
 );
 
-CREATE INDEX idx_cdn_zones_source_account ON cdn_zones(source_account_id);
-CREATE INDEX idx_cdn_zones_provider ON cdn_zones(provider);
-CREATE INDEX idx_cdn_zones_domain ON cdn_zones(domain);
+CREATE INDEX idx_cdn_zones_source_account ON np_cdn_zones(source_account_id);
+CREATE INDEX idx_cdn_zones_provider ON np_cdn_zones(provider);
+CREATE INDEX idx_cdn_zones_domain ON np_cdn_zones(domain);
 ```
 
-### cdn_purge_requests
+### np_cdn_purge_requests
 Tracks cache purge operations.
 
 ```sql
-CREATE TABLE cdn_purge_requests (
+CREATE TABLE np_cdn_purge_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  zone_id UUID REFERENCES cdn_zones(id),
+  zone_id UUID REFERENCES np_cdn_zones(id),
   purge_type VARCHAR(16) NOT NULL,
   urls JSONB DEFAULT '[]',
   tags JSONB DEFAULT '[]',
@@ -659,19 +659,19 @@ CREATE TABLE cdn_purge_requests (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_cdn_purge_source_account ON cdn_purge_requests(source_account_id);
-CREATE INDEX idx_cdn_purge_status ON cdn_purge_requests(status);
-CREATE INDEX idx_cdn_purge_zone ON cdn_purge_requests(zone_id);
+CREATE INDEX idx_cdn_purge_source_account ON np_cdn_purge_requests(source_account_id);
+CREATE INDEX idx_cdn_purge_status ON np_cdn_purge_requests(status);
+CREATE INDEX idx_cdn_purge_zone ON np_cdn_purge_requests(zone_id);
 ```
 
-### cdn_analytics
+### np_cdn_analytics
 Stores daily CDN analytics.
 
 ```sql
-CREATE TABLE cdn_analytics (
+CREATE TABLE np_cdn_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  zone_id UUID REFERENCES cdn_zones(id),
+  zone_id UUID REFERENCES np_cdn_zones(id),
   date DATE NOT NULL,
   requests_total BIGINT DEFAULT 0,
   requests_cached BIGINT DEFAULT 0,
@@ -690,19 +690,19 @@ CREATE TABLE cdn_analytics (
   UNIQUE(source_account_id, zone_id, date)
 );
 
-CREATE INDEX idx_cdn_analytics_source_account ON cdn_analytics(source_account_id);
-CREATE INDEX idx_cdn_analytics_date ON cdn_analytics(date);
-CREATE INDEX idx_cdn_analytics_zone ON cdn_analytics(zone_id);
+CREATE INDEX idx_cdn_analytics_source_account ON np_cdn_analytics(source_account_id);
+CREATE INDEX idx_cdn_analytics_date ON np_cdn_analytics(date);
+CREATE INDEX idx_cdn_analytics_zone ON np_cdn_analytics(zone_id);
 ```
 
-### cdn_signed_urls
+### np_cdn_signed_urls
 Tracks generated signed URLs.
 
 ```sql
-CREATE TABLE cdn_signed_urls (
+CREATE TABLE np_cdn_signed_urls (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  zone_id UUID REFERENCES cdn_zones(id),
+  zone_id UUID REFERENCES np_cdn_zones(id),
   original_url TEXT NOT NULL,
   signed_url TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -712,18 +712,18 @@ CREATE TABLE cdn_signed_urls (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_cdn_signed_source_account ON cdn_signed_urls(source_account_id);
-CREATE INDEX idx_cdn_signed_expires ON cdn_signed_urls(expires_at);
-CREATE INDEX idx_cdn_signed_zone ON cdn_signed_urls(zone_id);
+CREATE INDEX idx_cdn_signed_source_account ON np_cdn_signed_urls(source_account_id);
+CREATE INDEX idx_cdn_signed_expires ON np_cdn_signed_urls(expires_at);
+CREATE INDEX idx_cdn_signed_zone ON np_cdn_signed_urls(zone_id);
 ```
 
 ### Analytics Views
 
-#### cdn_bandwidth_by_zone
+#### np_cdn_bandwidth_by_zone
 Bandwidth usage by zone.
 
 ```sql
-CREATE OR REPLACE VIEW cdn_bandwidth_by_zone AS
+CREATE OR REPLACE VIEW np_cdn_bandwidth_by_zone AS
 SELECT z.source_account_id,
        z.name AS zone_name,
        z.domain,
@@ -735,39 +735,39 @@ SELECT z.source_account_id,
        a.requests_total,
        a.requests_cached,
        ROUND(100.0 * a.requests_cached / NULLIF(a.requests_total, 0), 1) AS cache_hit_rate
-FROM cdn_zones z
-JOIN cdn_analytics a ON z.id = a.zone_id
+FROM np_cdn_zones z
+JOIN np_cdn_analytics a ON z.id = a.zone_id
 ORDER BY a.date DESC;
 ```
 
-#### cdn_cache_hit_rate
+#### np_cdn_cache_hit_rate
 Overall cache performance.
 
 ```sql
-CREATE OR REPLACE VIEW cdn_cache_hit_rate AS
+CREATE OR REPLACE VIEW np_cdn_cache_hit_rate AS
 SELECT source_account_id,
        DATE(date) as day,
        SUM(requests_total) as total_requests,
        SUM(requests_cached) as cached_requests,
        ROUND(100.0 * SUM(requests_cached) / NULLIF(SUM(requests_total), 0), 1) as cache_hit_rate
-FROM cdn_analytics
+FROM np_cdn_analytics
 GROUP BY source_account_id, DATE(date)
 ORDER BY day DESC;
 ```
 
-#### cdn_top_paths
+#### np_cdn_top_paths
 Most requested paths.
 
 ```sql
-CREATE OR REPLACE VIEW cdn_top_paths AS
+CREATE OR REPLACE VIEW np_cdn_top_paths AS
 SELECT z.source_account_id,
        z.name AS zone_name,
        z.domain,
        a.date,
        path_item->>'path' AS path,
        (path_item->>'requests')::BIGINT AS requests
-FROM cdn_zones z
-JOIN cdn_analytics a ON z.id = a.zone_id,
+FROM np_cdn_zones z
+JOIN np_cdn_analytics a ON z.id = a.zone_id,
      jsonb_array_elements(a.top_paths) AS path_item
 ORDER BY (path_item->>'requests')::BIGINT DESC;
 ```
@@ -833,7 +833,7 @@ SELECT
   total_requests,
   cached_requests,
   cache_hit_rate
-FROM cdn_bandwidth_by_zone
+FROM np_cdn_bandwidth_by_zone
 WHERE source_account_id = 'primary'
   AND day > CURRENT_DATE - INTERVAL '30 days'
 ORDER BY day DESC, cache_hit_rate DESC;
@@ -844,7 +844,7 @@ SELECT
   domain,
   AVG(cache_hit_rate) as avg_cache_hit_rate,
   SUM(total_requests) as total_requests
-FROM cdn_bandwidth_by_zone
+FROM np_cdn_bandwidth_by_zone
 WHERE source_account_id = 'primary'
   AND day > CURRENT_DATE - INTERVAL '30 days'
 GROUP BY zone_name, domain
@@ -904,7 +904,7 @@ psql $DATABASE_URL -c "
     requests_total,
     bandwidth_total / 1024 / 1024 as bandwidth_mb,
     ROUND(100.0 * requests_cached / requests_total, 1) as cache_hit_rate
-  FROM cdn_analytics
+  FROM np_cdn_analytics
   WHERE zone_id = '$ZONE_ID'
     AND date = '$YESTERDAY';
 "
@@ -921,11 +921,11 @@ psql $DATABASE_URL -c "
 **Solution:**
 1. Verify zone configuration:
    ```sql
-   SELECT * FROM cdn_zones WHERE id = '<zone-id>';
+   SELECT * FROM np_cdn_zones WHERE id = '<zone-id>';
    ```
 2. Check purge request status:
    ```sql
-   SELECT * FROM cdn_purge_requests
+   SELECT * FROM np_cdn_purge_requests
    WHERE zone_id = '<zone-id>'
    ORDER BY created_at DESC
    LIMIT 10;
@@ -956,17 +956,17 @@ psql $DATABASE_URL -c "
 2. Check URL hasn't expired:
    ```sql
    SELECT original_url, expires_at, NOW() > expires_at as expired
-   FROM cdn_signed_urls
+   FROM np_cdn_signed_urls
    WHERE id = '<signed-url-id>';
    ```
 3. Verify IP restriction if set:
    ```sql
-   SELECT ip_restriction FROM cdn_signed_urls WHERE id = '<signed-url-id>';
+   SELECT ip_restriction FROM np_cdn_signed_urls WHERE id = '<signed-url-id>';
    ```
 4. Check access count vs max_access:
    ```sql
    SELECT access_count, max_access
-   FROM cdn_signed_urls
+   FROM np_cdn_signed_urls
    WHERE id = '<signed-url-id>';
    ```
 5. Test signature generation:
@@ -999,7 +999,7 @@ psql $DATABASE_URL -c "
 3. Verify data in database:
    ```sql
    SELECT date, requests_total, bandwidth_total
-   FROM cdn_analytics
+   FROM np_cdn_analytics
    WHERE zone_id = '<zone-id>'
    ORDER BY date DESC
    LIMIT 7;
@@ -1064,7 +1064,7 @@ psql $DATABASE_URL -c "
    ```
 2. Check zone_id uniqueness:
    ```sql
-   SELECT * FROM cdn_zones
+   SELECT * FROM np_cdn_zones
    WHERE provider = 'cloudflare'
      AND zone_id = '<zone-id>';
    ```

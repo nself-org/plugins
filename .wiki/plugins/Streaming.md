@@ -429,12 +429,12 @@ A stream was reported.
 
 ## Database Schema
 
-### streaming_streams
+### np_streaming_streams
 
 Live streams.
 
 ```sql
-CREATE TABLE streaming_streams (
+CREATE TABLE np_streaming_streams (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id UUID NOT NULL,
@@ -454,29 +454,29 @@ CREATE TABLE streaming_streams (
   current_viewers INTEGER DEFAULT 0,
   peak_viewers INTEGER DEFAULT 0,
   total_views INTEGER DEFAULT 0,
-  chat_message_count INTEGER DEFAULT 0,
+  np_chat_message_count INTEGER DEFAULT 0,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(source_account_id, stream_key_hash)
 );
 
-CREATE INDEX idx_streaming_streams_account ON streaming_streams(source_account_id);
-CREATE INDEX idx_streaming_streams_user ON streaming_streams(user_id);
-CREATE INDEX idx_streaming_streams_status ON streaming_streams(status);
-CREATE INDEX idx_streaming_streams_category ON streaming_streams(category);
-CREATE INDEX idx_streaming_streams_started ON streaming_streams(started_at DESC);
+CREATE INDEX idx_streaming_streams_account ON np_streaming_streams(source_account_id);
+CREATE INDEX idx_streaming_streams_user ON np_streaming_streams(user_id);
+CREATE INDEX idx_streaming_streams_status ON np_streaming_streams(status);
+CREATE INDEX idx_streaming_streams_category ON np_streaming_streams(category);
+CREATE INDEX idx_streaming_streams_started ON np_streaming_streams(started_at DESC);
 ```
 
-### streaming_keys
+### np_streaming_keys
 
 Stream key management.
 
 ```sql
-CREATE TABLE streaming_keys (
+CREATE TABLE np_streaming_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   key_value VARCHAR(255) NOT NULL,
   key_hash VARCHAR(255) NOT NULL,
   is_active BOOLEAN NOT NULL DEFAULT true,
@@ -487,20 +487,20 @@ CREATE TABLE streaming_keys (
   UNIQUE(source_account_id, key_hash)
 );
 
-CREATE INDEX idx_streaming_keys_account ON streaming_keys(source_account_id);
-CREATE INDEX idx_streaming_keys_stream ON streaming_keys(stream_id);
-CREATE INDEX idx_streaming_keys_active ON streaming_keys(is_active) WHERE is_active = true;
+CREATE INDEX idx_streaming_keys_account ON np_streaming_keys(source_account_id);
+CREATE INDEX idx_streaming_keys_stream ON np_streaming_keys(stream_id);
+CREATE INDEX idx_streaming_keys_active ON np_streaming_keys(is_active) WHERE is_active = true;
 ```
 
-### streaming_viewers
+### np_streaming_viewers
 
 Active viewers tracking.
 
 ```sql
-CREATE TABLE streaming_viewers (
+CREATE TABLE np_streaming_viewers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   user_id UUID,
   session_id VARCHAR(255) NOT NULL,
   ip_address VARCHAR(45),
@@ -512,27 +512,27 @@ CREATE TABLE streaming_viewers (
   UNIQUE(source_account_id, stream_id, session_id)
 );
 
-CREATE INDEX idx_streaming_viewers_account ON streaming_viewers(source_account_id);
-CREATE INDEX idx_streaming_viewers_stream ON streaming_viewers(stream_id);
-CREATE INDEX idx_streaming_viewers_user ON streaming_viewers(user_id);
-CREATE INDEX idx_streaming_viewers_session ON streaming_viewers(session_id);
-CREATE INDEX idx_streaming_viewers_active ON streaming_viewers(left_at) WHERE left_at IS NULL;
+CREATE INDEX idx_streaming_viewers_account ON np_streaming_viewers(source_account_id);
+CREATE INDEX idx_streaming_viewers_stream ON np_streaming_viewers(stream_id);
+CREATE INDEX idx_streaming_viewers_user ON np_streaming_viewers(user_id);
+CREATE INDEX idx_streaming_viewers_session ON np_streaming_viewers(session_id);
+CREATE INDEX idx_streaming_viewers_active ON np_streaming_viewers(left_at) WHERE left_at IS NULL;
 ```
 
-### streaming_recordings
+### np_streaming_recordings
 
 Stream recordings.
 
 ```sql
-CREATE TABLE streaming_recordings (
+CREATE TABLE np_streaming_recordings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   title VARCHAR(500) NOT NULL,
   description TEXT,
   duration_seconds INTEGER,
-  file_url TEXT,
-  file_size_bytes BIGINT,
+  np_fileproc_url TEXT,
+  np_fileproc_size_bytes BIGINT,
   thumbnail_url TEXT,
   status VARCHAR(50) NOT NULL DEFAULT 'processing',
   is_published BOOLEAN NOT NULL DEFAULT false,
@@ -545,27 +545,27 @@ CREATE TABLE streaming_recordings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_streaming_recordings_account ON streaming_recordings(source_account_id);
-CREATE INDEX idx_streaming_recordings_stream ON streaming_recordings(stream_id);
-CREATE INDEX idx_streaming_recordings_status ON streaming_recordings(status);
-CREATE INDEX idx_streaming_recordings_published ON streaming_recordings(is_published) WHERE is_published = true;
+CREATE INDEX idx_streaming_recordings_account ON np_streaming_recordings(source_account_id);
+CREATE INDEX idx_streaming_recordings_stream ON np_streaming_recordings(stream_id);
+CREATE INDEX idx_streaming_recordings_status ON np_streaming_recordings(status);
+CREATE INDEX idx_streaming_recordings_published ON np_streaming_recordings(is_published) WHERE is_published = true;
 ```
 
-### streaming_clips
+### np_streaming_clips
 
 Stream clips.
 
 ```sql
-CREATE TABLE streaming_clips (
+CREATE TABLE np_streaming_clips (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
-  recording_id UUID REFERENCES streaming_recordings(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
+  recording_id UUID REFERENCES np_streaming_recordings(id) ON DELETE CASCADE,
   created_by UUID NOT NULL,
   title VARCHAR(500) NOT NULL,
   start_offset INTEGER NOT NULL,
   duration INTEGER NOT NULL,
-  file_url TEXT,
+  np_fileproc_url TEXT,
   thumbnail_url TEXT,
   status VARCHAR(50) NOT NULL DEFAULT 'processing',
   view_count INTEGER DEFAULT 0,
@@ -574,44 +574,44 @@ CREATE TABLE streaming_clips (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_streaming_clips_account ON streaming_clips(source_account_id);
-CREATE INDEX idx_streaming_clips_stream ON streaming_clips(stream_id);
-CREATE INDEX idx_streaming_clips_recording ON streaming_clips(recording_id);
-CREATE INDEX idx_streaming_clips_creator ON streaming_clips(created_by);
-CREATE INDEX idx_streaming_clips_status ON streaming_clips(status);
+CREATE INDEX idx_streaming_clips_account ON np_streaming_clips(source_account_id);
+CREATE INDEX idx_streaming_clips_stream ON np_streaming_clips(stream_id);
+CREATE INDEX idx_streaming_clips_recording ON np_streaming_clips(recording_id);
+CREATE INDEX idx_streaming_clips_creator ON np_streaming_clips(created_by);
+CREATE INDEX idx_streaming_clips_status ON np_streaming_clips(status);
 ```
 
-### streaming_analytics
+### np_streaming_analytics
 
 Analytics data points.
 
 ```sql
-CREATE TABLE streaming_analytics (
+CREATE TABLE np_streaming_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   timestamp TIMESTAMPTZ NOT NULL,
   viewer_count INTEGER NOT NULL,
-  chat_messages_per_minute INTEGER DEFAULT 0,
+  np_chat_messages_per_minute INTEGER DEFAULT 0,
   bitrate_kbps INTEGER,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_streaming_analytics_account ON streaming_analytics(source_account_id);
-CREATE INDEX idx_streaming_analytics_stream ON streaming_analytics(stream_id);
-CREATE INDEX idx_streaming_analytics_timestamp ON streaming_analytics(timestamp DESC);
+CREATE INDEX idx_streaming_analytics_account ON np_streaming_analytics(source_account_id);
+CREATE INDEX idx_streaming_analytics_stream ON np_streaming_analytics(stream_id);
+CREATE INDEX idx_streaming_analytics_timestamp ON np_streaming_analytics(timestamp DESC);
 ```
 
-### streaming_moderators
+### np_streaming_moderators
 
 Stream moderators.
 
 ```sql
-CREATE TABLE streaming_moderators (
+CREATE TABLE np_streaming_moderators (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   granted_by UUID NOT NULL,
   permissions BIGINT NOT NULL DEFAULT 0,
@@ -619,20 +619,20 @@ CREATE TABLE streaming_moderators (
   UNIQUE(source_account_id, stream_id, user_id)
 );
 
-CREATE INDEX idx_streaming_moderators_account ON streaming_moderators(source_account_id);
-CREATE INDEX idx_streaming_moderators_stream ON streaming_moderators(stream_id);
-CREATE INDEX idx_streaming_moderators_user ON streaming_moderators(user_id);
+CREATE INDEX idx_streaming_moderators_account ON np_streaming_moderators(source_account_id);
+CREATE INDEX idx_streaming_moderators_stream ON np_streaming_moderators(stream_id);
+CREATE INDEX idx_streaming_moderators_user ON np_streaming_moderators(user_id);
 ```
 
-### streaming_chat_messages
+### np_streaming_chat_messages
 
 Chat messages.
 
 ```sql
-CREATE TABLE streaming_chat_messages (
+CREATE TABLE np_streaming_chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   message TEXT NOT NULL,
   is_deleted BOOLEAN NOT NULL DEFAULT false,
@@ -642,22 +642,22 @@ CREATE TABLE streaming_chat_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_streaming_chat_account ON streaming_chat_messages(source_account_id);
-CREATE INDEX idx_streaming_chat_stream ON streaming_chat_messages(stream_id);
-CREATE INDEX idx_streaming_chat_user ON streaming_chat_messages(user_id);
-CREATE INDEX idx_streaming_chat_created ON streaming_chat_messages(created_at DESC);
-CREATE INDEX idx_streaming_chat_active ON streaming_chat_messages(is_deleted) WHERE is_deleted = false;
+CREATE INDEX idx_streaming_chat_account ON np_streaming_chat_messages(source_account_id);
+CREATE INDEX idx_streaming_chat_stream ON np_streaming_chat_messages(stream_id);
+CREATE INDEX idx_streaming_chat_user ON np_streaming_chat_messages(user_id);
+CREATE INDEX idx_streaming_chat_created ON np_streaming_chat_messages(created_at DESC);
+CREATE INDEX idx_streaming_chat_active ON np_streaming_chat_messages(is_deleted) WHERE is_deleted = false;
 ```
 
-### streaming_reports
+### np_streaming_reports
 
 Stream reports.
 
 ```sql
-CREATE TABLE streaming_reports (
+CREATE TABLE np_streaming_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  stream_id UUID NOT NULL REFERENCES streaming_streams(id) ON DELETE CASCADE,
+  stream_id UUID NOT NULL REFERENCES np_streaming_streams(id) ON DELETE CASCADE,
   reporter_id UUID NOT NULL,
   reason VARCHAR(100) NOT NULL,
   description TEXT,
@@ -670,18 +670,18 @@ CREATE TABLE streaming_reports (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_streaming_reports_account ON streaming_reports(source_account_id);
-CREATE INDEX idx_streaming_reports_stream ON streaming_reports(stream_id);
-CREATE INDEX idx_streaming_reports_reporter ON streaming_reports(reporter_id);
-CREATE INDEX idx_streaming_reports_status ON streaming_reports(status);
+CREATE INDEX idx_streaming_reports_account ON np_streaming_reports(source_account_id);
+CREATE INDEX idx_streaming_reports_stream ON np_streaming_reports(stream_id);
+CREATE INDEX idx_streaming_reports_reporter ON np_streaming_reports(reporter_id);
+CREATE INDEX idx_streaming_reports_status ON np_streaming_reports(status);
 ```
 
-### streaming_schedule
+### np_streaming_schedule
 
 Scheduled streams.
 
 ```sql
-CREATE TABLE streaming_schedule (
+CREATE TABLE np_streaming_schedule (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id UUID NOT NULL,
@@ -689,7 +689,7 @@ CREATE TABLE streaming_schedule (
   description TEXT,
   scheduled_start TIMESTAMPTZ NOT NULL,
   estimated_duration INTEGER,
-  stream_id UUID REFERENCES streaming_streams(id) ON DELETE SET NULL,
+  stream_id UUID REFERENCES np_streaming_streams(id) ON DELETE SET NULL,
   status VARCHAR(50) NOT NULL DEFAULT 'scheduled',
   notify_followers BOOLEAN NOT NULL DEFAULT true,
   notified_at TIMESTAMPTZ,
@@ -698,10 +698,10 @@ CREATE TABLE streaming_schedule (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_streaming_schedule_account ON streaming_schedule(source_account_id);
-CREATE INDEX idx_streaming_schedule_user ON streaming_schedule(user_id);
-CREATE INDEX idx_streaming_schedule_start ON streaming_schedule(scheduled_start);
-CREATE INDEX idx_streaming_schedule_status ON streaming_schedule(status);
+CREATE INDEX idx_streaming_schedule_account ON np_streaming_schedule(source_account_id);
+CREATE INDEX idx_streaming_schedule_user ON np_streaming_schedule(user_id);
+CREATE INDEX idx_streaming_schedule_start ON np_streaming_schedule(scheduled_start);
+CREATE INDEX idx_streaming_schedule_status ON np_streaming_schedule(status);
 ```
 
 ## Examples

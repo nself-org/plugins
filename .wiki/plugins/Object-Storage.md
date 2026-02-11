@@ -732,7 +732,7 @@ Get storage usage statistics.
 
 ## Database Schema
 
-### os_buckets
+### np_objstore_buckets
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -756,7 +756,7 @@ Get storage usage statistics.
 **Unique Constraint:**
 - `(source_account_id, name)`
 
-### os_objects
+### np_objstore_objects
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -784,7 +784,7 @@ Get storage usage statistics.
 **Unique Constraint:**
 - `(source_account_id, bucket_id, key, version_id)`
 
-### os_upload_sessions
+### np_objstore_upload_sessions
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -811,7 +811,7 @@ Get storage usage statistics.
 - `idx_os_uploads_status` - status
 - `idx_os_uploads_expires` - expires_at
 
-### os_access_logs
+### np_objstore_access_logs
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -840,7 +840,7 @@ Get storage usage statistics.
 - `idx_os_logs_operation` - operation
 - `idx_os_logs_timestamp` - timestamp DESC
 
-### os_webhook_events
+### np_objstore_webhook_events
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -1061,8 +1061,8 @@ SELECT
   COUNT(o.id) as object_count,
   SUM(o.size_bytes) as total_bytes,
   SUM(o.size_bytes) / 1024 / 1024 / 1024 as total_gb
-FROM os_buckets b
-LEFT JOIN os_objects o ON o.bucket_id = b.id
+FROM np_objstore_buckets b
+LEFT JOIN np_objstore_objects o ON o.bucket_id = b.id
 WHERE b.source_account_id = 'primary'
 GROUP BY b.name
 ORDER BY total_bytes DESC;
@@ -1073,8 +1073,8 @@ SELECT
   l.key,
   COUNT(*) FILTER (WHERE l.operation = 'download') as downloads,
   SUM(l.bytes_transferred) as total_bytes
-FROM os_access_logs l
-JOIN os_buckets b ON b.id = l.bucket_id
+FROM np_objstore_access_logs l
+JOIN np_objstore_buckets b ON b.id = l.bucket_id
 WHERE l.source_account_id = 'primary'
   AND l.timestamp >= NOW() - INTERVAL '7 days'
 GROUP BY b.name, l.key
@@ -1087,7 +1087,7 @@ SELECT
   key,
   COUNT(*) as failures,
   MAX(timestamp) as last_failure
-FROM os_access_logs
+FROM np_objstore_access_logs
 WHERE operation = 'upload'
   AND status_code >= 400
   AND timestamp >= NOW() - INTERVAL '24 hours'

@@ -352,24 +352,24 @@ CREATE INDEX idx_job_schedules_next ON job_schedules(next_run_at);
 
 ## Analytics Views
 
-### jobs_active
+### np_jobs_active
 
 Currently running jobs.
 
 ```sql
-CREATE VIEW jobs_active AS
+CREATE VIEW np_jobs_active AS
 SELECT id, type, queue, priority, payload, started_at, attempts
 FROM jobs
 WHERE status = 'active'
 ORDER BY started_at ASC;
 ```
 
-### jobs_failed_details
+### np_jobs_failed_details
 
 Failed jobs with error details.
 
 ```sql
-CREATE VIEW jobs_failed_details AS
+CREATE VIEW np_jobs_failed_details AS
 SELECT
     j.id, j.type, j.queue, j.attempts, j.max_attempts,
     f.error_message, f.error_stack, f.failed_at
@@ -684,8 +684,8 @@ server {
   server_name jobs.example.com;
 
   # Basic authentication
-  auth_basic "BullBoard Access";
-  auth_basic_user_file /etc/nginx/.htpasswd;
+  np_auth_basic "BullBoard Access";
+  np_auth_basic_user_file /etc/nginx/.htpasswd;
 
   location / {
     proxy_pass http://localhost:3105;
@@ -1374,7 +1374,7 @@ import promClient from 'prom-client';
 
 // Create metrics
 const jobsProcessed = new promClient.Counter({
-  name: 'jobs_processed_total',
+  name: 'np_jobs_processed_total',
   help: 'Total number of jobs processed',
   labelNames: ['queue', 'type', 'status'],
 });
@@ -1670,7 +1670,7 @@ async function checkRepeatedFailures() {
       {
         "title": "Jobs Processed (per minute)",
         "targets": [{
-          "expr": "rate(jobs_processed_total[1m])"
+          "expr": "rate(np_jobs_processed_total[1m])"
         }]
       },
       {
@@ -1688,7 +1688,7 @@ async function checkRepeatedFailures() {
       {
         "title": "Failure Rate (%)",
         "targets": [{
-          "expr": "rate(jobs_processed_total{status='failed'}[5m]) / rate(jobs_processed_total[5m]) * 100"
+          "expr": "rate(np_jobs_processed_total{status='failed'}[5m]) / rate(np_jobs_processed_total[5m]) * 100"
         }]
       }
     ]

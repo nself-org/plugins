@@ -775,9 +775,9 @@ Fleet-wide analytics.
 
 ## Database Schema
 
-### `dev_devices`
+### `np_dev_devices`
 ```sql
-CREATE TABLE dev_devices (
+CREATE TABLE np_dev_devices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   app_id VARCHAR(128) DEFAULT 'default',
   device_id VARCHAR(255) NOT NULL UNIQUE,
@@ -798,9 +798,9 @@ CREATE TABLE dev_devices (
 );
 ```
 
-### `dev_commands`
+### `np_dev_commands`
 ```sql
-CREATE TABLE dev_commands (
+CREATE TABLE np_dev_commands (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   app_id VARCHAR(128) DEFAULT 'default',
   device_id VARCHAR(255) NOT NULL,
@@ -821,9 +821,9 @@ CREATE TABLE dev_commands (
 );
 ```
 
-### `dev_telemetry`
+### `np_dev_telemetry`
 ```sql
-CREATE TABLE dev_telemetry (
+CREATE TABLE np_dev_telemetry (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   app_id VARCHAR(128) DEFAULT 'default',
   device_id VARCHAR(255) NOT NULL,
@@ -832,9 +832,9 @@ CREATE TABLE dev_telemetry (
 );
 ```
 
-### `dev_ingest_sessions`
+### `np_dev_ingest_sessions`
 ```sql
-CREATE TABLE dev_ingest_sessions (
+CREATE TABLE np_dev_ingest_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   app_id VARCHAR(128) DEFAULT 'default',
   device_id VARCHAR(255) NOT NULL,
@@ -853,9 +853,9 @@ CREATE TABLE dev_ingest_sessions (
 );
 ```
 
-### `dev_audit_log`
+### `np_dev_audit_log`
 ```sql
-CREATE TABLE dev_audit_log (
+CREATE TABLE np_dev_audit_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   app_id VARCHAR(128) DEFAULT 'default',
   device_id VARCHAR(255),

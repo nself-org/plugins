@@ -55,17 +55,17 @@ The Sports plugin provides unified synchronization of sports data from multiple 
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Leagues | League definitions and configurations | `sports_leagues` |
-| Teams | Team profiles with logos and metadata | `sports_teams` |
-| Events | Scheduled games and events | `sports_events` |
-| Games | Game details with scores and status | `sports_games` |
-| Standings | League/division standings | `sports_standings` |
-| Players | Player rosters and information | `sports_players` |
-| Favorites | User favorite teams | `sports_favorites` |
-| Provider Syncs | Sync history and status | `sports_provider_syncs` |
-| Schedule Cache | Cached schedule data | `sports_schedule_cache` |
-| Sync State | Current sync state per provider | `sports_sync_state` |
-| Webhook Events | Received webhook events | `sports_webhook_events` |
+| Leagues | League definitions and configurations | `np_sports_leagues` |
+| Teams | Team profiles with logos and metadata | `np_sports_teams` |
+| Events | Scheduled games and events | `np_sports_events` |
+| Games | Game details with scores and status | `np_sports_games` |
+| Standings | League/division standings | `np_sports_standings` |
+| Players | Player rosters and information | `np_sports_players` |
+| Favorites | User favorite teams | `np_sports_favorites` |
+| Provider Syncs | Sync history and status | `np_sports_provider_syncs` |
+| Schedule Cache | Cached schedule data | `np_sports_schedule_cache` |
+| Sync State | Current sync state per provider | `np_sports_sync_state` |
+| Webhook Events | Received webhook events | `np_sports_webhook_events` |
 
 ---
 
@@ -975,10 +975,10 @@ Set webhook secret in provider dashboard to match your configuration.
 
 (The database schema section continues with all 11 tables as shown in the original file, maintaining the exact structure...)
 
-### sports_leagues
+### np_sports_leagues
 
 ```sql
-CREATE TABLE sports_leagues (
+CREATE TABLE np_sports_leagues (
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     abbreviation VARCHAR(10),
@@ -994,16 +994,16 @@ CREATE TABLE sports_leagues (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_leagues_sport ON sports_leagues(sport);
-CREATE INDEX idx_sports_leagues_season ON sports_leagues(current_season);
+CREATE INDEX idx_sports_leagues_sport ON np_sports_leagues(sport);
+CREATE INDEX idx_sports_leagues_season ON np_sports_leagues(current_season);
 ```
 
-### sports_teams
+### np_sports_teams
 
 ```sql
-CREATE TABLE sports_teams (
+CREATE TABLE np_sports_teams (
     id VARCHAR(50) PRIMARY KEY,
-    league_id VARCHAR(50) REFERENCES sports_leagues(id),
+    league_id VARCHAR(50) REFERENCES np_sports_leagues(id),
     name VARCHAR(255) NOT NULL,
     abbreviation VARCHAR(10),
     display_name VARCHAR(255),
@@ -1027,22 +1027,22 @@ CREATE TABLE sports_teams (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_teams_league ON sports_teams(league_id);
-CREATE INDEX idx_sports_teams_name ON sports_teams(name);
-CREATE INDEX idx_sports_teams_conference ON sports_teams(conference);
-CREATE INDEX idx_sports_teams_division ON sports_teams(division);
+CREATE INDEX idx_sports_teams_league ON np_sports_teams(league_id);
+CREATE INDEX idx_sports_teams_name ON np_sports_teams(name);
+CREATE INDEX idx_sports_teams_conference ON np_sports_teams(conference);
+CREATE INDEX idx_sports_teams_division ON np_sports_teams(division);
 ```
 
-### sports_events
+### np_sports_events
 
 ```sql
-CREATE TABLE sports_events (
+CREATE TABLE np_sports_events (
     id VARCHAR(100) PRIMARY KEY,
     provider VARCHAR(50) NOT NULL,
     provider_event_id VARCHAR(255),
-    league_id VARCHAR(50) REFERENCES sports_leagues(id),
-    home_team_id VARCHAR(50) REFERENCES sports_teams(id),
-    away_team_id VARCHAR(50) REFERENCES sports_teams(id),
+    league_id VARCHAR(50) REFERENCES np_sports_leagues(id),
+    home_team_id VARCHAR(50) REFERENCES np_sports_teams(id),
+    away_team_id VARCHAR(50) REFERENCES np_sports_teams(id),
     season VARCHAR(10),
     season_type VARCHAR(20),
     week INTEGER,
@@ -1064,24 +1064,24 @@ CREATE TABLE sports_events (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_events_league ON sports_events(league_id);
-CREATE INDEX idx_sports_events_home_team ON sports_events(home_team_id);
-CREATE INDEX idx_sports_events_away_team ON sports_events(away_team_id);
-CREATE INDEX idx_sports_events_start_time ON sports_events(start_time);
-CREATE INDEX idx_sports_events_status ON sports_events(status);
-CREATE INDEX idx_sports_events_locked ON sports_events(locked);
-CREATE INDEX idx_sports_events_provider ON sports_events(provider, provider_event_id);
+CREATE INDEX idx_sports_events_league ON np_sports_events(league_id);
+CREATE INDEX idx_sports_events_home_team ON np_sports_events(home_team_id);
+CREATE INDEX idx_sports_events_away_team ON np_sports_events(away_team_id);
+CREATE INDEX idx_sports_events_start_time ON np_sports_events(start_time);
+CREATE INDEX idx_sports_events_status ON np_sports_events(status);
+CREATE INDEX idx_sports_events_locked ON np_sports_events(locked);
+CREATE INDEX idx_sports_events_provider ON np_sports_events(provider, provider_event_id);
 ```
 
-### sports_games
+### np_sports_games
 
 ```sql
-CREATE TABLE sports_games (
+CREATE TABLE np_sports_games (
     id VARCHAR(100) PRIMARY KEY,
-    event_id VARCHAR(100) REFERENCES sports_events(id),
-    league_id VARCHAR(50) REFERENCES sports_leagues(id),
-    home_team_id VARCHAR(50) REFERENCES sports_teams(id),
-    away_team_id VARCHAR(50) REFERENCES sports_teams(id),
+    event_id VARCHAR(100) REFERENCES np_sports_events(id),
+    league_id VARCHAR(50) REFERENCES np_sports_leagues(id),
+    home_team_id VARCHAR(50) REFERENCES np_sports_teams(id),
+    away_team_id VARCHAR(50) REFERENCES np_sports_teams(id),
     home_score INTEGER DEFAULT 0,
     away_score INTEGER DEFAULT 0,
     home_score_by_period JSONB DEFAULT '[]',
@@ -1108,19 +1108,19 @@ CREATE TABLE sports_games (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_games_event ON sports_games(event_id);
-CREATE INDEX idx_sports_games_league ON sports_games(league_id);
-CREATE INDEX idx_sports_games_status ON sports_games(status);
-CREATE INDEX idx_sports_games_started ON sports_games(started_at);
+CREATE INDEX idx_sports_games_event ON np_sports_games(event_id);
+CREATE INDEX idx_sports_games_league ON np_sports_games(league_id);
+CREATE INDEX idx_sports_games_status ON np_sports_games(status);
+CREATE INDEX idx_sports_games_started ON np_sports_games(started_at);
 ```
 
-### sports_standings
+### np_sports_standings
 
 ```sql
-CREATE TABLE sports_standings (
+CREATE TABLE np_sports_standings (
     id SERIAL PRIMARY KEY,
-    league_id VARCHAR(50) REFERENCES sports_leagues(id),
-    team_id VARCHAR(50) REFERENCES sports_teams(id),
+    league_id VARCHAR(50) REFERENCES np_sports_leagues(id),
+    team_id VARCHAR(50) REFERENCES np_sports_teams(id),
     season VARCHAR(10) NOT NULL,
     season_type VARCHAR(20),
     conference VARCHAR(50),
@@ -1154,20 +1154,20 @@ CREATE TABLE sports_standings (
     UNIQUE(league_id, team_id, season, season_type)
 );
 
-CREATE INDEX idx_sports_standings_league ON sports_standings(league_id);
-CREATE INDEX idx_sports_standings_team ON sports_standings(team_id);
-CREATE INDEX idx_sports_standings_season ON sports_standings(season);
-CREATE INDEX idx_sports_standings_rank ON sports_standings(rank);
+CREATE INDEX idx_sports_standings_league ON np_sports_standings(league_id);
+CREATE INDEX idx_sports_standings_team ON np_sports_standings(team_id);
+CREATE INDEX idx_sports_standings_season ON np_sports_standings(season);
+CREATE INDEX idx_sports_standings_rank ON np_sports_standings(rank);
 ```
 
-### sports_players
+### np_sports_players
 
 ```sql
-CREATE TABLE sports_players (
+CREATE TABLE np_sports_players (
     id VARCHAR(100) PRIMARY KEY,
     provider VARCHAR(50) NOT NULL,
     provider_player_id VARCHAR(255),
-    team_id VARCHAR(50) REFERENCES sports_teams(id),
+    team_id VARCHAR(50) REFERENCES np_sports_teams(id),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     full_name VARCHAR(255) NOT NULL,
@@ -1190,18 +1190,18 @@ CREATE TABLE sports_players (
     synced_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_players_team ON sports_players(team_id);
-CREATE INDEX idx_sports_players_name ON sports_players(full_name);
-CREATE INDEX idx_sports_players_position ON sports_players(position);
-CREATE INDEX idx_sports_players_provider ON sports_players(provider, provider_player_id);
+CREATE INDEX idx_sports_players_team ON np_sports_players(team_id);
+CREATE INDEX idx_sports_players_name ON np_sports_players(full_name);
+CREATE INDEX idx_sports_players_position ON np_sports_players(position);
+CREATE INDEX idx_sports_players_provider ON np_sports_players(provider, provider_player_id);
 ```
 
-### sports_favorites
+### np_sports_favorites
 
 ```sql
-CREATE TABLE sports_favorites (
+CREATE TABLE np_sports_favorites (
     id SERIAL PRIMARY KEY,
-    team_id VARCHAR(50) REFERENCES sports_teams(id),
+    team_id VARCHAR(50) REFERENCES np_sports_teams(id),
     user_id VARCHAR(100),
     priority INTEGER DEFAULT 0,
     notifications_enabled BOOLEAN DEFAULT TRUE,
@@ -1209,15 +1209,15 @@ CREATE TABLE sports_favorites (
     UNIQUE(team_id, user_id)
 );
 
-CREATE INDEX idx_sports_favorites_team ON sports_favorites(team_id);
-CREATE INDEX idx_sports_favorites_user ON sports_favorites(user_id);
-CREATE INDEX idx_sports_favorites_priority ON sports_favorites(priority DESC);
+CREATE INDEX idx_sports_favorites_team ON np_sports_favorites(team_id);
+CREATE INDEX idx_sports_favorites_user ON np_sports_favorites(user_id);
+CREATE INDEX idx_sports_favorites_priority ON np_sports_favorites(priority DESC);
 ```
 
-### sports_provider_syncs
+### np_sports_provider_syncs
 
 ```sql
-CREATE TABLE sports_provider_syncs (
+CREATE TABLE np_sports_provider_syncs (
     id SERIAL PRIMARY KEY,
     provider VARCHAR(50) NOT NULL,
     sport VARCHAR(50),
@@ -1235,15 +1235,15 @@ CREATE TABLE sports_provider_syncs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_provider_syncs_provider ON sports_provider_syncs(provider);
-CREATE INDEX idx_sports_provider_syncs_status ON sports_provider_syncs(status);
-CREATE INDEX idx_sports_provider_syncs_started ON sports_provider_syncs(started_at DESC);
+CREATE INDEX idx_sports_provider_syncs_provider ON np_sports_provider_syncs(provider);
+CREATE INDEX idx_sports_provider_syncs_status ON np_sports_provider_syncs(status);
+CREATE INDEX idx_sports_provider_syncs_started ON np_sports_provider_syncs(started_at DESC);
 ```
 
-### sports_schedule_cache
+### np_sports_schedule_cache
 
 ```sql
-CREATE TABLE sports_schedule_cache (
+CREATE TABLE np_sports_schedule_cache (
     id SERIAL PRIMARY KEY,
     cache_key VARCHAR(255) NOT NULL UNIQUE,
     league VARCHAR(50),
@@ -1254,15 +1254,15 @@ CREATE TABLE sports_schedule_cache (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_schedule_cache_key ON sports_schedule_cache(cache_key);
-CREATE INDEX idx_sports_schedule_cache_expires ON sports_schedule_cache(expires_at);
-CREATE INDEX idx_sports_schedule_cache_league_date ON sports_schedule_cache(league, date);
+CREATE INDEX idx_sports_schedule_cache_key ON np_sports_schedule_cache(cache_key);
+CREATE INDEX idx_sports_schedule_cache_expires ON np_sports_schedule_cache(expires_at);
+CREATE INDEX idx_sports_schedule_cache_league_date ON np_sports_schedule_cache(league, date);
 ```
 
-### sports_sync_state
+### np_sports_sync_state
 
 ```sql
-CREATE TABLE sports_sync_state (
+CREATE TABLE np_sports_sync_state (
     id SERIAL PRIMARY KEY,
     provider VARCHAR(50) NOT NULL,
     sport VARCHAR(50),
@@ -1278,14 +1278,14 @@ CREATE TABLE sports_sync_state (
     UNIQUE(provider, sport, league)
 );
 
-CREATE INDEX idx_sports_sync_state_provider ON sports_sync_state(provider);
-CREATE INDEX idx_sports_sync_state_status ON sports_sync_state(status);
+CREATE INDEX idx_sports_sync_state_provider ON np_sports_sync_state(provider);
+CREATE INDEX idx_sports_sync_state_status ON np_sports_sync_state(status);
 ```
 
-### sports_webhook_events
+### np_sports_webhook_events
 
 ```sql
-CREATE TABLE sports_webhook_events (
+CREATE TABLE np_sports_webhook_events (
     id SERIAL PRIMARY KEY,
     event_type VARCHAR(100) NOT NULL,
     provider VARCHAR(50) NOT NULL,
@@ -1298,21 +1298,21 @@ CREATE TABLE sports_webhook_events (
     received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_sports_webhook_events_type ON sports_webhook_events(event_type);
-CREATE INDEX idx_sports_webhook_events_processed ON sports_webhook_events(processed);
-CREATE INDEX idx_sports_webhook_events_received ON sports_webhook_events(received_at DESC);
+CREATE INDEX idx_sports_webhook_events_type ON np_sports_webhook_events(event_type);
+CREATE INDEX idx_sports_webhook_events_processed ON np_sports_webhook_events(processed);
+CREATE INDEX idx_sports_webhook_events_received ON np_sports_webhook_events(received_at DESC);
 ```
 
 ---
 
 ## Analytics Views
 
-### sports_upcoming_events
+### np_sports_upcoming_events
 
 Upcoming events within the next 7 days.
 
 ```sql
-CREATE VIEW sports_upcoming_events AS
+CREATE VIEW np_sports_upcoming_events AS
 SELECT
     e.id,
     e.league_id,
@@ -1329,21 +1329,21 @@ SELECT
     e.venue_name,
     e.broadcast_network,
     e.locked
-FROM sports_events e
-JOIN sports_leagues l ON e.league_id = l.id
-JOIN sports_teams ht ON e.home_team_id = ht.id
-JOIN sports_teams at ON e.away_team_id = at.id
+FROM np_sports_events e
+JOIN np_sports_leagues l ON e.league_id = l.id
+JOIN np_sports_teams ht ON e.home_team_id = ht.id
+JOIN np_sports_teams at ON e.away_team_id = at.id
 WHERE e.status = 'scheduled'
   AND e.start_time BETWEEN NOW() AND NOW() + INTERVAL '7 days'
 ORDER BY e.start_time;
 ```
 
-### sports_live_events
+### np_sports_live_events
 
 Currently live games.
 
 ```sql
-CREATE VIEW sports_live_events AS
+CREATE VIEW np_sports_live_events AS
 SELECT
     e.id AS event_id,
     e.league_id,
@@ -1357,22 +1357,22 @@ SELECT
     g.clock,
     e.venue_name,
     e.broadcast_network
-FROM sports_events e
-JOIN sports_leagues l ON e.league_id = l.id
-JOIN sports_teams ht ON e.home_team_id = ht.id
-JOIN sports_teams at ON e.away_team_id = at.id
-JOIN sports_games g ON e.id = g.event_id
+FROM np_sports_events e
+JOIN np_sports_leagues l ON e.league_id = l.id
+JOIN np_sports_teams ht ON e.home_team_id = ht.id
+JOIN np_sports_teams at ON e.away_team_id = at.id
+JOIN np_sports_games g ON e.id = g.event_id
 WHERE e.status = 'live'
   AND g.status = 'live'
 ORDER BY e.start_time;
 ```
 
-### sports_untriggered_recordings
+### np_sports_untriggered_recordings
 
 Events needing recording triggers.
 
 ```sql
-CREATE VIEW sports_untriggered_recordings AS
+CREATE VIEW np_sports_untriggered_recordings AS
 SELECT
     e.id AS event_id,
     e.league_id,
@@ -1383,10 +1383,10 @@ SELECT
     e.venue_name,
     e.broadcast_network,
     e.locked
-FROM sports_events e
-JOIN sports_leagues l ON e.league_id = l.id
-JOIN sports_teams ht ON e.home_team_id = ht.id
-JOIN sports_teams at ON e.away_team_id = at.id
+FROM np_sports_events e
+JOIN np_sports_leagues l ON e.league_id = l.id
+JOIN np_sports_teams ht ON e.home_team_id = ht.id
+JOIN np_sports_teams at ON e.away_team_id = at.id
 WHERE e.status = 'scheduled'
   AND e.locked = FALSE
   AND e.start_time > NOW()
@@ -1413,9 +1413,9 @@ SELECT
     e.start_time,
     e.venue_name,
     e.broadcast_network
-FROM sports_events e
-JOIN sports_teams ht ON e.home_team_id = ht.id
-JOIN sports_teams at ON e.away_team_id = at.id
+FROM np_sports_events e
+JOIN np_sports_teams ht ON e.home_team_id = ht.id
+JOIN np_sports_teams at ON e.away_team_id = at.id
 WHERE e.league_id = 'nfl'
   AND DATE(e.start_time) = CURRENT_DATE
 ORDER BY e.start_time;
@@ -1430,7 +1430,7 @@ nself plugin sports scores --live
 
 ```sql
 -- Using SQL
-SELECT * FROM sports_live_events;
+SELECT * FROM np_sports_live_events;
 ```
 
 ### Example: Auto-trigger Recordings

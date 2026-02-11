@@ -683,7 +683,7 @@ Get photo details including tags.
   "thumbnail_large_url": "https://storage.example.com/thumbs/large/image.webp",
   "width": 4000,
   "height": 3000,
-  "file_size_bytes": 2456789,
+  "np_fileproc_size_bytes": 2456789,
   "mime_type": "image/jpeg",
   "caption": "Beautiful sunset",
   "taken_at": "2025-02-10T18:30:00Z",
@@ -970,7 +970,7 @@ Search photos by query, tags, location, and date range.
 
 ## Webhook Events
 
-The Photos plugin emits webhook events that are stored in the `photos_webhook_events` table. Applications can poll this table or implement real-time webhooks to react to photo-related events.
+The Photos plugin emits webhook events that are stored in the `np_photos_webhook_events` table. Applications can poll this table or implement real-time webhooks to react to photo-related events.
 
 | Event Type | Description | Payload |
 |------------|-------------|---------|
@@ -986,7 +986,7 @@ The Photos plugin emits webhook events that are stored in the `photos_webhook_ev
 ### Example Webhook Event Record
 
 ```sql
-SELECT * FROM photos_webhook_events WHERE event_type = 'photos.photo.uploaded';
+SELECT * FROM np_photos_webhook_events WHERE event_type = 'photos.photo.uploaded';
 ```
 
 ```
@@ -997,12 +997,12 @@ SELECT * FROM photos_webhook_events WHERE event_type = 'photos.photo.uploaded';
 
 ## Database Schema
 
-### photos_albums
+### np_photos_albums
 
 Stores photo albums with visibility and organization settings.
 
 ```sql
-CREATE TABLE IF NOT EXISTS photos_albums (
+CREATE TABLE IF NOT EXISTS np_photos_albums (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   owner_id VARCHAR(255) NOT NULL,
@@ -1021,8 +1021,8 @@ CREATE TABLE IF NOT EXISTS photos_albums (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_photos_albums_source_app ON photos_albums(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_photos_albums_owner ON photos_albums(source_account_id, owner_id);
+CREATE INDEX IF NOT EXISTS idx_photos_albums_source_app ON np_photos_albums(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_photos_albums_owner ON np_photos_albums(source_account_id, owner_id);
 ```
 
 **Columns:**
@@ -1046,24 +1046,24 @@ CREATE INDEX IF NOT EXISTS idx_photos_albums_owner ON photos_albums(source_accou
 | `created_at` | TIMESTAMPTZ | No | `NOW()` | Album creation timestamp |
 | `updated_at` | TIMESTAMPTZ | No | `NOW()` | Album last update timestamp |
 
-### photos_items
+### np_photos_items
 
 Stores individual photo records with EXIF data and processing status.
 
 ```sql
-CREATE TABLE IF NOT EXISTS photos_items (
+CREATE TABLE IF NOT EXISTS np_photos_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  album_id UUID REFERENCES photos_albums(id) ON DELETE SET NULL,
+  album_id UUID REFERENCES np_photos_albums(id) ON DELETE SET NULL,
   uploader_id VARCHAR(255) NOT NULL,
-  file_id VARCHAR(255),
+  np_fileproc_id VARCHAR(255),
   original_url TEXT NOT NULL,
   thumbnail_small_url TEXT,
   thumbnail_medium_url TEXT,
   thumbnail_large_url TEXT,
   width INTEGER,
   height INTEGER,
-  file_size_bytes BIGINT,
+  np_fileproc_size_bytes BIGINT,
   mime_type VARCHAR(50),
   original_filename VARCHAR(500),
   caption TEXT,
@@ -1080,18 +1080,18 @@ CREATE TABLE IF NOT EXISTS photos_items (
   iso INTEGER,
   orientation INTEGER DEFAULT 1,
   processing_status VARCHAR(20) DEFAULT 'pending',
-  search_vector tsvector,
+  np_search_vector tsvector,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_photos_items_source_app ON photos_items(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_photos_items_album ON photos_items(album_id);
-CREATE INDEX IF NOT EXISTS idx_photos_items_uploader ON photos_items(source_account_id, uploader_id);
-CREATE INDEX IF NOT EXISTS idx_photos_items_taken ON photos_items(source_account_id, taken_at DESC);
-CREATE INDEX IF NOT EXISTS idx_photos_items_location ON photos_items(location_latitude, location_longitude) WHERE location_latitude IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_photos_items_search ON photos_items USING GIN(search_vector);
+CREATE INDEX IF NOT EXISTS idx_photos_items_source_app ON np_photos_items(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_photos_items_album ON np_photos_items(album_id);
+CREATE INDEX IF NOT EXISTS idx_photos_items_uploader ON np_photos_items(source_account_id, uploader_id);
+CREATE INDEX IF NOT EXISTS idx_photos_items_taken ON np_photos_items(source_account_id, taken_at DESC);
+CREATE INDEX IF NOT EXISTS idx_photos_items_location ON np_photos_items(location_latitude, location_longitude) WHERE location_latitude IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_photos_items_search ON np_photos_items USING GIN(np_search_vector);
 ```
 
 **Columns:**
@@ -1102,14 +1102,14 @@ CREATE INDEX IF NOT EXISTS idx_photos_items_search ON photos_items USING GIN(sea
 | `source_account_id` | VARCHAR(128) | No | `'primary'` | Application/tenant ID |
 | `album_id` | UUID | Yes | NULL | ID of the album containing this photo |
 | `uploader_id` | VARCHAR(255) | No | - | User ID who uploaded the photo |
-| `file_id` | VARCHAR(255) | Yes | NULL | External file storage ID |
+| `np_fileproc_id` | VARCHAR(255) | Yes | NULL | External file storage ID |
 | `original_url` | TEXT | No | - | URL to the original high-resolution photo |
 | `thumbnail_small_url` | TEXT | Yes | NULL | URL to small thumbnail (default: 150px) |
 | `thumbnail_medium_url` | TEXT | Yes | NULL | URL to medium thumbnail (default: 600px) |
 | `thumbnail_large_url` | TEXT | Yes | NULL | URL to large thumbnail (default: 1200px) |
 | `width` | INTEGER | Yes | NULL | Original photo width in pixels |
 | `height` | INTEGER | Yes | NULL | Original photo height in pixels |
-| `file_size_bytes` | BIGINT | Yes | NULL | File size in bytes |
+| `np_fileproc_size_bytes` | BIGINT | Yes | NULL | File size in bytes |
 | `mime_type` | VARCHAR(50) | Yes | NULL | MIME type (e.g., image/jpeg) |
 | `original_filename` | VARCHAR(500) | Yes | NULL | Original filename |
 | `caption` | TEXT | Yes | NULL | User-provided photo caption |
@@ -1126,20 +1126,20 @@ CREATE INDEX IF NOT EXISTS idx_photos_items_search ON photos_items USING GIN(sea
 | `iso` | INTEGER | Yes | NULL | ISO value (from EXIF) |
 | `orientation` | INTEGER | No | `1` | EXIF orientation value (1-8) |
 | `processing_status` | VARCHAR(20) | No | `'pending'` | Processing status (pending, processing, completed, error) |
-| `search_vector` | tsvector | Yes | NULL | Full-text search vector |
+| `np_search_vector` | tsvector | Yes | NULL | Full-text search vector |
 | `metadata` | JSONB | No | `'{}'` | Additional photo metadata |
 | `created_at` | TIMESTAMPTZ | No | `NOW()` | Record creation timestamp |
 | `updated_at` | TIMESTAMPTZ | No | `NOW()` | Record last update timestamp |
 
-### photos_tags
+### np_photos_tags
 
 Stores tags applied to photos (keywords, people, locations, events).
 
 ```sql
-CREATE TABLE IF NOT EXISTS photos_tags (
+CREATE TABLE IF NOT EXISTS np_photos_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  photo_id UUID NOT NULL REFERENCES photos_items(id) ON DELETE CASCADE,
+  photo_id UUID NOT NULL REFERENCES np_photos_items(id) ON DELETE CASCADE,
   tag_type VARCHAR(20) NOT NULL DEFAULT 'keyword',
   tag_value VARCHAR(255) NOT NULL,
   tagged_user_id VARCHAR(255),
@@ -1150,10 +1150,10 @@ CREATE TABLE IF NOT EXISTS photos_tags (
   UNIQUE(source_account_id, photo_id, tag_type, tag_value)
 );
 
-CREATE INDEX IF NOT EXISTS idx_photos_tags_source_app ON photos_tags(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_photos_tags_photo ON photos_tags(photo_id);
-CREATE INDEX IF NOT EXISTS idx_photos_tags_value ON photos_tags(source_account_id, tag_type, tag_value);
-CREATE INDEX IF NOT EXISTS idx_photos_tags_user ON photos_tags(source_account_id, tagged_user_id);
+CREATE INDEX IF NOT EXISTS idx_photos_tags_source_app ON np_photos_tags(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_photos_tags_photo ON np_photos_tags(photo_id);
+CREATE INDEX IF NOT EXISTS idx_photos_tags_value ON np_photos_tags(source_account_id, tag_type, tag_value);
+CREATE INDEX IF NOT EXISTS idx_photos_tags_user ON np_photos_tags(source_account_id, tagged_user_id);
 ```
 
 **Columns:**
@@ -1171,25 +1171,25 @@ CREATE INDEX IF NOT EXISTS idx_photos_tags_user ON photos_tags(source_account_id
 | `created_by` | VARCHAR(255) | Yes | NULL | User ID who created the tag |
 | `created_at` | TIMESTAMPTZ | No | `NOW()` | Tag creation timestamp |
 
-### photos_faces
+### np_photos_faces
 
 Stores detected face groups for facial recognition.
 
 ```sql
-CREATE TABLE IF NOT EXISTS photos_faces (
+CREATE TABLE IF NOT EXISTS np_photos_faces (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255),
   user_id VARCHAR(255),
-  representative_photo_id UUID REFERENCES photos_items(id),
+  representative_photo_id UUID REFERENCES np_photos_items(id),
   photo_count INTEGER DEFAULT 0,
   confirmed BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_photos_faces_source_app ON photos_faces(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_photos_faces_user ON photos_faces(source_account_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_photos_faces_source_app ON np_photos_faces(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_photos_faces_user ON np_photos_faces(source_account_id, user_id);
 ```
 
 **Columns:**
@@ -1206,12 +1206,12 @@ CREATE INDEX IF NOT EXISTS idx_photos_faces_user ON photos_faces(source_account_
 | `created_at` | TIMESTAMPTZ | No | `NOW()` | Face group creation timestamp |
 | `updated_at` | TIMESTAMPTZ | No | `NOW()` | Face group last update timestamp |
 
-### photos_webhook_events
+### np_photos_webhook_events
 
 Stores webhook events for asynchronous processing.
 
 ```sql
-CREATE TABLE IF NOT EXISTS photos_webhook_events (
+CREATE TABLE IF NOT EXISTS np_photos_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -1223,7 +1223,7 @@ CREATE TABLE IF NOT EXISTS photos_webhook_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_photos_webhook_events_source_app ON photos_webhook_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_photos_webhook_events_source_app ON np_photos_webhook_events(source_account_id);
 ```
 
 **Columns:**
@@ -1307,10 +1307,10 @@ SELECT
   pi.location_name,
   pi.camera_model,
   ARRAY_AGG(pt.tag_value) as tags
-FROM photos_items pi
-LEFT JOIN photos_tags pt ON pt.photo_id = pi.id
+FROM np_photos_items pi
+LEFT JOIN np_photos_tags pt ON pt.photo_id = pi.id
 WHERE pi.source_account_id = 'primary'
-  AND pi.search_vector @@ plainto_tsquery('english', 'beach')
+  AND pi.np_search_vector @@ plainto_tsquery('english', 'beach')
   AND pi.location_name ILIKE '%Hawaii%'
   AND pi.taken_at >= '2025-01-01'
   AND pi.taken_at < '2026-01-01'
@@ -1327,11 +1327,11 @@ SELECT
   TO_CHAR(taken_at, 'YYYY-MM') as month,
   COUNT(*) as photo_count,
   MODE() WITHIN GROUP (ORDER BY location_name) as primary_location,
-  (SELECT thumbnail_medium_url FROM photos_items pi2
-   WHERE pi2.source_account_id = photos_items.source_account_id
-     AND TO_CHAR(pi2.taken_at, 'YYYY-MM') = TO_CHAR(photos_items.taken_at, 'YYYY-MM')
+  (SELECT thumbnail_medium_url FROM np_photos_items pi2
+   WHERE pi2.source_account_id = np_photos_items.source_account_id
+     AND TO_CHAR(pi2.taken_at, 'YYYY-MM') = TO_CHAR(np_photos_items.taken_at, 'YYYY-MM')
    ORDER BY pi2.taken_at ASC LIMIT 1) as cover_photo_url
-FROM photos_items
+FROM np_photos_items
 WHERE source_account_id = 'primary'
   AND taken_at IS NOT NULL
   AND taken_at >= NOW() - INTERVAL '1 year'
@@ -1421,7 +1421,7 @@ SELECT
   processing_status,
   COUNT(*) as count,
   AVG(EXTRACT(EPOCH FROM (NOW() - created_at))) as avg_wait_seconds
-FROM photos_items
+FROM np_photos_items
 WHERE source_account_id = 'primary'
   AND created_at >= NOW() - INTERVAL '1 day'
 GROUP BY processing_status
@@ -1472,15 +1472,15 @@ ORDER BY
 - Ensure photos have been processed: Check `processing_status = 'completed'`
 - Verify search vector is populated:
   ```sql
-  SELECT id, caption, search_vector
-  FROM photos_items
-  WHERE search_vector IS NOT NULL
+  SELECT id, caption, np_search_vector
+  FROM np_photos_items
+  WHERE np_search_vector IS NOT NULL
   LIMIT 5;
   ```
 - Rebuild search vectors:
   ```sql
-  UPDATE photos_items
-  SET search_vector = to_tsvector('english',
+  UPDATE np_photos_items
+  SET np_search_vector = to_tsvector('english',
     COALESCE(caption, '') || ' ' ||
     COALESCE(original_filename, '') || ' ' ||
     COALESCE(location_name, '')
@@ -1499,10 +1499,10 @@ ORDER BY
   SELECT
     a.name,
     a.photo_count,
-    SUM(p.file_size_bytes) as total_bytes,
-    pg_size_pretty(SUM(p.file_size_bytes)) as total_size
-  FROM photos_albums a
-  JOIN photos_items p ON p.album_id = a.id
+    SUM(p.np_fileproc_size_bytes) as total_bytes,
+    pg_size_pretty(SUM(p.np_fileproc_size_bytes)) as total_size
+  FROM np_photos_albums a
+  JOIN np_photos_items p ON p.album_id = a.id
   WHERE a.source_account_id = 'primary'
   GROUP BY a.id
   ORDER BY total_bytes DESC
@@ -1520,12 +1520,12 @@ ORDER BY
 **Solutions:**
 - Ensure database indexes exist:
   ```sql
-  SELECT indexname FROM pg_indexes WHERE tablename = 'photos_items';
+  SELECT indexname FROM pg_indexes WHERE tablename = 'np_photos_items';
   ```
 - Add custom indexes for common queries:
   ```sql
   CREATE INDEX idx_photos_items_taken_at_location
-  ON photos_items(source_account_id, taken_at DESC, location_name)
+  ON np_photos_items(source_account_id, taken_at DESC, location_name)
   WHERE taken_at IS NOT NULL;
   ```
 - Use pagination with smaller page sizes

@@ -29,19 +29,19 @@ The Donorbox plugin provides complete synchronization of your Donorbox account d
 - **Full REST API** - Query synced data via HTTP endpoints
 - **CLI Interface** - Manage everything from the command line
 - **Multi-Account Support** - Sync multiple Donorbox accounts into one database
-- **Cross-Plugin References** - `stripe_charge_id` and `paypal_transaction_id` on donations
+- **Cross-Plugin References** - `np_stripe_charge_id` and `np_paypal_transaction_id` on donations
 
 ### Synced Resources
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Campaigns | Fundraising campaigns | `donorbox_campaigns` |
-| Donors | Donor profiles | `donorbox_donors` |
-| Donations | Individual donations | `donorbox_donations` |
-| Plans | Recurring donation plans | `donorbox_plans` |
-| Events | Donorbox events | `donorbox_events` |
-| Tickets | Event tickets | `donorbox_tickets` |
-| Webhook Events | Raw event log | `donorbox_webhook_events` |
+| Campaigns | Fundraising campaigns | `np_donorbox_campaigns` |
+| Donors | Donor profiles | `np_donorbox_donors` |
+| Donations | Individual donations | `np_donorbox_donations` |
+| Plans | Recurring donation plans | `np_donorbox_plans` |
+| Events | Donorbox events | `np_donorbox_events` |
+| Tickets | Event tickets | `np_donorbox_tickets` |
+| Webhook Events | Raw event log | `np_donorbox_webhook_events` |
 
 ---
 
@@ -239,10 +239,10 @@ Triggered when a new donation is made. The webhook payload is verified using HMA
 | `currency` | Currency code |
 | `donor.email` | Donor email |
 | `campaign.name` | Campaign name |
-| `stripe_charge_id` | Associated Stripe charge (if applicable) |
-| `paypal_transaction_id` | Associated PayPal transaction (if applicable) |
+| `np_stripe_charge_id` | Associated Stripe charge (if applicable) |
+| `np_paypal_transaction_id` | Associated PayPal transaction (if applicable) |
 
-**Action**: Upserts the donation into `donorbox_donations` with cross-reference IDs.
+**Action**: Upserts the donation into `np_donorbox_donations` with cross-reference IDs.
 
 ### Webhook Setup
 
@@ -256,10 +256,10 @@ Triggered when a new donation is made. The webhook payload is verified using HMA
 
 All tables include `source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'` for multi-account support.
 
-### donorbox_campaigns
+### np_donorbox_campaigns
 
 ```sql
-CREATE TABLE donorbox_campaigns (
+CREATE TABLE np_donorbox_campaigns (
     id INTEGER NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     name VARCHAR(255),
@@ -276,10 +276,10 @@ CREATE TABLE donorbox_campaigns (
 );
 ```
 
-### donorbox_donors
+### np_donorbox_donors
 
 ```sql
-CREATE TABLE donorbox_donors (
+CREATE TABLE np_donorbox_donors (
     id INTEGER NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     first_name VARCHAR(255),
@@ -302,10 +302,10 @@ CREATE TABLE donorbox_donors (
 );
 ```
 
-### donorbox_donations
+### np_donorbox_donations
 
 ```sql
-CREATE TABLE donorbox_donations (
+CREATE TABLE np_donorbox_donations (
     id INTEGER NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     campaign_id INTEGER,
@@ -325,8 +325,8 @@ CREATE TABLE donorbox_donations (
     recurring BOOLEAN DEFAULT false,
     comment TEXT,
     designation VARCHAR(255),
-    stripe_charge_id VARCHAR(255),       -- Cross-reference to stripe_charges.id
-    paypal_transaction_id VARCHAR(255),  -- Cross-reference to paypal_transactions.id
+    np_stripe_charge_id VARCHAR(255),       -- Cross-reference to np_stripe_charges.id
+    np_paypal_transaction_id VARCHAR(255),  -- Cross-reference to np_paypal_transactions.id
     questions JSONB DEFAULT '[]',
     created_at TIMESTAMP WITH TIME ZONE,
     updated_at TIMESTAMP WITH TIME ZONE,
@@ -335,10 +335,10 @@ CREATE TABLE donorbox_donations (
 );
 ```
 
-### donorbox_plans
+### np_donorbox_plans
 
 ```sql
-CREATE TABLE donorbox_plans (
+CREATE TABLE np_donorbox_plans (
     id INTEGER NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     campaign_id INTEGER,
@@ -359,10 +359,10 @@ CREATE TABLE donorbox_plans (
 );
 ```
 
-### donorbox_events
+### np_donorbox_events
 
 ```sql
-CREATE TABLE donorbox_events (
+CREATE TABLE np_donorbox_events (
     id INTEGER NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     name VARCHAR(255),
@@ -387,10 +387,10 @@ CREATE TABLE donorbox_events (
 );
 ```
 
-### donorbox_tickets
+### np_donorbox_tickets
 
 ```sql
-CREATE TABLE donorbox_tickets (
+CREATE TABLE np_donorbox_tickets (
     id INTEGER NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     event_id INTEGER,
@@ -409,10 +409,10 @@ CREATE TABLE donorbox_tickets (
 );
 ```
 
-### donorbox_webhook_events
+### np_donorbox_webhook_events
 
 ```sql
-CREATE TABLE donorbox_webhook_events (
+CREATE TABLE np_donorbox_webhook_events (
     id VARCHAR(255) PRIMARY KEY,
     event_type VARCHAR(255),
     payload JSONB DEFAULT '{}',
@@ -429,53 +429,53 @@ CREATE TABLE donorbox_webhook_events (
 
 ## Analytics Views
 
-### donorbox_unified_donations
+### np_donorbox_unified_donations
 
 All donations with campaign and donor details, excluding refunded donations.
 
 ```sql
-SELECT * FROM donorbox_unified_donations;
+SELECT * FROM np_donorbox_unified_donations;
 -- donation_id, source_account_id, campaign_id, campaign_name,
 -- donor_id, donor_email, donor_name, amount, amount_refunded, net_amount,
 -- currency, donation_type, donation_date, status, recurring,
--- stripe_charge_id, paypal_transaction_id, processing_fee
+-- np_stripe_charge_id, np_paypal_transaction_id, processing_fee
 ```
 
-### donorbox_campaign_summary
+### np_donorbox_campaign_summary
 
 Per-campaign totals and donor counts.
 
 ```sql
-SELECT * FROM donorbox_campaign_summary;
+SELECT * FROM np_donorbox_campaign_summary;
 -- campaign_id, name, source_account_id, goal_amount, total_raised,
 -- donations_count, is_active, currency, unique_donors
 ```
 
-### donorbox_daily_donations
+### np_donorbox_daily_donations
 
 Daily donation aggregation.
 
 ```sql
-SELECT * FROM donorbox_daily_donations;
+SELECT * FROM np_donorbox_daily_donations;
 -- source_account_id, donation_day, currency, donation_count,
 -- total_amount, net_amount
 ```
 
-### donorbox_recurring_summary
+### np_donorbox_recurring_summary
 
 Recurring plan statistics.
 
 ```sql
-SELECT * FROM donorbox_recurring_summary;
+SELECT * FROM np_donorbox_recurring_summary;
 -- source_account_id, status, currency, plan_count, total_recurring_amount
 ```
 
-### donorbox_top_donors
+### np_donorbox_top_donors
 
 Ranked donors by total giving.
 
 ```sql
-SELECT * FROM donorbox_top_donors;
+SELECT * FROM np_donorbox_top_donors;
 -- donor_id, source_account_id, email, name, total,
 -- donations_count, last_donation_at
 ```
@@ -491,13 +491,13 @@ Donorbox stores the underlying payment processor IDs on each donation, enabling 
 ```sql
 SELECT
     dd.donor_name,
-    dd.amount AS donorbox_amount,
-    sc.amount / 100.0 AS stripe_amount,
-    sc.status AS stripe_status,
+    dd.amount AS np_donorbox_amount,
+    sc.amount / 100.0 AS np_stripe_amount,
+    sc.status AS np_stripe_status,
     sc.payment_method_details
-FROM donorbox_donations dd
-JOIN stripe_charges sc ON dd.stripe_charge_id = sc.id
-WHERE dd.stripe_charge_id IS NOT NULL;
+FROM np_donorbox_donations dd
+JOIN np_stripe_charges sc ON dd.np_stripe_charge_id = sc.id
+WHERE dd.np_stripe_charge_id IS NOT NULL;
 ```
 
 ### Join Donorbox Donations with PayPal Transactions
@@ -505,12 +505,12 @@ WHERE dd.stripe_charge_id IS NOT NULL;
 ```sql
 SELECT
     dd.donor_name,
-    dd.amount AS donorbox_amount,
-    pt.amount AS paypal_amount,
-    pt.fee_amount AS paypal_fee
-FROM donorbox_donations dd
-JOIN paypal_transactions pt ON dd.paypal_transaction_id = pt.id
-WHERE dd.paypal_transaction_id IS NOT NULL;
+    dd.amount AS np_donorbox_amount,
+    pt.amount AS np_paypal_amount,
+    pt.fee_amount AS np_paypal_fee
+FROM np_donorbox_donations dd
+JOIN np_paypal_transactions pt ON dd.np_paypal_transaction_id = pt.id
+WHERE dd.np_paypal_transaction_id IS NOT NULL;
 ```
 
 ### Unified Giving Report (All Platforms)
@@ -518,13 +518,13 @@ WHERE dd.paypal_transaction_id IS NOT NULL;
 ```sql
 -- Total giving across all three platforms
 SELECT 'stripe' AS source, SUM(amount / 100.0) AS total
-FROM stripe_charges WHERE status = 'succeeded'
+FROM np_stripe_charges WHERE status = 'succeeded'
 UNION ALL
 SELECT 'paypal', SUM(amount)
-FROM paypal_transactions WHERE status = 'S' AND amount > 0
+FROM np_paypal_transactions WHERE status = 'S' AND amount > 0
 UNION ALL
 SELECT 'donorbox', SUM(amount)
-FROM donorbox_donations WHERE status != 'refunded';
+FROM np_donorbox_donations WHERE status != 'refunded';
 ```
 
 ---
@@ -545,7 +545,7 @@ Ensure `DONORBOX_WEBHOOK_SECRET` matches the secret configured in your Donorbox 
 
 ### Missing Cross-Reference IDs
 
-`stripe_charge_id` and `paypal_transaction_id` are only populated when Donorbox includes them in the API response. These depend on the payment method the donor used.
+`np_stripe_charge_id` and `np_paypal_transaction_id` are only populated when Donorbox includes them in the API response. These depend on the payment method the donor used.
 
 ### Debug Mode
 

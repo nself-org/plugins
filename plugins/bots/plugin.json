@@ -8,20 +8,26 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "automation",
-  "tags": ["bots", "commands", "slash-commands", "marketplace", "automation", "integrations", "webhooks"],
-
-  "tables": [
-    "nchat_bots",
-    "nchat_bot_commands",
-    "nchat_bot_subscriptions",
-    "nchat_bot_installations",
-    "nchat_bot_messages",
-    "nchat_bot_interactions",
-    "nchat_bot_reviews",
-    "nchat_bot_api_keys",
-    "nchat_bots_webhook_events"
+  "tags": [
+    "bots",
+    "commands",
+    "slash-commands",
+    "marketplace",
+    "automation",
+    "integrations",
+    "webhooks"
   ],
-
+  "tables": [
+    "np_bot_bots",
+    "np_bot_bot_commands",
+    "np_bot_bot_subscriptions",
+    "np_bot_bot_installations",
+    "np_bot_bot_messages",
+    "np_bot_bot_interactions",
+    "np_bot_bot_reviews",
+    "np_bot_bot_api_keys",
+    "np_bot_bots_webhook_events"
+  ],
   "webhooks": {
     "bot.created": "New bot created",
     "bot.updated": "Bot configuration updated",
@@ -33,7 +39,6 @@
     "interaction.created": "User interacted with bot message",
     "review.submitted": "Bot review submitted"
   },
-
   "actions": {
     "bots:create": "Create a new bot",
     "bots:list": "List bots",
@@ -45,7 +50,6 @@
     "marketplace:search": "Search bot marketplace",
     "health": "Health check"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -70,7 +74,6 @@
       "BOTS_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "defaultPort": 3708,
     "webhookTimeout": 30,
@@ -81,23 +84,29 @@
     "tokenExpiryDays": 365,
     "maxMessageSize": 10000
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["webhooks"],
-    "filesystem": ["logs"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "webhooks"
+    ],
+    "filesystem": [
+      "logs"
+    ]
   }
 }

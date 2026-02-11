@@ -712,9 +712,9 @@ Get flag-specific statistics.
 
 ## Database Schema
 
-### `ff_flags`
+### `np_flags_flags`
 ```sql
-CREATE TABLE ff_flags (
+CREATE TABLE np_flags_flags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   key VARCHAR(128) NOT NULL UNIQUE,
@@ -736,13 +736,13 @@ CREATE TABLE ff_flags (
 );
 ```
 
-### `ff_rules`
+### `np_flags_rules`
 ```sql
-CREATE TABLE ff_rules (
+CREATE TABLE np_flags_rules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  flag_id UUID NOT NULL REFERENCES ff_flags(id) ON DELETE CASCADE,
-  segment_id UUID REFERENCES ff_segments(id),
+  flag_id UUID NOT NULL REFERENCES np_flags_flags(id) ON DELETE CASCADE,
+  segment_id UUID REFERENCES np_flags_segments(id),
   variant VARCHAR(64) NOT NULL,
   priority INTEGER DEFAULT 0,
   enabled BOOLEAN DEFAULT true,
@@ -750,9 +750,9 @@ CREATE TABLE ff_rules (
 );
 ```
 
-### `ff_segments`
+### `np_flags_segments`
 ```sql
-CREATE TABLE ff_segments (
+CREATE TABLE np_flags_segments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -766,9 +766,9 @@ CREATE TABLE ff_segments (
 );
 ```
 
-### `ff_evaluations`
+### `np_flags_evaluations`
 ```sql
-CREATE TABLE ff_evaluations (
+CREATE TABLE np_flags_evaluations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   flag_key VARCHAR(128) NOT NULL,
@@ -783,9 +783,9 @@ CREATE TABLE ff_evaluations (
 );
 ```
 
-### `ff_webhook_events`
+### `np_flags_webhook_events`
 ```sql
-CREATE TABLE ff_webhook_events (
+CREATE TABLE np_flags_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,

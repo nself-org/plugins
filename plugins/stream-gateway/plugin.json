@@ -16,16 +16,16 @@
     "live"
   ],
   "tables": [
-    "sg_stream_sessions",
-    "sg_streams",
-    "sg_admission_rules",
-    "sg_viewer_analytics"
+    "np_streamgw_stream_sessions",
+    "np_streamgw_streams",
+    "np_streamgw_admission_rules",
+    "np_streamgw_viewer_analytics"
   ],
   "views": [
-    "sg_concurrent_viewers_over_time",
-    "sg_denial_rates",
-    "sg_stream_duration_distribution",
-    "sg_device_type_breakdown"
+    "np_streamgw_concurrent_viewers_over_time",
+    "np_streamgw_denial_rates",
+    "np_streamgw_stream_duration_distribution",
+    "np_streamgw_device_type_breakdown"
   ],
   "webhooks": {},
   "actions": {
@@ -115,7 +115,7 @@
   },
   "multiApp": {
     "supported": true,
-    "isolationColumn": "app_id",
+    "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "default"
   },

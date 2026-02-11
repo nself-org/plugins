@@ -402,7 +402,7 @@ Get conversation details with participant information.
       "role": "admin",
       "nickname": "John D",
       "joined_at": "2026-02-10T08:00:00Z",
-      "notification_level": "all"
+      "np_notifications_level": "all"
     }
   ],
   "unread_count": 5,
@@ -460,7 +460,7 @@ Add a participant to a conversation.
 {
   "user_id": "user456",
   "role": "member",
-  "notification_level": "all"
+  "np_notifications_level": "all"
 }
 ```
 
@@ -471,7 +471,7 @@ Add a participant to a conversation.
   "conversation_id": "conv-uuid",
   "user_id": "user456",
   "role": "member",
-  "notification_level": "all",
+  "np_notifications_level": "all",
   "joined_at": "2026-02-11T10:30:00Z",
   "created_at": "2026-02-11T10:30:00Z"
 }
@@ -491,7 +491,7 @@ List conversation participants.
       "nickname": "John D",
       "joined_at": "2026-02-10T08:00:00Z",
       "last_read_at": "2026-02-11T10:20:00Z",
-      "notification_level": "all"
+      "np_notifications_level": "all"
     }
   ],
   "total": 5
@@ -506,7 +506,7 @@ Update participant settings.
 {
   "role": "moderator",
   "nickname": "Johnny",
-  "notification_level": "mentions"
+  "np_notifications_level": "mentions"
 }
 ```
 
@@ -516,7 +516,7 @@ Update participant settings.
   "id": "participant-uuid",
   "role": "moderator",
   "nickname": "Johnny",
-  "notification_level": "mentions",
+  "np_notifications_level": "mentions",
   "updated_at": "2026-02-11T10:30:00Z"
 }
 ```
@@ -901,11 +901,11 @@ Triggered when a moderation action is executed.
 
 ## Database Schema
 
-### `chat_conversations`
+### `np_chat_conversations`
 Stores all conversations.
 
 ```sql
-CREATE TABLE chat_conversations (
+CREATE TABLE np_chat_conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   type VARCHAR(16) NOT NULL DEFAULT 'direct',
@@ -926,14 +926,14 @@ CREATE TABLE chat_conversations (
 );
 ```
 
-### `chat_participants`
+### `np_chat_participants`
 Tracks conversation participants.
 
 ```sql
-CREATE TABLE chat_participants (
+CREATE TABLE np_chat_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  conversation_id UUID NOT NULL REFERENCES np_chat_conversations(id) ON DELETE CASCADE,
   user_id VARCHAR(255) NOT NULL,
   role VARCHAR(32) DEFAULT 'member',
   nickname VARCHAR(128),
@@ -942,25 +942,25 @@ CREATE TABLE chat_participants (
   left_at TIMESTAMP WITH TIME ZONE,
   last_read_message_id UUID,
   last_read_at TIMESTAMP WITH TIME ZONE,
-  notification_level VARCHAR(32) DEFAULT 'all',
+  np_notifications_level VARCHAR(32) DEFAULT 'all',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(conversation_id, user_id),
   CHECK (role IN ('owner', 'admin', 'moderator', 'member', 'guest')),
-  CHECK (notification_level IN ('all', 'mentions', 'none'))
+  CHECK (np_notifications_level IN ('all', 'mentions', 'none'))
 );
 ```
 
-### `chat_messages`
+### `np_chat_messages`
 Stores all messages.
 
 ```sql
-CREATE TABLE chat_messages (
+CREATE TABLE np_chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  conversation_id UUID NOT NULL REFERENCES np_chat_conversations(id) ON DELETE CASCADE,
   sender_id VARCHAR(255) NOT NULL,
-  reply_to_id UUID REFERENCES chat_messages(id),
-  thread_root_id UUID REFERENCES chat_messages(id),
+  reply_to_id UUID REFERENCES np_chat_messages(id),
+  thread_root_id UUID REFERENCES np_chat_messages(id),
   content TEXT,
   content_type VARCHAR(32) DEFAULT 'text',
   attachments JSONB DEFAULT '[]',
@@ -977,31 +977,31 @@ CREATE TABLE chat_messages (
 );
 ```
 
-### `chat_read_receipts`
+### `np_chat_read_receipts`
 Tracks read status per user.
 
 ```sql
-CREATE TABLE chat_read_receipts (
+CREATE TABLE np_chat_read_receipts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  conversation_id UUID NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+  conversation_id UUID NOT NULL REFERENCES np_chat_conversations(id) ON DELETE CASCADE,
   user_id VARCHAR(255) NOT NULL,
-  last_read_message_id UUID REFERENCES chat_messages(id),
+  last_read_message_id UUID REFERENCES np_chat_messages(id),
   last_read_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   unread_count INTEGER DEFAULT 0,
   UNIQUE(conversation_id, user_id)
 );
 ```
 
-### `chat_moderation_actions`
+### `np_chat_moderation_actions`
 Logs moderation actions.
 
 ```sql
-CREATE TABLE chat_moderation_actions (
+CREATE TABLE np_chat_moderation_actions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  conversation_id UUID REFERENCES chat_conversations(id),
-  message_id UUID REFERENCES chat_messages(id),
+  conversation_id UUID REFERENCES np_chat_conversations(id),
+  message_id UUID REFERENCES np_chat_messages(id),
   target_user_id VARCHAR(255),
   moderator_id VARCHAR(255) NOT NULL,
   action VARCHAR(32) NOT NULL,
@@ -1012,11 +1012,11 @@ CREATE TABLE chat_moderation_actions (
 );
 ```
 
-### `chat_webhook_events`
+### `np_chat_webhook_events`
 Webhook event log.
 
 ```sql
-CREATE TABLE chat_webhook_events (
+CREATE TABLE np_chat_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,

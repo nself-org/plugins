@@ -8,16 +8,24 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["storage", "s3", "minio", "r2", "gcs", "azure", "b2", "uploads", "presigned"],
-
-  "tables": [
-    "os_buckets",
-    "os_objects",
-    "os_upload_sessions",
-    "os_access_logs",
-    "os_webhook_events"
+  "tags": [
+    "storage",
+    "s3",
+    "minio",
+    "r2",
+    "gcs",
+    "azure",
+    "b2",
+    "uploads",
+    "presigned"
   ],
-
+  "tables": [
+    "np_objstore_buckets",
+    "np_objstore_objects",
+    "np_objstore_upload_sessions",
+    "np_objstore_access_logs",
+    "np_objstore_webhook_events"
+  ],
   "webhooks": {
     "bucket.created": "Sync new bucket to database",
     "bucket.updated": "Update bucket configuration",
@@ -27,7 +35,6 @@
     "upload.completed": "Mark multipart upload as completed",
     "upload.aborted": "Mark multipart upload as aborted"
   },
-
   "actions": {
     "init": "Initialize object storage schema",
     "server": "Start HTTP server for uploads and API",
@@ -39,7 +46,6 @@
     "usage": "View storage usage statistics",
     "lifecycle": "Manage lifecycle rules"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -61,7 +67,6 @@
       "OS_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "defaultProvider": "local",
     "storageBasePath": "/data/object-storage",
@@ -70,23 +75,34 @@
     "multipartThreshold": 104857600,
     "port": 3301
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["s3.amazonaws.com", "*.r2.cloudflarestorage.com", "storage.googleapis.com", "*.blob.core.windows.net"],
-    "filesystem": ["logs", "cache", "storage"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "s3.amazonaws.com",
+      "*.r2.cloudflarestorage.com",
+      "storage.googleapis.com",
+      "*.blob.core.windows.net"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "storage"
+    ]
   }
 }

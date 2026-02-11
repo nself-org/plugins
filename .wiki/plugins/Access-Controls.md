@@ -42,12 +42,12 @@ The Access Controls plugin provides a complete authorization system combining Ro
 
 | Resource | Description | Table |
 |----------|-------------|-------|
-| Roles | User roles with hierarchical relationships | `acl_roles` |
-| Permissions | Resource-action permission definitions | `acl_permissions` |
-| Role Permissions | Role-to-permission assignments | `acl_role_permissions` |
-| User Roles | User-to-role assignments | `acl_user_roles` |
-| Policies | ABAC policy definitions | `acl_policies` |
-| Webhook Events | Authorization event log | `acl_webhook_events` |
+| Roles | User roles with hierarchical relationships | `np_acl_roles` |
+| Permissions | Resource-action permission definitions | `np_acl_permissions` |
+| Role Permissions | Role-to-permission assignments | `np_acl_role_permissions` |
+| User Roles | User-to-role assignments | `np_acl_user_roles` |
+| Policies | ABAC policy definitions | `np_acl_policies` |
+| Webhook Events | Authorization event log | `np_acl_webhook_events` |
 
 ---
 
@@ -843,12 +843,12 @@ Test policy evaluation.
 
 ## Database Schema
 
-### acl_roles
+### np_acl_roles
 
 Stores role definitions.
 
 ```sql
-CREATE TABLE acl_roles (
+CREATE TABLE np_acl_roles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -860,17 +860,17 @@ CREATE TABLE acl_roles (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_acl_roles_source_account ON acl_roles(source_account_id);
-CREATE INDEX idx_acl_roles_name ON acl_roles(name);
-CREATE INDEX idx_acl_roles_parent ON acl_roles(parent_role);
+CREATE INDEX idx_acl_roles_source_account ON np_acl_roles(source_account_id);
+CREATE INDEX idx_acl_roles_name ON np_acl_roles(name);
+CREATE INDEX idx_acl_roles_parent ON np_acl_roles(parent_role);
 ```
 
-### acl_permissions
+### np_acl_permissions
 
 Stores permission definitions.
 
 ```sql
-CREATE TABLE acl_permissions (
+CREATE TABLE np_acl_permissions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   resource VARCHAR(255) NOT NULL,
@@ -881,57 +881,57 @@ CREATE TABLE acl_permissions (
   UNIQUE(source_account_id, resource, action)
 );
 
-CREATE INDEX idx_acl_permissions_source_account ON acl_permissions(source_account_id);
-CREATE INDEX idx_acl_permissions_resource ON acl_permissions(resource);
-CREATE INDEX idx_acl_permissions_action ON acl_permissions(action);
+CREATE INDEX idx_acl_permissions_source_account ON np_acl_permissions(source_account_id);
+CREATE INDEX idx_acl_permissions_resource ON np_acl_permissions(resource);
+CREATE INDEX idx_acl_permissions_action ON np_acl_permissions(action);
 ```
 
-### acl_role_permissions
+### np_acl_role_permissions
 
 Maps permissions to roles.
 
 ```sql
-CREATE TABLE acl_role_permissions (
+CREATE TABLE np_acl_role_permissions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
-  role_id UUID REFERENCES acl_roles(id) ON DELETE CASCADE,
-  permission_id UUID REFERENCES acl_permissions(id) ON DELETE CASCADE,
+  role_id UUID REFERENCES np_acl_roles(id) ON DELETE CASCADE,
+  permission_id UUID REFERENCES np_acl_permissions(id) ON DELETE CASCADE,
   granted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(role_id, permission_id)
 );
 
-CREATE INDEX idx_acl_role_permissions_source_account ON acl_role_permissions(source_account_id);
-CREATE INDEX idx_acl_role_permissions_role ON acl_role_permissions(role_id);
-CREATE INDEX idx_acl_role_permissions_permission ON acl_role_permissions(permission_id);
+CREATE INDEX idx_acl_role_permissions_source_account ON np_acl_role_permissions(source_account_id);
+CREATE INDEX idx_acl_role_permissions_role ON np_acl_role_permissions(role_id);
+CREATE INDEX idx_acl_role_permissions_permission ON np_acl_role_permissions(permission_id);
 ```
 
-### acl_user_roles
+### np_acl_user_roles
 
 Maps roles to users.
 
 ```sql
-CREATE TABLE acl_user_roles (
+CREATE TABLE np_acl_user_roles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   user_id VARCHAR(255) NOT NULL,
-  role_id UUID REFERENCES acl_roles(id) ON DELETE CASCADE,
+  role_id UUID REFERENCES np_acl_roles(id) ON DELETE CASCADE,
   assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   expires_at TIMESTAMP WITH TIME ZONE,
   UNIQUE(source_account_id, user_id, role_id)
 );
 
-CREATE INDEX idx_acl_user_roles_source_account ON acl_user_roles(source_account_id);
-CREATE INDEX idx_acl_user_roles_user ON acl_user_roles(user_id);
-CREATE INDEX idx_acl_user_roles_role ON acl_user_roles(role_id);
-CREATE INDEX idx_acl_user_roles_expires ON acl_user_roles(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_acl_user_roles_source_account ON np_acl_user_roles(source_account_id);
+CREATE INDEX idx_acl_user_roles_user ON np_acl_user_roles(user_id);
+CREATE INDEX idx_acl_user_roles_role ON np_acl_user_roles(role_id);
+CREATE INDEX idx_acl_user_roles_expires ON np_acl_user_roles(expires_at) WHERE expires_at IS NOT NULL;
 ```
 
-### acl_policies
+### np_acl_policies
 
 Stores ABAC policy definitions.
 
 ```sql
-CREATE TABLE acl_policies (
+CREATE TABLE np_acl_policies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -948,20 +948,20 @@ CREATE TABLE acl_policies (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_acl_policies_source_account ON acl_policies(source_account_id);
-CREATE INDEX idx_acl_policies_name ON acl_policies(name);
-CREATE INDEX idx_acl_policies_resource ON acl_policies(resource);
-CREATE INDEX idx_acl_policies_action ON acl_policies(action);
-CREATE INDEX idx_acl_policies_priority ON acl_policies(priority DESC);
-CREATE INDEX idx_acl_policies_enabled ON acl_policies(enabled);
+CREATE INDEX idx_acl_policies_source_account ON np_acl_policies(source_account_id);
+CREATE INDEX idx_acl_policies_name ON np_acl_policies(name);
+CREATE INDEX idx_acl_policies_resource ON np_acl_policies(resource);
+CREATE INDEX idx_acl_policies_action ON np_acl_policies(action);
+CREATE INDEX idx_acl_policies_priority ON np_acl_policies(priority DESC);
+CREATE INDEX idx_acl_policies_enabled ON np_acl_policies(enabled);
 ```
 
-### acl_webhook_events
+### np_acl_webhook_events
 
 Tracks authorization events for audit.
 
 ```sql
-CREATE TABLE acl_webhook_events (
+CREATE TABLE np_acl_webhook_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_account_id VARCHAR(128) DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -974,10 +974,10 @@ CREATE TABLE acl_webhook_events (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_acl_webhook_events_source_account ON acl_webhook_events(source_account_id);
-CREATE INDEX idx_acl_webhook_events_type ON acl_webhook_events(event_type);
-CREATE INDEX idx_acl_webhook_events_user ON acl_webhook_events(user_id);
-CREATE INDEX idx_acl_webhook_events_created ON acl_webhook_events(created_at DESC);
+CREATE INDEX idx_acl_webhook_events_source_account ON np_acl_webhook_events(source_account_id);
+CREATE INDEX idx_acl_webhook_events_type ON np_acl_webhook_events(event_type);
+CREATE INDEX idx_acl_webhook_events_user ON np_acl_webhook_events(user_id);
+CREATE INDEX idx_acl_webhook_events_created ON np_acl_webhook_events(created_at DESC);
 ```
 
 ---

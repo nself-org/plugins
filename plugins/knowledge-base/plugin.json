@@ -8,19 +8,24 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "content",
-  "tags": ["knowledge-base", "documentation", "faq", "search", "versioning", "translations"],
-
-  "tables": [
-    "kb_documents",
-    "kb_collections",
-    "kb_faqs",
-    "kb_attachments",
-    "kb_comments",
-    "kb_analytics",
-    "kb_translations",
-    "kb_review_requests"
+  "tags": [
+    "knowledge-base",
+    "documentation",
+    "faq",
+    "search",
+    "versioning",
+    "translations"
   ],
-
+  "tables": [
+    "np_kb_documents",
+    "np_kb_collections",
+    "np_kb_faqs",
+    "np_kb_attachments",
+    "np_kb_comments",
+    "np_kb_analytics",
+    "np_kb_translations",
+    "np_kb_review_requests"
+  ],
   "webhooks": {
     "document.created": "New document created",
     "document.updated": "Document updated",
@@ -33,7 +38,6 @@
     "review.requested": "Review requested",
     "review.completed": "Review completed"
   },
-
   "actions": {
     "documents": "Manage knowledge base documents",
     "collections": "Manage collections",
@@ -42,7 +46,6 @@
     "analytics": "View knowledge base analytics",
     "reviews": "Manage review requests"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -59,7 +62,6 @@
       "KB_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3713,
     "defaultLanguage": "en",
@@ -67,23 +69,27 @@
     "cacheTTL": 3600,
     "semanticSearchEnabled": false
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs"]
+    "filesystem": [
+      "logs"
+    ]
   }
 }

@@ -261,7 +261,7 @@ Content-Type: application/json
 }
 ```
 
-Returns `{ success, notification_id, message }`.
+Returns `{ success, np_notifications_id, message }`.
 
 ### Get Notification Status
 
@@ -300,12 +300,12 @@ Webhook signatures are verified when `NOTIFICATIONS_WEBHOOK_VERIFY=true` and `NO
 
 ## Database Schema
 
-### notification_templates
+### np_notifications_templates
 
 Reusable notification templates with Handlebars syntax.
 
 ```sql
-CREATE TABLE notification_templates (
+CREATE TABLE np_notifications_templates (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     category VARCHAR(100),                 -- transactional, marketing, system
@@ -319,16 +319,16 @@ CREATE TABLE notification_templates (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_notification_templates_name ON notification_templates(name);
-CREATE INDEX idx_notification_templates_category ON notification_templates(category);
+CREATE INDEX idx_notification_templates_name ON np_notifications_templates(name);
+CREATE INDEX idx_notification_templates_category ON np_notifications_templates(category);
 ```
 
-### notification_preferences
+### np_notifications_preferences
 
 User opt-in/out settings per channel and category.
 
 ```sql
-CREATE TABLE notification_preferences (
+CREATE TABLE np_notifications_preferences (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     channel VARCHAR(50) NOT NULL,          -- email, push, sms
@@ -341,7 +341,7 @@ CREATE TABLE notification_preferences (
 );
 
 CREATE UNIQUE INDEX idx_notification_preferences_user_channel
-    ON notification_preferences(user_id, channel, category);
+    ON np_notifications_preferences(user_id, channel, category);
 ```
 
 ### notifications
@@ -376,14 +376,14 @@ CREATE INDEX idx_notifications_channel ON notifications(channel);
 CREATE INDEX idx_notifications_created ON notifications(created_at DESC);
 ```
 
-### notification_queue
+### np_notifications_queue
 
 Async processing queue for pending notifications.
 
 ```sql
-CREATE TABLE notification_queue (
+CREATE TABLE np_notifications_queue (
     id UUID PRIMARY KEY,
-    notification_id UUID REFERENCES notifications(id),
+    np_notifications_id UUID REFERENCES notifications(id),
     priority INTEGER DEFAULT 0,
     attempts INTEGER DEFAULT 0,
     max_attempts INTEGER DEFAULT 3,
@@ -393,16 +393,16 @@ CREATE TABLE notification_queue (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_notification_queue_priority ON notification_queue(priority DESC, created_at ASC);
-CREATE INDEX idx_notification_queue_retry ON notification_queue(next_retry_at);
+CREATE INDEX idx_notification_queue_priority ON np_notifications_queue(priority DESC, created_at ASC);
+CREATE INDEX idx_notification_queue_retry ON np_notifications_queue(next_retry_at);
 ```
 
-### notification_providers
+### np_notifications_providers
 
 Provider configurations and status.
 
 ```sql
-CREATE TABLE notification_providers (
+CREATE TABLE np_notifications_providers (
     id UUID PRIMARY KEY,
     name VARCHAR(100) NOT NULL,            -- resend, sendgrid, twilio, etc.
     channel VARCHAR(50) NOT NULL,          -- email, push, sms
@@ -416,12 +416,12 @@ CREATE TABLE notification_providers (
 );
 ```
 
-### notification_batches
+### np_notifications_batches
 
 Batch/digest tracking for grouped notifications.
 
 ```sql
-CREATE TABLE notification_batches (
+CREATE TABLE np_notifications_batches (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     category VARCHAR(100),
@@ -436,12 +436,12 @@ CREATE TABLE notification_batches (
 
 ## Analytics Views
 
-### notification_delivery_rates
+### np_notifications_delivery_rates
 
 Delivery metrics by channel.
 
 ```sql
-CREATE VIEW notification_delivery_rates AS
+CREATE VIEW np_notifications_delivery_rates AS
 SELECT
     channel,
     COUNT(*) AS total,
@@ -454,12 +454,12 @@ FROM notifications
 GROUP BY channel;
 ```
 
-### notification_engagement
+### np_notifications_engagement
 
 Email open and click rates.
 
 ```sql
-CREATE VIEW notification_engagement AS
+CREATE VIEW np_notifications_engagement AS
 SELECT
     template_name,
     COUNT(*) AS total_sent,
@@ -473,12 +473,12 @@ GROUP BY template_name
 ORDER BY total_sent DESC;
 ```
 
-### notification_provider_health
+### np_notifications_provider_health
 
 Provider status and reliability.
 
 ```sql
-CREATE VIEW notification_provider_health AS
+CREATE VIEW np_notifications_provider_health AS
 SELECT
     name,
     channel,
@@ -487,16 +487,16 @@ SELECT
     failure_count,
     last_success_at,
     last_failure_at
-FROM notification_providers
+FROM np_notifications_providers
 ORDER BY channel, priority DESC;
 ```
 
-### notification_user_summary
+### np_notifications_user_summary
 
 Per-user notification statistics.
 
 ```sql
-CREATE VIEW notification_user_summary AS
+CREATE VIEW np_notifications_user_summary AS
 SELECT
     user_id,
     COUNT(*) AS total_notifications,
@@ -509,19 +509,19 @@ GROUP BY user_id
 ORDER BY total_notifications DESC;
 ```
 
-### notification_queue_backlog
+### np_notifications_queue_backlog
 
 Current queue status.
 
 ```sql
-CREATE VIEW notification_queue_backlog AS
+CREATE VIEW np_notifications_queue_backlog AS
 SELECT
     COUNT(*) AS total_queued,
     COUNT(*) FILTER (WHERE locked_at IS NOT NULL) AS processing,
     COUNT(*) FILTER (WHERE locked_at IS NULL) AS pending,
     MIN(created_at) AS oldest_queued_at
-FROM notification_queue
-WHERE notification_id IN (
+FROM np_notifications_queue
+WHERE np_notifications_id IN (
     SELECT id FROM notifications WHERE status = 'queued'
 );
 ```
@@ -591,7 +591,7 @@ Automatically failover to backup providers when primary fails.
 
 ```sql
 -- Configure provider priorities (higher = preferred)
-INSERT INTO notification_providers (name, channel, priority, config, enabled) VALUES
+INSERT INTO np_notifications_providers (name, channel, priority, config, enabled) VALUES
   ('resend', 'email', 100, '{"api_key": "re_xxx"}', true),
   ('sendgrid', 'email', 90, '{"api_key": "SG.xxx"}', true),
   ('mailgun', 'email', 80, '{"api_key": "xxx", "domain": "mg.example.com"}', true);
@@ -632,7 +632,7 @@ SELECT
     enabled,
     last_failure_at,
     EXTRACT(EPOCH FROM (NOW() - last_failure_at)) AS seconds_since_failure
-FROM notification_providers
+FROM np_notifications_providers
 WHERE failure_count >= 10;
 ```
 
@@ -726,9 +726,9 @@ NOTIFICATIONS_AUTO_CLEANUP=true            # Auto-delete old jobs
 
 ```sql
 -- High priority notifications process first
-UPDATE notification_queue
+UPDATE np_notifications_queue
 SET priority = 100
-WHERE notification_id IN (
+WHERE np_notifications_id IN (
     SELECT id FROM notifications
     WHERE template_name IN ('password_reset', 'security_alert', 'payment_failed')
 );
@@ -759,8 +759,8 @@ DECLARE
     current_hour INTEGER;
 BEGIN
     SELECT quiet_hours INTO prefs
-    FROM notification_preferences
-    WHERE notification_preferences.user_id = should_send_now.user_id
+    FROM np_notifications_preferences
+    WHERE np_notifications_preferences.user_id = should_send_now.user_id
     LIMIT 1;
 
     IF prefs.quiet_hours IS NULL THEN
@@ -817,7 +817,7 @@ SELECT
     provider,
     AVG(response_time_ms) as avg_response_ms,
     PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms) as p95_response_ms
-FROM notification_logs
+FROM np_notifications_logs
 WHERE created_at > NOW() - INTERVAL '1 hour'
 GROUP BY provider;
 ```
@@ -917,7 +917,7 @@ function sanitizeVariables(variables: Record<string, any>): Record<string, any> 
 
 ```sql
 -- Restrict template editing to admins only
-CREATE POLICY template_edit_policy ON notification_templates
+CREATE POLICY template_edit_policy ON np_notifications_templates
 FOR UPDATE
 USING (
     EXISTS (
@@ -1064,13 +1064,13 @@ ORDER BY created_at DESC;
 
 -- Right to be forgotten (GDPR Article 17)
 DELETE FROM notifications WHERE user_id = $1;
-DELETE FROM notification_preferences WHERE user_id = $1;
+DELETE FROM np_notifications_preferences WHERE user_id = $1;
 ```
 
 #### Audit Logging
 
 ```sql
-CREATE TABLE notification_audit_log (
+CREATE TABLE np_notifications_audit_log (
     id UUID PRIMARY KEY,
     user_id UUID,
     action VARCHAR(50),  -- send, view, delete, export
@@ -1079,8 +1079,8 @@ CREATE TABLE notification_audit_log (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_log_user ON notification_audit_log(user_id);
-CREATE INDEX idx_audit_log_created ON notification_audit_log(created_at DESC);
+CREATE INDEX idx_audit_log_user ON np_notifications_audit_log(user_id);
+CREATE INDEX idx_audit_log_created ON np_notifications_audit_log(created_at DESC);
 ```
 
 ### Secure SMTP Configuration
@@ -1107,7 +1107,7 @@ NOTIFICATIONS_SMTP_PASSWORD=app-specific-password-not-main-password
 
 ```sql
 -- Insert a new template
-INSERT INTO notification_templates (
+INSERT INTO np_notifications_templates (
     id,
     name,
     category,
@@ -1272,7 +1272,7 @@ const providers = [
 // Insert providers
 for (const provider of providers) {
   await db.execute(
-    `INSERT INTO notification_providers (id, name, channel, priority, config, enabled)
+    `INSERT INTO np_notifications_providers (id, name, channel, priority, config, enabled)
      VALUES (gen_random_uuid(), $1, $2, $3, $4, true)
      ON CONFLICT (name, channel) DO UPDATE SET
        priority = EXCLUDED.priority,
@@ -1288,7 +1288,7 @@ for (const provider of providers) {
 async function sendWithFailover(notification: Notification): Promise<void> {
   // Get enabled providers sorted by priority
   const providers = await db.query(
-    `SELECT name, config FROM notification_providers
+    `SELECT name, config FROM np_notifications_providers
      WHERE channel = $1 AND enabled = true
      ORDER BY priority DESC`,
     [notification.channel]
@@ -1302,7 +1302,7 @@ async function sendWithFailover(notification: Notification): Promise<void> {
 
       // Success! Update provider stats
       await db.execute(
-        `UPDATE notification_providers
+        `UPDATE np_notifications_providers
          SET last_success_at = NOW(), failure_count = 0
          WHERE name = $1`,
         [provider.name]
@@ -1315,7 +1315,7 @@ async function sendWithFailover(notification: Notification): Promise<void> {
 
       // Track failure
       await db.execute(
-        `UPDATE notification_providers
+        `UPDATE np_notifications_providers
          SET last_failure_at = NOW(), failure_count = failure_count + 1
          WHERE name = $1`,
         [provider.name]
@@ -1323,13 +1323,13 @@ async function sendWithFailover(notification: Notification): Promise<void> {
 
       // Disable provider if too many failures
       const result = await db.query(
-        `SELECT failure_count FROM notification_providers WHERE name = $1`,
+        `SELECT failure_count FROM np_notifications_providers WHERE name = $1`,
         [provider.name]
       );
 
       if (result.rows[0].failure_count >= 10) {
         await db.execute(
-          `UPDATE notification_providers SET enabled = false WHERE name = $1`,
+          `UPDATE np_notifications_providers SET enabled = false WHERE name = $1`,
           [provider.name]
         );
       }
@@ -1356,7 +1356,7 @@ async function scheduleOptimal(
 ): Promise<void> {
   // Get user timezone and preferences
   const prefs = await db.query(
-    `SELECT quiet_hours FROM notification_preferences
+    `SELECT quiet_hours FROM np_notifications_preferences
      WHERE user_id = $1 AND channel = $2`,
     [userId, notification.channel]
   );
@@ -1382,7 +1382,7 @@ async function scheduleOptimal(
 
   // Insert into queue with scheduled time
   await db.execute(
-    `INSERT INTO notification_queue (id, notification_id, next_retry_at)
+    `INSERT INTO np_notifications_queue (id, np_notifications_id, next_retry_at)
      VALUES (gen_random_uuid(), $1, $2)`,
     [notification.id, sendAt]
   );
@@ -1398,8 +1398,8 @@ async function processBatch(batchSize = 100): Promise<void> {
     // Fetch next batch
     const batch = await db.query(
       `SELECT nq.id as queue_id, n.*
-       FROM notification_queue nq
-       JOIN notifications n ON n.id = nq.notification_id
+       FROM np_notifications_queue nq
+       JOIN notifications n ON n.id = nq.np_notifications_id
        WHERE nq.locked_at IS NULL
          AND (nq.next_retry_at IS NULL OR nq.next_retry_at <= NOW())
        ORDER BY nq.priority DESC, nq.created_at ASC
@@ -1415,7 +1415,7 @@ async function processBatch(batchSize = 100): Promise<void> {
     // Lock batch
     const queueIds = batch.rows.map(r => r.queue_id);
     await db.execute(
-      `UPDATE notification_queue
+      `UPDATE np_notifications_queue
        SET locked_at = NOW(), locked_by = $1
        WHERE id = ANY($2)`,
       [process.pid, queueIds]
@@ -1428,7 +1428,7 @@ async function processBatch(batchSize = 100): Promise<void> {
 
     // Remove from queue
     await db.execute(
-      `DELETE FROM notification_queue WHERE id = ANY($1)`,
+      `DELETE FROM np_notifications_queue WHERE id = ANY($1)`,
       [queueIds]
     );
   }
@@ -1710,7 +1710,7 @@ SELECT
         WHEN last_success_at > NOW() - INTERVAL '1 hour' THEN 'degraded'
         ELSE 'unhealthy'
     END as health_status
-FROM notification_providers
+FROM np_notifications_providers
 ORDER BY channel, priority DESC;
 
 -- Provider success rate (last 24 hours)
@@ -1759,7 +1759,7 @@ ORDER BY consecutive_failures DESC;
 // Health check worker
 async function checkProviderHealth(): Promise<void> {
   const providers = await db.query(
-    `SELECT name, channel, config FROM notification_providers WHERE enabled = true`
+    `SELECT name, channel, config FROM np_notifications_providers WHERE enabled = true`
   );
 
   for (const provider of providers.rows) {
@@ -1773,7 +1773,7 @@ async function checkProviderHealth(): Promise<void> {
 
       // Update success timestamp
       await db.execute(
-        `UPDATE notification_providers
+        `UPDATE np_notifications_providers
          SET last_success_at = NOW(), failure_count = 0
          WHERE name = $1`,
         [provider.name]
@@ -1782,7 +1782,7 @@ async function checkProviderHealth(): Promise<void> {
     } catch (error) {
       // Update failure count
       await db.execute(
-        `UPDATE notification_providers
+        `UPDATE np_notifications_providers
          SET last_failure_at = NOW(), failure_count = failure_count + 1
          WHERE name = $1`,
         [provider.name]
@@ -1812,7 +1812,7 @@ const notificationsSent = new Counter({
 });
 
 const notificationLatency = new Histogram({
-  name: 'notification_latency_seconds',
+  name: 'np_notifications_latency_seconds',
   help: 'Notification processing latency',
   labelNames: ['channel', 'provider'],
   buckets: [0.1, 0.5, 1, 2, 5, 10],
@@ -1820,7 +1820,7 @@ const notificationLatency = new Histogram({
 });
 
 const queueSize = new Gauge({
-  name: 'notification_queue_size',
+  name: 'np_notifications_queue_size',
   help: 'Current queue size',
   registers: [register]
 });
@@ -1861,7 +1861,7 @@ groups:
           description: Failure rate is {{ $value | humanizePercentage }}
 
       - alert: QueueBacklog
-        expr: notification_queue_size > 10000
+        expr: np_notifications_queue_size > 10000
         for: 10m
         labels:
           severity: warning
@@ -1871,7 +1871,7 @@ groups:
 
       - alert: ProviderDown
         expr: |
-          time() - notification_provider_last_success_timestamp > 600
+          time() - np_notifications_provider_last_success_timestamp > 600
         for: 5m
         labels:
           severity: critical
@@ -1975,7 +1975,7 @@ async function sendProductLaunch(): Promise<void> {
     for (const user of users.rows) {
       // Check user preferences
       const prefs = await db.query(
-        `SELECT enabled FROM notification_preferences
+        `SELECT enabled FROM np_notifications_preferences
          WHERE user_id = $1 AND channel = 'email' AND category = 'marketing'`,
         [user.id]
       );
@@ -2089,7 +2089,7 @@ async function sendWeeklyReport(): Promise<void> {
          COUNT(*) as total_events,
          COUNT(DISTINCT session_id) as sessions,
          COUNT(DISTINCT user_id) as unique_users
-       FROM analytics_events
+       FROM np_analytics_events
        WHERE workspace_id = $1
          AND created_at > NOW() - INTERVAL '7 days'`,
       [user.workspace_id]
@@ -2324,7 +2324,7 @@ async function startOnboardingCampaign(userId: string): Promise<void> {
 
     // Schedule for future delivery
     await db.execute(
-      `INSERT INTO notification_queue (id, notification_id, next_retry_at)
+      `INSERT INTO np_notifications_queue (id, np_notifications_id, next_retry_at)
        VALUES (
          gen_random_uuid(),
          (
@@ -2384,7 +2384,7 @@ async function sendCommentReply(commentId: string): Promise<void> {
 
   // Check user preferences for reply notifications
   const prefs = await db.query(
-    `SELECT frequency FROM notification_preferences
+    `SELECT frequency FROM np_notifications_preferences
      WHERE user_id = $1 AND channel = 'email' AND category = 'comments'`,
     [data.parent_author_id]
   );
@@ -2417,7 +2417,7 @@ async function sendCommentReply(commentId: string): Promise<void> {
   } else {
     // Add to daily digest
     await db.execute(
-      `INSERT INTO notification_batches (id, user_id, batch_type, data)
+      `INSERT INTO np_notifications_batches (id, user_id, batch_type, data)
        VALUES (gen_random_uuid(), $1, 'daily_comments', $2)`,
       [data.parent_author_id, JSON.stringify(data)]
     );
@@ -2486,9 +2486,9 @@ async function sendNearbyEventNotification(userId: string, location: { lat: numb
 
   // Rate limit: only send once per day
   await db.execute(
-    `INSERT INTO notification_rate_limits (user_id, notification_type, last_sent_at)
+    `INSERT INTO np_notifications_rate_limits (user_id, np_notifications_type, last_sent_at)
      VALUES ($1, 'nearby_events', NOW())
-     ON CONFLICT (user_id, notification_type) DO UPDATE SET last_sent_at = NOW()`,
+     ON CONFLICT (user_id, np_notifications_type) DO UPDATE SET last_sent_at = NOW()`,
     [userId]
   );
 }
@@ -2572,7 +2572,7 @@ async function sendDataExportReady(userId: string, exportId: string): Promise<vo
       to: { email: user.rows[0].email },
       variables: {
         user_name: user.rows[0].name,
-        export_size: formatBytes(exportData.rows[0].file_size),
+        export_size: formatBytes(exportData.rows[0].np_fileproc_size),
         download_url: `https://example.com/exports/${exportId}/download?token=${exportData.rows[0].download_token}`,
         expires_at: exportData.rows[0].expires_at,
         privacy_url: 'https://example.com/privacy'
@@ -2582,7 +2582,7 @@ async function sendDataExportReady(userId: string, exportId: string): Promise<vo
 
   // Log for compliance audit trail
   await db.execute(
-    `INSERT INTO compliance_logs (user_id, action, details)
+    `INSERT INTO np_compliance_logs (user_id, action, details)
      VALUES ($1, 'data_export_notification_sent', $2)`,
     [userId, JSON.stringify({ export_id: exportId, sent_at: new Date() })]
   );
@@ -2612,7 +2612,7 @@ async function sendDataExportReady(userId: string, exportId: string): Promise<vo
 #### "High Failure Rate"
 
 **Solutions:**
-1. Check provider health: `SELECT * FROM notification_provider_health;`
+1. Check provider health: `SELECT * FROM np_notifications_provider_health;`
 2. Review recent failures: `nself plugin notifications stats failures 50`
 3. Test provider directly: `nself plugin notifications test email test@example.com`
 

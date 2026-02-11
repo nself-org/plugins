@@ -327,15 +327,15 @@ A meeting reminder was sent.
 
 ## Database Schema
 
-### meetings_events
+### np_meetings_events
 
 Meeting events.
 
 ```sql
-CREATE TABLE meetings_events (
+CREATE TABLE np_meetings_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  calendar_id UUID NOT NULL REFERENCES meetings_calendars(id) ON DELETE CASCADE,
+  np_calendar_id UUID NOT NULL REFERENCES np_meetings_calendars(id) ON DELETE CASCADE,
   title VARCHAR(500) NOT NULL,
   description TEXT,
   location VARCHAR(500),
@@ -347,7 +347,7 @@ CREATE TABLE meetings_events (
   recurrence_rule TEXT,
   recurrence_id UUID,
   organizer_id UUID NOT NULL,
-  room_id UUID REFERENCES meetings_rooms(id) ON DELETE SET NULL,
+  room_id UUID REFERENCES np_meetings_rooms(id) ON DELETE SET NULL,
   external_event_id VARCHAR(255),
   external_calendar_id VARCHAR(255),
   metadata JSONB DEFAULT '{}'::jsonb,
@@ -356,23 +356,23 @@ CREATE TABLE meetings_events (
   cancelled_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_meetings_events_account ON meetings_events(source_account_id);
-CREATE INDEX idx_meetings_events_calendar ON meetings_events(calendar_id);
-CREATE INDEX idx_meetings_events_start ON meetings_events(start_time);
-CREATE INDEX idx_meetings_events_end ON meetings_events(end_time);
-CREATE INDEX idx_meetings_events_room ON meetings_events(room_id);
-CREATE INDEX idx_meetings_events_status ON meetings_events(status);
+CREATE INDEX idx_meetings_events_account ON np_meetings_events(source_account_id);
+CREATE INDEX idx_meetings_events_calendar ON np_meetings_events(np_calendar_id);
+CREATE INDEX idx_meetings_events_start ON np_meetings_events(start_time);
+CREATE INDEX idx_meetings_events_end ON np_meetings_events(end_time);
+CREATE INDEX idx_meetings_events_room ON np_meetings_events(room_id);
+CREATE INDEX idx_meetings_events_status ON np_meetings_events(status);
 ```
 
-### meetings_attendees
+### np_meetings_attendees
 
 Event attendees and RSVP tracking.
 
 ```sql
-CREATE TABLE meetings_attendees (
+CREATE TABLE np_meetings_attendees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  event_id UUID NOT NULL REFERENCES meetings_events(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES np_meetings_events(id) ON DELETE CASCADE,
   user_id UUID,
   email VARCHAR(255) NOT NULL,
   display_name VARCHAR(255),
@@ -387,18 +387,18 @@ CREATE TABLE meetings_attendees (
   UNIQUE(source_account_id, event_id, email)
 );
 
-CREATE INDEX idx_meetings_attendees_account ON meetings_attendees(source_account_id);
-CREATE INDEX idx_meetings_attendees_event ON meetings_attendees(event_id);
-CREATE INDEX idx_meetings_attendees_user ON meetings_attendees(user_id);
-CREATE INDEX idx_meetings_attendees_email ON meetings_attendees(email);
+CREATE INDEX idx_meetings_attendees_account ON np_meetings_attendees(source_account_id);
+CREATE INDEX idx_meetings_attendees_event ON np_meetings_attendees(event_id);
+CREATE INDEX idx_meetings_attendees_user ON np_meetings_attendees(user_id);
+CREATE INDEX idx_meetings_attendees_email ON np_meetings_attendees(email);
 ```
 
-### meetings_rooms
+### np_meetings_rooms
 
 Meeting rooms and resources.
 
 ```sql
-CREATE TABLE meetings_rooms (
+CREATE TABLE np_meetings_rooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(200) NOT NULL,
@@ -418,17 +418,17 @@ CREATE TABLE meetings_rooms (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX idx_meetings_rooms_account ON meetings_rooms(source_account_id);
-CREATE INDEX idx_meetings_rooms_active ON meetings_rooms(is_active) WHERE is_active = true;
-CREATE INDEX idx_meetings_rooms_type ON meetings_rooms(room_type);
+CREATE INDEX idx_meetings_rooms_account ON np_meetings_rooms(source_account_id);
+CREATE INDEX idx_meetings_rooms_active ON np_meetings_rooms(is_active) WHERE is_active = true;
+CREATE INDEX idx_meetings_rooms_type ON np_meetings_rooms(room_type);
 ```
 
-### meetings_calendars
+### np_meetings_calendars
 
 User and shared calendars.
 
 ```sql
-CREATE TABLE meetings_calendars (
+CREATE TABLE np_meetings_calendars (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id UUID NOT NULL,
@@ -447,38 +447,38 @@ CREATE TABLE meetings_calendars (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_meetings_calendars_account ON meetings_calendars(source_account_id);
-CREATE INDEX idx_meetings_calendars_user ON meetings_calendars(user_id);
-CREATE INDEX idx_meetings_calendars_primary ON meetings_calendars(is_primary) WHERE is_primary = true;
+CREATE INDEX idx_meetings_calendars_account ON np_meetings_calendars(source_account_id);
+CREATE INDEX idx_meetings_calendars_user ON np_meetings_calendars(user_id);
+CREATE INDEX idx_meetings_calendars_primary ON np_meetings_calendars(is_primary) WHERE is_primary = true;
 ```
 
-### meetings_calendar_shares
+### np_meetings_calendar_shares
 
 Calendar sharing permissions.
 
 ```sql
-CREATE TABLE meetings_calendar_shares (
+CREATE TABLE np_meetings_calendar_shares (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  calendar_id UUID NOT NULL REFERENCES meetings_calendars(id) ON DELETE CASCADE,
+  np_calendar_id UUID NOT NULL REFERENCES np_meetings_calendars(id) ON DELETE CASCADE,
   shared_with_user_id UUID NOT NULL,
   permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
   created_by UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(source_account_id, calendar_id, shared_with_user_id)
+  UNIQUE(source_account_id, np_calendar_id, shared_with_user_id)
 );
 
-CREATE INDEX idx_calendar_shares_account ON meetings_calendar_shares(source_account_id);
-CREATE INDEX idx_calendar_shares_calendar ON meetings_calendar_shares(calendar_id);
-CREATE INDEX idx_calendar_shares_user ON meetings_calendar_shares(shared_with_user_id);
+CREATE INDEX idx_calendar_shares_account ON np_meetings_calendar_shares(source_account_id);
+CREATE INDEX idx_calendar_shares_calendar ON np_meetings_calendar_shares(np_calendar_id);
+CREATE INDEX idx_calendar_shares_user ON np_meetings_calendar_shares(shared_with_user_id);
 ```
 
-### meetings_external_calendars
+### np_meetings_external_calendars
 
 External calendar connections.
 
 ```sql
-CREATE TABLE meetings_external_calendars (
+CREATE TABLE np_meetings_external_calendars (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   user_id UUID NOT NULL,
@@ -496,17 +496,17 @@ CREATE TABLE meetings_external_calendars (
   UNIQUE(source_account_id, user_id, provider, external_calendar_id)
 );
 
-CREATE INDEX idx_external_calendars_account ON meetings_external_calendars(source_account_id);
-CREATE INDEX idx_external_calendars_user ON meetings_external_calendars(user_id);
-CREATE INDEX idx_external_calendars_provider ON meetings_external_calendars(provider);
+CREATE INDEX idx_external_calendars_account ON np_meetings_external_calendars(source_account_id);
+CREATE INDEX idx_external_calendars_user ON np_meetings_external_calendars(user_id);
+CREATE INDEX idx_external_calendars_provider ON np_meetings_external_calendars(provider);
 ```
 
-### meetings_templates
+### np_meetings_templates
 
 Meeting templates.
 
 ```sql
-CREATE TABLE meetings_templates (
+CREATE TABLE np_meetings_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(200) NOT NULL,
@@ -524,20 +524,20 @@ CREATE TABLE meetings_templates (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_meetings_templates_account ON meetings_templates(source_account_id);
-CREATE INDEX idx_meetings_templates_public ON meetings_templates(is_public) WHERE is_public = true;
+CREATE INDEX idx_meetings_templates_account ON np_meetings_templates(source_account_id);
+CREATE INDEX idx_meetings_templates_public ON np_meetings_templates(is_public) WHERE is_public = true;
 ```
 
-### meetings_reminders
+### np_meetings_reminders
 
 Meeting reminders.
 
 ```sql
-CREATE TABLE meetings_reminders (
+CREATE TABLE np_meetings_reminders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  event_id UUID NOT NULL REFERENCES meetings_events(id) ON DELETE CASCADE,
-  attendee_id UUID REFERENCES meetings_attendees(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES np_meetings_events(id) ON DELETE CASCADE,
+  attendee_id UUID REFERENCES np_meetings_attendees(id) ON DELETE CASCADE,
   reminder_type VARCHAR(50) NOT NULL DEFAULT 'email',
   minutes_before INTEGER NOT NULL DEFAULT 15,
   scheduled_at TIMESTAMPTZ NOT NULL,
@@ -547,21 +547,21 @@ CREATE TABLE meetings_reminders (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_meetings_reminders_account ON meetings_reminders(source_account_id);
-CREATE INDEX idx_meetings_reminders_event ON meetings_reminders(event_id);
-CREATE INDEX idx_meetings_reminders_scheduled ON meetings_reminders(scheduled_at);
-CREATE INDEX idx_meetings_reminders_status ON meetings_reminders(status);
+CREATE INDEX idx_meetings_reminders_account ON np_meetings_reminders(source_account_id);
+CREATE INDEX idx_meetings_reminders_event ON np_meetings_reminders(event_id);
+CREATE INDEX idx_meetings_reminders_scheduled ON np_meetings_reminders(scheduled_at);
+CREATE INDEX idx_meetings_reminders_status ON np_meetings_reminders(status);
 ```
 
-### meetings_waitlist
+### np_meetings_waitlist
 
 Meeting waitlist entries.
 
 ```sql
-CREATE TABLE meetings_waitlist (
+CREATE TABLE np_meetings_waitlist (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  event_id UUID NOT NULL REFERENCES meetings_events(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES np_meetings_events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   email VARCHAR(255) NOT NULL,
   position INTEGER NOT NULL,
@@ -572,10 +572,10 @@ CREATE TABLE meetings_waitlist (
   UNIQUE(source_account_id, event_id, user_id)
 );
 
-CREATE INDEX idx_meetings_waitlist_account ON meetings_waitlist(source_account_id);
-CREATE INDEX idx_meetings_waitlist_event ON meetings_waitlist(event_id);
-CREATE INDEX idx_meetings_waitlist_user ON meetings_waitlist(user_id);
-CREATE INDEX idx_meetings_waitlist_status ON meetings_waitlist(status);
+CREATE INDEX idx_meetings_waitlist_account ON np_meetings_waitlist(source_account_id);
+CREATE INDEX idx_meetings_waitlist_event ON np_meetings_waitlist(event_id);
+CREATE INDEX idx_meetings_waitlist_user ON np_meetings_waitlist(user_id);
+CREATE INDEX idx_meetings_waitlist_status ON np_meetings_waitlist(status);
 ```
 
 ## Examples
@@ -655,7 +655,7 @@ curl -X POST http://localhost:3710/api/meetings/events/EVENT_ID/rsvp \
 **Solutions:**
 1. Verify OAuth tokens haven't expired
 2. Check sync_enabled flag is true
-3. Review sync error messages in meetings_external_calendars table
+3. Review sync error messages in np_meetings_external_calendars table
 4. Re-authenticate with calendar provider
 
 ### Room Booking Conflicts
@@ -664,7 +664,7 @@ curl -X POST http://localhost:3710/api/meetings/events/EVENT_ID/rsvp \
 
 **Solutions:**
 1. Ensure proper locking during room booking
-2. Check for overlapping events in meetings_events
+2. Check for overlapping events in np_meetings_events
 3. Verify room capacity isn't exceeded
 4. Review booking logic for race conditions
 

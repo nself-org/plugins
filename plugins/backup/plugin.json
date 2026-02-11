@@ -8,17 +8,20 @@
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
   "category": "infrastructure",
-  "tags": ["backup", "restore", "database", "automation", "disaster-recovery"],
-
-  "tables": [
-    "backup_schedules",
-    "backup_artifacts",
-    "backup_restore_jobs",
-    "backup_webhook_events"
+  "tags": [
+    "backup",
+    "restore",
+    "database",
+    "automation",
+    "disaster-recovery"
   ],
-
+  "tables": [
+    "np_backup_schedules",
+    "np_backup_artifacts",
+    "np_backup_restore_jobs",
+    "np_backup_webhook_events"
+  ],
   "webhooks": {},
-
   "actions": {
     "init": "Initialize database schema",
     "server": "Start backup automation server",
@@ -30,7 +33,6 @@
     "restore": "Restore from a backup artifact",
     "download": "Download a backup artifact"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -52,30 +54,36 @@
       "BACKUP_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "defaultPort": 3013,
     "defaultStoragePath": "/tmp/nself-backups",
     "defaultRetentionDays": 30,
     "maxConcurrentBackups": 2
   },
-
   "hooks": {
     "postInstall": "install.sh",
     "preUninstall": "uninstall.sh",
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
-    "network": ["s3"],
-    "filesystem": ["read", "write"]
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "s3"
+    ],
+    "filesystem": [
+      "read",
+      "write"
+    ]
   }
 }

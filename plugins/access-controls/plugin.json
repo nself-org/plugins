@@ -7,20 +7,24 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/access-controls",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "security",
-  "tags": ["access-control", "rbac", "abac", "authorization", "policies", "permissions"],
-
-  "tables": [
-    "acl_roles",
-    "acl_permissions",
-    "acl_role_permissions",
-    "acl_user_roles",
-    "acl_policies",
-    "acl_webhook_events"
+  "category": "authentication",
+  "tags": [
+    "access-control",
+    "rbac",
+    "abac",
+    "authorization",
+    "policies",
+    "permissions"
   ],
-
+  "tables": [
+    "np_acl_roles",
+    "np_acl_permissions",
+    "np_acl_role_permissions",
+    "np_acl_user_roles",
+    "np_acl_policies",
+    "np_acl_webhook_events"
+  ],
   "webhooks": {},
-
   "actions": {
     "server": "Start the access control API server",
     "authorize": "Check if user has permission for resource/action",
@@ -28,7 +32,6 @@
     "permissions": "Manage permissions",
     "policies": "Manage ABAC policies"
   },
-
   "envVars": {
     "required": [
       "DATABASE_URL"
@@ -43,30 +46,34 @@
       "ACL_RATE_LIMIT_WINDOW_MS"
     ]
   },
-
   "config": {
     "port": 3027,
     "cacheTtlSeconds": 300,
     "maxRoleDepth": 10,
     "defaultDeny": true
   },
-
   "hooks": {
     "postInstall": null,
     "preUninstall": null,
     "postSync": null
   },
-
   "multiApp": {
     "supported": true,
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
     "defaultValue": "primary"
   },
-
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["logs", "cache"]
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
   }
 }

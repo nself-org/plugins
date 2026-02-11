@@ -510,10 +510,10 @@ Get channels in a group.
 
 ## Database Schema
 
-### epg_channels
+### np_epg_channels
 
 ```sql
-CREATE TABLE IF NOT EXISTS epg_channels (
+CREATE TABLE IF NOT EXISTS np_epg_channels (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   channel_id VARCHAR(255) UNIQUE NOT NULL,
@@ -531,10 +531,10 @@ CREATE TABLE IF NOT EXISTS epg_channels (
 );
 ```
 
-### epg_programs
+### np_epg_programs
 
 ```sql
-CREATE TABLE IF NOT EXISTS epg_programs (
+CREATE TABLE IF NOT EXISTS np_epg_programs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   program_id VARCHAR(255) UNIQUE NOT NULL,
@@ -555,14 +555,14 @@ CREATE TABLE IF NOT EXISTS epg_programs (
 );
 ```
 
-### epg_schedules
+### np_epg_schedules
 
 ```sql
-CREATE TABLE IF NOT EXISTS epg_schedules (
+CREATE TABLE IF NOT EXISTS np_epg_schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  channel_id UUID NOT NULL REFERENCES epg_channels(id) ON DELETE CASCADE,
-  program_id UUID NOT NULL REFERENCES epg_programs(id) ON DELETE CASCADE,
+  channel_id UUID NOT NULL REFERENCES np_epg_channels(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES np_epg_programs(id) ON DELETE CASCADE,
   start_time TIMESTAMPTZ NOT NULL,
   end_time TIMESTAMPTZ NOT NULL,
   metadata JSONB DEFAULT '{}',
@@ -571,16 +571,16 @@ CREATE TABLE IF NOT EXISTS epg_schedules (
 );
 
 CREATE INDEX IF NOT EXISTS idx_epg_schedules_channel_time
-ON epg_schedules(channel_id, start_time, end_time);
+ON np_epg_schedules(channel_id, start_time, end_time);
 
 CREATE INDEX IF NOT EXISTS idx_epg_schedules_time_range
-ON epg_schedules(start_time, end_time);
+ON np_epg_schedules(start_time, end_time);
 ```
 
-### epg_channel_groups
+### np_epg_channel_groups
 
 ```sql
-CREATE TABLE IF NOT EXISTS epg_channel_groups (
+CREATE TABLE IF NOT EXISTS np_epg_channel_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -591,14 +591,14 @@ CREATE TABLE IF NOT EXISTS epg_channel_groups (
 );
 ```
 
-### epg_channel_group_members
+### np_epg_channel_group_members
 
 ```sql
-CREATE TABLE IF NOT EXISTS epg_channel_group_members (
+CREATE TABLE IF NOT EXISTS np_epg_channel_group_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  group_id UUID NOT NULL REFERENCES epg_channel_groups(id) ON DELETE CASCADE,
-  channel_id UUID NOT NULL REFERENCES epg_channels(id) ON DELETE CASCADE,
+  group_id UUID NOT NULL REFERENCES np_epg_channel_groups(id) ON DELETE CASCADE,
+  channel_id UUID NOT NULL REFERENCES np_epg_channels(id) ON DELETE CASCADE,
   sort_order INTEGER DEFAULT 0,
   UNIQUE(group_id, channel_id)
 );
@@ -631,9 +631,9 @@ SELECT
   s.end_time,
   p.genre,
   p.rating
-FROM epg_schedules s
-JOIN epg_channels c ON c.id = s.channel_id
-JOIN epg_programs p ON p.id = s.program_id
+FROM np_epg_schedules s
+JOIN np_epg_channels c ON c.id = s.channel_id
+JOIN np_epg_programs p ON p.id = s.program_id
 WHERE s.source_account_id = 'primary'
   AND DATE(s.start_time AT TIME ZONE 'America/New_York') = CURRENT_DATE
   AND EXTRACT(HOUR FROM s.start_time AT TIME ZONE 'America/New_York') BETWEEN 19 AND 23

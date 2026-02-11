@@ -758,7 +758,7 @@ Get sync status and statistics.
 
 ## Webhook Events
 
-The Cloudflare plugin emits webhook events that are stored in the `cf_webhook_events` table.
+The Cloudflare plugin emits webhook events that are stored in the `np_cf_webhook_events` table.
 
 | Event Type | Description | Payload |
 |------------|-------------|---------|
@@ -772,12 +772,12 @@ The Cloudflare plugin emits webhook events that are stored in the `cf_webhook_ev
 
 ## Database Schema
 
-### cf_zones
+### np_cf_zones
 
 Stores Cloudflare zones with configuration and status.
 
 ```sql
-CREATE TABLE IF NOT EXISTS cf_zones (
+CREATE TABLE IF NOT EXISTS np_cf_zones (
   id VARCHAR(64) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(255) NOT NULL,
@@ -790,7 +790,7 @@ CREATE TABLE IF NOT EXISTS cf_zones (
   synced_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_cf_zones_source_app ON cf_zones(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_cf_zones_source_app ON np_cf_zones(source_account_id);
 ```
 
 **Columns:**
@@ -808,15 +808,15 @@ CREATE INDEX IF NOT EXISTS idx_cf_zones_source_app ON cf_zones(source_account_id
 | `ssl_status` | VARCHAR(50) | Yes | NULL | SSL/TLS status |
 | `synced_at` | TIMESTAMPTZ | No | `NOW()` | Last sync timestamp |
 
-### cf_dns_records
+### np_cf_dns_records
 
 Stores DNS records for all zones.
 
 ```sql
-CREATE TABLE IF NOT EXISTS cf_dns_records (
+CREATE TABLE IF NOT EXISTS np_cf_dns_records (
   id VARCHAR(64) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-  zone_id VARCHAR(64) NOT NULL REFERENCES cf_zones(id),
+  zone_id VARCHAR(64) NOT NULL REFERENCES np_cf_zones(id),
   type VARCHAR(10) NOT NULL,
   name VARCHAR(255) NOT NULL,
   content TEXT NOT NULL,
@@ -827,8 +827,8 @@ CREATE TABLE IF NOT EXISTS cf_dns_records (
   synced_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_cf_dns_source_app ON cf_dns_records(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_cf_dns_zone ON cf_dns_records(zone_id);
+CREATE INDEX IF NOT EXISTS idx_cf_dns_source_app ON np_cf_dns_records(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_cf_dns_zone ON np_cf_dns_records(zone_id);
 ```
 
 **Columns:**
@@ -847,12 +847,12 @@ CREATE INDEX IF NOT EXISTS idx_cf_dns_zone ON cf_dns_records(zone_id);
 | `locked` | BOOLEAN | No | `false` | Whether record is locked from editing |
 | `synced_at` | TIMESTAMPTZ | No | `NOW()` | Last sync timestamp |
 
-### cf_r2_buckets
+### np_cf_r2_buckets
 
 Stores R2 object storage buckets.
 
 ```sql
-CREATE TABLE IF NOT EXISTS cf_r2_buckets (
+CREATE TABLE IF NOT EXISTS np_cf_r2_buckets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   name VARCHAR(63) NOT NULL,
@@ -865,7 +865,7 @@ CREATE TABLE IF NOT EXISTS cf_r2_buckets (
   UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cf_r2_buckets_source_app ON cf_r2_buckets(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_cf_r2_buckets_source_app ON np_cf_r2_buckets(source_account_id);
 ```
 
 **Columns:**
@@ -882,12 +882,12 @@ CREATE INDEX IF NOT EXISTS idx_cf_r2_buckets_source_app ON cf_r2_buckets(source_
 | `created_at` | TIMESTAMPTZ | Yes | NULL | Bucket creation timestamp |
 | `synced_at` | TIMESTAMPTZ | No | `NOW()` | Last sync timestamp |
 
-### cf_cache_purge_log
+### np_cf_cache_purge_log
 
 Stores cache purge history with audit trail.
 
 ```sql
-CREATE TABLE IF NOT EXISTS cf_cache_purge_log (
+CREATE TABLE IF NOT EXISTS np_cf_cache_purge_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   zone_id VARCHAR(64) NOT NULL,
@@ -897,11 +897,11 @@ CREATE TABLE IF NOT EXISTS cf_cache_purge_log (
   hosts TEXT[],
   prefixes TEXT[],
   status VARCHAR(20) NOT NULL,
-  cf_response JSONB,
+  np_cf_response JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_cf_cache_purge_source_app ON cf_cache_purge_log(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_cf_cache_purge_source_app ON np_cf_cache_purge_log(source_account_id);
 ```
 
 **Columns:**
@@ -917,15 +917,15 @@ CREATE INDEX IF NOT EXISTS idx_cf_cache_purge_source_app ON cf_cache_purge_log(s
 | `hosts` | TEXT[] | Yes | NULL | Array of hosts purged (if type=hosts) |
 | `prefixes` | TEXT[] | Yes | NULL | Array of URL prefixes purged (if type=prefixes) |
 | `status` | VARCHAR(20) | No | - | Purge status (completed, failed) |
-| `cf_response` | JSONB | Yes | NULL | Raw Cloudflare API response |
+| `np_cf_response` | JSONB | Yes | NULL | Raw Cloudflare API response |
 | `created_at` | TIMESTAMPTZ | No | `NOW()` | Purge request timestamp |
 
-### cf_analytics
+### np_cf_analytics
 
 Stores daily analytics data per zone.
 
 ```sql
-CREATE TABLE IF NOT EXISTS cf_analytics (
+CREATE TABLE IF NOT EXISTS np_cf_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   zone_id VARCHAR(64) NOT NULL,
@@ -943,8 +943,8 @@ CREATE TABLE IF NOT EXISTS cf_analytics (
   UNIQUE(source_account_id, zone_id, date)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cf_analytics_source_app ON cf_analytics(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_cf_analytics_date ON cf_analytics(source_account_id, zone_id, date);
+CREATE INDEX IF NOT EXISTS idx_cf_analytics_source_app ON np_cf_analytics(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_cf_analytics_date ON np_cf_analytics(source_account_id, zone_id, date);
 ```
 
 **Columns:**
@@ -966,12 +966,12 @@ CREATE INDEX IF NOT EXISTS idx_cf_analytics_date ON cf_analytics(source_account_
 | `countries` | JSONB | No | `'{}'` | Request distribution by country |
 | `synced_at` | TIMESTAMPTZ | No | `NOW()` | Last sync timestamp |
 
-### cf_webhook_events
+### np_cf_webhook_events
 
 Stores webhook events for asynchronous processing.
 
 ```sql
-CREATE TABLE IF NOT EXISTS cf_webhook_events (
+CREATE TABLE IF NOT EXISTS np_cf_webhook_events (
   id VARCHAR(255) PRIMARY KEY,
   source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
   event_type VARCHAR(128) NOT NULL,
@@ -983,7 +983,7 @@ CREATE TABLE IF NOT EXISTS cf_webhook_events (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_cf_webhook_events_source_app ON cf_webhook_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_cf_webhook_events_source_app ON np_cf_webhook_events(source_account_id);
 ```
 
 **Columns:**
@@ -1058,8 +1058,8 @@ SELECT
   pg_size_pretty(SUM(a.bandwidth_cached)) as cached_bandwidth,
   SUM(a.threats_total) as threats_blocked,
   SUM(a.unique_visitors) as unique_visitors
-FROM cf_analytics a
-JOIN cf_zones z ON z.id = a.zone_id
+FROM np_cf_analytics a
+JOIN np_cf_zones z ON z.id = a.zone_id
 WHERE a.source_account_id = 'primary'
   AND a.date >= CURRENT_DATE - INTERVAL '30 days'
 GROUP BY z.name
@@ -1122,8 +1122,8 @@ SELECT
   d.content as ip_address,
   d.proxied,
   d.synced_at
-FROM cf_dns_records d
-JOIN cf_zones z ON z.id = d.zone_id
+FROM np_cf_dns_records d
+JOIN np_cf_zones z ON z.id = d.zone_id
 WHERE d.source_account_id = 'primary'
   AND d.type = 'A'
 ORDER BY z.name, d.name;
@@ -1177,7 +1177,7 @@ done
 - Run sync to fetch latest zones: `nself plugin cloudflare sync --resources zones`
 - Verify zone ID exists:
   ```sql
-  SELECT id, name FROM cf_zones WHERE source_account_id = 'primary';
+  SELECT id, name FROM np_cf_zones WHERE source_account_id = 'primary';
   ```
 - Check if zone filtering is enabled: `echo $CF_ZONE_IDS`
 - Verify multi-app isolation: use correct `--app-id` parameter
@@ -1193,7 +1193,7 @@ done
   - CNAME: Must be valid domain name
   - MX: Must include priority value
   - TXT: Enclose in quotes if contains spaces
-- Ensure zone is active: check `status` column in `cf_zones` table
+- Ensure zone is active: check `status` column in `np_cf_zones` table
 
 #### 4. Slow Analytics Queries
 
@@ -1204,19 +1204,19 @@ done
 - Add custom index:
   ```sql
   CREATE INDEX idx_cf_analytics_zone_date
-  ON cf_analytics(zone_id, date DESC)
+  ON np_cf_analytics(zone_id, date DESC)
   WHERE source_account_id = 'primary';
   ```
 - Use aggregate queries instead of fetching all daily records
 - Consider materialized views for frequently-accessed reports:
   ```sql
-  CREATE MATERIALIZED VIEW cf_monthly_analytics AS
+  CREATE MATERIALIZED VIEW np_cf_monthly_analytics AS
   SELECT
     zone_id,
     DATE_TRUNC('month', date) as month,
     SUM(requests_total) as requests,
     SUM(bandwidth_total) as bandwidth
-  FROM cf_analytics
+  FROM np_cf_analytics
   GROUP BY zone_id, month;
   ```
 

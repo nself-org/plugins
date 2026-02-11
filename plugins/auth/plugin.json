@@ -20,13 +20,13 @@
     "sso"
   ],
   "tables": [
-    "auth_oauth_providers",
-    "auth_passkeys",
-    "auth_mfa_enrollments",
-    "auth_device_codes",
-    "auth_magic_links",
-    "auth_sessions",
-    "auth_login_attempts"
+    "np_auth_oauth_providers",
+    "np_auth_passkeys",
+    "np_auth_mfa_enrollments",
+    "np_auth_device_codes",
+    "np_auth_magic_links",
+    "np_auth_sessions",
+    "np_auth_login_attempts"
   ],
   "webhooks": {
     "auth.oauth.linked": "OAuth account linked",

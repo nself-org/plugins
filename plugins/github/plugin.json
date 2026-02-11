@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/github",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "devops",
+  "category": "development",
   "tags": [
     "github",
     "git",
@@ -23,14 +23,14 @@
     "defaultValue": "primary"
   },
   "tables": [
-    "github_repositories",
-    "github_issues",
-    "github_pull_requests",
-    "github_commits",
-    "github_releases",
-    "github_workflow_runs",
-    "github_deployments",
-    "github_webhook_events"
+    "np_github_repositories",
+    "np_github_issues",
+    "np_github_pull_requests",
+    "np_github_commits",
+    "np_github_releases",
+    "np_github_workflow_runs",
+    "np_github_deployments",
+    "np_github_webhook_events"
   ],
   "webhooks": {
     "push": "Code pushed to repository",

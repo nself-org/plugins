@@ -1,0 +1,476 @@
+{
+  "$schema": "./servers-schema.json",
+  "version": "1.0.0",
+  "last_updated": "2026-02-11T00:00:00Z",
+  "providers": {
+    "nordvpn": {
+      "total_servers": 5500,
+      "p2p_servers": 5500,
+      "countries": 47,
+      "api_endpoint": "https://api.nordvpn.com/v1/servers/recommendations",
+      "notes": "Almost all servers support P2P except: North Macedonia, Moldova, Bosnia and Herzegovina, Albania",
+      "sample_servers": [
+        {
+          "hostname": "us7123.nordvpn.com",
+          "country": "US",
+          "city": "New York",
+          "load": 25,
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "uk2149.nordvpn.com",
+          "country": "GB",
+          "city": "London",
+          "load": 30,
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "de1053.nordvpn.com",
+          "country": "DE",
+          "city": "Frankfurt",
+          "load": 20,
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "nl928.nordvpn.com",
+          "country": "NL",
+          "city": "Amsterdam",
+          "load": 15,
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "ca724.nordvpn.com",
+          "country": "CA",
+          "city": "Toronto",
+          "load": 22,
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "au515.nordvpn.com",
+          "country": "AU",
+          "city": "Sydney",
+          "load": 18,
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "surfshark": {
+      "total_servers": 4500,
+      "p2p_servers": 4500,
+      "countries": 100,
+      "api_endpoint": "https://api.surfshark.com/v3/server/clusters",
+      "notes": "All servers support P2P - no dedicated P2P servers, automatic routing to optimized servers",
+      "sample_servers": [
+        {
+          "hostname": "us-nyc.prod.surfshark.com",
+          "country": "US",
+          "city": "New York",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "nl-ams.prod.surfshark.com",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "de-fra.prod.surfshark.com",
+          "country": "DE",
+          "city": "Frankfurt",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "uk-lon.prod.surfshark.com",
+          "country": "GB",
+          "city": "London",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "au-syd.prod.surfshark.com",
+          "country": "AU",
+          "city": "Sydney",
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "expressvpn": {
+      "total_servers": 3000,
+      "p2p_servers": 3000,
+      "countries": 105,
+      "notes": "All servers support P2P, may internally route to Switzerland/Netherlands for optimization",
+      "recommended_p2p_countries": ["CH", "NL", "LU", "CA"],
+      "sample_servers": [
+        {
+          "hostname": "switzerland.expressvpn.com",
+          "country": "CH",
+          "city": "Zurich",
+          "p2p": true,
+          "port_forwarding": false,
+          "recommended": true
+        },
+        {
+          "hostname": "netherlands.expressvpn.com",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": false,
+          "recommended": true
+        },
+        {
+          "hostname": "canada.expressvpn.com",
+          "country": "CA",
+          "city": "Toronto",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "usa.expressvpn.com",
+          "country": "US",
+          "city": "New York",
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "pia": {
+      "total_servers": 600,
+      "p2p_servers": 600,
+      "countries": 90,
+      "api_endpoint": "https://serverlist.piaservers.net/vpninfo/servers/v6",
+      "notes": "All servers support P2P, port forwarding available on all except US servers",
+      "sample_servers": [
+        {
+          "hostname": "au-melbourne.privateinternetaccess.com",
+          "country": "AU",
+          "city": "Melbourne",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "ca-vancouver.privateinternetaccess.com",
+          "country": "CA",
+          "city": "Vancouver",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "nl-amsterdam.privateinternetaccess.com",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "de-frankfurt.privateinternetaccess.com",
+          "country": "DE",
+          "city": "Frankfurt",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "us-east.privateinternetaccess.com",
+          "country": "US",
+          "city": "New York",
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "protonvpn": {
+      "total_servers": 3000,
+      "p2p_servers": 140,
+      "countries": 90,
+      "notes": "140+ dedicated P2P servers, requires Proton VPN Plus plan",
+      "sample_servers": [
+        {
+          "hostname": "nl-01.protonvpn.net",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "ch-03.protonvpn.net",
+          "country": "CH",
+          "city": "Zurich",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "se-05.protonvpn.net",
+          "country": "SE",
+          "city": "Stockholm",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "sg-02.protonvpn.net",
+          "country": "SG",
+          "city": "Singapore",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "us-ca-01.protonvpn.net",
+          "country": "US",
+          "city": "Los Angeles",
+          "p2p": true,
+          "port_forwarding": true
+        }
+      ]
+    },
+    "mullvad": {
+      "total_servers": 674,
+      "p2p_servers": 674,
+      "countries": 45,
+      "api_endpoint": "https://api.mullvad.net/www/relays/all/",
+      "notes": "All servers support P2P, port forwarding removed July 1, 2023",
+      "sample_servers": [
+        {
+          "hostname": "au-bne-wg-001",
+          "country": "AU",
+          "city": "Brisbane",
+          "p2p": true,
+          "port_forwarding": false,
+          "owned": true
+        },
+        {
+          "hostname": "se-sto-wg-001",
+          "country": "SE",
+          "city": "Stockholm",
+          "p2p": true,
+          "port_forwarding": false,
+          "owned": true
+        },
+        {
+          "hostname": "nl-ams-wg-001",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": false,
+          "owned": true
+        },
+        {
+          "hostname": "de-fra-wg-001",
+          "country": "DE",
+          "city": "Frankfurt",
+          "p2p": true,
+          "port_forwarding": false,
+          "owned": true
+        },
+        {
+          "hostname": "us-nyc-wg-001",
+          "country": "US",
+          "city": "New York",
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "keepsolid": {
+      "total_servers": 3000,
+      "p2p_servers": 5,
+      "countries": 80,
+      "notes": "SEVERELY LIMITED: Only 5 P2P servers, US BitTorrent ban since March 2022",
+      "p2p_allowed_locations": [
+        "Canada-Ontario",
+        "Romania",
+        "France",
+        "Luxembourg"
+      ],
+      "sample_servers": [
+        {
+          "hostname": "ca-ontario.vpnunlimited.com",
+          "country": "CA",
+          "city": "Toronto",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "romania.vpnunlimited.com",
+          "country": "RO",
+          "city": "Bucharest",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "france.vpnunlimited.com",
+          "country": "FR",
+          "city": "Paris",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "luxembourg.vpnunlimited.com",
+          "country": "LU",
+          "city": "Luxembourg City",
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "cyberghost": {
+      "total_servers": 11000,
+      "p2p_servers": 87,
+      "countries": 100,
+      "notes": "87 P2P-optimized server locations",
+      "sample_servers": [
+        {
+          "hostname": "de-fra-p2p-001.cyberghostvpn.com",
+          "country": "DE",
+          "city": "Frankfurt",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "nl-ams-p2p-001.cyberghostvpn.com",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "us-nyc-p2p-001.cyberghostvpn.com",
+          "country": "US",
+          "city": "New York",
+          "p2p": true,
+          "port_forwarding": false
+        },
+        {
+          "hostname": "ro-buc-p2p-001.cyberghostvpn.com",
+          "country": "RO",
+          "city": "Bucharest",
+          "p2p": true,
+          "port_forwarding": false
+        }
+      ]
+    },
+    "airvpn": {
+      "total_servers": 260,
+      "p2p_servers": 260,
+      "countries": 23,
+      "notes": "ALL servers support P2P and port forwarding (20 ports per account)",
+      "sample_servers": [
+        {
+          "hostname": "cassiopeia.airvpn.org",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "andromeda.airvpn.org",
+          "country": "CA",
+          "city": "Montreal",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "auriga.airvpn.org",
+          "country": "CH",
+          "city": "Zurich",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "camelopardalis.airvpn.org",
+          "country": "DE",
+          "city": "Frankfurt",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "sagittarius.airvpn.org",
+          "country": "US",
+          "city": "Miami",
+          "p2p": true,
+          "port_forwarding": true
+        }
+      ]
+    },
+    "windscribe": {
+      "total_servers": 700,
+      "p2p_servers": 600,
+      "countries": 69,
+      "notes": "Most servers support P2P except: India, Albania, Cyprus, Indonesia, Philippines, South Korea, Thailand, Lithuania, Russia, Bosnia, South Africa",
+      "sample_servers": [
+        {
+          "hostname": "windflix-ca.windscribe.com",
+          "country": "CA",
+          "city": "Toronto",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "netherlands.windscribe.com",
+          "country": "NL",
+          "city": "Amsterdam",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "germany.windscribe.com",
+          "country": "DE",
+          "city": "Frankfurt",
+          "p2p": true,
+          "port_forwarding": true
+        },
+        {
+          "hostname": "windflix-uk.windscribe.com",
+          "country": "GB",
+          "city": "London",
+          "p2p": true,
+          "port_forwarding": true
+        }
+      ]
+    }
+  },
+  "recommended_countries_p2p": [
+    {
+      "code": "NL",
+      "name": "Netherlands",
+      "reason": "Excellent P2P infrastructure, privacy-friendly laws, high speeds"
+    },
+    {
+      "code": "CH",
+      "name": "Switzerland",
+      "reason": "Strong privacy laws, no data retention, copyright-neutral"
+    },
+    {
+      "code": "CA",
+      "name": "Canada",
+      "reason": "P2P-friendly, good speeds, proximity to US"
+    },
+    {
+      "code": "DE",
+      "name": "Germany",
+      "reason": "Major EU hub, excellent infrastructure"
+    },
+    {
+      "code": "SE",
+      "name": "Sweden",
+      "reason": "P2P-originated country (The Pirate Bay), privacy-focused"
+    },
+    {
+      "code": "LU",
+      "name": "Luxembourg",
+      "reason": "Privacy laws, financial hub infrastructure"
+    },
+    {
+      "code": "RO",
+      "name": "Romania",
+      "reason": "High-speed infrastructure, lax copyright enforcement"
+    }
+  ]
+}
