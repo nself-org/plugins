@@ -34,6 +34,7 @@ export interface MatchOptions {
 }
 
 interface ScoreBreakdown {
+  [key: string]: number;
   qualityScore: number;
   sourceScore: number;
   seederScore: number;

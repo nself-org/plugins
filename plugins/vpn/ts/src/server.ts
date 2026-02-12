@@ -5,7 +5,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, loadSecurityConfig } from '@nself/plugin-utils';
 import { VPNDatabase } from './database.js';
 import { getProvider, getSupportedProviders, providerMetadata, isProviderSupported } from './providers/index.js';
 import { config } from './config.js';
@@ -22,7 +22,11 @@ import type {
 
 const logger = createLogger('vpn:server');
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-key-change-in-production';
+const ENCRYPTION_KEY_RAW = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY_RAW) {
+  throw new Error('ENCRYPTION_KEY environment variable is required. Set a strong random key for credential encryption.');
+}
+const ENCRYPTION_KEY: string = ENCRYPTION_KEY_RAW;
 
 export async function createServer(db: VPNDatabase) {
   const fastify = Fastify({
@@ -33,6 +37,13 @@ export async function createServer(db: VPNDatabase) {
   await fastify.register(cors, {
     origin: true,
   });
+
+  // Register authentication and rate limiting
+  const securityConfig = loadSecurityConfig('VPN');
+  const rateLimiter = new ApiRateLimiter(securityConfig.rateLimitMax, securityConfig.rateLimitWindowMs);
+
+  fastify.addHook('preHandler', createAuthHook(securityConfig.apiKey));
+  fastify.addHook('preHandler', createRateLimitHook(rateLimiter));
 
   // ============================================================================
   // Health Check
@@ -99,7 +110,21 @@ export async function createServer(db: VPNDatabase) {
       account_number?: string;
       api_key?: string;
     };
-  }>('/api/providers/:id/credentials', async (request, reply) => {
+  }>('/api/providers/:id/credentials', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          username: { type: 'string' },
+          password: { type: 'string' },
+          token: { type: 'string' },
+          account_number: { type: 'string' },
+          api_key: { type: 'string' },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params;
     const { username, password, token, account_number, api_key } = request.body;
 
@@ -164,7 +189,18 @@ export async function createServer(db: VPNDatabase) {
    */
   fastify.post<{
     Body: { provider: string };
-  }>('/api/servers/sync', async (request, reply) => {
+  }>('/api/servers/sync', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['provider'],
+        properties: {
+          provider: { type: 'string', enum: ['nordvpn', 'pia', 'mullvad'] },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
     const { provider: providerName } = request.body;
 
     if (!isProviderSupported(providerName)) {
@@ -190,7 +226,7 @@ export async function createServer(db: VPNDatabase) {
 
       return { success: true, servers_synced: synced };
     } catch (error) {
-      logger.error('Server sync failed', error);
+      logger.error('Server sync failed', { error: error instanceof Error ? error.message : String(error) });
       return reply.code(500).send({
         error: 'Sync failed',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -206,7 +242,25 @@ export async function createServer(db: VPNDatabase) {
    * POST /api/connect
    * Connect to VPN
    */
-  fastify.post<{ Body: ConnectVPNRequest }>('/api/connect', async (request, reply) => {
+  fastify.post<{ Body: ConnectVPNRequest }>('/api/connect', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['provider'],
+        properties: {
+          provider: { type: 'string', enum: ['nordvpn', 'pia', 'mullvad'] },
+          region: { type: 'string' },
+          city: { type: 'string' },
+          server: { type: 'string' },
+          protocol: { type: 'string', enum: ['wireguard', 'openvpn_udp', 'openvpn_tcp', 'ikev2', 'nordlynx', 'lightway'] },
+          kill_switch: { type: 'boolean' },
+          port_forwarding: { type: 'boolean' },
+          requested_by: { type: 'string' },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
     const connectRequest = request.body;
 
     if (!isProviderSupported(connectRequest.provider)) {
@@ -250,7 +304,7 @@ export async function createServer(db: VPNDatabase) {
 
       return response;
     } catch (error) {
-      logger.error('Connection failed', error);
+      logger.error('Connection failed', { error: error instanceof Error ? error.message : String(error) });
       return reply.code(500).send({
         error: 'Connection failed',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -282,7 +336,7 @@ export async function createServer(db: VPNDatabase) {
 
       return { success: true, message: 'Disconnected' };
     } catch (error) {
-      logger.error('Disconnect failed', error);
+      logger.error('Disconnect failed', { error: error instanceof Error ? error.message : String(error) });
       return reply.code(500).send({
         error: 'Disconnect failed',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -312,7 +366,7 @@ export async function createServer(db: VPNDatabase) {
         provider: connection.provider_id,
       };
     } catch (error) {
-      logger.error('Status check failed', error);
+      logger.error('Status check failed', { error: error instanceof Error ? error.message : String(error) });
       return reply.code(500).send({
         error: 'Status check failed',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -328,16 +382,23 @@ export async function createServer(db: VPNDatabase) {
    * POST /api/download
    * Start torrent download via VPN
    */
-  fastify.post<{ Body: DownloadRequest }>('/api/download', async (request, reply) => {
+  fastify.post<{ Body: DownloadRequest }>('/api/download', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['magnet_link', 'requested_by'],
+        properties: {
+          magnet_link: { type: 'string', minLength: 1 },
+          destination: { type: 'string' },
+          provider: { type: 'string', enum: ['nordvpn', 'pia', 'mullvad'] },
+          region: { type: 'string' },
+          requested_by: { type: 'string', minLength: 1 },
+        },
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
     const { magnet_link, destination, provider: providerName, region, requested_by } = request.body;
-
-    if (!magnet_link) {
-      return reply.code(400).send({ error: 'magnet_link is required' });
-    }
-
-    if (!requested_by) {
-      return reply.code(400).send({ error: 'requested_by is required' });
-    }
 
     try {
       // Ensure VPN is connected
@@ -406,7 +467,7 @@ export async function createServer(db: VPNDatabase) {
 
       return response;
     } catch (error) {
-      logger.error('Download failed', error);
+      logger.error('Download failed', { error: error instanceof Error ? error.message : String(error) });
       return reply.code(500).send({
         error: 'Download failed',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -487,7 +548,7 @@ export async function createServer(db: VPNDatabase) {
       const result = await provider.testLeaks();
 
       // Store result
-      await db.pool.query(
+      await db.query(
         `INSERT INTO vpn_leak_tests (connection_id, test_type, passed, expected_value, actual_value, details)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [
@@ -502,7 +563,7 @@ export async function createServer(db: VPNDatabase) {
 
       return result;
     } catch (error) {
-      logger.error('Leak test failed', error);
+      logger.error('Leak test failed', { error: error instanceof Error ? error.message : String(error) });
       return reply.code(500).send({
         error: 'Leak test failed',
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -561,7 +622,7 @@ export async function startServer(db: VPNDatabase) {
 
     return server;
   } catch (error) {
-    logger.error('Failed to start server', error);
+    logger.error('Failed to start server', { error: error instanceof Error ? error.message : String(error) });
     throw error;
   }
 }

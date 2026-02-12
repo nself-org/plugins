@@ -1,0 +1,90 @@
+{
+  "name": "rom-discovery",
+  "version": "1.0.0",
+  "description": "ROM metadata database, search, discovery, automated download orchestration, and multi-source scraping for nself-tv",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/rom-discovery",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": [
+    "rom",
+    "retro-gaming",
+    "emulation",
+    "scraper",
+    "archive-org",
+    "metadata",
+    "discovery",
+    "download"
+  ],
+  "tables": [
+    "np_romdisc_metadata",
+    "np_romdisc_download_queue",
+    "np_romdisc_scraper_jobs",
+    "np_romdisc_popularity"
+  ],
+  "webhooks": {},
+  "actions": {
+    "server": "Start HTTP server",
+    "search": "Search ROM database",
+    "platforms": "List platforms with ROM counts",
+    "scrapers": "Manage scrapers",
+    "downloads": "View download queue",
+    "stats": "Show statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "ROM_DISCOVERY_PLUGIN_PORT",
+      "ROM_DISCOVERY_ENABLE_SCRAPERS",
+      "ROM_DISCOVERY_SCRAPER_SCHEDULE",
+      "ROM_DISCOVERY_DEFAULT_QUALITY_MIN",
+      "ROM_DISCOVERY_DEFAULT_POPULARITY_MIN",
+      "ROM_DISCOVERY_MAX_CONCURRENT_DOWNLOADS",
+      "ROM_DISCOVERY_MAX_DOWNLOAD_SIZE_MB",
+      "ROM_DISCOVERY_RETRO_GAMING_URL",
+      "ROM_DISCOVERY_CDN_URL",
+      "LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3034,
+    "enableScrapers": false,
+    "scraperSchedule": "0 3 * * *",
+    "defaultQualityMin": 50,
+    "defaultPopularityMin": 0,
+    "maxConcurrentDownloads": 3,
+    "maxDownloadSizeMb": 2048
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "archive.org",
+      "localhost"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  }
+}

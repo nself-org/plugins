@@ -26,7 +26,7 @@ export class VPNChecker {
       const status = await this.getVPNStatus();
       return status.connected;
     } catch (error) {
-      logger.error('Failed to check VPN status', error);
+      logger.error('Failed to check VPN status', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
@@ -52,7 +52,7 @@ export class VPNChecker {
 
       throw new Error('Invalid VPN status response');
     } catch (error) {
-      logger.error('Failed to get VPN status from VPN Manager', error);
+      logger.error('Failed to get VPN status from VPN Manager', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -119,8 +119,8 @@ export class VPNChecker {
       }
     };
 
-    checkLoop().catch((error) => {
-      logger.error('VPN monitoring error', error);
+    checkLoop().catch((error: unknown) => {
+      logger.error('VPN monitoring error', { error: error instanceof Error ? error.message : String(error) });
       this.isChecking = false;
     });
   }

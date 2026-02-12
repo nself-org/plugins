@@ -1,163 +1,141 @@
 /**
  * Torrent Client Integration
- * WebTorrent-based torrent downloads bound to VPN interface
+ * Transmission RPC-based torrent downloads bound to VPN interface
  */
 
+import { Transmission } from '@ctrl/transmission';
 import { createLogger } from '@nself/plugin-utils';
-import type { TorrentInfo, TorrentProgress } from '../types.js';
 
 const logger = createLogger('vpn:torrent');
 
-export class TorrentClient {
-  private interfaceName?: string;
-  private downloadPath: string;
-
-  constructor(downloadPath: string) {
-    this.downloadPath = downloadPath;
-  }
-
-  /**
-   * Bind to VPN interface
-   */
-  bindToInterface(interfaceName: string): void {
-    this.interfaceName = interfaceName;
-    logger.info(`Torrent client bound to interface: ${interfaceName}`);
-  }
-
-  /**
-   * Start download from magnet link
-   */
-  async download(
-    magnetLink: string,
-    destination?: string
-  ): Promise<{ id: string; info: TorrentInfo }> {
-    if (!this.interfaceName) {
-      logger.warn('Torrent client not bound to VPN interface - downloads may leak IP');
-    }
-
-    logger.info('Starting torrent download', {
-      magnet: magnetLink.slice(0, 50) + '...',
-      interface: this.interfaceName,
-    });
-
-    // Extract info hash
-    const infoHashMatch = magnetLink.match(/urn:btih:([a-fA-F0-9]{40})/);
-    const infoHash = infoHashMatch ? infoHashMatch[1] : 'unknown';
-
-    // TODO: Actual WebTorrent implementation
-    // This is a placeholder that would be replaced with real WebTorrent code:
-    //
-    // const WebTorrent = await import('webtorrent');
-    // const client = new WebTorrent();
-    //
-    // // Bind to VPN interface
-    // if (this.interfaceName) {
-    //   client.on('torrent', (torrent) => {
-    //     torrent.wires.forEach(wire => {
-    //       // Force connections through VPN interface
-    //       wire.socket.bind(this.interfaceName);
-    //     });
-    //   });
-    // }
-    //
-    // return new Promise((resolve, reject) => {
-    //   client.add(magnetLink, { path: destination || this.downloadPath }, (torrent) => {
-    //     resolve({
-    //       id: infoHash,
-    //       info: {
-    //         infoHash: torrent.infoHash,
-    //         name: torrent.name,
-    //         length: torrent.length,
-    //         files: torrent.files.map(f => ({
-    //           name: f.name,
-    //           length: f.length,
-    //           path: f.path,
-    //         })),
-    //       },
-    //     });
-    //   });
-    // });
-
-    return {
-      id: infoHash,
-      info: {
-        infoHash,
-        name: undefined,
-        length: undefined,
-        files: [],
-      },
-    };
-  }
-
-  /**
-   * Get download progress
-   */
-  async getProgress(downloadId: string): Promise<TorrentProgress> {
-    // TODO: Actual WebTorrent implementation
-    // This would query the active torrent by infoHash
-
-    return {
-      progress: 0,
-      downloaded: 0,
-      total: undefined,
-      downloadSpeed: 0,
-      uploadSpeed: 0,
-      numPeers: 0,
-      ratio: 0,
-    };
-  }
-
-  /**
-   * Pause download
-   */
-  async pause(downloadId: string): Promise<void> {
-    logger.info(`Pausing download: ${downloadId}`);
-    // TODO: Implement WebTorrent pause
-  }
-
-  /**
-   * Resume download
-   */
-  async resume(downloadId: string): Promise<void> {
-    logger.info(`Resuming download: ${downloadId}`);
-    // TODO: Implement WebTorrent resume
-  }
-
-  /**
-   * Cancel download
-   */
-  async cancel(downloadId: string): Promise<void> {
-    logger.info(`Cancelling download: ${downloadId}`);
-    // TODO: Implement WebTorrent destroy
-  }
-
-  /**
-   * Verify VPN interface is active
-   */
-  async verifyInterface(): Promise<boolean> {
-    if (!this.interfaceName) {
-      return false;
-    }
-
-    try {
-      // Check if interface exists
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
-
-      const { stdout } = await execAsync(`ip link show ${this.interfaceName}`);
-      return stdout.includes(this.interfaceName);
-    } catch {
-      return false;
-    }
-  }
+export interface TorrentInfo {
+  id: string;
+  name: string;
+  progress: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  size: number;
+  downloaded: number;
+  uploaded: number;
+  status: string;
+  peers: number;
+  seeds: number;
 }
 
-/**
- * Create and configure torrent client for VPN
- */
-export function createTorrentClient(interfaceName: string, downloadPath: string): TorrentClient {
-  const client = new TorrentClient(downloadPath);
-  client.bindToInterface(interfaceName);
-  return client;
+export class TorrentClient {
+  private client: Transmission | null = null;
+  private config: { host: string; port: number; username?: string; password?: string };
+
+  constructor(config?: { host?: string; port?: number; username?: string; password?: string }) {
+    this.config = {
+      host: config?.host || process.env.TRANSMISSION_HOST || 'localhost',
+      port: config?.port || parseInt(process.env.TRANSMISSION_PORT || '9091', 10),
+      username: config?.username || process.env.TRANSMISSION_USERNAME,
+      password: config?.password || process.env.TRANSMISSION_PASSWORD,
+    };
+  }
+
+  async connect(): Promise<void> {
+    try {
+      this.client = new Transmission({
+        baseUrl: `http://${this.config.host}:${this.config.port}/transmission/rpc`,
+        username: this.config.username,
+        password: this.config.password,
+      });
+      // Test connection
+      await this.client.getAllData();
+      logger.info('Connected to Transmission');
+    } catch (error) {
+      logger.error('Failed to connect to Transmission', { error: error instanceof Error ? error.message : String(error) });
+      throw new Error(`Transmission connection failed: ${error}`);
+    }
+  }
+
+  async download(magnetLink: string, downloadDir?: string): Promise<TorrentInfo> {
+    if (!this.client) throw new Error('Not connected to Transmission');
+
+    try {
+      const result = await this.client.addMagnet(magnetLink, { 'download-dir': downloadDir });
+      const args = result.arguments as Record<string, { id: number; hashString: string; name: string }>;
+      const torrent = args['torrent-added'] || args['torrent-duplicate'];
+
+      return {
+        id: String(torrent.id),
+        name: torrent.name || 'Unknown',
+        progress: 0,
+        downloadSpeed: 0,
+        uploadSpeed: 0,
+        size: 0,
+        downloaded: 0,
+        uploaded: 0,
+        status: 'downloading',
+        peers: 0,
+        seeds: 0,
+      };
+    } catch (error) {
+      logger.error('Failed to add torrent', { error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  async getProgress(torrentId: string): Promise<TorrentInfo> {
+    if (!this.client) throw new Error('Not connected to Transmission');
+
+    try {
+      const t = await this.client.getTorrent(parseInt(torrentId));
+
+      return {
+        id: String(t.id),
+        name: t.name,
+        progress: Math.round(t.progress),
+        downloadSpeed: t.downloadSpeed || 0,
+        uploadSpeed: t.uploadSpeed || 0,
+        size: t.totalSize || 0,
+        downloaded: t.totalDownloaded || 0,
+        uploaded: t.totalUploaded || 0,
+        status: t.isCompleted ? 'completed' : 'downloading',
+        peers: t.connectedPeers || 0,
+        seeds: t.connectedSeeds || 0,
+      };
+    } catch (error) {
+      logger.error(`Failed to get torrent progress for ${torrentId}`, { error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
+  }
+
+  async pause(torrentId: string): Promise<void> {
+    if (!this.client) throw new Error('Not connected to Transmission');
+    await this.client.pauseTorrent(parseInt(torrentId));
+    logger.info(`Paused torrent ${torrentId}`);
+  }
+
+  async resume(torrentId: string): Promise<void> {
+    if (!this.client) throw new Error('Not connected to Transmission');
+    await this.client.resumeTorrent(parseInt(torrentId));
+    logger.info(`Resumed torrent ${torrentId}`);
+  }
+
+  async cancel(torrentId: string, deleteFiles = false): Promise<void> {
+    if (!this.client) throw new Error('Not connected to Transmission');
+    await this.client.removeTorrent(parseInt(torrentId), deleteFiles);
+    logger.info(`Cancelled torrent ${torrentId}, deleteFiles=${deleteFiles}`);
+  }
+
+  async listAll(): Promise<TorrentInfo[]> {
+    if (!this.client) throw new Error('Not connected to Transmission');
+    const result = await this.client.getAllData();
+    return (result.torrents || []).map((t) => ({
+      id: String(t.id),
+      name: t.name,
+      progress: Math.round(t.progress),
+      downloadSpeed: t.downloadSpeed || 0,
+      uploadSpeed: t.uploadSpeed || 0,
+      size: t.totalSize || 0,
+      downloaded: t.totalDownloaded || 0,
+      uploaded: t.totalUploaded || 0,
+      status: t.isCompleted ? 'completed' : t.state === 'paused' ? 'paused' : 'downloading',
+      peers: t.connectedPeers || 0,
+      seeds: t.connectedSeeds || 0,
+    }));
+  }
 }

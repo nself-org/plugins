@@ -116,6 +116,18 @@
       "required": true
     },
     {
+      "name": "SUBTITLE_MANAGER_URL",
+      "default": "http://localhost:3204"
+    },
+    {
+      "name": "MEDIA_PROCESSING_URL",
+      "default": "http://localhost:3019"
+    },
+    {
+      "name": "NTV_BACKEND_URL",
+      "default": "http://localhost:4000"
+    },
+    {
       "name": "REDIS_HOST",
       "default": "localhost"
     },

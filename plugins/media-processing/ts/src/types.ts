@@ -102,7 +102,8 @@ export type JobStatus =
   | 'uploading'
   | 'completed'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'qa_failed';
 
 export interface MediaMetadata {
   format?: string;
@@ -362,4 +363,131 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   hasMore: boolean;
+}
+
+// =============================================================================
+// Packager Types (UPGRADE 1a)
+// =============================================================================
+
+export type PackagerType = 'shaka' | 'bento4' | 'ffmpeg-only';
+
+export type OutputFormat = 'hls' | 'dash' | 'cmaf';
+
+export interface PackagerStreamDescriptor {
+  input: string;
+  stream: 'audio' | 'video';
+  language?: string;
+  bandwidth?: number;
+  output?: string;
+}
+
+export interface PackagerOptions {
+  hlsMasterPlaylistOutput?: string;
+  mpdOutput?: string;
+  segmentDuration?: number;
+}
+
+// =============================================================================
+// Content Identification Types (UPGRADE 1d)
+// =============================================================================
+
+export interface ParsedMediaInfo {
+  title: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  resolution?: string;
+  source?: string;
+  codec?: string;
+  releaseGroup?: string;
+  raw: string;
+}
+
+export interface TmdbSearchResult {
+  id: number;
+  title: string;
+  release_date?: string;
+  media_type?: string;
+  overview?: string;
+  vote_average?: number;
+}
+
+export interface ContentIdentification extends ParsedMediaInfo {
+  tmdb_id?: number;
+  tmdb_title?: string;
+  tmdb_year?: number;
+  confidence: number;
+}
+
+// =============================================================================
+// QA Validation Types (UPGRADE 1f)
+// =============================================================================
+
+export type QAStatus = 'pass' | 'warn' | 'fail';
+
+export interface QACheck {
+  name: string;
+  status: QAStatus;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface QAResult {
+  status: QAStatus;
+  checks: QACheck[];
+  issues: string[];
+  timestamp: string;
+}
+
+// =============================================================================
+// Drop-Folder Watcher Types (UPGRADE 1c)
+// =============================================================================
+
+export interface DropFolderEvent {
+  id: string;
+  source_account_id: string;
+  file_path: string;
+  file_size: number;
+  event_type: 'detected' | 'settled' | 'validated' | 'submitted' | 'error';
+  job_id: string | null;
+  error_message: string | null;
+  created_at: Date;
+  [key: string]: unknown;
+}
+
+export interface WatcherStatus {
+  running: boolean;
+  watchPath: string | null;
+  filesDetected: number;
+  jobsSubmitted: number;
+  errors: number;
+  startedAt: Date | null;
+}
+
+// =============================================================================
+// Upload Record Types (UPGRADE 1e)
+// =============================================================================
+
+export interface UploadRecord {
+  id: string;
+  source_account_id: string;
+  job_id: string;
+  file_path: string;
+  storage_path: string;
+  storage_url: string | null;
+  content_type: string;
+  file_size_bytes: number;
+  content_id: string | null;
+  version: number;
+  uploaded_at: Date;
+  [key: string]: unknown;
+}
+
+// =============================================================================
+// Job Leasing Types (UPGRADE 1g)
+// =============================================================================
+
+export interface LeasedJob extends JobRecord {
+  leased_by: string | null;
+  heartbeat_at: Date | null;
 }

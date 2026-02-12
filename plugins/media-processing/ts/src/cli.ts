@@ -10,6 +10,7 @@ import { loadConfig } from './config.js';
 import { MediaProcessingDatabase } from './database.js';
 import { startServer } from './server.js';
 import { FFmpegClient } from './ffmpeg.js';
+import { DropFolderWatcher } from './watcher.js';
 import type { CreateJobInput } from './types.js';
 
 const logger = createLogger('media-processing:cli');
@@ -39,7 +40,7 @@ program
       if (profiles.length === 0) {
         await db.createEncodingProfile({
           name: 'default',
-          description: 'Default encoding profile with 1080p, 720p, and 480p',
+          description: 'Default encoding profile with 5-rung ladder: 1080p, 720p, 480p, 360p, 240p',
           is_default: true,
         });
         logger.info('Created default encoding profile');
@@ -334,6 +335,65 @@ program
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to get statistics', { error: message });
+      process.exit(1);
+    }
+  });
+
+// Watch command (UPGRADE 1c)
+program
+  .command('watch [path]')
+  .description('Watch a directory for new media files and auto-submit encoding jobs')
+  .option('--settle-seconds <seconds>', 'Seconds between settlement checks', '5')
+  .option('--settle-intervals <intervals>', 'Number of settlement checks', '3')
+  .action(async (watchPath: string | undefined, options: { settleSeconds: string; settleIntervals: string }) => {
+    try {
+      const config = loadConfig({
+        settleCheckSeconds: parseInt(options.settleSeconds, 10),
+        settleCheckIntervals: parseInt(options.settleIntervals, 10),
+      });
+      const db = new MediaProcessingDatabase();
+      await db.connect();
+      await db.initializeSchema();
+
+      const watcher = new DropFolderWatcher(config, db);
+
+      const targetPath = watchPath ?? config.dropFolderPath;
+      if (!targetPath) {
+        logger.error('No watch path specified. Provide a path argument or set MP_DROP_FOLDER_PATH');
+        process.exit(1);
+      }
+
+      console.log(`\nWatching: ${targetPath}`);
+      console.log(`Settlement: ${config.settleCheckSeconds}s x ${config.settleCheckIntervals} checks`);
+      console.log('Press Ctrl+C to stop.\n');
+
+      await watcher.start(targetPath);
+
+      // Print status periodically
+      const statusInterval = setInterval(() => {
+        const status = watcher.getStatus();
+        process.stdout.write(
+          `\rDetected: ${status.filesDetected} | Submitted: ${status.jobsSubmitted} | Errors: ${status.errors}`
+        );
+      }, 2000);
+
+      // Handle shutdown
+      const shutdown = () => {
+        clearInterval(statusInterval);
+        watcher.stop();
+        console.log('\n\nWatcher stopped.');
+        const status = watcher.getStatus();
+        console.log(`Total detected: ${status.filesDetected}`);
+        console.log(`Total submitted: ${status.jobsSubmitted}`);
+        console.log(`Total errors: ${status.errors}`);
+        db.disconnect().then(() => process.exit(0)).catch(() => process.exit(1));
+      };
+
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Watch failed', { error: message });
       process.exit(1);
     }
   });

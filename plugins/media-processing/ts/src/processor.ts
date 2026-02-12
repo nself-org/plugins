@@ -1,27 +1,77 @@
 /**
  * Media Processing Processor
  * Orchestrates encoding jobs with FFmpeg
+ * UPGRADE 1: Added Shaka Packager, QA validation, object storage upload, and job leasing
  */
 
 import { createLogger } from '@nself/plugin-utils';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
+import { randomUUID } from 'crypto';
 import type { Config } from './config.js';
 import type { MediaProcessingDatabase } from './database.js';
 import { FFmpegClient } from './ffmpeg.js';
+import { ShakaPackager } from './packager.js';
+import { QAValidator } from './qa-validator.js';
+import { StorageUploader } from './upload.js';
 import type { JobRecord, EncodingProfileRecord } from './types.js';
 
 const logger = createLogger('media-processing:processor');
 
+/** Heartbeat interval in milliseconds (30 seconds) */
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
+/** Stale job timeout in minutes */
+const STALE_JOB_TIMEOUT_MINUTES = 15;
+
 export class MediaProcessor {
   private ffmpeg: FFmpegClient;
+  private packager: ShakaPackager;
+  private qaValidator: QAValidator;
+  private uploader: StorageUploader;
   private activeJobs = new Map<string, AbortController>();
+  private heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
+  private workerId: string;
 
   constructor(
     private config: Config,
     private db: MediaProcessingDatabase
   ) {
     this.ffmpeg = new FFmpegClient(config);
+    this.packager = new ShakaPackager(config);
+    this.qaValidator = new QAValidator();
+    this.uploader = new StorageUploader(config, db);
+    this.workerId = `worker-${randomUUID().substring(0, 8)}`;
+  }
+
+  /**
+   * Initialize the processor - reclaim stale jobs on startup
+   */
+  async initialize(): Promise<void> {
+    logger.info('Initializing processor', { workerId: this.workerId });
+    const reclaimed = await this.db.reclaimStaleJobs(STALE_JOB_TIMEOUT_MINUTES);
+    if (reclaimed > 0) {
+      logger.warn('Reclaimed stale jobs on startup', { count: reclaimed });
+    }
+  }
+
+  /**
+   * Lease and process the next available job
+   */
+  async leaseAndProcessNext(): Promise<boolean> {
+    const leasedJob = await this.db.leaseNextJob(this.workerId);
+    if (!leasedJob) {
+      return false;
+    }
+
+    logger.info('Leased job', { jobId: leasedJob.id, workerId: this.workerId });
+
+    // Process in background
+    this.processJob(leasedJob.id).catch(error => {
+      logger.error('Job processing error', { jobId: leasedJob.id, error: error.message });
+    });
+
+    return true;
   }
 
   /**
@@ -32,6 +82,9 @@ export class MediaProcessor {
 
     const abortController = new AbortController();
     this.activeJobs.set(jobId, abortController);
+
+    // Start heartbeat
+    this.startHeartbeat(jobId);
 
     try {
       // Get job details
@@ -81,6 +134,9 @@ export class MediaProcessor {
         const hlsDir = join(outputBasePath, 'hls');
         await fs.mkdir(hlsDir, { recursive: true });
 
+        // Check if we should use Shaka Packager for CMAF
+        const usePackager = await this.packager.shouldUsePackager();
+
         await this.ffmpeg.generateHls(
           inputPath,
           hlsDir,
@@ -101,6 +157,29 @@ export class MediaProcessor {
             });
           }
         );
+
+        // If Shaka Packager is available, package CMAF (HLS + DASH)
+        if (usePackager) {
+          await this.db.updateJobStatus(jobId, 'packaging', 0);
+          try {
+            const cmafDir = join(outputBasePath, 'cmaf');
+            await fs.mkdir(cmafDir, { recursive: true });
+
+            const streams = profile.resolutions.map(r => ({
+              input: join(hlsDir, r.label, 'playlist.m3u8'),
+              stream: 'video' as const,
+              bandwidth: r.bitrate,
+            }));
+
+            await this.packager.packageCMAF(hlsDir, cmafDir, streams, {
+              segmentDuration: profile.hls_segment_duration,
+            });
+
+            logger.info('CMAF packaging complete', { jobId });
+          } catch (error) {
+            logger.warn('CMAF packaging failed, falling back to FFmpeg-only HLS (non-fatal)', { error });
+          }
+        }
 
         // Record HLS outputs
         const masterManifestPath = join(hlsDir, 'master.m3u8');
@@ -296,6 +375,36 @@ export class MediaProcessor {
         }
       }
 
+      // QA Validation (UPGRADE 1f)
+      logger.info('Running QA validation', { jobId });
+      const qaResult = await this.qaValidator.validateOutput(outputBasePath);
+
+      if (qaResult.status === 'fail') {
+        logger.error('QA validation failed', { jobId, issues: qaResult.issues });
+        await this.db.updateJobStatus(jobId, 'qa_failed', undefined, `QA failed: ${qaResult.issues.join('; ')}`);
+        return; // Block upload on QA failure
+      }
+
+      if (qaResult.status === 'warn') {
+        logger.warn('QA validation passed with warnings', { jobId, issues: qaResult.issues });
+      }
+
+      // Object Storage Upload (UPGRADE 1e)
+      if (this.config.objectStorageUrl) {
+        try {
+          await this.db.updateJobStatus(jobId, 'uploading', 90);
+
+          // Derive content ID from filename
+          const inputFilename = basename(job.input_url);
+          const contentId = inputFilename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+          await this.uploader.uploadJobOutputs(jobId, outputBasePath, contentId);
+          logger.info('Upload complete', { jobId, contentId });
+        } catch (error) {
+          logger.warn('Upload to object storage failed (non-fatal)', { error });
+        }
+      }
+
       // Cleanup input if it was downloaded
       if (job.input_type === 'url' || job.input_type === 's3') {
         try {
@@ -314,7 +423,35 @@ export class MediaProcessor {
       await this.db.updateJobStatus(jobId, 'failed', undefined, message);
       throw error;
     } finally {
+      this.stopHeartbeat(jobId);
       this.activeJobs.delete(jobId);
+      await this.db.releaseJobLease(jobId).catch(err => {
+        logger.error('Failed to release job lease', { jobId, error: err.message });
+      });
+    }
+  }
+
+  /**
+   * Start heartbeat for a job
+   */
+  private startHeartbeat(jobId: string): void {
+    const timer = setInterval(() => {
+      this.db.heartbeatJob(jobId, this.workerId).catch(err => {
+        logger.error('Heartbeat failed', { jobId, error: err.message });
+      });
+    }, HEARTBEAT_INTERVAL_MS);
+
+    this.heartbeatTimers.set(jobId, timer);
+  }
+
+  /**
+   * Stop heartbeat for a job
+   */
+  private stopHeartbeat(jobId: string): void {
+    const timer = this.heartbeatTimers.get(jobId);
+    if (timer) {
+      clearInterval(timer);
+      this.heartbeatTimers.delete(jobId);
     }
   }
 
@@ -325,6 +462,7 @@ export class MediaProcessor {
     const abortController = this.activeJobs.get(jobId);
     if (abortController) {
       abortController.abort();
+      this.stopHeartbeat(jobId);
       this.activeJobs.delete(jobId);
       logger.info('Job cancelled', { jobId });
     }
@@ -402,5 +540,12 @@ export class MediaProcessor {
    */
   isJobActive(jobId: string): boolean {
     return this.activeJobs.has(jobId);
+  }
+
+  /**
+   * Get the worker ID for this processor instance
+   */
+  getWorkerId(): string {
+    return this.workerId;
   }
 }

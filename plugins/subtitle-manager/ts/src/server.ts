@@ -1,9 +1,20 @@
-import Fastify from 'fastify';
+import fs from 'fs/promises';
+import path from 'path';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
-import rateLimit from '@fastify/rate-limit';
-import { createLogger } from '@nself/plugin-utils';
+import {
+  createLogger,
+  ApiRateLimiter,
+  createAuthHook,
+  createRateLimitHook,
+  getAppContext,
+  loadSecurityConfig,
+} from '@nself/plugin-utils';
 import { SubtitleManagerDatabase } from './database.js';
 import { OpenSubtitlesClient } from './opensubtitles-client.js';
+import { SubtitleSynchronizer } from './sync.js';
+import { SubtitleQC } from './qc.js';
+import { SubtitleNormalizer } from './normalize.js';
 import type { SubtitleManagerConfig } from './types.js';
 
 const logger = createLogger('subtitle-manager:server');
@@ -12,42 +23,348 @@ export class SubtitleManagerServer {
   private fastify: ReturnType<typeof Fastify>;
   private database: SubtitleManagerDatabase;
   private opensubtitles: OpenSubtitlesClient;
+  private synchronizer: SubtitleSynchronizer;
+  private qc: SubtitleQC;
+  private normalizer: SubtitleNormalizer;
   private config: SubtitleManagerConfig;
 
   constructor(config: SubtitleManagerConfig, database: SubtitleManagerDatabase) {
     this.config = config;
     this.database = database;
     this.opensubtitles = new OpenSubtitlesClient(config.opensubtitles_api_key);
+    this.synchronizer = new SubtitleSynchronizer(config);
+    this.qc = new SubtitleQC();
+    this.normalizer = new SubtitleNormalizer();
     this.fastify = Fastify({ logger: false });
   }
 
   async initialize(): Promise<void> {
     await this.fastify.register(cors);
-    await this.fastify.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+
+    // Auth and rate-limit hooks from plugin-utils
+    const securityConfig = loadSecurityConfig('SUBTITLE_MANAGER');
+    const rateLimiter = new ApiRateLimiter(
+      securityConfig.rateLimitMax ?? 100,
+      securityConfig.rateLimitWindowMs ?? 60000,
+    );
+
+    this.fastify.addHook('preHandler', createAuthHook(securityConfig.apiKey));
+    this.fastify.addHook('preHandler', createRateLimitHook(rateLimiter));
+
     this.registerRoutes();
     logger.info('Server initialized');
   }
 
   private registerRoutes(): void {
-    this.fastify.get('/health', async () => ({ status: 'ok' }));
+    // -------------------------------------------------------------------------
+    // Health check
+    // -------------------------------------------------------------------------
+    this.fastify.get('/health', async () => ({
+      status: 'ok',
+      plugin: 'subtitle-manager',
+      version: '1.0.0',
+    }));
 
-    this.fastify.get('/v1/subtitles', async (request) => {
-      const { media_id, language } = request.query as any;
-      const subtitles = await this.database.searchSubtitles(media_id, language || 'en');
+    // -------------------------------------------------------------------------
+    // GET /v1/subtitles - Search locally stored subtitles
+    // -------------------------------------------------------------------------
+    this.fastify.get('/v1/subtitles', async (request: FastifyRequest<{ Querystring: { media_id?: string; language?: string } }>) => {
+      const { media_id, language } = request.query;
+      if (!media_id) {
+        return { error: 'media_id query parameter is required' };
+      }
+      const { sourceAccountId } = getAppContext(request);
+      const subtitles = await this.database.searchSubtitles(
+        media_id,
+        language || 'en',
+        sourceAccountId,
+      );
       return { subtitles };
     });
 
-    this.fastify.post('/v1/search', async (request, reply) => {
-      const { query, languages } = request.body as any;
-      const results = await this.opensubtitles.searchByQuery(query, languages);
-      return { results };
+    // -------------------------------------------------------------------------
+    // GET /v1/downloads - List downloaded subtitles
+    // -------------------------------------------------------------------------
+    this.fastify.get('/v1/downloads', async (request: FastifyRequest<{ Querystring: { limit?: string; offset?: string } }>) => {
+      const { limit, offset } = request.query;
+      const { sourceAccountId } = getAppContext(request);
+      const result = await this.database.listDownloads(
+        sourceAccountId,
+        limit ? parseInt(limit, 10) : 50,
+        offset ? parseInt(offset, 10) : 0,
+      );
+      return result;
     });
 
-    this.fastify.post('/v1/download', async (request, reply) => {
-      const { file_id } = request.body as any;
-      const subtitle = await this.opensubtitles.downloadSubtitle(file_id);
-      if (!subtitle) {
-        reply.code(404).send({ error: 'Subtitle not found' });
+    // -------------------------------------------------------------------------
+    // GET /v1/stats - Get subtitle stats
+    // -------------------------------------------------------------------------
+    this.fastify.get('/v1/stats', async (request: FastifyRequest) => {
+      const { sourceAccountId } = getAppContext(request);
+      const stats = await this.database.getStats(sourceAccountId);
+      return { stats };
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/search - Search OpenSubtitles by text query
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/search', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['query'],
+          properties: {
+            query: { type: 'string', minLength: 1 },
+            languages: {
+              type: 'array',
+              items: { type: 'string', minLength: 2, maxLength: 5 },
+              default: ['en'],
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: { query: string; languages?: string[] } }>) => {
+      const { query, languages } = request.body;
+      const results = await this.opensubtitles.searchByQuery(query, languages || ['en']);
+      return { results, count: results.length };
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/search/hash - Search OpenSubtitles by file hash
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/search/hash', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['moviehash', 'moviebytesize'],
+          properties: {
+            moviehash: { type: 'string', minLength: 1 },
+            moviebytesize: { type: 'number', minimum: 1 },
+            languages: {
+              type: 'array',
+              items: { type: 'string', minLength: 2, maxLength: 5 },
+              default: ['en'],
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: { moviehash: string; moviebytesize: number; languages?: string[] } }>) => {
+      const { moviehash, moviebytesize, languages } = request.body;
+      const results = await this.opensubtitles.searchByHash(
+        moviehash,
+        moviebytesize,
+        languages || ['en'],
+      );
+      return { results, count: results.length };
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/download - Download a subtitle file and save to disk
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/download', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['file_id', 'media_id'],
+          properties: {
+            file_id: { type: 'number', minimum: 1 },
+            media_id: { type: 'string', minLength: 1 },
+            media_type: { type: 'string', enum: ['movie', 'tv_episode'], default: 'movie' },
+            media_title: { type: 'string' },
+            language: { type: 'string', minLength: 2, maxLength: 5, default: 'en' },
+            run_qc: { type: 'boolean', default: false },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: { file_id: number; media_id: string; media_type?: string; media_title?: string; language?: string; run_qc?: boolean } }>, reply: FastifyReply) => {
+      const { file_id, media_id, media_type, media_title, language, run_qc } = request.body;
+      const { sourceAccountId } = getAppContext(request);
+      const lang = language || 'en';
+
+      // Check if already downloaded
+      const existing = await this.database.getDownloadByMediaId(media_id, lang, sourceAccountId);
+      if (existing) {
+        return { success: true, download: existing, source: 'cache' };
+      }
+
+      // Download from OpenSubtitles
+      const subtitleBuffer = await this.opensubtitles.downloadSubtitle(file_id);
+      if (!subtitleBuffer) {
+        reply.code(404).send({ error: 'Subtitle not found or download failed' });
+        return;
+      }
+
+      // Save to disk
+      const dir = path.join(this.config.subtitle_storage_path, sourceAccountId, media_id);
+      await fs.mkdir(dir, { recursive: true });
+      const filePath = path.join(dir, `${lang}.srt`);
+      await fs.writeFile(filePath, subtitleBuffer);
+
+      logger.info('Subtitle saved to disk', { filePath, bytes: subtitleBuffer.length });
+
+      // Track in database
+      const download = await this.database.insertDownload({
+        source_account_id: sourceAccountId,
+        media_id,
+        media_type: media_type || 'movie',
+        media_title: media_title || '',
+        language: lang,
+        file_path: filePath,
+        file_size_bytes: subtitleBuffer.length,
+        opensubtitles_file_id: file_id,
+        source: 'opensubtitles',
+      });
+
+      // Optionally run QC after download
+      let qcResult = undefined;
+      if (run_qc) {
+        try {
+          const result = await this.qc.validateSubtitle(filePath);
+          await this.database.insertQCResult({
+            source_account_id: sourceAccountId,
+            download_id: download.id,
+            status: result.status,
+            checks: result.checks,
+            issues: result.issues,
+            cue_count: result.cueCount,
+            total_duration_ms: result.totalDurationMs,
+          });
+          await this.database.updateDownloadQC(download.id, result.status, {
+            cueCount: result.cueCount,
+            issueCount: result.issues.length,
+          });
+          qcResult = result;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.warn('QC validation after download failed', { error: message });
+        }
+      }
+
+      return { success: true, download, source: 'opensubtitles', qc: qcResult };
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/sync - Synchronize subtitle timing with video
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/sync', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['video_path', 'subtitle_path'],
+          properties: {
+            video_path: { type: 'string', minLength: 1 },
+            subtitle_path: { type: 'string', minLength: 1 },
+            language: { type: 'string', minLength: 2, maxLength: 5, default: 'en' },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: { video_path: string; subtitle_path: string; language?: string } }>, reply: FastifyReply) => {
+      const { video_path, subtitle_path, language } = request.body;
+      const lang = language || 'en';
+      const { sourceAccountId } = getAppContext(request);
+
+      try {
+        const outputDir = path.join(this.config.subtitle_storage_path, sourceAccountId, 'synced');
+        const baseName = path.basename(subtitle_path, path.extname(subtitle_path));
+        const outputPath = path.join(outputDir, `${baseName}.synced.${lang}.srt`);
+
+        const result = await this.synchronizer.syncSubtitle(video_path, subtitle_path, outputPath);
+        return { success: true, result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Sync failed', { error: message });
+        reply.code(500).send({ error: `Sync failed: ${message}` });
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/qc - Validate a subtitle file with QC checks
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/qc', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['subtitle_path'],
+          properties: {
+            subtitle_path: { type: 'string', minLength: 1 },
+            video_duration_ms: { type: 'number', minimum: 0 },
+            download_id: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: { subtitle_path: string; video_duration_ms?: number; download_id?: string } }>, reply: FastifyReply) => {
+      const { subtitle_path, video_duration_ms, download_id } = request.body;
+      const { sourceAccountId } = getAppContext(request);
+
+      try {
+        const result = await this.qc.validateSubtitle(subtitle_path, video_duration_ms);
+
+        // If download_id is provided, store result and update download record
+        if (download_id) {
+          await this.database.insertQCResult({
+            source_account_id: sourceAccountId,
+            download_id,
+            status: result.status,
+            checks: result.checks,
+            issues: result.issues,
+            cue_count: result.cueCount,
+            total_duration_ms: result.totalDurationMs,
+          });
+          await this.database.updateDownloadQC(download_id, result.status, {
+            cueCount: result.cueCount,
+            issueCount: result.issues.length,
+          });
+        }
+
+        return { success: true, result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('QC validation failed', { error: message });
+        reply.code(500).send({ error: `QC validation failed: ${message}` });
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/normalize - Convert subtitle to WebVTT
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/normalize', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['input_path'],
+          properties: {
+            input_path: { type: 'string', minLength: 1 },
+            output_format: { type: 'string', enum: ['vtt'], default: 'vtt' },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: { input_path: string; output_format?: string } }>, reply: FastifyReply) => {
+      const { input_path } = request.body;
+
+      try {
+        const outputPath = await this.normalizer.normalizeToWebVTT(input_path);
+        return { success: true, output_path: outputPath };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Normalization failed', { error: message });
+        reply.code(500).send({ error: `Normalization failed: ${message}` });
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // DELETE /v1/downloads/:id - Delete a download record
+    // -------------------------------------------------------------------------
+    this.fastify.delete('/v1/downloads/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const { id } = request.params;
+      const deleted = await this.database.deleteDownload(id);
+      if (!deleted) {
+        reply.code(404).send({ error: 'Download not found' });
         return;
       }
       return { success: true };

@@ -23,15 +23,8 @@ export function loadConfig(): VPNPluginConfig {
   const defaultProvider = (process.env.VPN_PROVIDER as VPNProvider) || undefined;
   const validProviders = [
     'nordvpn',
-    'surfshark',
-    'expressvpn',
     'pia',
-    'protonvpn',
     'mullvad',
-    'keepsolid',
-    'cyberghost',
-    'airvpn',
-    'windscribe',
   ];
 
   if (defaultProvider && !validProviders.includes(defaultProvider)) {

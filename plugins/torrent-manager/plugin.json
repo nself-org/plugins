@@ -63,12 +63,6 @@
     "GET /health",
     "GET /ready",
     "GET /v1/clients",
-    "POST /v1/clients",
-    "GET /v1/clients/:id",
-    "PUT /v1/clients/:id",
-    "DELETE /v1/clients/:id",
-    "GET /v1/sources",
-    "POST /v1/sources/:id/scrape",
     "POST /v1/search",
     "POST /v1/search/best-match",
     "POST /v1/magnet",
@@ -79,20 +73,13 @@
     "DELETE /v1/downloads/:id",
     "POST /v1/downloads/:id/pause",
     "POST /v1/downloads/:id/resume",
-    "POST /v1/downloads/:id/verify",
     "GET /v1/stats",
-    "GET /v1/stats/:id",
-    "GET /v1/seeding",
-    "POST /v1/seeding/policy"
+    "GET /v1/seeding"
   ],
   "cliCommands": [
     {
       "name": "init",
       "description": "Initialize torrent manager and register clients"
-    },
-    {
-      "name": "clients",
-      "description": "Manage torrent clients (list, add, test)"
     },
     {
       "name": "search",
@@ -111,24 +98,8 @@
       "description": "List all downloads (active, completed, seeding)"
     },
     {
-      "name": "pause",
-      "description": "Pause download"
-    },
-    {
-      "name": "resume",
-      "description": "Resume download"
-    },
-    {
-      "name": "remove",
-      "description": "Remove torrent (optionally delete files)"
-    },
-    {
       "name": "stats",
       "description": "Show download statistics"
-    },
-    {
-      "name": "seeding",
-      "description": "Manage seeding policy and active seeds"
     },
     {
       "name": "server",

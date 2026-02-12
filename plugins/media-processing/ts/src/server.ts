@@ -8,6 +8,9 @@ import cors from '@fastify/cors';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { MediaProcessingDatabase } from './database.js';
 import { MediaProcessor } from './processor.js';
+import { DropFolderWatcher } from './watcher.js';
+import { ContentIdentifier } from './identify.js';
+import { QAValidator } from './qa-validator.js';
 import { loadConfig, type Config } from './config.js';
 import type { CreateEncodingProfileInput, CreateJobInput } from './types.js';
 
@@ -22,6 +25,11 @@ export async function createServer(config?: Partial<Config>) {
   await db.initializeSchema();
 
   const processor = new MediaProcessor(fullConfig, db);
+  await processor.initialize();
+
+  const watcher = new DropFolderWatcher(fullConfig, db);
+  const identifier = new ContentIdentifier(fullConfig);
+  const qaValidator = new QAValidator();
 
   // Job processing queue
   const jobQueue: string[] = [];
@@ -267,7 +275,7 @@ export async function createServer(config?: Partial<Config>) {
         return reply.status(404).send({ success: false, error: 'Job not found' });
       }
 
-      if (job.status !== 'failed' && job.status !== 'cancelled') {
+      if (job.status !== 'failed' && job.status !== 'cancelled' && job.status !== 'qa_failed') {
         return reply.status(400).send({ success: false, error: 'Job is not in a retriable state' });
       }
 
@@ -368,6 +376,86 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   // =========================================================================
+  // Watcher Endpoints (UPGRADE 1c)
+  // =========================================================================
+
+  app.post<{ Body: { path?: string } }>('/v1/watcher/start', async (request, reply) => {
+    try {
+      await watcher.start(request.body?.path);
+      return { success: true, data: watcher.getStatus() };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to start watcher', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
+  });
+
+  app.post('/v1/watcher/stop', async () => {
+    watcher.stop();
+    return { success: true, data: watcher.getStatus() };
+  });
+
+  app.get('/v1/watcher/status', async () => {
+    return { success: true, data: watcher.getStatus() };
+  });
+
+  // =========================================================================
+  // Content Identification Endpoint (UPGRADE 1d)
+  // =========================================================================
+
+  app.post<{ Body: { filename: string; duration?: number } }>('/v1/identify', async (request, reply) => {
+    try {
+      const { filename, duration } = request.body;
+      if (!filename) {
+        return reply.status(400).send({ success: false, error: 'filename is required' });
+      }
+
+      const result = await identifier.identifyContent(filename, duration);
+      return { success: true, data: result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to identify content', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
+  });
+
+  // =========================================================================
+  // QA Validation Endpoint (UPGRADE 1f)
+  // =========================================================================
+
+  app.get<{ Params: { id: string } }>('/v1/jobs/:id/qa', async (request, reply) => {
+    try {
+      const job = await scopedDb(request).getJob(request.params.id);
+      if (!job) {
+        return reply.status(404).send({ success: false, error: 'Job not found' });
+      }
+
+      const outputDir = job.output_base_path ?? `${fullConfig.outputBasePath}/${job.id}`;
+      const result = await qaValidator.validateOutput(outputDir);
+      return { success: true, data: result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to run QA validation', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
+  });
+
+  // =========================================================================
+  // Upload Records Endpoint (UPGRADE 1e)
+  // =========================================================================
+
+  app.get<{ Params: { id: string } }>('/v1/jobs/:id/uploads', async (request, reply) => {
+    try {
+      const uploads = await scopedDb(request).getJobUploads(request.params.id);
+      return { success: true, data: uploads };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to get uploads', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
+  });
+
+  // =========================================================================
   // Statistics Endpoint
   // =========================================================================
 
@@ -386,6 +474,7 @@ export async function createServer(config?: Partial<Config>) {
   // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down server...');
+    watcher.stop();
     await app.close();
     await db.disconnect();
     logger.info('Server shut down complete');

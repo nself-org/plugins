@@ -1,7 +1,7 @@
 {
   "name": "vpn",
   "version": "1.0.0",
-  "description": "Multi-provider VPN management and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection",
+  "description": "Multi-provider VPN management (3 VPN providers) and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection",
   "author": "nself",
   "license": "MIT",
   "category": "authentication",
@@ -17,7 +17,7 @@
       "fastify",
       "fastify-cors",
       "commander",
-      "webtorrent",
+      "@ctrl/transmission",
       "wireguard-tools",
       "node-openvpn",
       "pg"
@@ -114,7 +114,7 @@
     {
       "name": "VPN_PROVIDER",
       "required": false,
-      "description": "Default VPN provider (nordvpn, surfshark, pia, mullvad, etc.)",
+      "description": "Default VPN provider (nordvpn, pia, mullvad)",
       "default": "nordvpn"
     },
     {
@@ -154,11 +154,11 @@
     }
   ],
   "features": [
-    "Multi-provider support (10 VPN providers)",
+    "Multi-provider support (3 VPN providers: NordVPN, PIA, Mullvad)",
     "P2P-optimized server selection",
     "Automatic server carousel for redundancy",
     "Kill switch and leak protection",
-    "Port forwarding (PIA, ProtonVPN, AirVPN, Windscribe)",
+    "Port forwarding (PIA)",
     "Torrent client integration with interface binding",
     "Connection monitoring and auto-reconnect",
     "DNS/IP/WebRTC leak testing",
@@ -169,14 +169,7 @@
   ],
   "supportedProviders": [
     "nordvpn",
-    "surfshark",
-    "expressvpn",
     "pia",
-    "protonvpn",
-    "mullvad",
-    "keepsolid",
-    "cyberghost",
-    "airvpn",
-    "windscribe"
+    "mullvad"
   ]
 }

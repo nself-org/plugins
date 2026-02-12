@@ -46,11 +46,18 @@ export class TorrentSearchAggregator {
   async search(options: SearchOptions): Promise<TorrentSearchResult[]> {
     logger.info(`Searching ${this.searchers.length} sources for: ${options.query}`);
 
-    // Execute searches in parallel
+    // Execute searches in parallel with timeout
+    const SEARCH_TIMEOUT_MS = 30000;
+
     const searchPromises = this.searchers.map(searcher =>
-      searcher.search(options).catch(error => {
+      Promise.race([
+        searcher.search(options),
+        new Promise<TorrentSearchResult[]>((_, reject) =>
+          setTimeout(() => reject(new Error(`Search timeout for ${searcher.name} after ${SEARCH_TIMEOUT_MS}ms`)), SEARCH_TIMEOUT_MS)
+        )
+      ]).catch(error => {
         logger.error(`Search failed for ${searcher.name}: ${error.message}`);
-        return []; // Return empty array on failure
+        return [] as TorrentSearchResult[];
       })
     );
 

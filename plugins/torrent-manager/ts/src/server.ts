@@ -3,10 +3,10 @@
  * Complete Fastify REST API with all endpoints
  */
 
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
-import { createLogger } from '@nself/plugin-utils';
+import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext, loadSecurityConfig } from '@nself/plugin-utils';
 import { TorrentDatabase } from './database.js';
 import { VPNChecker } from './vpn-checker.js';
 import { TransmissionClient } from './clients/transmission.js';
@@ -37,6 +37,14 @@ export class TorrentManagerServer {
       max: 100,
       timeWindow: '1 minute',
     });
+
+    // Security middleware
+    const security = loadSecurityConfig('TORRENT_MANAGER');
+    const rateLimiter = new ApiRateLimiter(security.rateLimitMax ?? 100, security.rateLimitWindowMs ?? 60000);
+    this.fastify.addHook('preHandler', createRateLimitHook(rateLimiter) as never);
+    if (security.apiKey) {
+      this.fastify.addHook('preHandler', createAuthHook(security.apiKey) as never);
+    }
 
     // Initialize torrent client
     if (this.config.default_client === 'transmission') {
@@ -100,12 +108,6 @@ export class TorrentManagerServer {
       return { clients };
     });
 
-    // Get client status
-    this.fastify.get('/v1/clients/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      // TODO: Get specific client status
-      reply.code(501).send({ error: 'Not implemented' });
-    });
   }
 
   // ============================================================================
@@ -114,7 +116,20 @@ export class TorrentManagerServer {
 
   private registerDownloadRoutes(): void {
     // Add download
-    this.fastify.post('/v1/downloads', async (request, reply) => {
+    this.fastify.post('/v1/downloads', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['magnet_uri'],
+          properties: {
+            magnet_uri: { type: 'string' },
+            category: { type: 'string' },
+            download_path: { type: 'string' },
+            requested_by: { type: 'string' },
+          },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const { magnet_uri, category, download_path, requested_by } = request.body as any;
 
       // Verify VPN if required
@@ -159,14 +174,15 @@ export class TorrentManagerServer {
           success: true,
           download: savedDownload,
         };
-      } catch (error: any) {
-        logger.error('Failed to add download', error);
-        reply.code(500).send({ error: error.message });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Failed to add download', { error: message });
+        reply.code(500).send({ error: message });
       }
     });
 
     // List downloads
-    this.fastify.get('/v1/downloads', async (request) => {
+    this.fastify.get('/v1/downloads', async (request: FastifyRequest) => {
       const { status, category, limit } = request.query as any;
       const downloads = await this.database.listDownloads({
         status,
@@ -178,7 +194,7 @@ export class TorrentManagerServer {
     });
 
     // Get download details
-    this.fastify.get('/v1/downloads/:id', async (request, reply) => {
+    this.fastify.get('/v1/downloads/:id', async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const download = await this.database.getDownload(id);
 
@@ -191,7 +207,7 @@ export class TorrentManagerServer {
     });
 
     // Pause download
-    this.fastify.post('/v1/downloads/:id/pause', async (request, reply) => {
+    this.fastify.post('/v1/downloads/:id/pause', async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const download = await this.database.getDownload(id);
 
@@ -209,7 +225,7 @@ export class TorrentManagerServer {
     });
 
     // Resume download
-    this.fastify.post('/v1/downloads/:id/resume', async (request, reply) => {
+    this.fastify.post('/v1/downloads/:id/resume', async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const download = await this.database.getDownload(id);
 
@@ -239,7 +255,7 @@ export class TorrentManagerServer {
     });
 
     // Delete download
-    this.fastify.delete('/v1/downloads/:id', async (request, reply) => {
+    this.fastify.delete('/v1/downloads/:id', async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { delete_files } = request.query as any;
       const download = await this.database.getDownload(id);
@@ -267,7 +283,21 @@ export class TorrentManagerServer {
 
   private registerSearchRoutes(): void {
     // Search torrents across all sources
-    this.fastify.post('/v1/search', async (request, reply) => {
+    this.fastify.post('/v1/search', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['query'],
+          properties: {
+            query: { type: 'string' },
+            type: { type: 'string' },
+            quality: { type: 'string' },
+            minSeeders: { type: 'number' },
+            maxResults: { type: 'number' },
+          },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const { query, type, quality, minSeeders, maxResults } = request.body as any;
 
       if (!query) {
@@ -304,14 +334,30 @@ export class TorrentManagerServer {
             sourceUrl: r.sourceUrl,
           })),
         };
-      } catch (error: any) {
-        logger.error('Search failed:', error);
-        reply.code(500).send({ error: 'Search failed', details: error.message });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Search failed:', { error: message });
+        reply.code(500).send({ error: 'Search failed', details: message });
       }
     });
 
     // Search and return best match
-    this.fastify.post('/v1/search/best-match', async (request, reply) => {
+    this.fastify.post('/v1/search/best-match', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['title'],
+          properties: {
+            title: { type: 'string' },
+            year: { type: 'number' },
+            season: { type: 'number' },
+            episode: { type: 'number' },
+            quality: { type: 'string' },
+            minSeeders: { type: 'number' },
+          },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const { title, year, season, episode, quality, minSeeders } = request.body as any;
 
       if (!title) {
@@ -379,14 +425,26 @@ export class TorrentManagerServer {
             parsedInfo: bestMatch.parsedInfo,
           },
         };
-      } catch (error: any) {
-        logger.error('Best match search failed:', error);
-        reply.code(500).send({ error: 'Search failed', details: error.message });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Best match search failed:', { error: message });
+        reply.code(500).send({ error: 'Search failed', details: message });
       }
     });
 
     // Get magnet link for a specific torrent
-    this.fastify.post('/v1/magnet', async (request, reply) => {
+    this.fastify.post('/v1/magnet', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['source', 'sourceUrl'],
+          properties: {
+            source: { type: 'string' },
+            sourceUrl: { type: 'string' },
+          },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
       const { source, sourceUrl } = request.body as any;
 
       if (!source || !sourceUrl) {
@@ -402,14 +460,15 @@ export class TorrentManagerServer {
         } as any);
 
         return { magnetUri };
-      } catch (error: any) {
-        logger.error('Magnet fetch failed:', error);
-        reply.code(500).send({ error: 'Failed to fetch magnet', details: error.message });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Magnet fetch failed:', { error: message });
+        reply.code(500).send({ error: 'Failed to fetch magnet', details: message });
       }
     });
 
     // Get search cache
-    this.fastify.get('/v1/search/cache', async (request) => {
+    this.fastify.get('/v1/search/cache', async (request: FastifyRequest) => {
       const { query_hash } = request.query as any;
       if (!query_hash) {
         return { error: 'query_hash required' };
@@ -454,12 +513,29 @@ export class TorrentManagerServer {
       logger.info(`Server listening on port ${this.config.port}`);
 
       // Start VPN monitoring
-      this.vpnChecker.startMonitoring(() => {
+      this.vpnChecker.startMonitoring(async () => {
         logger.warn('VPN disconnected! Pausing all active downloads');
-        // TODO: Pause all active downloads
+        try {
+          const activeDownloads = await this.database.listDownloads({ status: 'downloading' });
+          for (const download of activeDownloads) {
+            try {
+              if (this.torrentClient && download.client_torrent_id) {
+                await this.torrentClient.pauseTorrent(download.client_torrent_id);
+              }
+              await this.database.updateDownload(download.id, { status: 'paused', error_message: 'VPN disconnected - download paused for safety' });
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              logger.error(`Failed to pause download ${download.id}: ${msg}`);
+            }
+          }
+          logger.warn(`Paused ${activeDownloads.length} active downloads due to VPN disconnection`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          logger.error(`Failed to pause downloads on VPN disconnect: ${msg}`);
+        }
       });
     } catch (error) {
-      logger.error('Failed to start server', error);
+      logger.error('Failed to start server', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }

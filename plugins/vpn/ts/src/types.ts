@@ -9,15 +9,8 @@
 
 export type VPNProvider =
   | 'nordvpn'
-  | 'surfshark'
-  | 'expressvpn'
   | 'pia'
-  | 'protonvpn'
-  | 'mullvad'
-  | 'keepsolid'
-  | 'cyberghost'
-  | 'airvpn'
-  | 'windscribe';
+  | 'mullvad';
 
 export type VPNProtocol = 'wireguard' | 'openvpn_udp' | 'openvpn_tcp' | 'ikev2' | 'nordlynx' | 'lightway';
 
@@ -97,7 +90,7 @@ export interface VPNServerRecord {
 export interface VPNConnectionRecord {
   id: string;
   provider_id: string;
-  server_id: string;
+  server_id?: string;
   protocol: VPNProtocol;
   status: ConnectionStatus;
   local_ip?: string;
@@ -361,12 +354,6 @@ export interface NordVPNConfig {
   cli_path?: string;
 }
 
-export interface SurfsharkConfig {
-  service_username?: string;
-  service_password?: string;
-  private_key?: string;
-}
-
 export interface PIAConfig {
   username?: string;
   password?: string;
@@ -376,38 +363,6 @@ export interface PIAConfig {
 export interface MullvadConfig {
   account_number?: string;
   device_name?: string;
-}
-
-export interface ProtonVPNConfig {
-  username?: string;
-  password?: string;
-  openvpn_username?: string;
-  openvpn_password?: string;
-}
-
-export interface ExpressVPNConfig {
-  activation_code?: string;
-}
-
-export interface KeepSolidConfig {
-  keepsolid_id?: string;
-  password?: string;
-}
-
-export interface CyberGhostConfig {
-  username?: string;
-  password?: string;
-}
-
-export interface AirVPNConfig {
-  username?: string;
-  password?: string;
-  api_key?: string;
-}
-
-export interface WindscribeConfig {
-  username?: string;
-  password?: string;
 }
 
 // ============================================================================

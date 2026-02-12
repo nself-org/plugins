@@ -10,6 +10,9 @@ export * from './config.js';
 export * from './database.js';
 export * from './server.js';
 export * from './opensubtitles-client.js';
+export * from './sync.js';
+export * from './qc.js';
+export * from './normalize.js';
 
 async function startServer() {
   logger.info('Starting Subtitle Manager Server', { version: '1.0.0' });
@@ -35,7 +38,7 @@ async function startServer() {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
-    logger.error('Failed to start Subtitle Manager Server', error);
+    logger.error('Failed to start Subtitle Manager Server', { error: error instanceof Error ? error.message : String(error) });
     process.exit(1);
   }
 }

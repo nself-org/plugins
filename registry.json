@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-11T20:23:17.411Z",
+  "lastUpdated": "2026-02-11T22:01:01.361Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -3475,7 +3475,7 @@
         "entryPoint": "ts/dist/index.js",
         "cli": "ts/dist/cli.js",
         "cliName": "nself-cdn",
-        "defaultPort": 3204,
+        "defaultPort": 3036,
         "packageManager": "npm",
         "framework": "fastify"
       },
@@ -6488,7 +6488,7 @@
         "entryPoint": "ts/dist/index.js",
         "cli": "ts/dist/cli.js",
         "cliName": "nself-sports",
-        "defaultPort": 3201,
+        "defaultPort": 3035,
         "packageManager": "npm",
         "framework": "fastify"
       },
@@ -7594,6 +7594,1058 @@
         "privacy",
         "data-transfer"
       ]
+    },
+    "rom-discovery": {
+      "name": "rom-discovery",
+      "version": "1.0.0",
+      "description": "ROM metadata database, search, discovery, automated download orchestration, and multi-source scraping for nself-tv",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/rom-discovery",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/rom-discovery",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "rom",
+        "retro-gaming",
+        "emulation",
+        "scraper",
+        "archive-org",
+        "metadata",
+        "discovery",
+        "download"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-rom-discovery",
+        "defaultPort": 3034,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_romdisc_metadata",
+        "np_romdisc_download_queue",
+        "np_romdisc_scraper_jobs",
+        "np_romdisc_popularity"
+      ],
+      "views": [],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "ROM_DISCOVERY_PLUGIN_PORT",
+          "description": "Server port (default: 3034)"
+        },
+        {
+          "name": "ROM_DISCOVERY_ENABLE_SCRAPERS",
+          "description": "Enable automated scraping (default: false)"
+        },
+        {
+          "name": "ROM_DISCOVERY_SCRAPER_SCHEDULE",
+          "description": "Default cron schedule for scrapers"
+        },
+        {
+          "name": "ROM_DISCOVERY_MAX_CONCURRENT_DOWNLOADS",
+          "description": "Maximum concurrent downloads (default: 3)"
+        },
+        {
+          "name": "ROM_DISCOVERY_MAX_DOWNLOAD_SIZE_MB",
+          "description": "Maximum download file size in MB (default: 2048)"
+        },
+        {
+          "name": "ROM_DISCOVERY_RETRO_GAMING_URL",
+          "description": "Retro gaming plugin URL (default: http://localhost:3033)"
+        },
+        {
+          "name": "ROM_DISCOVERY_CDN_URL",
+          "description": "CDN URL for ROM assets"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the ROM Discovery API server"
+        },
+        {
+          "name": "search",
+          "description": "Search ROM database with full-text search"
+        },
+        {
+          "name": "platforms",
+          "description": "List platforms with ROM counts"
+        },
+        {
+          "name": "scrapers list",
+          "description": "List all scrapers and their status"
+        },
+        {
+          "name": "scrapers run",
+          "description": "Manually trigger a scraper"
+        },
+        {
+          "name": "downloads",
+          "description": "View download queue"
+        },
+        {
+          "name": "stats",
+          "description": "Show ROM Discovery statistics"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/roms/search",
+          "description": "Search ROM database with full-text search and filters"
+        },
+        {
+          "method": "GET",
+          "path": "/api/roms/:id",
+          "description": "Get ROM metadata by ID"
+        },
+        {
+          "method": "GET",
+          "path": "/api/roms/platforms",
+          "description": "List platforms with ROM counts"
+        },
+        {
+          "method": "GET",
+          "path": "/api/roms/featured",
+          "description": "Get featured/recommended ROMs"
+        },
+        {
+          "method": "POST",
+          "path": "/api/roms/download",
+          "description": "Queue ROM for download"
+        },
+        {
+          "method": "GET",
+          "path": "/api/roms/download/:id/status",
+          "description": "Check download status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/roms/download/queue",
+          "description": "Get current download queue"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/roms/download/:id",
+          "description": "Cancel download"
+        },
+        {
+          "method": "GET",
+          "path": "/api/roms/scrapers",
+          "description": "List scrapers and status"
+        },
+        {
+          "method": "POST",
+          "path": "/api/roms/scrapers/:name/run",
+          "description": "Manually trigger scraper"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/roms/scrapers/:name",
+          "description": "Update scraper config"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
+    },
+    "vpn": {
+      "name": "vpn",
+      "version": "1.0.0",
+      "description": "Multi-provider VPN management with P2P optimization, server carousel, kill switch, and leak protection",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/vpn",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/vpn",
+      "minNselfVersion": "0.4.8",
+      "category": "infrastructure",
+      "tags": [
+        "vpn",
+        "nordvpn",
+        "mullvad",
+        "pia",
+        "wireguard",
+        "openvpn",
+        "privacy",
+        "p2p",
+        "torrent"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-vpn",
+        "defaultPort": 3200,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_vpn_providers",
+        "np_vpn_credentials",
+        "np_vpn_servers",
+        "np_vpn_connections",
+        "np_vpn_downloads",
+        "np_vpn_connection_logs",
+        "np_vpn_server_performance",
+        "np_vpn_leak_tests"
+      ],
+      "views": [
+        "np_vpn_active_connections",
+        "np_vpn_server_stats",
+        "np_vpn_download_history",
+        "np_vpn_provider_uptime"
+      ],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "VPN_PLUGIN_PORT",
+          "description": "Server port (default: 3200)"
+        },
+        {
+          "name": "NORDVPN_TOKEN",
+          "description": "NordVPN API token"
+        },
+        {
+          "name": "PIA_USERNAME",
+          "description": "PIA username"
+        },
+        {
+          "name": "PIA_PASSWORD",
+          "description": "PIA password"
+        },
+        {
+          "name": "MULLVAD_ACCOUNT",
+          "description": "Mullvad account number"
+        },
+        {
+          "name": "TRANSMISSION_HOST",
+          "description": "Transmission RPC host"
+        },
+        {
+          "name": "TRANSMISSION_PORT",
+          "description": "Transmission RPC port"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the VPN management API server"
+        },
+        {
+          "name": "status",
+          "description": "Show VPN connection status"
+        },
+        {
+          "name": "connect",
+          "description": "Connect to VPN"
+        },
+        {
+          "name": "disconnect",
+          "description": "Disconnect VPN"
+        },
+        {
+          "name": "servers",
+          "description": "List available VPN servers"
+        },
+        {
+          "name": "leak-test",
+          "description": "Run DNS/IP leak test"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/status",
+          "description": "VPN connection status"
+        },
+        {
+          "method": "POST",
+          "path": "/api/connect",
+          "description": "Connect to VPN"
+        },
+        {
+          "method": "POST",
+          "path": "/api/disconnect",
+          "description": "Disconnect VPN"
+        },
+        {
+          "method": "GET",
+          "path": "/api/servers",
+          "description": "List available servers"
+        },
+        {
+          "method": "GET",
+          "path": "/api/providers",
+          "description": "List configured providers"
+        },
+        {
+          "method": "POST",
+          "path": "/api/leak-test",
+          "description": "Run leak test"
+        },
+        {
+          "method": "GET",
+          "path": "/api/downloads",
+          "description": "List torrent downloads"
+        },
+        {
+          "method": "POST",
+          "path": "/api/downloads",
+          "description": "Start torrent download via VPN"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
+    },
+    "torrent-manager": {
+      "name": "torrent-manager",
+      "version": "1.0.0",
+      "description": "Torrent downloading with Transmission/qBittorrent integration, multi-source search, and VPN enforcement",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/torrent-manager",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/torrent-manager",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "torrent",
+        "transmission",
+        "qbittorrent",
+        "p2p",
+        "download",
+        "vpn"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-torrent-manager",
+        "defaultPort": 3201,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_torrentmanager_clients",
+        "np_torrentmanager_sources",
+        "np_torrentmanager_downloads",
+        "np_torrentmanager_files",
+        "np_torrentmanager_trackers",
+        "np_torrentmanager_search_cache",
+        "np_torrentmanager_stats",
+        "np_torrentmanager_seeding_policy"
+      ],
+      "views": [
+        "np_torrentmanager_active_downloads",
+        "np_torrentmanager_completed_downloads",
+        "np_torrentmanager_seeding_torrents"
+      ],
+      "webhooks": [
+        "torrent.added",
+        "torrent.started",
+        "torrent.progress",
+        "torrent.completed",
+        "torrent.failed",
+        "torrent.removed",
+        "vpn.disconnected"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "TORRENT_MANAGER_PORT",
+          "description": "Server port (default: 3201)"
+        },
+        {
+          "name": "TRANSMISSION_HOST",
+          "description": "Transmission RPC host"
+        },
+        {
+          "name": "TRANSMISSION_PORT",
+          "description": "Transmission RPC port"
+        },
+        {
+          "name": "TRANSMISSION_USERNAME",
+          "description": "Transmission RPC username"
+        },
+        {
+          "name": "TRANSMISSION_PASSWORD",
+          "description": "Transmission RPC password"
+        },
+        {
+          "name": "VPN_ENFORCEMENT_URL",
+          "description": "VPN plugin URL for enforcement checks"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the torrent manager server"
+        },
+        {
+          "name": "add",
+          "description": "Add a torrent by magnet URI or URL"
+        },
+        {
+          "name": "list",
+          "description": "List all downloads"
+        },
+        {
+          "name": "status",
+          "description": "Show download status"
+        },
+        {
+          "name": "search",
+          "description": "Search for torrents"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/downloads",
+          "description": "List all downloads"
+        },
+        {
+          "method": "POST",
+          "path": "/api/downloads",
+          "description": "Add new download"
+        },
+        {
+          "method": "GET",
+          "path": "/api/downloads/:id",
+          "description": "Get download status"
+        },
+        {
+          "method": "PUT",
+          "path": "/api/downloads/:id",
+          "description": "Update download"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/downloads/:id",
+          "description": "Remove download"
+        },
+        {
+          "method": "GET",
+          "path": "/api/clients",
+          "description": "List torrent clients"
+        },
+        {
+          "method": "GET",
+          "path": "/api/search",
+          "description": "Search torrents"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
+    },
+    "content-acquisition": {
+      "name": "content-acquisition",
+      "version": "1.0.0",
+      "description": "Automated content acquisition with RSS monitoring, release calendar, quality profiles, and download pipeline orchestration",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-acquisition",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/content-acquisition",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "content",
+        "acquisition",
+        "rss",
+        "automation",
+        "sonarr",
+        "radarr",
+        "pipeline"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-content-acquisition",
+        "defaultPort": 3202,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_contentacquisition_profiles",
+        "np_contentacquisition_acquisition_subscriptions",
+        "np_contentacquisition_rss_feeds",
+        "np_contentacquisition_rss_feed_items",
+        "np_contentacquisition_release_calendar",
+        "np_contentacquisition_acquisition_queue",
+        "np_contentacquisition_acquisition_history",
+        "np_contentacquisition_acquisition_rules",
+        "np_ca_pipeline_runs"
+      ],
+      "views": [],
+      "webhooks": [
+        "acquisition.subscribed",
+        "acquisition.new_release_detected",
+        "acquisition.queued",
+        "acquisition.started",
+        "acquisition.completed",
+        "acquisition.failed"
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "CONTENT_ACQUISITION_PORT",
+          "description": "Server port (default: 3202)"
+        },
+        {
+          "name": "VPN_URL",
+          "description": "VPN plugin URL (default: http://localhost:3200)"
+        },
+        {
+          "name": "TORRENT_MANAGER_URL",
+          "description": "Torrent manager URL (default: http://localhost:3201)"
+        },
+        {
+          "name": "METADATA_ENRICHMENT_URL",
+          "description": "Metadata enrichment URL (default: http://localhost:3203)"
+        },
+        {
+          "name": "SUBTITLE_MANAGER_URL",
+          "description": "Subtitle manager URL (default: http://localhost:3204)"
+        },
+        {
+          "name": "RSS_CHECK_INTERVAL",
+          "description": "RSS check interval in minutes (default: 30)"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the content acquisition server"
+        },
+        {
+          "name": "subscribe",
+          "description": "Add content subscription"
+        },
+        {
+          "name": "queue",
+          "description": "View acquisition queue"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "POST",
+          "path": "/v1/subscriptions",
+          "description": "Create subscription"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/subscriptions",
+          "description": "List subscriptions"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/feeds",
+          "description": "Add RSS feed"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/feeds",
+          "description": "List feeds"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/queue",
+          "description": "Add to queue"
+        },
+        {
+          "method": "GET",
+          "path": "/v1/queue",
+          "description": "View queue"
+        },
+        {
+          "method": "POST",
+          "path": "/v1/profiles",
+          "description": "Create quality profile"
+        },
+        {
+          "method": "GET",
+          "path": "/api/pipeline",
+          "description": "List pipeline runs"
+        },
+        {
+          "method": "GET",
+          "path": "/api/pipeline/:id",
+          "description": "Get pipeline run status"
+        },
+        {
+          "method": "POST",
+          "path": "/api/pipeline/trigger",
+          "description": "Manually trigger pipeline"
+        },
+        {
+          "method": "POST",
+          "path": "/api/pipeline/retry/:id",
+          "description": "Retry failed pipeline"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
+    },
+    "metadata-enrichment": {
+      "name": "metadata-enrichment",
+      "version": "1.0.0",
+      "description": "Metadata enrichment with TMDB, TVDB, and MusicBrainz integration for movies, TV shows, and music",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/metadata-enrichment",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/metadata-enrichment",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "metadata",
+        "tmdb",
+        "tvdb",
+        "musicbrainz",
+        "enrichment",
+        "movies",
+        "tv"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-metadata-enrichment",
+        "defaultPort": 3203,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_metaenrich_movies",
+        "np_metaenrich_tv_shows"
+      ],
+      "views": [],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "METADATA_ENRICHMENT_PORT",
+          "description": "Server port (default: 3203)"
+        },
+        {
+          "name": "TMDB_API_KEY",
+          "required": true,
+          "description": "TMDB API key"
+        },
+        {
+          "name": "TVDB_API_KEY",
+          "description": "TVDB API key (optional)"
+        },
+        {
+          "name": "MUSICBRAINZ_APP_NAME",
+          "description": "MusicBrainz app name for User-Agent"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the metadata enrichment server"
+        },
+        {
+          "name": "search",
+          "description": "Search for metadata"
+        },
+        {
+          "name": "enrich",
+          "description": "Enrich content with metadata"
+        },
+        {
+          "name": "status",
+          "description": "Show enrichment statistics"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "POST",
+          "path": "/api/enrich",
+          "description": "Enrich content with metadata"
+        },
+        {
+          "method": "GET",
+          "path": "/api/search",
+          "description": "Search TMDB/TVDB"
+        },
+        {
+          "method": "GET",
+          "path": "/api/movie/:id",
+          "description": "Get movie metadata"
+        },
+        {
+          "method": "GET",
+          "path": "/api/tv/:id",
+          "description": "Get TV show metadata"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Enrichment statistics"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
+    },
+    "subtitle-manager": {
+      "name": "subtitle-manager",
+      "version": "1.0.0",
+      "description": "Subtitle search, download, and sync verification via OpenSubtitles and multi-source providers",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/subtitle-manager",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/subtitle-manager",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "subtitles",
+        "opensubtitles",
+        "sync",
+        "verification",
+        "srt",
+        "vtt"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-subtitle-manager",
+        "defaultPort": 3204,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_subtmgr_subtitles",
+        "np_subtmgr_downloads"
+      ],
+      "views": [],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "SUBTITLE_MANAGER_PORT",
+          "description": "Server port (default: 3204)"
+        },
+        {
+          "name": "OPENSUBTITLES_API_KEY",
+          "description": "OpenSubtitles API key"
+        },
+        {
+          "name": "SUBTITLE_STORAGE_PATH",
+          "description": "Path for storing downloaded subtitles"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the subtitle manager server"
+        },
+        {
+          "name": "search",
+          "description": "Search for subtitles"
+        },
+        {
+          "name": "download",
+          "description": "Download subtitles"
+        },
+        {
+          "name": "status",
+          "description": "Show subtitle statistics"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "POST",
+          "path": "/api/search",
+          "description": "Search for subtitles"
+        },
+        {
+          "method": "POST",
+          "path": "/api/download",
+          "description": "Download subtitle"
+        },
+        {
+          "method": "GET",
+          "path": "/api/subtitles",
+          "description": "List stored subtitles"
+        },
+        {
+          "method": "GET",
+          "path": "/api/subtitles/:id",
+          "description": "Get subtitle details"
+        },
+        {
+          "method": "GET",
+          "path": "/api/stats",
+          "description": "Subtitle statistics"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
+    },
+    "retro-gaming": {
+      "name": "retro-gaming",
+      "version": "1.0.0",
+      "description": "Retro gaming ROM library management, emulator core serving, save state synchronization, and controller configuration",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/retro-gaming",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/retro-gaming",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "retro-gaming",
+        "roms",
+        "emulator",
+        "save-states",
+        "controller",
+        "nes",
+        "snes",
+        "n64"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-retro-gaming",
+        "defaultPort": 3033,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_retrogame_roms",
+        "np_retrogame_save_states",
+        "np_retrogame_play_sessions",
+        "np_retrogame_emulator_cores",
+        "np_retrogame_controller_configs",
+        "np_retrogame_core_installations"
+      ],
+      "views": [],
+      "webhooks": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "RETRO_GAMING_PLUGIN_PORT",
+          "description": "Server port (default: 3033)"
+        },
+        {
+          "name": "IGDB_CLIENT_ID",
+          "description": "IGDB client ID for metadata"
+        },
+        {
+          "name": "IGDB_CLIENT_SECRET",
+          "description": "IGDB client secret"
+        },
+        {
+          "name": "MOBYGAMES_API_KEY",
+          "description": "MobyGames API key (optional)"
+        },
+        {
+          "name": "ROM_STORAGE_PATH",
+          "description": "Path for ROM files"
+        },
+        {
+          "name": "SAVE_STATE_STORAGE_PATH",
+          "description": "Path for save states"
+        }
+      ],
+      "cliCommands": [
+        {
+          "name": "server",
+          "description": "Start the retro gaming server"
+        },
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "status",
+          "description": "Show library statistics"
+        },
+        {
+          "name": "platforms",
+          "description": "List supported platforms"
+        },
+        {
+          "name": "games",
+          "description": "List games in library"
+        },
+        {
+          "name": "sync",
+          "description": "Sync ROM library"
+        }
+      ],
+      "apiEndpoints": [
+        {
+          "method": "GET",
+          "path": "/api/games",
+          "description": "List games in library"
+        },
+        {
+          "method": "GET",
+          "path": "/api/games/:id",
+          "description": "Get game details"
+        },
+        {
+          "method": "POST",
+          "path": "/api/games/roms",
+          "description": "Add ROM to library"
+        },
+        {
+          "method": "GET",
+          "path": "/api/platforms",
+          "description": "List supported platforms"
+        },
+        {
+          "method": "GET",
+          "path": "/api/cores",
+          "description": "List emulator cores"
+        },
+        {
+          "method": "GET",
+          "path": "/api/cores/:id/binary",
+          "description": "Download emulator core binary"
+        },
+        {
+          "method": "GET",
+          "path": "/api/save-states",
+          "description": "List save states"
+        },
+        {
+          "method": "POST",
+          "path": "/api/save-states",
+          "description": "Upload save state"
+        },
+        {
+          "method": "GET",
+          "path": "/api/save-states/:id",
+          "description": "Download save state"
+        },
+        {
+          "method": "GET",
+          "path": "/api/controllers",
+          "description": "List controller profiles"
+        },
+        {
+          "method": "POST",
+          "path": "/api/controllers",
+          "description": "Create controller profile"
+        },
+        {
+          "method": "GET",
+          "path": "/api/progress",
+          "description": "Get game progress"
+        },
+        {
+          "method": "POST",
+          "path": "/api/sessions",
+          "description": "Start play session"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "dependencies": []
     }
   },
   "categories": {

@@ -18,6 +18,22 @@ export interface Config {
   maxInputSizeGb: number;
   hardwareAccel: 'none' | 'nvenc' | 'vaapi' | 'qsv';
 
+  // Packager (UPGRADE 1a)
+  packager: 'shaka' | 'bento4' | 'ffmpeg-only';
+  shakaPackagerPath: string;
+  outputFormats: ('hls' | 'dash' | 'cmaf')[];
+
+  // Drop-Folder Watcher (UPGRADE 1c)
+  dropFolderPath: string;
+  settleCheckSeconds: number;
+  settleCheckIntervals: number;
+
+  // Content Identification (UPGRADE 1d)
+  metadataEnrichmentUrl: string;
+
+  // Object Storage (UPGRADE 1e)
+  objectStorageUrl: string;
+
   // Database
   databaseHost: string;
   databasePort: number;
@@ -74,6 +90,12 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     dbConfig = parseUrl(databaseUrl);
   }
 
+  // Parse output formats
+  const outputFormatsRaw = process.env.MP_OUTPUT_FORMATS ?? 'hls';
+  const outputFormats = outputFormatsRaw.split(',').map(f => f.trim()).filter(
+    (f): f is 'hls' | 'dash' | 'cmaf' => ['hls', 'dash', 'cmaf'].includes(f)
+  );
+
   const config: Config = {
     // Server
     port: parseInt(process.env.MP_PLUGIN_PORT ?? process.env.PORT ?? '3019', 10),
@@ -86,6 +108,22 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     maxConcurrentJobs: parseInt(process.env.MP_MAX_CONCURRENT_JOBS ?? '2', 10),
     maxInputSizeGb: parseInt(process.env.MP_MAX_INPUT_SIZE_GB ?? '50', 10),
     hardwareAccel: (process.env.MP_HARDWARE_ACCEL ?? 'none') as 'none' | 'nvenc' | 'vaapi' | 'qsv',
+
+    // Packager (UPGRADE 1a)
+    packager: (process.env.MP_PACKAGER ?? 'ffmpeg-only') as 'shaka' | 'bento4' | 'ffmpeg-only',
+    shakaPackagerPath: process.env.MP_SHAKA_PACKAGER_PATH ?? 'packager',
+    outputFormats: outputFormats.length > 0 ? outputFormats : ['hls'],
+
+    // Drop-Folder Watcher (UPGRADE 1c)
+    dropFolderPath: process.env.MP_DROP_FOLDER_PATH ?? '',
+    settleCheckSeconds: parseInt(process.env.MP_SETTLE_CHECK_SECONDS ?? '5', 10),
+    settleCheckIntervals: parseInt(process.env.MP_SETTLE_CHECK_INTERVALS ?? '3', 10),
+
+    // Content Identification (UPGRADE 1d)
+    metadataEnrichmentUrl: process.env.MP_METADATA_ENRICHMENT_URL ?? 'http://localhost:3203',
+
+    // Object Storage (UPGRADE 1e)
+    objectStorageUrl: process.env.MP_OBJECT_STORAGE_URL ?? 'http://localhost:3301',
 
     // Database
     databaseHost: dbConfig.host,

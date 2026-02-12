@@ -93,7 +93,7 @@ export class MullvadProvider extends BaseVPNProvider {
       logger.info('Successfully authenticated with Mullvad');
       return true;
     } catch (error) {
-      logger.error('Mullvad authentication failed', error);
+      logger.error('Mullvad authentication failed', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
@@ -159,7 +159,7 @@ export class MullvadProvider extends BaseVPNProvider {
 
       return servers;
     } catch (error) {
-      logger.error('Failed to fetch Mullvad servers', error);
+      logger.error('Failed to fetch Mullvad servers', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -234,7 +234,7 @@ export class MullvadProvider extends BaseVPNProvider {
 
       return connection;
     } catch (error) {
-      logger.error('Mullvad connection failed', error);
+      logger.error('Mullvad connection failed', { error: error instanceof Error ? error.message : String(error) });
       throw new Error(`Failed to connect to Mullvad: ${error}`);
     }
   }
@@ -246,7 +246,7 @@ export class MullvadProvider extends BaseVPNProvider {
       await this.executeCommand(`${this.cliCommand} disconnect`);
       logger.info('Successfully disconnected from Mullvad');
     } catch (error) {
-      logger.error('Failed to disconnect from Mullvad', error);
+      logger.error('Failed to disconnect from Mullvad', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -282,12 +282,12 @@ export class MullvadProvider extends BaseVPNProvider {
       if (status.connected) {
         // Get interface IP
         status.interface = 'wg0-mullvad';
-        status.vpn_ip = await this.getInterfaceIP(status.interface);
+        status.vpn_ip = (await this.getInterfaceIP(status.interface)) ?? undefined;
       }
 
       return status;
     } catch (error) {
-      logger.error('Failed to get Mullvad status', error);
+      logger.error('Failed to get Mullvad status', { error: error instanceof Error ? error.message : String(error) });
       return { connected: false };
     }
   }
@@ -303,7 +303,7 @@ export class MullvadProvider extends BaseVPNProvider {
       await this.executeCommand(`${this.cliCommand} lockdown-mode set on`);
       logger.info('Lockdown mode enabled');
     } catch (error) {
-      logger.error('Failed to enable lockdown mode', error);
+      logger.error('Failed to enable lockdown mode', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -315,7 +315,7 @@ export class MullvadProvider extends BaseVPNProvider {
       await this.executeCommand(`${this.cliCommand} lockdown-mode set off`);
       logger.info('Lockdown mode disabled');
     } catch (error) {
-      logger.error('Failed to disable lockdown mode', error);
+      logger.error('Failed to disable lockdown mode', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }

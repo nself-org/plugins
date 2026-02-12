@@ -20,6 +20,9 @@ import type {
   Resolution,
   JobStatus,
   OutputType,
+  DropFolderEvent,
+  UploadRecord,
+  LeasedJob,
 } from './types.js';
 
 const logger = createLogger('media-processing:db');
@@ -92,7 +95,9 @@ export class MediaProcessingDatabase {
         resolutions JSONB NOT NULL DEFAULT '[
           {"width":1920,"height":1080,"bitrate":5000000,"label":"1080p"},
           {"width":1280,"height":720,"bitrate":2500000,"label":"720p"},
-          {"width":854,"height":480,"bitrate":1000000,"label":"480p"}
+          {"width":854,"height":480,"bitrate":1200000,"label":"480p"},
+          {"width":640,"height":360,"bitrate":800000,"label":"360p"},
+          {"width":426,"height":240,"bitrate":400000,"label":"240p"}
         ]'::jsonb,
         audio_bitrate INTEGER DEFAULT 128000,
         framerate INTEGER DEFAULT 30,
@@ -133,6 +138,8 @@ export class MediaProcessingDatabase {
         file_size_bytes BIGINT,
         started_at TIMESTAMP WITH TIME ZONE,
         completed_at TIMESTAMP WITH TIME ZONE,
+        heartbeat_at TIMESTAMP WITH TIME ZONE,
+        leased_by VARCHAR(255),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
@@ -142,6 +149,7 @@ export class MediaProcessingDatabase {
       CREATE INDEX IF NOT EXISTS idx_mp_jobs_profile ON mp_jobs(profile_id);
       CREATE INDEX IF NOT EXISTS idx_mp_jobs_created ON mp_jobs(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_mp_jobs_priority ON mp_jobs(priority DESC, created_at ASC) WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS idx_mp_jobs_heartbeat ON mp_jobs(heartbeat_at) WHERE leased_by IS NOT NULL;
 
       -- =====================================================================
       -- Job Outputs
@@ -247,9 +255,70 @@ export class MediaProcessingDatabase {
       CREATE INDEX IF NOT EXISTS idx_mp_webhook_account ON mp_webhook_events(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_mp_webhook_processed ON mp_webhook_events(processed);
       CREATE INDEX IF NOT EXISTS idx_mp_webhook_created ON mp_webhook_events(created_at DESC);
+
+      -- =====================================================================
+      -- Watcher Events (UPGRADE 1c)
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_mediap_watcher_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        file_path TEXT NOT NULL,
+        file_size BIGINT DEFAULT 0,
+        event_type VARCHAR(32) NOT NULL DEFAULT 'detected',
+        job_id UUID REFERENCES mp_jobs(id) ON DELETE SET NULL,
+        error_message TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_watcher_account ON np_mediap_watcher_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_watcher_type ON np_mediap_watcher_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_watcher_created ON np_mediap_watcher_events(created_at DESC);
+
+      -- =====================================================================
+      -- Uploads (UPGRADE 1e)
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_mediap_uploads (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        job_id UUID NOT NULL REFERENCES mp_jobs(id) ON DELETE CASCADE,
+        file_path TEXT NOT NULL,
+        storage_path TEXT NOT NULL,
+        storage_url TEXT,
+        content_type VARCHAR(128) NOT NULL,
+        file_size_bytes BIGINT DEFAULT 0,
+        content_id VARCHAR(255),
+        version INTEGER DEFAULT 1,
+        uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_uploads_account ON np_mediap_uploads(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_uploads_job ON np_mediap_uploads(job_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_uploads_content ON np_mediap_uploads(content_id);
     `;
 
     await this.db.execute(schema);
+
+    // Migration: add heartbeat_at and leased_by columns to mp_jobs if missing
+    await this.db.execute(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'mp_jobs' AND column_name = 'heartbeat_at'
+        ) THEN
+          ALTER TABLE mp_jobs ADD COLUMN heartbeat_at TIMESTAMP WITH TIME ZONE;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'mp_jobs' AND column_name = 'leased_by'
+        ) THEN
+          ALTER TABLE mp_jobs ADD COLUMN leased_by VARCHAR(255);
+        END IF;
+      END $$;
+    `);
+
     logger.info('Schema initialized successfully');
   }
 
@@ -261,7 +330,9 @@ export class MediaProcessingDatabase {
     const resolutions: Resolution[] = input.resolutions ?? [
       { width: 1920, height: 1080, bitrate: 5000000, label: '1080p' },
       { width: 1280, height: 720, bitrate: 2500000, label: '720p' },
-      { width: 854, height: 480, bitrate: 1000000, label: '480p' },
+      { width: 854, height: 480, bitrate: 1200000, label: '480p' },
+      { width: 640, height: 360, bitrate: 800000, label: '360p' },
+      { width: 426, height: 240, bitrate: 400000, label: '240p' },
     ];
 
     const result = await this.db.query<EncodingProfileRecord>(
@@ -540,7 +611,7 @@ export class MediaProcessingDatabase {
       updates.push('started_at = COALESCE(started_at, NOW())');
     }
 
-    if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+    if (status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'qa_failed') {
       updates.push('completed_at = NOW()');
     }
 
@@ -858,6 +929,193 @@ export class MediaProcessingDatabase {
       profiles: parseInt(row.profiles, 10),
       averageProcessingTimeSeconds: row.avg_processing_time ? parseFloat(row.avg_processing_time) : null,
       lastJobCompletedAt: row.last_job_completed ? new Date(row.last_job_completed) : null,
+    };
+  }
+
+  // =========================================================================
+  // Job Leasing (UPGRADE 1g)
+  // =========================================================================
+
+  async leaseNextJob(workerId: string): Promise<LeasedJob | null> {
+    const result = await this.db.query<LeasedJob>(
+      `UPDATE mp_jobs SET
+        leased_by = $2,
+        heartbeat_at = NOW(),
+        updated_at = NOW()
+      WHERE id = (
+        SELECT id FROM mp_jobs
+        WHERE source_account_id = $1
+          AND status = 'pending'
+          AND leased_by IS NULL
+        ORDER BY priority DESC, created_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      RETURNING *`,
+      [this.sourceAccountId, workerId]
+    );
+
+    return result.rows.length > 0 ? this.mapLeasedJob(result.rows[0]) : null;
+  }
+
+  async heartbeatJob(jobId: string, workerId: string): Promise<void> {
+    await this.db.execute(
+      `UPDATE mp_jobs SET heartbeat_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND source_account_id = $2 AND leased_by = $3`,
+      [jobId, this.sourceAccountId, workerId]
+    );
+  }
+
+  async reclaimStaleJobs(timeoutMinutes: number): Promise<number> {
+    const result = await this.db.query<{ id: string }>(
+      `UPDATE mp_jobs SET
+        status = 'failed',
+        error_message = 'Stale heartbeat - worker did not respond within ' || $3 || ' minutes',
+        leased_by = NULL,
+        heartbeat_at = NULL,
+        completed_at = NOW(),
+        updated_at = NOW()
+      WHERE source_account_id = $1
+        AND leased_by IS NOT NULL
+        AND status NOT IN ('completed', 'failed', 'cancelled', 'qa_failed')
+        AND heartbeat_at < NOW() - ($3 || ' minutes')::interval
+      RETURNING id`,
+      [this.sourceAccountId, undefined, timeoutMinutes.toString()]
+    );
+
+    if (result.rows.length > 0) {
+      logger.warn('Reclaimed stale jobs', { count: result.rows.length, jobIds: result.rows.map(r => r.id) });
+    }
+
+    return result.rows.length;
+  }
+
+  async releaseJobLease(jobId: string): Promise<void> {
+    await this.db.execute(
+      `UPDATE mp_jobs SET leased_by = NULL, heartbeat_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND source_account_id = $2`,
+      [jobId, this.sourceAccountId]
+    );
+  }
+
+  private mapLeasedJob(row: Record<string, unknown>): LeasedJob {
+    return {
+      ...this.mapJob(row),
+      leased_by: row.leased_by as string | null,
+      heartbeat_at: row.heartbeat_at ? new Date(row.heartbeat_at as string) : null,
+    };
+  }
+
+  // =========================================================================
+  // Watcher Events (UPGRADE 1c)
+  // =========================================================================
+
+  async createWatcherEvent(event: Omit<DropFolderEvent, 'id' | 'source_account_id' | 'created_at'>): Promise<DropFolderEvent> {
+    const result = await this.db.query<DropFolderEvent>(
+      `INSERT INTO np_mediap_watcher_events (
+        source_account_id, file_path, file_size, event_type, job_id, error_message
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        event.file_path,
+        event.file_size,
+        event.event_type,
+        event.job_id ?? null,
+        event.error_message ?? null,
+      ]
+    );
+
+    return this.mapWatcherEvent(result.rows[0]);
+  }
+
+  async listWatcherEvents(limit = 50): Promise<DropFolderEvent[]> {
+    const result = await this.db.query<DropFolderEvent>(
+      `SELECT * FROM np_mediap_watcher_events
+       WHERE source_account_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [this.sourceAccountId, limit]
+    );
+
+    return result.rows.map(row => this.mapWatcherEvent(row));
+  }
+
+  private mapWatcherEvent(row: Record<string, unknown>): DropFolderEvent {
+    return {
+      id: row.id as string,
+      source_account_id: row.source_account_id as string,
+      file_path: row.file_path as string,
+      file_size: typeof row.file_size === 'string' ? parseInt(row.file_size, 10) : (row.file_size as number),
+      event_type: row.event_type as DropFolderEvent['event_type'],
+      job_id: row.job_id as string | null,
+      error_message: row.error_message as string | null,
+      created_at: new Date(row.created_at as string),
+    };
+  }
+
+  // =========================================================================
+  // Uploads (UPGRADE 1e)
+  // =========================================================================
+
+  async createUploadRecord(upload: Omit<UploadRecord, 'id' | 'source_account_id' | 'uploaded_at'>): Promise<UploadRecord> {
+    const result = await this.db.query<UploadRecord>(
+      `INSERT INTO np_mediap_uploads (
+        source_account_id, job_id, file_path, storage_path, storage_url,
+        content_type, file_size_bytes, content_id, version
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        upload.job_id,
+        upload.file_path,
+        upload.storage_path,
+        upload.storage_url ?? null,
+        upload.content_type,
+        upload.file_size_bytes,
+        upload.content_id ?? null,
+        upload.version,
+      ]
+    );
+
+    return this.mapUploadRecord(result.rows[0]);
+  }
+
+  async getJobUploads(jobId: string): Promise<UploadRecord[]> {
+    const result = await this.db.query<UploadRecord>(
+      `SELECT * FROM np_mediap_uploads
+       WHERE job_id = $1 AND source_account_id = $2
+       ORDER BY uploaded_at`,
+      [jobId, this.sourceAccountId]
+    );
+
+    return result.rows.map(row => this.mapUploadRecord(row));
+  }
+
+  async getNextUploadVersion(contentId: string): Promise<number> {
+    const result = await this.db.query<{ max_version: string | null }>(
+      `SELECT MAX(version)::text as max_version FROM np_mediap_uploads
+       WHERE content_id = $1 AND source_account_id = $2`,
+      [contentId, this.sourceAccountId]
+    );
+
+    const maxVersion = result.rows[0]?.max_version;
+    return maxVersion ? parseInt(maxVersion, 10) + 1 : 1;
+  }
+
+  private mapUploadRecord(row: Record<string, unknown>): UploadRecord {
+    return {
+      id: row.id as string,
+      source_account_id: row.source_account_id as string,
+      job_id: row.job_id as string,
+      file_path: row.file_path as string,
+      storage_path: row.storage_path as string,
+      storage_url: row.storage_url as string | null,
+      content_type: row.content_type as string,
+      file_size_bytes: typeof row.file_size_bytes === 'string' ? parseInt(row.file_size_bytes, 10) : (row.file_size_bytes as number),
+      content_id: row.content_id as string | null,
+      version: row.version as number,
+      uploaded_at: new Date(row.uploaded_at as string),
     };
   }
 }

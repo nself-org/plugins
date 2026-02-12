@@ -84,7 +84,7 @@ export class PIAProvider extends BaseVPNProvider {
       logger.info('Successfully authenticated with PIA');
       return true;
     } catch (error) {
-      logger.error('PIA authentication failed', error);
+      logger.error('PIA authentication failed', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
@@ -142,7 +142,7 @@ export class PIAProvider extends BaseVPNProvider {
 
       return servers;
     } catch (error) {
-      logger.error('Failed to fetch PIA servers', error);
+      logger.error('Failed to fetch PIA servers', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -216,7 +216,7 @@ export class PIAProvider extends BaseVPNProvider {
 
       return connection;
     } catch (error) {
-      logger.error('PIA connection failed', error);
+      logger.error('PIA connection failed', { error: error instanceof Error ? error.message : String(error) });
       throw new Error(`Failed to connect to PIA: ${error}`);
     }
   }
@@ -229,7 +229,7 @@ export class PIAProvider extends BaseVPNProvider {
       this.forwardedPort = null;
       logger.info('Successfully disconnected from PIA');
     } catch (error) {
-      logger.error('Failed to disconnect from PIA', error);
+      logger.error('Failed to disconnect from PIA', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -265,7 +265,7 @@ export class PIAProvider extends BaseVPNProvider {
         port_forwarded: this.forwardedPort || undefined,
       };
     } catch (error) {
-      logger.error('Failed to get PIA status', error);
+      logger.error('Failed to get PIA status', { error: error instanceof Error ? error.message : String(error) });
       return { connected: false };
     }
   }
@@ -294,7 +294,7 @@ export class PIAProvider extends BaseVPNProvider {
       logger.info(`Port forwarded: ${port}`);
       return port;
     } catch (error) {
-      logger.error('Failed to get forwarded port', error);
+      logger.error('Failed to get forwarded port', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }

@@ -57,7 +57,7 @@
     ]
   },
   "config": {
-    "port": 3204,
+    "port": 3036,
     "webhookPath": "/webhooks/cdn",
     "retryAttempts": 3,
     "retryDelay": 1000

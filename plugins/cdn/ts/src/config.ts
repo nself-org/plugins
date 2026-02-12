@@ -82,7 +82,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
 
   const config: Config = {
     // Server
-    port: parseInt(process.env.CDN_PLUGIN_PORT ?? process.env.PORT ?? '3204', 10),
+    port: parseInt(process.env.CDN_PLUGIN_PORT ?? process.env.PORT ?? '3036', 10),
     host: process.env.CDN_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
 
     // Database

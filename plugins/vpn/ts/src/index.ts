@@ -106,7 +106,7 @@ async function initialize() {
       logger.info('✓ Shutdown complete');
       process.exit(0);
     } catch (error) {
-      logger.error('Error during shutdown', error);
+      logger.error('Error during shutdown', { error: error instanceof Error ? error.message : String(error) });
       process.exit(1);
     }
   };

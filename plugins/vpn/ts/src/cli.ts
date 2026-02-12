@@ -19,8 +19,11 @@ const program = new Command();
 // Initialize database
 const db = new VPNDatabase(config.database_url);
 
-// Encryption key for credentials (from env or prompt)
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-key-change-in-production';
+// Encryption key for credentials (must be set via environment variable)
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+  throw new Error('ENCRYPTION_KEY environment variable is required. Set a strong random key for credential encryption.');
+}
 
 // ============================================================================
 // Helper Functions
@@ -435,7 +438,7 @@ program
   .action(async (magnetLink: string, options) => {
     console.log(chalk.yellow('\n⚠ Torrent download feature requires server to be running'));
     console.log(chalk.gray('Start server with: npx tsx src/index.ts'));
-    console.log(chalk.gray('Then use: curl -X POST http://localhost:3010/api/download -d \'{"magnet_link":"..."}\''));
+    console.log(chalk.gray('Then use: curl -X POST http://localhost:3200/api/download -d \'{"magnet_link":"..."}\''));
     console.log('');
   });
 
@@ -486,7 +489,7 @@ program
       console.log('');
 
       // Store result in database
-      await db.pool.query(
+      await db.query(
         `INSERT INTO vpn_leak_tests (connection_id, test_type, passed, expected_value, actual_value)
          VALUES ($1, $2, $3, $4, $5)`,
         [connection.id, 'comprehensive', result.passed, 'no leaks', JSON.stringify(result.tests)]

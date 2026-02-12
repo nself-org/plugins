@@ -3,6 +3,7 @@
  */
 
 import { Transmission } from '@ctrl/transmission';
+import type { Torrent } from '@ctrl/transmission';
 import { createLogger } from '@nself/plugin-utils';
 import { BaseTorrentClient } from './base.js';
 import type {
@@ -30,13 +31,13 @@ export class TransmissionClient extends BaseTorrentClient {
 
   async connect(): Promise<boolean> {
     try {
-      // Test connection by getting session stats
-      await this.client.sessionStats();
+      // Test connection by getting session info
+      await this.client.getSession();
       this.connected = true;
       logger.info('Connected to Transmission', { host: this.host, port: this.port });
       return true;
     } catch (error) {
-      logger.error('Failed to connect to Transmission', error);
+      logger.error('Failed to connect to Transmission', { error: error instanceof Error ? error.message : String(error) });
       this.connected = false;
       return false;
     }
@@ -54,7 +55,7 @@ export class TransmissionClient extends BaseTorrentClient {
     }
 
     try {
-      await this.client.sessionStats();
+      await this.client.getSession();
       return true;
     } catch {
       this.connected = false;
@@ -67,31 +68,30 @@ export class TransmissionClient extends BaseTorrentClient {
 
     try {
       const result = await this.client.addUrl(magnetUri, {
-        'download-dir': options.download_path,
-        paused: options.paused,
+        'download-dir': options.download_path || this.getDownloadPath(),
+        paused: options.paused ?? false,
       });
 
-      if (!result.added) {
+      const torrentAdded = result.arguments['torrent-added'];
+      if (!torrentAdded) {
         throw new Error('Failed to add torrent to Transmission');
       }
-
-      const torrent = result.added;
 
       // Map Transmission torrent to TorrentDownload
       const download: TorrentDownload = {
         id: '', // Will be set by database
         source_account_id: 'primary',
         client_id: '', // Will be set by caller
-        client_torrent_id: String(torrent.id),
+        client_torrent_id: String(torrentAdded.id),
 
-        name: torrent.name,
-        info_hash: torrent.hashString,
+        name: torrentAdded.name,
+        info_hash: torrentAdded.hashString,
         magnet_uri: magnetUri,
 
         status: options.paused ? 'paused' : 'queued',
         category: options.category || 'other',
 
-        size_bytes: torrent.totalSize || 0,
+        size_bytes: 0,
         downloaded_bytes: 0,
         uploaded_bytes: 0,
         progress_percent: 0,
@@ -114,83 +114,84 @@ export class TransmissionClient extends BaseTorrentClient {
         updated_at: new Date(),
       };
 
-      logger.info('Torrent added successfully', { id: torrent.id, name: torrent.name });
+      logger.info('Torrent added successfully', { id: torrentAdded.id, name: torrentAdded.name });
       return download;
     } catch (error) {
-      logger.error('Failed to add torrent', error);
+      logger.error('Failed to add torrent', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
 
   async getTorrent(id: string): Promise<TorrentDownload | null> {
     try {
-      const result = await this.client.get([parseInt(id, 10)]);
-      if (!result.torrents || result.torrents.length === 0) {
+      const result = await this.client.listTorrents([parseInt(id, 10)]);
+      if (!result.arguments.torrents || result.arguments.torrents.length === 0) {
         return null;
       }
 
-      const torrent = result.torrents[0];
+      const torrent = result.arguments.torrents[0];
       return this.mapTorrentToDownload(torrent);
     } catch (error) {
-      logger.error('Failed to get torrent', error);
+      logger.error('Failed to get torrent', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
 
   async listTorrents(filter?: TorrentFilter): Promise<TorrentDownload[]> {
     try {
-      const result = await this.client.get();
-      const torrents = result.torrents || [];
+      const result = await this.client.listTorrents();
+      const torrents = result.arguments.torrents || [];
 
       let filtered = torrents;
 
       // Apply status filter
       if (filter?.status) {
-        filtered = filtered.filter((t) => {
+        filtered = filtered.filter((t: Torrent) => {
           const status = this.mapTransmissionStatus(t.status);
           return status === filter.status;
         });
       }
 
-      return filtered.map((t) => this.mapTorrentToDownload(t));
+      return filtered.map((t: Torrent) => this.mapTorrentToDownload(t));
     } catch (error) {
-      logger.error('Failed to list torrents', error);
+      logger.error('Failed to list torrents', { error: error instanceof Error ? error.message : String(error) });
       return [];
     }
   }
 
   async pauseTorrent(id: string): Promise<void> {
     logger.info('Pausing torrent', { id });
-    await this.client.stop([parseInt(id, 10)]);
+    await this.client.pauseTorrent([parseInt(id, 10)]);
   }
 
   async resumeTorrent(id: string): Promise<void> {
     logger.info('Resuming torrent', { id });
-    await this.client.start([parseInt(id, 10)]);
+    await this.client.resumeTorrent([parseInt(id, 10)]);
   }
 
   async removeTorrent(id: string, deleteFiles: boolean): Promise<void> {
     logger.info('Removing torrent', { id, deleteFiles });
-    await this.client.remove([parseInt(id, 10)], deleteFiles);
+    await this.client.removeTorrent([parseInt(id, 10)], deleteFiles);
   }
 
   async getStats(): Promise<TorrentClientStats> {
     try {
-      const stats = await this.client.sessionStats();
-      const result = await this.client.get();
+      const session = await this.client.getSession();
+      const result = await this.client.listTorrents();
+      const torrents = result.arguments.torrents || [];
 
       return {
-        total_torrents: stats['torrent-count'] || 0,
-        active_torrents: stats.activeTorrentCount || 0,
-        paused_torrents: stats.pausedTorrentCount || 0,
-        seeding_torrents: result.torrents?.filter((t) => t.status === 6).length || 0,
-        download_speed_bytes: stats.downloadSpeed || 0,
-        upload_speed_bytes: stats.uploadSpeed || 0,
-        downloaded_bytes: stats['cumulative-stats']?.downloadedBytes || 0,
-        uploaded_bytes: stats['cumulative-stats']?.uploadedBytes || 0,
+        total_torrents: torrents.length,
+        active_torrents: torrents.filter((t: Torrent) => t.status === 4).length,
+        paused_torrents: torrents.filter((t: Torrent) => t.status === 0).length,
+        seeding_torrents: torrents.filter((t: Torrent) => t.status === 6).length,
+        download_speed_bytes: torrents.reduce((sum: number, t: Torrent) => sum + (t.rateDownload || 0), 0),
+        upload_speed_bytes: torrents.reduce((sum: number, t: Torrent) => sum + (t.rateUpload || 0), 0),
+        downloaded_bytes: torrents.reduce((sum: number, t: Torrent) => sum + (t.downloadedEver || 0), 0),
+        uploaded_bytes: torrents.reduce((sum: number, t: Torrent) => sum + (t.uploadedEver || 0), 0),
       };
     } catch (error) {
-      logger.error('Failed to get stats', error);
+      logger.error('Failed to get stats', { error: error instanceof Error ? error.message : String(error) });
       return {
         total_torrents: 0,
         active_torrents: 0,
@@ -208,7 +209,7 @@ export class TransmissionClient extends BaseTorrentClient {
   // Helper Methods
   // ============================================================================
 
-  private mapTorrentToDownload(torrent: any): TorrentDownload {
+  private mapTorrentToDownload(torrent: Torrent): TorrentDownload {
     const status = this.mapTransmissionStatus(torrent.status);
 
     return {
@@ -219,7 +220,7 @@ export class TransmissionClient extends BaseTorrentClient {
 
       name: torrent.name,
       info_hash: torrent.hashString,
-      magnet_uri: '',
+      magnet_uri: torrent.magnetLink || '',
 
       status,
       category: 'other',
@@ -243,7 +244,7 @@ export class TransmissionClient extends BaseTorrentClient {
       requested_by: 'transmission',
 
       added_at: new Date(torrent.addedDate * 1000),
-      started_at: torrent.startDate ? new Date(torrent.startDate * 1000) : undefined,
+      started_at: torrent.activityDate ? new Date(torrent.activityDate * 1000) : undefined,
       completed_at: torrent.doneDate ? new Date(torrent.doneDate * 1000) : undefined,
 
       created_at: new Date(),

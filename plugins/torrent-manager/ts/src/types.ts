@@ -151,6 +151,9 @@ export interface TorrentDownload {
   vpn_ip?: string;
   vpn_interface?: string;
 
+  // Error tracking
+  error_message?: string;
+
   // Metadata
   content_id?: string;
   requested_by: string;

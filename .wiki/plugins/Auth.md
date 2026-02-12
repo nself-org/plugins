@@ -1,97 +1,22 @@
 # Auth Plugin
 
-**Category:** Authentication
-**Port:** 3014
-**Version:** 1.0.0
+Advanced authentication plugin supporting OAuth (Google, Apple, Facebook, GitHub, Microsoft), WebAuthn/passkeys, TOTP 2FA with backup codes, magic links, device code flow, session management, and login attempt tracking.
 
-Advanced authentication methods service that extends nSelf's core JWT auth. Provides OAuth provider integration (Google, Apple, Facebook, GitHub, Microsoft), WebAuthn/passkey registration and verification, TOTP 2FA enrollment and verification, magic link email flow, device-code flow (TV login pattern), and session management.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Quick Start](#quick-start)
-3. [Configuration](#configuration)
-4. [CLI Commands](#cli-commands)
-5. [REST API](#rest-api)
-6. [Database Schema](#database-schema)
-7. [Webhook Events](#webhook-events)
-8. [Multi-App Support](#multi-app-support)
-9. [Security](#security)
-10. [Troubleshooting](#troubleshooting)
-
----
-
-## Overview
-
-### What It Does
-
-The auth plugin provides advanced authentication methods:
-
-- **OAuth Integration**: Google, Apple, Facebook, GitHub, Microsoft
-- **WebAuthn/Passkeys**: FIDO2-based passwordless authentication
-- **TOTP 2FA**: Time-based one-time password two-factor authentication
-- **Magic Links**: Email-based passwordless login
-- **Device Code Flow**: TV/device login (scan QR or enter code on phone)
-- **Session Management**: Cross-device session tracking and remote logout
-- **Login Attempt Tracking**: Rate limiting and security monitoring
-
-### What It Does NOT Do
-
-- Does NOT replace nSelf core auth (JWT tokens, basic user table)
-- Does NOT handle government identity verification (idme plugin does that)
-- Does NOT send notification emails directly (delegates to notifications plugin)
-
-### Use Cases
-
-- **Multi-platform apps**: OAuth login for web/mobile apps
-- **TV apps**: Device code flow for Android TV, Fire TV, Roku, Apple TV
-- **High-security apps**: TOTP 2FA for admin accounts
-- **Passwordless auth**: WebAuthn passkeys or magic links
-- **Session security**: Remote logout, device tracking
+| Property | Value |
+|----------|-------|
+| **Port** | `3014` |
+| **Category** | `authentication` |
+| **Multi-App** | `source_account_id` (UUID) |
+| **Min nself** | `0.4.8` |
 
 ---
 
 ## Quick Start
 
-### 1. Install Dependencies
-
 ```bash
-cd plugins/auth/ts
-npm install
+nself plugin run auth init
+nself plugin run auth server
 ```
-
-### 2. Set Required Environment Variables
-
-```bash
-# Required
-export AUTH_ENCRYPTION_KEY="your-32-character-encryption-key-here"
-export DATABASE_URL="postgresql://user:pass@localhost:5432/nself"
-
-# Optional OAuth providers
-export AUTH_GOOGLE_CLIENT_ID="your-google-client-id"
-export AUTH_GOOGLE_CLIENT_SECRET="your-google-client-secret"
-```
-
-### 3. Initialize Database
-
-```bash
-npm run build
-node dist/cli.js init
-```
-
-### 4. Start Server
-
-```bash
-# Development
-npm run dev
-
-# Production
-npm start
-```
-
-The server will start on `http://localhost:3014`.
 
 ---
 
@@ -101,195 +26,103 @@ The server will start on `http://localhost:3014`.
 
 | Variable | Description |
 |----------|-------------|
-| `AUTH_ENCRYPTION_KEY` | Encryption key for tokens and secrets (minimum 32 characters) |
 | `DATABASE_URL` | PostgreSQL connection string |
+| `AUTH_ENCRYPTION_KEY` | Encryption key for tokens and secrets (AES-256) |
 
 ### Optional Environment Variables
 
-#### Server Configuration
+#### Server
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_PLUGIN_PORT` | `3014` | HTTP server port |
-| `AUTH_PLUGIN_HOST` | `0.0.0.0` | HTTP server host |
-| `AUTH_LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
-| `AUTH_APP_IDS` | `primary` | Comma-separated app IDs for multi-app mode |
+| `AUTH_PLUGIN_PORT` | `3014` | Server port |
+| `AUTH_PLUGIN_HOST` | `0.0.0.0` | Server host |
+| `AUTH_LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
+| `AUTH_APP_IDS` | - | Comma-separated app IDs for multi-app |
 
-#### OAuth - Google
+#### OAuth Providers
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTH_GOOGLE_CLIENT_ID` | - | Google OAuth client ID |
 | `AUTH_GOOGLE_CLIENT_SECRET` | - | Google OAuth client secret |
-| `AUTH_GOOGLE_SCOPES` | `email,profile` | OAuth scopes |
+| `AUTH_GOOGLE_SCOPES` | `openid,email,profile` | Google OAuth scopes |
+| `AUTH_APPLE_CLIENT_ID` | - | Apple Sign-In client ID |
+| `AUTH_APPLE_TEAM_ID` | - | Apple Developer team ID |
+| `AUTH_APPLE_KEY_ID` | - | Apple Sign-In key ID |
+| `AUTH_APPLE_PRIVATE_KEY` | - | Apple Sign-In private key (PEM) |
+| `AUTH_FACEBOOK_APP_ID` | - | Facebook app ID |
+| `AUTH_FACEBOOK_APP_SECRET` | - | Facebook app secret |
+| `AUTH_GITHUB_CLIENT_ID` | - | GitHub OAuth app client ID |
+| `AUTH_GITHUB_CLIENT_SECRET` | - | GitHub OAuth app client secret |
+| `AUTH_MICROSOFT_CLIENT_ID` | - | Microsoft (Azure AD) client ID |
+| `AUTH_MICROSOFT_CLIENT_SECRET` | - | Microsoft (Azure AD) client secret |
 
-#### OAuth - Apple
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_APPLE_CLIENT_ID` | - | Apple client ID (Services ID) |
-| `AUTH_APPLE_TEAM_ID` | - | Apple Team ID |
-| `AUTH_APPLE_KEY_ID` | - | Apple Key ID |
-| `AUTH_APPLE_PRIVATE_KEY` | - | Apple private key (P8 file contents) |
-
-#### OAuth - Facebook
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_FACEBOOK_APP_ID` | - | Facebook App ID |
-| `AUTH_FACEBOOK_APP_SECRET` | - | Facebook App Secret |
-
-#### OAuth - GitHub
+#### WebAuthn
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_GITHUB_CLIENT_ID` | - | GitHub OAuth client ID |
-| `AUTH_GITHUB_CLIENT_SECRET` | - | GitHub OAuth client secret |
-
-#### OAuth - Microsoft
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_MICROSOFT_CLIENT_ID` | - | Microsoft client ID |
-| `AUTH_MICROSOFT_CLIENT_SECRET` | - | Microsoft client secret |
-
-#### WebAuthn/Passkeys
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_WEBAUTHN_RP_NAME` | `nSelf` | Relying Party name |
-| `AUTH_WEBAUTHN_RP_ID` | `localhost` | Relying Party ID (domain) |
-| `AUTH_WEBAUTHN_ORIGIN` | `http://localhost:3014` | WebAuthn origin URL |
+| `AUTH_WEBAUTHN_RP_NAME` | - | Relying party name (your app name) |
+| `AUTH_WEBAUTHN_RP_ID` | - | Relying party ID (domain, e.g., `example.com`) |
+| `AUTH_WEBAUTHN_ORIGIN` | - | Expected origin (e.g., `https://example.com`) |
 
 #### TOTP 2FA
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_TOTP_ISSUER` | `nSelf` | TOTP issuer name |
-| `AUTH_TOTP_ALGORITHM` | `SHA1` | TOTP algorithm |
-| `AUTH_TOTP_DIGITS` | `6` | Number of digits |
-| `AUTH_TOTP_PERIOD` | `30` | Time period (seconds) |
-| `AUTH_TOTP_BACKUP_CODE_COUNT` | `10` | Number of backup codes |
+| `AUTH_TOTP_ISSUER` | - | TOTP issuer name (shown in authenticator apps) |
+| `AUTH_TOTP_ALGORITHM` | `SHA1` | TOTP hash algorithm |
+| `AUTH_TOTP_DIGITS` | `6` | Number of digits in TOTP code |
+| `AUTH_TOTP_PERIOD` | `30` | TOTP time step in seconds |
+| `AUTH_TOTP_BACKUP_CODE_COUNT` | `10` | Number of backup codes to generate |
 
 #### Magic Links
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_MAGIC_LINK_EXPIRY_SECONDS` | `600` | Link expiry time (10 minutes) |
-| `AUTH_MAGIC_LINK_BASE_URL` | - | Base URL for magic links |
+| `AUTH_MAGIC_LINK_EXPIRY_SECONDS` | `600` | Magic link token expiry (10 minutes) |
+| `AUTH_MAGIC_LINK_BASE_URL` | - | Base URL for magic link verification page |
 
 #### Device Code Flow
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTH_DEVICE_CODE_EXPIRY_SECONDS` | `600` | Code expiry time (10 minutes) |
-| `AUTH_DEVICE_CODE_POLL_INTERVAL` | `5` | Polling interval (seconds) |
-| `AUTH_DEVICE_CODE_LENGTH` | `8` | User code length |
+| `AUTH_DEVICE_CODE_EXPIRY_SECONDS` | `600` | Device code expiry (10 minutes) |
+| `AUTH_DEVICE_CODE_POLL_INTERVAL` | `5` | Minimum poll interval in seconds |
+| `AUTH_DEVICE_CODE_LENGTH` | `8` | Length of user-visible code |
 
 #### Sessions
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTH_SESSION_MAX_PER_USER` | `10` | Maximum concurrent sessions per user |
-| `AUTH_SESSION_IDLE_TIMEOUT_HOURS` | `24` | Idle timeout (hours) |
-| `AUTH_SESSION_ABSOLUTE_TIMEOUT_HOURS` | `720` | Absolute timeout (30 days) |
+| `AUTH_SESSION_IDLE_TIMEOUT_HOURS` | `24` | Idle session timeout |
+| `AUTH_SESSION_ABSOLUTE_TIMEOUT_HOURS` | `720` | Absolute session timeout (30 days) |
 
 #### Security
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTH_LOGIN_MAX_ATTEMPTS` | `5` | Max failed login attempts before lockout |
-| `AUTH_LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration (minutes) |
-
-#### Cleanup
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_CLEANUP_CRON` | `0 */6 * * *` | Cron schedule for cleanup (every 6 hours) |
+| `AUTH_LOGIN_LOCKOUT_MINUTES` | `15` | Lockout duration after max failures |
+| `AUTH_CLEANUP_CRON` | - | Cron expression for automatic cleanup |
 
 ---
 
 ## CLI Commands
 
-### Initialize Database
-
-```bash
-nself plugin auth init
-```
-
-Initializes the auth database schema (7 tables).
-
-### Start Server
-
-```bash
-nself plugin auth server
-```
-
-Starts the auth HTTP server on the configured port.
-
-### List Sessions
-
-```bash
-nself plugin auth sessions --user user-123
-```
-
-Lists all active sessions for a user.
-
-### Revoke Session
-
-```bash
-nself plugin auth revoke-session --session-id <uuid> --reason "Security"
-```
-
-Revokes a specific session (remote logout).
-
-### Revoke All Sessions
-
-```bash
-nself plugin auth revoke-all --user user-123 --except <session-id> --reason "Password reset"
-```
-
-Revokes all sessions for a user, optionally excluding the current session.
-
-### Check MFA Status
-
-```bash
-nself plugin auth mfa-status --user user-123
-```
-
-Checks TOTP 2FA enrollment status for a user.
-
-### View Login Attempts
-
-```bash
-nself plugin auth login-attempts --user user-123 --limit 20
-```
-
-Shows recent login attempts for a user.
-
-### List OAuth Connections
-
-```bash
-nself plugin auth oauth-connections --user user-123
-```
-
-Lists all OAuth provider connections for a user.
-
-### Cleanup Expired Data
-
-```bash
-nself plugin auth cleanup-expired
-```
-
-Cleans up expired device codes, magic links, sessions, and old login attempts.
-
-### Show Statistics
-
-```bash
-nself plugin auth stats
-```
-
-Displays plugin statistics (OAuth providers, passkeys, MFA enrollments, active sessions, etc.).
+| Command | Description |
+|---------|-------------|
+| `init` | Initialize database schema (7 tables) |
+| `server` | Start the HTTP API server |
+| `sessions` | List active sessions for a user (`--user`) |
+| `revoke-session` | Revoke a specific session (`--session-id`, `--reason?`) |
+| `revoke-all` | Revoke all sessions for a user (`--user`, `--except?`, `--reason?`) |
+| `mfa-status` | Check MFA enrollment status (`--user`) |
+| `login-attempts` | View recent login attempts (`--user`, `--limit?`) |
+| `oauth-connections` | List OAuth connections for a user (`--user`) |
+| `cleanup-expired` | Clean up expired device codes, magic links, sessions, and old login attempts |
+| `stats` | Show auth plugin statistics |
 
 ---
 
@@ -297,814 +130,74 @@ Displays plugin statistics (OAuth providers, passkeys, MFA enrollments, active s
 
 ### Health & Status
 
-#### GET /health
-
-Health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "plugin": "auth",
-  "timestamp": "2026-02-10T12:00:00Z",
-  "version": "1.0.0"
-}
-```
-
-#### GET /ready
-
-Readiness check (includes database connectivity).
-
-**Response:**
-```json
-{
-  "ready": true,
-  "database": "ok",
-  "timestamp": "2026-02-10T12:00:00Z"
-}
-```
-
-#### GET /live
-
-Liveness check with detailed stats.
-
-**Response:**
-```json
-{
-  "alive": true,
-  "uptime": 3600,
-  "memory": {
-    "used": 50000000,
-    "total": 100000000
-  },
-  "stats": {
-    "oauthProviders": 150,
-    "passkeys": 45,
-    "mfaEnrollments": 30,
-    "activeSessions": 200,
-    "activeDeviceCodes": 5,
-    "pendingMagicLinks": 10,
-    "recentLoginAttempts": 50
-  }
-}
-```
-
-### OAuth Endpoints
-
-#### GET /api/oauth/providers
-
-List configured OAuth providers for current app.
-
-**Response:**
-```json
-{
-  "providers": [
-    { "name": "google", "displayName": "Google", "enabled": true },
-    { "name": "apple", "displayName": "Apple", "enabled": true }
-  ]
-}
-```
-
-#### GET /api/oauth/:provider/start
-
-Initiate OAuth flow.
-
-**Query Parameters:**
-- `redirectUri` (required): OAuth callback URL
-- `state` (optional): CSRF state
-- `scopes` (optional): Comma-separated scopes
-
-**Response:**
-```json
-{
-  "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?...",
-  "state": "random-state-value"
-}
-```
-
-#### GET /api/oauth/:provider/callback
-
-OAuth callback handler.
-
-**Query Parameters:**
-- `code` (required): Authorization code
-- `state` (required): CSRF state
-
-**Response:**
-```json
-{
-  "userId": "user-123",
-  "provider": "google",
-  "providerEmail": "user@example.com",
-  "providerName": "John Doe",
-  "providerAvatarUrl": "https://...",
-  "accessToken": "...",
-  "refreshToken": "..."
-}
-```
-
-#### POST /api/oauth/:provider/link
-
-Link OAuth account to existing user.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123",
-  "code": "authorization-code",
-  "redirectUri": "https://app.com/callback"
-}
-```
-
-**Response:**
-```json
-{
-  "linked": true,
-  "provider": "google",
-  "providerEmail": "user@example.com"
-}
-```
-
-#### DELETE /api/oauth/:provider/unlink
-
-Unlink OAuth account.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-#### GET /api/oauth/connections/:userId
-
-List user's OAuth connections.
-
-**Response:**
-```json
-{
-  "connections": [
-    {
-      "provider": "google",
-      "providerEmail": "user@example.com",
-      "providerName": "John Doe",
-      "linkedAt": "2026-01-15T10:00:00Z",
-      "lastUsedAt": "2026-02-10T08:30:00Z"
-    }
-  ]
-}
-```
-
-### WebAuthn/Passkeys Endpoints
-
-#### POST /api/passkeys/register/start
-
-Start passkey registration.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123",
-  "userName": "john@example.com",
-  "userDisplayName": "John Doe"
-}
-```
-
-**Response:**
-```json
-{
-  "options": {
-    "challenge": "...",
-    "rp": { "name": "nSelf", "id": "example.com" },
-    "user": { "id": "...", "name": "john@example.com", "displayName": "John Doe" },
-    "pubKeyCredParams": [...],
-    "authenticatorSelection": {...},
-    "timeout": 60000
-  }
-}
-```
-
-#### POST /api/passkeys/register/finish
-
-Complete passkey registration.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123",
-  "credential": { /* WebAuthn attestation response */ },
-  "friendlyName": "MacBook Pro TouchID"
-}
-```
-
-**Response:**
-```json
-{
-  "credentialId": "...",
-  "deviceType": "platform"
-}
-```
-
-#### POST /api/passkeys/authenticate/start
-
-Start passkey authentication.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123"
-}
-```
-
-**Response:**
-```json
-{
-  "options": {
-    "challenge": "...",
-    "rpId": "example.com",
-    "allowCredentials": [...],
-    "timeout": 60000
-  }
-}
-```
-
-#### POST /api/passkeys/authenticate/finish
-
-Complete passkey authentication.
-
-**Request Body:**
-```json
-{
-  "credential": { /* WebAuthn assertion response */ }
-}
-```
-
-**Response:**
-```json
-{
-  "userId": "user-123",
-  "accessToken": "...",
-  "refreshToken": "..."
-}
-```
-
-#### GET /api/passkeys/:userId
-
-List registered passkeys.
-
-**Response:**
-```json
-{
-  "passkeys": [
-    {
-      "id": "uuid",
-      "credentialId": "...",
-      "deviceType": "platform",
-      "friendlyName": "MacBook Pro TouchID",
-      "lastUsedAt": "2026-02-10T08:00:00Z",
-      "createdAt": "2026-01-15T10:00:00Z"
-    }
-  ]
-}
-```
-
-#### DELETE /api/passkeys/:credentialId
-
-Remove a passkey.
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-### TOTP 2FA Endpoints
-
-#### POST /api/mfa/totp/enroll
-
-Start TOTP enrollment.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123"
-}
-```
-
-**Response:**
-```json
-{
-  "secret": "JBSWY3DPEHPK3PXP",
-  "qrCodeDataUrl": "data:image/png;base64,...",
-  "otpauthUrl": "otpauth://totp/nSelf:user@example.com?secret=...",
-  "backupCodes": ["12345678", "87654321", ...]
-}
-```
-
-#### POST /api/mfa/totp/verify
-
-Verify TOTP code (completes enrollment or validates login).
-
-**Request Body:**
-```json
-{
-  "userId": "user-123",
-  "code": "123456"
-}
-```
-
-**Response:**
-```json
-{
-  "valid": true,
-  "enrolled": true
-}
-```
-
-#### POST /api/mfa/totp/validate
-
-Validate TOTP code during login.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123",
-  "code": "123456"
-}
-```
-
-**Response:**
-```json
-{
-  "valid": true
-}
-```
-
-#### POST /api/mfa/backup-code/validate
-
-Validate a backup code.
-
-**Request Body:**
-```json
-{
-  "userId": "user-123",
-  "code": "12345678"
-}
-```
-
-**Response:**
-```json
-{
-  "valid": true,
-  "remainingBackupCodes": 9
-}
-```
-
-#### DELETE /api/mfa/totp/:userId
-
-Disable TOTP for user.
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-#### GET /api/mfa/status/:userId
-
-Check MFA enrollment status.
-
-**Response:**
-```json
-{
-  "enrolled": true,
-  "method": "totp",
-  "backupCodesRemaining": 8,
-  "verified": true
-}
-```
-
-### Magic Link Endpoints
-
-#### POST /api/magic-link/send
-
-Send a magic link email.
-
-**Request Body:**
-```json
-{
-  "email": "user@example.com",
-  "purpose": "login",
-  "redirectUrl": "https://app.com/auth/verify"
-}
-```
-
-**Response:**
-```json
-{
-  "sent": true,
-  "expiresIn": 600
-}
-```
-
-#### POST /api/magic-link/verify
-
-Verify a magic link token.
-
-**Request Body:**
-```json
-{
-  "token": "random-token-value"
-}
-```
-
-**Response:**
-```json
-{
-  "valid": true,
-  "userId": "user-123",
-  "email": "user@example.com",
-  "purpose": "login"
-}
-```
-
-### Device Code Endpoints
-
-#### POST /api/device-code/initiate
-
-Start device code flow (TV login).
-
-**Request Body:**
-```json
-{
-  "deviceId": "tv-device-001",
-  "deviceName": "Living Room TV",
-  "deviceType": "android_tv"
-}
-```
-
-**Response:**
-```json
-{
-  "deviceCode": "xxxx-xxxx-xxxx",
-  "userCode": "ABCD-1234",
-  "verificationUrl": "https://app.com/activate",
-  "expiresIn": 600,
-  "pollInterval": 5
-}
-```
-
-#### GET /api/device-code/poll
-
-Device polls for authorization.
-
-**Query Parameters:**
-- `deviceCode` (required): Device code from initiate
-
-**Response (pending):**
-```json
-{
-  "status": "pending"
-}
-```
-
-**Response (authorized):**
-```json
-{
-  "status": "authorized",
-  "userId": "user-123",
-  "accessToken": "...",
-  "refreshToken": "..."
-}
-```
-
-#### POST /api/device-code/authorize
-
-User authorizes device (from phone/web).
-
-**Request Body:**
-```json
-{
-  "userCode": "ABCD-1234",
-  "userId": "user-123"
-}
-```
-
-**Response:**
-```json
-{
-  "authorized": true,
-  "deviceName": "Living Room TV"
-}
-```
-
-#### POST /api/device-code/deny
-
-User denies device authorization.
-
-**Request Body:**
-```json
-{
-  "userCode": "ABCD-1234"
-}
-```
-
-**Response:**
-```json
-{
-  "denied": true
-}
-```
-
-### Session Endpoints
-
-#### GET /api/sessions/:userId
-
-List active sessions for user.
-
-**Response:**
-```json
-{
-  "sessions": [
-    {
-      "id": "uuid",
-      "deviceName": "iPhone 14 Pro",
-      "deviceType": "mobile",
-      "ipAddress": "192.168.1.100",
-      "location": "San Francisco, US",
-      "lastActivity": "2026-02-10T12:00:00Z",
-      "authMethod": "oauth",
-      "createdAt": "2026-02-10T08:00:00Z",
-      "isCurrentSession": true
-    }
-  ]
-}
-```
-
-#### DELETE /api/sessions/:sessionId
-
-Revoke a specific session (remote logout).
-
-**Request Body:**
-```json
-{
-  "reason": "Security concern"
-}
-```
-
-**Response:**
-```json
-{
-  "revoked": true
-}
-```
-
-#### DELETE /api/sessions/user/:userId
-
-Revoke all sessions for user (force logout everywhere).
-
-**Request Body:**
-```json
-{
-  "exceptSessionId": "current-session-uuid",
-  "reason": "Password reset"
-}
-```
-
-**Response:**
-```json
-{
-  "revoked": 5
-}
-```
-
-### Login Attempts Endpoints
-
-#### GET /api/login-attempts/:userId
-
-Get recent login attempts.
-
-**Query Parameters:**
-- `limit` (optional, default 20): Number of attempts
-
-**Response:**
-```json
-{
-  "attempts": [
-    {
-      "id": "uuid",
-      "method": "oauth",
-      "outcome": "success",
-      "failureReason": null,
-      "ipAddress": "192.168.1.100",
-      "userAgent": "Mozilla/5.0...",
-      "createdAt": "2026-02-10T12:00:00Z"
-    }
-  ]
-}
-```
-
----
-
-## Database Schema
-
-### np_auth_oauth_providers
-
-OAuth provider account connections.
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `user_id` | VARCHAR(255) | User ID |
-| `provider` | VARCHAR(50) | Provider name (google, apple, etc.) |
-| `provider_user_id` | VARCHAR(255) | Provider's user ID |
-| `provider_email` | VARCHAR(255) | Email from provider |
-| `provider_name` | VARCHAR(255) | Display name from provider |
-| `provider_avatar_url` | TEXT | Avatar URL |
-| `access_token_encrypted` | TEXT | Encrypted access token |
-| `refresh_token_encrypted` | TEXT | Encrypted refresh token |
-| `token_expires_at` | TIMESTAMPTZ | Token expiry |
-| `scopes` | TEXT[] | OAuth scopes |
-| `raw_profile` | JSONB | Full profile data |
-| `linked_at` | TIMESTAMPTZ | When linked |
-| `last_used_at` | TIMESTAMPTZ | Last authentication |
+| `GET` | `/health` | Health check |
+| `GET` | `/ready` | Readiness check (DB) |
+| `GET` | `/live` | Liveness with memory/uptime/stats |
 
-**Indexes:**
-- `idx_auth_oauth_source_app` on `(source_account_id)`
-- `idx_auth_oauth_user` on `(source_account_id, user_id)`
+### OAuth
 
-**Unique Constraints:**
-- `(source_account_id, provider, provider_user_id)`
-- `(source_account_id, user_id, provider)`
-
-### np_auth_passkeys
-
-WebAuthn/FIDO2 passkey credentials.
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `user_id` | VARCHAR(255) | User ID |
-| `credential_id` | TEXT | WebAuthn credential ID |
-| `public_key` | TEXT | Public key |
-| `counter` | BIGINT | Signature counter (anti-replay) |
-| `device_type` | VARCHAR(50) | platform or cross-platform |
-| `backed_up` | BOOLEAN | Cloud backup status |
-| `transports` | TEXT[] | Available transports |
-| `friendly_name` | VARCHAR(255) | User-assigned name |
-| `last_used_at` | TIMESTAMPTZ | Last authentication |
-| `created_at` | TIMESTAMPTZ | Registration time |
+| `GET` | `/api/oauth/providers` | List configured OAuth providers |
+| `GET` | `/api/oauth/:provider/start` | Start OAuth flow (query: `redirectUri`, `state?`, `scopes?`) -- returns `authorizationUrl` |
+| `GET` | `/api/oauth/:provider/callback` | Handle OAuth callback (query: `code`, `state`) -- returns user info and tokens |
+| `POST` | `/api/oauth/:provider/link` | Link OAuth account to existing user (body: `userId`, `code`, `redirectUri`) |
+| `DELETE` | `/api/oauth/:provider/unlink` | Unlink OAuth account (body: `userId`) |
+| `GET` | `/api/oauth/connections/:userId` | List all OAuth connections for a user |
 
-**Indexes:**
-- `idx_auth_passkeys_source_app` on `(source_account_id)`
-- `idx_auth_passkeys_user` on `(source_account_id, user_id)`
+### WebAuthn / Passkeys
 
-**Unique Constraints:**
-- `(source_account_id, credential_id)`
-
-### np_auth_mfa_enrollments
-
-TOTP 2FA enrollments.
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `user_id` | VARCHAR(255) | User ID |
-| `method` | VARCHAR(50) | totp, sms, or email |
-| `secret_encrypted` | TEXT | Encrypted TOTP secret |
-| `algorithm` | VARCHAR(10) | SHA1, SHA256, SHA512 |
-| `digits` | INTEGER | Code length (6 or 8) |
-| `period` | INTEGER | Time period (seconds) |
-| `verified` | BOOLEAN | Enrollment verified |
-| `np_backup_codes_encrypted` | TEXT | Encrypted backup codes |
-| `np_backup_codes_remaining` | INTEGER | Remaining codes |
-| `enabled` | BOOLEAN | Currently enabled |
-| `last_used_at` | TIMESTAMPTZ | Last verification |
-| `created_at` | TIMESTAMPTZ | Enrollment time |
+| `POST` | `/api/passkeys/register/start` | Start passkey registration (body: `userId`, `userName`, `userDisplayName`) -- returns `PublicKeyCredentialCreationOptions` |
+| `POST` | `/api/passkeys/register/finish` | Complete passkey registration (body: `userId`, `credential`, `friendlyName?`) |
+| `POST` | `/api/passkeys/authenticate/start` | Start passkey authentication (body: `userId?`) -- returns `PublicKeyCredentialRequestOptions` |
+| `POST` | `/api/passkeys/authenticate/finish` | Complete passkey authentication (body: `credential`) -- returns `userId`, tokens |
+| `GET` | `/api/passkeys/:userId` | List registered passkeys for a user |
+| `DELETE` | `/api/passkeys/:credentialId` | Delete a passkey |
 
-**Indexes:**
-- `idx_auth_mfa_source_app` on `(source_account_id)`
-- `idx_auth_mfa_user` on `(source_account_id, user_id)`
+### MFA / TOTP
 
-**Unique Constraints:**
-- `(source_account_id, user_id, method)`
-
-### np_auth_device_codes
-
-Device code flow (TV login).
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `device_code` | VARCHAR(255) | Long device code |
-| `user_code` | VARCHAR(20) | Short user-friendly code |
-| `device_id` | VARCHAR(255) | Device identifier |
-| `device_name` | VARCHAR(255) | Device name |
-| `device_type` | VARCHAR(50) | android_tv, fire_tv, etc. |
-| `scopes` | TEXT[] | Requested scopes |
-| `status` | VARCHAR(20) | pending, authorized, denied, expired |
-| `user_id` | VARCHAR(255) | User who authorized |
-| `authorized_at` | TIMESTAMPTZ | Authorization time |
-| `expires_at` | TIMESTAMPTZ | Expiry time |
-| `poll_interval` | INTEGER | Polling interval (seconds) |
-| `created_at` | TIMESTAMPTZ | Creation time |
+| `POST` | `/api/mfa/totp/enroll` | Enroll in TOTP (body: `userId`) -- returns `secret`, `qrCodeDataUrl`, `otpauthUrl`, `backupCodes[]` |
+| `POST` | `/api/mfa/totp/verify` | Verify TOTP code to complete enrollment (body: `userId`, `code`) |
+| `POST` | `/api/mfa/totp/validate` | Validate TOTP code during login (body: `userId`, `code`) |
+| `POST` | `/api/mfa/backup-code/validate` | Validate a backup code (body: `userId`, `code`) -- returns `remainingBackupCodes` |
+| `DELETE` | `/api/mfa/totp/:userId` | Remove TOTP enrollment |
+| `GET` | `/api/mfa/status/:userId` | Get MFA enrollment status (`enrolled`, `method`, `backupCodesRemaining`, `verified`) |
 
-**Indexes:**
-- `idx_auth_device_codes_source_app` on `(source_account_id)`
-- `idx_auth_device_codes_user_code` on `(source_account_id, user_code)`
+### Magic Links
 
-**Unique Constraints:**
-- `(source_account_id, device_code)`
-- `(source_account_id, user_code)`
-
-### np_auth_magic_links
-
-Magic link tokens.
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `email` | VARCHAR(255) | Email address |
-| `token_hash` | VARCHAR(128) | Token hash |
-| `purpose` | VARCHAR(50) | login, verify, reset |
-| `used` | BOOLEAN | Token used |
-| `used_at` | TIMESTAMPTZ | Usage time |
-| `expires_at` | TIMESTAMPTZ | Expiry time |
-| `ip_address` | VARCHAR(45) | Request IP |
-| `created_at` | TIMESTAMPTZ | Creation time |
+| `POST` | `/api/magic-link/send` | Send magic link (body: `email`, `purpose`, `redirectUrl?`) -- purpose: `login`, `verify`, `reset` |
+| `POST` | `/api/magic-link/verify` | Verify magic link token (body: `token`) -- returns `valid`, `userId`, `email`, `purpose` |
 
-**Indexes:**
-- `idx_auth_magic_links_source_app` on `(source_account_id)`
-- `idx_auth_magic_links_email` on `(source_account_id, email)`
+### Device Code Flow
 
-**Unique Constraints:**
-- `(source_account_id, token_hash)`
-
-### np_auth_sessions
-
-User sessions.
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `user_id` | VARCHAR(255) | User ID |
-| `device_id` | VARCHAR(255) | Device identifier |
-| `device_name` | VARCHAR(255) | Device name |
-| `device_type` | VARCHAR(50) | mobile, desktop, tv, etc. |
-| `ip_address` | VARCHAR(45) | IP address |
-| `user_agent` | TEXT | User agent string |
-| `location_city` | VARCHAR(128) | City (from IP) |
-| `location_country` | VARCHAR(10) | Country code |
-| `np_auth_method` | VARCHAR(50) | password, oauth, passkey, magic_link, device_code |
-| `token_hash` | VARCHAR(128) | Session token hash |
-| `is_active` | BOOLEAN | Currently active |
-| `last_activity_at` | TIMESTAMPTZ | Last activity |
-| `expires_at` | TIMESTAMPTZ | Expiry time |
-| `revoked_at` | TIMESTAMPTZ | Revocation time |
-| `revoked_reason` | VARCHAR(255) | Revocation reason |
-| `created_at` | TIMESTAMPTZ | Creation time |
+| `POST` | `/api/device-code/initiate` | Start device code flow (body: `deviceId?`, `deviceName?`, `deviceType?`) -- returns `deviceCode`, `userCode`, `verificationUrl`, `expiresIn`, `pollInterval` |
+| `GET` | `/api/device-code/poll` | Poll for authorization (query: `deviceCode`) -- returns `status` (`pending`, `authorized`, `expired`, `denied`) |
+| `POST` | `/api/device-code/authorize` | Authorize device code (body: `userCode`, `userId`) |
+| `POST` | `/api/device-code/deny` | Deny device code (body: `userCode`) |
 
-**Indexes:**
-- `idx_auth_sessions_source_app` on `(source_account_id)`
-- `idx_auth_sessions_user` on `(source_account_id, user_id)`
-- `idx_auth_sessions_active` on `(source_account_id, user_id, is_active)`
+### Sessions
 
-### np_auth_login_attempts
-
-Login attempt tracking.
-
-| Column | Type | Description |
+| Method | Path | Description |
 |--------|------|-------------|
-| `id` | UUID | Primary key |
-| `source_account_id` | VARCHAR(128) | Multi-app isolation |
-| `email` | VARCHAR(255) | Email attempted |
-| `user_id` | VARCHAR(255) | User ID (if known) |
-| `ip_address` | VARCHAR(45) | IP address |
-| `method` | VARCHAR(50) | password, oauth, passkey, magic_link, device_code |
-| `outcome` | VARCHAR(20) | success, failure, blocked |
-| `failure_reason` | VARCHAR(255) | Failure reason |
-| `user_agent` | TEXT | User agent string |
-| `created_at` | TIMESTAMPTZ | Attempt time |
+| `GET` | `/api/sessions/:userId` | List active sessions (returns device, IP, location, auth method) |
+| `DELETE` | `/api/sessions/:sessionId` | Revoke a session (body: `reason?`) |
+| `DELETE` | `/api/sessions/user/:userId` | Revoke all sessions (body: `exceptSessionId?`, `reason?`) |
 
-**Indexes:**
-- `idx_auth_login_attempts_source_app` on `(source_account_id)`
-- `idx_auth_login_attempts_email` on `(source_account_id, email, created_at)`
-- `idx_auth_login_attempts_ip` on `(source_account_id, ip_address, created_at)`
+### Login Attempts
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/login-attempts/:userId` | List login attempts (query: `limit?`) |
 
 ---
 
@@ -1112,7 +205,7 @@ Login attempt tracking.
 
 | Event | Description |
 |-------|-------------|
-| `auth.oauth.linked` | OAuth account linked to user |
+| `auth.oauth.linked` | OAuth account linked |
 | `auth.oauth.unlinked` | OAuth account unlinked |
 | `auth.passkey.registered` | New passkey registered |
 | `auth.passkey.used` | Passkey authentication succeeded |
@@ -1123,132 +216,201 @@ Login attempt tracking.
 | `auth.device_code.initiated` | Device code flow started |
 | `auth.device_code.authorized` | Device code authorized by user |
 | `auth.device_code.denied` | Device code denied |
+| `auth.device_code.expired` | Device code expired |
 | `auth.session.created` | New session created |
 | `auth.session.revoked` | Session revoked (remote logout) |
 | `auth.login.success` | Successful login (any method) |
 | `auth.login.failure` | Failed login attempt |
+| `auth.login.blocked` | Login blocked (rate limit or policy) |
 
 ---
 
-## Multi-App Support
+## Authentication Methods
 
-The auth plugin fully supports multi-app deployments with per-app isolation and configuration.
+### OAuth
 
-### Configuration
+Supports five providers with encrypted token storage. Each provider stores `access_token`, `refresh_token`, `provider_user_id`, profile data, and scopes. Tokens are encrypted at rest using `AUTH_ENCRYPTION_KEY`.
 
-```bash
-# Enable multi-app mode
-AUTH_APP_IDS=famtv,famapp
+| Provider | Config Required |
+|----------|----------------|
+| Google | `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET` |
+| Apple | `AUTH_APPLE_CLIENT_ID`, `AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`, `AUTH_APPLE_PRIVATE_KEY` |
+| Facebook | `AUTH_FACEBOOK_APP_ID`, `AUTH_FACEBOOK_APP_SECRET` |
+| GitHub | `AUTH_GITHUB_CLIENT_ID`, `AUTH_GITHUB_CLIENT_SECRET` |
+| Microsoft | `AUTH_MICROSOFT_CLIENT_ID`, `AUTH_MICROSOFT_CLIENT_SECRET` |
 
-# Per-app OAuth overrides
-AUTH_FAMTV_GOOGLE_CLIENT_ID=famtv-google-client-id
-AUTH_FAMAPP_GOOGLE_CLIENT_ID=famapp-google-client-id
+### WebAuthn / Passkeys
 
-# Per-app WebAuthn
-AUTH_FAMTV_WEBAUTHN_RP_ID=famtv.com
-AUTH_FAMAPP_WEBAUTHN_RP_ID=famapp.com
-```
+FIDO2-compatible passwordless authentication. Stores credential public keys with counter values for replay protection. Tracks device type, backup status, and transport methods.
 
-### Subdomain Routing
+### TOTP 2FA
 
-```
-auth.famtv.example.com → Auth server (appId=famtv)
-auth.famapp.example.com → Auth server (appId=famapp)
-```
+Time-based one-time passwords compatible with Google Authenticator, Authy, and similar apps. Enrollment generates a secret, QR code data URL, and `otpauth://` URL. Backup codes provide emergency access if the authenticator device is lost.
 
-All data is isolated by `source_account_id` column.
+### Magic Links
+
+Passwordless authentication via email. Tokens are SHA-256 hashed before storage. Supports three purposes: `login` (sign in), `verify` (email verification), `reset` (password reset). Links expire after `AUTH_MAGIC_LINK_EXPIRY_SECONDS`.
+
+### Device Code Flow
+
+For devices without a browser (smart TVs, CLI tools, IoT). The device displays a short `userCode` and `verificationUrl`. The user enters the code on a browser-equipped device to authorize. The original device polls `GET /api/device-code/poll` until authorization completes or the code expires.
 
 ---
 
-## Security
+## Database Schema
 
-### Encryption
+### `np_auth_oauth_providers`
 
-- OAuth tokens and TOTP secrets are encrypted at rest using `AUTH_ENCRYPTION_KEY`
-- Minimum key length: 32 characters
-- Uses AES-256-GCM encryption
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Record ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `user_id` | `VARCHAR(255)` | Application user ID |
+| `provider` | `VARCHAR(50)` | `google`, `apple`, `facebook`, `github`, `microsoft` |
+| `provider_user_id` | `VARCHAR(255)` | User ID from the provider |
+| `provider_email` | `VARCHAR(255)` | Email from the provider |
+| `provider_name` | `VARCHAR(255)` | Display name from the provider |
+| `provider_avatar_url` | `TEXT` | Avatar URL from the provider |
+| `access_token_encrypted` | `TEXT` | Encrypted OAuth access token |
+| `refresh_token_encrypted` | `TEXT` | Encrypted OAuth refresh token |
+| `token_expires_at` | `TIMESTAMPTZ` | Token expiration |
+| `scopes` | `TEXT[]` | Granted OAuth scopes |
+| `raw_profile` | `JSONB` | Full provider profile response |
+| `linked_at` | `TIMESTAMPTZ` | When the account was linked |
+| `last_used_at` | `TIMESTAMPTZ` | Last OAuth login |
 
-### Rate Limiting
+### `np_auth_passkeys`
 
-- Login attempts tracked per email and IP
-- Default: 5 attempts per 15 minutes
-- Automatic lockout after threshold
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Record ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `user_id` | `VARCHAR(255)` | Application user ID |
+| `credential_id` | `VARCHAR(512)` | WebAuthn credential ID (Base64URL) |
+| `public_key` | `TEXT` | COSE public key |
+| `counter` | `INTEGER` | Signature counter (replay protection) |
+| `device_type` | `VARCHAR(100)` | `platform` or `cross-platform` |
+| `backed_up` | `BOOLEAN` | Whether key is backed up (e.g., iCloud Keychain) |
+| `transports` | `TEXT[]` | `usb`, `ble`, `nfc`, `internal`, `hybrid` |
+| `friendly_name` | `VARCHAR(255)` | User-assigned name |
+| `last_used_at` | `TIMESTAMPTZ` | Last authentication |
+| `created_at` | `TIMESTAMPTZ` | Registration time |
 
-### Session Security
+### `np_auth_mfa_enrollments`
 
-- Session tokens hashed before storage
-- Idle timeout: 24 hours (configurable)
-- Absolute timeout: 30 days (configurable)
-- Maximum sessions per user: 10 (configurable)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Enrollment ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `user_id` | `VARCHAR(255)` | Application user ID |
+| `method` | `VARCHAR(50)` | `totp`, `sms`, `email` |
+| `secret_encrypted` | `TEXT` | Encrypted TOTP secret |
+| `algorithm` | `VARCHAR(20)` | Hash algorithm (default: SHA1) |
+| `digits` | `INTEGER` | Code length (default: 6) |
+| `period` | `INTEGER` | Time step in seconds (default: 30) |
+| `verified` | `BOOLEAN` | Whether enrollment is verified |
+| `backup_codes_encrypted` | `TEXT` | Encrypted backup codes (JSON array) |
+| `backup_codes_remaining` | `INTEGER` | Number of unused backup codes |
+| `enabled` | `BOOLEAN` | Whether MFA is active |
+| `last_used_at` | `TIMESTAMPTZ` | Last TOTP validation |
+| `created_at` | `TIMESTAMPTZ` | Enrollment time |
 
-### WebAuthn
+### `np_auth_device_codes`
 
-- FIDO2-certified authentication
-- Counter-based replay protection
-- Support for platform and cross-platform authenticators
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Record ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `device_code` | `VARCHAR(255)` | Device-side code (long, random) |
+| `user_code` | `VARCHAR(20)` | User-visible short code |
+| `device_id` | `VARCHAR(255)` | Device identifier |
+| `device_name` | `VARCHAR(255)` | Device display name |
+| `device_type` | `VARCHAR(100)` | Device type (TV, CLI, IoT) |
+| `scopes` | `TEXT[]` | Requested scopes |
+| `status` | `VARCHAR(20)` | `pending`, `authorized`, `denied`, `expired` |
+| `user_id` | `VARCHAR(255)` | User who authorized (set on authorization) |
+| `authorized_at` | `TIMESTAMPTZ` | Authorization timestamp |
+| `expires_at` | `TIMESTAMPTZ` | Code expiration |
+| `poll_interval` | `INTEGER` | Minimum poll interval (seconds) |
+| `created_at` | `TIMESTAMPTZ` | Creation time |
+
+### `np_auth_magic_links`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Record ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `email` | `VARCHAR(255)` | Recipient email |
+| `token_hash` | `VARCHAR(128)` | SHA-256 hash of the token |
+| `purpose` | `VARCHAR(20)` | `login`, `verify`, `reset` |
+| `used` | `BOOLEAN` | Whether the link has been used |
+| `used_at` | `TIMESTAMPTZ` | When the link was used |
+| `expires_at` | `TIMESTAMPTZ` | Link expiration |
+| `ip_address` | `VARCHAR(45)` | IP address of the requester |
+| `created_at` | `TIMESTAMPTZ` | Creation time |
+
+### `np_auth_sessions`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Session ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `user_id` | `VARCHAR(255)` | Session owner |
+| `device_id` | `VARCHAR(255)` | Device identifier |
+| `device_name` | `VARCHAR(255)` | Device display name |
+| `device_type` | `VARCHAR(100)` | Device type |
+| `ip_address` | `VARCHAR(45)` | Client IP |
+| `user_agent` | `TEXT` | Client user agent |
+| `location_city` | `VARCHAR(128)` | Geo city |
+| `location_country` | `VARCHAR(128)` | Geo country |
+| `auth_method` | `VARCHAR(50)` | `password`, `oauth`, `passkey`, `magic_link`, `device_code`, `mfa` |
+| `token_hash` | `VARCHAR(128)` | Session token hash |
+| `is_active` | `BOOLEAN` | Whether session is active |
+| `last_activity_at` | `TIMESTAMPTZ` | Last activity timestamp |
+| `expires_at` | `TIMESTAMPTZ` | Absolute expiration |
+| `revoked_at` | `TIMESTAMPTZ` | When revoked |
+| `revoked_reason` | `TEXT` | Revocation reason |
+| `created_at` | `TIMESTAMPTZ` | Session creation time |
+
+### `np_auth_login_attempts`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `UUID` (PK) | Attempt ID |
+| `source_account_id` | `VARCHAR(128)` | Multi-app isolation |
+| `email` | `VARCHAR(255)` | Email used in attempt |
+| `user_id` | `VARCHAR(255)` | Resolved user ID (if any) |
+| `ip_address` | `VARCHAR(45)` | Client IP |
+| `method` | `VARCHAR(50)` | Auth method attempted |
+| `outcome` | `VARCHAR(20)` | `success`, `failure`, `blocked` |
+| `failure_reason` | `TEXT` | Reason for failure |
+| `user_agent` | `TEXT` | Client user agent |
+| `created_at` | `TIMESTAMPTZ` | Attempt timestamp |
+
+---
+
+## Session Management
+
+Sessions track device, IP, location, and authentication method. The plugin enforces:
+
+- **Max concurrent sessions**: `AUTH_SESSION_MAX_PER_USER` (default: 10). Oldest sessions are evicted when the limit is exceeded.
+- **Idle timeout**: Sessions with no activity for `AUTH_SESSION_IDLE_TIMEOUT_HOURS` are expired.
+- **Absolute timeout**: Sessions older than `AUTH_SESSION_ABSOLUTE_TIMEOUT_HOURS` are expired regardless of activity.
+
+Use `cleanup-expired` CLI command or set `AUTH_CLEANUP_CRON` for automatic expiration.
 
 ---
 
 ## Troubleshooting
 
-### Database Connection Errors
+**"Encryption key not configured"** -- Set `AUTH_ENCRYPTION_KEY` environment variable. This is required for encrypting OAuth tokens, TOTP secrets, and backup codes.
 
-**Error:** `Connection refused`
+**OAuth provider not listed** -- Set the corresponding `AUTH_<PROVIDER>_CLIENT_ID` and secret. Only configured providers appear in `GET /api/oauth/providers`.
 
-**Solution:**
-```bash
-# Verify DATABASE_URL is set
-echo $DATABASE_URL
+**Passkey registration fails** -- Verify `AUTH_WEBAUTHN_RP_ID` matches your domain and `AUTH_WEBAUTHN_ORIGIN` matches the page origin exactly (including scheme and port).
 
-# Test PostgreSQL connection
-psql $DATABASE_URL -c "SELECT 1"
-```
+**TOTP codes rejected** -- Check system clock synchronization. TOTP is time-sensitive with a 30-second window. Verify the user completed enrollment verification via `POST /api/mfa/totp/verify`.
 
-### OAuth Configuration
+**Device code expired before authorization** -- Increase `AUTH_DEVICE_CODE_EXPIRY_SECONDS`. Default is 600 seconds (10 minutes).
 
-**Error:** `OAuth provider not configured`
-
-**Solution:**
-```bash
-# Verify provider credentials are set
-echo $AUTH_GOOGLE_CLIENT_ID
-echo $AUTH_GOOGLE_CLIENT_SECRET
-
-# Check provider is enabled
-curl http://localhost:3014/api/oauth/providers
-```
-
-### Encryption Key Error
-
-**Error:** `AUTH_ENCRYPTION_KEY must be at least 32 characters`
-
-**Solution:**
-```bash
-# Generate a random 32-character key
-export AUTH_ENCRYPTION_KEY=$(openssl rand -hex 32)
-```
-
-### Port Already in Use
-
-**Error:** `EADDRINUSE: address already in use :::3014`
-
-**Solution:**
-```bash
-# Use different port
-export AUTH_PLUGIN_PORT=3015
-
-# Or kill process on port 3014
-lsof -ti:3014 | xargs kill -9
-```
-
----
-
-## Support
-
-- **Documentation**: https://github.com/acamarata/nself-plugins/wiki/Auth
-- **Issues**: https://github.com/acamarata/nself-plugins/issues
-- **License**: Source-Available
-
----
-
-**Last Updated**: February 10, 2026
+**Sessions not expiring** -- Run `cleanup-expired` manually or configure `AUTH_CLEANUP_CRON`. The `idle_timeout` and `absolute_timeout` are checked on cleanup, not on every request.

@@ -42,7 +42,7 @@ program
 program
   .command('server')
   .description('Start the API server')
-  .option('-p, --port <port>', 'Server port', '3204')
+  .option('-p, --port <port>', 'Server port', '3036')
   .option('-h, --host <host>', 'Server host', '0.0.0.0')
   .action(async (options) => {
     try {

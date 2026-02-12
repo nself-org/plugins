@@ -1,0 +1,98 @@
+{
+  "name": "metadata-enrichment",
+  "version": "1.0.0",
+  "description": "TMDB metadata enrichment for movies and TV shows",
+  "author": "nself",
+  "license": "MIT",
+  "category": "media",
+  "subcategory": "metadata",
+  "path": "plugins/metadata-enrichment",
+  "language": "typescript",
+  "runtime": "node",
+  "minNselfVersion": "0.4.8",
+  "port": 3203,
+  "dependencies": {
+    "npm": [
+      "@nself/plugin-utils",
+      "fastify",
+      "@fastify/cors",
+      "moviedb-promise",
+      "pg",
+      "dotenv",
+      "uuid",
+      "winston",
+      "commander",
+      "chalk",
+      "ora"
+    ]
+  },
+  "tables": [
+    "np_metaenrich_movies",
+    "np_metaenrich_tv_shows"
+  ],
+  "views": [],
+  "webhooks": [],
+  "apiEndpoints": [
+    "GET /health",
+    "GET /v1/movies/search",
+    "GET /v1/movies/:id",
+    "GET /v1/tv/search",
+    "GET /v1/tv/:id"
+  ],
+  "cliCommands": [
+    {
+      "name": "init",
+      "description": "Initialize database schema"
+    },
+    {
+      "name": "search-movie",
+      "description": "Search for movies by title"
+    },
+    {
+      "name": "search-tv",
+      "description": "Search for TV shows by title"
+    },
+    {
+      "name": "server",
+      "description": "Start HTTP API server"
+    }
+  ],
+  "envVars": [
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "description": "PostgreSQL connection string"
+    },
+    {
+      "name": "TMDB_API_KEY",
+      "required": true,
+      "description": "TMDB API key for movie and TV metadata"
+    },
+    {
+      "name": "TVDB_API_KEY",
+      "description": "TVDB API key for supplementary TV metadata"
+    },
+    {
+      "name": "MUSICBRAINZ_USER_AGENT",
+      "description": "User agent for MusicBrainz API requests",
+      "default": "nself-tv/1.0.0"
+    },
+    {
+      "name": "METADATA_ENRICHMENT_PORT",
+      "description": "HTTP server port",
+      "default": "3203"
+    }
+  ],
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "features": [
+    "TMDB movie search and metadata lookup",
+    "TMDB TV show search and metadata lookup",
+    "Database caching with configurable staleness",
+    "Rate-limited outbound TMDB API calls"
+  ]
+}

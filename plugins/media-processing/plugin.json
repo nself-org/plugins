@@ -14,6 +14,8 @@
     "encoding",
     "ffmpeg",
     "hls",
+    "dash",
+    "cmaf",
     "streaming",
     "transcoding"
   ],
@@ -24,7 +26,9 @@
     "np_mediap_hls_manifests",
     "np_mediap_subtitles",
     "np_mediap_trickplay",
-    "np_mediap_webhook_events"
+    "np_mediap_webhook_events",
+    "np_mediap_watcher_events",
+    "np_mediap_uploads"
   ],
   "webhooks": {
     "job.created": "Job submitted for processing",
@@ -36,7 +40,10 @@
     "job.completed": "Job completed successfully",
     "job.failed": "Job failed",
     "job.cancelled": "Job cancelled by user",
-    "job.progress": "Encoding progress update"
+    "job.qa_failed": "Job failed QA validation",
+    "job.progress": "Encoding progress update",
+    "watcher.file_detected": "New file detected in drop folder",
+    "watcher.job_submitted": "Job auto-submitted from watcher"
   },
   "actions": {
     "init": "Initialize database schema",
@@ -45,7 +52,8 @@
     "jobs": "List and manage jobs",
     "profiles": "Manage encoding profiles",
     "analyze": "Analyze media file metadata",
-    "stats": "View processing statistics"
+    "stats": "View processing statistics",
+    "watch": "Watch drop folder for new media files"
   },
   "envVars": {
     "required": [
@@ -61,7 +69,15 @@
       "MP_HARDWARE_ACCEL",
       "MP_API_KEY",
       "MP_RATE_LIMIT_MAX",
-      "MP_RATE_LIMIT_WINDOW_MS"
+      "MP_RATE_LIMIT_WINDOW_MS",
+      "MP_PACKAGER",
+      "MP_SHAKA_PACKAGER_PATH",
+      "MP_OUTPUT_FORMATS",
+      "MP_DROP_FOLDER_PATH",
+      "MP_SETTLE_CHECK_SECONDS",
+      "MP_SETTLE_CHECK_INTERVALS",
+      "MP_METADATA_ENRICHMENT_URL",
+      "MP_OBJECT_STORAGE_URL"
     ]
   },
   "config": {
@@ -70,7 +86,19 @@
     "maxInputSizeGb": 50,
     "outputBasePath": "/data/media-processing",
     "ffmpegPath": "ffmpeg",
-    "ffprobePath": "ffprobe"
+    "ffprobePath": "ffprobe",
+    "packager": "ffmpeg-only",
+    "outputFormats": ["hls"]
+  },
+  "systemDependencies": {
+    "required": [
+      {"name": "ffmpeg", "minVersion": "5.0", "apt": "ffmpeg", "brew": "ffmpeg", "verify": "ffmpeg -version"},
+      {"name": "ffprobe", "minVersion": "5.0", "apt": "ffmpeg", "brew": "ffmpeg", "verify": "ffprobe -version"}
+    ],
+    "recommended": [
+      {"name": "shaka-packager", "verify": "packager --version", "note": "Required for CMAF HLS+DASH dual output. Falls back to FFmpeg-only HLS if not installed."},
+      {"name": "guessit", "verify": "guessit --version", "note": "Python-based filename parser. Plugin uses built-in regex parser as fallback."}
+    ]
   },
   "hooks": {
     "postInstall": null,

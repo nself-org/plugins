@@ -8,9 +8,14 @@ export interface ContentAcquisitionConfig {
   metadata_enrichment_url: string;
   torrent_manager_url: string;
   vpn_manager_url: string;
+  subtitle_manager_url: string;
+  media_processing_url: string;
+  ntv_backend_url: string;
   redis_host: string;
   redis_port: number;
   log_level: string;
+  /** Interval in minutes between scheduled RSS feed checks (default: 30) */
+  rss_check_interval: number;
 }
 
 export interface QualityProfile {
@@ -161,4 +166,42 @@ export interface AcquisitionHistoryItem {
   acquired_from: string;
   upgrade_of?: string;
   created_at: Date;
+}
+
+export interface PipelineRunRecord {
+  id: number;
+  source_account_id: string;
+  trigger_type: string;
+  trigger_source: string | null;
+  content_title: string;
+  content_type: string | null;
+  status: string;
+  vpn_check_status: string;
+  torrent_status: string;
+  torrent_download_id: string | null;
+  metadata_status: string;
+  subtitle_status: string;
+  encoding_status: string;
+  encoding_job_id: string | null;
+  publishing_status: string;
+  detected_at: Date;
+  vpn_checked_at: Date | null;
+  torrent_submitted_at: Date | null;
+  download_completed_at: Date | null;
+  metadata_enriched_at: Date | null;
+  subtitles_fetched_at: Date | null;
+  encoding_completed_at: Date | null;
+  published_at: Date | null;
+  pipeline_completed_at: Date | null;
+  error_message: string | null;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface PipelineTriggerRequest {
+  content_title: string;
+  content_type?: string;
+  magnet_url?: string;
+  torrent_url?: string;
 }

@@ -35,7 +35,7 @@ async function startServer() {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
-    logger.error('Failed to start Metadata Enrichment Server', error);
+    logger.error('Failed to start Metadata Enrichment Server', { error: error instanceof Error ? error.message : String(error) });
     process.exit(1);
   }
 }

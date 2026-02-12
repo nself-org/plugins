@@ -73,7 +73,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
 
       return success;
     } catch (error) {
-      logger.error(`Authentication error for ${this.displayName}`, error);
+      logger.error(`Authentication error for ${this.displayName}`, { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
@@ -130,7 +130,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
     }
 
     const expectedIP = status.vpn_ip;
-    const tests = {
+    const tests: LeakTestResult['tests'] = {
       dns: { passed: false, expected: undefined, actual: undefined },
       ip: { passed: false, expected: expectedIP, actual: undefined },
       webrtc: { passed: false, leaked_ips: [] as string[] },
@@ -149,7 +149,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
       if (dnsMatch) {
         tests.dns.actual = dnsMatch[1];
         // DNS should resolve to VPN provider's DNS or the VPN IP network
-        tests.dns.passed = !this.isISPIP(tests.dns.actual);
+        tests.dns.passed = !this.isISPIP(tests.dns.actual!);
       }
 
       // Test IPv6 leak
@@ -185,7 +185,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
         timestamp: new Date(),
       };
     } catch (error) {
-      logger.error(`Leak test failed for ${this.displayName}`, error);
+      logger.error(`Leak test failed for ${this.displayName}`, { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }

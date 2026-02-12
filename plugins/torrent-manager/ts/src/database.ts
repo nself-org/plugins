@@ -126,6 +126,8 @@ export class TorrentDatabase {
           vpn_ip VARCHAR(50),
           vpn_interface VARCHAR(50),
 
+          error_message TEXT,
+
           content_id UUID,
           requested_by VARCHAR(255) NOT NULL,
           metadata JSONB DEFAULT '{}',
@@ -297,7 +299,7 @@ export class TorrentDatabase {
       logger.info('Database schema initialized successfully');
     } catch (error) {
       await client.query('ROLLBACK');
-      logger.error('Failed to initialize database schema', error);
+      logger.error('Failed to initialize database schema', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     } finally {
       client.release();
@@ -415,9 +417,14 @@ export class TorrentDatabase {
       fields.push(`leechers = $${paramCount++}`);
       values.push(updates.leechers);
     }
+    if (updates.error_message !== undefined) {
+      fields.push(`error_message = $${paramCount++}`);
+      values.push(updates.error_message);
+    }
 
     fields.push(`updated_at = NOW()`);
     values.push(id);
+    paramCount++;
 
     const result = await this.pool.query(
       `UPDATE torrent_downloads SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,

@@ -153,13 +153,14 @@ export class X1337Searcher extends BaseTorrentSearcher {
 
     // Relative dates
     if (dateStr.includes('ago')) {
-      const match = dateStr.match(/(\d+)\s+(min|hour|day|week|month)s?\s+ago/i);
+      const match = dateStr.match(/(\d+)\s+(minute|min|hour|day|week|month)s?\s+ago/i);
       if (match) {
         const value = parseInt(match[1]);
         const unit = match[2].toLowerCase();
 
         const multipliers: Record<string, number> = {
           'min': 60 * 1000,
+          'minute': 60 * 1000,
           'hour': 60 * 60 * 1000,
           'day': 24 * 60 * 60 * 1000,
           'week': 7 * 24 * 60 * 60 * 1000,

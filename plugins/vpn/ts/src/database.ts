@@ -30,8 +30,15 @@ export class VPNDatabase {
     });
 
     this.pool.on('error', (err) => {
-      logger.error('Unexpected database error', err);
+      logger.error('Unexpected database error', { error: err instanceof Error ? err.message : String(err) });
     });
+  }
+
+  /**
+   * Execute a raw query against the pool (for ad-hoc queries not covered by typed methods)
+   */
+  async query<T extends Record<string, any> = any>(text: string, values?: any[]): Promise<QueryResult<T>> {
+    return this.pool.query<T>(text, values);
   }
 
   /**
@@ -355,7 +362,7 @@ export class VPNDatabase {
       logger.info('Database schema initialized successfully');
     } catch (error) {
       await client.query('ROLLBACK');
-      logger.error('Failed to initialize database schema', error);
+      logger.error('Failed to initialize database schema', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     } finally {
       client.release();
@@ -813,10 +820,10 @@ export class VPNDatabase {
     );
 
     return {
-      total_connections: parseInt(connectionsResult.rows[0]?.total || '0'),
-      active_connections: parseInt(connectionsResult.rows[0]?.active || '0'),
-      total_downloads: parseInt(downloadsResult.rows[0]?.total || '0'),
-      active_downloads: parseInt(downloadsResult.rows[0]?.active || '0'),
+      total_connections: parseInt(String(connectionsResult.rows[0]?.total ?? '0')),
+      active_connections: parseInt(String(connectionsResult.rows[0]?.active ?? '0')),
+      total_downloads: parseInt(String(downloadsResult.rows[0]?.total ?? '0')),
+      active_downloads: parseInt(String(downloadsResult.rows[0]?.active ?? '0')),
       total_bytes_downloaded: downloadsResult.rows[0]?.bytes || '0',
       providers: providersResult.rows.map((row: any) => ({
         provider: row.display_name,

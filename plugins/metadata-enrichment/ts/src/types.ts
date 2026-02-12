@@ -6,10 +6,14 @@ export interface MetadataEnrichmentConfig {
   musicbrainz_user_agent: string;
   object_storage_url?: string;
   log_level: string;
+  api_key?: string;
+  rate_limit_max?: number;
+  rate_limit_window_ms?: number;
 }
 
 export interface MovieMetadata {
   id: string;
+  source_account_id: string;
   tmdb_id: number;
   imdb_id?: string;
   title: string;
@@ -22,12 +26,14 @@ export interface MovieMetadata {
   vote_count?: number;
   poster_path?: string;
   backdrop_path?: string;
+  raw_response?: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface TVShowMetadata {
   id: string;
+  source_account_id: string;
   tmdb_id: number;
   tvdb_id?: number;
   imdb_id?: string;
@@ -43,6 +49,7 @@ export interface TVShowMetadata {
   vote_count?: number;
   poster_path?: string;
   backdrop_path?: string;
+  raw_response?: Record<string, unknown>;
   created_at: Date;
   updated_at: Date;
 }

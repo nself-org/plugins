@@ -91,7 +91,7 @@ export class NordVPNProvider extends BaseVPNProvider {
 
       throw new Error('NordVPN requires access token for authentication');
     } catch (error) {
-      logger.error('NordVPN authentication failed', error);
+      logger.error('NordVPN authentication failed', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
@@ -117,7 +117,7 @@ export class NordVPNProvider extends BaseVPNProvider {
 
       return servers.map((server) => this.mapServer(server));
     } catch (error) {
-      logger.error('Failed to fetch NordVPN servers', error);
+      logger.error('Failed to fetch NordVPN servers', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -227,7 +227,7 @@ export class NordVPNProvider extends BaseVPNProvider {
 
       return connection;
     } catch (error) {
-      logger.error('NordVPN connection failed', error);
+      logger.error('NordVPN connection failed', { error: error instanceof Error ? error.message : String(error) });
       throw new Error(`Failed to connect to NordVPN: ${error}`);
     }
   }
@@ -239,7 +239,7 @@ export class NordVPNProvider extends BaseVPNProvider {
       await this.executeCommand(`${this.cliCommand} disconnect`);
       logger.info('Successfully disconnected from NordVPN');
     } catch (error) {
-      logger.error('Failed to disconnect from NordVPN', error);
+      logger.error('Failed to disconnect from NordVPN', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -249,7 +249,7 @@ export class NordVPNProvider extends BaseVPNProvider {
       const result = await this.executeCommand(`${this.cliCommand} status`);
       return this.parseNordVPNStatus(result.stdout);
     } catch (error) {
-      logger.error('Failed to get NordVPN status', error);
+      logger.error('Failed to get NordVPN status', { error: error instanceof Error ? error.message : String(error) });
       return { connected: false };
     }
   }
@@ -348,7 +348,7 @@ export class NordVPNProvider extends BaseVPNProvider {
       await this.executeCommand(`${this.cliCommand} set killswitch on`);
       logger.info('Kill switch enabled');
     } catch (error) {
-      logger.error('Failed to enable kill switch', error);
+      logger.error('Failed to enable kill switch', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -360,7 +360,7 @@ export class NordVPNProvider extends BaseVPNProvider {
       await this.executeCommand(`${this.cliCommand} set killswitch off`);
       logger.info('Kill switch disabled');
     } catch (error) {
-      logger.error('Failed to disable kill switch', error);
+      logger.error('Failed to disable kill switch', { error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }

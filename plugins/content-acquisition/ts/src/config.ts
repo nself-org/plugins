@@ -37,9 +37,13 @@ export function loadConfig(): ContentAcquisitionConfig {
     metadata_enrichment_url: metadataEnrichmentUrl,
     torrent_manager_url: torrentManagerUrl,
     vpn_manager_url: vpnManagerUrl,
+    subtitle_manager_url: process.env.SUBTITLE_MANAGER_URL || 'http://localhost:3204',
+    media_processing_url: process.env.MEDIA_PROCESSING_URL || 'http://localhost:3019',
+    ntv_backend_url: process.env.NTV_BACKEND_URL || 'http://localhost:4000',
     redis_host: process.env.REDIS_HOST || 'localhost',
     redis_port: parseInt(process.env.REDIS_PORT || '6379', 10),
     log_level: process.env.LOG_LEVEL || 'info',
+    rss_check_interval: parseInt(process.env.RSS_CHECK_INTERVAL || '30', 10),
   };
 
   logger.info('Configuration loaded', { port: config.port });
