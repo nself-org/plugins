@@ -284,6 +284,107 @@ export interface ImportXmltvResponse {
 }
 
 // =============================================================================
+// Recording Types
+// =============================================================================
+
+export interface RecordingRuleRecord {
+  [key: string]: unknown;
+  id: string;
+  source_account_id: string;
+  user_id: string;
+  rule_type: 'single' | 'series' | 'keyword';
+  program_id: string | null;
+  channel_id: string | null;
+  series_title: string | null;
+  keyword: string | null;
+  priority: number;
+  keep_count: number | null;
+  start_padding_minutes: number;
+  end_padding_minutes: number;
+  enabled: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface ScheduledRecordingRecord {
+  [key: string]: unknown;
+  id: string;
+  source_account_id: string;
+  recording_rule_id: string | null;
+  program_id: string | null;
+  channel_id: string | null;
+  scheduled_start: Date;
+  scheduled_end: Date;
+  status: 'scheduled' | 'recording' | 'completed' | 'failed' | 'conflict' | 'cancelled';
+  antserver_job_id: string | null;
+  error_message: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateRecordingRuleRequest {
+  user_id: string;
+  rule_type: 'single' | 'series' | 'keyword';
+  program_id?: string;
+  channel_id?: string;
+  series_title?: string;
+  keyword?: string;
+  priority?: number;
+  keep_count?: number;
+  start_padding_minutes?: number;
+  end_padding_minutes?: number;
+}
+
+export interface CreateRecordingRuleData {
+  user_id: string;
+  rule_type: 'single' | 'series' | 'keyword';
+  program_id?: string | null;
+  channel_id?: string | null;
+  series_title?: string | null;
+  keyword?: string | null;
+  priority?: number;
+  keep_count?: number | null;
+  start_padding_minutes?: number;
+  end_padding_minutes?: number;
+}
+
+export interface CreateScheduledRecordingData {
+  recording_rule_id?: string | null;
+  program_id?: string | null;
+  channel_id?: string | null;
+  scheduled_start: Date;
+  scheduled_end: Date;
+  status?: 'scheduled' | 'recording' | 'completed' | 'failed' | 'conflict' | 'cancelled';
+  antserver_job_id?: string | null;
+  error_message?: string | null;
+}
+
+export interface RecordingTriggerEvent {
+  recording_id: string;
+  status: 'started' | 'completed' | 'failed';
+  antserver_job_id?: string;
+  error_message?: string;
+}
+
+export interface ListScheduledRecordingsQuery {
+  status?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface ConflictCheckQuery {
+  start: string;
+  end: string;
+  channel_id?: string;
+}
+
+export interface ResolveConflictRequest {
+  recording_ids: string[];
+  strategy: 'priority' | 'keep';
+  keep_id?: string;
+}
+
+// =============================================================================
 // Stats Types
 // =============================================================================
 

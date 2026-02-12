@@ -14,6 +14,10 @@ import type {
   ChannelSchedule,
   WhatsOnNowEntry,
   EpgStats,
+  RecordingRuleRecord,
+  ScheduledRecordingRecord,
+  CreateRecordingRuleData,
+  CreateScheduledRecordingData,
 } from './types.js';
 
 const logger = createLogger('epg:db');
@@ -234,6 +238,60 @@ export class EpgDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_epg_webhook_events_source_app
         ON epg_webhook_events(source_account_id);
+
+      -- =====================================================================
+      -- Recording Rules
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_epg_recording_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        user_id TEXT NOT NULL,
+        rule_type TEXT NOT NULL CHECK (rule_type IN ('single', 'series', 'keyword')),
+        program_id UUID REFERENCES epg_programs(id),
+        channel_id UUID REFERENCES epg_channels(id),
+        series_title TEXT,
+        keyword TEXT,
+        priority INTEGER DEFAULT 50,
+        keep_count INTEGER,
+        start_padding_minutes INTEGER DEFAULT 1,
+        end_padding_minutes INTEGER DEFAULT 3,
+        enabled BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_epg_recording_rules_account ON np_epg_recording_rules(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_recording_rules_user ON np_epg_recording_rules(source_account_id, user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_recording_rules_type ON np_epg_recording_rules(rule_type);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_recording_rules_enabled ON np_epg_recording_rules(enabled) WHERE enabled = true;
+
+      -- =====================================================================
+      -- Scheduled Recordings
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_epg_scheduled_recordings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        recording_rule_id UUID REFERENCES np_epg_recording_rules(id) ON DELETE SET NULL,
+        program_id UUID REFERENCES epg_programs(id),
+        channel_id UUID REFERENCES epg_channels(id),
+        scheduled_start TIMESTAMPTZ NOT NULL,
+        scheduled_end TIMESTAMPTZ NOT NULL,
+        status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'recording', 'completed', 'failed', 'conflict', 'cancelled')),
+        antserver_job_id TEXT,
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_np_epg_scheduled_recording
+        ON np_epg_scheduled_recordings(source_account_id, program_id, channel_id, scheduled_start);
+
+      CREATE INDEX IF NOT EXISTS idx_np_epg_scheduled_recordings_account ON np_epg_scheduled_recordings(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_scheduled_recordings_status ON np_epg_scheduled_recordings(status);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_scheduled_recordings_time ON np_epg_scheduled_recordings(scheduled_start, scheduled_end);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_scheduled_recordings_rule ON np_epg_scheduled_recordings(recording_rule_id);
     `;
 
     await this.execute(schema);
@@ -812,6 +870,341 @@ export class EpgDatabase {
       [this.sourceAccountId]
     );
     return count;
+  }
+
+  // =========================================================================
+  // Recording Rules Operations
+  // =========================================================================
+
+  async createRecordingRule(data: CreateRecordingRuleData): Promise<RecordingRuleRecord> {
+    const result = await this.query<RecordingRuleRecord>(
+      `INSERT INTO np_epg_recording_rules (
+        source_account_id, user_id, rule_type, program_id, channel_id,
+        series_title, keyword, priority, keep_count,
+        start_padding_minutes, end_padding_minutes, enabled
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        data.user_id,
+        data.rule_type,
+        data.program_id ?? null,
+        data.channel_id ?? null,
+        data.series_title ?? null,
+        data.keyword ?? null,
+        data.priority ?? 50,
+        data.keep_count ?? null,
+        data.start_padding_minutes ?? 1,
+        data.end_padding_minutes ?? 3,
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async listRecordingRules(userId?: string): Promise<RecordingRuleRecord[]> {
+    const conditions: string[] = ['source_account_id = $1'];
+    const values: unknown[] = [this.sourceAccountId];
+    let paramIndex = 2;
+
+    if (userId) {
+      conditions.push(`user_id = $${paramIndex}`);
+      values.push(userId);
+      paramIndex++;
+    }
+
+    // Suppress unused variable warning
+    void paramIndex;
+
+    const result = await this.query<RecordingRuleRecord>(
+      `SELECT * FROM np_epg_recording_rules
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY priority DESC, created_at DESC`,
+      values
+    );
+
+    return result.rows;
+  }
+
+  async getRecordingRule(id: string): Promise<RecordingRuleRecord | null> {
+    const result = await this.query<RecordingRuleRecord>(
+      `SELECT * FROM np_epg_recording_rules
+       WHERE id = $1 AND source_account_id = $2`,
+      [id, this.sourceAccountId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateRecordingRule(id: string, updates: Partial<CreateRecordingRuleData>): Promise<RecordingRuleRecord | null> {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const allowedFields = [
+      'user_id', 'rule_type', 'program_id', 'channel_id',
+      'series_title', 'keyword', 'priority', 'keep_count',
+      'start_padding_minutes', 'end_padding_minutes',
+    ];
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (fields.length === 0) {
+      return this.getRecordingRule(id);
+    }
+
+    fields.push(`updated_at = NOW()`);
+    values.push(id, this.sourceAccountId);
+
+    const result = await this.query<RecordingRuleRecord>(
+      `UPDATE np_epg_recording_rules
+       SET ${fields.join(', ')}
+       WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}
+       RETURNING *`,
+      values
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async deleteRecordingRule(id: string): Promise<boolean> {
+    const count = await this.execute(
+      `DELETE FROM np_epg_recording_rules WHERE id = $1 AND source_account_id = $2`,
+      [id, this.sourceAccountId]
+    );
+    return count > 0;
+  }
+
+  async enableRecordingRule(id: string, enabled: boolean): Promise<RecordingRuleRecord | null> {
+    const result = await this.query<RecordingRuleRecord>(
+      `UPDATE np_epg_recording_rules
+       SET enabled = $1, updated_at = NOW()
+       WHERE id = $2 AND source_account_id = $3
+       RETURNING *`,
+      [enabled, id, this.sourceAccountId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  // =========================================================================
+  // Scheduled Recordings Operations
+  // =========================================================================
+
+  async createScheduledRecording(data: CreateScheduledRecordingData): Promise<ScheduledRecordingRecord> {
+    const result = await this.query<ScheduledRecordingRecord>(
+      `INSERT INTO np_epg_scheduled_recordings (
+        source_account_id, recording_rule_id, program_id, channel_id,
+        scheduled_start, scheduled_end, status, antserver_job_id, error_message
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (source_account_id, program_id, channel_id, scheduled_start) DO UPDATE SET
+        recording_rule_id = COALESCE(EXCLUDED.recording_rule_id, np_epg_scheduled_recordings.recording_rule_id),
+        scheduled_end = EXCLUDED.scheduled_end,
+        status = EXCLUDED.status,
+        updated_at = NOW()
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        data.recording_rule_id ?? null,
+        data.program_id ?? null,
+        data.channel_id ?? null,
+        data.scheduled_start,
+        data.scheduled_end,
+        data.status ?? 'scheduled',
+        data.antserver_job_id ?? null,
+        data.error_message ?? null,
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async listScheduledRecordings(filters?: { status?: string; from?: Date; to?: Date }): Promise<ScheduledRecordingRecord[]> {
+    const conditions: string[] = ['sr.source_account_id = $1'];
+    const values: unknown[] = [this.sourceAccountId];
+    let paramIndex = 2;
+
+    if (filters?.status) {
+      conditions.push(`sr.status = $${paramIndex}`);
+      values.push(filters.status);
+      paramIndex++;
+    }
+
+    if (filters?.from) {
+      conditions.push(`sr.scheduled_start >= $${paramIndex}`);
+      values.push(filters.from);
+      paramIndex++;
+    }
+
+    if (filters?.to) {
+      conditions.push(`sr.scheduled_end <= $${paramIndex}`);
+      values.push(filters.to);
+      paramIndex++;
+    }
+
+    // Suppress unused variable warning
+    void paramIndex;
+
+    const result = await this.query<ScheduledRecordingRecord>(
+      `SELECT sr.* FROM np_epg_scheduled_recordings sr
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY sr.scheduled_start ASC`,
+      values
+    );
+
+    return result.rows;
+  }
+
+  async getScheduledRecording(id: string): Promise<ScheduledRecordingRecord | null> {
+    const result = await this.query<ScheduledRecordingRecord>(
+      `SELECT * FROM np_epg_scheduled_recordings
+       WHERE id = $1 AND source_account_id = $2`,
+      [id, this.sourceAccountId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateScheduledRecording(id: string, updates: Partial<ScheduledRecordingRecord>): Promise<ScheduledRecordingRecord | null> {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const allowedFields = [
+      'status', 'antserver_job_id', 'error_message',
+      'scheduled_start', 'scheduled_end',
+    ];
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (fields.length === 0) {
+      return this.getScheduledRecording(id);
+    }
+
+    fields.push(`updated_at = NOW()`);
+    values.push(id, this.sourceAccountId);
+
+    const result = await this.query<ScheduledRecordingRecord>(
+      `UPDATE np_epg_scheduled_recordings
+       SET ${fields.join(', ')}
+       WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}
+       RETURNING *`,
+      values
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  // =========================================================================
+  // Conflict Detection
+  // =========================================================================
+
+  async findConflicts(start: Date, end: Date, channelId?: string, excludeId?: string): Promise<ScheduledRecordingRecord[]> {
+    const conditions: string[] = [
+      'source_account_id = $1',
+      'scheduled_start < $2',
+      'scheduled_end > $3',
+      "status IN ('scheduled', 'recording')",
+    ];
+    const values: unknown[] = [this.sourceAccountId, end, start];
+    let paramIndex = 4;
+
+    if (channelId) {
+      conditions.push(`channel_id = $${paramIndex}`);
+      values.push(channelId);
+      paramIndex++;
+    }
+
+    if (excludeId) {
+      conditions.push(`id != $${paramIndex}`);
+      values.push(excludeId);
+      paramIndex++;
+    }
+
+    // Suppress unused variable warning
+    void paramIndex;
+
+    const result = await this.query<ScheduledRecordingRecord>(
+      `SELECT * FROM np_epg_scheduled_recordings
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY scheduled_start ASC`,
+      values
+    );
+
+    return result.rows;
+  }
+
+  // =========================================================================
+  // Series/Keyword Matching
+  // =========================================================================
+
+  async matchRulesAgainstPrograms(
+    programs: ProgramRecord[]
+  ): Promise<Array<{ rule: RecordingRuleRecord; program: ProgramRecord; schedule: ScheduleRecord }>> {
+    const matches: Array<{ rule: RecordingRuleRecord; program: ProgramRecord; schedule: ScheduleRecord }> = [];
+
+    // Get all enabled series and keyword rules
+    const rulesResult = await this.query<RecordingRuleRecord>(
+      `SELECT * FROM np_epg_recording_rules
+       WHERE source_account_id = $1
+         AND enabled = true
+         AND rule_type IN ('series', 'keyword')`,
+      [this.sourceAccountId]
+    );
+
+    const rules = rulesResult.rows;
+    if (rules.length === 0) {
+      return matches;
+    }
+
+    for (const program of programs) {
+      // Get schedules for this program
+      const schedulesResult = await this.query<ScheduleRecord>(
+        `SELECT * FROM epg_schedules
+         WHERE source_account_id = $1
+           AND program_id = $2
+           AND start_time >= NOW()
+         ORDER BY start_time ASC`,
+        [this.sourceAccountId, program.id]
+      );
+
+      if (schedulesResult.rows.length === 0) continue;
+
+      for (const rule of rules) {
+        let matched = false;
+
+        if (rule.rule_type === 'series' && rule.series_title) {
+          // Case-insensitive substring match on title
+          matched = program.title.toLowerCase().includes(rule.series_title.toLowerCase());
+        } else if (rule.rule_type === 'keyword' && rule.keyword) {
+          // Match keyword in title or description
+          const searchText = `${program.title} ${program.description ?? ''}`.toLowerCase();
+          matched = searchText.includes(rule.keyword.toLowerCase());
+        }
+
+        if (matched) {
+          // If rule has a channel_id constraint, only match programs on that channel
+          const applicableSchedules = rule.channel_id
+            ? schedulesResult.rows.filter(s => s.channel_id === rule.channel_id)
+            : schedulesResult.rows;
+
+          for (const schedule of applicableSchedules) {
+            matches.push({ rule, program, schedule });
+          }
+        }
+      }
+    }
+
+    return matches;
   }
 
   // =========================================================================

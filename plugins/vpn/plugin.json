@@ -153,6 +153,12 @@
       "default": "60"
     }
   ],
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
   "features": [
     "Multi-provider support (3 VPN providers: NordVPN, PIA, Mullvad)",
     "P2P-optimized server selection",

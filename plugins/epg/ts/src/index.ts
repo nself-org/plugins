@@ -7,3 +7,10 @@ export * from './types.js';
 export { loadConfig } from './config.js';
 export { EpgDatabase } from './database.js';
 export { createServer, startServer } from './server.js';
+export {
+  scheduleRecording,
+  checkConflicts,
+  resolveConflicts,
+  matchSeriesRules,
+  notifyAntServer,
+} from './recording-trigger.js';

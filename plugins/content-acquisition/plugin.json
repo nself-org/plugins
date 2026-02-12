@@ -136,6 +136,12 @@
       "default": "6379"
     }
   ],
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
   "features": [
     "TV show and music subscriptions",
     "RSS feed monitoring",

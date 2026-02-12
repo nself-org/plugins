@@ -3,11 +3,18 @@
  * HTTP server for electronic program guide API endpoints
  */
 
+import crypto from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { EpgDatabase } from './database.js';
 import { loadConfig, type Config } from './config.js';
+import {
+  scheduleRecording,
+  checkConflicts,
+  resolveConflicts,
+  matchSeriesRules,
+} from './recording-trigger.js';
 import type {
   CreateChannelRequest,
   UpdateChannelRequest,
@@ -24,6 +31,12 @@ import type {
   ImportManualRequest,
   ChannelRecord,
   ChannelGroupRecord,
+  CreateRecordingRuleRequest,
+  ListScheduledRecordingsQuery,
+  ConflictCheckQuery,
+  ResolveConflictRequest,
+  RecordingTriggerEvent,
+  ProgramRecord,
 } from './types.js';
 
 const logger = createLogger('epg:server');
@@ -494,6 +507,7 @@ export async function createServer(config?: Partial<Config>) {
       let schedulesImported = 0;
       let programsImported = 0;
       const errors: string[] = [];
+      const importedPrograms: ProgramRecord[] = [];
 
       for (const entry of request.body.schedules) {
         try {
@@ -531,6 +545,7 @@ export async function createServer(config?: Partial<Config>) {
             metadata: {},
           });
           programsImported++;
+          importedPrograms.push(program);
 
           // Create schedule
           await scopedDb(request).createSchedule({
@@ -550,10 +565,27 @@ export async function createServer(config?: Partial<Config>) {
         }
       }
 
+      // Match imported programs against existing recording rules
+      let recordingsScheduled = 0;
+      if (importedPrograms.length > 0) {
+        try {
+          recordingsScheduled = await matchSeriesRules(
+            scopedDb(request),
+            importedPrograms,
+            fullConfig.antserverUrl || undefined
+          );
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          logger.warn('Recording rule matching failed during import', { error: errMsg });
+          errors.push(`Recording rule matching failed: ${errMsg}`);
+        }
+      }
+
       return {
         channels_imported: 0,
         programs_imported: programsImported,
         schedules_imported: schedulesImported,
+        recordings_scheduled: recordingsScheduled,
         errors,
       };
     } catch (error) {
@@ -570,6 +602,235 @@ export async function createServer(config?: Partial<Config>) {
       sources: fullConfig.xmltvUrls,
       timestamp: new Date().toISOString(),
     };
+  });
+
+  // =========================================================================
+  // Recording Rules Endpoints
+  // =========================================================================
+
+  app.post<{ Body: CreateRecordingRuleRequest }>('/api/recordings/rules', async (request, reply) => {
+    try {
+      const body = request.body;
+      const rule = await scopedDb(request).createRecordingRule({
+        user_id: body.user_id,
+        rule_type: body.rule_type,
+        program_id: body.program_id ?? null,
+        channel_id: body.channel_id ?? null,
+        series_title: body.series_title ?? null,
+        keyword: body.keyword ?? null,
+        priority: body.priority,
+        keep_count: body.keep_count ?? null,
+        start_padding_minutes: body.start_padding_minutes,
+        end_padding_minutes: body.end_padding_minutes,
+      });
+
+      // If it is a single rule with a program_id and channel_id, schedule it immediately
+      if (rule.rule_type === 'single' && rule.program_id && rule.channel_id) {
+        try {
+          await scheduleRecording(
+            scopedDb(request),
+            rule.program_id,
+            rule.id,
+            rule.channel_id,
+            fullConfig.antserverUrl || undefined
+          );
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          logger.warn('Auto-schedule failed for single rule', { ruleId: rule.id, error: errMsg });
+        }
+      }
+
+      return reply.status(201).send(rule);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to create recording rule', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  app.get<{ Querystring: { user_id?: string } }>('/api/recordings/rules', async (request) => {
+    const rules = await scopedDb(request).listRecordingRules(request.query.user_id);
+    return { rules, count: rules.length };
+  });
+
+  app.put<{ Params: { id: string }; Body: Partial<CreateRecordingRuleRequest> }>(
+    '/api/recordings/rules/:id',
+    async (request, reply) => {
+      try {
+        const rule = await scopedDb(request).updateRecordingRule(
+          request.params.id,
+          request.body
+        );
+        if (!rule) {
+          return reply.status(404).send({ error: 'Recording rule not found' });
+        }
+        return rule;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('Failed to update recording rule', { error: message });
+        return reply.status(500).send({ error: message });
+      }
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/recordings/rules/:id', async (request, reply) => {
+    const deleted = await scopedDb(request).deleteRecordingRule(request.params.id);
+    if (!deleted) {
+      return reply.status(404).send({ error: 'Recording rule not found' });
+    }
+    return { success: true };
+  });
+
+  // =========================================================================
+  // Scheduled Recordings Endpoints
+  // =========================================================================
+
+  app.get<{ Querystring: ListScheduledRecordingsQuery }>('/api/recordings/scheduled', async (request) => {
+    const recordings = await scopedDb(request).listScheduledRecordings({
+      status: request.query.status,
+      from: request.query.from ? new Date(request.query.from) : undefined,
+      to: request.query.to ? new Date(request.query.to) : undefined,
+    });
+    return { recordings, count: recordings.length };
+  });
+
+  app.get<{ Querystring: ConflictCheckQuery }>('/api/recordings/conflicts', async (request, reply) => {
+    try {
+      if (!request.query.start || !request.query.end) {
+        return reply.status(400).send({ error: 'start and end query parameters are required' });
+      }
+
+      const conflicts = await checkConflicts(
+        scopedDb(request),
+        new Date(request.query.start),
+        new Date(request.query.end),
+        request.query.channel_id
+      );
+
+      return { conflicts, count: conflicts.length };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to check conflicts', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  app.post<{ Body: ResolveConflictRequest }>('/api/recordings/resolve-conflict', async (request, reply) => {
+    try {
+      const { recording_ids, strategy, keep_id } = request.body;
+
+      if (!recording_ids || recording_ids.length === 0) {
+        return reply.status(400).send({ error: 'recording_ids array is required' });
+      }
+
+      // Fetch all the recordings
+      const recordings = [];
+      for (const id of recording_ids) {
+        const recording = await scopedDb(request).getScheduledRecording(id);
+        if (recording) {
+          recordings.push(recording);
+        }
+      }
+
+      if (recordings.length === 0) {
+        return reply.status(404).send({ error: 'No valid recordings found' });
+      }
+
+      if (strategy === 'keep' && keep_id) {
+        // User explicitly chose which recording to keep
+        for (const recording of recordings) {
+          if (recording.id === keep_id) {
+            await scopedDb(request).updateScheduledRecording(recording.id, { status: 'scheduled' });
+          } else {
+            await scopedDb(request).updateScheduledRecording(recording.id, { status: 'cancelled' });
+          }
+        }
+      } else {
+        // Priority-based resolution
+        await resolveConflicts(scopedDb(request), recordings);
+      }
+
+      // Re-fetch to return updated state
+      const updated = [];
+      for (const id of recording_ids) {
+        const recording = await scopedDb(request).getScheduledRecording(id);
+        if (recording) {
+          updated.push(recording);
+        }
+      }
+
+      return { recordings: updated, count: updated.length };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to resolve conflict', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  app.post<{ Body: RecordingTriggerEvent }>('/api/recordings/trigger', async (request, reply) => {
+    try {
+      // Verify HMAC signature from AntServer when secret is configured
+      const webhookSecret = fullConfig.antserverWebhookSecret;
+      if (webhookSecret) {
+        const signature = request.headers['x-antserver-signature'] as string | undefined;
+        const expectedSig = crypto
+          .createHmac('sha256', webhookSecret)
+          .update(JSON.stringify(request.body))
+          .digest('hex');
+
+        if (!signature || !crypto.timingSafeEqual(
+          Buffer.from(signature),
+          Buffer.from(expectedSig)
+        )) {
+          return reply.status(401).send({ error: 'Invalid webhook signature' });
+        }
+      }
+
+      const { recording_id, status, antserver_job_id, error_message } = request.body;
+
+      if (!recording_id || !status) {
+        return reply.status(400).send({ error: 'recording_id and status are required' });
+      }
+
+      const recording = await scopedDb(request).getScheduledRecording(recording_id);
+      if (!recording) {
+        return reply.status(404).send({ error: 'Recording not found' });
+      }
+
+      // Map trigger event status to recording status
+      let recordingStatus: 'recording' | 'completed' | 'failed';
+      switch (status) {
+        case 'started':
+          recordingStatus = 'recording';
+          break;
+        case 'completed':
+          recordingStatus = 'completed';
+          break;
+        case 'failed':
+          recordingStatus = 'failed';
+          break;
+        default:
+          return reply.status(400).send({ error: `Invalid status: ${status}` });
+      }
+
+      const updated = await scopedDb(request).updateScheduledRecording(recording_id, {
+        status: recordingStatus,
+        antserver_job_id: antserver_job_id ?? recording.antserver_job_id,
+        error_message: error_message ?? null,
+      });
+
+      logger.info('Recording trigger event processed', {
+        recordingId: recording_id,
+        status: recordingStatus,
+        antserverJobId: antserver_job_id,
+      });
+
+      return updated;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to process recording trigger', { error: message });
+      return reply.status(500).send({ error: message });
+    }
   });
 
   // =========================================================================

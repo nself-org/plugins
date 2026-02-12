@@ -228,6 +228,12 @@
       "description": "Maximum concurrent active downloads"
     }
   ],
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
   "features": [
     "Multi-client support (Transmission, qBittorrent)",
     "VPN enforcement (blocks downloads without active VPN)",

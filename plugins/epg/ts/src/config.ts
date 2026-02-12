@@ -42,6 +42,10 @@ export interface Config {
   // XMLTV refresh
   xmltvRefreshCron: string;
 
+  // AntServer integration
+  antserverUrl: string;
+  antserverWebhookSecret: string;
+
   // Logging
   logLevel: string;
 
@@ -88,6 +92,10 @@ export function loadConfig(overrides?: Partial<Config>): Config {
 
     // XMLTV refresh
     xmltvRefreshCron: process.env.EPG_XMLTV_REFRESH_CRON ?? '0 3 * * *',
+
+    // AntServer integration
+    antserverUrl: process.env.ANTSERVER_URL ?? '',
+    antserverWebhookSecret: process.env.ANTSERVER_WEBHOOK_SECRET ?? '',
 
     // Logging
     logLevel: process.env.LOG_LEVEL ?? 'info',
