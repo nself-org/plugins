@@ -161,7 +161,7 @@ SERVER_CAROUSEL_ENABLED=false
 CAROUSEL_INTERVAL_MINUTES=60
 
 # API port (optional)
-PORT=3010
+PORT=3200
 ```
 
 ### Provider Credentials
@@ -258,7 +258,7 @@ From another plugin (e.g., `osupd`):
 
 ```typescript
 // Connect to VPN and download via torrent
-const response = await fetch('http://localhost:3010/api/download', {
+const response = await fetch('http://localhost:3200/api/download', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -274,7 +274,7 @@ const { download_id } = await response.json();
 
 // Poll for completion
 while (true) {
-  const status = await fetch(`http://localhost:3010/api/downloads/${download_id}`)
+  const status = await fetch(`http://localhost:3200/api/downloads/${download_id}`)
     .then(r => r.json());
 
   if (status.status === 'completed') {
@@ -316,7 +316,7 @@ while (true) {
 
 ## 🔬 Research Documentation
 
-Complete research files available in `.codex/` directory:
+Complete research files available in the private planning directory:
 
 - **NordVPN Research** (43KB): CLI commands, API endpoints, P2P servers, kill switch, leak protection
 - **Surfshark Research** (38KB): WireGuard configs, all-P2P policy, manual setup
