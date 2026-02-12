@@ -93,11 +93,11 @@ export class MediaProcessingDatabase {
         video_codec VARCHAR(16) DEFAULT 'h264',
         audio_codec VARCHAR(16) DEFAULT 'aac',
         resolutions JSONB NOT NULL DEFAULT '[
-          {"width":1920,"height":1080,"bitrate":5000000,"label":"1080p"},
-          {"width":1280,"height":720,"bitrate":2500000,"label":"720p"},
-          {"width":854,"height":480,"bitrate":1200000,"label":"480p"},
-          {"width":640,"height":360,"bitrate":800000,"label":"360p"},
-          {"width":426,"height":240,"bitrate":400000,"label":"240p"}
+          {"width":1920,"height":1080,"bitrate":5000000,"label":"1080p","audioBitrate":192000},
+          {"width":1280,"height":720,"bitrate":2500000,"label":"720p","audioBitrate":128000},
+          {"width":854,"height":480,"bitrate":1200000,"label":"480p","audioBitrate":128000},
+          {"width":640,"height":360,"bitrate":800000,"label":"360p","audioBitrate":96000},
+          {"width":426,"height":240,"bitrate":400000,"label":"240p","audioBitrate":64000}
         ]'::jsonb,
         audio_bitrate INTEGER DEFAULT 128000,
         framerate INTEGER DEFAULT 30,
@@ -328,11 +328,11 @@ export class MediaProcessingDatabase {
 
   async createEncodingProfile(input: CreateEncodingProfileInput): Promise<EncodingProfileRecord> {
     const resolutions: Resolution[] = input.resolutions ?? [
-      { width: 1920, height: 1080, bitrate: 5000000, label: '1080p' },
-      { width: 1280, height: 720, bitrate: 2500000, label: '720p' },
-      { width: 854, height: 480, bitrate: 1200000, label: '480p' },
-      { width: 640, height: 360, bitrate: 800000, label: '360p' },
-      { width: 426, height: 240, bitrate: 400000, label: '240p' },
+      { width: 1920, height: 1080, bitrate: 5000000, label: '1080p', audioBitrate: 192000 },
+      { width: 1280, height: 720, bitrate: 2500000, label: '720p', audioBitrate: 128000 },
+      { width: 854, height: 480, bitrate: 1200000, label: '480p', audioBitrate: 128000 },
+      { width: 640, height: 360, bitrate: 800000, label: '360p', audioBitrate: 96000 },
+      { width: 426, height: 240, bitrate: 400000, label: '240p', audioBitrate: 64000 },
     ];
 
     const result = await this.db.query<EncodingProfileRecord>(

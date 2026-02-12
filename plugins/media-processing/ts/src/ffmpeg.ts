@@ -448,6 +448,67 @@ export class FFmpegClient {
   }
 
   /**
+   * Encode to fragmented MP4 intermediate for Shaka Packager consumption.
+   * Produces fMP4 with movflags suitable for CMAF packaging.
+   */
+  async encodeToFmp4(
+    inputPath: string,
+    outputPath: string,
+    resolution: Resolution,
+    options: {
+      videoCodec: string;
+      audioCodec: string;
+      audioBitrate: number;
+      preset: string;
+      framerate: number;
+      segmentDuration: number;
+      hardwareAccel?: string;
+    },
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    logger.info('Encoding to fMP4 intermediate', {
+      inputPath,
+      outputPath,
+      resolution: resolution.label,
+    });
+
+    return new Promise((resolve, reject) => {
+      const args = this.buildFmp4Args(inputPath, outputPath, resolution, options);
+
+      const proc = spawn(this.config.ffmpegPath, args);
+      let stderr = '';
+
+      proc.stderr.on('data', (data: Buffer) => {
+        const chunk = data.toString();
+        stderr += chunk;
+
+        if (onProgress) {
+          const progress = this.parseProgress(chunk);
+          if (progress !== null) {
+            onProgress(progress);
+          }
+        }
+      });
+
+      proc.on('close', (code) => {
+        if (code !== 0) {
+          logger.error('fMP4 encoding failed', { code, stderr: stderr.slice(-500) });
+          reject(new Error(`FFmpeg fMP4 encoding failed with code ${code}`));
+          return;
+        }
+
+        logger.info('fMP4 intermediate encoded', { outputPath, resolution: resolution.label });
+        resolve();
+      });
+
+      proc.on('error', (error) => {
+        logger.error('FFmpeg process error', { error: error.message });
+        reject(error);
+      });
+    });
+  }
+
+  /**
    * Build transcode arguments
    */
   private buildTranscodeArgs(
@@ -495,10 +556,11 @@ export class FFmpegClient {
       args.push('-preset', options.preset);
     }
 
-    // Audio encoding
+    // Audio encoding — use per-rung audioBitrate if available, else profile-level
+    const audioBitrate = resolution.audioBitrate ?? options.audioBitrate;
     args.push(
       '-c:a', options.audioCodec,
-      '-b:a', `${options.audioBitrate}`,
+      '-b:a', `${audioBitrate}`,
       '-ar', '48000',
       '-ac', '2',
     );
@@ -561,10 +623,11 @@ export class FFmpegClient {
       args.push('-preset', options.preset);
     }
 
-    // Audio encoding
+    // Audio encoding — use per-rung audioBitrate if available, else profile-level
+    const audioBitrate = resolution.audioBitrate ?? options.audioBitrate;
     args.push(
       '-c:a', options.audioCodec,
-      '-b:a', `${options.audioBitrate}`,
+      '-b:a', `${audioBitrate}`,
       '-ar', '48000',
       '-ac', '2',
     );
@@ -583,6 +646,89 @@ export class FFmpegClient {
 
     // Output
     args.push(`${outputDir}/playlist.m3u8`);
+
+    return args;
+  }
+
+  /**
+   * Build fMP4 (fragmented MP4) arguments for Shaka Packager input.
+   * Uses -movflags +frag_keyframe+empty_moov+default_base_moof for CMAF compatibility.
+   */
+  private buildFmp4Args(
+    inputPath: string,
+    outputPath: string,
+    resolution: Resolution,
+    options: {
+      videoCodec: string;
+      audioCodec: string;
+      audioBitrate: number;
+      preset: string;
+      framerate: number;
+      segmentDuration: number;
+      hardwareAccel?: string;
+    }
+  ): string[] {
+    const args: string[] = [];
+
+    // Hardware acceleration
+    if (options.hardwareAccel && options.hardwareAccel !== 'none') {
+      if (options.hardwareAccel === 'nvenc') {
+        args.push('-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda');
+      } else if (options.hardwareAccel === 'vaapi') {
+        args.push('-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128');
+      } else if (options.hardwareAccel === 'qsv') {
+        args.push('-hwaccel', 'qsv');
+      }
+    }
+
+    // Input
+    args.push('-i', inputPath);
+
+    // Video encoding
+    const videoCodec = this.mapVideoCodec(options.videoCodec, options.hardwareAccel);
+    args.push(
+      '-c:v', videoCodec,
+      '-b:v', resolution.bitrate.toString(),
+      '-maxrate', (resolution.bitrate * 1.5).toString(),
+      '-bufsize', (resolution.bitrate * 2).toString(),
+      '-vf', `scale=${resolution.width}:${resolution.height}`,
+      '-r', options.framerate.toString(),
+    );
+
+    // Keyframe interval = segment duration * framerate (for clean segment boundaries)
+    const gopSize = Math.round(options.segmentDuration * options.framerate);
+    args.push(
+      '-g', gopSize.toString(),
+      '-keyint_min', gopSize.toString(),
+    );
+
+    // Preset
+    if (videoCodec.includes('264') || videoCodec.includes('265')) {
+      args.push('-preset', options.preset);
+    }
+
+    // Audio encoding — use per-rung audioBitrate if available, else profile-level
+    const audioBitrate = resolution.audioBitrate ?? options.audioBitrate;
+    args.push(
+      '-c:a', options.audioCodec,
+      '-b:a', `${audioBitrate}`,
+      '-ar', '48000',
+      '-ac', '2',
+    );
+
+    // fMP4 container with CMAF-compatible fragmentation flags
+    const fragDuration = options.segmentDuration * 1_000_000; // microseconds
+    args.push(
+      '-f', 'mp4',
+      '-movflags', '+frag_keyframe+empty_moov+default_base_moof',
+      '-frag_duration', fragDuration.toString(),
+    );
+
+    // Progress reporting
+    args.push('-progress', 'pipe:2');
+
+    // Output
+    args.push('-y', outputPath);
 
     return args;
   }

@@ -40,11 +40,13 @@
     "recommended": [
       {
         "name": "alass",
+        "custom_install": "cargo install alass-cli",
         "verify": "alass --version",
         "note": "Rust-based subtitle synchronizer for fast offset/split correction"
       },
       {
         "name": "ffsubsync",
+        "custom_install": "pip3 install ffsubsync",
         "verify": "ffsubsync --version",
         "note": "Python audio-based subtitle sync. Install: pip3 install ffsubsync"
       }

@@ -38,6 +38,7 @@ export interface Resolution {
   height: number;
   bitrate: number;
   label: string;
+  audioBitrate?: number;
 }
 
 export interface EncodingProfileRecord {

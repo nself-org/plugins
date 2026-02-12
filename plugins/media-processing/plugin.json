@@ -96,8 +96,8 @@
       {"name": "ffprobe", "minVersion": "5.0", "apt": "ffmpeg", "brew": "ffmpeg", "verify": "ffprobe -version"}
     ],
     "recommended": [
-      {"name": "shaka-packager", "verify": "packager --version", "note": "Required for CMAF HLS+DASH dual output. Falls back to FFmpeg-only HLS if not installed."},
-      {"name": "guessit", "verify": "guessit --version", "note": "Python-based filename parser. Plugin uses built-in regex parser as fallback."}
+      {"name": "shaka-packager", "custom_install": "curl -L https://github.com/shaka-project/shaka-packager/releases/latest/download/packager-linux-x64 -o /usr/local/bin/packager && chmod +x /usr/local/bin/packager", "verify": "packager --version", "note": "Required for CMAF HLS+DASH dual output. Falls back to FFmpeg-only HLS if not installed."},
+      {"name": "guessit", "custom_install": "pip3 install guessit", "verify": "guessit --version", "note": "Python-based filename parser. Plugin uses built-in regex parser as fallback."}
     ]
   },
   "hooks": {

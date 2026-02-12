@@ -14,7 +14,7 @@ import { FFmpegClient } from './ffmpeg.js';
 import { ShakaPackager } from './packager.js';
 import { QAValidator } from './qa-validator.js';
 import { StorageUploader } from './upload.js';
-import type { JobRecord, EncodingProfileRecord } from './types.js';
+import type { JobRecord, EncodingProfileRecord, PackagerStreamDescriptor } from './types.js';
 
 const logger = createLogger('media-processing:processor');
 
@@ -129,13 +129,162 @@ export class MediaProcessor {
       // Encoding phase
       await this.db.updateJobStatus(jobId, 'encoding', 0);
 
-      if (profile.hls_enabled) {
-        // Generate HLS streams
+      // Decide encoding path BEFORE running FFmpeg
+      const usePackager = profile.hls_enabled && await this.packager.shouldUsePackager();
+
+      if (profile.hls_enabled && usePackager) {
+        // =====================================================================
+        // PATH A: FFmpeg → fMP4 intermediates → Shaka Packager → CMAF (HLS + DASH)
+        // =====================================================================
+        const fmp4Dir = join(outputBasePath, 'intermediates');
+        await fs.mkdir(fmp4Dir, { recursive: true });
+
+        const streams: PackagerStreamDescriptor[] = [];
+
+        // Step 1: Encode each resolution to fragmented MP4
+        for (let i = 0; i < profile.resolutions.length; i++) {
+          const resolution = profile.resolutions[i];
+          const fmp4Path = join(fmp4Dir, `${resolution.label}.mp4`);
+
+          await this.ffmpeg.encodeToFmp4(
+            inputPath,
+            fmp4Path,
+            resolution,
+            {
+              videoCodec: profile.video_codec,
+              audioCodec: profile.audio_codec,
+              audioBitrate: profile.audio_bitrate,
+              preset: profile.preset,
+              framerate: profile.framerate,
+              segmentDuration: profile.hls_segment_duration,
+              hardwareAccel: this.config.hardwareAccel,
+            },
+            (currentTime: number) => {
+              // Spread progress across all resolutions (e.g. 5 rungs = 20% each)
+              const rungProgress = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
+              const overallProgress = ((i / profile.resolutions.length) * 80) +
+                (rungProgress / profile.resolutions.length * 0.8);
+              this.db.updateJobStatus(jobId, 'encoding', Math.min(overallProgress, 80)).catch(err => {
+                logger.error('Failed to update progress', { error: err.message });
+              });
+            }
+          );
+
+          streams.push({
+            input: fmp4Path,
+            stream: 'video',
+            bandwidth: resolution.bitrate,
+          });
+        }
+
+        // Step 2: Package with Shaka Packager → CMAF (HLS + DASH)
+        await this.db.updateJobStatus(jobId, 'packaging', 0);
+        const cmafDir = join(outputBasePath, 'cmaf');
+        await fs.mkdir(cmafDir, { recursive: true });
+
+        let cmafResult: { hlsManifest: string; dashManifest: string | null };
+        try {
+          cmafResult = await this.packager.packageCMAF(fmp4Dir, cmafDir, streams, {
+            segmentDuration: profile.hls_segment_duration,
+          });
+
+          logger.info('CMAF packaging complete', {
+            jobId,
+            hlsManifest: cmafResult.hlsManifest,
+            dashManifest: cmafResult.dashManifest,
+          });
+        } catch (error) {
+          // Shaka Packager failed — fall back to FFmpeg HLS
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          logger.warn('CMAF packaging failed, falling back to FFmpeg-only HLS', { jobId, error: message });
+
+          // Re-encode using FFmpeg HLS path as fallback
+          const hlsDir = join(outputBasePath, 'hls');
+          await fs.mkdir(hlsDir, { recursive: true });
+
+          await this.ffmpeg.generateHls(inputPath, hlsDir, profile.resolutions, {
+            videoCodec: profile.video_codec,
+            audioCodec: profile.audio_codec,
+            audioBitrate: profile.audio_bitrate,
+            preset: profile.preset,
+            framerate: profile.framerate,
+            segmentDuration: profile.hls_segment_duration,
+            hardwareAccel: this.config.hardwareAccel,
+          });
+
+          cmafResult = {
+            hlsManifest: join(hlsDir, 'master.m3u8'),
+            dashManifest: null,
+          };
+        }
+
+        // Record manifests
+        const masterManifestPath = cmafResult.hlsManifest;
+        const variantManifests = profile.resolutions.map(r => ({
+          resolution_label: r.label,
+          bandwidth: r.bitrate,
+          width: r.width,
+          height: r.height,
+          codecs: 'avc1.64001f,mp4a.40.2',
+          manifest_path: join(cmafDir, `video_${r.bitrate}.mp4`),
+        }));
+
+        await this.db.createHlsManifest({
+          job_id: jobId,
+          master_manifest_path: masterManifestPath,
+          variant_manifests: variantManifests,
+          segment_count: 0,
+          total_duration_seconds: duration,
+        });
+
+        // Record HLS manifest output
+        await this.db.createJobOutput({
+          job_id: jobId,
+          output_type: 'hls_manifest',
+          resolution_label: null,
+          file_path: masterManifestPath,
+          file_size_bytes: null,
+          content_type: 'application/vnd.apple.mpegurl',
+          width: null,
+          height: null,
+          bitrate: null,
+          duration_seconds: duration,
+          language: null,
+          metadata: {},
+        });
+
+        // Record DASH manifest output if produced
+        if (cmafResult.dashManifest) {
+          await this.db.createJobOutput({
+            job_id: jobId,
+            output_type: 'hls_manifest', // reusing type for DASH manifest
+            resolution_label: null,
+            file_path: cmafResult.dashManifest,
+            file_size_bytes: null,
+            content_type: 'application/dash+xml',
+            width: null,
+            height: null,
+            bitrate: null,
+            duration_seconds: duration,
+            language: null,
+            metadata: { format: 'dash' },
+          });
+        }
+
+        // Clean up intermediates
+        try {
+          await fs.rm(fmp4Dir, { recursive: true, force: true });
+          logger.debug('Cleaned up fMP4 intermediates', { fmp4Dir });
+        } catch {
+          logger.warn('Failed to clean up fMP4 intermediates (non-fatal)', { fmp4Dir });
+        }
+
+      } else if (profile.hls_enabled) {
+        // =====================================================================
+        // PATH B: FFmpeg → HLS directly (no Shaka Packager)
+        // =====================================================================
         const hlsDir = join(outputBasePath, 'hls');
         await fs.mkdir(hlsDir, { recursive: true });
-
-        // Check if we should use Shaka Packager for CMAF
-        const usePackager = await this.packager.shouldUsePackager();
 
         await this.ffmpeg.generateHls(
           inputPath,
@@ -158,29 +307,6 @@ export class MediaProcessor {
           }
         );
 
-        // If Shaka Packager is available, package CMAF (HLS + DASH)
-        if (usePackager) {
-          await this.db.updateJobStatus(jobId, 'packaging', 0);
-          try {
-            const cmafDir = join(outputBasePath, 'cmaf');
-            await fs.mkdir(cmafDir, { recursive: true });
-
-            const streams = profile.resolutions.map(r => ({
-              input: join(hlsDir, r.label, 'playlist.m3u8'),
-              stream: 'video' as const,
-              bandwidth: r.bitrate,
-            }));
-
-            await this.packager.packageCMAF(hlsDir, cmafDir, streams, {
-              segmentDuration: profile.hls_segment_duration,
-            });
-
-            logger.info('CMAF packaging complete', { jobId });
-          } catch (error) {
-            logger.warn('CMAF packaging failed, falling back to FFmpeg-only HLS (non-fatal)', { error });
-          }
-        }
-
         // Record HLS outputs
         const masterManifestPath = join(hlsDir, 'master.m3u8');
         const variantManifests = profile.resolutions.map(r => ({
@@ -196,7 +322,7 @@ export class MediaProcessor {
           job_id: jobId,
           master_manifest_path: masterManifestPath,
           variant_manifests: variantManifests,
-          segment_count: 0, // TODO: count segments
+          segment_count: 0,
           total_duration_seconds: duration,
         });
 
