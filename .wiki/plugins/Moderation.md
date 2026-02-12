@@ -69,14 +69,14 @@ The plugin creates **17 comprehensive tables**:
 | `np_moderation_toxicity_scores` | AI toxicity analysis results |
 | `np_moderation_user_stats` | Per-user violation and action statistics |
 | `np_moderation_audit_log` | Complete audit trail of all moderation activities |
-| `mod_reviews` | Automated and manual content review records |
-| `mod_policies` | Content policies with configured thresholds |
-| `mod_user_strikes` | User strike tracking with expiration |
-| `cp_policies` | Content policy definitions |
-| `cp_rules` | Individual policy rules with matching conditions |
-| `cp_evaluations` | Policy evaluation results for content |
-| `cp_word_lists` | Word lists for policy matching |
-| `cp_overrides` | Manual policy overrides for specific content |
+| `np_moderation_mod_reviews` | Automated and manual content review records |
+| `np_moderation_mod_policies` | Content policies with configured thresholds |
+| `np_moderation_mod_user_strikes` | User strike tracking with expiration |
+| `np_moderation_cp_policies` | Content policy definitions |
+| `np_moderation_cp_rules` | Individual policy rules with matching conditions |
+| `np_moderation_cp_evaluations` | Policy evaluation results for content |
+| `np_moderation_cp_word_lists` | Word lists for policy matching |
+| `np_moderation_cp_overrides` | Manual policy overrides for specific content |
 | `np_moderation_webhook_events` | Received webhook event log |
 
 ---
@@ -372,14 +372,14 @@ The Moderation plugin creates 17 tables for comprehensive content moderation:
 7. **np_moderation_toxicity_scores** - AI toxicity analysis results
 8. **np_moderation_user_stats** - Per-user statistics
 9. **np_moderation_audit_log** - Complete audit trail
-10. **mod_reviews** - Content review records
-11. **mod_policies** - Content policies with thresholds
-12. **mod_user_strikes** - Strike tracking with expiration
-13. **cp_policies** - Content policy definitions
-14. **cp_rules** - Individual policy rules
-15. **cp_evaluations** - Policy evaluation results
-16. **cp_word_lists** - Word lists for policies
-17. **cp_overrides** - Manual policy overrides
+10. **np_moderation_mod_reviews** - Content review records
+11. **np_moderation_mod_policies** - Content policies with thresholds
+12. **np_moderation_mod_user_strikes** - Strike tracking with expiration
+13. **np_moderation_cp_policies** - Content policy definitions
+14. **np_moderation_cp_rules** - Individual policy rules
+15. **np_moderation_cp_evaluations** - Policy evaluation results
+16. **np_moderation_cp_word_lists** - Word lists for policies
+17. **np_moderation_cp_overrides** - Manual policy overrides
 18. **np_moderation_webhook_events** - Webhook event log
 
 ### Key Schema Details
@@ -408,7 +408,7 @@ Columns: `user_id`, `total_flags`, `total_violations`, `total_warnings`, `total_
 
 Indexes: `total_violations`, `active_strikes`, `reputation_score`, `is_currently_muted`, `is_currently_banned`, `source_account_id`
 
-#### mod_user_strikes
+#### np_moderation_mod_user_strikes
 
 Columns: `id`, `user_id`, `reason`, `severity`, `content_id`, `action_id`, `issued_by`, `expires_at`, `expired`, `revoked`, `revoked_at`, `revoked_by`, `metadata` (JSONB), `source_account_id`, `created_at`, `synced_at`
 
