@@ -2,58 +2,61 @@
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE & editors
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
+# Environment & credentials (never commit)
+.env
+.env.local
+.env.*.local
+.secrets/
+*.key
+*.pem
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
 # Logs
 *.log
 logs/
 
-# Cache
+# Cache & temp
 .cache/
 cache/
-
-# Temp files
 *.tmp
 *.temp
 tmp/
-
-# Environment files (should not be committed)
-.env
-.env.local
-.env.*.local
 
 # Test output
 coverage/
 test-results/
 
-# Build artifacts
-dist/
-build/
+# AI agent directories (private — never commit)
+.ai/
+.claude
+.codex
 
-# Node modules (if any tooling uses npm)
-node_modules/
-
-# Private control directories (contains credentials)
-.claude/
-.codex/
-
-# Task tracking files
+# Planning & working documents (local only)
 todo.md
 TODO.md
-
-# Future features planning (private)
+DONE.md
+FEEDBACK.md
 NEXT.md
+TRACKING.md
+PLAN.md
 
-# Plugin proposals (private to requesting project)
+# Plugin proposals (private)
 PROP1.md
 PROP2.md
 PROP3.md
-
-# nself-tv proposal (active)
 PROPTV.md
 FEEDTV.md
+.claude/
