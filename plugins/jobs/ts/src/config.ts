@@ -10,9 +10,49 @@ import type { JobsConfig } from './types.js';
 config();
 
 /**
+ * Parse DATABASE_URL into connection parameters
+ */
+function parseDatabaseUrl(url: string | undefined): {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  ssl: boolean;
+} | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/([^?]+)(\?.*)?$/);
+    if (!match) {
+      return null;
+    }
+
+    const [, user, password, host, port, database, queryString] = match;
+    const ssl = queryString?.includes('sslmode=require') || queryString?.includes('ssl=true') || false;
+
+    return {
+      host,
+      port: parseInt(port, 10),
+      database,
+      user,
+      password,
+      ssl,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Load configuration from environment variables
  */
 export function loadConfig(overrides?: Partial<JobsConfig>): JobsConfig {
+  // Try to parse DATABASE_URL first, fall back to individual POSTGRES_* vars
+  const dbFromUrl = parseDatabaseUrl(process.env.DATABASE_URL);
+
   const cfg: JobsConfig = {
     // Redis
     redisUrl: process.env.JOBS_REDIS_URL || 'redis://localhost:6379',
@@ -35,14 +75,14 @@ export function loadConfig(overrides?: Partial<JobsConfig>): JobsConfig {
     cleanCompletedAfter: parseInt(process.env.JOBS_CLEAN_COMPLETED_AFTER || '86400000', 10), // 24 hours
     cleanFailedAfter: parseInt(process.env.JOBS_CLEAN_FAILED_AFTER || '604800000', 10), // 7 days
 
-    // Database
+    // Database - Priority: DATABASE_URL → POSTGRES_* vars → defaults
     database: {
-      host: process.env.POSTGRES_HOST ?? 'localhost',
-      port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
-      database: process.env.POSTGRES_DB ?? 'nself',
-      user: process.env.POSTGRES_USER ?? 'postgres',
-      password: process.env.POSTGRES_PASSWORD ?? '',
-      ssl: process.env.POSTGRES_SSL === 'true',
+      host: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
+      port: dbFromUrl?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+      database: dbFromUrl?.database ?? process.env.POSTGRES_DB ?? 'nself',
+      user: dbFromUrl?.user ?? process.env.POSTGRES_USER ?? 'postgres',
+      password: dbFromUrl?.password ?? process.env.POSTGRES_PASSWORD ?? '',
+      ssl: dbFromUrl?.ssl ?? process.env.POSTGRES_SSL === 'true',
     },
 
     ...overrides,
@@ -63,11 +103,15 @@ export function validateConfig(config: JobsConfig): void {
   }
 
   if (!config.database.host) {
-    errors.push('POSTGRES_HOST is required');
+    errors.push('Database host is required (set DATABASE_URL or POSTGRES_HOST)');
   }
 
   if (!config.database.database) {
-    errors.push('POSTGRES_DB is required');
+    errors.push('Database name is required (set DATABASE_URL or POSTGRES_DB)');
+  }
+
+  if (!config.database.password) {
+    errors.push('Database password is required (set DATABASE_URL or POSTGRES_PASSWORD)');
   }
 
   // Validate ranges
