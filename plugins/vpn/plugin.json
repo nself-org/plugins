@@ -4,6 +4,8 @@
   "description": "Multi-provider VPN management (3 VPN providers) and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection",
   "author": "nself",
   "license": "MIT",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/vpn",
+  "repository": "https://github.com/acamarata/nself-plugins",
   "category": "authentication",
   "subcategory": "orchestration",
   "path": "plugins/vpn",

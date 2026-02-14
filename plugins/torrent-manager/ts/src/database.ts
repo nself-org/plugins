@@ -69,7 +69,7 @@ export class TorrentDatabase {
 
       // Torrent Sources Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_sources (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_sources (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           source_name VARCHAR(50) NOT NULL,
@@ -86,8 +86,8 @@ export class TorrentDatabase {
       `);
 
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_torrent_sources_active
-        ON torrent_sources(is_active) WHERE is_active = TRUE
+        CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_sources_active
+        ON np_torrentmanager_sources(is_active) WHERE is_active = TRUE
       `);
 
       // Torrent Downloads Table
@@ -207,7 +207,7 @@ export class TorrentDatabase {
 
       // Torrent Search Cache Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_search_cache (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_search_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           query_hash VARCHAR(64) NOT NULL,
@@ -223,18 +223,18 @@ export class TorrentDatabase {
       `);
 
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_torrent_search_cache_hash
-        ON torrent_search_cache(query_hash)
+        CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_search_cache_hash
+        ON np_torrentmanager_search_cache(query_hash)
       `);
 
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_torrent_search_cache_expires
-        ON torrent_search_cache(expires_at)
+        CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_search_cache_expires
+        ON np_torrentmanager_search_cache(expires_at)
       `);
 
       // Seeding Policy Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_seeding_policy (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_seeding_policy (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           policy_name VARCHAR(255) NOT NULL,
@@ -254,7 +254,7 @@ export class TorrentDatabase {
 
       // Torrent Stats Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_stats (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_stats (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           total_downloads INT DEFAULT 0,
@@ -276,7 +276,7 @@ export class TorrentDatabase {
 
       // Per-Download Seeding Policies Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS np_torrent_seeding_policies (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_seeding_policies (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           download_id VARCHAR(255) NOT NULL,
@@ -291,18 +291,18 @@ export class TorrentDatabase {
       `);
 
       await client.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_np_torrent_seeding_policies_download
-        ON np_torrent_seeding_policies(download_id)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_np_torrentmanager_seeding_policies_download
+        ON np_torrentmanager_seeding_policies(download_id)
       `);
 
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_np_torrent_seeding_policies_account
-        ON np_torrent_seeding_policies(source_account_id)
+        CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_seeding_policies_account
+        ON np_torrentmanager_seeding_policies(source_account_id)
       `);
 
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_np_torrent_seeding_policies_favorite
-        ON np_torrent_seeding_policies(favorite) WHERE favorite = TRUE
+        CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_seeding_policies_favorite
+        ON np_torrentmanager_seeding_policies(favorite) WHERE favorite = TRUE
       `);
 
       // Create Views
@@ -512,16 +512,16 @@ export class TorrentDatabase {
     policy: Partial<DownloadSeedingPolicy>
   ): Promise<DownloadSeedingPolicy> {
     const result = await this.pool.query(
-      `INSERT INTO np_torrent_seeding_policies (
+      `INSERT INTO np_torrentmanager_seeding_policies (
         source_account_id, download_id, ratio_limit, time_limit_hours,
         auto_remove, keep_files, favorite
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (download_id) DO UPDATE SET
-        ratio_limit = COALESCE(EXCLUDED.ratio_limit, np_torrent_seeding_policies.ratio_limit),
-        time_limit_hours = COALESCE(EXCLUDED.time_limit_hours, np_torrent_seeding_policies.time_limit_hours),
-        auto_remove = COALESCE(EXCLUDED.auto_remove, np_torrent_seeding_policies.auto_remove),
-        keep_files = COALESCE(EXCLUDED.keep_files, np_torrent_seeding_policies.keep_files),
-        favorite = COALESCE(EXCLUDED.favorite, np_torrent_seeding_policies.favorite),
+        ratio_limit = COALESCE(EXCLUDED.ratio_limit, np_torrentmanager_seeding_policies.ratio_limit),
+        time_limit_hours = COALESCE(EXCLUDED.time_limit_hours, np_torrentmanager_seeding_policies.time_limit_hours),
+        auto_remove = COALESCE(EXCLUDED.auto_remove, np_torrentmanager_seeding_policies.auto_remove),
+        keep_files = COALESCE(EXCLUDED.keep_files, np_torrentmanager_seeding_policies.keep_files),
+        favorite = COALESCE(EXCLUDED.favorite, np_torrentmanager_seeding_policies.favorite),
         updated_at = NOW()
       RETURNING *`,
       [
@@ -539,7 +539,7 @@ export class TorrentDatabase {
 
   async getDownloadSeedingPolicy(downloadId: string): Promise<DownloadSeedingPolicy | null> {
     const result = await this.pool.query(
-      'SELECT * FROM np_torrent_seeding_policies WHERE download_id = $1',
+      'SELECT * FROM np_torrentmanager_seeding_policies WHERE download_id = $1',
       [downloadId]
     );
     return result.rows[0] || null;
@@ -551,7 +551,7 @@ export class TorrentDatabase {
 
   async cacheSearchResults(cache: Partial<TorrentSearchCache>): Promise<void> {
     await this.pool.query(
-      `INSERT INTO torrent_search_cache (
+      `INSERT INTO np_torrentmanager_search_cache (
         source_account_id, query_hash, query, results, results_count,
         sources_searched, search_duration_ms, expires_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -570,7 +570,7 @@ export class TorrentDatabase {
 
   async getSearchCache(queryHash: string): Promise<TorrentSearchCache | null> {
     const result = await this.pool.query(
-      `SELECT * FROM torrent_search_cache
+      `SELECT * FROM np_torrentmanager_search_cache
        WHERE query_hash = $1 AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
       [queryHash]

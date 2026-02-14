@@ -213,7 +213,7 @@ export class ContentAcquisitionDatabase {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS np_ca_pipeline_runs (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_pipeline_runs (
         id SERIAL PRIMARY KEY,
         source_account_id TEXT NOT NULL,
         trigger_type TEXT NOT NULL,
@@ -241,20 +241,20 @@ export class ContentAcquisitionDatabase {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_np_ca_pipeline_source ON np_ca_pipeline_runs(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_np_ca_pipeline_status ON np_ca_pipeline_runs(status);
-      CREATE INDEX IF NOT EXISTS idx_np_ca_pipeline_created ON np_ca_pipeline_runs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_ca_pipeline_source ON np_contentacquisition_pipeline_runs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_ca_pipeline_status ON np_contentacquisition_pipeline_runs(status);
+      CREATE INDEX IF NOT EXISTS idx_np_ca_pipeline_created ON np_contentacquisition_pipeline_runs(created_at DESC);
 
       -- Pipeline extensions: encoding job reference and publishing stage
-      ALTER TABLE np_ca_pipeline_runs ADD COLUMN IF NOT EXISTS encoding_job_id TEXT;
-      ALTER TABLE np_ca_pipeline_runs ADD COLUMN IF NOT EXISTS publishing_status TEXT DEFAULT 'pending';
-      ALTER TABLE np_ca_pipeline_runs ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+      ALTER TABLE np_contentacquisition_pipeline_runs ADD COLUMN IF NOT EXISTS encoding_job_id TEXT;
+      ALTER TABLE np_contentacquisition_pipeline_runs ADD COLUMN IF NOT EXISTS publishing_status TEXT DEFAULT 'pending';
+      ALTER TABLE np_contentacquisition_pipeline_runs ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
 
       -- =====================================================================
       -- nTV Downloads (state-machine driven)
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_contacq_downloads (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_downloads (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id TEXT NOT NULL,
         user_id UUID NOT NULL,
@@ -276,20 +276,20 @@ export class ContentAcquisitionDatabase {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_np_contacq_downloads_account
-        ON np_contacq_downloads(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_np_contacq_downloads_state
-        ON np_contacq_downloads(state);
-      CREATE INDEX IF NOT EXISTS idx_np_contacq_downloads_user
-        ON np_contacq_downloads(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_contentacquisition_downloads_account
+        ON np_contentacquisition_downloads(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_contentacquisition_downloads_state
+        ON np_contentacquisition_downloads(state);
+      CREATE INDEX IF NOT EXISTS idx_np_contentacquisition_downloads_user
+        ON np_contentacquisition_downloads(user_id, created_at DESC);
 
       -- =====================================================================
       -- Download State History
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_contacq_download_state_history (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_download_state_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        download_id UUID NOT NULL REFERENCES np_contacq_downloads(id) ON DELETE CASCADE,
+        download_id UUID NOT NULL REFERENCES np_contentacquisition_downloads(id) ON DELETE CASCADE,
         from_state TEXT,
         to_state TEXT NOT NULL,
         metadata JSONB,
@@ -297,13 +297,13 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_np_contacq_state_history_download
-        ON np_contacq_download_state_history(download_id, created_at ASC);
+        ON np_contentacquisition_download_state_history(download_id, created_at ASC);
 
       -- =====================================================================
       -- Movie Monitoring
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_contacq_movie_monitoring (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_movie_monitoring (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id TEXT NOT NULL,
         user_id UUID NOT NULL,
@@ -321,17 +321,17 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_np_contacq_movies_account
-        ON np_contacq_movie_monitoring(source_account_id);
+        ON np_contentacquisition_movie_monitoring(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_np_contacq_movies_status
-        ON np_contacq_movie_monitoring(status);
+        ON np_contentacquisition_movie_monitoring(status);
       CREATE INDEX IF NOT EXISTS idx_np_contacq_movies_tmdb
-        ON np_contacq_movie_monitoring(tmdb_id) WHERE tmdb_id IS NOT NULL;
+        ON np_contentacquisition_movie_monitoring(tmdb_id) WHERE tmdb_id IS NOT NULL;
 
       -- =====================================================================
       -- Download Rules
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_contacq_download_rules (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_download_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id TEXT NOT NULL,
         user_id UUID NOT NULL,
@@ -345,20 +345,20 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_np_contacq_rules_account
-        ON np_contacq_download_rules(source_account_id, enabled);
+        ON np_contentacquisition_download_rules(source_account_id, enabled);
 
       -- =====================================================================
       -- Download Queue (priority queue for pending downloads)
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_contacq_download_queue (
-        download_id UUID PRIMARY KEY REFERENCES np_contacq_downloads(id) ON DELETE CASCADE,
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_download_queue (
+        download_id UUID PRIMARY KEY REFERENCES np_contentacquisition_downloads(id) ON DELETE CASCADE,
         priority INT DEFAULT 10,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
       CREATE INDEX IF NOT EXISTS idx_np_contacq_queue_priority
-        ON np_contacq_download_queue(priority DESC, created_at ASC);
+        ON np_contentacquisition_download_queue(priority DESC, created_at ASC);
     `);
   }
 
@@ -619,7 +619,7 @@ export class ContentAcquisitionDatabase {
     metadata?: Record<string, unknown>;
   }): Promise<PipelineRunRecord> {
     const result = await this.pool.query(
-      `INSERT INTO np_ca_pipeline_runs (source_account_id, trigger_type, trigger_source,
+      `INSERT INTO np_contentacquisition_pipeline_runs (source_account_id, trigger_type, trigger_source,
         content_title, content_type, metadata)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
@@ -661,7 +661,7 @@ export class ContentAcquisitionDatabase {
 
     values.push(id);
     const result = await this.pool.query(
-      `UPDATE np_ca_pipeline_runs SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE np_contentacquisition_pipeline_runs SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
       values
     );
     return result.rows[0] ?? null;
@@ -669,7 +669,7 @@ export class ContentAcquisitionDatabase {
 
   async getPipelineRun(id: number): Promise<PipelineRunRecord | null> {
     const result = await this.pool.query(
-      `SELECT * FROM np_ca_pipeline_runs WHERE id = $1`,
+      `SELECT * FROM np_contentacquisition_pipeline_runs WHERE id = $1`,
       [id]
     );
     return result.rows[0] ?? null;
@@ -693,7 +693,7 @@ export class ContentAcquisitionDatabase {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const countResult = await this.pool.query(
-      `SELECT COUNT(*)::int AS total FROM np_ca_pipeline_runs ${whereClause}`,
+      `SELECT COUNT(*)::int AS total FROM np_contentacquisition_pipeline_runs ${whereClause}`,
       params
     );
     const total: number = countResult.rows[0].total;
@@ -703,7 +703,7 @@ export class ContentAcquisitionDatabase {
     const dataParams = [...params, limit, offset];
 
     const result = await this.pool.query(
-      `SELECT * FROM np_ca_pipeline_runs ${whereClause}
+      `SELECT * FROM np_contentacquisition_pipeline_runs ${whereClause}
        ORDER BY created_at DESC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       dataParams
@@ -824,7 +824,7 @@ export class ContentAcquisitionDatabase {
 
   async createMovieMonitoring(movie: Partial<MovieMonitoring>): Promise<MovieMonitoring> {
     const result = await this.pool.query(
-      `INSERT INTO np_contacq_movie_monitoring
+      `INSERT INTO np_contentacquisition_movie_monitoring
         (source_account_id, user_id, movie_title, tmdb_id, release_date,
          digital_release_date, quality_profile, auto_download, auto_upgrade, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -847,7 +847,7 @@ export class ContentAcquisitionDatabase {
 
   async getMovieMonitoring(id: string): Promise<MovieMonitoring | null> {
     const result = await this.pool.query(
-      `SELECT * FROM np_contacq_movie_monitoring WHERE id = $1`,
+      `SELECT * FROM np_contentacquisition_movie_monitoring WHERE id = $1`,
       [id],
     );
     return result.rows[0] ?? null;
@@ -855,7 +855,7 @@ export class ContentAcquisitionDatabase {
 
   async listMovieMonitoring(accountId: string): Promise<MovieMonitoring[]> {
     const result = await this.pool.query(
-      `SELECT * FROM np_contacq_movie_monitoring
+      `SELECT * FROM np_contentacquisition_movie_monitoring
        WHERE source_account_id = $1
        ORDER BY created_at DESC`,
       [accountId],
@@ -886,7 +886,7 @@ export class ContentAcquisitionDatabase {
 
     values.push(id);
     const result = await this.pool.query(
-      `UPDATE np_contacq_movie_monitoring SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE np_contentacquisition_movie_monitoring SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
       values,
     );
     return result.rows[0] ?? null;
@@ -894,7 +894,7 @@ export class ContentAcquisitionDatabase {
 
   async deleteMovieMonitoring(id: string): Promise<boolean> {
     const result = await this.pool.query(
-      `DELETE FROM np_contacq_movie_monitoring WHERE id = $1`,
+      `DELETE FROM np_contentacquisition_movie_monitoring WHERE id = $1`,
       [id],
     );
     return (result.rowCount ?? 0) > 0;
@@ -906,7 +906,7 @@ export class ContentAcquisitionDatabase {
 
   async createDownload(download: Partial<Download>): Promise<Download> {
     const result = await this.pool.query(
-      `INSERT INTO np_contacq_downloads
+      `INSERT INTO np_contentacquisition_downloads
         (source_account_id, user_id, content_type, title, state, magnet_uri,
          quality_profile, show_id, season_number, episode_number, tmdb_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -929,7 +929,7 @@ export class ContentAcquisitionDatabase {
     // Record the initial state in history
     const dl = result.rows[0] as Download;
     await this.pool.query(
-      `INSERT INTO np_contacq_download_state_history
+      `INSERT INTO np_contentacquisition_download_state_history
          (download_id, from_state, to_state, metadata)
        VALUES ($1, NULL, $2, $3)`,
       [dl.id, dl.state, JSON.stringify({ source: 'creation' })],
@@ -940,14 +940,14 @@ export class ContentAcquisitionDatabase {
 
   async getDownload(id: string): Promise<Download | null> {
     const result = await this.pool.query(
-      `SELECT * FROM np_contacq_downloads WHERE id = $1`,
+      `SELECT * FROM np_contentacquisition_downloads WHERE id = $1`,
       [id],
     );
     return result.rows[0] ?? null;
   }
 
   async listDownloads(accountId: string, statusFilter?: string): Promise<Download[]> {
-    let query = `SELECT * FROM np_contacq_downloads WHERE source_account_id = $1`;
+    let query = `SELECT * FROM np_contentacquisition_downloads WHERE source_account_id = $1`;
     const params: unknown[] = [accountId];
 
     if (statusFilter) {
@@ -962,7 +962,7 @@ export class ContentAcquisitionDatabase {
 
   async updateDownloadProgress(id: string, progress: number): Promise<void> {
     await this.pool.query(
-      `UPDATE np_contacq_downloads SET progress = $2, updated_at = NOW() WHERE id = $1`,
+      `UPDATE np_contentacquisition_downloads SET progress = $2, updated_at = NOW() WHERE id = $1`,
       [id, progress],
     );
   }
@@ -990,7 +990,7 @@ export class ContentAcquisitionDatabase {
 
     values.push(id);
     const result = await this.pool.query(
-      `UPDATE np_contacq_downloads SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE np_contentacquisition_downloads SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
       values,
     );
     return result.rows[0] ?? null;
@@ -998,7 +998,7 @@ export class ContentAcquisitionDatabase {
 
   async deleteDownload(id: string): Promise<boolean> {
     const result = await this.pool.query(
-      `DELETE FROM np_contacq_downloads WHERE id = $1`,
+      `DELETE FROM np_contentacquisition_downloads WHERE id = $1`,
       [id],
     );
     return (result.rowCount ?? 0) > 0;
@@ -1006,7 +1006,7 @@ export class ContentAcquisitionDatabase {
 
   async getDownloadStateHistory(downloadId: string): Promise<DownloadStateTransition[]> {
     const result = await this.pool.query(
-      `SELECT * FROM np_contacq_download_state_history
+      `SELECT * FROM np_contentacquisition_download_state_history
        WHERE download_id = $1
        ORDER BY created_at ASC`,
       [downloadId],
@@ -1020,7 +1020,7 @@ export class ContentAcquisitionDatabase {
 
   async addToDownloadQueue(downloadId: string, priority?: number): Promise<DownloadQueueItem> {
     const result = await this.pool.query(
-      `INSERT INTO np_contacq_download_queue (download_id, priority)
+      `INSERT INTO np_contentacquisition_download_queue (download_id, priority)
        VALUES ($1, $2)
        ON CONFLICT (download_id) DO UPDATE SET priority = $2
        RETURNING *`,
@@ -1031,7 +1031,7 @@ export class ContentAcquisitionDatabase {
 
   async removeFromDownloadQueue(downloadId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `DELETE FROM np_contacq_download_queue WHERE download_id = $1`,
+      `DELETE FROM np_contentacquisition_download_queue WHERE download_id = $1`,
       [downloadId],
     );
     return (result.rowCount ?? 0) > 0;
@@ -1040,8 +1040,8 @@ export class ContentAcquisitionDatabase {
   async getDownloadQueueDepth(accountId: string): Promise<number> {
     const result = await this.pool.query(
       `SELECT COUNT(*)::int AS depth
-       FROM np_contacq_download_queue q
-       JOIN np_contacq_downloads d ON d.id = q.download_id
+       FROM np_contentacquisition_download_queue q
+       JOIN np_contentacquisition_downloads d ON d.id = q.download_id
        WHERE d.source_account_id = $1`,
       [accountId],
     );
@@ -1054,7 +1054,7 @@ export class ContentAcquisitionDatabase {
 
   async createDownloadRule(rule: Partial<DownloadRule>): Promise<DownloadRule> {
     const result = await this.pool.query(
-      `INSERT INTO np_contacq_download_rules
+      `INSERT INTO np_contentacquisition_download_rules
         (source_account_id, user_id, name, conditions, action, priority, enabled)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
@@ -1073,7 +1073,7 @@ export class ContentAcquisitionDatabase {
 
   async getDownloadRule(id: string): Promise<DownloadRule | null> {
     const result = await this.pool.query(
-      `SELECT * FROM np_contacq_download_rules WHERE id = $1`,
+      `SELECT * FROM np_contentacquisition_download_rules WHERE id = $1`,
       [id],
     );
     return result.rows[0] ?? null;
@@ -1081,7 +1081,7 @@ export class ContentAcquisitionDatabase {
 
   async listDownloadRules(accountId: string): Promise<DownloadRule[]> {
     const result = await this.pool.query(
-      `SELECT * FROM np_contacq_download_rules
+      `SELECT * FROM np_contentacquisition_download_rules
        WHERE source_account_id = $1
        ORDER BY priority DESC, created_at DESC`,
       [accountId],
@@ -1124,7 +1124,7 @@ export class ContentAcquisitionDatabase {
 
     values.push(id);
     const result = await this.pool.query(
-      `UPDATE np_contacq_download_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE np_contentacquisition_download_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
       values,
     );
     return result.rows[0] ?? null;
@@ -1132,7 +1132,7 @@ export class ContentAcquisitionDatabase {
 
   async deleteDownloadRule(id: string): Promise<boolean> {
     const result = await this.pool.query(
-      `DELETE FROM np_contacq_download_rules WHERE id = $1`,
+      `DELETE FROM np_contentacquisition_download_rules WHERE id = $1`,
       [id],
     );
     return (result.rowCount ?? 0) > 0;
@@ -1164,7 +1164,7 @@ export class ContentAcquisitionDatabase {
            COUNT(*) FILTER (WHERE state NOT IN ('completed', 'failed', 'cancelled'))::int AS active,
            COUNT(*) FILTER (WHERE state = 'completed' AND updated_at >= CURRENT_DATE)::int AS completed_today,
            COUNT(*) FILTER (WHERE state = 'failed' AND updated_at >= CURRENT_DATE)::int AS failed_today
-         FROM np_contacq_downloads WHERE source_account_id = $1`,
+         FROM np_contentacquisition_downloads WHERE source_account_id = $1`,
         [accountId],
       ),
       this.pool.query(
@@ -1172,7 +1172,7 @@ export class ContentAcquisitionDatabase {
         [accountId],
       ),
       this.pool.query(
-        `SELECT COUNT(*)::int AS cnt FROM np_contacq_movie_monitoring WHERE source_account_id = $1 AND status != 'downloaded'`,
+        `SELECT COUNT(*)::int AS cnt FROM np_contentacquisition_movie_monitoring WHERE source_account_id = $1 AND status != 'downloaded'`,
         [accountId],
       ),
       this.pool.query(
@@ -1180,7 +1180,7 @@ export class ContentAcquisitionDatabase {
         [accountId],
       ),
       this.pool.query(
-        `SELECT COUNT(*)::int AS cnt FROM np_contacq_download_rules WHERE source_account_id = $1 AND enabled = true`,
+        `SELECT COUNT(*)::int AS cnt FROM np_contentacquisition_download_rules WHERE source_account_id = $1 AND enabled = true`,
         [accountId],
       ),
       this.getDownloadQueueDepth(accountId),

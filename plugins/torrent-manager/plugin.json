@@ -4,6 +4,8 @@
   "description": "Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement",
   "author": "nself",
   "license": "MIT",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/torrent-manager",
+  "repository": "https://github.com/acamarata/nself-plugins",
   "category": "media",
   "subcategory": "download",
   "path": "plugins/torrent-manager",

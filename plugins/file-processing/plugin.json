@@ -7,6 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/file-processing",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
+  "port": 3104,
   "category": "infrastructure",
   "tags": [
     "files",
@@ -17,7 +18,7 @@
     "virus-scanning"
   ],
   "tables": [
-    "np_fileproc_processing_jobs",
+    "np_fileproc_jobs",
     "np_fileproc_thumbnails",
     "np_fileproc_scans",
     "np_fileproc_metadata"

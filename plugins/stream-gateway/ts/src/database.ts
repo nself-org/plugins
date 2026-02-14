@@ -66,7 +66,7 @@ export class StreamGatewayDatabase {
       -- Stream Sessions
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sg_stream_sessions (
+      CREATE TABLE IF NOT EXISTS np_streamgw_stream_sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -88,23 +88,23 @@ export class StreamGatewayDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_sg_sessions_source_account
-        ON sg_stream_sessions(source_account_id);
+        ON np_streamgw_stream_sessions(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_sg_sessions_app
-        ON sg_stream_sessions(app_id);
+        ON np_streamgw_stream_sessions(app_id);
       CREATE INDEX IF NOT EXISTS idx_sg_sessions_stream
-        ON sg_stream_sessions(stream_id);
+        ON np_streamgw_stream_sessions(stream_id);
       CREATE INDEX IF NOT EXISTS idx_sg_sessions_user
-        ON sg_stream_sessions(user_id);
+        ON np_streamgw_stream_sessions(user_id);
       CREATE INDEX IF NOT EXISTS idx_sg_sessions_status
-        ON sg_stream_sessions(status) WHERE status = 'active';
+        ON np_streamgw_stream_sessions(status) WHERE status = 'active';
       CREATE INDEX IF NOT EXISTS idx_sg_sessions_heartbeat
-        ON sg_stream_sessions(last_heartbeat_at) WHERE status = 'active';
+        ON np_streamgw_stream_sessions(last_heartbeat_at) WHERE status = 'active';
 
       -- =====================================================================
       -- Streams
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sg_streams (
+      CREATE TABLE IF NOT EXISTS np_streamgw_streams (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -128,18 +128,18 @@ export class StreamGatewayDatabase {
         UNIQUE(source_account_id, app_id, stream_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_sg_streams_source_account
-        ON sg_streams(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_sg_streams_app
-        ON sg_streams(app_id);
-      CREATE INDEX IF NOT EXISTS idx_sg_streams_status
-        ON sg_streams(status);
+      CREATE INDEX IF NOT EXISTS idx_np_streamgw_streams_source_account
+        ON np_streamgw_streams(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_streamgw_streams_app
+        ON np_streamgw_streams(app_id);
+      CREATE INDEX IF NOT EXISTS idx_np_streamgw_streams_status
+        ON np_streamgw_streams(status);
 
       -- =====================================================================
       -- Admission Rules
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sg_admission_rules (
+      CREATE TABLE IF NOT EXISTS np_streamgw_admission_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -154,17 +154,17 @@ export class StreamGatewayDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_sg_rules_source_account
-        ON sg_admission_rules(source_account_id);
+        ON np_streamgw_admission_rules(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_sg_rules_app
-        ON sg_admission_rules(app_id);
+        ON np_streamgw_admission_rules(app_id);
       CREATE INDEX IF NOT EXISTS idx_sg_rules_active
-        ON sg_admission_rules(active) WHERE active = TRUE;
+        ON np_streamgw_admission_rules(active) WHERE active = TRUE;
 
       -- =====================================================================
       -- Viewer Analytics
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sg_viewer_analytics (
+      CREATE TABLE IF NOT EXISTS np_streamgw_viewer_analytics (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -182,11 +182,11 @@ export class StreamGatewayDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_sg_analytics_source_account
-        ON sg_viewer_analytics(source_account_id);
+        ON np_streamgw_viewer_analytics(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_sg_analytics_stream
-        ON sg_viewer_analytics(stream_id);
+        ON np_streamgw_viewer_analytics(stream_id);
       CREATE INDEX IF NOT EXISTS idx_sg_analytics_period
-        ON sg_viewer_analytics(period_start DESC);
+        ON np_streamgw_viewer_analytics(period_start DESC);
 
       -- =====================================================================
       -- Family Members (nTV v1 API)
@@ -218,8 +218,8 @@ export class StreamGatewayDatabase {
              COUNT(*) AS total_sessions,
              COUNT(*) FILTER (WHERE ss.status = 'active') AS concurrent_at_snapshot,
              MAX(va.peak_viewers) AS peak_viewers
-      FROM sg_stream_sessions ss
-      LEFT JOIN sg_viewer_analytics va
+      FROM np_streamgw_stream_sessions ss
+      LEFT JOIN np_streamgw_viewer_analytics va
         ON ss.stream_id = va.stream_id
         AND ss.app_id = va.app_id
         AND ss.source_account_id = va.source_account_id
@@ -231,7 +231,7 @@ export class StreamGatewayDatabase {
              denial_reason,
              COUNT(*) AS denial_count,
              ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (PARTITION BY source_account_id, app_id), 0), 2) AS pct_of_denials
-      FROM sg_stream_sessions
+      FROM np_streamgw_stream_sessions
       WHERE status = 'denied' AND denial_reason IS NOT NULL
       GROUP BY source_account_id, app_id, denial_reason
       ORDER BY denial_count DESC;
@@ -247,7 +247,7 @@ export class StreamGatewayDatabase {
              END AS duration_bucket,
              COUNT(*) AS session_count,
              AVG(duration_seconds) / 60.0 AS avg_minutes
-      FROM sg_stream_sessions
+      FROM np_streamgw_stream_sessions
       WHERE status IN ('ended', 'evicted') AND duration_seconds IS NOT NULL
       GROUP BY source_account_id, app_id, duration_bucket
       ORDER BY source_account_id, app_id, MIN(duration_seconds);
@@ -257,7 +257,7 @@ export class StreamGatewayDatabase {
              COUNT(*) AS active_sessions,
              COUNT(DISTINCT user_id) AS unique_users,
              AVG(EXTRACT(EPOCH FROM (NOW() - started_at))) / 60.0 AS avg_session_minutes
-      FROM sg_stream_sessions
+      FROM np_streamgw_stream_sessions
       WHERE status = 'active'
       GROUP BY source_account_id, app_id, device_type
       ORDER BY active_sessions DESC;
@@ -278,7 +278,7 @@ export class StreamGatewayDatabase {
     denialReason?: string
   ): Promise<StreamSessionRecord> {
     const result = await this.query<StreamSessionRecord>(
-      `INSERT INTO sg_stream_sessions (
+      `INSERT INTO np_streamgw_stream_sessions (
         source_account_id, app_id, stream_id, stream_type, user_id,
         device_id, device_type, status, quality, denial_reason, metadata
       ) VALUES ($1, $2, $3, 'live', $4, $5, $6, $7, $8, $9, $10)
@@ -302,7 +302,7 @@ export class StreamGatewayDatabase {
 
   async getSession(sessionId: string): Promise<StreamSessionRecord | null> {
     const result = await this.query<StreamSessionRecord>(
-      `SELECT * FROM sg_stream_sessions
+      `SELECT * FROM np_streamgw_stream_sessions
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, sessionId]
     );
@@ -312,7 +312,7 @@ export class StreamGatewayDatabase {
   async getActiveSessions(appId?: string, limit = 100, offset = 0): Promise<StreamSessionRecord[]> {
     if (appId) {
       const result = await this.query<StreamSessionRecord>(
-        `SELECT * FROM sg_stream_sessions
+        `SELECT * FROM np_streamgw_stream_sessions
          WHERE source_account_id = $1 AND app_id = $2 AND status = 'active'
          ORDER BY started_at DESC
          LIMIT $3 OFFSET $4`,
@@ -322,7 +322,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<StreamSessionRecord>(
-      `SELECT * FROM sg_stream_sessions
+      `SELECT * FROM np_streamgw_stream_sessions
        WHERE source_account_id = $1 AND status = 'active'
        ORDER BY started_at DESC
        LIMIT $2 OFFSET $3`,
@@ -348,7 +348,7 @@ export class StreamGatewayDatabase {
     params.push(limit, offset);
 
     const result = await this.query<StreamSessionRecord>(
-      `SELECT * FROM sg_stream_sessions
+      `SELECT * FROM np_streamgw_stream_sessions
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -361,7 +361,7 @@ export class StreamGatewayDatabase {
   async getUserActiveSessions(userId: string, appId?: string): Promise<StreamSessionRecord[]> {
     if (appId) {
       const result = await this.query<StreamSessionRecord>(
-        `SELECT * FROM sg_stream_sessions
+        `SELECT * FROM np_streamgw_stream_sessions
          WHERE source_account_id = $1 AND user_id = $2 AND app_id = $3 AND status = 'active'
          ORDER BY started_at DESC`,
         [this.sourceAccountId, userId, appId]
@@ -370,7 +370,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<StreamSessionRecord>(
-      `SELECT * FROM sg_stream_sessions
+      `SELECT * FROM np_streamgw_stream_sessions
        WHERE source_account_id = $1 AND user_id = $2 AND status = 'active'
        ORDER BY started_at DESC`,
       [this.sourceAccountId, userId]
@@ -381,7 +381,7 @@ export class StreamGatewayDatabase {
   async getDeviceActiveSessions(deviceId: string, appId?: string): Promise<StreamSessionRecord[]> {
     if (appId) {
       const result = await this.query<StreamSessionRecord>(
-        `SELECT * FROM sg_stream_sessions
+        `SELECT * FROM np_streamgw_stream_sessions
          WHERE source_account_id = $1 AND device_id = $2 AND app_id = $3 AND status = 'active'
          ORDER BY started_at DESC`,
         [this.sourceAccountId, deviceId, appId]
@@ -390,7 +390,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<StreamSessionRecord>(
-      `SELECT * FROM sg_stream_sessions
+      `SELECT * FROM np_streamgw_stream_sessions
        WHERE source_account_id = $1 AND device_id = $2 AND status = 'active'
        ORDER BY started_at DESC`,
       [this.sourceAccountId, deviceId]
@@ -413,7 +413,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<StreamSessionRecord>(
-      `UPDATE sg_stream_sessions
+      `UPDATE np_streamgw_stream_sessions
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2 AND status = 'active'
        RETURNING *`,
@@ -425,7 +425,7 @@ export class StreamGatewayDatabase {
 
   async endSession(sessionId: string, bytesTransferred?: number): Promise<StreamSessionRecord | null> {
     const result = await this.query<StreamSessionRecord>(
-      `UPDATE sg_stream_sessions
+      `UPDATE np_streamgw_stream_sessions
        SET status = 'ended',
            ended_at = NOW(),
            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER,
@@ -440,7 +440,7 @@ export class StreamGatewayDatabase {
 
   async evictSession(sessionId: string): Promise<StreamSessionRecord | null> {
     const result = await this.query<StreamSessionRecord>(
-      `UPDATE sg_stream_sessions
+      `UPDATE np_streamgw_stream_sessions
        SET status = 'evicted',
            ended_at = NOW(),
            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
@@ -454,7 +454,7 @@ export class StreamGatewayDatabase {
 
   async evictUserFromStream(streamId: string, userId: string): Promise<StreamSessionRecord[]> {
     const result = await this.query<StreamSessionRecord>(
-      `UPDATE sg_stream_sessions
+      `UPDATE np_streamgw_stream_sessions
        SET status = 'evicted',
            ended_at = NOW(),
            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
@@ -468,7 +468,7 @@ export class StreamGatewayDatabase {
 
   async expireStaleSessionsByTimeout(timeoutSeconds: number): Promise<number> {
     const rowCount = await this.execute(
-      `UPDATE sg_stream_sessions
+      `UPDATE np_streamgw_stream_sessions
        SET status = 'ended',
            ended_at = NOW(),
            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
@@ -487,20 +487,20 @@ export class StreamGatewayDatabase {
 
   async createStream(appId: string, request: CreateStreamRequest): Promise<StreamRecord> {
     const result = await this.query<StreamRecord>(
-      `INSERT INTO sg_streams (
+      `INSERT INTO np_streamgw_streams (
         source_account_id, app_id, stream_id, title, stream_type,
         source_device_id, ingest_url, playback_url, thumbnail_url,
         max_viewers, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT (source_account_id, app_id, stream_id)
       DO UPDATE SET
-        title = COALESCE(EXCLUDED.title, sg_streams.title),
-        stream_type = COALESCE(EXCLUDED.stream_type, sg_streams.stream_type),
-        source_device_id = COALESCE(EXCLUDED.source_device_id, sg_streams.source_device_id),
-        ingest_url = COALESCE(EXCLUDED.ingest_url, sg_streams.ingest_url),
-        playback_url = COALESCE(EXCLUDED.playback_url, sg_streams.playback_url),
-        thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, sg_streams.thumbnail_url),
-        max_viewers = COALESCE(EXCLUDED.max_viewers, sg_streams.max_viewers),
+        title = COALESCE(EXCLUDED.title, np_streamgw_streams.title),
+        stream_type = COALESCE(EXCLUDED.stream_type, np_streamgw_streams.stream_type),
+        source_device_id = COALESCE(EXCLUDED.source_device_id, np_streamgw_streams.source_device_id),
+        ingest_url = COALESCE(EXCLUDED.ingest_url, np_streamgw_streams.ingest_url),
+        playback_url = COALESCE(EXCLUDED.playback_url, np_streamgw_streams.playback_url),
+        thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, np_streamgw_streams.thumbnail_url),
+        max_viewers = COALESCE(EXCLUDED.max_viewers, np_streamgw_streams.max_viewers),
         metadata = EXCLUDED.metadata,
         updated_at = NOW()
       RETURNING *`,
@@ -525,7 +525,7 @@ export class StreamGatewayDatabase {
   async getStream(streamId: string, appId?: string): Promise<StreamRecord | null> {
     if (appId) {
       const result = await this.query<StreamRecord>(
-        `SELECT * FROM sg_streams
+        `SELECT * FROM np_streamgw_streams
          WHERE source_account_id = $1 AND stream_id = $2 AND app_id = $3`,
         [this.sourceAccountId, streamId, appId]
       );
@@ -533,7 +533,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<StreamRecord>(
-      `SELECT * FROM sg_streams
+      `SELECT * FROM np_streamgw_streams
        WHERE source_account_id = $1 AND stream_id = $2`,
       [this.sourceAccountId, streamId]
     );
@@ -542,7 +542,7 @@ export class StreamGatewayDatabase {
 
   async getStreamById(id: string): Promise<StreamRecord | null> {
     const result = await this.query<StreamRecord>(
-      `SELECT * FROM sg_streams
+      `SELECT * FROM np_streamgw_streams
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, id]
     );
@@ -566,7 +566,7 @@ export class StreamGatewayDatabase {
     params.push(limit, offset);
 
     const result = await this.query<StreamRecord>(
-      `SELECT * FROM sg_streams
+      `SELECT * FROM np_streamgw_streams
        WHERE ${conditions.join(' AND ')}
        ORDER BY updated_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -616,7 +616,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<StreamRecord>(
-      `UPDATE sg_streams
+      `UPDATE np_streamgw_streams
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND stream_id = $2 AND app_id = $3
        RETURNING *`,
@@ -628,7 +628,7 @@ export class StreamGatewayDatabase {
 
   async incrementStreamViewers(streamId: string, appId: string): Promise<void> {
     await this.execute(
-      `UPDATE sg_streams
+      `UPDATE np_streamgw_streams
        SET current_viewers = current_viewers + 1,
            total_viewers = total_viewers + 1,
            peak_viewers = GREATEST(peak_viewers, current_viewers + 1),
@@ -640,7 +640,7 @@ export class StreamGatewayDatabase {
 
   async decrementStreamViewers(streamId: string, appId: string): Promise<void> {
     await this.execute(
-      `UPDATE sg_streams
+      `UPDATE np_streamgw_streams
        SET current_viewers = GREATEST(current_viewers - 1, 0),
            updated_at = NOW()
        WHERE source_account_id = $1 AND stream_id = $2 AND app_id = $3`,
@@ -650,7 +650,7 @@ export class StreamGatewayDatabase {
 
   async getStreamViewers(streamId: string): Promise<StreamSessionRecord[]> {
     const result = await this.query<StreamSessionRecord>(
-      `SELECT * FROM sg_stream_sessions
+      `SELECT * FROM np_streamgw_stream_sessions
        WHERE source_account_id = $1 AND stream_id = $2 AND status = 'active'
        ORDER BY started_at ASC`,
       [this.sourceAccountId, streamId]
@@ -664,7 +664,7 @@ export class StreamGatewayDatabase {
 
   async createRule(appId: string, request: CreateRuleRequest): Promise<AdmissionRuleRecord> {
     const result = await this.query<AdmissionRuleRecord>(
-      `INSERT INTO sg_admission_rules (
+      `INSERT INTO np_streamgw_admission_rules (
         source_account_id, app_id, name, rule_type, conditions,
         action, priority, active
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -686,7 +686,7 @@ export class StreamGatewayDatabase {
 
   async getRule(ruleId: string): Promise<AdmissionRuleRecord | null> {
     const result = await this.query<AdmissionRuleRecord>(
-      `SELECT * FROM sg_admission_rules
+      `SELECT * FROM np_streamgw_admission_rules
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, ruleId]
     );
@@ -707,7 +707,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<AdmissionRuleRecord>(
-      `SELECT * FROM sg_admission_rules
+      `SELECT * FROM np_streamgw_admission_rules
        WHERE ${conditions.join(' AND ')}
        ORDER BY priority DESC, created_at ASC`,
       params
@@ -746,7 +746,7 @@ export class StreamGatewayDatabase {
     }
 
     const result = await this.query<AdmissionRuleRecord>(
-      `UPDATE sg_admission_rules
+      `UPDATE np_streamgw_admission_rules
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2
        RETURNING *`,
@@ -758,7 +758,7 @@ export class StreamGatewayDatabase {
 
   async deleteRule(ruleId: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM sg_admission_rules
+      `DELETE FROM np_streamgw_admission_rules
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, ruleId]
     );
@@ -784,7 +784,7 @@ export class StreamGatewayDatabase {
     }
   ): Promise<ViewerAnalyticsRecord> {
     const result = await this.query<ViewerAnalyticsRecord>(
-      `INSERT INTO sg_viewer_analytics (
+      `INSERT INTO np_streamgw_viewer_analytics (
         source_account_id, app_id, stream_id, period_start, period_end,
         avg_viewers, peak_viewers, unique_viewers, total_view_minutes,
         quality_distribution, device_distribution
@@ -818,7 +818,7 @@ export class StreamGatewayDatabase {
 
   async getStreamAnalytics(streamId: string, limit = 100): Promise<ViewerAnalyticsRecord[]> {
     const result = await this.query<ViewerAnalyticsRecord>(
-      `SELECT * FROM sg_viewer_analytics
+      `SELECT * FROM np_streamgw_viewer_analytics
        WHERE source_account_id = $1 AND stream_id = $2
        ORDER BY period_start DESC
        LIMIT $3`,
@@ -841,7 +841,7 @@ export class StreamGatewayDatabase {
         COALESCE(AVG(avg_viewers), 0) AS avg_viewers_per_stream,
         COALESCE(MAX(peak_viewers), 0) AS peak_viewers,
         COALESCE(SUM(unique_viewers), 0) AS unique_viewers
-       FROM sg_viewer_analytics
+       FROM np_streamgw_viewer_analytics
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
@@ -854,7 +854,7 @@ export class StreamGatewayDatabase {
       `SELECT stream_id,
               COALESCE(SUM(total_view_minutes), 0) AS total_view_minutes,
               COALESCE(MAX(peak_viewers), 0) AS peak_viewers
-       FROM sg_viewer_analytics
+       FROM np_streamgw_viewer_analytics
        WHERE source_account_id = $1
        GROUP BY stream_id
        ORDER BY total_view_minutes DESC
@@ -889,7 +889,7 @@ export class StreamGatewayDatabase {
 
   async getFamilySessions(familyId: string): Promise<StreamSessionRecord[]> {
     const result = await this.query<StreamSessionRecord>(
-      `SELECT ss.* FROM sg_stream_sessions ss
+      `SELECT ss.* FROM np_streamgw_stream_sessions ss
        INNER JOIN np_streamgw_family_members fm
          ON fm.user_id = ss.user_id
          AND fm.source_account_id = ss.source_account_id
@@ -941,7 +941,7 @@ export class StreamGatewayDatabase {
         SELECT
           COUNT(*) AS total,
           COUNT(*) FILTER (WHERE status = 'active') AS active
-        FROM sg_streams
+        FROM np_streamgw_streams
         WHERE source_account_id = $1
       ),
       sessions AS (
@@ -950,19 +950,19 @@ export class StreamGatewayDatabase {
           COUNT(*) FILTER (WHERE status = 'active') AS active,
           COUNT(*) FILTER (WHERE status = 'denied') AS denied,
           MAX(created_at) AS last_activity
-        FROM sg_stream_sessions
+        FROM np_streamgw_stream_sessions
         WHERE source_account_id = $1
       ),
       rules AS (
         SELECT
           COUNT(*) AS total,
           COUNT(*) FILTER (WHERE active = TRUE) AS active
-        FROM sg_admission_rules
+        FROM np_streamgw_admission_rules
         WHERE source_account_id = $1
       ),
       peak AS (
         SELECT COALESCE(MAX(peak_viewers), 0) AS peak
-        FROM sg_streams
+        FROM np_streamgw_streams
         WHERE source_account_id = $1
       )
       SELECT

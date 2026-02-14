@@ -4,6 +4,8 @@
   "description": "Subtitle search, download, and sync verification via OpenSubtitles",
   "author": "nself",
   "license": "MIT",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/subtitle-manager",
+  "repository": "https://github.com/acamarata/nself-plugins",
   "category": "media",
   "subcategory": "subtitles",
   "path": "plugins/subtitle-manager",

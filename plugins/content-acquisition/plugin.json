@@ -4,6 +4,8 @@
   "description": "Automated content acquisition with RSS monitoring, release calendar, and download rules engine",
   "author": "nself",
   "license": "MIT",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-acquisition",
+  "repository": "https://github.com/acamarata/nself-plugins",
   "category": "media",
   "subcategory": "orchestration",
   "path": "plugins/content-acquisition",

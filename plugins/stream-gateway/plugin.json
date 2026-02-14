@@ -7,6 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/nself-stream-gateway",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.9.8",
+  "port": 3601,
   "category": "streaming",
   "tags": [
     "streaming",
