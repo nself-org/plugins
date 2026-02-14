@@ -53,8 +53,8 @@ async function startServer() {
   await db.connect();
   logger.info('Database connected');
 
-  // Run multi-app migration
-  await db.migrateMultiApp();
+  // Initialize schema (creates tables if missing, runs migrations if needed)
+  await db.initializeSchema();
 
   // Create Fastify app
   const app = Fastify({

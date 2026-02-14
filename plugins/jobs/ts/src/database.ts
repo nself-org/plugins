@@ -67,15 +67,173 @@ export class JobsDatabase {
   }
 
   /**
+   * Initialize database schema
+   */
+  async initializeSchema(): Promise<void> {
+    logger.info('Initializing jobs schema...');
+
+    // Check if schema exists
+    const schemaExists = await this.query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_name = 'np_jobs_tasks'
+      )
+    `);
+
+    if (!schemaExists[0]?.exists) {
+      logger.info('Creating initial schema...');
+      await this.createInitialSchema();
+    } else {
+      logger.info('Schema already exists, checking for migrations...');
+    }
+
+    // Run migrations for multi-app support
+    await this.migrateMultiApp();
+
+    logger.success('Schema initialization complete');
+  }
+
+  /**
+   * Create initial database schema
+   */
+  private async createInitialSchema(): Promise<void> {
+    const schema = `
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+      -- =====================================================================
+      -- Jobs/Tasks
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_jobs_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        bullmq_id VARCHAR(255) UNIQUE,
+        queue_name VARCHAR(128) NOT NULL,
+        job_type VARCHAR(128) NOT NULL,
+        priority INTEGER DEFAULT 0,
+        status VARCHAR(32) NOT NULL DEFAULT 'waiting',
+        payload JSONB DEFAULT '{}',
+        options JSONB DEFAULT '{}',
+        scheduled_for TIMESTAMPTZ,
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        progress INTEGER DEFAULT 0,
+        worker_id VARCHAR(255),
+        process_id VARCHAR(255),
+        retry_count INTEGER DEFAULT 0,
+        max_retries INTEGER DEFAULT 3,
+        retry_delay INTEGER DEFAULT 5000,
+        metadata JSONB DEFAULT '{}',
+        tags TEXT[] DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_tasks_source_account
+        ON np_jobs_tasks(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_tasks_queue
+        ON np_jobs_tasks(queue_name);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_tasks_status
+        ON np_jobs_tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_tasks_type
+        ON np_jobs_tasks(job_type);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_tasks_scheduled
+        ON np_jobs_tasks(scheduled_for) WHERE scheduled_for IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_tasks_bullmq
+        ON np_jobs_tasks(bullmq_id);
+
+      -- =====================================================================
+      -- Job Results
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_jobs_job_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        job_id UUID NOT NULL REFERENCES np_jobs_tasks(id) ON DELETE CASCADE,
+        result JSONB,
+        duration_ms INTEGER,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_results_source_account
+        ON np_jobs_job_results(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_results_job
+        ON np_jobs_job_results(job_id);
+
+      -- =====================================================================
+      -- Job Failures
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_jobs_job_failures (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        job_id UUID NOT NULL REFERENCES np_jobs_tasks(id) ON DELETE CASCADE,
+        error_message TEXT,
+        error_stack TEXT,
+        attempt_number INTEGER,
+        will_retry BOOLEAN DEFAULT false,
+        retry_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_failures_source_account
+        ON np_jobs_job_failures(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_failures_job
+        ON np_jobs_job_failures(job_id);
+
+      -- =====================================================================
+      -- Job Schedules
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_jobs_job_schedules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        job_type VARCHAR(128) NOT NULL,
+        queue_name VARCHAR(128) DEFAULT 'default',
+        payload JSONB DEFAULT '{}',
+        options JSONB DEFAULT '{}',
+        cron_expression VARCHAR(255) NOT NULL,
+        timezone VARCHAR(64) DEFAULT 'UTC',
+        enabled BOOLEAN DEFAULT true,
+        last_run_at TIMESTAMPTZ,
+        next_run_at TIMESTAMPTZ,
+        last_job_id UUID REFERENCES np_jobs_tasks(id),
+        total_runs INTEGER DEFAULT 0,
+        successful_runs INTEGER DEFAULT 0,
+        failed_runs INTEGER DEFAULT 0,
+        max_runs INTEGER,
+        end_date TIMESTAMPTZ,
+        metadata JSONB DEFAULT '{}',
+        tags TEXT[] DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(source_account_id, name)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_schedules_source_account
+        ON np_jobs_job_schedules(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_schedules_enabled
+        ON np_jobs_job_schedules(enabled) WHERE enabled = true;
+      CREATE INDEX IF NOT EXISTS idx_np_jobs_schedules_next_run
+        ON np_jobs_job_schedules(next_run_at) WHERE enabled = true;
+    `;
+
+    await this.pool.query(schema);
+    logger.success('Initial schema created');
+  }
+
+  /**
    * Run schema migrations to add source_account_id column if missing
    */
-  async migrateMultiApp(): Promise<void> {
+  private async migrateMultiApp(): Promise<void> {
     const migResult = await this.query<{ exists: boolean }>(`SELECT EXISTS (
-      SELECT 1 FROM information_schema.columns WHERE table_name = 'np_np_jobs_tasks' AND column_name = 'source_account_id'
+      SELECT 1 FROM information_schema.columns WHERE table_name = 'np_jobs_tasks' AND column_name = 'source_account_id'
     )`);
     if (!migResult[0]?.exists) {
       logger.info('Running multi-app migration: adding source_account_id columns...');
-      for (const table of ['np_np_jobs_tasks', 'np_jobs_np_jobs_job_results', 'np_jobs_np_jobs_job_failures', 'np_jobs_np_jobs_job_schedules']) {
+      for (const table of ['np_jobs_tasks', 'np_jobs_job_results', 'np_jobs_job_failures', 'np_jobs_job_schedules']) {
         await this.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'`);
       }
       logger.info('Multi-app migration complete');
@@ -318,7 +476,7 @@ export class JobsDatabase {
    * Delete all data for a specific source account across all tables.
    */
   async cleanupForAccount(sourceAccountId: string): Promise<{ tables: Record<string, number> }> {
-    const tables = ['np_jobs_np_jobs_job_results', 'np_jobs_np_jobs_job_failures', 'np_np_jobs_tasks', 'np_jobs_np_jobs_job_schedules'];
+    const tables = ['np_jobs_job_results', 'np_jobs_job_failures', 'np_jobs_tasks', 'np_jobs_job_schedules'];
     const result: Record<string, number> = {};
 
     for (const table of tables) {
