@@ -7,7 +7,7 @@
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/activity-feed",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "port": 3503,
+  "port": 3209,
   "category": "content",
   "tags": [
     "activity",
