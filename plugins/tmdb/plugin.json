@@ -82,5 +82,6 @@
     ]
   },
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/tmdb",
-  "repository": "https://github.com/acamarata/nself-plugins"
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "port": 3032
 }

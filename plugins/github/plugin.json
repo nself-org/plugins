@@ -74,5 +74,6 @@
     "webhookPath": "/webhooks/github",
     "syncInterval": 3600,
     "defaultBranch": "main"
-  }
+  },
+  "port": 3002
 }

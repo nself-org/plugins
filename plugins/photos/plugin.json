@@ -78,5 +78,6 @@
     ]
   },
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/photos",
-  "repository": "https://github.com/acamarata/nself-plugins"
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "port": 3108
 }

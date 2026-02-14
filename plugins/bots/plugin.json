@@ -108,5 +108,6 @@
     "filesystem": [
       "logs"
     ]
-  }
+  },
+  "port": 3103
 }

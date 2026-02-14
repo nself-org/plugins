@@ -104,5 +104,6 @@
       "logs",
       "recordings"
     ]
-  }
+  },
+  "port": 3107
 }

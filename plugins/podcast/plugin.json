@@ -84,5 +84,6 @@
       "cache",
       "downloads"
     ]
-  }
+  },
+  "port": 3302
 }

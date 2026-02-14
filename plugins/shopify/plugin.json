@@ -76,5 +76,6 @@
     "webhookPath": "/webhooks/shopify",
     "syncInterval": 3600,
     "rateLimit": 2
-  }
+  },
+  "port": 3003
 }

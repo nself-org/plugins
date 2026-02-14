@@ -96,5 +96,6 @@
     "filesystem": [
       "logs"
     ]
-  }
+  },
+  "port": 3112
 }
