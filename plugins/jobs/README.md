@@ -59,6 +59,63 @@ JOBS_CLEAN_COMPLETED_AFTER=86400000  # 24 hours in ms
 JOBS_CLEAN_FAILED_AFTER=604800000    # 7 days in ms
 ```
 
+## Configuration Mapping
+
+When using nself-tv backend `.env.dev`, map variables as follows:
+
+### Backend → Plugin Variable Mapping
+
+| Backend Variable | Plugin Variable | Description | Example |
+|------------------|-----------------|-------------|---------|
+| `JOBS_PLUGIN_ENABLED` | - | Enable plugin (backend only) | `true` |
+| `JOBS_PLUGIN_PORT` | `PORT` or `JOBS_DASHBOARD_PORT` | Dashboard port | `3105` |
+| `DATABASE_URL` | `DATABASE_URL` | PostgreSQL connection URL | `postgresql://...` |
+| `JOBS_REDIS_URL` | `JOBS_REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
+| `JOBS_MAX_CONCURRENT` | `JOBS_DEFAULT_CONCURRENCY` | Max concurrent jobs | `5` |
+| `JOBS_DEFAULT_ATTEMPTS` | `JOBS_RETRY_ATTEMPTS` | Default retry attempts | `3` |
+| `JOBS_DEFAULT_BACKOFF_DELAY` | `JOBS_RETRY_DELAY` | Retry backoff delay (ms) | `5000` |
+
+### Configuration Helper Script
+
+```bash
+#!/bin/bash
+# generate-jobs-env.sh
+
+BACKEND_ENV="$HOME/Sites/nself-tv/backend/.env.dev"
+PLUGIN_ENV="$HOME/.nself/plugins/jobs/ts/.env"
+
+# Source backend variables
+source "$BACKEND_ENV"
+
+# Create plugin .env
+cat > "$PLUGIN_ENV" <<EOF
+# Auto-generated from backend .env.dev
+DATABASE_URL=$DATABASE_URL
+JOBS_REDIS_URL=$JOBS_REDIS_URL
+
+# Dashboard
+JOBS_DASHBOARD_ENABLED=true
+JOBS_DASHBOARD_PORT=$JOBS_PLUGIN_PORT
+
+# Worker
+JOBS_DEFAULT_CONCURRENCY=${JOBS_MAX_CONCURRENT:-5}
+JOBS_RETRY_ATTEMPTS=${JOBS_DEFAULT_ATTEMPTS:-3}
+JOBS_RETRY_DELAY=${JOBS_DEFAULT_BACKOFF_DELAY:-5000}
+JOBS_JOB_TIMEOUT=60000
+
+# Cleanup
+JOBS_CLEAN_COMPLETED_AFTER=86400000
+JOBS_CLEAN_FAILED_AFTER=604800000
+
+# Logging
+LOG_LEVEL=info
+EOF
+
+echo "Created $PLUGIN_ENV"
+```
+
+See [CONFIGURATION.md](../../CONFIGURATION.md) for detailed mapping patterns and troubleshooting.
+
 ## Quick Start
 
 ### 1. Start the Dashboard
