@@ -118,6 +118,88 @@ FILE_STORAGE_ACCESS_KEY=your_key_id
 FILE_STORAGE_SECRET_KEY=your_application_key
 ```
 
+## Configuration Mapping
+
+When using nself-tv backend `.env.dev`, map variables as follows:
+
+### Backend → Plugin Variable Mapping
+
+| Backend Variable | Plugin Variable | Description | Example |
+|-----------------|-----------------|-------------|---------|
+| `FILE_PROCESSING_PLUGIN_ENABLED` | - | Enable plugin (backend only) | `true` |
+| `FILE_PROCESSING_PLUGIN_PORT` | `PORT` | Server port | `3104` |
+| `MINIO_ENDPOINT` | `FILE_STORAGE_ENDPOINT` | S3 endpoint URL | `http://localhost:9000` |
+| `MINIO_BUCKET_RAW` | `FILE_STORAGE_BUCKET` | Storage bucket name | `media-raw` |
+| `MINIO_ACCESS_KEY` | `FILE_STORAGE_ACCESS_KEY` | S3 access key | `minioadmin` |
+| `MINIO_SECRET_KEY` | `FILE_STORAGE_SECRET_KEY` | S3 secret key | `minioadmin` |
+| `MINIO_REGION` | `FILE_STORAGE_REGION` | Storage region | `us-east-1` |
+| `REDIS_URL` | `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
+| `DATABASE_URL` | `DATABASE_URL` | PostgreSQL connection URL | `postgresql://...` |
+| - | `FILE_STORAGE_PROVIDER` | Storage provider type | `minio` |
+
+### Configuration Helper Script
+
+You can generate the plugin `.env` file from your backend configuration:
+
+```bash
+#!/bin/bash
+# generate-file-processing-env.sh
+
+BACKEND_ENV="$HOME/Sites/nself-tv/backend/.env.dev"
+PLUGIN_ENV="$HOME/.nself/plugins/file-processing/ts/.env"
+
+# Source backend variables
+source "$BACKEND_ENV"
+
+# Create plugin .env
+cat > "$PLUGIN_ENV" <<EOF
+# Auto-generated from backend .env.dev
+DATABASE_URL=$DATABASE_URL
+PORT=$FILE_PROCESSING_PLUGIN_PORT
+FILE_STORAGE_PROVIDER=minio
+FILE_STORAGE_ENDPOINT=$MINIO_ENDPOINT
+FILE_STORAGE_BUCKET=$MINIO_BUCKET_RAW
+FILE_STORAGE_ACCESS_KEY=$MINIO_ACCESS_KEY
+FILE_STORAGE_SECRET_KEY=$MINIO_SECRET_KEY
+FILE_STORAGE_REGION=${MINIO_REGION:-us-east-1}
+
+# Processing options
+FILE_THUMBNAIL_SIZES=100,400,1200
+FILE_ENABLE_OPTIMIZATION=true
+FILE_STRIP_EXIF=true
+FILE_MAX_SIZE=104857600
+
+# Queue
+REDIS_URL=$REDIS_URL
+FILE_QUEUE_CONCURRENCY=3
+
+# Server
+HOST=0.0.0.0
+LOG_LEVEL=info
+EOF
+
+echo "Created $PLUGIN_ENV"
+```
+
+### Manual Configuration
+
+Alternatively, manually create `~/.nself/plugins/file-processing/ts/.env`:
+
+```bash
+# From nself-tv backend .env.dev
+DATABASE_URL=postgresql://postgres:password@localhost:5432/nself_tv
+PORT=3104
+FILE_STORAGE_PROVIDER=minio
+FILE_STORAGE_ENDPOINT=http://localhost:9000
+FILE_STORAGE_BUCKET=media-raw
+FILE_STORAGE_ACCESS_KEY=minioadmin
+FILE_STORAGE_SECRET_KEY=minioadmin
+FILE_STORAGE_REGION=us-east-1
+REDIS_URL=redis://localhost:6379
+```
+
+See [CONFIGURATION.md](../../CONFIGURATION.md) for detailed mapping patterns and troubleshooting.
+
 ## Usage
 
 ### Start Services

@@ -239,16 +239,68 @@ export class Database {
   }
 }
 
+/**
+ * Parse DATABASE_URL into connection parameters
+ */
+function parseDatabaseUrl(url: string | undefined): {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  ssl: boolean;
+} | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const match = url.match(/^postgres(?:ql)?:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/([^?]+)(\?.*)?$/);
+    if (!match) {
+      return null;
+    }
+
+    const [, user, password, host, port, database, queryString] = match;
+    const ssl = queryString?.includes('sslmode=require') || queryString?.includes('ssl=true') || false;
+
+    return {
+      host,
+      port: parseInt(port, 10),
+      database,
+      user,
+      password,
+      ssl,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function createDatabase(config?: Partial<DatabaseConfig>): Database {
+  // Try to parse DATABASE_URL first, fall back to individual POSTGRES_* vars
+  const dbFromUrl = parseDatabaseUrl(process.env.DATABASE_URL);
+
   const fullConfig: DatabaseConfig = {
-    host: config?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
-    port: config?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
-    database: config?.database ?? process.env.POSTGRES_DB ?? 'nself',
-    user: config?.user ?? process.env.POSTGRES_USER ?? 'postgres',
-    password: config?.password ?? process.env.POSTGRES_PASSWORD ?? '',
-    ssl: config?.ssl ?? process.env.POSTGRES_SSL === 'true',
+    host: config?.host ?? dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
+    port: config?.port ?? dbFromUrl?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+    database: config?.database ?? dbFromUrl?.database ?? process.env.POSTGRES_DB ?? 'nself',
+    user: config?.user ?? dbFromUrl?.user ?? process.env.POSTGRES_USER ?? 'postgres',
+    password: config?.password ?? dbFromUrl?.password ?? process.env.POSTGRES_PASSWORD ?? '',
+    ssl: config?.ssl ?? dbFromUrl?.ssl ?? process.env.POSTGRES_SSL === 'true',
     maxConnections: config?.maxConnections ?? parseInt(process.env.POSTGRES_MAX_CONNECTIONS ?? '10', 10),
   };
+
+  // Validate that we have a password (empty string will cause SCRAM auth errors)
+  if (!fullConfig.password) {
+    const source = config?.password ? 'config' :
+                   dbFromUrl?.password ? 'DATABASE_URL' :
+                   process.env.POSTGRES_PASSWORD ? 'POSTGRES_PASSWORD' : 'none';
+    logger.error('Database password is empty or undefined', {
+      source,
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasPostgresPassword: !!process.env.POSTGRES_PASSWORD,
+    });
+  }
 
   return new Database(fullConfig);
 }
