@@ -87,8 +87,9 @@ export class TorrentGalaxySearcher extends BaseTorrentSearcher {
       logger.info(`Found ${results.length} results from TorrentGalaxy`);
       return results;
 
-    } catch (error) {
-      logger.warn(`TorrentGalaxy search failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(`TorrentGalaxy search failed: ${message}`);
       return [];
     }
   }

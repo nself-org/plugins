@@ -82,7 +82,7 @@ export class OpenSubtitlesClient {
 
       return response.data.data || [];
     } catch (error) {
-      logger.error('OpenSubtitles search failed:', error instanceof Error ? error.message : String(error));
+      logger.error('OpenSubtitles search failed:', { error: error instanceof Error ? error.message : String(error) });
       return [];
     }
   }
@@ -112,7 +112,7 @@ export class OpenSubtitlesClient {
 
       return response.data.data || [];
     } catch (error) {
-      logger.error('OpenSubtitles hash search failed:', error.message);
+      logger.error('OpenSubtitles hash search failed:', { error: error instanceof Error ? error.message : String(error) });
       return [];
     }
   }
@@ -134,7 +134,7 @@ export class OpenSubtitlesClient {
 
       return Buffer.from(response.data);
     } catch (error) {
-      logger.error('Subtitle download failed:', error);
+      logger.error('Subtitle download failed:', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }

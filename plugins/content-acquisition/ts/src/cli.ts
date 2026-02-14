@@ -30,7 +30,8 @@ program
       await database.close();
     } catch (error) {
       spinner.fail('Initialization failed');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -55,7 +56,8 @@ program
       console.log(chalk.green(`Subscription ID: ${sub.id}`));
     } catch (error) {
       spinner.fail('Subscription failed');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -85,7 +87,8 @@ program
       });
     } catch (error) {
       spinner.fail('Failed to load queue');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -113,7 +116,8 @@ program
         process.exit(0);
       });
     } catch (error) {
-      console.error(chalk.red('Failed to start server:'), error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red('Failed to start server:'), message);
       process.exit(1);
     }
   });

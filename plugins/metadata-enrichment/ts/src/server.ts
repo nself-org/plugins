@@ -93,7 +93,7 @@ export class MetadataEnrichmentServer {
       const tmdbResult = await this.tmdb.getMovieDetails(tmdbId);
       if (tmdbResult) {
         const genres = Array.isArray(tmdbResult.genres)
-          ? tmdbResult.genres.map((g: { name?: string }) => g.name).filter(Boolean)
+          ? tmdbResult.genres.map((g: { name?: string }) => g.name).filter((name): name is string => Boolean(name))
           : undefined;
 
         const movie = await this.database.upsertMovie(
@@ -110,7 +110,7 @@ export class MetadataEnrichmentServer {
             vote_count: tmdbResult.vote_count ?? undefined,
             poster_path: tmdbResult.poster_path ?? undefined,
             backdrop_path: tmdbResult.backdrop_path ?? undefined,
-            raw_response: tmdbResult as Record<string, unknown>,
+            raw_response: tmdbResult as unknown as Record<string, unknown>,
           },
           ctx.sourceAccountId
         );
@@ -155,7 +155,7 @@ export class MetadataEnrichmentServer {
       const tmdbResult = await this.tmdb.getTVShowDetails(tmdbId);
       if (tmdbResult) {
         const genres = Array.isArray(tmdbResult.genres)
-          ? tmdbResult.genres.map((g: { name?: string }) => g.name).filter(Boolean)
+          ? tmdbResult.genres.map((g: { name?: string }) => g.name).filter((name): name is string => Boolean(name))
           : undefined;
 
         const show = await this.database.upsertTVShow(
@@ -175,7 +175,7 @@ export class MetadataEnrichmentServer {
             vote_count: tmdbResult.vote_count ?? undefined,
             poster_path: tmdbResult.poster_path ?? undefined,
             backdrop_path: tmdbResult.backdrop_path ?? undefined,
-            raw_response: tmdbResult as Record<string, unknown>,
+            raw_response: tmdbResult as unknown as Record<string, unknown>,
           },
           ctx.sourceAccountId
         );

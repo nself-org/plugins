@@ -90,11 +90,11 @@ export async function createServer(db: VPNDatabase) {
         lastTest = row.tested_at.toISOString();
 
         // Parse individual test results from the stored details
-        const details = row.details || {};
-        const tests = details.tests || {};
-        dnsLeak = tests.dns ? !tests.dns.passed : false;
-        webrtcLeak = tests.webrtc ? !tests.webrtc.passed : false;
-        ipv6Leak = tests.ipv6 ? !tests.ipv6.passed : false;
+        const details = row.details as unknown as LeakTestResult | null;
+        const tests = details?.tests;
+        dnsLeak = tests?.dns ? !tests.dns.passed : false;
+        webrtcLeak = tests?.webrtc ? !tests.webrtc.passed : false;
+        ipv6Leak = tests?.ipv6 ? !tests.ipv6.passed : false;
       }
     }
 

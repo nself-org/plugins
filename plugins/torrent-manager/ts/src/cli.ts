@@ -63,9 +63,10 @@ program
       }
 
       await database.close();
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail('Initialization failed');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -136,9 +137,10 @@ program
       console.log(chalk.green(`Name: ${download.name}`));
       console.log(chalk.green(`Hash: ${download.info_hash}`));
       console.log(chalk.green(`Size: ${(download.size_bytes / 1024 / 1024).toFixed(2)} MB`));
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail('Failed to add torrent');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -190,9 +192,10 @@ program
         console.log(`   ID: ${chalk.gray(download.id)}`);
         console.log('');
       });
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail('Failed to list downloads');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -227,9 +230,10 @@ program
         `Uploaded: ${chalk.green((stats.total_uploaded_bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB')}`
       );
       console.log(`Overall Ratio: ${chalk.green(stats.overall_ratio.toFixed(2))}`);
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail('Failed to get statistics');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -264,8 +268,9 @@ program
         await database.close();
         process.exit(0);
       });
-    } catch (error) {
-      console.error(chalk.red('Failed to start server:'), error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red('Failed to start server:'), message);
       process.exit(1);
     }
   });
@@ -320,9 +325,10 @@ program
         );
         console.log('');
       });
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail('Search failed');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });
@@ -470,15 +476,17 @@ program
           await database.close();
 
           downloadSpinner.succeed(`Download started: ${download.id}`);
-        } catch (error) {
+        } catch (error: unknown) {
           downloadSpinner.fail('Download failed');
-          console.error(chalk.red(error.message));
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(chalk.red(message));
           process.exit(1);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail('Best match search failed');
-      console.error(chalk.red(error.message));
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(message));
       process.exit(1);
     }
   });

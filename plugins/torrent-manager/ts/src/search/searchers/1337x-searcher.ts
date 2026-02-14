@@ -103,8 +103,9 @@ export class X1337Searcher extends BaseTorrentSearcher {
           break;
         }
 
-      } catch (error) {
-        logger.warn(`1337x mirror ${mirror} failed: ${error.message}`);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`1337x mirror ${mirror} failed: ${message}`);
         // Continue to next mirror
         continue;
       }
@@ -134,8 +135,9 @@ export class X1337Searcher extends BaseTorrentSearcher {
       }
 
       return magnetLink;
-    } catch (error) {
-      throw new Error(`Failed to fetch magnet link: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to fetch magnet link: ${message}`);
     }
   }
 

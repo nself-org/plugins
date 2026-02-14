@@ -135,7 +135,7 @@ export class TMDBClient {
       });
       return (results.results || []) as TMDBMovieSearchResult[];
     } catch (error) {
-      logger.error('Movie search failed:', error instanceof Error ? error.message : String(error));
+      logger.error('Movie search failed:', { error: error instanceof Error ? error.message : String(error) });
       return [];
     }
   }
@@ -149,7 +149,7 @@ export class TMDBClient {
       });
       return details as TMDBMovieDetails;
     } catch (error) {
-      logger.error('Get movie details failed:', error instanceof Error ? error.message : String(error));
+      logger.error('Get movie details failed:', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
@@ -164,7 +164,7 @@ export class TMDBClient {
       });
       return (results.results || []) as TMDBTVSearchResult[];
     } catch (error) {
-      logger.error('TV search failed:', error instanceof Error ? error.message : String(error));
+      logger.error('TV search failed:', { error: error instanceof Error ? error.message : String(error) });
       return [];
     }
   }
@@ -178,7 +178,7 @@ export class TMDBClient {
       });
       return details as TMDBTVDetails;
     } catch (error) {
-      logger.error('Get TV show details failed:', error instanceof Error ? error.message : String(error));
+      logger.error('Get TV show details failed:', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }

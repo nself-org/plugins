@@ -387,7 +387,7 @@ export class MediaProcessingDatabase {
       [this.sourceAccountId]
     );
 
-    return result.rows.map(row => this.mapEncodingProfile(row));
+    return result.rows.map((row: Record<string, unknown>) => this.mapEncodingProfile(row));
   }
 
   async getDefaultEncodingProfile(): Promise<EncodingProfileRecord | null> {
@@ -589,7 +589,7 @@ export class MediaProcessingDatabase {
     params.push(limit, offset);
 
     const result = await this.db.query<JobRecord>(query, params);
-    return result.rows.map(row => this.mapJob(row));
+    return result.rows.map((row: Record<string, unknown>) => this.mapJob(row));
   }
 
   async updateJobStatus(id: string, status: JobStatus, progress?: number, error?: string): Promise<void> {
@@ -691,7 +691,7 @@ export class MediaProcessingDatabase {
       [jobId, this.sourceAccountId]
     );
 
-    return result.rows.map(row => this.mapJobOutput(row));
+    return result.rows.map((row: Record<string, unknown>) => this.mapJobOutput(row));
   }
 
   private mapJobOutput(row: Record<string, unknown>): JobOutputRecord {
@@ -790,7 +790,7 @@ export class MediaProcessingDatabase {
       [jobId, this.sourceAccountId]
     );
 
-    return result.rows.map(row => this.mapSubtitle(row));
+    return result.rows.map((row: Record<string, unknown>) => this.mapSubtitle(row));
   }
 
   private mapSubtitle(row: Record<string, unknown>): SubtitleRecord {
@@ -984,7 +984,7 @@ export class MediaProcessingDatabase {
     );
 
     if (result.rows.length > 0) {
-      logger.warn('Reclaimed stale jobs', { count: result.rows.length, jobIds: result.rows.map(r => r.id) });
+      logger.warn('Reclaimed stale jobs', { count: result.rows.length, jobIds: result.rows.map((r: { id: string }) => r.id) });
     }
 
     return result.rows.length;
@@ -1038,7 +1038,7 @@ export class MediaProcessingDatabase {
       [this.sourceAccountId, limit]
     );
 
-    return result.rows.map(row => this.mapWatcherEvent(row));
+    return result.rows.map((row: Record<string, unknown>) => this.mapWatcherEvent(row));
   }
 
   private mapWatcherEvent(row: Record<string, unknown>): DropFolderEvent {
@@ -1089,7 +1089,7 @@ export class MediaProcessingDatabase {
       [jobId, this.sourceAccountId]
     );
 
-    return result.rows.map(row => this.mapUploadRecord(row));
+    return result.rows.map((row: Record<string, unknown>) => this.mapUploadRecord(row));
   }
 
   async getNextUploadVersion(contentId: string): Promise<number> {

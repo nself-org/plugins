@@ -3,7 +3,7 @@
  * All provider implementations extend this class
  */
 
-import { exec as execCallback } from 'child_process';
+import { exec as execCallback, type ExecException } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '@nself/plugin-utils';
 import type {
@@ -205,7 +205,8 @@ export abstract class BaseVPNProvider implements IVPNProvider {
       });
       return result;
     } catch (error) {
-      if (error.killed && error.signal === 'SIGTERM') {
+      const execError = error as ExecException;
+      if (execError.killed && execError.signal === 'SIGTERM') {
         throw new Error(`Command timed out after ${timeout}ms: ${command}`);
       }
       throw error;

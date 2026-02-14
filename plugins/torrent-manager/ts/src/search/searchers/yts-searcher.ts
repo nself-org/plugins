@@ -130,8 +130,9 @@ export class YTSSearcher extends BaseTorrentSearcher {
       logger.info(`Found ${results.length} results from YTS`);
       return results;
 
-    } catch (error) {
-      logger.warn(`YTS search failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(`YTS search failed: ${message}`);
       return [];
     }
   }

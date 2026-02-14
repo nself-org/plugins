@@ -60,7 +60,8 @@ export class RSSFeedMonitor {
           }
         }
       } catch (error) {
-        logger.error('Scheduled feed check failed:', error);
+        const metadata = error instanceof Error ? { message: error.message } : { error: String(error) };
+        logger.error('Scheduled feed check failed:', metadata);
       }
     });
     logger.info(`RSS feed monitor started with ${intervalMinutes} minute interval`);
@@ -76,7 +77,21 @@ export class RSSFeedMonitor {
 
       let processedCount = 0;
       for (const item of feedData.items) {
-        await this.processItem(feed, item);
+        const feedItem: RSSFeedItem = {
+          title: item.title,
+          link: item.link,
+          pubDate: item.pubDate,
+          enclosure: item.enclosure ? {
+            url: item.enclosure.url,
+            type: item.enclosure.type,
+            length: item.enclosure.length ? String(item.enclosure.length) : undefined,
+          } : undefined,
+          content: item.content,
+          contentSnippet: item.contentSnippet,
+          guid: item.guid,
+          categories: item.categories,
+        };
+        await this.processItem(feed, feedItem);
         processedCount++;
       }
 
@@ -85,11 +100,13 @@ export class RSSFeedMonitor {
       logger.info(`Processed ${processedCount} items from ${feed.name}`);
     } catch (error) {
       // Record the failure on the feed so consecutive_failures increments
-      await this.database.updateFeedLastChecked(feed.id, error.message).catch(() => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await this.database.updateFeedLastChecked(feed.id, errorMessage).catch(() => {
         // If even the error recording fails, just log it
         logger.error(`Failed to record feed check error for ${feed.name}`);
       });
-      logger.error(`RSS feed check failed for ${feed.name}:`, error);
+      const metadata = error instanceof Error ? { message: error.message } : { error: String(error) };
+      logger.error(`RSS feed check failed for ${feed.name}:`, metadata);
     }
   }
 

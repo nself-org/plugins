@@ -17,10 +17,10 @@ const logger = createLogger('content-acquisition:server');
 
 // Type guards for validated enums
 type SubscriptionType = 'tv_show' | 'movie_collection' | 'artist' | 'podcast';
-type FeedType = 'torrent_rss' | 'show_rss' | 'movie_rss';
-type ContentType = 'movie' | 'tv_show' | 'music' | 'podcast';
-type DownloadStatus = 'pending' | 'searching' | 'matched' | 'downloading' | 'completed' | 'failed';
-type DownloadAction = 'retry' | 'cancel';
+type FeedType = 'tv_shows' | 'movies' | 'anime' | 'music';
+type ContentType = 'movie' | 'tv_episode' | 'music' | 'other';
+type DownloadStatus = 'scheduled' | 'searching' | 'downloading' | 'downloaded' | 'failed';
+type DownloadAction = 'auto-download' | 'notify' | 'skip';
 
 // ============================================================================
 // JSON Schema definitions for request validation

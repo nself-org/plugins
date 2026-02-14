@@ -13,7 +13,7 @@ import { TransmissionClient } from './clients/transmission.js';
 import { TorrentSearchAggregator } from './search/aggregator.js';
 import { SmartMatcher } from './matching/smart-matcher.js';
 import { getAllSources } from './sources/registry.js';
-import type { TorrentManagerConfig } from './types.js';
+import type { TorrentManagerConfig, TorrentCategory } from './types.js';
 
 const logger = createLogger('torrent-manager:server');
 
@@ -205,9 +205,12 @@ export class TorrentManagerServer {
       }
 
       try {
+        // Validate category if provided
+        const validCategory = category as TorrentCategory | undefined;
+
         // Add to client
         const download = await this.torrentClient.addTorrent(magnet_uri, {
-          category,
+          category: validCategory,
           download_path,
         });
 
@@ -365,9 +368,12 @@ export class TorrentManagerServer {
           this.config.enabled_sources?.split(',')
         );
 
+        // Validate type is either 'movie' or 'tv'
+        const searchType = type === 'tv' || type === 'movie' ? type : undefined;
+
         const results = await aggregator.search({
           query,
-          type,
+          type: searchType,
           quality,
           minSeeders,
           maxResults: maxResults || 50,
@@ -433,9 +439,10 @@ export class TorrentManagerServer {
             ? `${title} ${year}`
             : title;
 
+        const searchType = season !== undefined ? 'tv' : 'movie';
         const searchResults = await aggregator.search({
           query: searchQuery,
-          type: season !== undefined ? 'tv' : 'movie',
+          type: searchType as 'tv' | 'movie',
           quality,
           minSeeders: minSeeders || 1,
           maxResults: 50,
@@ -510,16 +517,21 @@ export class TorrentManagerServer {
       try {
         const aggregator = new TorrentSearchAggregator([source]);
         const magnetUri = await aggregator.getMagnetLink({
-          source,
-          sourceUrl,
-          name: '',
-          info_hash: '',
-          size_bytes: 0,
+          title: '',
+          normalizedTitle: '',
+          magnetUri: '',
+          infoHash: '',
+          size: '',
+          sizeBytes: 0,
           seeders: 0,
           leechers: 0,
-          trusted_uploader: false,
-          category: 'other' as const,
-          score: 0,
+          uploadDate: new Date().toISOString(),
+          uploadDateUnix: Date.now(),
+          source,
+          sourceUrl,
+          parsedInfo: {
+            title: '',
+          },
         });
 
         return { magnetUri };
@@ -579,7 +591,7 @@ export class TorrentManagerServer {
       try {
         const appContext = getAppContext(request);
         await this.database.upsertDownloadSeedingPolicy(id, {
-          source_account_id: appContext?.accountId || 'primary',
+          source_account_id: appContext?.sourceAccountId || 'primary',
           ratio_limit: body.ratio_limit,
           time_limit_hours: body.time_limit_hours,
           auto_remove: autoRemove,

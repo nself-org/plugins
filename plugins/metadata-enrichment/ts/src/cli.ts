@@ -27,7 +27,7 @@ program
       await database.close();
     } catch (error) {
       spinner.fail('Initialization failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
       process.exit(1);
     }
   });
@@ -55,7 +55,7 @@ program
       });
     } catch (error) {
       spinner.fail('Search failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
       process.exit(1);
     }
   });
@@ -83,7 +83,7 @@ program
       });
     } catch (error) {
       spinner.fail('Search failed');
-      console.error(chalk.red(error.message));
+      console.error(chalk.red(error instanceof Error ? error.message : String(error)));
       process.exit(1);
     }
   });
@@ -111,7 +111,7 @@ program
         process.exit(0);
       });
     } catch (error) {
-      console.error(chalk.red('Failed to start server:'), error.message);
+      console.error(chalk.red('Failed to start server:'), error instanceof Error ? error.message : String(error));
       process.exit(1);
     }
   });

@@ -9,6 +9,7 @@ import { createLogger } from '@nself/plugin-utils';
 import { loadConfig } from './config.js';
 import { StreamGatewayDatabase } from './database.js';
 import { createServer } from './server.js';
+import type { StreamStatus } from './types.js';
 
 const logger = createLogger('stream-gateway:cli');
 
@@ -91,8 +92,8 @@ program
   });
 
 // Streams commands
-const np_streamgw_streams = program
-  .command('np_streamgw_streams')
+const streams = program
+  .command('streams')
   .description('Manage streams');
 
 streams
@@ -100,7 +101,7 @@ streams
   .description('List all streams')
   .option('-l, --limit <limit>', 'Number of records', '50')
   .option('-s, --status <status>', 'Filter by status')
-  .action(async (options) => {
+  .action(async (options: { limit: string; status?: StreamStatus }) => {
     try {
       const db = new StreamGatewayDatabase();
       await db.connect();
@@ -120,14 +121,14 @@ streams
       await db.disconnect();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('List np_streamgw_streams failed', { error: message });
+      logger.error('List streams failed', { error: message });
       process.exit(1);
     }
   });
 
 streams
   .command('active')
-  .description('List active np_streamgw_streams with viewer counts')
+  .description('List active streams with viewer counts')
   .action(async () => {
     try {
       const db = new StreamGatewayDatabase();
@@ -147,7 +148,7 @@ streams
       await db.disconnect();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('List active np_streamgw_streams failed', { error: message });
+      logger.error('List active streams failed', { error: message });
       process.exit(1);
     }
   });

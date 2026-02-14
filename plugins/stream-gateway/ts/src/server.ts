@@ -279,7 +279,7 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
     };
     const appId = getAppId(request);
-    const np_streamgw_streams = await scopedDb(request).listStreams(appId, status, limit, offset);
+    const streams = await scopedDb(request).listStreams(appId, status, limit, offset);
     return { data: streams, limit, offset };
   });
 
