@@ -268,6 +268,21 @@ export async function createServer(config?: Partial<Config>) {
     }
   });
 
+  /**
+   * DELETE /v1/jobs/:id
+   * Alias for POST /v1/jobs/:id/cancel (nTV compatibility)
+   */
+  app.delete<{ Params: { id: string } }>('/v1/jobs/:id', async (request, reply) => {
+    try {
+      await processor.cancelJob(request.params.id);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to cancel job', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
+  });
+
   app.post<{ Params: { id: string } }>('/v1/jobs/:id/retry', async (request, reply) => {
     try {
       const job = await scopedDb(request).getJob(request.params.id);
@@ -316,12 +331,111 @@ export async function createServer(config?: Partial<Config>) {
     return { success: true, data: subtitles };
   });
 
+  /**
+   * POST /v1/jobs/:id/subtitles
+   * Extract embedded subtitle tracks from the source media file using ffprobe.
+   * Returns detected subtitle streams with index, language, and format.
+   */
+  app.post<{ Params: { id: string } }>('/v1/jobs/:id/subtitles', async (request, reply) => {
+    try {
+      const job = await scopedDb(request).getJob(request.params.id);
+      if (!job) {
+        return reply.status(404).send({ success: false, error: 'Job not found' });
+      }
+
+      const ffmpegClient = new (await import('./ffmpeg.js')).FFmpegClient(fullConfig);
+      const metadata = await ffmpegClient.probe(job.input_url);
+
+      const subtitleStreams = (metadata.streams || [])
+        .filter(s => s.codec_type === 'subtitle')
+        .map(s => ({
+          index: s.index,
+          language: s.tags?.language ?? s.language ?? 'und',
+          format: s.codec_name,
+        }));
+
+      return {
+        success: true,
+        tracks: subtitleStreams,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to extract subtitle tracks', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
+  });
+
   app.get<{ Params: { id: string } }>('/v1/jobs/:id/trickplay', async (request, reply) => {
     const trickplay = await scopedDb(request).getTrickplay(request.params.id);
     if (!trickplay) {
       return reply.status(404).send({ success: false, error: 'Trickplay data not found' });
     }
     return { success: true, data: trickplay };
+  });
+
+  /**
+   * POST /v1/jobs/:id/trickplay
+   * Trigger trickplay generation for an existing job (nTV compatibility).
+   * Accepts optional parameters to override profile defaults.
+   */
+  app.post<{
+    Params: { id: string };
+    Body: { interval_seconds?: number; grid?: string; thumb_size?: string };
+  }>('/v1/jobs/:id/trickplay', async (request, reply) => {
+    try {
+      const job = await scopedDb(request).getJob(request.params.id);
+      if (!job) {
+        return reply.status(404).send({ success: false, error: 'Job not found' });
+      }
+
+      const { interval_seconds, grid, thumb_size } = request.body || {};
+
+      // Build an output path that encodes the trickplay params for the processor
+      const outputBase = job.output_base_path ?? `${fullConfig.outputBasePath}/${job.id}`;
+      const trickplayOutputPath = `${outputBase}/trickplay`;
+
+      // Create a trickplay generation job referencing the parent job's source
+      const trickplayJob = await scopedDb(request).createJob({
+        input_url: job.input_url,
+        input_type: job.input_type,
+        profile_id: job.profile_id ?? undefined,
+        priority: job.priority,
+        output_base_path: trickplayOutputPath,
+      });
+
+      // Store trickplay parameters on the job record for the processor to read
+      await scopedDb(request).query(
+        `UPDATE np_mediap_jobs SET input_metadata = $1 WHERE id = $2 AND source_account_id = $3`,
+        [
+          JSON.stringify({
+            parent_job_id: job.id,
+            type: 'trickplay',
+            interval_seconds: interval_seconds ?? 10,
+            grid: grid ?? '6x6',
+            thumb_size: thumb_size ?? '160x90',
+          }),
+          trickplayJob.id,
+          trickplayJob.source_account_id,
+        ]
+      );
+
+      // Add to queue
+      jobQueue.push(trickplayJob.id);
+      logger.info('Trickplay job queued', { jobId: trickplayJob.id, parentJobId: job.id });
+
+      processJobQueue().catch(err => {
+        logger.error('Failed to start queue processing', { error: err.message });
+      });
+
+      return reply.status(201).send({
+        job_id: trickplayJob.id,
+        state: 'queued',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to queue trickplay generation', { error: message });
+      return reply.status(400).send({ success: false, error: message });
+    }
   });
 
   // =========================================================================

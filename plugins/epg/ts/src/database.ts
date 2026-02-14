@@ -78,7 +78,7 @@ export class EpgDatabase {
       -- Channels
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS epg_channels (
+      CREATE TABLE IF NOT EXISTS np_epg_channels (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         channel_number VARCHAR(10),
@@ -101,18 +101,18 @@ export class EpgDatabase {
         UNIQUE(source_account_id, call_sign)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_epg_channels_source_app
-        ON epg_channels(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_epg_channels_number
-        ON epg_channels(source_account_id, channel_number);
-      CREATE INDEX IF NOT EXISTS idx_epg_channels_category
-        ON epg_channels(source_account_id, category);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_channels_source_app
+        ON np_epg_channels(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_channels_number
+        ON np_epg_channels(source_account_id, channel_number);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_channels_category
+        ON np_epg_channels(source_account_id, category);
 
       -- =====================================================================
       -- Programs
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS epg_programs (
+      CREATE TABLE IF NOT EXISTS np_epg_programs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         external_id VARCHAR(255),
@@ -149,24 +149,24 @@ export class EpgDatabase {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_epg_programs_source_app
-        ON epg_programs(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_epg_programs_external
-        ON epg_programs(source_account_id, external_id);
-      CREATE INDEX IF NOT EXISTS idx_epg_programs_title
-        ON epg_programs(source_account_id, title);
-      CREATE INDEX IF NOT EXISTS idx_epg_programs_search
-        ON epg_programs USING GIN(search_vector);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_programs_source_app
+        ON np_epg_programs(source_account_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_np_epg_programs_external
+        ON np_epg_programs(source_account_id, external_id) WHERE external_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_np_epg_programs_title
+        ON np_epg_programs(source_account_id, title);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_programs_search
+        ON np_epg_programs USING GIN(search_vector);
 
       -- =====================================================================
       -- Schedules
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS epg_schedules (
+      CREATE TABLE IF NOT EXISTS np_epg_schedules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        channel_id UUID NOT NULL REFERENCES epg_channels(id) ON DELETE CASCADE,
-        program_id UUID NOT NULL REFERENCES epg_programs(id) ON DELETE CASCADE,
+        channel_id UUID NOT NULL REFERENCES np_epg_channels(id) ON DELETE CASCADE,
+        program_id UUID NOT NULL REFERENCES np_epg_programs(id) ON DELETE CASCADE,
         start_time TIMESTAMPTZ NOT NULL,
         end_time TIMESTAMPTZ NOT NULL,
         is_rerun BOOLEAN DEFAULT false,
@@ -175,14 +175,14 @@ export class EpgDatabase {
         UNIQUE(source_account_id, channel_id, start_time)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_epg_schedules_source_app
-        ON epg_schedules(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_epg_schedules_channel
-        ON epg_schedules(channel_id, start_time);
-      CREATE INDEX IF NOT EXISTS idx_epg_schedules_time
-        ON epg_schedules(source_account_id, start_time, end_time);
-      CREATE INDEX IF NOT EXISTS idx_epg_schedules_program
-        ON epg_schedules(program_id);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_schedules_source_app
+        ON np_epg_schedules(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_schedules_channel
+        ON np_epg_schedules(channel_id, start_time);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_schedules_time
+        ON np_epg_schedules(source_account_id, start_time, end_time);
+      CREATE INDEX IF NOT EXISTS idx_np_epg_schedules_program
+        ON np_epg_schedules(program_id);
 
       -- =====================================================================
       -- Channel Groups
@@ -210,7 +210,7 @@ export class EpgDatabase {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         group_id UUID NOT NULL REFERENCES epg_channel_groups(id) ON DELETE CASCADE,
-        channel_id UUID NOT NULL REFERENCES epg_channels(id) ON DELETE CASCADE,
+        channel_id UUID NOT NULL REFERENCES np_epg_channels(id) ON DELETE CASCADE,
         sort_order INTEGER DEFAULT 0,
         UNIQUE(source_account_id, group_id, channel_id)
       );
@@ -248,8 +248,8 @@ export class EpgDatabase {
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         user_id TEXT NOT NULL,
         rule_type TEXT NOT NULL CHECK (rule_type IN ('single', 'series', 'keyword')),
-        program_id UUID REFERENCES epg_programs(id),
-        channel_id UUID REFERENCES epg_channels(id),
+        program_id UUID REFERENCES np_epg_programs(id),
+        channel_id UUID REFERENCES np_epg_channels(id),
         series_title TEXT,
         keyword TEXT,
         priority INTEGER DEFAULT 50,
@@ -274,8 +274,8 @@ export class EpgDatabase {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         recording_rule_id UUID REFERENCES np_epg_recording_rules(id) ON DELETE SET NULL,
-        program_id UUID REFERENCES epg_programs(id),
-        channel_id UUID REFERENCES epg_channels(id),
+        program_id UUID REFERENCES np_epg_programs(id),
+        channel_id UUID REFERENCES np_epg_channels(id),
         scheduled_start TIMESTAMPTZ NOT NULL,
         scheduled_end TIMESTAMPTZ NOT NULL,
         status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'recording', 'completed', 'failed', 'conflict', 'cancelled')),
@@ -304,7 +304,7 @@ export class EpgDatabase {
 
   async createChannel(channel: Omit<ChannelRecord, 'id' | 'created_at' | 'updated_at'>): Promise<ChannelRecord> {
     const result = await this.query<ChannelRecord>(
-      `INSERT INTO epg_channels (
+      `INSERT INTO np_epg_channels (
         source_account_id, channel_number, call_sign, name, display_name,
         logo_url, category, language, country, stream_url, stream_type,
         is_hd, is_4k, is_active, sort_order, metadata
@@ -324,7 +324,7 @@ export class EpgDatabase {
 
   async getChannel(id: string): Promise<ChannelRecord | null> {
     const result = await this.query<ChannelRecord>(
-      `SELECT * FROM epg_channels WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_epg_channels WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -359,7 +359,7 @@ export class EpgDatabase {
     }
 
     let sql = `
-      SELECT c.* FROM epg_channels c
+      SELECT c.* FROM np_epg_channels c
       ${joinClause}
       WHERE ${conditions.join(' AND ')}
       ORDER BY c.sort_order ASC, c.channel_number ASC, c.name ASC
@@ -405,7 +405,7 @@ export class EpgDatabase {
     values.push(id, this.sourceAccountId);
 
     const result = await this.query<ChannelRecord>(
-      `UPDATE epg_channels
+      `UPDATE np_epg_channels
        SET ${fields.join(', ')}
        WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}
        RETURNING *`,
@@ -417,7 +417,7 @@ export class EpgDatabase {
 
   async deleteChannel(id: string): Promise<boolean> {
     const count = await this.execute(
-      `DELETE FROM epg_channels WHERE id = $1 AND source_account_id = $2`,
+      `DELETE FROM np_epg_channels WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return count > 0;
@@ -429,7 +429,7 @@ export class EpgDatabase {
 
   async createProgram(program: Omit<ProgramRecord, 'id' | 'created_at' | 'updated_at'>): Promise<ProgramRecord> {
     const result = await this.query<ProgramRecord>(
-      `INSERT INTO epg_programs (
+      `INSERT INTO np_epg_programs (
         source_account_id, external_id, title, episode_title, description,
         long_description, categories, genre, season_number, episode_number,
         original_air_date, year, duration_minutes, content_rating, star_rating,
@@ -460,7 +460,7 @@ export class EpgDatabase {
 
   async getProgram(id: string): Promise<ProgramRecord | null> {
     const result = await this.query<ProgramRecord>(
-      `SELECT * FROM epg_programs WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_epg_programs WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -507,7 +507,7 @@ export class EpgDatabase {
     const limit = filters.limit ?? 50;
 
     const result = await this.query<ProgramRecord>(
-      `SELECT * FROM epg_programs
+      `SELECT * FROM np_epg_programs
        WHERE ${conditions.join(' AND ')}
        ORDER BY title ASC
        LIMIT ${limit}`,
@@ -523,7 +523,7 @@ export class EpgDatabase {
 
   async createSchedule(schedule: Omit<ScheduleRecord, 'id'>): Promise<ScheduleRecord> {
     const result = await this.query<ScheduleRecord>(
-      `INSERT INTO epg_schedules (
+      `INSERT INTO np_epg_schedules (
         source_account_id, channel_id, program_id, start_time, end_time,
         is_rerun, is_live, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -588,9 +588,9 @@ export class EpgDatabase {
         s.is_live,
         p.is_new,
         s.is_rerun
-       FROM epg_schedules s
-       JOIN epg_channels c ON s.channel_id = c.id
-       JOIN epg_programs p ON s.program_id = p.id
+       FROM np_epg_schedules s
+       JOIN np_epg_channels c ON s.channel_id = c.id
+       JOIN np_epg_programs p ON s.program_id = p.id
        WHERE ${conditions.join(' AND ')}
        ORDER BY c.sort_order ASC, c.channel_number ASC, s.start_time ASC`,
       values
@@ -647,7 +647,7 @@ export class EpgDatabase {
 
     // Get active channels
     const channelsResult = await this.query<ChannelRecord>(
-      `SELECT * FROM epg_channels c WHERE ${conditions.join(' AND ')} ORDER BY c.sort_order ASC, c.channel_number ASC`,
+      `SELECT * FROM np_epg_channels c WHERE ${conditions.join(' AND ')} ORDER BY c.sort_order ASC, c.channel_number ASC`,
       values
     );
 
@@ -659,8 +659,8 @@ export class EpgDatabase {
         `SELECT s.id as schedule_id, s.start_time, s.end_time, s.is_live, s.is_rerun,
                 p.id as program_id, p.title, p.episode_title, p.description, p.categories,
                 p.content_rating, p.duration_minutes, p.is_new
-         FROM epg_schedules s
-         JOIN epg_programs p ON s.program_id = p.id
+         FROM np_epg_schedules s
+         JOIN np_epg_programs p ON s.program_id = p.id
          WHERE s.source_account_id = $1
            AND s.channel_id = $2
            AND s.start_time <= NOW()
@@ -675,8 +675,8 @@ export class EpgDatabase {
         `SELECT s.id as schedule_id, s.start_time, s.end_time, s.is_live, s.is_rerun,
                 p.id as program_id, p.title, p.episode_title, p.description, p.categories,
                 p.content_rating, p.duration_minutes, p.is_new
-         FROM epg_schedules s
-         JOIN epg_programs p ON s.program_id = p.id
+         FROM np_epg_schedules s
+         JOIN np_epg_programs p ON s.program_id = p.id
          WHERE s.source_account_id = $1
            AND s.channel_id = $2
            AND s.start_time > NOW()
@@ -705,8 +705,8 @@ export class EpgDatabase {
       `SELECT s.id as schedule_id, s.start_time, s.end_time, s.is_live, s.is_rerun,
               p.id as program_id, p.title, p.episode_title, p.description, p.categories,
               p.content_rating, p.duration_minutes, p.is_new
-       FROM epg_schedules s
-       JOIN epg_programs p ON s.program_id = p.id
+       FROM np_epg_schedules s
+       JOIN np_epg_programs p ON s.program_id = p.id
        WHERE s.source_account_id = $1
          AND s.channel_id = $2
          AND s.start_time >= $3
@@ -724,9 +724,9 @@ export class EpgDatabase {
               p.id as program_id, p.title, p.episode_title, p.description, p.categories,
               p.content_rating, p.duration_minutes, p.is_new,
               c.name as channel_name, c.channel_number
-       FROM epg_schedules s
-       JOIN epg_programs p ON s.program_id = p.id
-       JOIN epg_channels c ON s.channel_id = c.id
+       FROM np_epg_schedules s
+       JOIN np_epg_programs p ON s.program_id = p.id
+       JOIN np_epg_channels c ON s.channel_id = c.id
        WHERE s.source_account_id = $1
          AND s.program_id = $2
          AND s.start_time >= NOW()
@@ -840,15 +840,15 @@ export class EpgDatabase {
 
   async upsertChannelByCallSign(channel: Omit<ChannelRecord, 'id' | 'created_at' | 'updated_at'>): Promise<ChannelRecord> {
     const result = await this.query<ChannelRecord>(
-      `INSERT INTO epg_channels (
+      `INSERT INTO np_epg_channels (
         source_account_id, channel_number, call_sign, name, display_name,
         logo_url, category, language, country, is_active, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10)
       ON CONFLICT (source_account_id, call_sign) DO UPDATE SET
-        channel_number = COALESCE(EXCLUDED.channel_number, epg_channels.channel_number),
+        channel_number = COALESCE(EXCLUDED.channel_number, np_epg_channels.channel_number),
         name = EXCLUDED.name,
         display_name = EXCLUDED.display_name,
-        logo_url = COALESCE(EXCLUDED.logo_url, epg_channels.logo_url),
+        logo_url = COALESCE(EXCLUDED.logo_url, np_epg_channels.logo_url),
         updated_at = NOW()
       RETURNING *`,
       [
@@ -862,9 +862,138 @@ export class EpgDatabase {
     return result.rows[0];
   }
 
+  async upsertProgramByExternalId(program: Omit<ProgramRecord, 'id' | 'created_at' | 'updated_at'>): Promise<ProgramRecord> {
+    if (!program.external_id) {
+      return this.createProgram(program);
+    }
+
+    const result = await this.query<ProgramRecord>(
+      `INSERT INTO np_epg_programs (
+        source_account_id, external_id, title, episode_title, description,
+        long_description, categories, genre, season_number, episode_number,
+        original_air_date, year, duration_minutes, content_rating, star_rating,
+        poster_url, thumbnail_url, directors, actors,
+        is_new, is_live, is_premiere, is_finale, is_movie,
+        language, subtitles, audio_format, video_format, production_code,
+        metadata,
+        search_vector
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+        to_tsvector('english', $3 || ' ' || COALESCE($4, '') || ' ' || COALESCE($5, ''))
+      )
+      ON CONFLICT (source_account_id, external_id) WHERE external_id IS NOT NULL DO UPDATE SET
+        title = EXCLUDED.title,
+        episode_title = COALESCE(EXCLUDED.episode_title, np_epg_programs.episode_title),
+        description = COALESCE(EXCLUDED.description, np_epg_programs.description),
+        long_description = COALESCE(EXCLUDED.long_description, np_epg_programs.long_description),
+        categories = EXCLUDED.categories,
+        genre = COALESCE(EXCLUDED.genre, np_epg_programs.genre),
+        poster_url = COALESCE(EXCLUDED.poster_url, np_epg_programs.poster_url),
+        thumbnail_url = COALESCE(EXCLUDED.thumbnail_url, np_epg_programs.thumbnail_url),
+        search_vector = to_tsvector('english', EXCLUDED.title || ' ' || COALESCE(EXCLUDED.episode_title, '') || ' ' || COALESCE(EXCLUDED.description, '')),
+        updated_at = NOW()
+      RETURNING *`,
+      [
+        this.sourceAccountId, program.external_id, program.title,
+        program.episode_title, program.description, program.long_description,
+        program.categories, program.genre, program.season_number,
+        program.episode_number, program.original_air_date, program.year,
+        program.duration_minutes, program.content_rating, program.star_rating,
+        program.poster_url, program.thumbnail_url, program.directors, program.actors,
+        program.is_new, program.is_live, program.is_premiere, program.is_finale,
+        program.is_movie, program.language, program.subtitles, program.audio_format,
+        program.video_format, program.production_code, JSON.stringify(program.metadata),
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async getNowPlaying(channelIds?: string[]): Promise<Array<{
+    channel_id: string;
+    channel_name: string;
+    channel_number: string | null;
+    logo_url: string | null;
+    is_hd: boolean;
+    program_id: string;
+    title: string;
+    episode_title: string | null;
+    description: string | null;
+    categories: string[];
+    content_rating: string | null;
+    start_time: Date;
+    end_time: Date;
+    duration_minutes: number | null;
+    is_live: boolean;
+    is_new: boolean;
+  }>> {
+    const conditions: string[] = [
+      's.source_account_id = $1',
+      'c.is_active = true',
+      's.start_time <= NOW()',
+      's.end_time > NOW()',
+    ];
+    const values: unknown[] = [this.sourceAccountId];
+    let paramIndex = 2;
+
+    if (channelIds && channelIds.length > 0) {
+      const placeholders = channelIds.map((_, i) => `$${paramIndex + i}`).join(', ');
+      conditions.push(`c.id IN (${placeholders})`);
+      values.push(...channelIds);
+      paramIndex += channelIds.length;
+    }
+
+    // Suppress unused variable warning
+    void paramIndex;
+
+    const result = await this.query<{
+      channel_id: string;
+      channel_name: string;
+      channel_number: string | null;
+      logo_url: string | null;
+      is_hd: boolean;
+      program_id: string;
+      title: string;
+      episode_title: string | null;
+      description: string | null;
+      categories: string[];
+      content_rating: string | null;
+      start_time: Date;
+      end_time: Date;
+      duration_minutes: number | null;
+      is_live: boolean;
+      is_new: boolean;
+    }>(
+      `SELECT
+        c.id as channel_id,
+        c.name as channel_name,
+        c.channel_number,
+        c.logo_url,
+        c.is_hd,
+        p.id as program_id,
+        p.title,
+        p.episode_title,
+        p.description,
+        p.categories,
+        p.content_rating,
+        s.start_time,
+        s.end_time,
+        p.duration_minutes,
+        s.is_live,
+        p.is_new
+       FROM np_epg_schedules s
+       JOIN np_epg_channels c ON s.channel_id = c.id
+       JOIN np_epg_programs p ON s.program_id = p.id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY c.sort_order ASC, c.channel_number ASC`,
+      values
+    );
+
+    return result.rows;
+  }
+
   async cleanupOldSchedules(days: number): Promise<number> {
     const count = await this.execute(
-      `DELETE FROM epg_schedules
+      `DELETE FROM np_epg_schedules
        WHERE source_account_id = $1
          AND end_time < NOW() - INTERVAL '${days} days'`,
       [this.sourceAccountId]
@@ -1169,7 +1298,7 @@ export class EpgDatabase {
     for (const program of programs) {
       // Get schedules for this program
       const schedulesResult = await this.query<ScheduleRecord>(
-        `SELECT * FROM epg_schedules
+        `SELECT * FROM np_epg_schedules
          WHERE source_account_id = $1
            AND program_id = $2
            AND start_time >= NOW()
@@ -1222,13 +1351,13 @@ export class EpgDatabase {
       newest_schedule: Date | null;
     }>(
       `SELECT
-        (SELECT COUNT(*) FROM epg_channels WHERE source_account_id = $1) as total_channels,
-        (SELECT COUNT(*) FROM epg_channels WHERE source_account_id = $1 AND is_active = true) as active_channels,
-        (SELECT COUNT(*) FROM epg_programs WHERE source_account_id = $1) as total_programs,
-        (SELECT COUNT(*) FROM epg_schedules WHERE source_account_id = $1) as total_schedules,
+        (SELECT COUNT(*) FROM np_epg_channels WHERE source_account_id = $1) as total_channels,
+        (SELECT COUNT(*) FROM np_epg_channels WHERE source_account_id = $1 AND is_active = true) as active_channels,
+        (SELECT COUNT(*) FROM np_epg_programs WHERE source_account_id = $1) as total_programs,
+        (SELECT COUNT(*) FROM np_epg_schedules WHERE source_account_id = $1) as total_schedules,
         (SELECT COUNT(*) FROM epg_channel_groups WHERE source_account_id = $1) as total_channel_groups,
-        (SELECT MIN(start_time) FROM epg_schedules WHERE source_account_id = $1) as oldest_schedule,
-        (SELECT MAX(end_time) FROM epg_schedules WHERE source_account_id = $1) as newest_schedule`,
+        (SELECT MIN(start_time) FROM np_epg_schedules WHERE source_account_id = $1) as oldest_schedule,
+        (SELECT MAX(end_time) FROM np_epg_schedules WHERE source_account_id = $1) as newest_schedule`,
       [this.sourceAccountId]
     );
 

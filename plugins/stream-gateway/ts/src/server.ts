@@ -3,6 +3,7 @@
  * HTTP server for stream admission, session management, and analytics endpoints
  */
 
+import crypto from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
@@ -18,6 +19,8 @@ import type {
   UpdateRuleRequest,
   SessionStatus,
   StreamStatus,
+  V1AdmitRequest,
+  V1HeartbeatRequest,
 } from './types.js';
 
 const logger = createLogger('stream-gateway:server');
@@ -135,7 +138,7 @@ export async function createServer(config?: Partial<Config>) {
           admitted: false,
           session_id: denied.id,
           reason: 'concurrent_limit',
-          message: `Maximum ${fullConfig.defaultMaxConcurrent} concurrent streams reached. Please stop another stream first.`,
+          message: `Maximum ${fullConfig.defaultMaxConcurrent} concurrent np_streamgw_streams reached. Please stop another stream first.`,
           current_sessions: userSessions.length,
           max_sessions: fullConfig.defaultMaxConcurrent,
         });
@@ -276,7 +279,7 @@ export async function createServer(config?: Partial<Config>) {
       offset?: number;
     };
     const appId = getAppId(request);
-    const streams = await scopedDb(request).listStreams(appId, status, limit, offset);
+    const np_streamgw_streams = await scopedDb(request).listStreams(appId, status, limit, offset);
     return { data: streams, limit, offset };
   });
 
@@ -448,6 +451,237 @@ export async function createServer(config?: Partial<Config>) {
       },
       timestamp: new Date().toISOString(),
     };
+  });
+
+  // =========================================================================
+  // nTV v1 API Endpoints
+  // =========================================================================
+
+  /**
+   * Sign a playback URL with HMAC-SHA256 for secure, time-limited access.
+   */
+  function signPlaybackUrl(url: string, sessionId: string, secret: string, expirySeconds: number): string {
+    const expires = Math.floor(Date.now() / 1000) + expirySeconds;
+    const payload = `${url}|${sessionId}|${expires}`;
+    const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    return `${url}?token=${signature}&expires=${expires}&session=${sessionId}`;
+  }
+
+  // POST /v1/admit - Admit user to stream (nTV frontend)
+  app.post('/v1/admit', async (request, reply) => {
+    try {
+      const body = request.body as V1AdmitRequest;
+      const appId = getAppId(request);
+      const sdb = scopedDb(request);
+
+      if (!body.user_id || !body.content_id) {
+        return reply.status(400).send({ admitted: false, reason: 'user_id and content_id are required' });
+      }
+
+      // Map content_id to stream_id for the existing admission logic
+      const streamId = body.content_id;
+
+      // Check stream exists
+      const stream = await sdb.getStream(streamId, appId);
+
+      // Check concurrent user sessions
+      const userSessions = await sdb.getUserActiveSessions(body.user_id, appId);
+      if (userSessions.length >= fullConfig.defaultMaxConcurrent) {
+        await sdb.createSession(appId, {
+          stream_id: streamId,
+          user_id: body.user_id,
+          device_id: body.device_id,
+          metadata: body.content_rating ? { content_rating: body.content_rating } : {},
+        }, 'denied', 'concurrent_limit');
+        return reply.status(403).send({
+          admitted: false,
+          reason: `Maximum ${fullConfig.defaultMaxConcurrent} concurrent np_streamgw_streams reached`,
+        });
+      }
+
+      // Check device sessions if device_id provided
+      if (body.device_id) {
+        const deviceSessions = await sdb.getDeviceActiveSessions(body.device_id, appId);
+        if (deviceSessions.length >= fullConfig.defaultMaxDeviceStreams) {
+          await sdb.createSession(appId, {
+            stream_id: streamId,
+            user_id: body.user_id,
+            device_id: body.device_id,
+            metadata: body.content_rating ? { content_rating: body.content_rating } : {},
+          }, 'denied', 'device_limit');
+          return reply.status(403).send({
+            admitted: false,
+            reason: `Device already streaming (max ${fullConfig.defaultMaxDeviceStreams})`,
+          });
+        }
+      }
+
+      // Check stream capacity
+      if (stream && stream.max_viewers !== null && stream.current_viewers >= stream.max_viewers) {
+        await sdb.createSession(appId, {
+          stream_id: streamId,
+          user_id: body.user_id,
+          device_id: body.device_id,
+          metadata: body.content_rating ? { content_rating: body.content_rating } : {},
+        }, 'denied', 'stream_full');
+        return reply.status(403).send({
+          admitted: false,
+          reason: 'Stream at maximum capacity',
+        });
+      }
+
+      // Check admission rules
+      const rules = await sdb.listRules(appId, true);
+      for (const rule of rules) {
+        if (rule.action === 'deny') {
+          const conditions = rule.conditions as Record<string, unknown>;
+          if (rule.rule_type === 'concurrent_limit') {
+            const max = (conditions.max as number) ?? fullConfig.defaultMaxConcurrent;
+            if (userSessions.length >= max) {
+              await sdb.createSession(appId, {
+                stream_id: streamId,
+                user_id: body.user_id,
+                device_id: body.device_id,
+                metadata: body.content_rating ? { content_rating: body.content_rating } : {},
+              }, 'denied', 'concurrent_limit');
+              return reply.status(403).send({
+                admitted: false,
+                reason: `Rule "${rule.name}": maximum ${max} concurrent streams`,
+              });
+            }
+          }
+        }
+      }
+
+      // Admit the user
+      const session = await sdb.createSession(appId, {
+        stream_id: streamId,
+        user_id: body.user_id,
+        device_id: body.device_id,
+        metadata: body.content_rating ? { content_rating: body.content_rating } : {},
+      }, 'active');
+
+      // Update stream viewer count
+      if (stream) {
+        await sdb.incrementStreamViewers(streamId, appId);
+      }
+
+      // Build signed playback URL
+      const playbackUrl = stream?.playback_url ?? '';
+      const expirySeconds = fullConfig.signedUrlExpirySeconds;
+      const signingSecret = fullConfig.signingSecret;
+      const signedUrl = signingSecret
+        ? signPlaybackUrl(playbackUrl, session.id, signingSecret, expirySeconds)
+        : playbackUrl;
+
+      const expiresAt = new Date(Date.now() + expirySeconds * 1000).toISOString();
+
+      // Generate a token from the signature for the client to hold
+      const token = signingSecret
+        ? crypto.createHmac('sha256', signingSecret).update(`${session.id}|${expiresAt}`).digest('hex')
+        : session.id;
+
+      return {
+        admitted: true,
+        session_id: session.id,
+        signed_url: signedUrl,
+        token,
+        expires_at: expiresAt,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 admission failed', { error: message });
+      return reply.status(500).send({ admitted: false, reason: message });
+    }
+  });
+
+  // POST /v1/heartbeat - Session heartbeat (nTV frontend)
+  app.post('/v1/heartbeat', async (request, reply) => {
+    try {
+      const body = request.body as V1HeartbeatRequest;
+
+      if (!body.session_id) {
+        return reply.status(400).send({ active: false, error: 'session_id is required' });
+      }
+
+      const session = await scopedDb(request).heartbeatSession(body.session_id);
+
+      if (!session) {
+        return reply.status(404).send({ active: false, error: 'Active session not found' });
+      }
+
+      const durationSeconds = session.started_at
+        ? Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000)
+        : 0;
+
+      return { active: true, duration_seconds: durationSeconds };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 heartbeat failed', { error: message });
+      return reply.status(500).send({ active: false, error: message });
+    }
+  });
+
+  // POST /v1/sessions/:id/end - End session (nTV frontend)
+  app.post('/v1/sessions/:id/end', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const sdb = scopedDb(request);
+
+      const session = await sdb.endSession(id);
+
+      if (!session) {
+        return reply.status(404).send({ ended: false, error: 'Active session not found' });
+      }
+
+      // Decrement stream viewers
+      const appId = getAppId(request);
+      await sdb.decrementStreamViewers(session.stream_id, appId);
+
+      return { ended: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 end session failed', { error: message });
+      return reply.status(500).send({ ended: false, error: message });
+    }
+  });
+
+  // GET /v1/sessions/active - List active sessions for account (nTV frontend)
+  app.get('/v1/sessions/active', async (request) => {
+    const appId = getAppId(request);
+    const sessions = await scopedDb(request).getActiveSessions(appId);
+
+    return sessions.map(s => ({
+      session_id: s.id,
+      user_id: s.user_id,
+      content_id: s.stream_id,
+      device_id: s.device_id,
+      started_at: s.started_at,
+      last_heartbeat: s.last_heartbeat_at,
+    }));
+  });
+
+  // GET /v1/sessions/family/:family_id - Get sessions for a family group (nTV frontend)
+  app.get('/v1/sessions/family/:family_id', async (request, reply) => {
+    try {
+      const { family_id } = request.params as { family_id: string };
+      const sdb = scopedDb(request);
+
+      const sessions = await sdb.getFamilySessions(family_id);
+
+      return sessions.map(s => ({
+        session_id: s.id,
+        user_id: s.user_id,
+        content_id: s.stream_id,
+        device_id: s.device_id,
+        started_at: s.started_at,
+        last_heartbeat: s.last_heartbeat_at,
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 family sessions failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
   });
 
   // Graceful shutdown

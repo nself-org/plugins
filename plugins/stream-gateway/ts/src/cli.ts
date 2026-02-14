@@ -91,8 +91,8 @@ program
   });
 
 // Streams commands
-const streams = program
-  .command('streams')
+const np_streamgw_streams = program
+  .command('np_streamgw_streams')
   .description('Manage streams');
 
 streams
@@ -120,14 +120,14 @@ streams
       await db.disconnect();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('List streams failed', { error: message });
+      logger.error('List np_streamgw_streams failed', { error: message });
       process.exit(1);
     }
   });
 
 streams
   .command('active')
-  .description('List active streams with viewer counts')
+  .description('List active np_streamgw_streams with viewer counts')
   .action(async () => {
     try {
       const db = new StreamGatewayDatabase();
@@ -147,7 +147,7 @@ streams
       await db.disconnect();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('List active streams failed', { error: message });
+      logger.error('List active np_streamgw_streams failed', { error: message });
       process.exit(1);
     }
   });

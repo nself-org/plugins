@@ -9,6 +9,7 @@ import type {
   StreamRecord,
   AdmissionRuleRecord,
   ViewerAnalyticsRecord,
+  FamilyMemberRecord,
   SessionStatus,
   StreamStatus,
   AdmitRequest,
@@ -186,6 +187,26 @@ export class StreamGatewayDatabase {
         ON sg_viewer_analytics(stream_id);
       CREATE INDEX IF NOT EXISTS idx_sg_analytics_period
         ON sg_viewer_analytics(period_start DESC);
+
+      -- =====================================================================
+      -- Family Members (nTV v1 API)
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_streamgw_family_members (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        family_id VARCHAR(255) NOT NULL,
+        user_id VARCHAR(255) NOT NULL,
+        role VARCHAR(32) NOT NULL DEFAULT 'member',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_streamgw_family_source_account
+        ON np_streamgw_family_members(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_streamgw_family_family_id
+        ON np_streamgw_family_members(family_id);
+      CREATE INDEX IF NOT EXISTS idx_np_streamgw_family_user_id
+        ON np_streamgw_family_members(user_id);
 
       -- =====================================================================
       -- Analytics Views
@@ -853,6 +874,54 @@ export class StreamGatewayDatabase {
   }
 
   // =========================================================================
+  // Family Members (nTV v1 API)
+  // =========================================================================
+
+  async getFamilyMembers(familyId: string): Promise<FamilyMemberRecord[]> {
+    const result = await this.query<FamilyMemberRecord>(
+      `SELECT * FROM np_streamgw_family_members
+       WHERE source_account_id = $1 AND family_id = $2
+       ORDER BY created_at ASC`,
+      [this.sourceAccountId, familyId]
+    );
+    return result.rows;
+  }
+
+  async getFamilySessions(familyId: string): Promise<StreamSessionRecord[]> {
+    const result = await this.query<StreamSessionRecord>(
+      `SELECT ss.* FROM sg_stream_sessions ss
+       INNER JOIN np_streamgw_family_members fm
+         ON fm.user_id = ss.user_id
+         AND fm.source_account_id = ss.source_account_id
+       WHERE fm.source_account_id = $1
+         AND fm.family_id = $2
+         AND ss.status = 'active'
+       ORDER BY ss.started_at DESC`,
+      [this.sourceAccountId, familyId]
+    );
+    return result.rows;
+  }
+
+  async addFamilyMember(familyId: string, userId: string, role = 'member'): Promise<FamilyMemberRecord> {
+    const result = await this.query<FamilyMemberRecord>(
+      `INSERT INTO np_streamgw_family_members (source_account_id, family_id, user_id, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [this.sourceAccountId, familyId, userId, role]
+    );
+    return result.rows[0];
+  }
+
+  async removeFamilyMember(familyId: string, userId: string): Promise<boolean> {
+    const rowCount = await this.execute(
+      `DELETE FROM np_streamgw_family_members
+       WHERE source_account_id = $1 AND family_id = $2 AND user_id = $3`,
+      [this.sourceAccountId, familyId, userId]
+    );
+    return rowCount > 0;
+  }
+
+  // =========================================================================
   // Statistics
   // =========================================================================
 
@@ -868,7 +937,7 @@ export class StreamGatewayDatabase {
       peak_concurrent_viewers: number;
       last_activity: Date | null;
     }>(
-      `WITH streams AS (
+      `WITH np_streamgw_streams AS (
         SELECT
           COUNT(*) AS total,
           COUNT(*) FILTER (WHERE status = 'active') AS active
@@ -906,7 +975,7 @@ export class StreamGatewayDatabase {
         r.active AS active_rules,
         p.peak AS peak_concurrent_viewers,
         se.last_activity
-      FROM streams s
+      FROM np_streamgw_streams s
       CROSS JOIN sessions se
       CROSS JOIN rules r
       CROSS JOIN peak p`,

@@ -11,6 +11,8 @@ import type {
   EventWithDetails,
   ProviderSyncRecord,
   ScheduleCacheRecord,
+  StandingRecord,
+  FavoriteTeamRecord,
   UpsertLeagueRequest,
   UpsertTeamRequest,
   UpsertEventRequest,
@@ -78,7 +80,7 @@ export class SportsDatabase {
       -- Leagues
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sports_leagues (
+      CREATE TABLE IF NOT EXISTS np_sports_leagues (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         external_id VARCHAR(255) NOT NULL,
@@ -97,21 +99,21 @@ export class SportsDatabase {
         UNIQUE(source_account_id, provider, external_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_sports_leagues_source_account
-        ON sports_leagues(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_leagues_sport
-        ON sports_leagues(sport);
-      CREATE INDEX IF NOT EXISTS idx_sports_leagues_provider
-        ON sports_leagues(provider);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_leagues_source_account
+        ON np_sports_leagues(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_leagues_sport
+        ON np_sports_leagues(sport);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_leagues_provider
+        ON np_sports_leagues(provider);
 
       -- =====================================================================
       -- Teams
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sports_teams (
+      CREATE TABLE IF NOT EXISTS np_sports_teams (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        league_id UUID REFERENCES sports_leagues(id),
+        league_id UUID REFERENCES np_sports_leagues(id),
         external_id VARCHAR(255) NOT NULL,
         provider VARCHAR(64) NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -132,26 +134,26 @@ export class SportsDatabase {
         UNIQUE(source_account_id, provider, external_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_sports_teams_source_account
-        ON sports_teams(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_teams_league
-        ON sports_teams(league_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_teams_abbr
-        ON sports_teams(abbreviation);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_teams_source_account
+        ON np_sports_teams(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_teams_league
+        ON np_sports_teams(league_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_teams_abbr
+        ON np_sports_teams(abbreviation);
 
       -- =====================================================================
       -- Events (games/matches)
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS sports_events (
+      CREATE TABLE IF NOT EXISTS np_sports_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         external_id VARCHAR(255) NOT NULL,
         provider VARCHAR(64) NOT NULL,
         canonical_id VARCHAR(255),
-        league_id UUID REFERENCES sports_leagues(id),
-        home_team_id UUID REFERENCES sports_teams(id),
-        away_team_id UUID REFERENCES sports_teams(id),
+        league_id UUID REFERENCES np_sports_leagues(id),
+        home_team_id UUID REFERENCES np_sports_teams(id),
+        away_team_id UUID REFERENCES np_sports_teams(id),
         event_type VARCHAR(32) NOT NULL DEFAULT 'regular',
         status VARCHAR(32) NOT NULL DEFAULT 'scheduled',
         scheduled_at TIMESTAMPTZ NOT NULL,
@@ -185,22 +187,22 @@ export class SportsDatabase {
         UNIQUE(source_account_id, provider, external_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_sports_events_source_account
-        ON sports_events(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_league
-        ON sports_events(league_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_scheduled
-        ON sports_events(scheduled_at);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_status
-        ON sports_events(status);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_home
-        ON sports_events(home_team_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_away
-        ON sports_events(away_team_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_canonical
-        ON sports_events(canonical_id);
-      CREATE INDEX IF NOT EXISTS idx_sports_events_season
-        ON sports_events(season, week);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_source_account
+        ON np_sports_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_league
+        ON np_sports_events(league_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_scheduled
+        ON np_sports_events(scheduled_at);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_status
+        ON np_sports_events(status);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_home
+        ON np_sports_events(home_team_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_away
+        ON np_sports_events(away_team_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_canonical
+        ON np_sports_events(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_events_season
+        ON np_sports_events(season, week);
 
       -- =====================================================================
       -- Provider Sync Tracking
@@ -270,6 +272,56 @@ export class SportsDatabase {
         ON sports_webhook_events(processed);
 
       -- =====================================================================
+      -- Standings
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_sports_standings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        league_id UUID NOT NULL REFERENCES np_sports_leagues(id),
+        team_id UUID NOT NULL REFERENCES np_sports_teams(id),
+        wins INTEGER NOT NULL DEFAULT 0,
+        losses INTEGER NOT NULL DEFAULT 0,
+        draws INTEGER NOT NULL DEFAULT 0,
+        points INTEGER NOT NULL DEFAULT 0,
+        rank INTEGER NOT NULL DEFAULT 0,
+        season VARCHAR(32) NOT NULL,
+        synced_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(source_account_id, league_id, team_id, season)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_sports_standings_source_account
+        ON np_sports_standings(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_standings_league
+        ON np_sports_standings(league_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_standings_team
+        ON np_sports_standings(team_id);
+      CREATE INDEX IF NOT EXISTS idx_np_sports_standings_season
+        ON np_sports_standings(season);
+
+      -- =====================================================================
+      -- Favorites
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_np_sports_favorites (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        user_id VARCHAR(255) NOT NULL,
+        team_id UUID NOT NULL REFERENCES np_sports_teams(id),
+        notify_live BOOLEAN DEFAULT TRUE,
+        auto_record BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(source_account_id, user_id, team_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_np_sports_favorites_source_account
+        ON np_np_sports_favorites(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_np_sports_favorites_user
+        ON np_np_sports_favorites(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_np_sports_favorites_team
+        ON np_np_sports_favorites(team_id);
+
+      -- =====================================================================
       -- Analytics Views
       -- =====================================================================
 
@@ -277,10 +329,10 @@ export class SportsDatabase {
       SELECT e.*, l.name AS league_name, l.sport,
              ht.name AS home_team_name, ht.abbreviation AS home_abbr,
              at2.name AS away_team_name, at2.abbreviation AS away_abbr
-      FROM sports_events e
-      JOIN sports_leagues l ON e.league_id = l.id
-      LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-      LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+      FROM np_sports_events e
+      JOIN np_sports_leagues l ON e.league_id = l.id
+      LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+      LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
       WHERE e.status = 'scheduled'
         AND e.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
         AND e.deleted_at IS NULL
@@ -290,17 +342,17 @@ export class SportsDatabase {
       SELECT e.*, l.name AS league_name, l.sport,
              ht.name AS home_team_name, ht.abbreviation AS home_abbr,
              at2.name AS away_team_name, at2.abbreviation AS away_abbr
-      FROM sports_events e
-      JOIN sports_leagues l ON e.league_id = l.id
-      LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-      LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+      FROM np_sports_events e
+      JOIN np_sports_leagues l ON e.league_id = l.id
+      LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+      LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
       WHERE e.status IN ('in_progress', 'halftime', 'delayed')
         AND e.deleted_at IS NULL
       ORDER BY e.started_at ASC;
 
       CREATE OR REPLACE VIEW sports_untriggered_recordings AS
       SELECT e.*
-      FROM sports_events e
+      FROM np_sports_events e
       WHERE e.recording_trigger_sent = FALSE
         AND e.status = 'scheduled'
         AND e.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
@@ -317,7 +369,7 @@ export class SportsDatabase {
 
   async upsertLeague(request: UpsertLeagueRequest): Promise<LeagueRecord> {
     const result = await this.query<LeagueRecord>(
-      `INSERT INTO sports_leagues (
+      `INSERT INTO np_sports_leagues (
         source_account_id, external_id, provider, name, abbreviation,
         sport, country, season_type, current_season, logo_url, metadata,
         updated_at, synced_at
@@ -325,12 +377,12 @@ export class SportsDatabase {
       ON CONFLICT (source_account_id, provider, external_id)
       DO UPDATE SET
         name = EXCLUDED.name,
-        abbreviation = COALESCE(EXCLUDED.abbreviation, sports_leagues.abbreviation),
+        abbreviation = COALESCE(EXCLUDED.abbreviation, np_sports_leagues.abbreviation),
         sport = EXCLUDED.sport,
-        country = COALESCE(EXCLUDED.country, sports_leagues.country),
-        season_type = COALESCE(EXCLUDED.season_type, sports_leagues.season_type),
-        current_season = COALESCE(EXCLUDED.current_season, sports_leagues.current_season),
-        logo_url = COALESCE(EXCLUDED.logo_url, sports_leagues.logo_url),
+        country = COALESCE(EXCLUDED.country, np_sports_leagues.country),
+        season_type = COALESCE(EXCLUDED.season_type, np_sports_leagues.season_type),
+        current_season = COALESCE(EXCLUDED.current_season, np_sports_leagues.current_season),
+        logo_url = COALESCE(EXCLUDED.logo_url, np_sports_leagues.logo_url),
         metadata = EXCLUDED.metadata,
         updated_at = NOW(),
         synced_at = NOW()
@@ -355,7 +407,7 @@ export class SportsDatabase {
 
   async getLeague(id: string): Promise<LeagueRecord | null> {
     const result = await this.query<LeagueRecord>(
-      `SELECT * FROM sports_leagues WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_sports_leagues WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -364,14 +416,14 @@ export class SportsDatabase {
   async listLeagues(sport?: string): Promise<LeagueRecord[]> {
     if (sport) {
       const result = await this.query<LeagueRecord>(
-        `SELECT * FROM sports_leagues WHERE source_account_id = $1 AND sport = $2 ORDER BY name`,
+        `SELECT * FROM np_sports_leagues WHERE source_account_id = $1 AND sport = $2 ORDER BY name`,
         [this.sourceAccountId, sport]
       );
       return result.rows;
     }
 
     const result = await this.query<LeagueRecord>(
-      `SELECT * FROM sports_leagues WHERE source_account_id = $1 ORDER BY name`,
+      `SELECT * FROM np_sports_leagues WHERE source_account_id = $1 ORDER BY name`,
       [this.sourceAccountId]
     );
     return result.rows;
@@ -379,7 +431,7 @@ export class SportsDatabase {
 
   async deleteLeague(id: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM sports_leagues WHERE id = $1 AND source_account_id = $2`,
+      `DELETE FROM np_sports_leagues WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return rowCount > 0;
@@ -391,25 +443,25 @@ export class SportsDatabase {
 
   async upsertTeam(request: UpsertTeamRequest): Promise<TeamRecord> {
     const result = await this.query<TeamRecord>(
-      `INSERT INTO sports_teams (
+      `INSERT INTO np_sports_teams (
         source_account_id, league_id, external_id, provider, name, abbreviation,
         city, conference, division, logo_url, primary_color, secondary_color,
         venue_name, venue_city, venue_timezone, metadata, updated_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
       ON CONFLICT (source_account_id, provider, external_id)
       DO UPDATE SET
-        league_id = COALESCE(EXCLUDED.league_id, sports_teams.league_id),
+        league_id = COALESCE(EXCLUDED.league_id, np_sports_teams.league_id),
         name = EXCLUDED.name,
-        abbreviation = COALESCE(EXCLUDED.abbreviation, sports_teams.abbreviation),
-        city = COALESCE(EXCLUDED.city, sports_teams.city),
-        conference = COALESCE(EXCLUDED.conference, sports_teams.conference),
-        division = COALESCE(EXCLUDED.division, sports_teams.division),
-        logo_url = COALESCE(EXCLUDED.logo_url, sports_teams.logo_url),
-        primary_color = COALESCE(EXCLUDED.primary_color, sports_teams.primary_color),
-        secondary_color = COALESCE(EXCLUDED.secondary_color, sports_teams.secondary_color),
-        venue_name = COALESCE(EXCLUDED.venue_name, sports_teams.venue_name),
-        venue_city = COALESCE(EXCLUDED.venue_city, sports_teams.venue_city),
-        venue_timezone = COALESCE(EXCLUDED.venue_timezone, sports_teams.venue_timezone),
+        abbreviation = COALESCE(EXCLUDED.abbreviation, np_sports_teams.abbreviation),
+        city = COALESCE(EXCLUDED.city, np_sports_teams.city),
+        conference = COALESCE(EXCLUDED.conference, np_sports_teams.conference),
+        division = COALESCE(EXCLUDED.division, np_sports_teams.division),
+        logo_url = COALESCE(EXCLUDED.logo_url, np_sports_teams.logo_url),
+        primary_color = COALESCE(EXCLUDED.primary_color, np_sports_teams.primary_color),
+        secondary_color = COALESCE(EXCLUDED.secondary_color, np_sports_teams.secondary_color),
+        venue_name = COALESCE(EXCLUDED.venue_name, np_sports_teams.venue_name),
+        venue_city = COALESCE(EXCLUDED.venue_city, np_sports_teams.venue_city),
+        venue_timezone = COALESCE(EXCLUDED.venue_timezone, np_sports_teams.venue_timezone),
         metadata = EXCLUDED.metadata,
         updated_at = NOW(),
         synced_at = NOW()
@@ -439,7 +491,7 @@ export class SportsDatabase {
 
   async getTeam(id: string): Promise<TeamRecord | null> {
     const result = await this.query<TeamRecord>(
-      `SELECT * FROM sports_teams WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_sports_teams WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -465,8 +517,8 @@ export class SportsDatabase {
     }
 
     const result = await this.query<TeamRecord>(
-      `SELECT t.* FROM sports_teams t
-       LEFT JOIN sports_leagues l ON t.league_id = l.id
+      `SELECT t.* FROM np_sports_teams t
+       LEFT JOIN np_sports_leagues l ON t.league_id = l.id
        WHERE ${conditions.join(' AND ')}
        ORDER BY t.name`,
       params
@@ -476,7 +528,7 @@ export class SportsDatabase {
 
   async deleteTeam(id: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM sports_teams WHERE id = $1 AND source_account_id = $2`,
+      `DELETE FROM np_sports_teams WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
     return rowCount > 0;
@@ -498,7 +550,7 @@ export class SportsDatabase {
       : null;
 
     const result = await this.query<EventRecord>(
-      `INSERT INTO sports_events (
+      `INSERT INTO np_sports_events (
         source_account_id, external_id, provider, canonical_id,
         league_id, home_team_id, away_team_id, event_type, status,
         scheduled_at, started_at, ended_at, venue_name, venue_city,
@@ -511,34 +563,34 @@ export class SportsDatabase {
       )
       ON CONFLICT (source_account_id, provider, external_id)
       DO UPDATE SET
-        canonical_id = COALESCE(EXCLUDED.canonical_id, sports_events.canonical_id),
-        league_id = COALESCE(EXCLUDED.league_id, sports_events.league_id),
-        home_team_id = COALESCE(EXCLUDED.home_team_id, sports_events.home_team_id),
-        away_team_id = COALESCE(EXCLUDED.away_team_id, sports_events.away_team_id),
-        event_type = COALESCE(EXCLUDED.event_type, sports_events.event_type),
+        canonical_id = COALESCE(EXCLUDED.canonical_id, np_sports_events.canonical_id),
+        league_id = COALESCE(EXCLUDED.league_id, np_sports_events.league_id),
+        home_team_id = COALESCE(EXCLUDED.home_team_id, np_sports_events.home_team_id),
+        away_team_id = COALESCE(EXCLUDED.away_team_id, np_sports_events.away_team_id),
+        event_type = COALESCE(EXCLUDED.event_type, np_sports_events.event_type),
         status = CASE
-          WHEN sports_events.is_locked THEN sports_events.status
-          ELSE COALESCE(EXCLUDED.status, sports_events.status)
+          WHEN np_sports_events.is_locked THEN np_sports_events.status
+          ELSE COALESCE(EXCLUDED.status, np_sports_events.status)
         END,
         scheduled_at = CASE
-          WHEN sports_events.is_locked THEN sports_events.scheduled_at
-          ELSE COALESCE(EXCLUDED.scheduled_at, sports_events.scheduled_at)
+          WHEN np_sports_events.is_locked THEN np_sports_events.scheduled_at
+          ELSE COALESCE(EXCLUDED.scheduled_at, np_sports_events.scheduled_at)
         END,
-        started_at = COALESCE(EXCLUDED.started_at, sports_events.started_at),
-        ended_at = COALESCE(EXCLUDED.ended_at, sports_events.ended_at),
-        venue_name = COALESCE(EXCLUDED.venue_name, sports_events.venue_name),
-        venue_city = COALESCE(EXCLUDED.venue_city, sports_events.venue_city),
-        venue_timezone = COALESCE(EXCLUDED.venue_timezone, sports_events.venue_timezone),
-        broadcast_network = COALESCE(EXCLUDED.broadcast_network, sports_events.broadcast_network),
-        broadcast_channel = COALESCE(EXCLUDED.broadcast_channel, sports_events.broadcast_channel),
-        season = COALESCE(EXCLUDED.season, sports_events.season),
-        season_type = COALESCE(EXCLUDED.season_type, sports_events.season_type),
-        week = COALESCE(EXCLUDED.week, sports_events.week),
-        home_score = COALESCE(EXCLUDED.home_score, sports_events.home_score),
-        away_score = COALESCE(EXCLUDED.away_score, sports_events.away_score),
-        period = COALESCE(EXCLUDED.period, sports_events.period),
-        clock = COALESCE(EXCLUDED.clock, sports_events.clock),
-        is_final = COALESCE(EXCLUDED.is_final, sports_events.is_final),
+        started_at = COALESCE(EXCLUDED.started_at, np_sports_events.started_at),
+        ended_at = COALESCE(EXCLUDED.ended_at, np_sports_events.ended_at),
+        venue_name = COALESCE(EXCLUDED.venue_name, np_sports_events.venue_name),
+        venue_city = COALESCE(EXCLUDED.venue_city, np_sports_events.venue_city),
+        venue_timezone = COALESCE(EXCLUDED.venue_timezone, np_sports_events.venue_timezone),
+        broadcast_network = COALESCE(EXCLUDED.broadcast_network, np_sports_events.broadcast_network),
+        broadcast_channel = COALESCE(EXCLUDED.broadcast_channel, np_sports_events.broadcast_channel),
+        season = COALESCE(EXCLUDED.season, np_sports_events.season),
+        season_type = COALESCE(EXCLUDED.season_type, np_sports_events.season_type),
+        week = COALESCE(EXCLUDED.week, np_sports_events.week),
+        home_score = COALESCE(EXCLUDED.home_score, np_sports_events.home_score),
+        away_score = COALESCE(EXCLUDED.away_score, np_sports_events.away_score),
+        period = COALESCE(EXCLUDED.period, np_sports_events.period),
+        clock = COALESCE(EXCLUDED.clock, np_sports_events.clock),
+        is_final = COALESCE(EXCLUDED.is_final, np_sports_events.is_final),
         metadata = EXCLUDED.metadata,
         updated_at = NOW(),
         synced_at = NOW()
@@ -581,10 +633,10 @@ export class SportsDatabase {
       `SELECT e.*, l.name AS league_name, l.sport,
               ht.name AS home_team_name, ht.abbreviation AS home_abbr,
               at2.name AS away_team_name, at2.abbreviation AS away_abbr
-       FROM sports_events e
-       LEFT JOIN sports_leagues l ON e.league_id = l.id
-       LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-       LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+       FROM np_sports_events e
+       LEFT JOIN np_sports_leagues l ON e.league_id = l.id
+       LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+       LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
        WHERE e.id = $1 AND e.source_account_id = $2 AND e.deleted_at IS NULL`,
       [id, this.sourceAccountId]
     );
@@ -643,7 +695,7 @@ export class SportsDatabase {
     const whereClause = conditions.join(' AND ');
 
     const countResult = await this.query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM sports_events e WHERE ${whereClause}`,
+      `SELECT COUNT(*) as count FROM np_sports_events e WHERE ${whereClause}`,
       params
     );
     const total = countResult.rows[0]?.count ?? 0;
@@ -657,10 +709,10 @@ export class SportsDatabase {
       `SELECT e.*, l.name AS league_name, l.sport,
               ht.name AS home_team_name, ht.abbreviation AS home_abbr,
               at2.name AS away_team_name, at2.abbreviation AS away_abbr
-       FROM sports_events e
-       LEFT JOIN sports_leagues l ON e.league_id = l.id
-       LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-       LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+       FROM np_sports_events e
+       LEFT JOIN np_sports_leagues l ON e.league_id = l.id
+       LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+       LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
        WHERE ${whereClause}
        ORDER BY e.scheduled_at ASC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -696,10 +748,10 @@ export class SportsDatabase {
       `SELECT e.*, l.name AS league_name, l.sport,
               ht.name AS home_team_name, ht.abbreviation AS home_abbr,
               at2.name AS away_team_name, at2.abbreviation AS away_abbr
-       FROM sports_events e
-       LEFT JOIN sports_leagues l ON e.league_id = l.id
-       LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-       LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+       FROM np_sports_events e
+       LEFT JOIN np_sports_leagues l ON e.league_id = l.id
+       LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+       LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
        WHERE ${conditions.join(' AND ')}
        ORDER BY e.scheduled_at ASC
        LIMIT $${params.length}`,
@@ -726,10 +778,10 @@ export class SportsDatabase {
       `SELECT e.*, l.name AS league_name, l.sport,
               ht.name AS home_team_name, ht.abbreviation AS home_abbr,
               at2.name AS away_team_name, at2.abbreviation AS away_abbr
-       FROM sports_events e
-       LEFT JOIN sports_leagues l ON e.league_id = l.id
-       LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-       LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+       FROM np_sports_events e
+       LEFT JOIN np_sports_leagues l ON e.league_id = l.id
+       LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+       LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
        WHERE ${conditions.join(' AND ')}
        ORDER BY e.started_at ASC`,
       params
@@ -756,10 +808,10 @@ export class SportsDatabase {
       `SELECT e.*, l.name AS league_name, l.sport,
               ht.name AS home_team_name, ht.abbreviation AS home_abbr,
               at2.name AS away_team_name, at2.abbreviation AS away_abbr
-       FROM sports_events e
-       LEFT JOIN sports_leagues l ON e.league_id = l.id
-       LEFT JOIN sports_teams ht ON e.home_team_id = ht.id
-       LEFT JOIN sports_teams at2 ON e.away_team_id = at2.id
+       FROM np_sports_events e
+       LEFT JOIN np_sports_leagues l ON e.league_id = l.id
+       LEFT JOIN np_sports_teams ht ON e.home_team_id = ht.id
+       LEFT JOIN np_sports_teams at2 ON e.away_team_id = at2.id
        WHERE ${conditions.join(' AND ')}
        ORDER BY e.scheduled_at ASC`,
       params
@@ -770,7 +822,7 @@ export class SportsDatabase {
 
   async lockEvent(id: string, reason: string): Promise<EventRecord | null> {
     const result = await this.query<EventRecord>(
-      `UPDATE sports_events
+      `UPDATE np_sports_events
        SET is_locked = TRUE, lock_reason = $3, locked_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -781,7 +833,7 @@ export class SportsDatabase {
 
   async unlockEvent(id: string): Promise<EventRecord | null> {
     const result = await this.query<EventRecord>(
-      `UPDATE sports_events
+      `UPDATE np_sports_events
        SET is_locked = FALSE, lock_reason = NULL, locked_at = NULL, updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -813,7 +865,7 @@ export class SportsDatabase {
     }
 
     const result = await this.query<EventRecord>(
-      `UPDATE sports_events
+      `UPDATE np_sports_events
        SET ${setParts.join(', ')}
        WHERE id = $1 AND source_account_id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -825,7 +877,7 @@ export class SportsDatabase {
 
   async markRecordingTriggered(id: string): Promise<EventRecord | null> {
     const result = await this.query<EventRecord>(
-      `UPDATE sports_events
+      `UPDATE np_sports_events
        SET recording_trigger_sent = TRUE, recording_trigger_sent_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -836,7 +888,7 @@ export class SportsDatabase {
 
   async softDeleteEvent(id: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `UPDATE sports_events SET deleted_at = NOW(), updated_at = NOW()
+      `UPDATE np_sports_events SET deleted_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2 AND deleted_at IS NULL`,
       [id, this.sourceAccountId]
     );
@@ -963,6 +1015,120 @@ export class SportsDatabase {
   }
 
   // =========================================================================
+  // Standings
+  // =========================================================================
+
+  async getStandings(leagueId: string, season?: string): Promise<StandingRecord[]> {
+    const conditions: string[] = [
+      's.source_account_id = $1',
+      's.league_id = $2',
+    ];
+    const params: unknown[] = [this.sourceAccountId, leagueId];
+
+    if (season) {
+      params.push(season);
+      conditions.push(`s.season = $${params.length}`);
+    } else {
+      // Default to latest season
+      conditions.push(
+        `s.season = (SELECT MAX(season) FROM np_sports_standings WHERE source_account_id = $1 AND league_id = $2)`
+      );
+    }
+
+    const result = await this.query<StandingRecord>(
+      `SELECT s.*, t.name AS team_name, t.abbreviation AS team_abbr, t.logo_url AS team_logo
+       FROM np_sports_standings s
+       LEFT JOIN np_sports_teams t ON s.team_id = t.id
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY s.points DESC, s.wins DESC, s.rank ASC`,
+      params
+    );
+    return result.rows;
+  }
+
+  async upsertStanding(
+    leagueId: string,
+    teamId: string,
+    season: string,
+    data: { wins: number; losses: number; draws: number; points: number; rank: number }
+  ): Promise<StandingRecord> {
+    const result = await this.query<StandingRecord>(
+      `INSERT INTO np_sports_standings (
+        source_account_id, league_id, team_id, season,
+        wins, losses, draws, points, rank, synced_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      ON CONFLICT (source_account_id, league_id, team_id, season)
+      DO UPDATE SET
+        wins = EXCLUDED.wins,
+        losses = EXCLUDED.losses,
+        draws = EXCLUDED.draws,
+        points = EXCLUDED.points,
+        rank = EXCLUDED.rank,
+        synced_at = NOW()
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        leagueId,
+        teamId,
+        season,
+        data.wins,
+        data.losses,
+        data.draws,
+        data.points,
+        data.rank,
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // =========================================================================
+  // Favorites
+  // =========================================================================
+
+  async listFavorites(userId: string): Promise<FavoriteTeamRecord[]> {
+    const result = await this.query<FavoriteTeamRecord>(
+      `SELECT f.*, t.name AS team_name, t.abbreviation AS team_abbr, t.logo_url AS team_logo,
+              l.name AS league_name, l.sport
+       FROM np_np_sports_favorites f
+       LEFT JOIN np_sports_teams t ON f.team_id = t.id
+       LEFT JOIN np_sports_leagues l ON t.league_id = l.id
+       WHERE f.source_account_id = $1 AND f.user_id = $2
+       ORDER BY f.created_at DESC`,
+      [this.sourceAccountId, userId]
+    );
+    return result.rows;
+  }
+
+  async addFavorite(
+    userId: string,
+    teamId: string,
+    notifyLive = true,
+    autoRecord = false
+  ): Promise<FavoriteTeamRecord> {
+    const result = await this.query<FavoriteTeamRecord>(
+      `INSERT INTO np_np_sports_favorites (
+        source_account_id, user_id, team_id, notify_live, auto_record
+      ) VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (source_account_id, user_id, team_id)
+      DO UPDATE SET
+        notify_live = EXCLUDED.notify_live,
+        auto_record = EXCLUDED.auto_record
+      RETURNING *`,
+      [this.sourceAccountId, userId, teamId, notifyLive, autoRecord]
+    );
+    return result.rows[0];
+  }
+
+  async removeFavorite(userId: string, teamId: string): Promise<boolean> {
+    const rowCount = await this.execute(
+      `DELETE FROM np_np_sports_favorites
+       WHERE source_account_id = $1 AND user_id = $2 AND team_id = $3`,
+      [this.sourceAccountId, userId, teamId]
+    );
+    return rowCount > 0;
+  }
+
+  // =========================================================================
   // Statistics
   // =========================================================================
 
@@ -975,22 +1141,22 @@ export class SportsDatabase {
       live_events: number;
     }>(
       `WITH league_count AS (
-        SELECT COUNT(*) as count FROM sports_leagues WHERE source_account_id = $1
+        SELECT COUNT(*) as count FROM np_sports_leagues WHERE source_account_id = $1
       ),
       team_count AS (
-        SELECT COUNT(*) as count FROM sports_teams WHERE source_account_id = $1
+        SELECT COUNT(*) as count FROM np_sports_teams WHERE source_account_id = $1
       ),
       event_count AS (
-        SELECT COUNT(*) as count FROM sports_events WHERE source_account_id = $1 AND deleted_at IS NULL
+        SELECT COUNT(*) as count FROM np_sports_events WHERE source_account_id = $1 AND deleted_at IS NULL
       ),
       upcoming AS (
-        SELECT COUNT(*) as count FROM sports_events
+        SELECT COUNT(*) as count FROM np_sports_events
         WHERE source_account_id = $1 AND status = 'scheduled'
           AND scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
           AND deleted_at IS NULL
       ),
       live AS (
-        SELECT COUNT(*) as count FROM sports_events
+        SELECT COUNT(*) as count FROM np_sports_events
         WHERE source_account_id = $1 AND status IN ('in_progress', 'halftime', 'delayed')
           AND deleted_at IS NULL
       )
@@ -1012,7 +1178,7 @@ export class SportsDatabase {
 
     // By provider counts
     const providerResult = await this.query<{ provider: string; count: number }>(
-      `SELECT provider, COUNT(*) as count FROM sports_events
+      `SELECT provider, COUNT(*) as count FROM np_sports_events
        WHERE source_account_id = $1 AND deleted_at IS NULL
        GROUP BY provider`,
       [this.sourceAccountId]
@@ -1041,13 +1207,13 @@ export class SportsDatabase {
 
     const providerDetailResult = await this.query<{ provider: string; leagues: number; teams: number; events: number }>(
       `WITH pl AS (
-        SELECT provider, COUNT(*) as count FROM sports_leagues WHERE source_account_id = $1 GROUP BY provider
+        SELECT provider, COUNT(*) as count FROM np_sports_leagues WHERE source_account_id = $1 GROUP BY provider
       ),
       pt AS (
-        SELECT provider, COUNT(*) as count FROM sports_teams WHERE source_account_id = $1 GROUP BY provider
+        SELECT provider, COUNT(*) as count FROM np_sports_teams WHERE source_account_id = $1 GROUP BY provider
       ),
       pe AS (
-        SELECT provider, COUNT(*) as count FROM sports_events WHERE source_account_id = $1 AND deleted_at IS NULL GROUP BY provider
+        SELECT provider, COUNT(*) as count FROM np_sports_events WHERE source_account_id = $1 AND deleted_at IS NULL GROUP BY provider
       )
       SELECT
         COALESCE(pl.provider, pt.provider, pe.provider) as provider,

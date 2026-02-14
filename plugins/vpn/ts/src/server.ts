@@ -54,6 +54,60 @@ export async function createServer(db: VPNDatabase) {
   });
 
   // ============================================================================
+  // nTV Health Endpoint (leak test info)
+  // ============================================================================
+
+  /**
+   * GET /api/health
+   * Returns VPN connection status and last leak test results.
+   * Used by nTV to verify VPN integrity before streaming operations.
+   */
+  fastify.get('/api/health', async () => {
+    const connection = await db.getActiveConnection();
+    const vpnConnected = !!connection;
+
+    // Default response when no leak test data is available
+    let dnsLeak = false;
+    let webrtcLeak = false;
+    let ipv6Leak = false;
+    let lastTest: string | null = null;
+
+    if (connection) {
+      // Fetch the most recent comprehensive leak test for the active connection
+      const result = await db.query<{
+        passed: boolean;
+        details: Record<string, any>;
+        tested_at: Date;
+      }>(
+        `SELECT passed, details, tested_at FROM vpn_leak_tests
+         WHERE connection_id = $1
+         ORDER BY tested_at DESC LIMIT 1`,
+        [connection.id]
+      );
+
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
+        lastTest = row.tested_at.toISOString();
+
+        // Parse individual test results from the stored details
+        const details = row.details || {};
+        const tests = details.tests || {};
+        dnsLeak = tests.dns ? !tests.dns.passed : false;
+        webrtcLeak = tests.webrtc ? !tests.webrtc.passed : false;
+        ipv6Leak = tests.ipv6 ? !tests.ipv6.passed : false;
+      }
+    }
+
+    return {
+      vpn_connected: vpnConnected,
+      dns_leak: dnsLeak,
+      webrtc_leak: webrtcLeak,
+      ipv6_leak: ipv6Leak,
+      last_test: lastTest,
+    };
+  });
+
+  // ============================================================================
   // Provider Endpoints
   // ============================================================================
 

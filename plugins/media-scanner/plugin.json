@@ -1,0 +1,84 @@
+{
+  "name": "media-scanner",
+  "version": "1.0.0",
+  "description": "Library scanning, filename parsing, FFprobe media analysis, TMDB metadata matching, and MeiliSearch indexing",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/media-scanner",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 5003,
+  "category": "media",
+  "tags": [
+    "media",
+    "scanner",
+    "ffprobe",
+    "parser",
+    "tmdb",
+    "meilisearch",
+    "library",
+    "metadata"
+  ],
+  "tables": [
+    "np_mscan_scans",
+    "np_mscan_media_files"
+  ],
+  "webhooks": {},
+  "actions": {
+    "scan": "Scan media directories for new files",
+    "parse": "Parse a media filename into structured metadata",
+    "probe": "Run FFprobe on a media file for technical details",
+    "match": "Match a title against TMDB metadata",
+    "index": "Index media items into MeiliSearch",
+    "search": "Search indexed media via MeiliSearch",
+    "stats": "Show library statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "MEDIA_SCANNER_PORT",
+      "MEDIA_SCANNER_HOST",
+      "MEILISEARCH_URL",
+      "MEILISEARCH_KEY",
+      "TMDB_API_KEY",
+      "MEDIA_LIBRARY_PATHS",
+      "SCAN_INTERVAL_HOURS",
+      "MEDIA_SCANNER_API_KEY"
+    ]
+  },
+  "config": {
+    "syncInterval": 86400,
+    "webhookPath": null,
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "api.themoviedb.org",
+      "meilisearch"
+    ],
+    "filesystem": [
+      "read",
+      "logs"
+    ]
+  }
+}

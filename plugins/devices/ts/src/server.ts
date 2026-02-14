@@ -18,6 +18,10 @@ import type {
   StartIngestRequest,
   IngestHeartbeatRequest,
   RevokeRequest,
+  CreateBootstrapTokenRequest,
+  EnrollDeviceRequest,
+  DeviceHeartbeatRequest,
+  SendCommandRequest,
   DeviceStatus,
   DeviceType,
   TrustLevel,
@@ -496,6 +500,275 @@ export async function createServer(config?: Partial<Config>) {
     });
 
     return { ok: true, session };
+  });
+
+  // =========================================================================
+  // nTV v1 API Endpoints
+  // =========================================================================
+
+  // POST /api/v1/bootstrap-tokens - Create a bootstrap token for device enrollment
+  app.post('/api/v1/bootstrap-tokens', async (request, reply) => {
+    try {
+      const body = request.body as CreateBootstrapTokenRequest;
+      const appId = getAppId(request);
+
+      if (!body.name) {
+        return reply.status(400).send({ error: 'name is required' });
+      }
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + fullConfig.bootstrapTokenTtl * 1000);
+      const capabilities = body.capabilities ?? [];
+
+      const record = await scopedDb(request).createBootstrapToken(
+        body.name,
+        token,
+        capabilities,
+        expiresAt
+      );
+
+      await scopedDb(request).createAuditEntry(appId, 'bootstrap_token.created', undefined, undefined, {
+        token_id: record.id,
+        name: body.name,
+      });
+
+      return reply.status(201).send({
+        token: record.token,
+        expires_at: record.expires_at,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Create bootstrap token failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // POST /api/v1/devices/enroll - Enroll a device using bootstrap token
+  app.post('/api/v1/devices/enroll', async (request, reply) => {
+    try {
+      const body = request.body as EnrollDeviceRequest;
+      const appId = getAppId(request);
+
+      if (!body.token || !body.name || !body.public_key) {
+        return reply.status(400).send({ error: 'token, name, and public_key are required' });
+      }
+
+      // Validate the bootstrap token
+      const bootstrapToken = await scopedDb(request).getBootstrapToken(body.token);
+
+      if (!bootstrapToken) {
+        return reply.status(401).send({ error: 'Invalid bootstrap token' });
+      }
+
+      if (bootstrapToken.used) {
+        return reply.status(410).send({ error: 'Bootstrap token has already been used' });
+      }
+
+      if (new Date(bootstrapToken.expires_at) < new Date()) {
+        return reply.status(410).send({ error: 'Bootstrap token has expired' });
+      }
+
+      // Create the device record
+      const capabilities = bootstrapToken.capabilities ?? [];
+      const device = await scopedDb(request).enrollDeviceWithToken(
+        appId,
+        body.name,
+        body.public_key,
+        capabilities
+      );
+
+      // Mark the token as used
+      await scopedDb(request).markBootstrapTokenUsed(body.token, device.id);
+
+      // Audit log
+      await scopedDb(request).createAuditEntry(appId, 'device.enrolled_via_token', device.id, undefined, {
+        token_name: bootstrapToken.name,
+        device_name: body.name,
+      });
+
+      return reply.status(201).send(device);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Enroll device via token failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // POST /api/v1/devices/:id/heartbeat - Device heartbeat with telemetry
+  app.post('/api/v1/devices/:id/heartbeat', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const body = (request.body as DeviceHeartbeatRequest) ?? {};
+      const appId = getAppId(request);
+      const ip = request.ip;
+
+      // Update device heartbeat with signal quality check
+      const device = await scopedDb(request).updateDeviceHeartbeatWithTelemetry(
+        id,
+        ip,
+        body.signal_quality
+      );
+
+      if (!device) {
+        return reply.status(404).send({ error: 'Device not found' });
+      }
+
+      // Store telemetry data if provided
+      const telemetryData: Record<string, unknown> = {};
+      if (body.cpu_usage !== undefined) telemetryData.cpu_usage = body.cpu_usage;
+      if (body.memory_usage !== undefined) telemetryData.memory_usage = body.memory_usage;
+      if (body.temperature !== undefined) telemetryData.temperature = body.temperature;
+      if (body.disk_usage !== undefined) telemetryData.disk_usage = body.disk_usage;
+      if (body.signal_quality !== undefined) telemetryData.signal_quality = body.signal_quality;
+
+      if (Object.keys(telemetryData).length > 0) {
+        await scopedDb(request).submitTelemetry(appId, id, {
+          telemetry_type: 'heartbeat',
+          data: telemetryData,
+        });
+      }
+
+      // Compute status for response
+      let status: 'online' | 'degraded' = 'online';
+      if (body.signal_quality !== undefined && body.signal_quality < 0.5) {
+        status = 'degraded';
+      }
+
+      return {
+        ok: true,
+        status,
+        next_heartbeat_seconds: fullConfig.heartbeatInterval,
+        offline_timeout_seconds: fullConfig.heartbeatOfflineTimeout,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 heartbeat failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // POST /api/v1/devices/:id/commands - Send command to device
+  app.post('/api/v1/devices/:id/commands', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const body = request.body as SendCommandRequest;
+      const appId = getAppId(request);
+
+      if (!body.type) {
+        return reply.status(400).send({ error: 'type is required' });
+      }
+
+      const validTypes = ['SCAN_CHANNELS', 'START_EVENT', 'STOP_EVENT', 'HEALTH', 'UPDATE'];
+      if (!validTypes.includes(body.type)) {
+        return reply.status(400).send({
+          error: `Invalid command type. Must be one of: ${validTypes.join(', ')}`,
+        });
+      }
+
+      // Verify device exists
+      const device = await scopedDb(request).getDevice(id);
+      if (!device) {
+        return reply.status(404).send({ error: 'Device not found' });
+      }
+
+      const timeout = fullConfig.commandDefaultTimeout;
+      const command = await scopedDb(request).dispatchCommand(appId, id, {
+        device_id: id,
+        command_type: body.type,
+        payload: body.payload,
+      }, timeout);
+
+      // Audit log
+      await scopedDb(request).createAuditEntry(appId, 'command.dispatched', id, undefined, {
+        command_id: command.id,
+        command_type: body.type,
+      });
+
+      return reply.status(201).send({ commandId: command.id });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 send command failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // GET /api/v1/devices - List all devices for the account
+  app.get('/api/v1/devices', async (request) => {
+    const { status, type, trust_level, limit = 100, offset = 0 } = request.query as {
+      status?: DeviceStatus;
+      type?: DeviceType;
+      trust_level?: TrustLevel;
+      limit?: number;
+      offset?: number;
+    };
+    const appId = getAppId(request);
+    const devices = await scopedDb(request).listDevices(appId, status, type, trust_level, limit, offset);
+
+    // Augment each device with computed online/offline/degraded status
+    const now = Date.now();
+    const timeoutMs = fullConfig.heartbeatOfflineTimeout * 1000;
+    const data = devices.map(d => {
+      let heartbeatStatus: 'online' | 'offline' | 'degraded' = 'offline';
+      if (d.last_seen_at && (now - new Date(d.last_seen_at as string | Date).getTime()) < timeoutMs) {
+        const meta = d.metadata as Record<string, unknown> | undefined;
+        heartbeatStatus = meta?.heartbeat_status === 'degraded' ? 'degraded' : 'online';
+      }
+      return { ...d, heartbeat_status: heartbeatStatus };
+    });
+
+    return { data, limit, offset };
+  });
+
+  // GET /api/v1/devices/:id - Get single device
+  app.get('/api/v1/devices/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const device = await scopedDb(request).getDevice(id);
+
+    if (!device) {
+      return reply.status(404).send({ error: 'Device not found' });
+    }
+
+    // Compute heartbeat status
+    const now = Date.now();
+    const timeoutMs = fullConfig.heartbeatOfflineTimeout * 1000;
+    let heartbeatStatus: 'online' | 'offline' | 'degraded' = 'offline';
+    if (device.last_seen_at && (now - new Date(device.last_seen_at as string | Date).getTime()) < timeoutMs) {
+      const meta = device.metadata as Record<string, unknown> | undefined;
+      heartbeatStatus = meta?.heartbeat_status === 'degraded' ? 'degraded' : 'online';
+    }
+
+    return { ...device, heartbeat_status: heartbeatStatus };
+  });
+
+  // DELETE /api/v1/devices/:id - Revoke/delete a device
+  app.delete('/api/v1/devices/:id', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const appId = getAppId(request);
+
+      const device = await scopedDb(request).getDevice(id);
+      if (!device) {
+        return reply.status(404).send({ error: 'Device not found' });
+      }
+
+      // Audit log before deletion
+      await scopedDb(request).createAuditEntry(appId, 'device.deleted', id, undefined, {
+        device_id: device.device_id,
+        name: device.name,
+      });
+
+      const deleted = await scopedDb(request).deleteDevice(id);
+
+      if (!deleted) {
+        return reply.status(500).send({ error: 'Failed to delete device' });
+      }
+
+      return reply.status(204).send();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 delete device failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
   });
 
   // =========================================================================

@@ -4,11 +4,14 @@
 
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import Parser from 'rss-parser';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext, loadSecurityConfig } from '@nself/plugin-utils';
 import { ContentAcquisitionDatabase } from './database.js';
 import { RSSFeedMonitor } from './rss-monitor.js';
 import { PipelineOrchestrator } from './pipeline.js';
-import type { ContentAcquisitionConfig, PipelineTriggerRequest } from './types.js';
+import { DownloadStateMachine } from './state-machine.js';
+import { listQualityPresets } from './quality-profiles.js';
+import type { ContentAcquisitionConfig, PipelineTriggerRequest, DownloadState } from './types.js';
 
 const logger = createLogger('content-acquisition:server');
 
@@ -28,6 +31,19 @@ const subscriptionBodySchema = {
   additionalProperties: false,
 };
 
+const subscriptionUpdateBodySchema = {
+  type: 'object' as const,
+  properties: {
+    contentType: { type: 'string', enum: ['tv_show', 'movie_collection', 'artist', 'podcast'] },
+    contentId: { type: 'string' },
+    contentName: { type: 'string', minLength: 1, maxLength: 255 },
+    qualityProfileId: { type: 'string', format: 'uuid' },
+    enabled: { type: 'boolean' },
+    autoUpgrade: { type: 'boolean' },
+  },
+  additionalProperties: false,
+};
+
 const feedBodySchema = {
   type: 'object' as const,
   required: ['name', 'url', 'feedType'],
@@ -35,6 +51,27 @@ const feedBodySchema = {
     name: { type: 'string', minLength: 1, maxLength: 255 },
     url: { type: 'string', minLength: 1, format: 'uri' },
     feedType: { type: 'string', enum: ['tv_shows', 'movies', 'anime', 'music'] },
+  },
+  additionalProperties: false,
+};
+
+const feedUpdateBodySchema = {
+  type: 'object' as const,
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 255 },
+    url: { type: 'string', minLength: 1, format: 'uri' },
+    feedType: { type: 'string', enum: ['tv_shows', 'movies', 'anime', 'music'] },
+    enabled: { type: 'boolean' },
+    checkIntervalMinutes: { type: 'integer', minimum: 5, maximum: 1440 },
+  },
+  additionalProperties: false,
+};
+
+const feedValidateBodySchema = {
+  type: 'object' as const,
+  required: ['url'],
+  properties: {
+    url: { type: 'string', minLength: 1, format: 'uri' },
   },
   additionalProperties: false,
 };
@@ -79,6 +116,82 @@ const pipelineTriggerBodySchema = {
   additionalProperties: false,
 };
 
+const movieBodySchema = {
+  type: 'object' as const,
+  required: ['title'],
+  properties: {
+    title: { type: 'string', minLength: 1, maxLength: 500 },
+    tmdbId: { type: 'integer' },
+    qualityProfile: { type: 'string', enum: ['minimal', 'balanced', '4k_premium'] },
+    autoDownload: { type: 'boolean' },
+    autoUpgrade: { type: 'boolean' },
+  },
+  additionalProperties: false,
+};
+
+const movieUpdateBodySchema = {
+  type: 'object' as const,
+  properties: {
+    title: { type: 'string', minLength: 1, maxLength: 500 },
+    tmdbId: { type: 'integer' },
+    qualityProfile: { type: 'string', enum: ['minimal', 'balanced', '4k_premium'] },
+    autoDownload: { type: 'boolean' },
+    autoUpgrade: { type: 'boolean' },
+    status: { type: 'string', enum: ['scheduled', 'searching', 'downloading', 'downloaded', 'failed'] },
+  },
+  additionalProperties: false,
+};
+
+const downloadBodySchema = {
+  type: 'object' as const,
+  required: ['contentType', 'title'],
+  properties: {
+    contentType: { type: 'string', minLength: 1, maxLength: 100 },
+    title: { type: 'string', minLength: 1, maxLength: 500 },
+    magnetUri: { type: 'string', maxLength: 2048 },
+    qualityProfile: { type: 'string', enum: ['minimal', 'balanced', '4k_premium'] },
+    showId: { type: 'string', format: 'uuid' },
+    seasonNumber: { type: 'integer', minimum: 0 },
+    episodeNumber: { type: 'integer', minimum: 0 },
+    tmdbId: { type: 'integer' },
+  },
+  additionalProperties: false,
+};
+
+const ruleBodySchema = {
+  type: 'object' as const,
+  required: ['name', 'conditions', 'action'],
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 255 },
+    conditions: { type: 'object' },
+    action: { type: 'string', enum: ['auto-download', 'notify', 'skip'] },
+    priority: { type: 'integer', minimum: 0, maximum: 100 },
+    enabled: { type: 'boolean' },
+  },
+  additionalProperties: false,
+};
+
+const ruleUpdateBodySchema = {
+  type: 'object' as const,
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 255 },
+    conditions: { type: 'object' },
+    action: { type: 'string', enum: ['auto-download', 'notify', 'skip'] },
+    priority: { type: 'integer', minimum: 0, maximum: 100 },
+    enabled: { type: 'boolean' },
+  },
+  additionalProperties: false,
+};
+
+const ruleTestBodySchema = {
+  type: 'object' as const,
+  required: ['sample'],
+  properties: {
+    sample: { type: 'object' },
+  },
+  additionalProperties: false,
+};
+
 // ============================================================================
 // Server
 // ============================================================================
@@ -88,12 +201,14 @@ export class ContentAcquisitionServer {
   private database: ContentAcquisitionDatabase;
   private config: ContentAcquisitionConfig;
   private pipeline: PipelineOrchestrator;
+  private stateMachine: DownloadStateMachine;
 
   constructor(config: ContentAcquisitionConfig, database: ContentAcquisitionDatabase) {
     this.config = config;
     this.database = database;
     this.fastify = Fastify({ logger: false });
     this.pipeline = new PipelineOrchestrator(database, config);
+    this.stateMachine = new DownloadStateMachine(database.getPool());
   }
 
   async initialize(): Promise<void> {
@@ -151,6 +266,40 @@ export class ContentAcquisitionServer {
       return { subscriptions: subs };
     });
 
+    this.fastify.get('/v1/subscriptions/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const sub = await this.database.getSubscription(request.params.id);
+      if (!sub) {
+        return reply.status(404).send({ error: 'Subscription not found' });
+      }
+      return { subscription: sub };
+    });
+
+    this.fastify.put('/v1/subscriptions/:id', {
+      schema: { body: subscriptionUpdateBodySchema },
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: { contentType?: string; contentId?: string; contentName?: string; qualityProfileId?: string; enabled?: boolean; autoUpgrade?: boolean } }>, reply: FastifyReply) => {
+      const { contentType, contentId, contentName, qualityProfileId, enabled, autoUpgrade } = request.body;
+      const sub = await this.database.updateSubscription(request.params.id, {
+        subscription_type: contentType as any,
+        content_id: contentId,
+        content_name: contentName,
+        quality_profile_id: qualityProfileId,
+        enabled,
+        auto_upgrade: autoUpgrade,
+      });
+      if (!sub) {
+        return reply.status(404).send({ error: 'Subscription not found' });
+      }
+      return { subscription: sub };
+    });
+
+    this.fastify.delete('/v1/subscriptions/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const deleted = await this.database.deleteSubscription(request.params.id);
+      if (!deleted) {
+        return reply.status(404).send({ error: 'Subscription not found' });
+      }
+      return { deleted: true };
+    });
+
     // -----------------------------------------------------------------------
     // RSS Feeds
     // -----------------------------------------------------------------------
@@ -173,6 +322,56 @@ export class ContentAcquisitionServer {
       const { sourceAccountId } = getAppContext(request);
       const feeds = await this.database.listRSSFeeds(sourceAccountId);
       return { feeds };
+    });
+
+    this.fastify.post('/v1/feeds/validate', {
+      schema: { body: feedValidateBodySchema },
+    }, async (request: FastifyRequest<{ Body: { url: string } }>, reply: FastifyReply) => {
+      const { url } = request.body;
+      try {
+        const parser = new Parser();
+        const feedData = await parser.parseURL(url);
+        const latestDate = feedData.items[0]?.pubDate
+          ? new Date(feedData.items[0].pubDate).toISOString()
+          : undefined;
+        return {
+          valid: true,
+          title: feedData.title,
+          item_count: feedData.items.length,
+          latest_item_date: latestDate,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return reply.status(422).send({
+          valid: false,
+          error: `Failed to parse feed: ${message}`,
+        });
+      }
+    });
+
+    this.fastify.put('/v1/feeds/:id', {
+      schema: { body: feedUpdateBodySchema },
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: { name?: string; url?: string; feedType?: string; enabled?: boolean; checkIntervalMinutes?: number } }>, reply: FastifyReply) => {
+      const { name, url, feedType, enabled, checkIntervalMinutes } = request.body;
+      const feed = await this.database.updateRSSFeed(request.params.id, {
+        name,
+        url,
+        feed_type: feedType as any,
+        enabled,
+        check_interval_minutes: checkIntervalMinutes,
+      });
+      if (!feed) {
+        return reply.status(404).send({ error: 'Feed not found' });
+      }
+      return { feed };
+    });
+
+    this.fastify.delete('/v1/feeds/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const deleted = await this.database.deleteRSSFeed(request.params.id);
+      if (!deleted) {
+        return reply.status(404).send({ error: 'Feed not found' });
+      }
+      return { deleted: true };
     });
 
     // -----------------------------------------------------------------------
@@ -226,6 +425,312 @@ export class ContentAcquisitionServer {
         min_seeders: minSeeders || 1,
       });
       return { profile };
+    });
+
+    this.fastify.get('/v1/profiles/presets', async () => {
+      return { presets: listQualityPresets() };
+    });
+
+    // -----------------------------------------------------------------------
+    // Movies (monitoring)
+    // -----------------------------------------------------------------------
+
+    this.fastify.post('/v1/movies', {
+      schema: { body: movieBodySchema },
+    }, async (request: FastifyRequest<{ Body: { title: string; tmdbId?: number; qualityProfile?: string; autoDownload?: boolean; autoUpgrade?: boolean } }>, reply: FastifyReply) => {
+      const { sourceAccountId } = getAppContext(request);
+      const { title, tmdbId, qualityProfile, autoDownload, autoUpgrade } = request.body;
+      const movie = await this.database.createMovieMonitoring({
+        source_account_id: sourceAccountId,
+        user_id: sourceAccountId,
+        movie_title: title,
+        tmdb_id: tmdbId,
+        quality_profile: qualityProfile ?? 'balanced',
+        auto_download: autoDownload,
+        auto_upgrade: autoUpgrade,
+      });
+      return reply.status(201).send({ movie });
+    });
+
+    this.fastify.get('/v1/movies', async (request: FastifyRequest) => {
+      const { sourceAccountId } = getAppContext(request);
+      const movies = await this.database.listMovieMonitoring(sourceAccountId);
+      return { movies };
+    });
+
+    this.fastify.put('/v1/movies/:id', {
+      schema: { body: movieUpdateBodySchema },
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: { title?: string; tmdbId?: number; qualityProfile?: string; autoDownload?: boolean; autoUpgrade?: boolean; status?: string } }>, reply: FastifyReply) => {
+      const { title, tmdbId, qualityProfile, autoDownload, autoUpgrade, status } = request.body;
+      const movie = await this.database.updateMovieMonitoring(request.params.id, {
+        movie_title: title,
+        tmdb_id: tmdbId,
+        quality_profile: qualityProfile,
+        auto_download: autoDownload,
+        auto_upgrade: autoUpgrade,
+        status: status as any,
+      });
+      if (!movie) {
+        return reply.status(404).send({ error: 'Movie not found' });
+      }
+      return { movie };
+    });
+
+    this.fastify.delete('/v1/movies/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const deleted = await this.database.deleteMovieMonitoring(request.params.id);
+      if (!deleted) {
+        return reply.status(404).send({ error: 'Movie not found' });
+      }
+      return { deleted: true };
+    });
+
+    // -----------------------------------------------------------------------
+    // Downloads (state-machine driven)
+    // -----------------------------------------------------------------------
+
+    this.fastify.post('/v1/downloads', {
+      schema: { body: downloadBodySchema },
+    }, async (request: FastifyRequest<{ Body: { contentType: string; title: string; magnetUri?: string; qualityProfile?: string; showId?: string; seasonNumber?: number; episodeNumber?: number; tmdbId?: number } }>, reply: FastifyReply) => {
+      const { sourceAccountId } = getAppContext(request);
+      const { contentType, title, magnetUri, qualityProfile, showId, seasonNumber, episodeNumber, tmdbId } = request.body;
+      const download = await this.database.createDownload({
+        source_account_id: sourceAccountId,
+        user_id: sourceAccountId,
+        content_type: contentType,
+        title,
+        magnet_uri: magnetUri,
+        quality_profile: qualityProfile ?? 'balanced',
+        show_id: showId,
+        season_number: seasonNumber,
+        episode_number: episodeNumber,
+        tmdb_id: tmdbId,
+      });
+      // Add to download queue
+      await this.database.addToDownloadQueue(download.id);
+      return reply.status(201).send({ download });
+    });
+
+    this.fastify.get('/v1/downloads', async (request: FastifyRequest<{ Querystring: { status?: string } }>) => {
+      const { sourceAccountId } = getAppContext(request);
+      const { status } = request.query;
+      const downloads = await this.database.listDownloads(sourceAccountId, status);
+      return { downloads };
+    });
+
+    this.fastify.get('/v1/downloads/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const download = await this.database.getDownload(request.params.id);
+      if (!download) {
+        return reply.status(404).send({ error: 'Download not found' });
+      }
+      return { download };
+    });
+
+    this.fastify.get('/v1/downloads/:id/history', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const download = await this.database.getDownload(request.params.id);
+      if (!download) {
+        return reply.status(404).send({ error: 'Download not found' });
+      }
+      const history = await this.stateMachine.getHistory(request.params.id);
+      return { download_id: request.params.id, history };
+    });
+
+    this.fastify.delete('/v1/downloads/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const download = await this.database.getDownload(request.params.id);
+      if (!download) {
+        return reply.status(404).send({ error: 'Download not found' });
+      }
+      // Transition to cancelled if in an active state
+      const terminalStates: DownloadState[] = ['completed', 'failed', 'cancelled'];
+      if (!terminalStates.includes(download.state)) {
+        try {
+          await this.stateMachine.transition(request.params.id, 'cancelled', { reason: 'user_cancelled' });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.warn(`Could not transition download ${request.params.id} to cancelled: ${message}`);
+        }
+      }
+      await this.database.removeFromDownloadQueue(request.params.id);
+      return { cancelled: true, download_id: request.params.id };
+    });
+
+    this.fastify.patch('/v1/downloads/:id/pause', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const download = await this.database.getDownload(request.params.id);
+      if (!download) {
+        return reply.status(404).send({ error: 'Download not found' });
+      }
+      try {
+        await this.stateMachine.transition(request.params.id, 'paused', { reason: 'user_paused' });
+        const updated = await this.database.getDownload(request.params.id);
+        return { download: updated };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    });
+
+    this.fastify.patch('/v1/downloads/:id/resume', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const download = await this.database.getDownload(request.params.id);
+      if (!download) {
+        return reply.status(404).send({ error: 'Download not found' });
+      }
+      if (download.state !== 'paused') {
+        return reply.status(400).send({ error: 'Download is not paused' });
+      }
+      // Resume to the most sensible active state based on history
+      const history = await this.stateMachine.getHistory(request.params.id);
+      // Find the state before paused
+      let resumeState: DownloadState = 'downloading';
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].to_state === 'paused' && history[i].from_state) {
+          resumeState = history[i].from_state as DownloadState;
+          break;
+        }
+      }
+      try {
+        await this.stateMachine.transition(request.params.id, resumeState, { reason: 'user_resumed' });
+        const updated = await this.database.getDownload(request.params.id);
+        return { download: updated };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    });
+
+    this.fastify.post('/v1/downloads/:id/retry', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const download = await this.database.getDownload(request.params.id);
+      if (!download) {
+        return reply.status(404).send({ error: 'Download not found' });
+      }
+      if (download.state !== 'failed') {
+        return reply.status(400).send({ error: 'Only failed downloads can be retried' });
+      }
+      try {
+        await this.stateMachine.transition(request.params.id, 'created', { reason: 'user_retry' });
+        await this.database.updateDownloadFields(request.params.id, {
+          retry_count: download.retry_count + 1,
+          error_message: undefined,
+        });
+        // Re-add to download queue
+        await this.database.addToDownloadQueue(request.params.id);
+        const updated = await this.database.getDownload(request.params.id);
+        return { download: updated };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.status(400).send({ error: message });
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Download Rules
+    // -----------------------------------------------------------------------
+
+    this.fastify.post('/v1/rules', {
+      schema: { body: ruleBodySchema },
+    }, async (request: FastifyRequest<{ Body: { name: string; conditions: Record<string, unknown>; action: string; priority?: number; enabled?: boolean } }>, reply: FastifyReply) => {
+      const { sourceAccountId } = getAppContext(request);
+      const { name, conditions, action, priority, enabled } = request.body;
+      const rule = await this.database.createDownloadRule({
+        source_account_id: sourceAccountId,
+        user_id: sourceAccountId,
+        name,
+        conditions,
+        action: action as any,
+        priority,
+        enabled,
+      });
+      return reply.status(201).send({ rule });
+    });
+
+    this.fastify.get('/v1/rules', async (request: FastifyRequest) => {
+      const { sourceAccountId } = getAppContext(request);
+      const rules = await this.database.listDownloadRules(sourceAccountId);
+      return { rules };
+    });
+
+    this.fastify.put('/v1/rules/:id', {
+      schema: { body: ruleUpdateBodySchema },
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: { name?: string; conditions?: Record<string, unknown>; action?: string; priority?: number; enabled?: boolean } }>, reply: FastifyReply) => {
+      const { name, conditions, action, priority, enabled } = request.body;
+      const rule = await this.database.updateDownloadRule(request.params.id, {
+        name,
+        conditions,
+        action: action as any,
+        priority,
+        enabled,
+      });
+      if (!rule) {
+        return reply.status(404).send({ error: 'Rule not found' });
+      }
+      return { rule };
+    });
+
+    this.fastify.delete('/v1/rules/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const deleted = await this.database.deleteDownloadRule(request.params.id);
+      if (!deleted) {
+        return reply.status(404).send({ error: 'Rule not found' });
+      }
+      return { deleted: true };
+    });
+
+    this.fastify.post('/v1/rules/:id/test', {
+      schema: { body: ruleTestBodySchema },
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: { sample: Record<string, unknown> } }>, reply: FastifyReply) => {
+      const rule = await this.database.getDownloadRule(request.params.id);
+      if (!rule) {
+        return reply.status(404).send({ error: 'Rule not found' });
+      }
+      // Evaluate conditions against sample data
+      const { sample } = request.body;
+      const conditions = rule.conditions as Record<string, unknown>;
+      let matches = true;
+      const results: Array<{ field: string; expected: unknown; actual: unknown; match: boolean }> = [];
+
+      for (const [field, expected] of Object.entries(conditions)) {
+        const actual = sample[field];
+        let match = false;
+
+        if (typeof expected === 'string' && typeof actual === 'string') {
+          match = actual.toLowerCase().includes(expected.toLowerCase());
+        } else if (typeof expected === 'number' && typeof actual === 'number') {
+          match = actual >= expected;
+        } else if (typeof expected === 'boolean') {
+          match = actual === expected;
+        } else {
+          match = actual === expected;
+        }
+
+        results.push({ field, expected, actual, match });
+        if (!match) matches = false;
+      }
+
+      return {
+        rule_id: rule.id,
+        rule_name: rule.name,
+        action: rule.action,
+        matches,
+        results,
+      };
+    });
+
+    // -----------------------------------------------------------------------
+    // History
+    // -----------------------------------------------------------------------
+
+    this.fastify.get('/v1/history', async (request: FastifyRequest<{ Querystring: { days?: string } }>) => {
+      const { sourceAccountId } = getAppContext(request);
+      const days = request.query.days ? parseInt(request.query.days, 10) : 90;
+      const history = await this.database.listAcquisitionHistory(sourceAccountId, days);
+      return { history };
+    });
+
+    // -----------------------------------------------------------------------
+    // Dashboard
+    // -----------------------------------------------------------------------
+
+    this.fastify.get('/v1/dashboard', async (request: FastifyRequest) => {
+      const { sourceAccountId } = getAppContext(request);
+      const summary = await this.database.getDashboardSummary(sourceAccountId);
+      return { summary };
     });
 
     // -----------------------------------------------------------------------

@@ -12,6 +12,7 @@ import { VPNChecker } from './vpn-checker.js';
 import { TransmissionClient } from './clients/transmission.js';
 import { TorrentSearchAggregator } from './search/aggregator.js';
 import { SmartMatcher } from './matching/smart-matcher.js';
+import { getAllSources } from './sources/registry.js';
 import type { TorrentManagerConfig } from './types.js';
 
 const logger = createLogger('torrent-manager:server');
@@ -68,6 +69,8 @@ export class TorrentManagerServer {
     this.registerClientRoutes();
     this.registerDownloadRoutes();
     this.registerSearchRoutes();
+    this.registerSeedingRoutes();
+    this.registerSourceRoutes();
     this.registerStatsRoutes();
 
     logger.info('Server initialized');
@@ -476,6 +479,93 @@ export class TorrentManagerServer {
 
       const cache = await this.database.getSearchCache(query_hash);
       return { cache };
+    });
+  }
+
+  // ============================================================================
+  // Seeding Policy Routes
+  // ============================================================================
+
+  private registerSeedingRoutes(): void {
+    // Update seeding policy for a specific download
+    this.fastify.put('/v1/seeding/:id/policy', {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            ratio_limit: { type: 'number' },
+            time_limit_hours: { type: 'number' },
+            auto_remove: { type: 'boolean' },
+            keep_files: { type: 'boolean' },
+            favorite: { type: 'boolean' },
+          },
+        },
+      },
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const body = request.body as {
+        ratio_limit?: number;
+        time_limit_hours?: number;
+        auto_remove?: boolean;
+        keep_files?: boolean;
+        favorite?: boolean;
+      };
+
+      // Verify the download exists
+      const download = await this.database.getDownload(id);
+      if (!download) {
+        reply.code(404).send({ error: 'Download not found' });
+        return;
+      }
+
+      // Favorites must never be auto-removed
+      const isFavorite = body.favorite ?? false;
+      const autoRemove = isFavorite ? false : (body.auto_remove ?? true);
+
+      try {
+        const appContext = getAppContext(request as any);
+        await this.database.upsertDownloadSeedingPolicy(id, {
+          source_account_id: appContext?.accountId || 'primary',
+          ratio_limit: body.ratio_limit,
+          time_limit_hours: body.time_limit_hours,
+          auto_remove: autoRemove,
+          keep_files: body.keep_files,
+          favorite: isFavorite,
+        });
+
+        logger.info('Seeding policy updated', { download_id: id, favorite: isFavorite });
+
+        return { updated: true };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('Failed to update seeding policy', { error: message });
+        reply.code(500).send({ error: 'Failed to update seeding policy', details: message });
+      }
+    });
+
+    // Get seeding policy for a specific download
+    this.fastify.get('/v1/seeding/:id/policy', async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+
+      const policy = await this.database.getDownloadSeedingPolicy(id);
+      if (!policy) {
+        reply.code(404).send({ error: 'No seeding policy found for this download' });
+        return;
+      }
+
+      return { policy };
+    });
+  }
+
+  // ============================================================================
+  // Source Routes
+  // ============================================================================
+
+  private registerSourceRoutes(): void {
+    // List all torrent sources with lifecycle info
+    this.fastify.get('/v1/sources', async () => {
+      const sources = getAllSources();
+      return sources;
     });
   }
 

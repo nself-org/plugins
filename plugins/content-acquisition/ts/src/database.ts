@@ -4,7 +4,12 @@
 
 import { Pool, PoolClient } from 'pg';
 import { createLogger } from '@nself/plugin-utils';
-import type { QualityProfile, Subscription, RSSFeed, RSSFeedItem, ReleaseCalendarItem, AcquisitionQueueItem, PipelineRunRecord } from './types.js';
+import type {
+  QualityProfile, Subscription, RSSFeed, RSSFeedItem, ReleaseCalendarItem,
+  AcquisitionQueueItem, PipelineRunRecord, MovieMonitoring, Download,
+  DownloadStateTransition, DownloadRule, DownloadQueueItem, DashboardSummary,
+  AcquisitionHistoryItem,
+} from './types.js';
 
 const logger = createLogger('content-acquisition:database');
 
@@ -27,7 +32,7 @@ export class ContentAcquisitionDatabase {
 
   private async createSchema(client: PoolClient): Promise<void> {
     await client.query(`
-      CREATE TABLE IF NOT EXISTS quality_profiles (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_quality_profiles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         name VARCHAR(100) NOT NULL,
@@ -48,14 +53,14 @@ export class ContentAcquisitionDatabase {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS acquisition_subscriptions (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_acquisition_subscriptions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         subscription_type VARCHAR(50) NOT NULL,
         content_id VARCHAR(255),
         content_name VARCHAR(255) NOT NULL,
         content_metadata JSONB,
-        quality_profile_id UUID REFERENCES quality_profiles(id),
+        quality_profile_id UUID REFERENCES np_contentacquisition_quality_profiles(id),
         enabled BOOLEAN DEFAULT true,
         auto_upgrade BOOLEAN DEFAULT false,
         monitor_future_seasons BOOLEAN DEFAULT true,
@@ -69,9 +74,9 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_subscriptions_account
-        ON acquisition_subscriptions(source_account_id, enabled);
+        ON np_contentacquisition_acquisition_subscriptions(source_account_id, enabled);
 
-      CREATE TABLE IF NOT EXISTS rss_feeds (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_rss_feeds (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -79,7 +84,7 @@ export class ContentAcquisitionDatabase {
         feed_type VARCHAR(50) NOT NULL,
         enabled BOOLEAN DEFAULT true,
         check_interval_minutes INT DEFAULT 60,
-        quality_profile_id UUID REFERENCES quality_profiles(id),
+        quality_profile_id UUID REFERENCES np_contentacquisition_quality_profiles(id),
         last_check_at TIMESTAMPTZ,
         last_success_at TIMESTAMPTZ,
         last_error TEXT,
@@ -90,11 +95,11 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_rss_feeds_next_check
-        ON rss_feeds(next_check_at) WHERE enabled = true;
+        ON np_contentacquisition_rss_feeds(next_check_at) WHERE enabled = true;
 
-      CREATE TABLE IF NOT EXISTS rss_feed_items (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_rss_feed_items (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        feed_id UUID NOT NULL REFERENCES rss_feeds(id) ON DELETE CASCADE,
+        feed_id UUID NOT NULL REFERENCES np_contentacquisition_rss_feeds(id) ON DELETE CASCADE,
         source_account_id UUID NOT NULL,
         title VARCHAR(500) NOT NULL,
         link TEXT,
@@ -112,7 +117,7 @@ export class ContentAcquisitionDatabase {
         seeders INT,
         leechers INT,
         status VARCHAR(50) DEFAULT 'pending',
-        matched_subscription_id UUID REFERENCES acquisition_subscriptions(id),
+        matched_subscription_id UUID REFERENCES np_contentacquisition_acquisition_subscriptions(id),
         rejection_reason TEXT,
         download_id UUID,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -120,9 +125,9 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_rss_items_feed
-        ON rss_feed_items(feed_id, created_at DESC);
+        ON np_contentacquisition_rss_feed_items(feed_id, created_at DESC);
 
-      CREATE TABLE IF NOT EXISTS release_calendar (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_release_calendar (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         content_type VARCHAR(50) NOT NULL,
@@ -133,8 +138,8 @@ export class ContentAcquisitionDatabase {
         release_date DATE NOT NULL,
         digital_release_date DATE,
         physical_release_date DATE,
-        subscription_id UUID REFERENCES acquisition_subscriptions(id),
-        quality_profile_id UUID REFERENCES quality_profiles(id),
+        subscription_id UUID REFERENCES np_contentacquisition_acquisition_subscriptions(id),
+        quality_profile_id UUID REFERENCES np_contentacquisition_quality_profiles(id),
         monitoring_enabled BOOLEAN DEFAULT true,
         status VARCHAR(50) DEFAULT 'awaiting',
         first_search_at TIMESTAMPTZ,
@@ -145,7 +150,7 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_calendar_release_date
-        ON release_calendar(release_date, monitoring_enabled);
+        ON np_contentacquisition_release_calendar(release_date, monitoring_enabled);
 
       CREATE TABLE IF NOT EXISTS acquisition_queue (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -155,7 +160,7 @@ export class ContentAcquisitionDatabase {
         year INT,
         season INT,
         episode INT,
-        quality_profile_id UUID REFERENCES quality_profiles(id),
+        quality_profile_id UUID REFERENCES np_contentacquisition_quality_profiles(id),
         requested_by VARCHAR(100),
         request_source_id UUID,
         status VARCHAR(50) DEFAULT 'pending',
@@ -244,12 +249,122 @@ export class ContentAcquisitionDatabase {
       ALTER TABLE np_ca_pipeline_runs ADD COLUMN IF NOT EXISTS encoding_job_id TEXT;
       ALTER TABLE np_ca_pipeline_runs ADD COLUMN IF NOT EXISTS publishing_status TEXT DEFAULT 'pending';
       ALTER TABLE np_ca_pipeline_runs ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+
+      -- =====================================================================
+      -- nTV Downloads (state-machine driven)
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_contacq_downloads (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id TEXT NOT NULL,
+        user_id UUID NOT NULL,
+        content_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'created',
+        progress REAL DEFAULT 0,
+        magnet_uri TEXT,
+        torrent_id TEXT,
+        encoding_job_id TEXT,
+        quality_profile TEXT DEFAULT 'balanced',
+        retry_count INT DEFAULT 0,
+        error_message TEXT,
+        show_id UUID,
+        season_number INT,
+        episode_number INT,
+        tmdb_id INT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_downloads_account
+        ON np_contacq_downloads(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_downloads_state
+        ON np_contacq_downloads(state);
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_downloads_user
+        ON np_contacq_downloads(user_id, created_at DESC);
+
+      -- =====================================================================
+      -- Download State History
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_contacq_download_state_history (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        download_id UUID NOT NULL REFERENCES np_contacq_downloads(id) ON DELETE CASCADE,
+        from_state TEXT,
+        to_state TEXT NOT NULL,
+        metadata JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_state_history_download
+        ON np_contacq_download_state_history(download_id, created_at ASC);
+
+      -- =====================================================================
+      -- Movie Monitoring
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_contacq_movie_monitoring (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id TEXT NOT NULL,
+        user_id UUID NOT NULL,
+        movie_title TEXT NOT NULL,
+        tmdb_id INT,
+        release_date DATE,
+        digital_release_date DATE,
+        quality_profile TEXT DEFAULT 'balanced',
+        auto_download BOOLEAN DEFAULT true,
+        auto_upgrade BOOLEAN DEFAULT false,
+        status TEXT DEFAULT 'scheduled',
+        downloaded_quality TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_movies_account
+        ON np_contacq_movie_monitoring(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_movies_status
+        ON np_contacq_movie_monitoring(status);
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_movies_tmdb
+        ON np_contacq_movie_monitoring(tmdb_id) WHERE tmdb_id IS NOT NULL;
+
+      -- =====================================================================
+      -- Download Rules
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_contacq_download_rules (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id TEXT NOT NULL,
+        user_id UUID NOT NULL,
+        name TEXT NOT NULL,
+        conditions JSONB NOT NULL,
+        action TEXT NOT NULL CHECK (action IN ('auto-download', 'notify', 'skip')),
+        priority INT DEFAULT 0,
+        enabled BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_rules_account
+        ON np_contacq_download_rules(source_account_id, enabled);
+
+      -- =====================================================================
+      -- Download Queue (priority queue for pending downloads)
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_contacq_download_queue (
+        download_id UUID PRIMARY KEY REFERENCES np_contacq_downloads(id) ON DELETE CASCADE,
+        priority INT DEFAULT 10,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_contacq_queue_priority
+        ON np_contacq_download_queue(priority DESC, created_at ASC);
     `);
   }
 
   async createQualityProfile(profile: Partial<QualityProfile>): Promise<QualityProfile> {
     const result = await this.pool.query(
-      `INSERT INTO quality_profiles (source_account_id, name, description, preferred_qualities,
+      `INSERT INTO np_contentacquisition_quality_profiles (source_account_id, name, description, preferred_qualities,
         preferred_sources, excluded_sources, min_seeders)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
@@ -268,7 +383,7 @@ export class ContentAcquisitionDatabase {
 
   async createSubscription(sub: Partial<Subscription>): Promise<Subscription> {
     const result = await this.pool.query(
-      `INSERT INTO acquisition_subscriptions (source_account_id, subscription_type, content_id,
+      `INSERT INTO np_contentacquisition_acquisition_subscriptions (source_account_id, subscription_type, content_id,
         content_name, content_metadata, quality_profile_id, enabled)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
@@ -287,7 +402,7 @@ export class ContentAcquisitionDatabase {
 
   async listSubscriptions(accountId: string): Promise<Subscription[]> {
     const result = await this.pool.query(
-      `SELECT * FROM acquisition_subscriptions WHERE source_account_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM np_contentacquisition_acquisition_subscriptions WHERE source_account_id = $1 ORDER BY created_at DESC`,
       [accountId]
     );
     return result.rows;
@@ -295,7 +410,7 @@ export class ContentAcquisitionDatabase {
 
   async createRSSFeed(feed: Partial<RSSFeed>): Promise<RSSFeed> {
     const result = await this.pool.query(
-      `INSERT INTO rss_feeds (source_account_id, name, url, feed_type, check_interval_minutes)
+      `INSERT INTO np_contentacquisition_rss_feeds (source_account_id, name, url, feed_type, check_interval_minutes)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [feed.source_account_id, feed.name, feed.url, feed.feed_type, feed.check_interval_minutes || 60]
@@ -305,7 +420,7 @@ export class ContentAcquisitionDatabase {
 
   async listRSSFeeds(accountId: string): Promise<RSSFeed[]> {
     const result = await this.pool.query(
-      `SELECT * FROM rss_feeds WHERE source_account_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM np_contentacquisition_rss_feeds WHERE source_account_id = $1 ORDER BY created_at DESC`,
       [accountId]
     );
     return result.rows;
@@ -350,18 +465,18 @@ export class ContentAcquisitionDatabase {
   async insertRSSFeedItem(item: Partial<RSSFeedItem>): Promise<{ feedItem: RSSFeedItem; isNew: boolean }> {
     // Check if an item with the same feed_id and title already exists
     const existing = await this.pool.query(
-      `SELECT id FROM rss_feed_items WHERE feed_id = $1 AND title = $2 LIMIT 1`,
+      `SELECT id FROM np_contentacquisition_rss_feed_items WHERE feed_id = $1 AND title = $2 LIMIT 1`,
       [item.feed_id, item.title]
     );
 
     if (existing.rows.length > 0) {
       // Item already processed; return existing without modification
-      const row = await this.pool.query(`SELECT * FROM rss_feed_items WHERE id = $1`, [existing.rows[0].id]);
+      const row = await this.pool.query(`SELECT * FROM np_contentacquisition_rss_feed_items WHERE id = $1`, [existing.rows[0].id]);
       return { feedItem: row.rows[0], isNew: false };
     }
 
     const result = await this.pool.query(
-      `INSERT INTO rss_feed_items (
+      `INSERT INTO np_contentacquisition_rss_feed_items (
         feed_id, source_account_id, title, link, magnet_uri, info_hash,
         pub_date, parsed_title, parsed_year, parsed_season, parsed_episode,
         parsed_quality, parsed_source, parsed_group, size_bytes, seeders, leechers,
@@ -405,7 +520,7 @@ export class ContentAcquisitionDatabase {
     feedType?: string,
   ): Promise<Subscription[]> {
     let query = `
-      SELECT * FROM acquisition_subscriptions
+      SELECT * FROM np_contentacquisition_acquisition_subscriptions
       WHERE source_account_id = $1
         AND enabled = true
         AND LOWER($2) LIKE '%' || LOWER(content_name) || '%'
@@ -439,7 +554,7 @@ export class ContentAcquisitionDatabase {
   async updateFeedLastChecked(feedId: string, error?: string): Promise<void> {
     if (error) {
       await this.pool.query(
-        `UPDATE rss_feeds
+        `UPDATE np_contentacquisition_rss_feeds
          SET last_check_at = NOW(),
              last_error = $2,
              consecutive_failures = consecutive_failures + 1,
@@ -449,7 +564,7 @@ export class ContentAcquisitionDatabase {
       );
     } else {
       await this.pool.query(
-        `UPDATE rss_feeds
+        `UPDATE np_contentacquisition_rss_feeds
          SET last_check_at = NOW(),
              last_success_at = NOW(),
              last_error = NULL,
@@ -471,7 +586,7 @@ export class ContentAcquisitionDatabase {
     rejectionReason?: string,
   ): Promise<void> {
     await this.pool.query(
-      `UPDATE rss_feed_items
+      `UPDATE np_contentacquisition_rss_feed_items
        SET status = $2,
            matched_subscription_id = COALESCE($3, matched_subscription_id),
            rejection_reason = $4,
@@ -486,7 +601,7 @@ export class ContentAcquisitionDatabase {
    */
   async listAllEnabledFeeds(): Promise<RSSFeed[]> {
     const result = await this.pool.query(
-      `SELECT * FROM rss_feeds WHERE enabled = true ORDER BY next_check_at ASC NULLS FIRST`
+      `SELECT * FROM np_contentacquisition_rss_feeds WHERE enabled = true ORDER BY next_check_at ASC NULLS FIRST`
     );
     return result.rows;
   }
@@ -595,6 +710,493 @@ export class ContentAcquisitionDatabase {
     );
 
     return { runs: result.rows, total };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pool accessor (used by DownloadStateMachine)
+  // ---------------------------------------------------------------------------
+
+  getPool(): Pool {
+    return this.pool;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Subscriptions (individual CRUD)
+  // ---------------------------------------------------------------------------
+
+  async getSubscription(id: string): Promise<Subscription | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contentacquisition_acquisition_subscriptions WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateSubscription(id: string, updates: Partial<Subscription>): Promise<Subscription | null> {
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const allowedFields: (keyof Subscription)[] = [
+      'content_name', 'content_id', 'subscription_type', 'quality_profile_id',
+      'enabled', 'auto_upgrade', 'monitor_future_seasons', 'monitor_existing_seasons',
+      'season_folder',
+    ];
+
+    for (const field of allowedFields) {
+      const value = (updates as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (values.length === 0) return this.getSubscription(id);
+
+    values.push(id);
+    const result = await this.pool.query(
+      `UPDATE np_contentacquisition_acquisition_subscriptions SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values,
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteSubscription(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM np_contentacquisition_acquisition_subscriptions WHERE id = $1`,
+      [id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // RSS Feeds (individual CRUD)
+  // ---------------------------------------------------------------------------
+
+  async getRSSFeed(id: string): Promise<RSSFeed | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contentacquisition_rss_feeds WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async updateRSSFeed(id: string, updates: Partial<RSSFeed>): Promise<RSSFeed | null> {
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const allowedFields: (keyof RSSFeed)[] = [
+      'name', 'url', 'feed_type', 'enabled', 'check_interval_minutes', 'quality_profile_id',
+    ];
+
+    for (const field of allowedFields) {
+      const value = (updates as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (values.length === 0) return this.getRSSFeed(id);
+
+    values.push(id);
+    const result = await this.pool.query(
+      `UPDATE np_contentacquisition_rss_feeds SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values,
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteRSSFeed(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM np_contentacquisition_rss_feeds WHERE id = $1`,
+      [id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Movie Monitoring
+  // ---------------------------------------------------------------------------
+
+  async createMovieMonitoring(movie: Partial<MovieMonitoring>): Promise<MovieMonitoring> {
+    const result = await this.pool.query(
+      `INSERT INTO np_contacq_movie_monitoring
+        (source_account_id, user_id, movie_title, tmdb_id, release_date,
+         digital_release_date, quality_profile, auto_download, auto_upgrade, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        movie.source_account_id,
+        movie.user_id,
+        movie.movie_title,
+        movie.tmdb_id ?? null,
+        movie.release_date ?? null,
+        movie.digital_release_date ?? null,
+        movie.quality_profile ?? 'balanced',
+        movie.auto_download !== false,
+        movie.auto_upgrade === true,
+        movie.status ?? 'scheduled',
+      ],
+    );
+    return result.rows[0];
+  }
+
+  async getMovieMonitoring(id: string): Promise<MovieMonitoring | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contacq_movie_monitoring WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listMovieMonitoring(accountId: string): Promise<MovieMonitoring[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contacq_movie_monitoring
+       WHERE source_account_id = $1
+       ORDER BY created_at DESC`,
+      [accountId],
+    );
+    return result.rows;
+  }
+
+  async updateMovieMonitoring(id: string, updates: Partial<MovieMonitoring>): Promise<MovieMonitoring | null> {
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const allowedFields: (keyof MovieMonitoring)[] = [
+      'movie_title', 'tmdb_id', 'release_date', 'digital_release_date',
+      'quality_profile', 'auto_download', 'auto_upgrade', 'status', 'downloaded_quality',
+    ];
+
+    for (const field of allowedFields) {
+      const value = (updates as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (values.length === 0) return this.getMovieMonitoring(id);
+
+    values.push(id);
+    const result = await this.pool.query(
+      `UPDATE np_contacq_movie_monitoring SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values,
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteMovieMonitoring(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM np_contacq_movie_monitoring WHERE id = $1`,
+      [id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Downloads (state-machine driven)
+  // ---------------------------------------------------------------------------
+
+  async createDownload(download: Partial<Download>): Promise<Download> {
+    const result = await this.pool.query(
+      `INSERT INTO np_contacq_downloads
+        (source_account_id, user_id, content_type, title, state, magnet_uri,
+         quality_profile, show_id, season_number, episode_number, tmdb_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        download.source_account_id,
+        download.user_id,
+        download.content_type ?? 'movie',
+        download.title,
+        download.state ?? 'created',
+        download.magnet_uri ?? null,
+        download.quality_profile ?? 'balanced',
+        download.show_id ?? null,
+        download.season_number ?? null,
+        download.episode_number ?? null,
+        download.tmdb_id ?? null,
+      ],
+    );
+
+    // Record the initial state in history
+    const dl = result.rows[0] as Download;
+    await this.pool.query(
+      `INSERT INTO np_contacq_download_state_history
+         (download_id, from_state, to_state, metadata)
+       VALUES ($1, NULL, $2, $3)`,
+      [dl.id, dl.state, JSON.stringify({ source: 'creation' })],
+    );
+
+    return dl;
+  }
+
+  async getDownload(id: string): Promise<Download | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contacq_downloads WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listDownloads(accountId: string, statusFilter?: string): Promise<Download[]> {
+    let query = `SELECT * FROM np_contacq_downloads WHERE source_account_id = $1`;
+    const params: unknown[] = [accountId];
+
+    if (statusFilter) {
+      query += ` AND state = $2`;
+      params.push(statusFilter);
+    }
+
+    query += ` ORDER BY created_at DESC`;
+    const result = await this.pool.query(query, params);
+    return result.rows;
+  }
+
+  async updateDownloadProgress(id: string, progress: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE np_contacq_downloads SET progress = $2, updated_at = NOW() WHERE id = $1`,
+      [id, progress],
+    );
+  }
+
+  async updateDownloadFields(id: string, fields: Partial<Download>): Promise<Download | null> {
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const allowedFields: (keyof Download)[] = [
+      'torrent_id', 'encoding_job_id', 'error_message', 'retry_count', 'progress',
+      'quality_profile', 'magnet_uri',
+    ];
+
+    for (const field of allowedFields) {
+      const value = (fields as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (values.length === 0) return this.getDownload(id);
+
+    values.push(id);
+    const result = await this.pool.query(
+      `UPDATE np_contacq_downloads SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values,
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteDownload(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM np_contacq_downloads WHERE id = $1`,
+      [id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getDownloadStateHistory(downloadId: string): Promise<DownloadStateTransition[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contacq_download_state_history
+       WHERE download_id = $1
+       ORDER BY created_at ASC`,
+      [downloadId],
+    );
+    return result.rows;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Download Queue
+  // ---------------------------------------------------------------------------
+
+  async addToDownloadQueue(downloadId: string, priority?: number): Promise<DownloadQueueItem> {
+    const result = await this.pool.query(
+      `INSERT INTO np_contacq_download_queue (download_id, priority)
+       VALUES ($1, $2)
+       ON CONFLICT (download_id) DO UPDATE SET priority = $2
+       RETURNING *`,
+      [downloadId, priority ?? 10],
+    );
+    return result.rows[0];
+  }
+
+  async removeFromDownloadQueue(downloadId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM np_contacq_download_queue WHERE download_id = $1`,
+      [downloadId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getDownloadQueueDepth(accountId: string): Promise<number> {
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int AS depth
+       FROM np_contacq_download_queue q
+       JOIN np_contacq_downloads d ON d.id = q.download_id
+       WHERE d.source_account_id = $1`,
+      [accountId],
+    );
+    return result.rows[0]?.depth ?? 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Download Rules
+  // ---------------------------------------------------------------------------
+
+  async createDownloadRule(rule: Partial<DownloadRule>): Promise<DownloadRule> {
+    const result = await this.pool.query(
+      `INSERT INTO np_contacq_download_rules
+        (source_account_id, user_id, name, conditions, action, priority, enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        rule.source_account_id,
+        rule.user_id,
+        rule.name,
+        JSON.stringify(rule.conditions ?? {}),
+        rule.action ?? 'auto-download',
+        rule.priority ?? 0,
+        rule.enabled !== false,
+      ],
+    );
+    return result.rows[0];
+  }
+
+  async getDownloadRule(id: string): Promise<DownloadRule | null> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contacq_download_rules WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listDownloadRules(accountId: string): Promise<DownloadRule[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM np_contacq_download_rules
+       WHERE source_account_id = $1
+       ORDER BY priority DESC, created_at DESC`,
+      [accountId],
+    );
+    return result.rows;
+  }
+
+  async updateDownloadRule(id: string, updates: Partial<DownloadRule>): Promise<DownloadRule | null> {
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    if (updates.name !== undefined) {
+      setClauses.push(`name = $${paramIndex}`);
+      values.push(updates.name);
+      paramIndex++;
+    }
+    if (updates.conditions !== undefined) {
+      setClauses.push(`conditions = $${paramIndex}`);
+      values.push(JSON.stringify(updates.conditions));
+      paramIndex++;
+    }
+    if (updates.action !== undefined) {
+      setClauses.push(`action = $${paramIndex}`);
+      values.push(updates.action);
+      paramIndex++;
+    }
+    if (updates.priority !== undefined) {
+      setClauses.push(`priority = $${paramIndex}`);
+      values.push(updates.priority);
+      paramIndex++;
+    }
+    if (updates.enabled !== undefined) {
+      setClauses.push(`enabled = $${paramIndex}`);
+      values.push(updates.enabled);
+      paramIndex++;
+    }
+
+    if (values.length === 0) return this.getDownloadRule(id);
+
+    values.push(id);
+    const result = await this.pool.query(
+      `UPDATE np_contacq_download_rules SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values,
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteDownloadRule(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM np_contacq_download_rules WHERE id = $1`,
+      [id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Acquisition History (last N days)
+  // ---------------------------------------------------------------------------
+
+  async listAcquisitionHistory(accountId: string, days: number = 90): Promise<AcquisitionHistoryItem[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM acquisition_history
+       WHERE source_account_id = $1
+         AND created_at >= NOW() - ($2 || ' days')::INTERVAL
+       ORDER BY created_at DESC`,
+      [accountId, days],
+    );
+    return result.rows;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dashboard Summary
+  // ---------------------------------------------------------------------------
+
+  async getDashboardSummary(accountId: string): Promise<DashboardSummary> {
+    const [downloads, subs, movies, feeds, rules, queue] = await Promise.all([
+      this.pool.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE state NOT IN ('completed', 'failed', 'cancelled'))::int AS active,
+           COUNT(*) FILTER (WHERE state = 'completed' AND updated_at >= CURRENT_DATE)::int AS completed_today,
+           COUNT(*) FILTER (WHERE state = 'failed' AND updated_at >= CURRENT_DATE)::int AS failed_today
+         FROM np_contacq_downloads WHERE source_account_id = $1`,
+        [accountId],
+      ),
+      this.pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM np_contentacquisition_acquisition_subscriptions WHERE source_account_id = $1 AND enabled = true`,
+        [accountId],
+      ),
+      this.pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM np_contacq_movie_monitoring WHERE source_account_id = $1 AND status != 'downloaded'`,
+        [accountId],
+      ),
+      this.pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM np_contentacquisition_rss_feeds WHERE source_account_id = $1 AND enabled = true`,
+        [accountId],
+      ),
+      this.pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM np_contacq_download_rules WHERE source_account_id = $1 AND enabled = true`,
+        [accountId],
+      ),
+      this.getDownloadQueueDepth(accountId),
+    ]);
+
+    const dlRow = downloads.rows[0];
+    return {
+      active_downloads: dlRow?.active ?? 0,
+      completed_today: dlRow?.completed_today ?? 0,
+      failed_today: dlRow?.failed_today ?? 0,
+      active_subscriptions: subs.rows[0]?.cnt ?? 0,
+      monitored_movies: movies.rows[0]?.cnt ?? 0,
+      enabled_feeds: feeds.rows[0]?.cnt ?? 0,
+      enabled_rules: rules.rows[0]?.cnt ?? 0,
+      queue_depth: queue,
+    };
   }
 
   async close(): Promise<void> {

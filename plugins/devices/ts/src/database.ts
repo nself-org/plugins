@@ -10,6 +10,7 @@ import type {
   TelemetryRecord,
   IngestSessionRecord,
   AuditLogRecord,
+  BootstrapTokenRecord,
   DeviceStatus,
   TrustLevel,
   DeviceType,
@@ -72,7 +73,7 @@ export class DevicesDatabase {
       -- Devices
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS dev_devices (
+      CREATE TABLE IF NOT EXISTS np_dev_devices (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -102,28 +103,28 @@ export class DevicesDatabase {
         UNIQUE(source_account_id, app_id, device_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_dev_devices_source_account
-        ON dev_devices(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_dev_devices_app
-        ON dev_devices(app_id);
-      CREATE INDEX IF NOT EXISTS idx_dev_devices_status
-        ON dev_devices(status);
-      CREATE INDEX IF NOT EXISTS idx_dev_devices_type
-        ON dev_devices(device_type);
-      CREATE INDEX IF NOT EXISTS idx_dev_devices_trust
-        ON dev_devices(trust_level);
-      CREATE INDEX IF NOT EXISTS idx_dev_devices_last_seen
-        ON dev_devices(last_seen_at);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_devices_source_account
+        ON np_dev_devices(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_devices_app
+        ON np_dev_devices(app_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_devices_status
+        ON np_dev_devices(status);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_devices_type
+        ON np_dev_devices(device_type);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_devices_trust
+        ON np_dev_devices(trust_level);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_devices_last_seen
+        ON np_dev_devices(last_seen_at);
 
       -- =====================================================================
       -- Commands
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS dev_commands (
+      CREATE TABLE IF NOT EXISTS np_dev_commands (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
-        device_id UUID NOT NULL REFERENCES dev_devices(id),
+        device_id UUID NOT NULL REFERENCES np_dev_devices(id),
         command_type VARCHAR(64) NOT NULL,
         command_id VARCHAR(255) NOT NULL,
         payload JSONB NOT NULL DEFAULT '{}',
@@ -145,50 +146,50 @@ export class DevicesDatabase {
         UNIQUE(source_account_id, app_id, idempotency_key)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_dev_commands_source_account
-        ON dev_commands(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_dev_commands_device
-        ON dev_commands(device_id);
-      CREATE INDEX IF NOT EXISTS idx_dev_commands_status
-        ON dev_commands(status);
-      CREATE INDEX IF NOT EXISTS idx_dev_commands_deadline
-        ON dev_commands(deadline) WHERE status IN ('dispatched', 'acked', 'running');
-      CREATE INDEX IF NOT EXISTS idx_dev_commands_type
-        ON dev_commands(command_type);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_commands_source_account
+        ON np_dev_commands(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_commands_device
+        ON np_dev_commands(device_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_commands_status
+        ON np_dev_commands(status);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_commands_deadline
+        ON np_dev_commands(deadline) WHERE status IN ('dispatched', 'acked', 'running');
+      CREATE INDEX IF NOT EXISTS idx_np_dev_commands_type
+        ON np_dev_commands(command_type);
 
       -- =====================================================================
       -- Telemetry
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS dev_telemetry (
+      CREATE TABLE IF NOT EXISTS np_dev_telemetry (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
-        device_id UUID NOT NULL REFERENCES dev_devices(id),
+        device_id UUID NOT NULL REFERENCES np_dev_devices(id),
         telemetry_type VARCHAR(64) NOT NULL,
         data JSONB NOT NULL,
         recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         received_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_dev_telemetry_source_account
-        ON dev_telemetry(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_dev_telemetry_device
-        ON dev_telemetry(device_id);
-      CREATE INDEX IF NOT EXISTS idx_dev_telemetry_type
-        ON dev_telemetry(telemetry_type);
-      CREATE INDEX IF NOT EXISTS idx_dev_telemetry_recorded
-        ON dev_telemetry(recorded_at);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_telemetry_source_account
+        ON np_dev_telemetry(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_telemetry_device
+        ON np_dev_telemetry(device_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_telemetry_type
+        ON np_dev_telemetry(telemetry_type);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_telemetry_recorded
+        ON np_dev_telemetry(recorded_at);
 
       -- =====================================================================
       -- Ingest Sessions
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS dev_ingest_sessions (
+      CREATE TABLE IF NOT EXISTS np_dev_ingest_sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
-        device_id UUID NOT NULL REFERENCES dev_devices(id),
+        device_id UUID NOT NULL REFERENCES np_dev_devices(id),
         stream_id VARCHAR(255) NOT NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'idle',
         ingest_url TEXT,
@@ -211,23 +212,23 @@ export class DevicesDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_dev_ingest_source_account
-        ON dev_ingest_sessions(source_account_id);
+        ON np_dev_ingest_sessions(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_dev_ingest_device
-        ON dev_ingest_sessions(device_id);
+        ON np_dev_ingest_sessions(device_id);
       CREATE INDEX IF NOT EXISTS idx_dev_ingest_status
-        ON dev_ingest_sessions(status) WHERE status = 'active';
+        ON np_dev_ingest_sessions(status) WHERE status = 'active';
       CREATE INDEX IF NOT EXISTS idx_dev_ingest_stream
-        ON dev_ingest_sessions(stream_id);
+        ON np_dev_ingest_sessions(stream_id);
 
       -- =====================================================================
       -- Audit Log
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS dev_audit_log (
+      CREATE TABLE IF NOT EXISTS np_dev_audit_log (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
-        device_id UUID REFERENCES dev_devices(id),
+        device_id UUID REFERENCES np_dev_devices(id),
         action VARCHAR(64) NOT NULL,
         actor_id VARCHAR(255),
         details JSONB DEFAULT '{}',
@@ -235,20 +236,43 @@ export class DevicesDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_dev_audit_source_account
-        ON dev_audit_log(source_account_id);
+        ON np_dev_audit_log(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_dev_audit_device
-        ON dev_audit_log(device_id);
+        ON np_dev_audit_log(device_id);
       CREATE INDEX IF NOT EXISTS idx_dev_audit_action
-        ON dev_audit_log(action);
+        ON np_dev_audit_log(action);
+
+      -- =====================================================================
+      -- Bootstrap Tokens (nTV enrollment)
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_devices_bootstrap_tokens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        name TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        capabilities TEXT[] DEFAULT '{}',
+        expires_at TIMESTAMPTZ NOT NULL,
+        used BOOLEAN DEFAULT false,
+        used_by_device_id UUID REFERENCES np_dev_devices(id),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_dev_bootstrap_source_account
+        ON np_devices_bootstrap_tokens(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_bootstrap_token
+        ON np_devices_bootstrap_tokens(token);
+      CREATE INDEX IF NOT EXISTS idx_np_dev_bootstrap_expires
+        ON np_devices_bootstrap_tokens(expires_at) WHERE used = false;
 
       -- =====================================================================
       -- Analytics Views
       -- =====================================================================
 
-      CREATE OR REPLACE VIEW dev_devices_by_status AS
+      CREATE OR REPLACE VIEW np_dev_devices_by_status AS
       SELECT source_account_id, app_id, status, trust_level, device_type,
              COUNT(*) AS device_count
-      FROM dev_devices
+      FROM np_dev_devices
       GROUP BY source_account_id, app_id, status, trust_level, device_type
       ORDER BY source_account_id, app_id, status, trust_level;
 
@@ -259,8 +283,8 @@ export class DevicesDatabase {
              COUNT(*) FILTER (WHERE c.status = 'failed') AS failed,
              COUNT(*) FILTER (WHERE c.status = 'timeout') AS timed_out,
              ROUND(100.0 * COUNT(*) FILTER (WHERE c.status = 'succeeded') / NULLIF(COUNT(*), 0), 2) AS success_rate
-      FROM dev_commands c
-      JOIN dev_devices d ON c.device_id = d.id
+      FROM np_dev_commands c
+      JOIN np_dev_devices d ON c.device_id = d.id
       GROUP BY d.source_account_id, d.app_id, d.device_id, c.command_type;
 
       CREATE OR REPLACE VIEW dev_ingest_uptime AS
@@ -270,7 +294,7 @@ export class DevicesDatabase {
              i.bytes_ingested,
              i.frames_dropped,
              i.error_count
-      FROM dev_ingest_sessions i
+      FROM np_dev_ingest_sessions i
       WHERE i.status IN ('active', 'degraded')
       ORDER BY i.started_at DESC;
 
@@ -281,7 +305,7 @@ export class DevicesDatabase {
              AVG((t.data->>'value')::FLOAT) AS avg_value,
              MAX((t.data->>'value')::FLOAT) AS max_value,
              MIN((t.data->>'value')::FLOAT) AS min_value
-      FROM dev_telemetry t
+      FROM np_dev_telemetry t
       WHERE t.recorded_at >= NOW() - INTERVAL '24 hours'
         AND t.data ? 'value'
       GROUP BY t.source_account_id, t.device_id, t.telemetry_type, DATE_TRUNC('hour', t.recorded_at)
@@ -298,18 +322,18 @@ export class DevicesDatabase {
 
   async registerDevice(appId: string, request: RegisterDeviceRequest): Promise<DeviceRecord> {
     const result = await this.query<DeviceRecord>(
-      `INSERT INTO dev_devices (
+      `INSERT INTO np_dev_devices (
         source_account_id, app_id, device_id, name, device_type,
         model, firmware_version, status, capabilities, config, labels, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'unregistered', $8, $9, $10, $11)
       ON CONFLICT (source_account_id, app_id, device_id)
       DO UPDATE SET
-        name = COALESCE(EXCLUDED.name, dev_devices.name),
-        model = COALESCE(EXCLUDED.model, dev_devices.model),
-        firmware_version = COALESCE(EXCLUDED.firmware_version, dev_devices.firmware_version),
-        capabilities = COALESCE(EXCLUDED.capabilities, dev_devices.capabilities),
-        config = COALESCE(EXCLUDED.config, dev_devices.config),
-        labels = COALESCE(EXCLUDED.labels, dev_devices.labels),
+        name = COALESCE(EXCLUDED.name, np_dev_devices.name),
+        model = COALESCE(EXCLUDED.model, np_dev_devices.model),
+        firmware_version = COALESCE(EXCLUDED.firmware_version, np_dev_devices.firmware_version),
+        capabilities = COALESCE(EXCLUDED.capabilities, np_dev_devices.capabilities),
+        config = COALESCE(EXCLUDED.config, np_dev_devices.config),
+        labels = COALESCE(EXCLUDED.labels, np_dev_devices.labels),
         metadata = EXCLUDED.metadata,
         updated_at = NOW()
       RETURNING *`,
@@ -333,7 +357,7 @@ export class DevicesDatabase {
 
   async getDevice(deviceId: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `SELECT * FROM dev_devices
+      `SELECT * FROM np_dev_devices
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, deviceId]
     );
@@ -343,7 +367,7 @@ export class DevicesDatabase {
   async getDeviceByDeviceId(deviceId: string, appId?: string): Promise<DeviceRecord | null> {
     if (appId) {
       const result = await this.query<DeviceRecord>(
-        `SELECT * FROM dev_devices
+        `SELECT * FROM np_dev_devices
          WHERE source_account_id = $1 AND device_id = $2 AND app_id = $3`,
         [this.sourceAccountId, deviceId, appId]
       );
@@ -351,7 +375,7 @@ export class DevicesDatabase {
     }
 
     const result = await this.query<DeviceRecord>(
-      `SELECT * FROM dev_devices
+      `SELECT * FROM np_dev_devices
        WHERE source_account_id = $1 AND device_id = $2`,
       [this.sourceAccountId, deviceId]
     );
@@ -392,7 +416,7 @@ export class DevicesDatabase {
     params.push(limit, offset);
 
     const result = await this.query<DeviceRecord>(
-      `SELECT * FROM dev_devices
+      `SELECT * FROM np_dev_devices
        WHERE ${conditions.join(' AND ')}
        ORDER BY updated_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -437,7 +461,7 @@ export class DevicesDatabase {
     }
 
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2
        RETURNING *`,
@@ -449,7 +473,7 @@ export class DevicesDatabase {
 
   async startEnrollment(deviceId: string, token: string, challenge: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET status = 'bootstrap_ready',
            trust_level = 'pending',
            enrollment_token = $3,
@@ -464,7 +488,7 @@ export class DevicesDatabase {
 
   async completeEnrollment(deviceId: string, publicKey: string, enrolledBy?: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET status = 'enrolled',
            trust_level = 'trusted',
            public_key = $3,
@@ -482,7 +506,7 @@ export class DevicesDatabase {
 
   async revokeDevice(deviceId: string, reason: string, revokedBy?: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET status = 'revoked',
            trust_level = 'untrusted',
            revoked_at = NOW(),
@@ -498,7 +522,7 @@ export class DevicesDatabase {
 
   async suspendDevice(deviceId: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET status = 'suspended', updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2 AND status = 'enrolled'
        RETURNING *`,
@@ -509,7 +533,7 @@ export class DevicesDatabase {
 
   async reinstateDevice(deviceId: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET status = 'enrolled', updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2 AND status = 'suspended'
        RETURNING *`,
@@ -520,7 +544,7 @@ export class DevicesDatabase {
 
   async updateDeviceHeartbeat(deviceId: string, ip?: string): Promise<DeviceRecord | null> {
     const result = await this.query<DeviceRecord>(
-      `UPDATE dev_devices
+      `UPDATE np_dev_devices
        SET last_seen_at = NOW(),
            last_ip = COALESCE($3, last_ip),
            updated_at = NOW()
@@ -541,7 +565,7 @@ export class DevicesDatabase {
     const deadline = new Date(Date.now() + timeoutSeconds * 1000);
 
     const result = await this.query<CommandRecord>(
-      `INSERT INTO dev_commands (
+      `INSERT INTO np_dev_commands (
         source_account_id, app_id, device_id, command_type, command_id,
         payload, priority, timeout_seconds, deadline, max_retries,
         idempotency_key, metadata
@@ -567,7 +591,7 @@ export class DevicesDatabase {
     // If conflict (idempotent key already exists), return existing
     if (result.rows.length === 0) {
       const existing = await this.query<CommandRecord>(
-        `SELECT * FROM dev_commands
+        `SELECT * FROM np_dev_commands
          WHERE source_account_id = $1 AND app_id = $2 AND idempotency_key = $3`,
         [this.sourceAccountId, appId, idempotencyKey]
       );
@@ -579,7 +603,7 @@ export class DevicesDatabase {
 
   async getCommand(commandId: string): Promise<CommandRecord | null> {
     const result = await this.query<CommandRecord>(
-      `SELECT * FROM dev_commands
+      `SELECT * FROM np_dev_commands
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, commandId]
     );
@@ -614,7 +638,7 @@ export class DevicesDatabase {
     params.push(limit, offset);
 
     const result = await this.query<CommandRecord>(
-      `SELECT * FROM dev_commands
+      `SELECT * FROM np_dev_commands
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -651,7 +675,7 @@ export class DevicesDatabase {
     }
 
     const result = await this.query<CommandRecord>(
-      `UPDATE dev_commands
+      `UPDATE np_dev_commands
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2
        RETURNING *`,
@@ -663,7 +687,7 @@ export class DevicesDatabase {
 
   async cancelCommand(commandId: string): Promise<CommandRecord | null> {
     const result = await this.query<CommandRecord>(
-      `UPDATE dev_commands
+      `UPDATE np_dev_commands
        SET status = 'cancelled', completed_at = NOW()
        WHERE source_account_id = $1 AND id = $2
          AND status IN ('dispatched', 'acked')
@@ -683,7 +707,7 @@ export class DevicesDatabase {
 
   async submitTelemetry(appId: string, deviceUuid: string, request: SubmitTelemetryRequest): Promise<TelemetryRecord> {
     const result = await this.query<TelemetryRecord>(
-      `INSERT INTO dev_telemetry (
+      `INSERT INTO np_dev_telemetry (
         source_account_id, app_id, device_id, telemetry_type, data, recorded_at
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
@@ -717,7 +741,7 @@ export class DevicesDatabase {
     params.push(limit, offset);
 
     const result = await this.query<TelemetryRecord>(
-      `SELECT * FROM dev_telemetry
+      `SELECT * FROM np_dev_telemetry
        WHERE ${conditions.join(' AND ')}
        ORDER BY recorded_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -729,7 +753,7 @@ export class DevicesDatabase {
 
   async cleanupOldTelemetry(retentionDays: number): Promise<number> {
     const rowCount = await this.execute(
-      `DELETE FROM dev_telemetry
+      `DELETE FROM np_dev_telemetry
        WHERE source_account_id = $1
          AND recorded_at < NOW() - ($2 || ' days')::INTERVAL`,
       [this.sourceAccountId, retentionDays.toString()]
@@ -743,7 +767,7 @@ export class DevicesDatabase {
 
   async startIngestSession(appId: string, deviceUuid: string, request: StartIngestRequest): Promise<IngestSessionRecord> {
     const result = await this.query<IngestSessionRecord>(
-      `INSERT INTO dev_ingest_sessions (
+      `INSERT INTO np_dev_ingest_sessions (
         source_account_id, app_id, device_id, stream_id,
         status, protocol, channel, quality, metadata, started_at
       ) VALUES ($1, $2, $3, $4, 'connecting', $5, $6, $7, $8, NOW())
@@ -765,7 +789,7 @@ export class DevicesDatabase {
 
   async getIngestSession(sessionId: string): Promise<IngestSessionRecord | null> {
     const result = await this.query<IngestSessionRecord>(
-      `SELECT * FROM dev_ingest_sessions
+      `SELECT * FROM np_dev_ingest_sessions
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, sessionId]
     );
@@ -794,7 +818,7 @@ export class DevicesDatabase {
     params.push(limit, offset);
 
     const result = await this.query<IngestSessionRecord>(
-      `SELECT * FROM dev_ingest_sessions
+      `SELECT * FROM np_dev_ingest_sessions
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -806,7 +830,7 @@ export class DevicesDatabase {
 
   async getActiveIngestSessions(): Promise<IngestSessionRecord[]> {
     const result = await this.query<IngestSessionRecord>(
-      `SELECT * FROM dev_ingest_sessions
+      `SELECT * FROM np_dev_ingest_sessions
        WHERE source_account_id = $1 AND status IN ('active', 'degraded', 'connecting')
        ORDER BY started_at DESC`,
       [this.sourceAccountId]
@@ -854,7 +878,7 @@ export class DevicesDatabase {
     }
 
     const result = await this.query<IngestSessionRecord>(
-      `UPDATE dev_ingest_sessions
+      `UPDATE np_dev_ingest_sessions
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2
        RETURNING *`,
@@ -866,7 +890,7 @@ export class DevicesDatabase {
 
   async endIngestSession(sessionId: string): Promise<IngestSessionRecord | null> {
     const result = await this.query<IngestSessionRecord>(
-      `UPDATE dev_ingest_sessions
+      `UPDATE np_dev_ingest_sessions
        SET status = 'stopped', ended_at = NOW(), updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2 AND status IN ('active', 'degraded', 'connecting', 'retrying')
        RETURNING *`,
@@ -881,7 +905,7 @@ export class DevicesDatabase {
 
   async createAuditEntry(appId: string, action: string, deviceUuid?: string, actorId?: string, details?: Record<string, unknown>): Promise<AuditLogRecord> {
     const result = await this.query<AuditLogRecord>(
-      `INSERT INTO dev_audit_log (
+      `INSERT INTO np_dev_audit_log (
         source_account_id, app_id, device_id, action, actor_id, details
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
@@ -900,13 +924,134 @@ export class DevicesDatabase {
 
   async getDeviceAuditLog(deviceUuid: string, limit = 100, offset = 0): Promise<AuditLogRecord[]> {
     const result = await this.query<AuditLogRecord>(
-      `SELECT * FROM dev_audit_log
+      `SELECT * FROM np_dev_audit_log
        WHERE source_account_id = $1 AND device_id = $2
        ORDER BY created_at DESC
        LIMIT $3 OFFSET $4`,
       [this.sourceAccountId, deviceUuid, limit, offset]
     );
     return result.rows;
+  }
+
+  // =========================================================================
+  // Bootstrap Tokens (nTV enrollment)
+  // =========================================================================
+
+  async createBootstrapToken(name: string, token: string, capabilities: string[], expiresAt: Date): Promise<BootstrapTokenRecord> {
+    const result = await this.query<BootstrapTokenRecord>(
+      `INSERT INTO np_devices_bootstrap_tokens (
+        source_account_id, name, token, capabilities, expires_at
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [this.sourceAccountId, name, token, capabilities, expiresAt]
+    );
+    return result.rows[0];
+  }
+
+  async getBootstrapToken(token: string): Promise<BootstrapTokenRecord | null> {
+    const result = await this.query<BootstrapTokenRecord>(
+      `SELECT * FROM np_devices_bootstrap_tokens
+       WHERE token = $1 AND source_account_id = $2`,
+      [token, this.sourceAccountId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async markBootstrapTokenUsed(token: string, deviceId: string): Promise<BootstrapTokenRecord | null> {
+    const result = await this.query<BootstrapTokenRecord>(
+      `UPDATE np_devices_bootstrap_tokens
+       SET used = true, used_by_device_id = $3
+       WHERE token = $1 AND source_account_id = $2
+       RETURNING *`,
+      [token, this.sourceAccountId, deviceId]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async enrollDeviceWithToken(appId: string, name: string, publicKey: string, capabilities: string[]): Promise<DeviceRecord> {
+    const deviceId = `ntv-${crypto.randomUUID().split('-')[0]}`;
+    const result = await this.query<DeviceRecord>(
+      `INSERT INTO np_dev_devices (
+        source_account_id, app_id, device_id, name, device_type,
+        status, trust_level, public_key, enrolled_at, capabilities
+      ) VALUES ($1, $2, $3, $4, 'set_top_box', 'enrolled', 'trusted', $5, NOW(), $6)
+      ON CONFLICT (source_account_id, app_id, device_id)
+      DO UPDATE SET
+        name = EXCLUDED.name,
+        public_key = EXCLUDED.public_key,
+        status = 'enrolled',
+        trust_level = 'trusted',
+        enrolled_at = NOW(),
+        capabilities = EXCLUDED.capabilities,
+        updated_at = NOW()
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        appId,
+        deviceId,
+        name,
+        publicKey,
+        JSON.stringify(capabilities),
+      ]
+    );
+    return result.rows[0];
+  }
+
+  async updateDeviceHeartbeatWithTelemetry(
+    deviceId: string,
+    ip: string | undefined,
+    signalQuality?: number
+  ): Promise<DeviceRecord | null> {
+    // Determine status: online normally, degraded if signal_quality < 0.5
+    const status = signalQuality !== undefined && signalQuality < 0.5 ? 'degraded' : 'online';
+
+    // Use 'enrolled' for online devices since DeviceStatus doesn't have 'online'/'degraded' —
+    // we store the computed status in metadata for the v1 API layer
+    const result = await this.query<DeviceRecord>(
+      `UPDATE np_dev_devices
+       SET last_seen_at = NOW(),
+           last_ip = COALESCE($3, last_ip),
+           metadata = jsonb_set(
+             COALESCE(metadata, '{}'),
+             '{heartbeat_status}',
+             $4::jsonb
+           ),
+           updated_at = NOW()
+       WHERE source_account_id = $1 AND id = $2
+       RETURNING *`,
+      [this.sourceAccountId, deviceId, ip ?? null, JSON.stringify(status)]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteDevice(deviceId: string): Promise<boolean> {
+    // Delete dependent records first, then the device
+    await this.execute(
+      `DELETE FROM np_dev_telemetry WHERE source_account_id = $1 AND device_id = $2`,
+      [this.sourceAccountId, deviceId]
+    );
+    await this.execute(
+      `DELETE FROM np_dev_commands WHERE source_account_id = $1 AND device_id = $2`,
+      [this.sourceAccountId, deviceId]
+    );
+    await this.execute(
+      `DELETE FROM np_dev_ingest_sessions WHERE source_account_id = $1 AND device_id = $2`,
+      [this.sourceAccountId, deviceId]
+    );
+    await this.execute(
+      `DELETE FROM np_dev_audit_log WHERE source_account_id = $1 AND device_id = $2`,
+      [this.sourceAccountId, deviceId]
+    );
+    await this.execute(
+      `UPDATE np_devices_bootstrap_tokens SET used_by_device_id = NULL WHERE source_account_id = $1 AND used_by_device_id = $2`,
+      [this.sourceAccountId, deviceId]
+    );
+
+    const rowCount = await this.execute(
+      `DELETE FROM np_dev_devices WHERE source_account_id = $1 AND id = $2`,
+      [this.sourceAccountId, deviceId]
+    );
+    return rowCount > 0;
   }
 
   // =========================================================================
@@ -929,7 +1074,7 @@ export class DevicesDatabase {
         COUNT(*) FILTER (WHERE status = 'suspended') AS suspended_devices,
         COUNT(*) FILTER (WHERE status = 'revoked') AS revoked_devices,
         MAX(last_seen_at) AS last_activity
-       FROM dev_devices
+       FROM np_dev_devices
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
@@ -945,21 +1090,21 @@ export class DevicesDatabase {
         COUNT(*) FILTER (WHERE status IN ('dispatched', 'acked', 'running')) AS pending_commands,
         COUNT(*) FILTER (WHERE status = 'succeeded') AS succeeded_commands,
         COUNT(*) FILTER (WHERE status = 'failed') AS failed_commands
-       FROM dev_commands
+       FROM np_dev_commands
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
 
     const ingestResult = await this.query<{ active_ingest_sessions: number }>(
       `SELECT COUNT(*) AS active_ingest_sessions
-       FROM dev_ingest_sessions
+       FROM np_dev_ingest_sessions
        WHERE source_account_id = $1 AND status IN ('active', 'degraded')`,
       [this.sourceAccountId]
     );
 
     const telResult = await this.query<{ total_telemetry_records: number }>(
       `SELECT COUNT(*) AS total_telemetry_records
-       FROM dev_telemetry
+       FROM np_dev_telemetry
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );

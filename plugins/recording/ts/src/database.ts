@@ -63,7 +63,7 @@ export class RecordingDatabase {
       -- Recordings
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS rec_recordings (
+      CREATE TABLE IF NOT EXISTS np_rec_recordings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -97,6 +97,7 @@ export class RecordingDatabase {
         tags JSONB DEFAULT '[]',
         category VARCHAR(128),
         content_rating VARCHAR(16),
+        commercial_markers JSONB,
         custom_fields JSONB DEFAULT '{}',
         metadata JSONB DEFAULT '{}',
         created_by VARCHAR(255),
@@ -106,31 +107,31 @@ export class RecordingDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_rec_source_account
-        ON rec_recordings(source_account_id);
+        ON np_rec_recordings(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_rec_app
-        ON rec_recordings(app_id);
+        ON np_rec_recordings(app_id);
       CREATE INDEX IF NOT EXISTS idx_rec_status
-        ON rec_recordings(status);
+        ON np_rec_recordings(status);
       CREATE INDEX IF NOT EXISTS idx_rec_scheduled
-        ON rec_recordings(scheduled_start);
+        ON np_rec_recordings(scheduled_start);
       CREATE INDEX IF NOT EXISTS idx_rec_source
-        ON rec_recordings(source_type, source_id);
+        ON np_rec_recordings(source_type, source_id);
       CREATE INDEX IF NOT EXISTS idx_rec_device
-        ON rec_recordings(source_device_id);
+        ON np_rec_recordings(source_device_id);
       CREATE INDEX IF NOT EXISTS idx_rec_sports
-        ON rec_recordings(sports_event_id);
+        ON np_rec_recordings(sports_event_id);
       CREATE INDEX IF NOT EXISTS idx_rec_published
-        ON rec_recordings(publish_status, published_at);
+        ON np_rec_recordings(publish_status, published_at);
       CREATE INDEX IF NOT EXISTS idx_rec_tags
-        ON rec_recordings USING GIN(tags);
+        ON np_rec_recordings USING GIN(tags);
       CREATE INDEX IF NOT EXISTS idx_rec_category
-        ON rec_recordings(category);
+        ON np_rec_recordings(category);
 
       -- =====================================================================
       -- Schedules
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS rec_schedules (
+      CREATE TABLE IF NOT EXISTS np_rec_schedules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         app_id VARCHAR(64) NOT NULL DEFAULT 'default',
@@ -154,23 +155,23 @@ export class RecordingDatabase {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_rec_schedules_source_account
-        ON rec_schedules(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_rec_schedules_app
-        ON rec_schedules(app_id);
-      CREATE INDEX IF NOT EXISTS idx_rec_schedules_type
-        ON rec_schedules(schedule_type);
-      CREATE INDEX IF NOT EXISTS idx_rec_schedules_active
-        ON rec_schedules(active) WHERE active = TRUE;
+      CREATE INDEX IF NOT EXISTS idx_np_rec_schedules_source_account
+        ON np_rec_schedules(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_rec_schedules_app
+        ON np_rec_schedules(app_id);
+      CREATE INDEX IF NOT EXISTS idx_np_rec_schedules_type
+        ON np_rec_schedules(schedule_type);
+      CREATE INDEX IF NOT EXISTS idx_np_rec_schedules_active
+        ON np_rec_schedules(active) WHERE active = TRUE;
 
       -- =====================================================================
       -- Encode Jobs
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS rec_encode_jobs (
+      CREATE TABLE IF NOT EXISTS np_rec_encode_jobs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        recording_id UUID NOT NULL REFERENCES rec_recordings(id) ON DELETE CASCADE,
+        recording_id UUID NOT NULL REFERENCES np_rec_recordings(id) ON DELETE CASCADE,
         profile VARCHAR(64) NOT NULL,
         status VARCHAR(32) NOT NULL DEFAULT 'pending',
         input_path TEXT NOT NULL,
@@ -185,22 +186,22 @@ export class RecordingDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_rec_encode_source_account
-        ON rec_encode_jobs(source_account_id);
+        ON np_rec_encode_jobs(source_account_id);
       CREATE INDEX IF NOT EXISTS idx_rec_encode_recording
-        ON rec_encode_jobs(recording_id);
+        ON np_rec_encode_jobs(recording_id);
       CREATE INDEX IF NOT EXISTS idx_rec_encode_status
-        ON rec_encode_jobs(status);
+        ON np_rec_encode_jobs(status);
 
       -- =====================================================================
       -- Analytics Views
       -- =====================================================================
 
-      CREATE OR REPLACE VIEW rec_recordings_by_status AS
+      CREATE OR REPLACE VIEW np_rec_recordings_by_status AS
       SELECT source_account_id, app_id, status, publish_status,
              COUNT(*) AS recording_count,
              COALESCE(SUM(duration_seconds), 0) / 3600.0 AS total_hours,
              COALESCE(SUM(file_size), 0) / (1024.0 * 1024 * 1024) AS total_gb
-      FROM rec_recordings
+      FROM np_rec_recordings
       WHERE deleted_at IS NULL
       GROUP BY source_account_id, app_id, status, publish_status
       ORDER BY source_account_id, app_id, status;
@@ -210,7 +211,7 @@ export class RecordingDatabase {
              COUNT(*) AS recording_count,
              COALESCE(SUM(file_size), 0) / (1024.0 * 1024 * 1024) AS storage_gb,
              COALESCE(AVG(duration_seconds), 0) / 60.0 AS avg_duration_minutes
-      FROM rec_recordings
+      FROM np_rec_recordings
       WHERE deleted_at IS NULL AND file_size IS NOT NULL
       GROUP BY source_account_id, app_id, source_type
       ORDER BY storage_gb DESC;
@@ -222,7 +223,7 @@ export class RecordingDatabase {
              COUNT(*) FILTER (WHERE status = 'failed') AS failed,
              COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled,
              ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'published') / NULLIF(COUNT(*), 0), 2) AS success_rate
-      FROM rec_recordings
+      FROM np_rec_recordings
       WHERE deleted_at IS NULL
       GROUP BY source_account_id, app_id;
 
@@ -232,7 +233,7 @@ export class RecordingDatabase {
              COUNT(*) AS scheduled,
              COUNT(*) FILTER (WHERE status = 'published') AS completed,
              COUNT(*) FILTER (WHERE status = 'failed') AS failed
-      FROM rec_recordings
+      FROM np_rec_recordings
       WHERE deleted_at IS NULL
         AND scheduled_start >= NOW() - INTERVAL '30 days'
       GROUP BY source_account_id, app_id, DATE_TRUNC('day', scheduled_start)
@@ -249,7 +250,7 @@ export class RecordingDatabase {
 
   async createRecording(appId: string, request: CreateRecordingRequest): Promise<RecordingRecord> {
     const result = await this.query<RecordingRecord>(
-      `INSERT INTO rec_recordings (
+      `INSERT INTO np_rec_recordings (
         source_account_id, app_id, title, description, source_type,
         source_id, source_channel, source_device_id, priority,
         scheduled_start, scheduled_end, sports_event_id,
@@ -283,7 +284,7 @@ export class RecordingDatabase {
 
   async getRecording(recordingId: string): Promise<RecordingRecord | null> {
     const result = await this.query<RecordingRecord>(
-      `SELECT * FROM rec_recordings
+      `SELECT * FROM np_rec_recordings
        WHERE source_account_id = $1 AND id = $2 AND deleted_at IS NULL`,
       [this.sourceAccountId, recordingId]
     );
@@ -324,7 +325,7 @@ export class RecordingDatabase {
     params.push(limit, offset);
 
     const result = await this.query<RecordingRecord>(
-      `SELECT * FROM rec_recordings
+      `SELECT * FROM np_rec_recordings
        WHERE ${conditions.join(' AND ')}
        ORDER BY scheduled_start DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -389,7 +390,7 @@ export class RecordingDatabase {
     }
 
     const result = await this.query<RecordingRecord>(
-      `UPDATE rec_recordings
+      `UPDATE np_rec_recordings
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -401,7 +402,7 @@ export class RecordingDatabase {
 
   async deleteRecording(recordingId: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `UPDATE rec_recordings
+      `UPDATE np_rec_recordings
        SET deleted_at = NOW(), updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2 AND deleted_at IS NULL`,
       [this.sourceAccountId, recordingId]
@@ -428,7 +429,7 @@ export class RecordingDatabase {
     }
 
     const result = await this.query<RecordingRecord>(
-      `UPDATE rec_recordings
+      `UPDATE np_rec_recordings
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -440,7 +441,7 @@ export class RecordingDatabase {
 
   async cancelRecording(recordingId: string): Promise<RecordingRecord | null> {
     const result = await this.query<RecordingRecord>(
-      `UPDATE rec_recordings
+      `UPDATE np_rec_recordings
        SET status = 'cancelled', updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2
          AND status IN ('scheduled', 'starting')
@@ -453,7 +454,7 @@ export class RecordingDatabase {
 
   async publishRecording(recordingId: string): Promise<RecordingRecord | null> {
     const result = await this.query<RecordingRecord>(
-      `UPDATE rec_recordings
+      `UPDATE np_rec_recordings
        SET publish_status = 'published', published_at = NOW(), updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2 AND deleted_at IS NULL
        RETURNING *`,
@@ -464,13 +465,39 @@ export class RecordingDatabase {
 
   async unpublishRecording(recordingId: string): Promise<RecordingRecord | null> {
     const result = await this.query<RecordingRecord>(
-      `UPDATE rec_recordings
+      `UPDATE np_rec_recordings
        SET publish_status = 'unpublished', published_at = NULL, updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2 AND deleted_at IS NULL
        RETURNING *`,
       [this.sourceAccountId, recordingId]
     );
     return result.rows[0] ?? null;
+  }
+
+  async finalizeRecording(recordingId: string): Promise<RecordingRecord | null> {
+    // Idempotent: only transitions from 'recording' or 'finalizing'; already 'processing'/'ready' is a no-op success
+    const existing = await this.getRecording(recordingId);
+    if (!existing) return null;
+
+    if (existing.status === 'processing' || existing.status === 'published') {
+      // Already finalized or beyond -- return current state for idempotency
+      return existing;
+    }
+
+    const result = await this.query<RecordingRecord>(
+      `UPDATE np_rec_recordings
+       SET status = 'processing',
+           actual_end = COALESCE(actual_end, NOW()),
+           duration_seconds = EXTRACT(EPOCH FROM (COALESCE(actual_end, NOW()) - actual_start))::INTEGER,
+           updated_at = NOW()
+       WHERE source_account_id = $1 AND id = $2
+         AND status IN ('recording', 'finalizing')
+         AND deleted_at IS NULL
+       RETURNING *`,
+      [this.sourceAccountId, recordingId]
+    );
+
+    return result.rows[0] ?? existing;
   }
 
   async getPublishedRecordings(appId?: string, category?: string, limit = 100, offset = 0): Promise<RecordingRecord[]> {
@@ -483,7 +510,7 @@ export class RecordingDatabase {
 
   async createSchedule(appId: string, request: CreateScheduleRequest): Promise<ScheduleRecord> {
     const result = await this.query<ScheduleRecord>(
-      `INSERT INTO rec_schedules (
+      `INSERT INTO np_rec_schedules (
         source_account_id, app_id, name, schedule_type,
         source_channel, source_device_id, recurrence_rule,
         duration_minutes, lead_time_minutes, trail_time_minutes,
@@ -516,7 +543,7 @@ export class RecordingDatabase {
 
   async getSchedule(scheduleId: string): Promise<ScheduleRecord | null> {
     const result = await this.query<ScheduleRecord>(
-      `SELECT * FROM rec_schedules
+      `SELECT * FROM np_rec_schedules
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, scheduleId]
     );
@@ -539,7 +566,7 @@ export class RecordingDatabase {
     params.push(limit, offset);
 
     const result = await this.query<ScheduleRecord>(
-      `SELECT * FROM rec_schedules
+      `SELECT * FROM np_rec_schedules
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -614,7 +641,7 @@ export class RecordingDatabase {
     }
 
     const result = await this.query<ScheduleRecord>(
-      `UPDATE rec_schedules
+      `UPDATE np_rec_schedules
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2
        RETURNING *`,
@@ -626,7 +653,7 @@ export class RecordingDatabase {
 
   async deleteSchedule(scheduleId: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM rec_schedules
+      `DELETE FROM np_rec_schedules
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, scheduleId]
     );
@@ -635,7 +662,7 @@ export class RecordingDatabase {
 
   async markScheduleTriggered(scheduleId: string): Promise<void> {
     await this.execute(
-      `UPDATE rec_schedules
+      `UPDATE np_rec_schedules
        SET last_triggered_at = NOW(), updated_at = NOW()
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, scheduleId]
@@ -648,7 +675,7 @@ export class RecordingDatabase {
 
   async createEncodeJob(recordingId: string, profile: string, inputPath: string, settings?: Record<string, unknown>): Promise<EncodeJobRecord> {
     const result = await this.query<EncodeJobRecord>(
-      `INSERT INTO rec_encode_jobs (
+      `INSERT INTO np_rec_encode_jobs (
         source_account_id, recording_id, profile, input_path, settings
       ) VALUES ($1, $2, $3, $4, $5)
       RETURNING *`,
@@ -666,7 +693,7 @@ export class RecordingDatabase {
 
   async getEncodeJob(jobId: string): Promise<EncodeJobRecord | null> {
     const result = await this.query<EncodeJobRecord>(
-      `SELECT * FROM rec_encode_jobs
+      `SELECT * FROM np_rec_encode_jobs
        WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, jobId]
     );
@@ -690,7 +717,7 @@ export class RecordingDatabase {
     params.push(limit, offset);
 
     const result = await this.query<EncodeJobRecord>(
-      `SELECT * FROM rec_encode_jobs
+      `SELECT * FROM np_rec_encode_jobs
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -735,7 +762,7 @@ export class RecordingDatabase {
     }
 
     const result = await this.query<EncodeJobRecord>(
-      `UPDATE rec_encode_jobs
+      `UPDATE np_rec_encode_jobs
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND id = $2
        RETURNING *`,
@@ -747,7 +774,7 @@ export class RecordingDatabase {
 
   async getEncodeJobsForRecording(recordingId: string): Promise<EncodeJobRecord[]> {
     const result = await this.query<EncodeJobRecord>(
-      `SELECT * FROM rec_encode_jobs
+      `SELECT * FROM np_rec_encode_jobs
        WHERE source_account_id = $1 AND recording_id = $2
        ORDER BY created_at ASC`,
       [this.sourceAccountId, recordingId]
@@ -783,7 +810,7 @@ export class RecordingDatabase {
         COALESCE(SUM(file_size), 0) / (1024.0 * 1024 * 1024) AS total_storage_gb,
         COALESCE(SUM(duration_seconds), 0) / 3600.0 AS total_duration_hours,
         MAX(updated_at) AS last_activity
-       FROM rec_recordings
+       FROM np_rec_recordings
        WHERE source_account_id = $1 AND deleted_at IS NULL`,
       [this.sourceAccountId]
     );
@@ -795,7 +822,7 @@ export class RecordingDatabase {
       `SELECT
         COUNT(*) AS total_schedules,
         COUNT(*) FILTER (WHERE active = TRUE) AS active_schedules
-       FROM rec_schedules
+       FROM np_rec_schedules
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
@@ -807,7 +834,7 @@ export class RecordingDatabase {
       `SELECT
         COUNT(*) FILTER (WHERE status = 'pending') AS pending_encode_jobs,
         COUNT(*) FILTER (WHERE status = 'running') AS running_encode_jobs
-       FROM rec_encode_jobs
+       FROM np_rec_encode_jobs
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );

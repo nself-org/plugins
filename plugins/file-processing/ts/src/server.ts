@@ -5,9 +5,18 @@
 import { createLogger, getAppContext } from '@nself/plugin-utils';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { loadConfig, validateConfig, getDatabaseConfig } from './config.js';
 import { Database } from './database.js';
-import type { CreateJobRequest, ProcessingStatus } from './types.js';
+import { generatePosters, generateSpriteSheet, optimizeImage } from './image-processor.js';
+import type {
+  CreateJobRequest,
+  ProcessingStatus,
+  PosterRequest,
+  SpriteRequest,
+  OptimizeRequest,
+} from './types.js';
 
 const logger = createLogger('file-processing:server');
 
@@ -47,6 +56,10 @@ async function startServer() {
   fastify.get('/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
+
+  // =========================================================================
+  // Existing /api/* routes (backwards compatible)
+  // =========================================================================
 
   // Create processing job
   fastify.post<{ Body: CreateJobRequest }>('/api/jobs', async (request, reply) => {
@@ -121,6 +134,111 @@ async function startServer() {
       return stats;
     } catch (error) {
       return { error: error instanceof Error ? error.message : 'Failed to get stats' };
+    }
+  });
+
+  // =========================================================================
+  // nTV /v1/* image processing endpoints
+  // =========================================================================
+
+  // POST /v1/poster - Generate poster thumbnails at multiple widths/formats
+  fastify.post<{ Body: PosterRequest }>('/v1/poster', async (request, reply) => {
+    const {
+      input_path,
+      widths = [100, 400, 1200],
+      formats = ['webp', 'avif', 'jpeg'],
+    } = request.body;
+
+    if (!input_path) {
+      reply.code(400);
+      return { error: 'input_path is required' };
+    }
+
+    try {
+      const outputDir = join(tmpdir(), `poster-${Date.now()}`);
+      const outputs = await generatePosters(input_path, widths, formats, outputDir);
+
+      return { outputs };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Poster generation failed';
+      logger.error('POST /v1/poster failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /v1/sprite - Generate sprite sheet for trickplay
+  fastify.post<{ Body: SpriteRequest }>('/v1/sprite', async (request, reply) => {
+    const {
+      input_path,
+      grid = '10x10',
+      thumb_size = '320x180',
+    } = request.body;
+
+    if (!input_path) {
+      reply.code(400);
+      return { error: 'input_path is required' };
+    }
+
+    try {
+      const outputDir = join(tmpdir(), `sprite-${Date.now()}`);
+      const result = await generateSpriteSheet(input_path, grid, thumb_size, outputDir);
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sprite generation failed';
+      logger.error('POST /v1/sprite failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /v1/optimize - Optimize an image file
+  fastify.post<{ Body: OptimizeRequest }>('/v1/optimize', async (request, reply) => {
+    const {
+      input_path,
+      format = 'webp',
+      quality = 80,
+      strip_exif = true,
+    } = request.body;
+
+    if (!input_path) {
+      reply.code(400);
+      return { error: 'input_path is required' };
+    }
+
+    try {
+      const outputDir = join(tmpdir(), `optimize-${Date.now()}`);
+      const result = await optimizeImage(input_path, format, quality, strip_exif, outputDir);
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Image optimization failed';
+      logger.error('POST /v1/optimize failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // GET /v1/jobs/:id - Job status alias for /api/jobs/:jobId
+  fastify.get<{ Params: { id: string } }>('/v1/jobs/:id', async (request, reply) => {
+    const { id } = request.params;
+
+    try {
+      const sdb = scopedDb(request);
+      const job = await sdb.getJob(id);
+      if (!job) {
+        reply.code(404);
+        return { error: 'Job not found' };
+      }
+
+      return {
+        state: job.status,
+        progress: job.status === 'completed' ? 100 : job.status === 'processing' ? 50 : 0,
+      };
+    } catch (error) {
+      reply.code(500);
+      return { error: error instanceof Error ? error.message : 'Failed to get job' };
     }
   });
 

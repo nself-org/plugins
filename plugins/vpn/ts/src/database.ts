@@ -56,7 +56,7 @@ export class VPNDatabase {
 
       // VPN Providers table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_providers (
+        CREATE TABLE IF NOT EXISTS np_vpn_providers (
           id VARCHAR(255) PRIMARY KEY,
           name VARCHAR(255) NOT NULL UNIQUE,
           display_name VARCHAR(255) NOT NULL,
@@ -81,9 +81,9 @@ export class VPNDatabase {
 
       // VPN Credentials table (encrypted)
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_credentials (
+        CREATE TABLE IF NOT EXISTS np_vpn_credentials (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          provider_id VARCHAR(255) NOT NULL REFERENCES vpn_providers(id) ON DELETE CASCADE,
+          provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id) ON DELETE CASCADE,
           username VARCHAR(255),
           password_encrypted TEXT,
           api_key_encrypted TEXT,
@@ -100,9 +100,9 @@ export class VPNDatabase {
 
       // VPN Servers table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_servers (
+        CREATE TABLE IF NOT EXISTS np_vpn_servers (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          provider_id VARCHAR(255) NOT NULL REFERENCES vpn_providers(id) ON DELETE CASCADE,
+          provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id) ON DELETE CASCADE,
           hostname VARCHAR(255) NOT NULL,
           ip_address VARCHAR(45) NOT NULL,
           ipv6_address VARCHAR(45),
@@ -141,10 +141,10 @@ export class VPNDatabase {
 
       // VPN Connections table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_connections (
+        CREATE TABLE IF NOT EXISTS np_vpn_connections (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          provider_id VARCHAR(255) NOT NULL REFERENCES vpn_providers(id),
-          server_id UUID REFERENCES vpn_servers(id),
+          provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id),
+          server_id UUID REFERENCES np_vpn_servers(id),
           protocol VARCHAR(50) NOT NULL,
           status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
           local_ip VARCHAR(45),
@@ -174,9 +174,9 @@ export class VPNDatabase {
 
       // VPN Downloads table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_downloads (
+        CREATE TABLE IF NOT EXISTS np_vpn_downloads (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          connection_id UUID REFERENCES vpn_connections(id),
+          connection_id UUID REFERENCES np_vpn_connections(id),
           magnet_link TEXT NOT NULL,
           info_hash VARCHAR(40) NOT NULL,
           name VARCHAR(512),
@@ -191,8 +191,8 @@ export class VPNDatabase {
           seeds INTEGER DEFAULT 0,
           eta_seconds INTEGER,
           requested_by VARCHAR(255) NOT NULL,
-          provider_id VARCHAR(255) NOT NULL REFERENCES vpn_providers(id),
-          server_id UUID REFERENCES vpn_servers(id),
+          provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id),
+          server_id UUID REFERENCES np_vpn_servers(id),
           started_at TIMESTAMP WITH TIME ZONE,
           completed_at TIMESTAMP WITH TIME ZONE,
           error_message TEXT,
@@ -210,9 +210,9 @@ export class VPNDatabase {
 
       // VPN Connection Logs table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_connection_logs (
+        CREATE TABLE IF NOT EXISTS np_vpn_connection_logs (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          connection_id UUID NOT NULL REFERENCES vpn_connections(id) ON DELETE CASCADE,
+          connection_id UUID NOT NULL REFERENCES np_vpn_connections(id) ON DELETE CASCADE,
           timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           event_type VARCHAR(50) NOT NULL,
           message TEXT NOT NULL,
@@ -228,9 +228,9 @@ export class VPNDatabase {
 
       // VPN Server Performance table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_server_performance (
+        CREATE TABLE IF NOT EXISTS np_vpn_server_performance (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          server_id UUID NOT NULL REFERENCES vpn_servers(id) ON DELETE CASCADE,
+          server_id UUID NOT NULL REFERENCES np_vpn_servers(id) ON DELETE CASCADE,
           timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           ping_ms INTEGER,
           download_speed_mbps DECIMAL(10, 2),
@@ -249,9 +249,9 @@ export class VPNDatabase {
 
       // VPN Leak Tests table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS vpn_leak_tests (
+        CREATE TABLE IF NOT EXISTS np_vpn_leak_tests (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          connection_id UUID NOT NULL REFERENCES vpn_connections(id) ON DELETE CASCADE,
+          connection_id UUID NOT NULL REFERENCES np_vpn_connections(id) ON DELETE CASCADE,
           test_type VARCHAR(50) NOT NULL,
           passed BOOLEAN NOT NULL,
           expected_value VARCHAR(255),
@@ -286,7 +286,7 @@ export class VPNDatabase {
           c.bytes_received,
           c.port_forwarded,
           c.kill_switch_enabled
-        FROM vpn_connections c
+        FROM np_vpn_connections c
         JOIN vpn_providers p ON c.provider_id = p.id
         LEFT JOIN vpn_servers s ON c.server_id = s.id
         WHERE c.status = 'connected'
@@ -310,7 +310,7 @@ export class VPNDatabase {
           AVG(sp.ping_ms) AS avg_ping,
           AVG(sp.success_rate) AS avg_success_rate,
           MAX(c.connected_at) AS last_used
-        FROM vpn_servers s
+        FROM np_vpn_servers s
         LEFT JOIN vpn_connections c ON s.id = c.server_id
         LEFT JOIN vpn_server_performance sp ON s.id = sp.server_id
         GROUP BY s.id
@@ -335,7 +335,7 @@ export class VPNDatabase {
           d.completed_at,
           EXTRACT(EPOCH FROM (COALESCE(d.completed_at, NOW()) - d.started_at))::INTEGER AS duration_seconds,
           d.created_at
-        FROM vpn_downloads d
+        FROM np_vpn_downloads d
         JOIN vpn_providers p ON d.provider_id = p.id
         LEFT JOIN vpn_servers s ON d.server_id = s.id
         ORDER BY d.created_at DESC
@@ -352,7 +352,7 @@ export class VPNDatabase {
           AVG(c.duration_seconds) AS avg_session_duration_seconds,
           ROUND((COUNT(CASE WHEN c.error_message IS NULL THEN 1 END)::NUMERIC /
                  NULLIF(COUNT(c.id), 0) * 100), 2) AS success_rate_percent
-        FROM vpn_providers p
+        FROM np_vpn_providers p
         LEFT JOIN vpn_connections c ON p.id = c.provider_id
         GROUP BY p.id
         ORDER BY total_connections DESC
@@ -375,7 +375,7 @@ export class VPNDatabase {
 
   async upsertProvider(provider: Partial<VPNProviderRecord>): Promise<VPNProviderRecord> {
     const result = await this.pool.query<VPNProviderRecord>(
-      `INSERT INTO vpn_providers (
+      `INSERT INTO np_vpn_providers (
         id, name, display_name, cli_available, cli_command, api_available, api_endpoint,
         port_forwarding_supported, p2p_all_servers, p2p_server_count, total_servers,
         total_countries, wireguard_supported, openvpn_supported, kill_switch_available,
@@ -423,12 +423,12 @@ export class VPNDatabase {
   }
 
   async getProvider(id: string): Promise<VPNProviderRecord | null> {
-    const result = await this.pool.query<VPNProviderRecord>('SELECT * FROM vpn_providers WHERE id = $1', [id]);
+    const result = await this.pool.query<VPNProviderRecord>('SELECT * FROM np_vpn_providers WHERE id = $1', [id]);
     return result.rows[0] || null;
   }
 
   async getAllProviders(): Promise<VPNProviderRecord[]> {
-    const result = await this.pool.query<VPNProviderRecord>('SELECT * FROM vpn_providers ORDER BY name');
+    const result = await this.pool.query<VPNProviderRecord>('SELECT * FROM np_vpn_providers ORDER BY name');
     return result.rows;
   }
 
@@ -438,7 +438,7 @@ export class VPNDatabase {
 
   async upsertCredentials(credentials: Partial<VPNCredentialRecord>, encryptionKey: string): Promise<VPNCredentialRecord> {
     const result = await this.pool.query<VPNCredentialRecord>(
-      `INSERT INTO vpn_credentials (
+      `INSERT INTO np_vpn_credentials (
         provider_id, username, password_encrypted, api_key_encrypted, api_token_encrypted,
         account_number, private_key_encrypted, additional_data, expires_at
       ) VALUES (
@@ -486,7 +486,7 @@ export class VPNDatabase {
         pgp_sym_decrypt(api_key_encrypted, $2) AS api_key_encrypted,
         pgp_sym_decrypt(api_token_encrypted, $2) AS api_token_encrypted,
         pgp_sym_decrypt(private_key_encrypted, $2) AS private_key_encrypted
-      FROM vpn_credentials
+      FROM np_vpn_credentials
       WHERE provider_id = $1`,
       [providerId, encryptionKey]
     );
@@ -494,7 +494,7 @@ export class VPNDatabase {
   }
 
   async deleteCredentials(providerId: string): Promise<boolean> {
-    const result = await this.pool.query('DELETE FROM vpn_credentials WHERE provider_id = $1', [providerId]);
+    const result = await this.pool.query('DELETE FROM np_vpn_credentials WHERE provider_id = $1', [providerId]);
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -504,7 +504,7 @@ export class VPNDatabase {
 
   async upsertServer(server: Partial<VPNServerRecord>): Promise<VPNServerRecord> {
     const result = await this.pool.query<VPNServerRecord>(
-      `INSERT INTO vpn_servers (
+      `INSERT INTO np_vpn_servers (
         provider_id, hostname, ip_address, ipv6_address, country_code, country_name, city, region,
         latitude, longitude, p2p_supported, port_forwarding_supported, protocols, load, capacity,
         status, features, public_key, endpoint_port, owned, metadata
@@ -596,7 +596,7 @@ export class VPNDatabase {
 
     const limit = filters.limit || 100;
     const query = `
-      SELECT * FROM vpn_servers
+      SELECT * FROM np_vpn_servers
       WHERE ${conditions.join(' AND ')}
       ORDER BY load ASC NULLS LAST, created_at DESC
       LIMIT $${paramIndex}
@@ -613,7 +613,7 @@ export class VPNDatabase {
 
   async createConnection(connection: Partial<VPNConnectionRecord>): Promise<VPNConnectionRecord> {
     const result = await this.pool.query<VPNConnectionRecord>(
-      `INSERT INTO vpn_connections (
+      `INSERT INTO np_vpn_connections (
         provider_id, server_id, protocol, status, local_ip, vpn_ip, interface_name, dns_servers,
         connected_at, kill_switch_enabled, requested_by, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -680,13 +680,13 @@ export class VPNDatabase {
 
   async getActiveConnection(): Promise<VPNConnectionRecord | null> {
     const result = await this.pool.query<VPNConnectionRecord>(
-      `SELECT * FROM vpn_connections WHERE status = 'connected' ORDER BY connected_at DESC LIMIT 1`
+      `SELECT * FROM np_vpn_connections WHERE status = 'connected' ORDER BY connected_at DESC LIMIT 1`
     );
     return result.rows[0] || null;
   }
 
   async getConnection(id: string): Promise<VPNConnectionRecord | null> {
-    const result = await this.pool.query<VPNConnectionRecord>('SELECT * FROM vpn_connections WHERE id = $1', [id]);
+    const result = await this.pool.query<VPNConnectionRecord>('SELECT * FROM np_vpn_connections WHERE id = $1', [id]);
     return result.rows[0] || null;
   }
 
@@ -696,7 +696,7 @@ export class VPNDatabase {
 
   async createDownload(download: Partial<VPNDownloadRecord>): Promise<VPNDownloadRecord> {
     const result = await this.pool.query<VPNDownloadRecord>(
-      `INSERT INTO vpn_downloads (
+      `INSERT INTO np_vpn_downloads (
         connection_id, magnet_link, info_hash, name, destination_path, status, progress,
         bytes_downloaded, bytes_total, requested_by, provider_id, server_id, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -766,13 +766,13 @@ export class VPNDatabase {
   }
 
   async getDownload(id: string): Promise<VPNDownloadRecord | null> {
-    const result = await this.pool.query<VPNDownloadRecord>('SELECT * FROM vpn_downloads WHERE id = $1', [id]);
+    const result = await this.pool.query<VPNDownloadRecord>('SELECT * FROM np_vpn_downloads WHERE id = $1', [id]);
     return result.rows[0] || null;
   }
 
   async getActiveDownloads(): Promise<VPNDownloadRecord[]> {
     const result = await this.pool.query<VPNDownloadRecord>(
-      `SELECT * FROM vpn_downloads
+      `SELECT * FROM np_vpn_downloads
        WHERE status IN ('queued', 'connecting_vpn', 'downloading', 'paused')
        ORDER BY created_at ASC`
     );
@@ -781,7 +781,7 @@ export class VPNDatabase {
 
   async getAllDownloads(limit: number = 100): Promise<VPNDownloadRecord[]> {
     const result = await this.pool.query<VPNDownloadRecord>(
-      'SELECT * FROM vpn_downloads ORDER BY created_at DESC LIMIT $1',
+      'SELECT * FROM np_vpn_downloads ORDER BY created_at DESC LIMIT $1',
       [limit]
     );
     return result.rows;
@@ -797,7 +797,7 @@ export class VPNDatabase {
       `SELECT
         COUNT(*) as total,
         COUNT(CASE WHEN status = 'connected' THEN 1 END) as active
-      FROM vpn_connections`
+      FROM np_vpn_connections`
     );
 
     // Get total and active downloads
@@ -806,7 +806,7 @@ export class VPNDatabase {
         COUNT(*) as total,
         COUNT(CASE WHEN status IN ('downloading', 'queued', 'connecting_vpn') THEN 1 END) as active,
         SUM(bytes_downloaded) as bytes
-      FROM vpn_downloads`
+      FROM np_vpn_downloads`
     );
 
     // Get provider stats

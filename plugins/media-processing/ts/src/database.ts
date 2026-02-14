@@ -84,7 +84,7 @@ export class MediaProcessingDatabase {
       -- Encoding Profiles
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_encoding_profiles (
+      CREATE TABLE IF NOT EXISTS np_mediap_encoding_profiles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         name VARCHAR(128) NOT NULL,
@@ -115,19 +115,19 @@ export class MediaProcessingDatabase {
         UNIQUE(source_account_id, name)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_profiles_account ON mp_encoding_profiles(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_profiles_default ON mp_encoding_profiles(is_default) WHERE is_default = true;
+      CREATE INDEX IF NOT EXISTS idx_mp_profiles_account ON np_mediap_encoding_profiles(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_mp_profiles_default ON np_mediap_encoding_profiles(is_default) WHERE is_default = true;
 
       -- =====================================================================
       -- Jobs
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_jobs (
+      CREATE TABLE IF NOT EXISTS np_mediap_jobs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         input_url TEXT NOT NULL,
         input_type VARCHAR(32) DEFAULT 'file',
-        profile_id UUID REFERENCES mp_encoding_profiles(id) ON DELETE SET NULL,
+        profile_id UUID REFERENCES np_mediap_encoding_profiles(id) ON DELETE SET NULL,
         status VARCHAR(32) DEFAULT 'pending',
         priority INTEGER DEFAULT 0,
         progress DOUBLE PRECISION DEFAULT 0,
@@ -144,21 +144,21 @@ export class MediaProcessingDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_jobs_account ON mp_jobs(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_jobs_status ON mp_jobs(status);
-      CREATE INDEX IF NOT EXISTS idx_mp_jobs_profile ON mp_jobs(profile_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_jobs_created ON mp_jobs(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_mp_jobs_priority ON mp_jobs(priority DESC, created_at ASC) WHERE status = 'pending';
-      CREATE INDEX IF NOT EXISTS idx_mp_jobs_heartbeat ON mp_jobs(heartbeat_at) WHERE leased_by IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_account ON np_mediap_jobs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_status ON np_mediap_jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_profile ON np_mediap_jobs(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_created ON np_mediap_jobs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_priority ON np_mediap_jobs(priority DESC, created_at ASC) WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_heartbeat ON np_mediap_jobs(heartbeat_at) WHERE leased_by IS NOT NULL;
 
       -- =====================================================================
       -- Job Outputs
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_job_outputs (
+      CREATE TABLE IF NOT EXISTS np_mediap_job_outputs (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        job_id UUID NOT NULL REFERENCES mp_jobs(id) ON DELETE CASCADE,
+        job_id UUID NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
         output_type VARCHAR(32) NOT NULL,
         resolution_label VARCHAR(16),
         file_path TEXT NOT NULL,
@@ -173,18 +173,18 @@ export class MediaProcessingDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_outputs_account ON mp_job_outputs(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_outputs_job ON mp_job_outputs(job_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_outputs_type ON mp_job_outputs(output_type);
+      CREATE INDEX IF NOT EXISTS idx_mp_outputs_account ON np_mediap_job_outputs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_mp_outputs_job ON np_mediap_job_outputs(job_id);
+      CREATE INDEX IF NOT EXISTS idx_mp_outputs_type ON np_mediap_job_outputs(output_type);
 
       -- =====================================================================
       -- HLS Manifests
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_hls_manifests (
+      CREATE TABLE IF NOT EXISTS np_mediap_hls_manifests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        job_id UUID NOT NULL REFERENCES mp_jobs(id) ON DELETE CASCADE,
+        job_id UUID NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
         master_manifest_path TEXT NOT NULL,
         variant_manifests JSONB DEFAULT '[]'::jsonb,
         segment_count INTEGER DEFAULT 0,
@@ -192,17 +192,17 @@ export class MediaProcessingDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_hls_account ON mp_hls_manifests(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_hls_job ON mp_hls_manifests(job_id);
+      CREATE INDEX IF NOT EXISTS idx_mp_hls_account ON np_mediap_hls_manifests(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_mp_hls_job ON np_mediap_hls_manifests(job_id);
 
       -- =====================================================================
       -- Subtitles
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_subtitles (
+      CREATE TABLE IF NOT EXISTS np_mediap_subtitles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        job_id UUID NOT NULL REFERENCES mp_jobs(id) ON DELETE CASCADE,
+        job_id UUID NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
         language VARCHAR(16) NOT NULL DEFAULT 'en',
         label VARCHAR(64),
         format VARCHAR(8) DEFAULT 'vtt',
@@ -212,17 +212,17 @@ export class MediaProcessingDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_subtitles_account ON mp_subtitles(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_subtitles_job ON mp_subtitles(job_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_subtitles_account ON np_mediap_subtitles(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_subtitles_job ON np_mediap_subtitles(job_id);
 
       -- =====================================================================
       -- Trickplay
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_trickplay (
+      CREATE TABLE IF NOT EXISTS np_mediap_trickplay (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        job_id UUID NOT NULL REFERENCES mp_jobs(id) ON DELETE CASCADE,
+        job_id UUID NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
         tile_width INTEGER DEFAULT 320,
         tile_height INTEGER DEFAULT 180,
         columns INTEGER DEFAULT 10,
@@ -234,14 +234,14 @@ export class MediaProcessingDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_trickplay_account ON mp_trickplay(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_trickplay_job ON mp_trickplay(job_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_trickplay_account ON np_mediap_trickplay(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_mediap_trickplay_job ON np_mediap_trickplay(job_id);
 
       -- =====================================================================
       -- Webhook Events
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS mp_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_mediap_webhook_events (
         id VARCHAR(255) PRIMARY KEY,
         source_account_id VARCHAR(128) DEFAULT 'primary',
         event_type VARCHAR(128) NOT NULL,
@@ -252,9 +252,9 @@ export class MediaProcessingDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_mp_webhook_account ON mp_webhook_events(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_mp_webhook_processed ON mp_webhook_events(processed);
-      CREATE INDEX IF NOT EXISTS idx_mp_webhook_created ON mp_webhook_events(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_mp_webhook_account ON np_mediap_webhook_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_mp_webhook_processed ON np_mediap_webhook_events(processed);
+      CREATE INDEX IF NOT EXISTS idx_mp_webhook_created ON np_mediap_webhook_events(created_at DESC);
 
       -- =====================================================================
       -- Watcher Events (UPGRADE 1c)
@@ -266,7 +266,7 @@ export class MediaProcessingDatabase {
         file_path TEXT NOT NULL,
         file_size BIGINT DEFAULT 0,
         event_type VARCHAR(32) NOT NULL DEFAULT 'detected',
-        job_id UUID REFERENCES mp_jobs(id) ON DELETE SET NULL,
+        job_id UUID REFERENCES np_mediap_jobs(id) ON DELETE SET NULL,
         error_message TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
@@ -282,7 +282,7 @@ export class MediaProcessingDatabase {
       CREATE TABLE IF NOT EXISTS np_mediap_uploads (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        job_id UUID NOT NULL REFERENCES mp_jobs(id) ON DELETE CASCADE,
+        job_id UUID NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
         file_path TEXT NOT NULL,
         storage_path TEXT NOT NULL,
         storage_url TEXT,
@@ -300,21 +300,21 @@ export class MediaProcessingDatabase {
 
     await this.db.execute(schema);
 
-    // Migration: add heartbeat_at and leased_by columns to mp_jobs if missing
+    // Migration: add heartbeat_at and leased_by columns to np_mediap_jobs if missing
     await this.db.execute(`
       DO $$
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'mp_jobs' AND column_name = 'heartbeat_at'
+          WHERE table_name = 'np_mediap_jobs' AND column_name = 'heartbeat_at'
         ) THEN
-          ALTER TABLE mp_jobs ADD COLUMN heartbeat_at TIMESTAMP WITH TIME ZONE;
+          ALTER TABLE np_mediap_jobs ADD COLUMN heartbeat_at TIMESTAMP WITH TIME ZONE;
         END IF;
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
-          WHERE table_name = 'mp_jobs' AND column_name = 'leased_by'
+          WHERE table_name = 'np_mediap_jobs' AND column_name = 'leased_by'
         ) THEN
-          ALTER TABLE mp_jobs ADD COLUMN leased_by VARCHAR(255);
+          ALTER TABLE np_mediap_jobs ADD COLUMN leased_by VARCHAR(255);
         END IF;
       END $$;
     `);
@@ -336,7 +336,7 @@ export class MediaProcessingDatabase {
     ];
 
     const result = await this.db.query<EncodingProfileRecord>(
-      `INSERT INTO mp_encoding_profiles (
+      `INSERT INTO np_mediap_encoding_profiles (
         source_account_id, name, description, container, video_codec, audio_codec,
         resolutions, audio_bitrate, framerate, preset, hls_enabled, hls_segment_duration,
         trickplay_enabled, trickplay_interval, subtitle_extract, thumbnail_enabled,
@@ -374,7 +374,7 @@ export class MediaProcessingDatabase {
 
   async getEncodingProfile(id: string): Promise<EncodingProfileRecord | null> {
     const result = await this.db.query<EncodingProfileRecord>(
-      'SELECT * FROM mp_encoding_profiles WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_mediap_encoding_profiles WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -383,7 +383,7 @@ export class MediaProcessingDatabase {
 
   async listEncodingProfiles(): Promise<EncodingProfileRecord[]> {
     const result = await this.db.query<EncodingProfileRecord>(
-      'SELECT * FROM mp_encoding_profiles WHERE source_account_id = $1 ORDER BY is_default DESC, created_at DESC',
+      'SELECT * FROM np_mediap_encoding_profiles WHERE source_account_id = $1 ORDER BY is_default DESC, created_at DESC',
       [this.sourceAccountId]
     );
 
@@ -392,7 +392,7 @@ export class MediaProcessingDatabase {
 
   async getDefaultEncodingProfile(): Promise<EncodingProfileRecord | null> {
     const result = await this.db.query<EncodingProfileRecord>(
-      'SELECT * FROM mp_encoding_profiles WHERE source_account_id = $1 AND is_default = true LIMIT 1',
+      'SELECT * FROM np_mediap_encoding_profiles WHERE source_account_id = $1 AND is_default = true LIMIT 1',
       [this.sourceAccountId]
     );
 
@@ -476,7 +476,7 @@ export class MediaProcessingDatabase {
     updates.push('updated_at = NOW()');
 
     const result = await this.db.query<EncodingProfileRecord>(
-      `UPDATE mp_encoding_profiles SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $2 RETURNING *`,
+      `UPDATE np_mediap_encoding_profiles SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $2 RETURNING *`,
       values
     );
 
@@ -489,7 +489,7 @@ export class MediaProcessingDatabase {
 
   async deleteEncodingProfile(id: string): Promise<void> {
     await this.db.execute(
-      'DELETE FROM mp_encoding_profiles WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_mediap_encoding_profiles WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
   }
@@ -526,7 +526,7 @@ export class MediaProcessingDatabase {
 
   async createJob(input: CreateJobInput): Promise<JobRecord> {
     const result = await this.db.query<JobRecord>(
-      `INSERT INTO mp_jobs (
+      `INSERT INTO np_mediap_jobs (
         source_account_id, input_url, input_type, profile_id, priority, output_base_path
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
@@ -549,7 +549,7 @@ export class MediaProcessingDatabase {
 
   async getJob(id: string): Promise<JobRecord | null> {
     const result = await this.db.query<JobRecord>(
-      'SELECT * FROM mp_jobs WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_mediap_jobs WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -577,7 +577,7 @@ export class MediaProcessingDatabase {
   }
 
   async listJobs(status?: string, limit = 50, offset = 0): Promise<JobRecord[]> {
-    let query = 'SELECT * FROM mp_jobs WHERE source_account_id = $1';
+    let query = 'SELECT * FROM np_mediap_jobs WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
 
     if (status) {
@@ -616,14 +616,14 @@ export class MediaProcessingDatabase {
     }
 
     await this.db.execute(
-      `UPDATE mp_jobs SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $2`,
+      `UPDATE np_mediap_jobs SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $2`,
       params
     );
   }
 
   async updateJobMetadata(id: string, metadata: Record<string, unknown>): Promise<void> {
     await this.db.execute(
-      'UPDATE mp_jobs SET input_metadata = $3, updated_at = NOW() WHERE id = $1 AND source_account_id = $2',
+      'UPDATE np_mediap_jobs SET input_metadata = $3, updated_at = NOW() WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId, JSON.stringify(metadata)]
     );
   }
@@ -660,7 +660,7 @@ export class MediaProcessingDatabase {
 
   async createJobOutput(output: Omit<JobOutputRecord, 'id' | 'source_account_id' | 'created_at'>): Promise<JobOutputRecord> {
     const result = await this.db.query<JobOutputRecord>(
-      `INSERT INTO mp_job_outputs (
+      `INSERT INTO np_mediap_job_outputs (
         source_account_id, job_id, output_type, resolution_label, file_path,
         file_size_bytes, content_type, width, height, bitrate, duration_seconds, language, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -687,7 +687,7 @@ export class MediaProcessingDatabase {
 
   async getJobOutputs(jobId: string): Promise<JobOutputRecord[]> {
     const result = await this.db.query<JobOutputRecord>(
-      'SELECT * FROM mp_job_outputs WHERE job_id = $1 AND source_account_id = $2 ORDER BY created_at',
+      'SELECT * FROM np_mediap_job_outputs WHERE job_id = $1 AND source_account_id = $2 ORDER BY created_at',
       [jobId, this.sourceAccountId]
     );
 
@@ -720,7 +720,7 @@ export class MediaProcessingDatabase {
 
   async createHlsManifest(manifest: Omit<HlsManifestRecord, 'id' | 'source_account_id' | 'created_at'>): Promise<HlsManifestRecord> {
     const result = await this.db.query<HlsManifestRecord>(
-      `INSERT INTO mp_hls_manifests (
+      `INSERT INTO np_mediap_hls_manifests (
         source_account_id, job_id, master_manifest_path, variant_manifests, segment_count, total_duration_seconds
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
@@ -739,7 +739,7 @@ export class MediaProcessingDatabase {
 
   async getHlsManifest(jobId: string): Promise<HlsManifestRecord | null> {
     const result = await this.db.query<HlsManifestRecord>(
-      'SELECT * FROM mp_hls_manifests WHERE job_id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_mediap_hls_manifests WHERE job_id = $1 AND source_account_id = $2',
       [jobId, this.sourceAccountId]
     );
 
@@ -765,7 +765,7 @@ export class MediaProcessingDatabase {
 
   async createSubtitle(subtitle: Omit<SubtitleRecord, 'id' | 'source_account_id' | 'created_at'>): Promise<SubtitleRecord> {
     const result = await this.db.query<SubtitleRecord>(
-      `INSERT INTO mp_subtitles (
+      `INSERT INTO np_mediap_subtitles (
         source_account_id, job_id, language, label, format, file_path, is_default, is_forced
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`,
@@ -786,7 +786,7 @@ export class MediaProcessingDatabase {
 
   async getJobSubtitles(jobId: string): Promise<SubtitleRecord[]> {
     const result = await this.db.query<SubtitleRecord>(
-      'SELECT * FROM mp_subtitles WHERE job_id = $1 AND source_account_id = $2 ORDER BY is_default DESC, language',
+      'SELECT * FROM np_mediap_subtitles WHERE job_id = $1 AND source_account_id = $2 ORDER BY is_default DESC, language',
       [jobId, this.sourceAccountId]
     );
 
@@ -814,7 +814,7 @@ export class MediaProcessingDatabase {
 
   async createTrickplay(trickplay: Omit<TrickplayRecord, 'id' | 'source_account_id' | 'created_at'>): Promise<TrickplayRecord> {
     const result = await this.db.query<TrickplayRecord>(
-      `INSERT INTO mp_trickplay (
+      `INSERT INTO np_mediap_trickplay (
         source_account_id, job_id, tile_width, tile_height, columns, rows,
         interval_seconds, file_path, index_path, total_thumbnails
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -838,7 +838,7 @@ export class MediaProcessingDatabase {
 
   async getTrickplay(jobId: string): Promise<TrickplayRecord | null> {
     const result = await this.db.query<TrickplayRecord>(
-      'SELECT * FROM mp_trickplay WHERE job_id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_mediap_trickplay WHERE job_id = $1 AND source_account_id = $2',
       [jobId, this.sourceAccountId]
     );
 
@@ -868,7 +868,7 @@ export class MediaProcessingDatabase {
 
   async insertWebhookEvent(id: string, eventType: string, payload: Record<string, unknown>): Promise<void> {
     await this.db.execute(
-      `INSERT INTO mp_webhook_events (id, source_account_id, event_type, payload)
+      `INSERT INTO np_mediap_webhook_events (id, source_account_id, event_type, payload)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (id) DO NOTHING`,
       [id, this.sourceAccountId, eventType, JSON.stringify(payload)]
@@ -877,7 +877,7 @@ export class MediaProcessingDatabase {
 
   async markEventProcessed(id: string, error?: string): Promise<void> {
     await this.db.execute(
-      `UPDATE mp_webhook_events
+      `UPDATE np_mediap_webhook_events
        SET processed = true, processed_at = NOW(), error = $3
        WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId, error ?? null]
@@ -909,10 +909,10 @@ export class MediaProcessingDatabase {
         COUNT(*) FILTER (WHERE status = 'failed')::text as failed_jobs,
         SUM(duration_seconds)::text as total_duration_seconds,
         SUM(file_size_bytes)::text as total_file_size_bytes,
-        (SELECT COUNT(*)::text FROM mp_encoding_profiles WHERE source_account_id = $1) as profiles,
+        (SELECT COUNT(*)::text FROM np_mediap_encoding_profiles WHERE source_account_id = $1) as profiles,
         AVG(EXTRACT(EPOCH FROM (completed_at - started_at)))::text as avg_processing_time,
         MAX(completed_at)::text as last_job_completed
-       FROM mp_jobs
+       FROM np_mediap_jobs
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
@@ -938,12 +938,12 @@ export class MediaProcessingDatabase {
 
   async leaseNextJob(workerId: string): Promise<LeasedJob | null> {
     const result = await this.db.query<LeasedJob>(
-      `UPDATE mp_jobs SET
+      `UPDATE np_mediap_jobs SET
         leased_by = $2,
         heartbeat_at = NOW(),
         updated_at = NOW()
       WHERE id = (
-        SELECT id FROM mp_jobs
+        SELECT id FROM np_mediap_jobs
         WHERE source_account_id = $1
           AND status = 'pending'
           AND leased_by IS NULL
@@ -960,7 +960,7 @@ export class MediaProcessingDatabase {
 
   async heartbeatJob(jobId: string, workerId: string): Promise<void> {
     await this.db.execute(
-      `UPDATE mp_jobs SET heartbeat_at = NOW(), updated_at = NOW()
+      `UPDATE np_mediap_jobs SET heartbeat_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2 AND leased_by = $3`,
       [jobId, this.sourceAccountId, workerId]
     );
@@ -968,7 +968,7 @@ export class MediaProcessingDatabase {
 
   async reclaimStaleJobs(timeoutMinutes: number): Promise<number> {
     const result = await this.db.query<{ id: string }>(
-      `UPDATE mp_jobs SET
+      `UPDATE np_mediap_jobs SET
         status = 'failed',
         error_message = 'Stale heartbeat - worker did not respond within ' || $3 || ' minutes',
         leased_by = NULL,
@@ -992,7 +992,7 @@ export class MediaProcessingDatabase {
 
   async releaseJobLease(jobId: string): Promise<void> {
     await this.db.execute(
-      `UPDATE mp_jobs SET leased_by = NULL, heartbeat_at = NULL, updated_at = NOW()
+      `UPDATE np_mediap_jobs SET leased_by = NULL, heartbeat_at = NULL, updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2`,
       [jobId, this.sourceAccountId]
     );

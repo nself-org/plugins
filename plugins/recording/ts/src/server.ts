@@ -14,6 +14,8 @@ import type {
   CreateScheduleRequest,
   UpdateScheduleRequest,
   TriggerEncodeRequest,
+  NtvCreateRecordingRequest,
+  NtvScheduleRecordingRequest,
   SportsWebhookPayload,
   DeviceWebhookPayload,
   RecordingStatus,
@@ -477,6 +479,242 @@ export async function createServer(config?: Partial<Config>) {
         autoPublish: fullConfig.autoPublish,
       },
       timestamp: new Date().toISOString(),
+    };
+  });
+
+  // =========================================================================
+  // nTV v1 API Endpoints
+  // =========================================================================
+
+  // POST /api/v1/recordings - Create a recording (nTV frontend format)
+  app.post('/api/v1/recordings', async (request, reply) => {
+    try {
+      const body = request.body as NtvCreateRecordingRequest;
+      const appId = getAppId(request);
+
+      if (!body.title || !body.channel_id || !body.start_time || !body.end_time) {
+        return reply.status(400).send({
+          error: 'title, channel_id, start_time, and end_time are required',
+        });
+      }
+
+      const recording = await scopedDb(request).createRecording(appId, {
+        title: body.title,
+        source_type: 'live_tv',
+        source_channel: body.channel_id,
+        source_id: body.program_id,
+        scheduled_start: body.start_time,
+        scheduled_end: body.end_time,
+      });
+
+      return reply.status(201).send(recording);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 create recording failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // POST /api/v1/recordings/schedule - Schedule a recurring recording
+  app.post('/api/v1/recordings/schedule', async (request, reply) => {
+    try {
+      const body = request.body as NtvScheduleRecordingRequest;
+      const appId = getAppId(request);
+
+      if (!body.title || !body.channel_id || !body.start_time || !body.end_time) {
+        return reply.status(400).send({
+          error: 'title, channel_id, start_time, and end_time are required',
+        });
+      }
+
+      const recording = await scopedDb(request).createRecording(appId, {
+        title: body.title,
+        source_type: 'live_tv',
+        source_channel: body.channel_id,
+        source_id: body.program_id,
+        scheduled_start: body.start_time,
+        scheduled_end: body.end_time,
+        priority: body.priority ?? 'normal',
+        metadata: {
+          recurring: body.recurring,
+          series_id: body.series_id ?? null,
+        },
+      });
+
+      // If recurring, also create a schedule entry for future instances
+      if (body.recurring) {
+        const durationMs = new Date(body.end_time).getTime() - new Date(body.start_time).getTime();
+        const durationMinutes = Math.ceil(durationMs / 60000);
+
+        await scopedDb(request).createSchedule(appId, {
+          name: body.title,
+          schedule_type: 'recurring',
+          source_channel: body.channel_id,
+          duration_minutes: durationMinutes,
+          priority: body.priority ?? 'normal',
+          metadata: {
+            series_id: body.series_id ?? null,
+            program_id: body.program_id ?? null,
+          },
+        });
+      }
+
+      return reply.status(201).send(recording);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 schedule recording failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // POST /api/v1/recordings/:id/finalize - Finalize a completed recording
+  app.post('/api/v1/recordings/:id/finalize', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const recording = await scopedDb(request).finalizeRecording(id);
+
+      if (!recording) {
+        return reply.status(404).send({ error: 'Recording not found' });
+      }
+
+      // Fire-and-forget encoding request to file-processing plugin
+      if (recording.file_path && recording.status === 'processing') {
+        const encodeUrl = `${fullConfig.fileProcessingUrl}/v1/jobs`;
+        try {
+          fetch(encodeUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              recording_id: id,
+              input_path: recording.file_path,
+              profile: fullConfig.defaultEncodeProfile,
+              callback_url: `http://${fullConfig.host}:${fullConfig.port}/api/v1/recordings/${id}/encode-complete`,
+            }),
+          }).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            logger.warn(`Fire-and-forget encode request failed for recording ${id}`, { error: msg });
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          logger.warn(`Failed to dispatch encode for recording ${id}`, { error: msg });
+        }
+      }
+
+      return { ok: true, recording };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 finalize recording failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // Internal callback for encode completion (used by file-processing plugin)
+  app.post('/api/v1/recordings/:id/encode-complete', async (request, reply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const body = request.body as { output_path?: string; error?: string };
+
+      if (body.error) {
+        await scopedDb(request).updateRecordingStatus(id, 'failed', {
+          encode_status: 'failed',
+          metadata: { encode_error: body.error },
+        });
+        return { ok: true, status: 'failed' };
+      }
+
+      const recording = await scopedDb(request).updateRecordingStatus(id, 'published', {
+        encode_status: 'completed',
+        encode_completed_at: new Date().toISOString(),
+        publish_status: 'published',
+        published_at: new Date().toISOString(),
+        file_path: body.output_path ?? undefined,
+      });
+
+      if (!recording) {
+        return reply.status(404).send({ error: 'Recording not found' });
+      }
+
+      return { ok: true, status: 'ready', recording };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('v1 encode-complete callback failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  // GET /api/v1/recordings - List recordings with optional ?status filter
+  app.get('/api/v1/recordings', async (request) => {
+    const { status, limit = 100, offset = 0 } = request.query as {
+      status?: RecordingStatus;
+      limit?: number;
+      offset?: number;
+    };
+    const appId = getAppId(request);
+    const recordings = await scopedDb(request).listRecordings(appId, status, undefined, undefined, limit, offset);
+    return { data: recordings, limit, offset };
+  });
+
+  // GET /api/v1/recordings/:id - Get single recording detail including commercial markers
+  app.get('/api/v1/recordings/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const recording = await scopedDb(request).getRecording(id);
+
+    if (!recording) {
+      return reply.status(404).send({ error: 'Recording not found' });
+    }
+
+    return {
+      ...recording,
+      commercial_markers: recording.commercial_markers ?? [],
+    };
+  });
+
+  // DELETE /api/v1/recordings/:id - Delete a recording and associated files
+  app.delete('/api/v1/recordings/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const recording = await scopedDb(request).getRecording(id);
+    if (!recording) {
+      return reply.status(404).send({ error: 'Recording not found' });
+    }
+
+    // Soft-delete the recording (files cleaned by storage plugin separately)
+    const deleted = await scopedDb(request).deleteRecording(id);
+    if (!deleted) {
+      return reply.status(404).send({ error: 'Recording not found' });
+    }
+
+    // Fire-and-forget: notify storage plugin to clean up files
+    if (recording.storage_object_id) {
+      try {
+        fetch(`${fullConfig.storageUrl}/api/objects/${recording.storage_object_id}`, {
+          method: 'DELETE',
+        }).catch(() => {
+          logger.warn(`Failed to delete storage object for recording ${id}`);
+        });
+      } catch {
+        // Ignore - best-effort cleanup
+      }
+    }
+
+    return { deleted: true, id };
+  });
+
+  // GET /api/v1/schedule - Get all scheduled recordings (one-time and recurring)
+  app.get('/api/v1/schedule', async (request) => {
+    const appId = getAppId(request);
+
+    // Fetch both upcoming one-time recordings and recurring schedules
+    const [scheduledRecordings, recurringSchedules] = await Promise.all([
+      scopedDb(request).listRecordings(appId, 'scheduled', undefined, undefined, 500, 0),
+      scopedDb(request).listSchedules(appId, true, 500, 0),
+    ]);
+
+    return {
+      data: {
+        one_time: scheduledRecordings,
+        recurring: recurringSchedules,
+      },
     };
   });
 

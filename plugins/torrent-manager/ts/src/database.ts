@@ -13,6 +13,7 @@ import type {
   TorrentFile,
   TorrentTracker,
   SeedingPolicy,
+  DownloadSeedingPolicy,
   TorrentStats,
 } from './types.js';
 
@@ -39,7 +40,7 @@ export class TorrentDatabase {
 
       // Torrent Clients Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_clients (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_clients (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           client_type VARCHAR(50) NOT NULL,
@@ -58,12 +59,12 @@ export class TorrentDatabase {
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_clients_account
-        ON torrent_clients(source_account_id)
+        ON np_torrentmanager_torrent_clients(source_account_id)
       `);
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_clients_type
-        ON torrent_clients(client_type)
+        ON np_torrentmanager_torrent_clients(client_type)
       `);
 
       // Torrent Sources Table
@@ -91,10 +92,10 @@ export class TorrentDatabase {
 
       // Torrent Downloads Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_downloads (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_downloads (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
-          client_id UUID NOT NULL REFERENCES torrent_clients(id) ON DELETE CASCADE,
+          client_id UUID NOT NULL REFERENCES np_torrentmanager_torrent_clients(id) ON DELETE CASCADE,
           client_torrent_id VARCHAR(255) NOT NULL,
 
           name VARCHAR(500) NOT NULL,
@@ -144,24 +145,24 @@ export class TorrentDatabase {
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_downloads_account
-        ON torrent_downloads(source_account_id)
+        ON np_torrentmanager_torrent_downloads(source_account_id)
       `);
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_downloads_status
-        ON torrent_downloads(status)
+        ON np_torrentmanager_torrent_downloads(status)
       `);
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_downloads_info_hash
-        ON torrent_downloads(info_hash)
+        ON np_torrentmanager_torrent_downloads(info_hash)
       `);
 
       // Torrent Files Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_files (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_files (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          download_id UUID NOT NULL REFERENCES torrent_downloads(id) ON DELETE CASCADE,
+          download_id UUID NOT NULL REFERENCES np_torrentmanager_torrent_downloads(id) ON DELETE CASCADE,
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           file_index INT NOT NULL,
           file_name VARCHAR(500) NOT NULL,
@@ -178,14 +179,14 @@ export class TorrentDatabase {
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_files_download
-        ON torrent_files(download_id)
+        ON np_torrentmanager_torrent_files(download_id)
       `);
 
       // Torrent Trackers Table
       await client.query(`
-        CREATE TABLE IF NOT EXISTS torrent_trackers (
+        CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_trackers (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          download_id UUID NOT NULL REFERENCES torrent_downloads(id) ON DELETE CASCADE,
+          download_id UUID NOT NULL REFERENCES np_torrentmanager_torrent_downloads(id) ON DELETE CASCADE,
           source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
           tracker_url VARCHAR(500) NOT NULL,
           tier INT NOT NULL,
@@ -201,7 +202,7 @@ export class TorrentDatabase {
 
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_torrent_trackers_download
-        ON torrent_trackers(download_id)
+        ON np_torrentmanager_torrent_trackers(download_id)
       `);
 
       // Torrent Search Cache Table
@@ -273,24 +274,55 @@ export class TorrentDatabase {
         )
       `);
 
+      // Per-Download Seeding Policies Table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS np_torrent_seeding_policies (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
+          download_id VARCHAR(255) NOT NULL,
+          ratio_limit DECIMAL(5,2) DEFAULT 2.0,
+          time_limit_hours INT DEFAULT 168,
+          auto_remove BOOLEAN DEFAULT TRUE,
+          keep_files BOOLEAN DEFAULT FALSE,
+          favorite BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_np_torrent_seeding_policies_download
+        ON np_torrent_seeding_policies(download_id)
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_np_torrent_seeding_policies_account
+        ON np_torrent_seeding_policies(source_account_id)
+      `);
+
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_np_torrent_seeding_policies_favorite
+        ON np_torrent_seeding_policies(favorite) WHERE favorite = TRUE
+      `);
+
       // Create Views
       await client.query(`
         CREATE OR REPLACE VIEW torrent_active_downloads AS
-        SELECT * FROM torrent_downloads
+        SELECT * FROM np_torrentmanager_torrent_downloads
         WHERE status IN ('downloading', 'paused')
         ORDER BY added_at DESC
       `);
 
       await client.query(`
         CREATE OR REPLACE VIEW torrent_completed_downloads AS
-        SELECT * FROM torrent_downloads
+        SELECT * FROM np_torrentmanager_torrent_downloads
         WHERE status = 'completed'
         ORDER BY completed_at DESC
       `);
 
       await client.query(`
         CREATE OR REPLACE VIEW torrent_seeding_torrents AS
-        SELECT * FROM torrent_downloads
+        SELECT * FROM np_torrentmanager_torrent_downloads
         WHERE status = 'seeding'
         ORDER BY completed_at DESC
       `);
@@ -312,7 +344,7 @@ export class TorrentDatabase {
 
   async upsertClient(client: Partial<TorrentClient>): Promise<TorrentClient> {
     const result = await this.pool.query(
-      `INSERT INTO torrent_clients (
+      `INSERT INTO np_torrentmanager_torrent_clients (
         source_account_id, client_type, host, port, username, password_encrypted,
         is_default, status, last_connected_at, last_error
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -345,13 +377,13 @@ export class TorrentDatabase {
 
   async getDefaultClient(): Promise<TorrentClient | null> {
     const result = await this.pool.query(
-      'SELECT * FROM torrent_clients WHERE is_default = TRUE LIMIT 1'
+      'SELECT * FROM np_torrentmanager_torrent_clients WHERE is_default = TRUE LIMIT 1'
     );
     return result.rows[0] || null;
   }
 
   async listClients(): Promise<TorrentClient[]> {
-    const result = await this.pool.query('SELECT * FROM torrent_clients ORDER BY created_at DESC');
+    const result = await this.pool.query('SELECT * FROM np_torrentmanager_torrent_clients ORDER BY created_at DESC');
     return result.rows;
   }
 
@@ -361,7 +393,7 @@ export class TorrentDatabase {
 
   async createDownload(download: Partial<TorrentDownload>): Promise<TorrentDownload> {
     const result = await this.pool.query(
-      `INSERT INTO torrent_downloads (
+      `INSERT INTO np_torrentmanager_torrent_downloads (
         source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
         status, category, size_bytes, download_path, requested_by, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -427,14 +459,14 @@ export class TorrentDatabase {
     paramCount++;
 
     const result = await this.pool.query(
-      `UPDATE torrent_downloads SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
+      `UPDATE np_torrentmanager_torrent_downloads SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
       values
     );
     return result.rows[0];
   }
 
   async getDownload(id: string): Promise<TorrentDownload | null> {
-    const result = await this.pool.query('SELECT * FROM torrent_downloads WHERE id = $1', [id]);
+    const result = await this.pool.query('SELECT * FROM np_torrentmanager_torrent_downloads WHERE id = $1', [id]);
     return result.rows[0] || null;
   }
 
@@ -443,7 +475,7 @@ export class TorrentDatabase {
     category?: string;
     limit?: number;
   }): Promise<TorrentDownload[]> {
-    let query = 'SELECT * FROM torrent_downloads WHERE 1=1';
+    let query = 'SELECT * FROM np_torrentmanager_torrent_downloads WHERE 1=1';
     const values: any[] = [];
     let paramCount = 1;
 
@@ -468,7 +500,49 @@ export class TorrentDatabase {
   }
 
   async deleteDownload(id: string): Promise<void> {
-    await this.pool.query('DELETE FROM torrent_downloads WHERE id = $1', [id]);
+    await this.pool.query('DELETE FROM np_torrentmanager_torrent_downloads WHERE id = $1', [id]);
+  }
+
+  // ============================================================================
+  // Per-Download Seeding Policy Operations
+  // ============================================================================
+
+  async upsertDownloadSeedingPolicy(
+    downloadId: string,
+    policy: Partial<DownloadSeedingPolicy>
+  ): Promise<DownloadSeedingPolicy> {
+    const result = await this.pool.query(
+      `INSERT INTO np_torrent_seeding_policies (
+        source_account_id, download_id, ratio_limit, time_limit_hours,
+        auto_remove, keep_files, favorite
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (download_id) DO UPDATE SET
+        ratio_limit = COALESCE(EXCLUDED.ratio_limit, np_torrent_seeding_policies.ratio_limit),
+        time_limit_hours = COALESCE(EXCLUDED.time_limit_hours, np_torrent_seeding_policies.time_limit_hours),
+        auto_remove = COALESCE(EXCLUDED.auto_remove, np_torrent_seeding_policies.auto_remove),
+        keep_files = COALESCE(EXCLUDED.keep_files, np_torrent_seeding_policies.keep_files),
+        favorite = COALESCE(EXCLUDED.favorite, np_torrent_seeding_policies.favorite),
+        updated_at = NOW()
+      RETURNING *`,
+      [
+        policy.source_account_id || 'primary',
+        downloadId,
+        policy.ratio_limit ?? 2.0,
+        policy.time_limit_hours ?? 168,
+        policy.auto_remove ?? true,
+        policy.keep_files ?? false,
+        policy.favorite ?? false,
+      ]
+    );
+    return result.rows[0];
+  }
+
+  async getDownloadSeedingPolicy(downloadId: string): Promise<DownloadSeedingPolicy | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM np_torrent_seeding_policies WHERE download_id = $1',
+      [downloadId]
+    );
+    return result.rows[0] || null;
   }
 
   // ============================================================================
@@ -521,7 +595,7 @@ export class TorrentDatabase {
         COALESCE(AVG(ratio), 0) as overall_ratio,
         COALESCE(SUM(download_speed_bytes), 0) as download_speed_bytes,
         COALESCE(SUM(upload_speed_bytes), 0) as upload_speed_bytes
-      FROM torrent_downloads
+      FROM np_torrentmanager_torrent_downloads
     `);
 
     return {

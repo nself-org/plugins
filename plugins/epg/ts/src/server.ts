@@ -41,6 +41,308 @@ import type {
 
 const logger = createLogger('epg:server');
 
+// =========================================================================
+// XMLTV Parsing
+// =========================================================================
+
+interface XmltvChannel {
+  id: string;
+  name: string;
+  displayName: string | null;
+  number: string | null;
+  icon: string | null;
+  lang: string | null;
+}
+
+interface XmltvProgramme {
+  channel: string;
+  title: string;
+  subTitle: string | null;
+  desc: string | null;
+  start: string;
+  startTime: Date | null;
+  endTime: Date | null;
+  externalId: string | null;
+  categories: string[];
+  date: string | null;
+  seasonNumber: number | null;
+  episodeNumber: number | null;
+  rating: string | null;
+  starRating: number | null;
+  icon: string | null;
+  directors: string[];
+  actors: string[];
+  isNew: boolean;
+  isLive: boolean;
+  isPremiere: boolean;
+  isRerun: boolean;
+  lang: string | null;
+}
+
+/**
+ * Parse XMLTV timestamp format: "20260214180000 +0000" or "20260214180000"
+ */
+function parseXmltvTime(timeStr: string | null): Date | null {
+  if (!timeStr) return null;
+  const cleaned = timeStr.trim();
+  // Format: YYYYMMDDHHmmss [+/-offset]
+  const match = cleaned.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\s*([+-]\d{4})?$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second, offset] = match;
+  const isoStr = `${year}-${month}-${day}T${hour}:${minute}:${second}${offset ? formatOffset(offset) : 'Z'}`;
+
+  const date = new Date(isoStr);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Parse XMLTV date format: "2026", "20260214", or "20260214180000"
+ * Returns a Date or null.
+ */
+function parseXmltvDate(dateStr: string): Date | null {
+  const cleaned = dateStr.trim();
+  if (cleaned.length === 4) {
+    // Year only: "2026" -> Jan 1 of that year
+    const d = new Date(`${cleaned}-01-01T00:00:00Z`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (cleaned.length >= 8) {
+    const year = cleaned.substring(0, 4);
+    const month = cleaned.substring(4, 6);
+    const day = cleaned.substring(6, 8);
+    const d = new Date(`${year}-${month}-${day}T00:00:00Z`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  // Fallback: try native parsing
+  const d = new Date(cleaned);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatOffset(offset: string): string {
+  // Convert "+0500" to "+05:00"
+  return `${offset.slice(0, 3)}:${offset.slice(3)}`;
+}
+
+/**
+ * Extract text content from a simple XML element.
+ * Handles both <tag>text</tag> and <tag attr="val">text</tag>.
+ */
+function extractText(xml: string, tag: string): string | null {
+  const regex = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'i');
+  const match = xml.match(regex);
+  return match ? decodeXmlEntities(match[1].trim()) : null;
+}
+
+/**
+ * Extract all text values for a given tag (returns array).
+ */
+function extractAllText(xml: string, tag: string): string[] {
+  const regex = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'gi');
+  const results: string[] = [];
+  let match;
+  while ((match = regex.exec(xml)) !== null) {
+    const text = decodeXmlEntities(match[1].trim());
+    if (text) results.push(text);
+  }
+  return results;
+}
+
+/**
+ * Extract an attribute value from an XML element string.
+ */
+function extractAttr(elementStr: string, attr: string): string | null {
+  const regex = new RegExp(`${attr}\\s*=\\s*"([^"]*)"`, 'i');
+  const match = elementStr.match(regex);
+  return match ? decodeXmlEntities(match[1]) : null;
+}
+
+/**
+ * Decode basic XML entities.
+ */
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)));
+}
+
+/**
+ * Parse XMLTV episode-num format (xmltv_ns): "season.episode.part"
+ * Season and episode are 0-indexed in this format.
+ */
+function parseEpisodeNum(epNumBlock: string): { season: number | null; episode: number | null } {
+  // Find xmltv_ns system
+  const nsMatch = epNumBlock.match(/<episode-num[^>]*system\s*=\s*"xmltv_ns"[^>]*>([^<]*)<\/episode-num>/i);
+  if (nsMatch) {
+    const parts = nsMatch[1].trim().split('.');
+    const season = parts[0] ? parseInt(parts[0], 10) : null;
+    const episode = parts[1] ? parseInt(parts[1], 10) : null;
+    return {
+      season: season !== null && !isNaN(season) ? season + 1 : null,  // Convert 0-indexed to 1-indexed
+      episode: episode !== null && !isNaN(episode) ? episode + 1 : null,
+    };
+  }
+
+  // Try onscreen format
+  const onscreenMatch = epNumBlock.match(/<episode-num[^>]*system\s*=\s*"onscreen"[^>]*>([^<]*)<\/episode-num>/i);
+  if (onscreenMatch) {
+    const text = onscreenMatch[1].trim();
+    const seMatch = text.match(/S(\d+)\s*E(\d+)/i);
+    if (seMatch) {
+      return {
+        season: parseInt(seMatch[1], 10),
+        episode: parseInt(seMatch[2], 10),
+      };
+    }
+  }
+
+  return { season: null, episode: null };
+}
+
+/**
+ * Parse XMLTV XML data into structured channels and programmes.
+ * Uses simple regex-based parsing for the well-defined XMLTV format.
+ */
+function parseXmltvData(xml: string, errors: string[]): { channels: XmltvChannel[]; programmes: XmltvProgramme[] } {
+  const channels: XmltvChannel[] = [];
+  const programmes: XmltvProgramme[] = [];
+
+  // Parse channels: <channel id="...">...</channel>
+  const channelRegex = /<channel\s+([^>]*)>([\s\S]*?)<\/channel>/gi;
+  let channelMatch;
+  while ((channelMatch = channelRegex.exec(xml)) !== null) {
+    try {
+      const attrs = channelMatch[1];
+      const body = channelMatch[2];
+      const id = extractAttr(`<channel ${attrs}>`, 'id');
+      if (!id) {
+        errors.push('Channel element missing id attribute');
+        continue;
+      }
+
+      const displayName = extractText(body, 'display-name');
+      const icon = body.match(/<icon\s+[^>]*src\s*=\s*"([^"]*)"[^>]*\/?>/i)?.[1] ?? null;
+      const lcn = extractText(body, 'lcn');
+
+      channels.push({
+        id,
+        name: displayName ?? id,
+        displayName,
+        number: lcn,
+        icon: icon ? decodeXmlEntities(icon) : null,
+        lang: extractAttr(body.match(/<display-name[^>]*>/)?.[0] ?? '', 'lang'),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      errors.push(`Failed to parse channel element: ${msg}`);
+    }
+  }
+
+  // Parse programmes: <programme start="..." stop="..." channel="...">...</programme>
+  const progRegex = /<programme\s+([^>]*)>([\s\S]*?)<\/programme>/gi;
+  let progMatch;
+  while ((progMatch = progRegex.exec(xml)) !== null) {
+    try {
+      const attrs = progMatch[1];
+      const body = progMatch[2];
+      const attrStr = `<programme ${attrs}>`;
+      const startStr = extractAttr(attrStr, 'start');
+      const stopStr = extractAttr(attrStr, 'stop');
+      const channel = extractAttr(attrStr, 'channel');
+
+      if (!channel || !startStr) {
+        errors.push('Programme element missing required attributes (channel, start)');
+        continue;
+      }
+
+      const title = extractText(body, 'title');
+      if (!title) {
+        errors.push(`Programme on channel "${channel}" at ${startStr} missing title`);
+        continue;
+      }
+
+      const startTime = parseXmltvTime(startStr);
+      const endTime = parseXmltvTime(stopStr);
+
+      if (!startTime) {
+        errors.push(`Programme "${title}": invalid start time "${startStr}"`);
+        continue;
+      }
+
+      const categories = extractAllText(body, 'category');
+      const { season, episode } = parseEpisodeNum(body);
+
+      // Extract credits
+      const directors: string[] = [];
+      const actors: string[] = [];
+      const creditsMatch = body.match(/<credits>([\s\S]*?)<\/credits>/i);
+      if (creditsMatch) {
+        directors.push(...extractAllText(creditsMatch[1], 'director'));
+        actors.push(...extractAllText(creditsMatch[1], 'actor'));
+      }
+
+      // Extract rating
+      const ratingMatch = body.match(/<rating[^>]*>[\s\S]*?<value>([^<]*)<\/value>[\s\S]*?<\/rating>/i);
+      const rating = ratingMatch ? decodeXmlEntities(ratingMatch[1].trim()) : null;
+
+      // Extract star-rating
+      const starMatch = body.match(/<star-rating[^>]*>[\s\S]*?<value>([^<]*)<\/value>[\s\S]*?<\/star-rating>/i);
+      let starRating: number | null = null;
+      if (starMatch) {
+        const starParts = starMatch[1].trim().split('/');
+        const num = parseFloat(starParts[0]);
+        const denom = starParts[1] ? parseFloat(starParts[1]) : 10;
+        starRating = !isNaN(num) && !isNaN(denom) && denom > 0 ? (num / denom) * 10 : null;
+      }
+
+      // Extract icon/poster
+      const progIcon = body.match(/<icon\s+[^>]*src\s*=\s*"([^"]*)"[^>]*\/?>/i)?.[1] ?? null;
+
+      // Flags
+      const isNew = /<new\s*\/?>/i.test(body);
+      const isPremiere = /<premiere[^>]*\/?>/i.test(body) || /<premiere[^>]*>[\s\S]*?<\/premiere>/i.test(body);
+      const isLive = categories.some(c => c.toLowerCase() === 'live');
+      const previouslyShown = /<previously-shown[^>]*\/?>/i.test(body);
+
+      programmes.push({
+        channel,
+        title,
+        subTitle: extractText(body, 'sub-title'),
+        desc: extractText(body, 'desc'),
+        start: startStr,
+        startTime,
+        endTime,
+        externalId: extractAttr(attrStr, 'clumpidx')
+          ?? `xmltv-${channel}-${startStr}`,
+        categories,
+        date: extractText(body, 'date'),
+        seasonNumber: season,
+        episodeNumber: episode,
+        rating,
+        starRating,
+        icon: progIcon ? decodeXmlEntities(progIcon) : null,
+        directors,
+        actors,
+        isNew,
+        isLive,
+        isPremiere,
+        isRerun: previouslyShown,
+        lang: extractAttr(body.match(/<title[^>]*>/)?.[0] ?? '', 'lang'),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      errors.push(`Failed to parse programme element: ${msg}`);
+    }
+  }
+
+  return { channels, programmes };
+}
+
 export async function createServer(config?: Partial<Config>) {
   const fullConfig = loadConfig(config);
 
@@ -466,19 +768,178 @@ export async function createServer(config?: Partial<Config>) {
 
   app.post<{ Body: ImportXmltvRequest }>('/api/import/xmltv', async (request, reply) => {
     try {
-      // XMLTV import is a placeholder - in production, this would parse actual XMLTV XML
-      logger.info('XMLTV import requested', {
-        hasUrl: !!request.body.url,
-        hasData: !!request.body.xml_data,
+      const { url, xml_data: xmlData } = request.body;
+      const errors: string[] = [];
+
+      if (!url && !xmlData) {
+        return reply.status(400).send({ error: 'Either url or xml_data is required' });
+      }
+
+      let xml = xmlData ?? '';
+
+      // Fetch XML from URL if provided
+      if (url) {
+        try {
+          const response = await fetch(url, {
+            headers: { 'Accept': 'application/xml, text/xml, */*' },
+            signal: AbortSignal.timeout(60000),
+          });
+
+          if (!response.ok) {
+            return reply.status(502).send({
+              error: `Failed to fetch XMLTV from URL: HTTP ${response.status}`,
+            });
+          }
+
+          xml = await response.text();
+        } catch (fetchError) {
+          const msg = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+          return reply.status(502).send({
+            error: `Failed to fetch XMLTV from URL: ${msg}`,
+          });
+        }
+      }
+
+      if (!xml.trim()) {
+        return reply.status(400).send({ error: 'Empty XMLTV data' });
+      }
+
+      // Parse XMLTV XML
+      const parsed = parseXmltvData(xml, errors);
+
+      let channelsImported = 0;
+      let programsImported = 0;
+      let schedulesImported = 0;
+      const importedPrograms: ProgramRecord[] = [];
+
+      // Import channels
+      const channelIdMap = new Map<string, string>();
+      for (const ch of parsed.channels) {
+        try {
+          const channel = await scopedDb(request).upsertChannelByCallSign({
+            source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+            channel_number: ch.number ?? null,
+            call_sign: ch.id,
+            name: ch.name,
+            display_name: ch.displayName ?? null,
+            logo_url: ch.icon ?? null,
+            category: null,
+            language: ch.lang ?? 'en',
+            country: 'US',
+            stream_url: null,
+            stream_type: null,
+            is_hd: false,
+            is_4k: false,
+            is_active: true,
+            sort_order: 0,
+            metadata: {},
+          });
+          channelIdMap.set(ch.id, channel.id);
+          channelsImported++;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          errors.push(`Channel "${ch.id}": ${msg}`);
+        }
+      }
+
+      // Import programs and schedules
+      for (const prog of parsed.programmes) {
+        const dbChannelId = channelIdMap.get(prog.channel);
+        if (!dbChannelId) {
+          errors.push(`Programme "${prog.title}": unknown channel "${prog.channel}"`);
+          continue;
+        }
+
+        try {
+          const externalId = prog.externalId ?? `xmltv-${prog.channel}-${prog.start}`;
+          const program = await scopedDb(request).upsertProgramByExternalId({
+            source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+            external_id: externalId,
+            title: prog.title,
+            episode_title: prog.subTitle ?? null,
+            description: prog.desc ?? null,
+            long_description: null,
+            categories: prog.categories ?? [],
+            genre: prog.categories?.[0] ?? null,
+            season_number: prog.seasonNumber ?? null,
+            episode_number: prog.episodeNumber ?? null,
+            original_air_date: prog.date ? parseXmltvDate(prog.date) : null,
+            year: prog.date ? parseInt(prog.date.substring(0, 4), 10) || null : null,
+            duration_minutes: prog.startTime && prog.endTime
+              ? Math.round((prog.endTime.getTime() - prog.startTime.getTime()) / 60000)
+              : null,
+            content_rating: prog.rating ?? null,
+            star_rating: prog.starRating ?? null,
+            poster_url: prog.icon ?? null,
+            thumbnail_url: null,
+            directors: prog.directors ?? [],
+            actors: prog.actors ?? [],
+            is_new: prog.isNew ?? false,
+            is_live: prog.isLive ?? false,
+            is_premiere: prog.isPremiere ?? false,
+            is_finale: false,
+            is_movie: prog.categories?.some(c => c.toLowerCase() === 'movie') ?? false,
+            language: prog.lang ?? 'en',
+            subtitles: [],
+            audio_format: null,
+            video_format: null,
+            production_code: null,
+            metadata: {},
+          });
+
+          importedPrograms.push(program);
+          programsImported++;
+
+          if (prog.startTime && prog.endTime) {
+            await scopedDb(request).createSchedule({
+              source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+              channel_id: dbChannelId,
+              program_id: program.id,
+              start_time: prog.startTime,
+              end_time: prog.endTime,
+              is_rerun: prog.isRerun ?? false,
+              is_live: prog.isLive ?? false,
+              metadata: {},
+            });
+            schedulesImported++;
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          errors.push(`Programme "${prog.title}": ${msg}`);
+        }
+      }
+
+      // Match imported programs against existing recording rules
+      let recordingsScheduled = 0;
+      if (importedPrograms.length > 0) {
+        try {
+          recordingsScheduled = await matchSeriesRules(
+            scopedDb(request),
+            importedPrograms,
+            fullConfig.antserverUrl || undefined
+          );
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          logger.warn('Recording rule matching failed during XMLTV import', { error: errMsg });
+          errors.push(`Recording rule matching failed: ${errMsg}`);
+        }
+      }
+
+      logger.info('XMLTV import completed', {
+        channelsImported,
+        programsImported,
+        schedulesImported,
+        recordingsScheduled,
+        errorCount: errors.length,
       });
 
-      return reply.status(202).send({
-        message: 'XMLTV import initiated',
-        channels_imported: 0,
-        programs_imported: 0,
-        schedules_imported: 0,
-        errors: [],
-      });
+      return {
+        channels_imported: channelsImported,
+        programs_imported: programsImported,
+        schedules_imported: schedulesImported,
+        recordings_scheduled: recordingsScheduled,
+        errors,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('XMLTV import failed', { error: message });
@@ -877,6 +1338,310 @@ export async function createServer(config?: Partial<Config>) {
       timestamp: new Date().toISOString(),
     };
   });
+
+  // =========================================================================
+  // nTV v1 API Endpoints
+  // =========================================================================
+
+  /**
+   * POST /api/v1/import - Import XMLTV data from URL or inline XML
+   * Fetches, parses, and imports XMLTV XML into channels, programs, and schedules.
+   */
+  app.post<{ Body: { url?: string; xml_data?: string; appId?: string } }>(
+    '/api/v1/import',
+    async (request, reply) => {
+      try {
+        const { url, xml_data: xmlData } = request.body;
+        const errors: string[] = [];
+
+        if (!url && !xmlData) {
+          return reply.status(400).send({ error: 'Either url or xml_data is required' });
+        }
+
+        let xml = xmlData ?? '';
+
+        // Fetch XML from URL if provided
+        if (url) {
+          try {
+            const response = await fetch(url, {
+              headers: { 'Accept': 'application/xml, text/xml, */*' },
+              signal: AbortSignal.timeout(60000),
+            });
+
+            if (!response.ok) {
+              return reply.status(502).send({
+                error: `Failed to fetch XMLTV from URL: HTTP ${response.status}`,
+              });
+            }
+
+            xml = await response.text();
+          } catch (fetchError) {
+            const msg = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+            return reply.status(502).send({
+              error: `Failed to fetch XMLTV from URL: ${msg}`,
+            });
+          }
+        }
+
+        if (!xml.trim()) {
+          return reply.status(400).send({ error: 'Empty XMLTV data' });
+        }
+
+        // Parse XMLTV XML
+        const parsed = parseXmltvData(xml, errors);
+
+        let channelsImported = 0;
+        let programsImported = 0;
+        const importedPrograms: ProgramRecord[] = [];
+
+        // Import channels
+        const channelIdMap = new Map<string, string>(); // xmltv_id -> db UUID
+        for (const ch of parsed.channels) {
+          try {
+            const channel = await scopedDb(request).upsertChannelByCallSign({
+              source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+              channel_number: ch.number ?? null,
+              call_sign: ch.id,
+              name: ch.name,
+              display_name: ch.displayName ?? null,
+              logo_url: ch.icon ?? null,
+              category: null,
+              language: ch.lang ?? 'en',
+              country: 'US',
+              stream_url: null,
+              stream_type: null,
+              is_hd: false,
+              is_4k: false,
+              is_active: true,
+              sort_order: 0,
+              metadata: {},
+            });
+            channelIdMap.set(ch.id, channel.id);
+            channelsImported++;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            errors.push(`Channel "${ch.id}": ${msg}`);
+          }
+        }
+
+        // Import programs and schedules
+        for (const prog of parsed.programmes) {
+          const dbChannelId = channelIdMap.get(prog.channel);
+          if (!dbChannelId) {
+            errors.push(`Programme "${prog.title}": unknown channel "${prog.channel}"`);
+            continue;
+          }
+
+          try {
+            // Create or upsert the program
+            const externalId = prog.externalId ?? `xmltv-${prog.channel}-${prog.start}`;
+            const program = await scopedDb(request).upsertProgramByExternalId({
+              source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+              external_id: externalId,
+              title: prog.title,
+              episode_title: prog.subTitle ?? null,
+              description: prog.desc ?? null,
+              long_description: null,
+              categories: prog.categories ?? [],
+              genre: prog.categories?.[0] ?? null,
+              season_number: prog.seasonNumber ?? null,
+              episode_number: prog.episodeNumber ?? null,
+              original_air_date: prog.date ? parseXmltvDate(prog.date) : null,
+              year: prog.date ? parseInt(prog.date.substring(0, 4), 10) || null : null,
+              duration_minutes: prog.startTime && prog.endTime
+                ? Math.round((prog.endTime.getTime() - prog.startTime.getTime()) / 60000)
+                : null,
+              content_rating: prog.rating ?? null,
+              star_rating: prog.starRating ?? null,
+              poster_url: prog.icon ?? null,
+              thumbnail_url: null,
+              directors: prog.directors ?? [],
+              actors: prog.actors ?? [],
+              is_new: prog.isNew ?? false,
+              is_live: prog.isLive ?? false,
+              is_premiere: prog.isPremiere ?? false,
+              is_finale: false,
+              is_movie: prog.categories?.some(c => c.toLowerCase() === 'movie') ?? false,
+              language: prog.lang ?? 'en',
+              subtitles: [],
+              audio_format: null,
+              video_format: null,
+              production_code: null,
+              metadata: {},
+            });
+
+            importedPrograms.push(program);
+            programsImported++;
+
+            // Create schedule entry linking program to channel at the given time
+            if (prog.startTime && prog.endTime) {
+              await scopedDb(request).createSchedule({
+                source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+                channel_id: dbChannelId,
+                program_id: program.id,
+                start_time: prog.startTime,
+                end_time: prog.endTime,
+                is_rerun: prog.isRerun ?? false,
+                is_live: prog.isLive ?? false,
+                metadata: {},
+              });
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            errors.push(`Programme "${prog.title}": ${msg}`);
+          }
+        }
+
+        // Match imported programs against existing recording rules
+        let recordingsScheduled = 0;
+        if (importedPrograms.length > 0) {
+          try {
+            recordingsScheduled = await matchSeriesRules(
+              scopedDb(request),
+              importedPrograms,
+              fullConfig.antserverUrl || undefined
+            );
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : 'Unknown error';
+            logger.warn('Recording rule matching failed during v1 import', { error: errMsg });
+            errors.push(`Recording rule matching failed: ${errMsg}`);
+          }
+        }
+
+        logger.info('XMLTV v1 import completed', {
+          channelsImported,
+          programsImported,
+          recordingsScheduled,
+          errorCount: errors.length,
+        });
+
+        return {
+          channels_imported: channelsImported,
+          programs_imported: programsImported,
+          recordings_scheduled: recordingsScheduled,
+          errors,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        logger.error('XMLTV v1 import failed', { error: message });
+        return reply.status(500).send({ error: message });
+      }
+    }
+  );
+
+  /**
+   * GET /api/v1/channels - List channels with optional groupId filter
+   * Returns array of Channel objects with id, name, number, logo_url, group, hd fields.
+   */
+  app.get<{ Querystring: { groupId?: string; limit?: string; offset?: string } }>(
+    '/api/v1/channels',
+    async (request) => {
+      const channels = await scopedDb(request).listChannels({
+        groupId: request.query.groupId,
+        isActive: true,
+        limit: request.query.limit ? parseInt(request.query.limit, 10) : 200,
+        offset: request.query.offset ? parseInt(request.query.offset, 10) : undefined,
+      });
+
+      return channels.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        number: ch.channel_number,
+        logo_url: ch.logo_url,
+        group: ch.category,
+        hd: ch.is_hd,
+        call_sign: ch.call_sign,
+        display_name: ch.display_name,
+        is_active: ch.is_active,
+      }));
+    }
+  );
+
+  /**
+   * GET /api/v1/schedule/:channelId - Get schedule for a channel
+   * Optional ?date query param (ISO date string). Returns programs sorted by start_time.
+   */
+  app.get<{ Params: { channelId: string }; Querystring: { date?: string; days?: string } }>(
+    '/api/v1/schedule/:channelId',
+    async (request, reply) => {
+      const channel = await scopedDb(request).getChannel(request.params.channelId);
+      if (!channel) {
+        return reply.status(404).send({ error: 'Channel not found' });
+      }
+
+      const startDate = request.query.date ? new Date(request.query.date) : new Date();
+      // If a specific date is given, start from beginning of that day
+      if (request.query.date) {
+        startDate.setHours(0, 0, 0, 0);
+      }
+      const days = request.query.days ? parseInt(request.query.days, 10) : 1;
+
+      const schedule = await scopedDb(request).getScheduleForChannel(
+        request.params.channelId,
+        startDate,
+        days
+      );
+
+      return {
+        channel: {
+          id: channel.id,
+          name: channel.name,
+          number: channel.channel_number,
+          logo_url: channel.logo_url,
+        },
+        programs: schedule,
+        count: schedule.length,
+      };
+    }
+  );
+
+  /**
+   * GET /api/v1/search - Search programs across all channels
+   * Query params: ?query, ?limit (default 50). Full-text search on title and description.
+   */
+  app.get<{ Querystring: { query?: string; limit?: string } }>(
+    '/api/v1/search',
+    async (request, reply) => {
+      const query = request.query.query;
+      if (!query) {
+        return reply.status(400).send({ error: 'query parameter is required' });
+      }
+
+      const limit = request.query.limit ? parseInt(request.query.limit, 10) : 50;
+
+      const programs = await scopedDb(request).searchPrograms({
+        query,
+        limit,
+      });
+
+      return {
+        programs,
+        count: programs.length,
+      };
+    }
+  );
+
+  /**
+   * GET /api/v1/now-playing - Get currently airing programs
+   * Optional ?channelIds query param (comma-separated).
+   * Returns programs where start_time <= NOW <= end_time, joined with channel info.
+   */
+  app.get<{ Querystring: { channelIds?: string } }>(
+    '/api/v1/now-playing',
+    async (request) => {
+      const channelIds = request.query.channelIds
+        ? request.query.channelIds.split(',').map(s => s.trim()).filter(Boolean)
+        : undefined;
+
+      const nowPlaying = await scopedDb(request).getNowPlaying(channelIds);
+
+      return {
+        now_playing: nowPlaying,
+        count: nowPlaying.length,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  );
 
   // =========================================================================
   // Server Lifecycle

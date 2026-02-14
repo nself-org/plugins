@@ -358,6 +358,91 @@ export class SubtitleManagerServer {
     });
 
     // -------------------------------------------------------------------------
+    // POST /v1/fetch-best - Full cascade: search + download + sync + convert
+    // This is the primary endpoint nself-tv uses. It implements the full
+    // subtitle cascade and NEVER blocks the content pipeline.
+    // -------------------------------------------------------------------------
+    this.fastify.post('/v1/fetch-best', {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['video_path', 'languages'],
+          properties: {
+            video_path: { type: 'string', minLength: 1 },
+            languages: {
+              type: 'array',
+              items: { type: 'string', minLength: 2, maxLength: 5 },
+              minItems: 1,
+            },
+            max_alternatives: { type: 'number', minimum: 1, maximum: 10, default: 3 },
+            media_id: { type: 'string' },
+            media_type: { type: 'string', enum: ['movie', 'tv_episode'], default: 'movie' },
+            media_title: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+      },
+    }, async (request: FastifyRequest<{ Body: {
+      video_path: string;
+      languages: string[];
+      max_alternatives?: number;
+      media_id?: string;
+      media_type?: string;
+      media_title?: string;
+    } }>) => {
+      const { video_path, languages, max_alternatives, media_id, media_type, media_title } = request.body;
+      const { sourceAccountId } = getAppContext(request);
+      const maxAlts = max_alternatives || 3;
+
+      const results: Array<{
+        language: string;
+        path: string | null;
+        format: string;
+        sync_quality: 'good' | 'warning' | 'failed';
+        sync_warning: boolean;
+        offset_ms: number;
+        tool_used: string;
+      }> = [];
+
+      // Process each language in parallel
+      const languagePromises = languages.map(async (lang) => {
+        try {
+          return await this.fetchBestForLanguage({
+            videoPath: video_path,
+            language: lang,
+            maxAlternatives: maxAlts,
+            sourceAccountId,
+            mediaId: media_id,
+            mediaType: media_type || 'movie',
+            mediaTitle: media_title,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.warn(`Fetch-best failed for language ${lang}`, { error: message });
+          return {
+            language: lang,
+            path: null,
+            format: 'none',
+            sync_quality: 'failed' as const,
+            sync_warning: true,
+            offset_ms: 0,
+            tool_used: 'none',
+          };
+        }
+      });
+
+      const langResults = await Promise.all(languagePromises);
+      results.push(...langResults);
+
+      return {
+        success: true,
+        subtitles: results,
+        languages_requested: languages.length,
+        languages_found: results.filter(r => r.path !== null).length,
+      };
+    });
+
+    // -------------------------------------------------------------------------
     // DELETE /v1/downloads/:id - Delete a download record
     // -------------------------------------------------------------------------
     this.fastify.delete('/v1/downloads/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
@@ -369,6 +454,185 @@ export class SubtitleManagerServer {
       }
       return { success: true };
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fetch-best cascade logic (private)
+  // ---------------------------------------------------------------------------
+
+  private async fetchBestForLanguage(params: {
+    videoPath: string;
+    language: string;
+    maxAlternatives: number;
+    sourceAccountId: string;
+    mediaId?: string;
+    mediaType: string;
+    mediaTitle?: string;
+  }): Promise<{
+    language: string;
+    path: string | null;
+    format: string;
+    sync_quality: 'good' | 'warning' | 'failed';
+    sync_warning: boolean;
+    offset_ms: number;
+    tool_used: string;
+  }> {
+    const { videoPath, language, maxAlternatives, sourceAccountId, mediaId, mediaType, mediaTitle } = params;
+    const SYNC_THRESHOLD_MS = 500;
+
+    // Step 1: Search for subtitles (by query since hash search requires moviehash)
+    const searchQuery = mediaTitle || path.basename(videoPath, path.extname(videoPath));
+    let searchResults = await this.opensubtitles.searchByQuery(searchQuery, [language]);
+
+    if (!searchResults || searchResults.length === 0) {
+      logger.info(`No subtitles found for language ${language}`, { query: searchQuery });
+      return {
+        language,
+        path: null,
+        format: 'none',
+        sync_quality: 'failed',
+        sync_warning: true,
+        offset_ms: 0,
+        tool_used: 'none',
+      };
+    }
+
+    // Rank results by downloads and rating
+    searchResults = searchResults
+      .filter((r: any) => r.attributes?.files?.length > 0)
+      .sort((a: any, b: any) => {
+        const aScore = (a.attributes?.download_count || 0) * 0.4 + (a.attributes?.ratings || 0) * 0.3;
+        const bScore = (b.attributes?.download_count || 0) * 0.4 + (b.attributes?.ratings || 0) * 0.3;
+        return bScore - aScore;
+      })
+      .slice(0, maxAlternatives);
+
+    let bestResult: {
+      path: string;
+      offset_ms: number;
+      tool_used: string;
+      sync_quality: 'good' | 'warning';
+    } | null = null;
+    let bestOffsetMs = Infinity;
+
+    // Step 2-5: Try each alternative subtitle
+    for (const result of searchResults) {
+      const fileId = result.attributes?.files?.[0]?.file_id;
+      if (!fileId) continue;
+
+      try {
+        // Download subtitle
+        const subtitleBuffer = await this.opensubtitles.downloadSubtitle(fileId);
+        if (!subtitleBuffer) continue;
+
+        // Save raw subtitle to temp location
+        const dir = path.join(this.config.subtitle_storage_path, sourceAccountId, mediaId || 'temp', language);
+        await fs.mkdir(dir, { recursive: true });
+        const rawPath = path.join(dir, `raw_${fileId}.srt`);
+        await fs.writeFile(rawPath, subtitleBuffer);
+
+        // Try sync with alass first
+        const syncedPath = path.join(dir, `synced_${fileId}.srt`);
+        let offsetMs = 0;
+        let toolUsed = 'none';
+
+        try {
+          const syncResult = await this.synchronizer.syncSubtitle(
+            videoPath, rawPath, syncedPath, { alassOnly: true }
+          );
+          offsetMs = Math.abs(syncResult.offsetMs);
+          toolUsed = 'alass';
+
+          // If offset > threshold, try ffsubsync
+          if (offsetMs > SYNC_THRESHOLD_MS) {
+            try {
+              const ffResult = await this.synchronizer.syncSubtitle(
+                videoPath, rawPath, syncedPath, { ffsubsyncOnly: true }
+              );
+              const ffOffset = Math.abs(ffResult.offsetMs);
+              if (ffOffset < offsetMs) {
+                offsetMs = ffOffset;
+                toolUsed = 'ffsubsync';
+              }
+            } catch {
+              // ffsubsync failed, keep alass result
+            }
+          }
+        } catch {
+          // Both sync tools failed, use raw file
+          await fs.copyFile(rawPath, syncedPath).catch(() => {});
+          toolUsed = 'raw';
+        }
+
+        // Track best result
+        if (offsetMs < bestOffsetMs) {
+          bestOffsetMs = offsetMs;
+          bestResult = {
+            path: syncedPath,
+            offset_ms: offsetMs,
+            tool_used: toolUsed,
+            sync_quality: offsetMs <= SYNC_THRESHOLD_MS ? 'good' : 'warning',
+          };
+        }
+
+        // If good sync achieved, stop trying alternatives
+        if (offsetMs <= SYNC_THRESHOLD_MS) break;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`Alternative subtitle ${fileId} failed`, { error: message });
+        continue;
+      }
+    }
+
+    if (!bestResult) {
+      return {
+        language,
+        path: null,
+        format: 'none',
+        sync_quality: 'failed',
+        sync_warning: true,
+        offset_ms: 0,
+        tool_used: 'none',
+      };
+    }
+
+    // Step 6: Normalize to WebVTT
+    let vttPath: string | null = null;
+    try {
+      vttPath = await this.normalizer.normalizeToWebVTT(bestResult.path);
+    } catch {
+      // Normalization failed, use SRT
+      vttPath = bestResult.path;
+    }
+
+    // Track download in database
+    if (mediaId) {
+      try {
+        await this.database.insertDownload({
+          source_account_id: sourceAccountId,
+          media_id: mediaId,
+          media_type: mediaType,
+          media_title: mediaTitle || '',
+          language,
+          file_path: vttPath || bestResult.path,
+          file_size_bytes: 0,
+          source: 'opensubtitles',
+          sync_score: bestResult.sync_quality === 'good' ? 1.0 : 0.5,
+        });
+      } catch {
+        // DB tracking failure is non-critical
+      }
+    }
+
+    return {
+      language,
+      path: vttPath,
+      format: vttPath?.endsWith('.vtt') ? 'webvtt' : 'srt',
+      sync_quality: bestResult.sync_quality,
+      sync_warning: bestResult.sync_quality !== 'good',
+      offset_ms: bestResult.offset_ms,
+      tool_used: bestResult.tool_used,
+    };
   }
 
   async start(): Promise<void> {

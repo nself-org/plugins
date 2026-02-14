@@ -20,10 +20,10 @@ const logger = createLogger('file-processing:database');
 
 // Tables that belong to this plugin
 const ALL_TABLES = [
-  'file_thumbnails',
-  'file_scans',
-  'file_metadata',
-  'file_processing_jobs',
+  'np_fileproc_thumbnails',
+  'np_fileproc_scans',
+  'np_fileproc_metadata',
+  'np_fileproc_jobs',
 ] as const;
 
 export class Database {
@@ -106,7 +106,7 @@ export class Database {
 
   async createJob(data: CreateJobRequest): Promise<string> {
     const query = `
-      INSERT INTO file_processing_jobs (
+      INSERT INTO np_fileproc_jobs (
         file_id, file_path, file_name, file_size, mime_type,
         storage_provider, storage_bucket, operations, priority,
         webhook_url, webhook_secret, callback_data,
@@ -135,7 +135,7 @@ export class Database {
   }
 
   async getJob(jobId: string): Promise<ProcessingJob | null> {
-    const query = 'SELECT * FROM file_processing_jobs WHERE id = $1 AND source_account_id = $2';
+    const query = 'SELECT * FROM np_fileproc_jobs WHERE id = $1 AND source_account_id = $2';
     const result = await this.pool.query(query, [jobId, this.sourceAccountId]);
     return result.rows[0] || null;
   }
@@ -146,7 +146,7 @@ export class Database {
     error?: { message: string; stack?: string }
   ): Promise<void> {
     const query = `
-      UPDATE file_processing_jobs
+      UPDATE np_fileproc_jobs
       SET status = $2,
           error_message = $3,
           error_stack = $4,
@@ -167,10 +167,10 @@ export class Database {
   async getNextJob(queueName: string = 'default'): Promise<string | null> {
     // The get_next_job function is not multi-app aware, so we use direct SQL
     const query = `
-      UPDATE file_processing_jobs
+      UPDATE np_fileproc_jobs
       SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
       WHERE id = (
-        SELECT id FROM file_processing_jobs
+        SELECT id FROM np_fileproc_jobs
         WHERE status = 'pending'
           AND queue_name = $1
           AND source_account_id = $2
@@ -194,10 +194,10 @@ export class Database {
     const params: unknown[] = [];
 
     if (status) {
-      query = 'SELECT * FROM file_processing_jobs WHERE status = $1 AND source_account_id = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4';
+      query = 'SELECT * FROM np_fileproc_jobs WHERE status = $1 AND source_account_id = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4';
       params.push(status, this.sourceAccountId, limit, offset);
     } else {
-      query = 'SELECT * FROM file_processing_jobs WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3';
+      query = 'SELECT * FROM np_fileproc_jobs WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3';
       params.push(this.sourceAccountId, limit, offset);
     }
 
@@ -211,7 +211,7 @@ export class Database {
 
   async saveThumbnail(jobId: string, thumbnail: ThumbnailResult): Promise<string> {
     const query = `
-      INSERT INTO file_thumbnails (
+      INSERT INTO np_fileproc_thumbnails (
         job_id, file_id, thumbnail_path, thumbnail_url,
         width, height, size_bytes, format,
         generation_time_ms, storage_provider, storage_bucket,
@@ -220,7 +220,7 @@ export class Database {
       SELECT
         $1, j.file_id, $2, $3, $4, $5, $6, $7, $8, j.storage_provider, j.storage_bucket,
         j.source_account_id
-      FROM file_processing_jobs j
+      FROM np_fileproc_jobs j
       WHERE j.id = $1 AND j.source_account_id = $9
       RETURNING id
     `;
@@ -241,7 +241,7 @@ export class Database {
   }
 
   async getThumbnails(jobId: string): Promise<FileThumbnail[]> {
-    const query = 'SELECT * FROM file_thumbnails WHERE job_id = $1 AND source_account_id = $2 ORDER BY width';
+    const query = 'SELECT * FROM np_fileproc_thumbnails WHERE job_id = $1 AND source_account_id = $2 ORDER BY width';
     const result = await this.pool.query(query, [jobId, this.sourceAccountId]);
     return result.rows;
   }
@@ -252,7 +252,7 @@ export class Database {
 
   async saveScan(jobId: string, scan: ScanResult): Promise<string> {
     const query = `
-      INSERT INTO file_scans (
+      INSERT INTO np_fileproc_scans (
         job_id, file_id, scan_status, is_clean,
         threats_found, threat_names, signature_version,
         scan_duration_ms, file_size_scanned,
@@ -261,7 +261,7 @@ export class Database {
       SELECT
         $1, j.file_id, $2, $3, $4, $5, $6, $7, j.file_size,
         j.source_account_id
-      FROM file_processing_jobs j
+      FROM np_fileproc_jobs j
       WHERE j.id = $1 AND j.source_account_id = $8
       RETURNING id
     `;
@@ -281,7 +281,7 @@ export class Database {
   }
 
   async getScan(jobId: string): Promise<FileScan | null> {
-    const query = 'SELECT * FROM file_scans WHERE job_id = $1 AND source_account_id = $2 ORDER BY scanned_at DESC LIMIT 1';
+    const query = 'SELECT * FROM np_fileproc_scans WHERE job_id = $1 AND source_account_id = $2 ORDER BY scanned_at DESC LIMIT 1';
     const result = await this.pool.query(query, [jobId, this.sourceAccountId]);
     return result.rows[0] || null;
   }
@@ -292,7 +292,7 @@ export class Database {
 
   async saveMetadata(jobId: string, metadata: MetadataResult): Promise<string> {
     const query = `
-      INSERT INTO file_metadata (
+      INSERT INTO np_fileproc_metadata (
         job_id, file_id, mime_type, file_size,
         exif_data, exif_stripped,
         metadata_extracted_at, extraction_duration_ms,
@@ -302,7 +302,7 @@ export class Database {
         $1, j.file_id, j.mime_type, j.file_size,
         $2, $3, NOW(), $4,
         j.source_account_id
-      FROM file_processing_jobs j
+      FROM np_fileproc_jobs j
       WHERE j.id = $1 AND j.source_account_id = $5
       ON CONFLICT (file_id) DO UPDATE SET
         exif_data = EXCLUDED.exif_data,
@@ -328,8 +328,8 @@ export class Database {
   async getMetadata(jobId: string): Promise<FileMetadata | null> {
     const query = `
       SELECT m.*
-      FROM file_metadata m
-      JOIN file_processing_jobs j ON m.job_id = j.id
+      FROM np_fileproc_metadata m
+      JOIN np_fileproc_jobs j ON m.job_id = j.id
       WHERE j.id = $1
         AND m.source_account_id = $2
     `;
@@ -359,9 +359,9 @@ export class Database {
         COUNT(*) FILTER (WHERE status = 'failed') AS failed,
         COALESCE(AVG(duration_ms) FILTER (WHERE status = 'completed'), 0) AS avg_duration_ms,
         COUNT(*) FILTER (WHERE status IN ('completed', 'failed')) AS total_processed,
-        (SELECT COUNT(*) FROM file_thumbnails WHERE source_account_id = $1) AS thumbnails_generated,
-        (SELECT COALESCE(SUM(size_bytes), 0) FROM file_thumbnails WHERE source_account_id = $1) AS storage_used
-      FROM file_processing_jobs
+        (SELECT COUNT(*) FROM np_fileproc_thumbnails WHERE source_account_id = $1) AS thumbnails_generated,
+        (SELECT COALESCE(SUM(size_bytes), 0) FROM np_fileproc_thumbnails WHERE source_account_id = $1) AS storage_used
+      FROM np_fileproc_jobs
       WHERE source_account_id = $1
     `;
 
@@ -382,7 +382,7 @@ export class Database {
 
   async cleanup(retentionDays: number = 30): Promise<number> {
     const query = `
-      DELETE FROM file_processing_jobs
+      DELETE FROM np_fileproc_jobs
       WHERE status IN ('completed', 'cancelled')
         AND completed_at < NOW() - ($1 || ' days')::INTERVAL
         AND source_account_id = $2
