@@ -69,7 +69,6 @@
     ]
   },
   "config": {
-    "port": 3502,
     "maxPostLength": 5000,
     "maxCommentLength": 2000,
     "maxCommentDepth": 5,

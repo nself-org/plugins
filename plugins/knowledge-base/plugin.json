@@ -64,7 +64,6 @@
     ]
   },
   "config": {
-    "port": 3713,
     "defaultLanguage": "en",
     "maxDocumentSize": 10485760,
     "cacheTTL": 3600,

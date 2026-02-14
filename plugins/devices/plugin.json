@@ -108,7 +108,6 @@
     ]
   },
   "config": {
-    "port": 3603,
     "webhookPath": "/webhooks/nself-devices",
     "retryAttempts": 3,
     "retryDelay": 1000

@@ -55,7 +55,6 @@
     ]
   },
   "config": {
-    "port": 3022,
     "webhookPath": null,
     "trendingWindowHours": 24,
     "defaultLimit": 20,

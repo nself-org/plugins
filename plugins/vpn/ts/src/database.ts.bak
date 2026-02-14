@@ -101,15 +101,9 @@ export class VPNDatabase {
           kill_switch_available BOOLEAN DEFAULT TRUE,
           split_tunneling_available BOOLEAN DEFAULT FALSE,
           config JSONB DEFAULT '{}',
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-      `);
-
-      // Index for source_account_id
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_providers_account ON np_vpn_providers(source_account_id)
       `);
 
       // VPN Credentials table (encrypted)
@@ -125,16 +119,10 @@ export class VPNDatabase {
           private_key_encrypted TEXT,
           additional_data JSONB DEFAULT '{}',
           expires_at TIMESTAMP WITH TIME ZONE,
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          UNIQUE(provider_id, source_account_id)
+          UNIQUE(provider_id)
         )
-      `);
-
-      // Index for source_account_id
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_credentials_account ON np_vpn_credentials(source_account_id)
       `);
 
       // VPN Servers table
@@ -162,22 +150,20 @@ export class VPNDatabase {
           endpoint_port INTEGER,
           owned BOOLEAN DEFAULT FALSE,
           metadata JSONB DEFAULT '{}',
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          UNIQUE(provider_id, hostname, source_account_id)
+          UNIQUE(provider_id, hostname)
         )
       `);
 
       // Create indexes for servers
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_vpn_servers_provider ON np_vpn_servers(provider_id);
-        CREATE INDEX IF NOT EXISTS idx_vpn_servers_country ON np_vpn_servers(country_code);
-        CREATE INDEX IF NOT EXISTS idx_vpn_servers_p2p ON np_vpn_servers(p2p_supported) WHERE p2p_supported = true;
-        CREATE INDEX IF NOT EXISTS idx_vpn_servers_status ON np_vpn_servers(status);
-        CREATE INDEX IF NOT EXISTS idx_vpn_servers_load ON np_vpn_servers(load);
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_servers_account ON np_vpn_servers(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_servers_provider ON vpn_servers(provider_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_servers_country ON vpn_servers(country_code);
+        CREATE INDEX IF NOT EXISTS idx_vpn_servers_p2p ON vpn_servers(p2p_supported) WHERE p2p_supported = true;
+        CREATE INDEX IF NOT EXISTS idx_vpn_servers_status ON vpn_servers(status);
+        CREATE INDEX IF NOT EXISTS idx_vpn_servers_load ON vpn_servers(load);
       `);
 
       // VPN Connections table
@@ -202,17 +188,15 @@ export class VPNDatabase {
           port_forwarded INTEGER,
           requested_by VARCHAR(255),
           metadata JSONB DEFAULT '{}',
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `);
 
       // Create indexes for connections
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_vpn_connections_status ON np_vpn_connections(status);
-        CREATE INDEX IF NOT EXISTS idx_vpn_connections_provider ON np_vpn_connections(provider_id);
-        CREATE INDEX IF NOT EXISTS idx_vpn_connections_created ON np_vpn_connections(created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_connections_account ON np_vpn_connections(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_connections_status ON vpn_connections(status);
+        CREATE INDEX IF NOT EXISTS idx_vpn_connections_provider ON vpn_connections(provider_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_connections_created ON vpn_connections(created_at DESC);
       `);
 
       // VPN Downloads table
@@ -240,17 +224,15 @@ export class VPNDatabase {
           completed_at TIMESTAMP WITH TIME ZONE,
           error_message TEXT,
           metadata JSONB DEFAULT '{}',
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `);
 
       // Create indexes for downloads
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_vpn_downloads_status ON np_vpn_downloads(status);
-        CREATE INDEX IF NOT EXISTS idx_vpn_downloads_info_hash ON np_vpn_downloads(info_hash);
-        CREATE INDEX IF NOT EXISTS idx_vpn_downloads_created ON np_vpn_downloads(created_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_downloads_account ON np_vpn_downloads(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_downloads_status ON vpn_downloads(status);
+        CREATE INDEX IF NOT EXISTS idx_vpn_downloads_info_hash ON vpn_downloads(info_hash);
+        CREATE INDEX IF NOT EXISTS idx_vpn_downloads_created ON vpn_downloads(created_at DESC);
       `);
 
       // VPN Connection Logs table
@@ -261,16 +243,14 @@ export class VPNDatabase {
           timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           event_type VARCHAR(50) NOT NULL,
           message TEXT NOT NULL,
-          details JSONB DEFAULT '{}',
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'
+          details JSONB DEFAULT '{}'
         )
       `);
 
       // Create index for logs
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_connection ON np_vpn_connection_logs(connection_id);
-        CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_timestamp ON np_vpn_connection_logs(timestamp DESC);
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_connection_logs_account ON np_vpn_connection_logs(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_connection ON vpn_connection_logs(connection_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_timestamp ON vpn_connection_logs(timestamp DESC);
       `);
 
       // VPN Server Performance table
@@ -284,16 +264,14 @@ export class VPNDatabase {
           upload_speed_mbps DECIMAL(10, 2),
           load_percentage INTEGER,
           success_rate DECIMAL(5, 4),
-          avg_connection_time_ms INTEGER,
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'
+          avg_connection_time_ms INTEGER
         )
       `);
 
       // Create indexes for performance
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_server ON np_vpn_server_performance(server_id);
-        CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_timestamp ON np_vpn_server_performance(timestamp DESC);
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_server_performance_account ON np_vpn_server_performance(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_server ON vpn_server_performance(server_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_timestamp ON vpn_server_performance(timestamp DESC);
       `);
 
       // VPN Leak Tests table
@@ -306,16 +284,14 @@ export class VPNDatabase {
           expected_value VARCHAR(255),
           actual_value VARCHAR(255),
           details JSONB DEFAULT '{}',
-          tested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'
+          tested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `);
 
       // Create index for leak tests
       await client.query(`
-        CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_connection ON np_vpn_leak_tests(connection_id);
-        CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_passed ON np_vpn_leak_tests(passed);
-        CREATE INDEX IF NOT EXISTS idx_np_vpn_leak_tests_account ON np_vpn_leak_tests(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_connection ON vpn_leak_tests(connection_id);
+        CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_passed ON vpn_leak_tests(passed);
       `);
 
       // Create analytics views
@@ -338,8 +314,8 @@ export class VPNDatabase {
           c.port_forwarded,
           c.kill_switch_enabled
         FROM np_vpn_connections c
-        JOIN np_vpn_providers p ON c.provider_id = p.id
-        LEFT JOIN np_vpn_servers s ON c.server_id = s.id
+        JOIN vpn_providers p ON c.provider_id = p.id
+        LEFT JOIN vpn_servers s ON c.server_id = s.id
         WHERE c.status = 'connected'
         ORDER BY c.connected_at DESC
       `);
@@ -362,8 +338,8 @@ export class VPNDatabase {
           AVG(sp.success_rate) AS avg_success_rate,
           MAX(c.connected_at) AS last_used
         FROM np_vpn_servers s
-        LEFT JOIN np_vpn_connections c ON s.id = c.server_id
-        LEFT JOIN np_vpn_server_performance sp ON s.id = sp.server_id
+        LEFT JOIN vpn_connections c ON s.id = c.server_id
+        LEFT JOIN vpn_server_performance sp ON s.id = sp.server_id
         GROUP BY s.id
         ORDER BY total_connections DESC, avg_download_speed DESC
       `);
@@ -387,8 +363,8 @@ export class VPNDatabase {
           EXTRACT(EPOCH FROM (COALESCE(d.completed_at, NOW()) - d.started_at))::INTEGER AS duration_seconds,
           d.created_at
         FROM np_vpn_downloads d
-        JOIN np_vpn_providers p ON d.provider_id = p.id
-        LEFT JOIN np_vpn_servers s ON d.server_id = s.id
+        JOIN vpn_providers p ON d.provider_id = p.id
+        LEFT JOIN vpn_servers s ON d.server_id = s.id
         ORDER BY d.created_at DESC
       `);
 
@@ -404,7 +380,7 @@ export class VPNDatabase {
           ROUND((COUNT(CASE WHEN c.error_message IS NULL THEN 1 END)::NUMERIC /
                  NULLIF(COUNT(c.id), 0) * 100), 2) AS success_rate_percent
         FROM np_vpn_providers p
-        LEFT JOIN np_vpn_connections c ON p.id = c.provider_id
+        LEFT JOIN vpn_connections c ON p.id = c.provider_id
         GROUP BY p.id
         ORDER BY total_connections DESC
       `);

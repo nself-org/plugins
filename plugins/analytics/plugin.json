@@ -55,7 +55,6 @@
     ]
   },
   "config": {
-    "port": 3304,
     "batchSize": 100,
     "rollupIntervalMs": 3600000,
     "eventRetentionDays": 90,

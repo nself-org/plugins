@@ -105,7 +105,6 @@
     ]
   },
   "config": {
-    "port": 3014,
     "webhookPath": "/webhooks/auth",
     "magicLinkExpirySeconds": 600,
     "deviceCodeExpirySeconds": 600,

@@ -65,7 +65,6 @@
     ]
   },
   "config": {
-    "port": 3714,
     "defaultCurrency": "USD",
     "defaultTrialDays": 14,
     "quotaWarningThreshold": 80

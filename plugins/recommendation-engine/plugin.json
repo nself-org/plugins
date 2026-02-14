@@ -52,7 +52,6 @@
     ]
   },
   "config": {
-    "port": 5004,
     "webhookPath": "/webhooks/recommendation-engine",
     "collaborativeWeight": 0.6,
     "contentWeight": 0.4,

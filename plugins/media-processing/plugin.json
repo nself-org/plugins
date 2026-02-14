@@ -82,23 +82,46 @@
     ]
   },
   "config": {
-    "port": 3019,
     "maxConcurrentJobs": 2,
     "maxInputSizeGb": 50,
     "outputBasePath": "/data/media-processing",
     "ffmpegPath": "ffmpeg",
     "ffprobePath": "ffprobe",
     "packager": "ffmpeg-only",
-    "outputFormats": ["hls"]
+    "outputFormats": [
+      "hls"
+    ]
   },
   "systemDependencies": {
     "required": [
-      {"name": "ffmpeg", "minVersion": "5.0", "apt": "ffmpeg", "brew": "ffmpeg", "verify": "ffmpeg -version"},
-      {"name": "ffprobe", "minVersion": "5.0", "apt": "ffmpeg", "brew": "ffmpeg", "verify": "ffprobe -version"}
+      {
+        "name": "ffmpeg",
+        "minVersion": "5.0",
+        "apt": "ffmpeg",
+        "brew": "ffmpeg",
+        "verify": "ffmpeg -version"
+      },
+      {
+        "name": "ffprobe",
+        "minVersion": "5.0",
+        "apt": "ffmpeg",
+        "brew": "ffmpeg",
+        "verify": "ffprobe -version"
+      }
     ],
     "recommended": [
-      {"name": "shaka-packager", "custom_install": "curl -L https://github.com/shaka-project/shaka-packager/releases/latest/download/packager-linux-x64 -o /usr/local/bin/packager && chmod +x /usr/local/bin/packager", "verify": "packager --version", "note": "Required for CMAF HLS+DASH dual output. Falls back to FFmpeg-only HLS if not installed."},
-      {"name": "guessit", "custom_install": "pip3 install guessit", "verify": "guessit --version", "note": "Python-based filename parser. Plugin uses built-in regex parser as fallback."}
+      {
+        "name": "shaka-packager",
+        "custom_install": "curl -L https://github.com/shaka-project/shaka-packager/releases/latest/download/packager-linux-x64 -o /usr/local/bin/packager && chmod +x /usr/local/bin/packager",
+        "verify": "packager --version",
+        "note": "Required for CMAF HLS+DASH dual output. Falls back to FFmpeg-only HLS if not installed."
+      },
+      {
+        "name": "guessit",
+        "custom_install": "pip3 install guessit",
+        "verify": "guessit --version",
+        "note": "Python-based filename parser. Plugin uses built-in regex parser as fallback."
+      }
     ]
   },
   "hooks": {

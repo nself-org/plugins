@@ -98,7 +98,6 @@
     ]
   },
   "config": {
-    "port": 3035,
     "webhookPath": "/webhooks/sports",
     "retryAttempts": 3,
     "retryDelay": 1000

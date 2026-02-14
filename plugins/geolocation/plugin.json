@@ -63,7 +63,6 @@
     ]
   },
   "config": {
-    "port": 3026,
     "postgisEnabled": true,
     "historyRetentionDays": 365,
     "batchMaxPoints": 1000,

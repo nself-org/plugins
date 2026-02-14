@@ -90,8 +90,7 @@
     "syncInterval": 3600,
     "webhookPath": "/webhooks/paypal",
     "retryAttempts": 3,
-    "retryDelay": 1000,
-    "port": 3004
+    "retryDelay": 1000
   },
   "hooks": {
     "postInstall": "install.sh",

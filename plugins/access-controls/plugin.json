@@ -48,7 +48,6 @@
     ]
   },
   "config": {
-    "port": 3027,
     "cacheTtlSeconds": 300,
     "maxRoleDepth": 10,
     "defaultDeny": true

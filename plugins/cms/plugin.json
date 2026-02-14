@@ -68,7 +68,6 @@
     ]
   },
   "config": {
-    "port": 3501,
     "webhookPath": "/webhooks/cms",
     "retryAttempts": 3,
     "retryDelay": 1000

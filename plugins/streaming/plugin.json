@@ -65,7 +65,6 @@
     ]
   },
   "config": {
-    "port": 3711,
     "webhookPath": "/webhooks/streaming",
     "rtmpPort": 1935,
     "hlsSegmentDuration": 4,

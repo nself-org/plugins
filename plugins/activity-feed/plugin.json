@@ -54,7 +54,6 @@
     ]
   },
   "config": {
-    "port": 3503,
     "strategy": "read",
     "maxFeedSize": 200,
     "aggregationWindowMinutes": 60,

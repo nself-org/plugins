@@ -109,7 +109,6 @@
     ]
   },
   "config": {
-    "port": 3602,
     "webhookPath": "/webhooks/nself-recording",
     "retryAttempts": 3,
     "retryDelay": 1000

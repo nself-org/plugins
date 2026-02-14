@@ -47,7 +47,6 @@
     ]
   },
   "config": {
-    "port": 3403,
     "maxAttempts": 5,
     "requestTimeoutMs": 30000,
     "maxPayloadSize": 1048576,

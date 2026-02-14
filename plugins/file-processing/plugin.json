@@ -62,7 +62,6 @@
     "defaultValue": "primary"
   },
   "config": {
-    "port": 3104,
     "defaultThumbnailSizes": [
       100,
       400,

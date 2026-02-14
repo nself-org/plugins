@@ -63,7 +63,6 @@
     ]
   },
   "config": {
-    "port": 3712,
     "webhookPath": "/webhooks/workflows",
     "defaultTimeoutSeconds": 300,
     "maxConcurrentExecutions": 10,

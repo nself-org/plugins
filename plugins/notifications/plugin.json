@@ -64,7 +64,6 @@
     ]
   },
   "config": {
-    "port": 3102,
     "webhookPath": "/webhooks/notifications",
     "queueBackend": "redis",
     "batchInterval": 86400,

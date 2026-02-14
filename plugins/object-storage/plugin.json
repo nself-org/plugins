@@ -73,8 +73,7 @@
     "storageBasePath": "/data/object-storage",
     "presignExpirySeconds": 3600,
     "maxUploadSize": 1073741824,
-    "multipartThreshold": 104857600,
-    "port": 3301
+    "multipartThreshold": 104857600
   },
   "hooks": {
     "postInstall": null,

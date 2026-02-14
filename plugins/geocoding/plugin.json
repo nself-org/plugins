@@ -62,7 +62,6 @@
     ]
   },
   "config": {
-    "port": 3203,
     "webhookPath": "/webhooks/geocoding",
     "retryAttempts": 3,
     "retryDelay": 1000

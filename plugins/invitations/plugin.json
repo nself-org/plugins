@@ -61,7 +61,6 @@
     ]
   },
   "config": {
-    "port": 3402,
     "defaultExpiryHours": 168,
     "codeLength": 32,
     "maxBulkSize": 500,

@@ -56,7 +56,6 @@
     ]
   },
   "config": {
-    "port": 3022,
     "completeThreshold": 95,
     "historySampleSeconds": 30,
     "historyRetentionDays": 365,

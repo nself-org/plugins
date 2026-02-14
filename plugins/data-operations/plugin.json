@@ -89,7 +89,6 @@
     ]
   },
   "config": {
-    "port": 3306,
     "storagePath": "/tmp/nself-data-operations",
     "tempPath": "/tmp/nself-imports",
     "downloadExpiryHours": 24,

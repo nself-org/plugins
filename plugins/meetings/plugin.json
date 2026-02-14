@@ -64,7 +64,6 @@
     ]
   },
   "config": {
-    "port": 3710,
     "webhookPath": "/webhooks/meetings",
     "defaultTimezone": "UTC",
     "businessHoursStart": "09:00",

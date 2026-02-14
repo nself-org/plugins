@@ -58,8 +58,7 @@
     "baseUrl": "https://api.id.me",
     "sandboxUrl": "https://api.idmelabs.com",
     "webhookPath": "/webhooks/idme",
-    "defaultScopes": "openid,email,profile",
-    "port": 3010
+    "defaultScopes": "openid,email,profile"
   },
   "hooks": {
     "postInstall": "install.sh",

@@ -104,7 +104,6 @@
     ]
   },
   "config": {
-    "port": 3601,
     "webhookPath": "/webhooks/nself-stream-gateway",
     "retryAttempts": 3,
     "retryDelay": 1000

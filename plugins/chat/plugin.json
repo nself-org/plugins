@@ -65,7 +65,6 @@
     ]
   },
   "config": {
-    "port": 3401,
     "webhookPath": "/webhooks/chat",
     "maxMessageLength": 10000,
     "maxAttachments": 10,

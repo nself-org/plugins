@@ -59,8 +59,7 @@
     "syncInterval": 3600,
     "webhookPath": "/webhooks/donorbox",
     "retryAttempts": 3,
-    "retryDelay": 1000,
-    "port": 3005
+    "retryDelay": 1000
   },
   "hooks": {
     "postInstall": "install.sh",

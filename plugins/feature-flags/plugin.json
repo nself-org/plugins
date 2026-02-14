@@ -47,7 +47,6 @@
     ]
   },
   "config": {
-    "port": 3305,
     "evaluationLogEnabled": true,
     "evaluationLogSampleRate": 100,
     "cacheTtlSeconds": 30

@@ -64,7 +64,6 @@
     ]
   },
   "config": {
-    "port": 3024,
     "syncInterval": 3600,
     "analyticsSyncCron": "0 1 * * *"
   },

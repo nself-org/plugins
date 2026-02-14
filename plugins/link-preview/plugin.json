@@ -70,7 +70,6 @@
     ]
   },
   "config": {
-    "port": 3718,
     "cacheTtlHours": 168,
     "timeoutSeconds": 10,
     "maxPreviewsPerMessage": 3,
