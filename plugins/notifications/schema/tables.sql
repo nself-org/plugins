@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 -- Reusable templates with Handlebars support
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS notification_templates (
+CREATE TABLE IF NOT EXISTS np_notifications_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL UNIQUE,          -- Template identifier (welcome_email, password_reset, etc.)
     category VARCHAR(50) NOT NULL,              -- transactional, marketing, system, alert
@@ -32,16 +32,16 @@ CREATE TABLE IF NOT EXISTS notification_templates (
     updated_by UUID
 );
 
-CREATE INDEX IF NOT EXISTS idx_notification_templates_name ON notification_templates(name);
-CREATE INDEX IF NOT EXISTS idx_notification_templates_category ON notification_templates(category);
-CREATE INDEX IF NOT EXISTS idx_notification_templates_active ON notification_templates(active);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_templates_name ON np_notifications_templates(name);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_templates_category ON np_notifications_templates(category);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_templates_active ON np_notifications_templates(active);
 
 -- =============================================================================
 -- Notification Preferences
 -- User opt-in/out per channel and category
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS notification_preferences (
+CREATE TABLE IF NOT EXISTS np_notifications_preferences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
     channel VARCHAR(20) NOT NULL,               -- email, push, sms
@@ -56,19 +56,19 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
     UNIQUE(user_id, channel, category)
 );
 
-CREATE INDEX IF NOT EXISTS idx_notification_preferences_user ON notification_preferences(user_id);
-CREATE INDEX IF NOT EXISTS idx_notification_preferences_channel ON notification_preferences(channel);
-CREATE INDEX IF NOT EXISTS idx_notification_preferences_enabled ON notification_preferences(enabled);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_preferences_user ON np_notifications_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_preferences_channel ON np_notifications_preferences(channel);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_preferences_enabled ON np_notifications_preferences(enabled);
 
 -- =============================================================================
 -- Notification Messages (Sent Log)
 -- Record of all sent notifications
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS notification_messages (
+CREATE TABLE IF NOT EXISTS np_notifications_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL,
-    template_id UUID REFERENCES notification_templates(id),
+    template_id UUID REFERENCES np_notifications_templates(id),
     template_name VARCHAR(255),                 -- Denormalized for history
     channel VARCHAR(20) NOT NULL,               -- email, push, sms
     category VARCHAR(50) NOT NULL,
@@ -121,25 +121,25 @@ CREATE TABLE IF NOT EXISTS notification_messages (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_notification_messages_user ON notification_messages(user_id);
-CREATE INDEX IF NOT EXISTS idx_notification_messages_template ON notification_messages(template_id);
-CREATE INDEX IF NOT EXISTS idx_notification_messages_status ON notification_messages(status);
-CREATE INDEX IF NOT EXISTS idx_notification_messages_channel ON notification_messages(channel);
-CREATE INDEX IF NOT EXISTS idx_notification_messages_category ON notification_messages(category);
-CREATE INDEX IF NOT EXISTS idx_notification_messages_scheduled ON notification_messages(scheduled_at) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_notification_messages_retry ON notification_messages(next_retry_at) WHERE status = 'failed' AND retry_count < max_retries;
-CREATE INDEX IF NOT EXISTS idx_notification_messages_batch ON notification_messages(batch_id) WHERE batch_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_notification_messages_created ON notification_messages(created_at);
-CREATE INDEX IF NOT EXISTS idx_notification_messages_provider_id ON notification_messages(provider_message_id);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_user ON np_notifications_messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_template ON np_notifications_messages(template_id);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_status ON np_notifications_messages(status);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_channel ON np_notifications_messages(channel);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_category ON np_notifications_messages(category);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_scheduled ON np_notifications_messages(scheduled_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_retry ON np_notifications_messages(next_retry_at) WHERE status = 'failed' AND retry_count < max_retries;
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_batch ON np_notifications_messages(batch_id) WHERE batch_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_created ON np_notifications_messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_provider_id ON np_notifications_messages(provider_message_id);
 
 -- =============================================================================
 -- Notification Queue
 -- Processing queue for async delivery
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS notification_queue (
+CREATE TABLE IF NOT EXISTS np_notifications_queue (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    notification_id UUID NOT NULL REFERENCES notification_messages(id) ON DELETE CASCADE,
+    notification_id UUID NOT NULL REFERENCES np_notifications_messages(id) ON DELETE CASCADE,
     status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed
     priority INTEGER DEFAULT 5,
     attempts INTEGER DEFAULT 0,
@@ -154,16 +154,16 @@ CREATE TABLE IF NOT EXISTS notification_queue (
     UNIQUE(notification_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_notification_queue_status ON notification_queue(status);
-CREATE INDEX IF NOT EXISTS idx_notification_queue_next_attempt ON notification_queue(next_attempt_at) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_notification_queue_priority ON notification_queue(priority);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_queue_status ON np_notifications_queue(status);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_queue_next_attempt ON np_notifications_queue(next_attempt_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_np_notifications_queue_priority ON np_notifications_queue(priority);
 
 -- =============================================================================
 -- Notification Providers
 -- Provider configuration and priority
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS notification_providers (
+CREATE TABLE IF NOT EXISTS np_notifications_providers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(50) NOT NULL UNIQUE,           -- resend, sendgrid, mailgun, ses, twilio, fcm, etc.
     type VARCHAR(20) NOT NULL,                  -- email, push, sms
@@ -189,17 +189,17 @@ CREATE TABLE IF NOT EXISTS notification_providers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_notification_providers_type ON notification_providers(type);
-CREATE INDEX IF NOT EXISTS idx_notification_providers_enabled ON notification_providers(enabled);
-CREATE INDEX IF NOT EXISTS idx_notification_providers_priority ON notification_providers(priority);
-CREATE INDEX IF NOT EXISTS idx_notification_providers_health ON notification_providers(health_status);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_providers_type ON np_notifications_providers(type);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_providers_enabled ON np_notifications_providers(enabled);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_providers_priority ON np_notifications_providers(priority);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_providers_health ON np_notifications_providers(health_status);
 
 -- =============================================================================
 -- Notification Batches
 -- For digest/batch sends
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS notification_batches (
+CREATE TABLE IF NOT EXISTS np_notifications_batches (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255),
     category VARCHAR(50),
@@ -224,9 +224,9 @@ CREATE TABLE IF NOT EXISTS notification_batches (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_notification_batches_status ON notification_batches(status);
-CREATE INDEX IF NOT EXISTS idx_notification_batches_next_send ON notification_batches(next_send_at) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_notification_batches_category ON notification_batches(category);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_batches_status ON np_notifications_batches(status);
+CREATE INDEX IF NOT EXISTS idx_np_notifications_batches_next_send ON np_notifications_batches(next_send_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_np_notifications_batches_category ON np_notifications_batches(category);
 
 -- =============================================================================
 -- Views for Analytics
@@ -243,7 +243,7 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'failed') AS failed,
     COUNT(*) FILTER (WHERE status = 'bounced') AS bounced,
     ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'delivered') / NULLIF(COUNT(*), 0), 2) AS delivery_rate
-FROM notification_messages
+FROM np_notifications_messages
 WHERE created_at >= NOW() - INTERVAL '30 days'
 GROUP BY channel, category, DATE_TRUNC('day', created_at)
 ORDER BY date DESC, channel;
@@ -260,7 +260,7 @@ SELECT
     COUNT(*) FILTER (WHERE unsubscribed_at IS NOT NULL) AS unsubscribed,
     ROUND(100.0 * COUNT(*) FILTER (WHERE opened_at IS NOT NULL) / NULLIF(COUNT(*) FILTER (WHERE status = 'delivered'), 0), 2) AS open_rate,
     ROUND(100.0 * COUNT(*) FILTER (WHERE clicked_at IS NOT NULL) / NULLIF(COUNT(*) FILTER (WHERE status = 'delivered'), 0), 2) AS click_rate
-FROM notification_messages
+FROM np_notifications_messages
 WHERE channel = 'email'
   AND created_at >= NOW() - INTERVAL '30 days'
 GROUP BY channel, category, DATE_TRUNC('day', created_at)
@@ -278,7 +278,7 @@ SELECT
     ROUND(100.0 * success_count / NULLIF(success_count + failure_count, 0), 2) AS success_rate,
     last_success_at,
     last_failure_at
-FROM notification_providers
+FROM np_notifications_providers
 ORDER BY type, priority;
 
 -- User notification summary
@@ -292,12 +292,12 @@ SELECT
     COUNT(*) FILTER (WHERE status = 'delivered') AS delivered_count,
     COUNT(*) FILTER (WHERE status = 'failed') AS failed_count,
     MAX(created_at) AS last_notification_at
-FROM notification_messages
+FROM np_notifications_messages
 WHERE created_at >= NOW() - INTERVAL '30 days'
 GROUP BY user_id;
 
 -- Queue backlog
-CREATE OR REPLACE VIEW notification_queue_backlog AS
+CREATE OR REPLACE VIEW np_notifications_queue_backlog AS
 SELECT
     nq.status,
     n.channel,
@@ -305,8 +305,8 @@ SELECT
     COUNT(*) AS count,
     MIN(nq.next_attempt_at) AS oldest_scheduled,
     AVG(nq.attempts) AS avg_attempts
-FROM notification_queue nq
-JOIN notification_messages n ON nq.notification_id = n.id
+FROM np_notifications_queue nq
+JOIN np_notifications_messages n ON nq.notification_id = n.id
 WHERE nq.status IN ('pending', 'processing')
 GROUP BY nq.status, n.channel, n.priority
 ORDER BY n.priority, nq.status;
@@ -325,22 +325,22 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply updated_at trigger to all tables
-CREATE TRIGGER update_notification_templates_updated_at BEFORE UPDATE ON notification_templates
+CREATE TRIGGER update_np_notifications_templates_updated_at BEFORE UPDATE ON np_notifications_templates
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_notification_preferences_updated_at BEFORE UPDATE ON notification_preferences
+CREATE TRIGGER update_np_notifications_preferences_updated_at BEFORE UPDATE ON np_notifications_preferences
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_notification_messages_updated_at BEFORE UPDATE ON notification_messages
+CREATE TRIGGER update_np_notifications_messages_updated_at BEFORE UPDATE ON np_notifications_messages
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_notification_queue_updated_at BEFORE UPDATE ON notification_queue
+CREATE TRIGGER update_np_notifications_queue_updated_at BEFORE UPDATE ON np_notifications_queue
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_notification_providers_updated_at BEFORE UPDATE ON notification_providers
+CREATE TRIGGER update_np_notifications_providers_updated_at BEFORE UPDATE ON np_notifications_providers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_notification_batches_updated_at BEFORE UPDATE ON notification_batches
+CREATE TRIGGER update_np_notifications_batches_updated_at BEFORE UPDATE ON np_notifications_batches
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to get user preferences with fallbacks
@@ -355,7 +355,7 @@ DECLARE
 BEGIN
     -- Check for specific preference
     SELECT enabled INTO v_enabled
-    FROM notification_preferences
+    FROM np_notifications_preferences
     WHERE user_id = p_user_id
       AND channel = p_channel
       AND category = p_category;
@@ -377,7 +377,7 @@ DECLARE
     v_count INTEGER;
 BEGIN
     SELECT COUNT(*) INTO v_count
-    FROM notification_messages
+    FROM np_notifications_messages
     WHERE user_id = p_user_id
       AND channel = p_channel
       AND created_at >= NOW() - (p_window_seconds || ' seconds')::INTERVAL;
@@ -390,7 +390,7 @@ $$ LANGUAGE plpgsql;
 -- Seed Default Templates
 -- =============================================================================
 
-INSERT INTO notification_templates (name, category, channels, subject, body_html, body_text) VALUES
+INSERT INTO np_notifications_templates (name, category, channels, subject, body_html, body_text) VALUES
 (
     'welcome_email',
     'transactional',
@@ -429,7 +429,7 @@ ON CONFLICT (name) DO NOTHING;
 -- Seed Default Providers
 -- =============================================================================
 
-INSERT INTO notification_providers (name, type, priority, enabled, config) VALUES
+INSERT INTO np_notifications_providers (name, type, priority, enabled, config) VALUES
 ('resend', 'email', 1, false, '{"api_key": "", "from": "noreply@example.com"}'),
 ('sendgrid', 'email', 2, false, '{"api_key": "", "from": "noreply@example.com"}'),
 ('mailgun', 'email', 3, false, '{"api_key": "", "domain": "", "from": "noreply@example.com"}'),

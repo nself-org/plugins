@@ -65,12 +65,12 @@ export class DatabaseClient {
    */
   async migrateMultiApp(): Promise<void> {
     const tables = [
-      'notification_templates',
-      'notification_messages',
-      'notification_queue',
-      'notification_preferences',
-      'notification_providers',
-      'notification_batches',
+      'np_notifications_templates',
+      'np_notifications_messages',
+      'np_notifications_queue',
+      'np_notifications_preferences',
+      'np_notifications_providers',
+      'np_notifications_batches',
     ];
 
     const client = await this.getClient();
@@ -102,7 +102,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM notification_templates WHERE name = $1 AND active = true AND source_account_id = $2',
+        'SELECT * FROM np_notifications_templates WHERE name = $1 AND active = true AND source_account_id = $2',
         [name, this.sourceAccountId]
       );
       return result.rows[0] || null;
@@ -115,7 +115,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM notification_templates WHERE active = true AND source_account_id = $1 ORDER BY category, name',
+        'SELECT * FROM np_notifications_templates WHERE active = true AND source_account_id = $1 ORDER BY category, name',
         [this.sourceAccountId]
       );
       return result.rows;
@@ -132,7 +132,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `INSERT INTO notification_messages (
+        `INSERT INTO np_notifications_messages (
           user_id, template_name, channel, category,
           recipient_email, recipient_phone, recipient_push_token,
           subject, body_text, body_html, priority,
@@ -167,7 +167,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM notification_messages WHERE id = $1 AND source_account_id = $2',
+        'SELECT * FROM np_notifications_messages WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return result.rows[0] || null;
@@ -186,7 +186,7 @@ export class DatabaseClient {
       const fields = Object.keys(updates);
       const values = Object.values(updates);
 
-      let query = 'UPDATE notification_messages SET status = $1, updated_at = NOW()';
+      let query = 'UPDATE np_notifications_messages SET status = $1, updated_at = NOW()';
       const params: unknown[] = [status];
 
       fields.forEach((field, index) => {
@@ -211,7 +211,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       await client.query(
-        `INSERT INTO notification_queue (notification_id, status, priority, next_attempt_at, source_account_id)
+        `INSERT INTO np_notifications_queue (notification_id, status, priority, next_attempt_at, source_account_id)
          VALUES ($1, 'pending', $2, NOW(), $3)
          ON CONFLICT (notification_id) DO NOTHING`,
         [notificationId, priority, this.sourceAccountId]
@@ -226,10 +226,10 @@ export class DatabaseClient {
     try {
       // Get and lock the next pending item scoped to this account
       const result = await client.query(
-        `UPDATE notification_queue
+        `UPDATE np_notifications_queue
          SET status = 'processing', processing_started_at = NOW(), updated_at = NOW()
          WHERE id = (
-           SELECT id FROM notification_queue
+           SELECT id FROM np_notifications_queue
            WHERE status = 'pending'
              AND next_attempt_at <= NOW()
              AND attempts < max_attempts
@@ -252,14 +252,14 @@ export class DatabaseClient {
     try {
       if (status === 'completed') {
         await client.query(
-          `UPDATE notification_queue
+          `UPDATE np_notifications_queue
            SET status = $1, processing_completed_at = NOW(), updated_at = NOW()
            WHERE id = $2 AND source_account_id = $3`,
           [status, id, this.sourceAccountId]
         );
       } else if (status === 'failed') {
         await client.query(
-          `UPDATE notification_queue
+          `UPDATE np_notifications_queue
            SET status = 'pending',
                attempts = attempts + 1,
                last_error = $1,
@@ -286,7 +286,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT * FROM notification_preferences
+        `SELECT * FROM np_notifications_preferences
          WHERE user_id = $1 AND channel = $2 AND category = $3 AND source_account_id = $4`,
         [userId, channel, category, this.sourceAccountId]
       );
@@ -306,7 +306,7 @@ export class DatabaseClient {
       // Inline preference check scoped by source_account_id instead of
       // relying on the unscoped SQL function get_user_notification_preference.
       const result = await client.query(
-        `SELECT enabled FROM notification_preferences
+        `SELECT enabled FROM np_notifications_preferences
          WHERE user_id = $1 AND channel = $2 AND category = $3 AND source_account_id = $4`,
         [userId, channel, category, this.sourceAccountId]
       );
@@ -326,7 +326,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT COUNT(*) AS cnt FROM notification_messages
+        `SELECT COUNT(*) AS cnt FROM np_notifications_messages
          WHERE user_id = $1
            AND channel = $2
            AND created_at >= NOW() - ($3 || ' seconds')::INTERVAL
@@ -348,7 +348,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT * FROM notification_providers
+        `SELECT * FROM np_notifications_providers
          WHERE type = $1 AND enabled = true AND source_account_id = $2
          ORDER BY priority ASC`,
         [type, this.sourceAccountId]
@@ -368,7 +368,7 @@ export class DatabaseClient {
     try {
       if (success) {
         await client.query(
-          `UPDATE notification_providers
+          `UPDATE np_notifications_providers
            SET success_count = success_count + 1,
                last_success_at = NOW(),
                health_status = 'healthy',
@@ -378,7 +378,7 @@ export class DatabaseClient {
         );
       } else {
         await client.query(
-          `UPDATE notification_providers
+          `UPDATE np_notifications_providers
            SET failure_count = failure_count + 1,
                last_failure_at = NOW(),
                health_status = CASE
@@ -413,7 +413,7 @@ export class DatabaseClient {
            COUNT(*) FILTER (WHERE status = 'failed') AS failed,
            COUNT(*) FILTER (WHERE status = 'bounced') AS bounced,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'delivered') / NULLIF(COUNT(*), 0), 2) AS delivery_rate
-         FROM notification_messages
+         FROM np_notifications_messages
          WHERE source_account_id = $1
            AND created_at >= NOW() - INTERVAL '1 day' * $2
          GROUP BY channel, category, DATE_TRUNC('day', created_at)
@@ -440,7 +440,7 @@ export class DatabaseClient {
            COUNT(*) FILTER (WHERE unsubscribed_at IS NOT NULL) AS unsubscribed,
            ROUND(100.0 * COUNT(*) FILTER (WHERE opened_at IS NOT NULL) / NULLIF(COUNT(*) FILTER (WHERE status = 'delivered'), 0), 2) AS open_rate,
            ROUND(100.0 * COUNT(*) FILTER (WHERE clicked_at IS NOT NULL) / NULLIF(COUNT(*) FILTER (WHERE status = 'delivered'), 0), 2) AS click_rate
-         FROM notification_messages
+         FROM np_notifications_messages
          WHERE channel = 'email'
            AND source_account_id = $1
            AND created_at >= NOW() - INTERVAL '1 day' * $2
@@ -464,12 +464,12 @@ export class DatabaseClient {
    */
   async cleanupForAccount(sourceAccountId: string): Promise<number> {
     const tables = [
-      'notification_queue',
-      'notification_messages',
-      'notification_preferences',
-      'notification_templates',
-      'notification_providers',
-      'notification_batches',
+      'np_notifications_queue',
+      'np_notifications_messages',
+      'np_notifications_preferences',
+      'np_notifications_templates',
+      'np_notifications_providers',
+      'np_notifications_batches',
     ];
 
     const client = await this.getClient();

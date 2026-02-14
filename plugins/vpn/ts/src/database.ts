@@ -339,6 +339,7 @@ export class VPNDatabase {
         SELECT
           c.id,
           c.provider_id,
+          c.source_account_id,
           p.display_name AS provider_name,
           s.hostname AS server,
           s.country_code,
@@ -353,8 +354,8 @@ export class VPNDatabase {
           c.port_forwarded,
           c.kill_switch_enabled
         FROM np_vpn_connections c
-        JOIN np_vpn_providers p ON c.provider_id = p.id
-        LEFT JOIN np_vpn_servers s ON c.server_id = s.id
+        JOIN np_vpn_providers p ON c.provider_id = p.id AND c.source_account_id = p.source_account_id
+        LEFT JOIN np_vpn_servers s ON c.server_id = s.id AND c.source_account_id = s.source_account_id
         WHERE c.status = 'connected'
         ORDER BY c.connected_at DESC
       `);
@@ -364,6 +365,7 @@ export class VPNDatabase {
         SELECT
           s.id,
           s.provider_id,
+          s.source_account_id,
           s.hostname,
           s.country_code,
           s.city,
@@ -377,8 +379,8 @@ export class VPNDatabase {
           AVG(sp.success_rate) AS avg_success_rate,
           MAX(c.connected_at) AS last_used
         FROM np_vpn_servers s
-        LEFT JOIN np_vpn_connections c ON s.id = c.server_id
-        LEFT JOIN np_vpn_server_performance sp ON s.id = sp.server_id
+        LEFT JOIN np_vpn_connections c ON s.id = c.server_id AND s.source_account_id = c.source_account_id
+        LEFT JOIN np_vpn_server_performance sp ON s.id = sp.server_id AND s.source_account_id = sp.source_account_id
         GROUP BY s.id
         ORDER BY total_connections DESC, avg_download_speed DESC
       `);
@@ -394,6 +396,7 @@ export class VPNDatabase {
           d.bytes_downloaded,
           d.bytes_total,
           d.requested_by,
+          d.source_account_id,
           p.display_name AS provider_name,
           s.hostname AS server,
           s.country_code,
@@ -402,8 +405,8 @@ export class VPNDatabase {
           EXTRACT(EPOCH FROM (COALESCE(d.completed_at, NOW()) - d.started_at))::INTEGER AS duration_seconds,
           d.created_at
         FROM np_vpn_downloads d
-        JOIN np_vpn_providers p ON d.provider_id = p.id
-        LEFT JOIN np_vpn_servers s ON d.server_id = s.id
+        JOIN np_vpn_providers p ON d.provider_id = p.id AND d.source_account_id = p.source_account_id
+        LEFT JOIN np_vpn_servers s ON d.server_id = s.id AND d.source_account_id = s.source_account_id
         ORDER BY d.created_at DESC
       `);
 
@@ -411,6 +414,7 @@ export class VPNDatabase {
         CREATE OR REPLACE VIEW vpn_provider_uptime AS
         SELECT
           p.id,
+          p.source_account_id,
           p.display_name,
           COUNT(DISTINCT c.id) AS total_connections,
           SUM(CASE WHEN c.status = 'connected' THEN 1 ELSE 0 END) AS active_connections,
@@ -419,7 +423,7 @@ export class VPNDatabase {
           ROUND((COUNT(CASE WHEN c.error_message IS NULL THEN 1 END)::NUMERIC /
                  NULLIF(COUNT(c.id), 0) * 100), 2) AS success_rate_percent
         FROM np_vpn_providers p
-        LEFT JOIN np_vpn_connections c ON p.id = c.provider_id
+        LEFT JOIN np_vpn_connections c ON p.id = c.provider_id AND p.source_account_id = c.source_account_id
         GROUP BY p.id
         ORDER BY total_connections DESC
       `);
@@ -471,9 +475,9 @@ export class VPNDatabase {
         id, name, display_name, cli_available, cli_command, api_available, api_endpoint,
         port_forwarding_supported, p2p_all_servers, p2p_server_count, total_servers,
         total_countries, wireguard_supported, openvpn_supported, kill_switch_available,
-        split_tunneling_available, config
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-      ON CONFLICT (id) DO UPDATE SET
+        split_tunneling_available, config, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      ON CONFLICT (id, source_account_id) DO UPDATE SET
         display_name = EXCLUDED.display_name,
         cli_available = EXCLUDED.cli_available,
         cli_command = EXCLUDED.cli_command,
@@ -509,18 +513,25 @@ export class VPNDatabase {
         provider.kill_switch_available,
         provider.split_tunneling_available,
         JSON.stringify(provider.config || {}),
+        this.sourceAccountId,
       ]
     );
     return result.rows[0];
   }
 
   async getProvider(id: string): Promise<VPNProviderRecord | null> {
-    const result = await this.pool.query<VPNProviderRecord>('SELECT * FROM np_vpn_providers WHERE id = $1', [id]);
+    const result = await this.pool.query<VPNProviderRecord>(
+      'SELECT * FROM np_vpn_providers WHERE id = $1 AND source_account_id = $2',
+      [id, this.sourceAccountId]
+    );
     return result.rows[0] || null;
   }
 
   async getAllProviders(): Promise<VPNProviderRecord[]> {
-    const result = await this.pool.query<VPNProviderRecord>('SELECT * FROM np_vpn_providers ORDER BY name');
+    const result = await this.pool.query<VPNProviderRecord>(
+      'SELECT * FROM np_vpn_providers WHERE source_account_id = $1 ORDER BY name',
+      [this.sourceAccountId]
+    );
     return result.rows;
   }
 
@@ -532,7 +543,7 @@ export class VPNDatabase {
     const result = await this.pool.query<VPNCredentialRecord>(
       `INSERT INTO np_vpn_credentials (
         provider_id, username, password_encrypted, api_key_encrypted, api_token_encrypted,
-        account_number, private_key_encrypted, additional_data, expires_at
+        account_number, private_key_encrypted, additional_data, expires_at, source_account_id
       ) VALUES (
         $1, $2,
         pgp_sym_encrypt($3::text, $4),
@@ -540,9 +551,9 @@ export class VPNDatabase {
         pgp_sym_encrypt($6::text, $4),
         $7,
         pgp_sym_encrypt($8::text, $4),
-        $9, $10
+        $9, $10, $11
       )
-      ON CONFLICT (provider_id) DO UPDATE SET
+      ON CONFLICT (provider_id, source_account_id) DO UPDATE SET
         username = EXCLUDED.username,
         password_encrypted = EXCLUDED.password_encrypted,
         api_key_encrypted = EXCLUDED.api_key_encrypted,
@@ -553,7 +564,7 @@ export class VPNDatabase {
         expires_at = EXCLUDED.expires_at,
         updated_at = NOW()
       RETURNING
-        id, provider_id, username, account_number, additional_data, expires_at, created_at, updated_at`,
+        id, provider_id, username, account_number, additional_data, expires_at, created_at, updated_at, source_account_id`,
       [
         credentials.provider_id,
         credentials.username,
@@ -565,6 +576,7 @@ export class VPNDatabase {
         credentials.private_key_encrypted || '',
         JSON.stringify(credentials.additional_data || {}),
         credentials.expires_at,
+        this.sourceAccountId,
       ]
     );
     return result.rows[0];
@@ -573,20 +585,23 @@ export class VPNDatabase {
   async getCredentials(providerId: string, encryptionKey: string): Promise<VPNCredentialRecord | null> {
     const result = await this.pool.query<VPNCredentialRecord>(
       `SELECT
-        id, provider_id, username, account_number, additional_data, expires_at, created_at, updated_at,
+        id, provider_id, username, account_number, additional_data, expires_at, created_at, updated_at, source_account_id,
         pgp_sym_decrypt(password_encrypted, $2) AS password_encrypted,
         pgp_sym_decrypt(api_key_encrypted, $2) AS api_key_encrypted,
         pgp_sym_decrypt(api_token_encrypted, $2) AS api_token_encrypted,
         pgp_sym_decrypt(private_key_encrypted, $2) AS private_key_encrypted
       FROM np_vpn_credentials
-      WHERE provider_id = $1`,
-      [providerId, encryptionKey]
+      WHERE provider_id = $1 AND source_account_id = $3`,
+      [providerId, encryptionKey, this.sourceAccountId]
     );
     return result.rows[0] || null;
   }
 
   async deleteCredentials(providerId: string): Promise<boolean> {
-    const result = await this.pool.query('DELETE FROM np_vpn_credentials WHERE provider_id = $1', [providerId]);
+    const result = await this.pool.query(
+      'DELETE FROM np_vpn_credentials WHERE provider_id = $1 AND source_account_id = $2',
+      [providerId, this.sourceAccountId]
+    );
     return (result.rowCount ?? 0) > 0;
   }
 
@@ -599,9 +614,9 @@ export class VPNDatabase {
       `INSERT INTO np_vpn_servers (
         provider_id, hostname, ip_address, ipv6_address, country_code, country_name, city, region,
         latitude, longitude, p2p_supported, port_forwarding_supported, protocols, load, capacity,
-        status, features, public_key, endpoint_port, owned, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-      ON CONFLICT (provider_id, hostname) DO UPDATE SET
+        status, features, public_key, endpoint_port, owned, metadata, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+      ON CONFLICT (provider_id, hostname, source_account_id) DO UPDATE SET
         ip_address = EXCLUDED.ip_address,
         ipv6_address = EXCLUDED.ipv6_address,
         country_code = EXCLUDED.country_code,
@@ -646,6 +661,7 @@ export class VPNDatabase {
         server.endpoint_port,
         server.owned || false,
         JSON.stringify(server.metadata || {}),
+        this.sourceAccountId,
       ]
     );
     return result.rows[0];
@@ -659,9 +675,9 @@ export class VPNDatabase {
     status?: string;
     limit?: number;
   }): Promise<VPNServerRecord[]> {
-    const conditions: string[] = ['1=1'];
-    const values: unknown[] = [];
-    let paramIndex = 1;
+    const conditions: string[] = ['source_account_id = $1'];
+    const values: unknown[] = [this.sourceAccountId];
+    let paramIndex = 2;
 
     if (filters.provider) {
       conditions.push(`provider_id = $${paramIndex++}`);
@@ -707,8 +723,8 @@ export class VPNDatabase {
     const result = await this.pool.query<VPNConnectionRecord>(
       `INSERT INTO np_vpn_connections (
         provider_id, server_id, protocol, status, local_ip, vpn_ip, interface_name, dns_servers,
-        connected_at, kill_switch_enabled, requested_by, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        connected_at, kill_switch_enabled, requested_by, metadata, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *`,
       [
         connection.provider_id,
@@ -723,6 +739,7 @@ export class VPNDatabase {
         connection.kill_switch_enabled !== false,
         connection.requested_by,
         JSON.stringify(connection.metadata || {}),
+        this.sourceAccountId,
       ]
     );
     return result.rows[0];
@@ -758,8 +775,9 @@ export class VPNDatabase {
     }
 
     values.push(id);
+    values.push(this.sourceAccountId);
     const result = await this.pool.query<VPNConnectionRecord>(
-      `UPDATE vpn_connections SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE np_vpn_connections SET ${fields.join(', ')} WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1} RETURNING *`,
       values
     );
 
@@ -772,13 +790,17 @@ export class VPNDatabase {
 
   async getActiveConnection(): Promise<VPNConnectionRecord | null> {
     const result = await this.pool.query<VPNConnectionRecord>(
-      `SELECT * FROM np_vpn_connections WHERE status = 'connected' ORDER BY connected_at DESC LIMIT 1`
+      `SELECT * FROM np_vpn_connections WHERE status = 'connected' AND source_account_id = $1 ORDER BY connected_at DESC LIMIT 1`,
+      [this.sourceAccountId]
     );
     return result.rows[0] || null;
   }
 
   async getConnection(id: string): Promise<VPNConnectionRecord | null> {
-    const result = await this.pool.query<VPNConnectionRecord>('SELECT * FROM np_vpn_connections WHERE id = $1', [id]);
+    const result = await this.pool.query<VPNConnectionRecord>(
+      'SELECT * FROM np_vpn_connections WHERE id = $1 AND source_account_id = $2',
+      [id, this.sourceAccountId]
+    );
     return result.rows[0] || null;
   }
 
@@ -790,8 +812,8 @@ export class VPNDatabase {
     const result = await this.pool.query<VPNDownloadRecord>(
       `INSERT INTO np_vpn_downloads (
         connection_id, magnet_link, info_hash, name, destination_path, status, progress,
-        bytes_downloaded, bytes_total, requested_by, provider_id, server_id, metadata
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        bytes_downloaded, bytes_total, requested_by, provider_id, server_id, metadata, source_account_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         download.connection_id,
@@ -807,6 +829,7 @@ export class VPNDatabase {
         download.provider_id,
         download.server_id,
         JSON.stringify(download.metadata || {}),
+        this.sourceAccountId,
       ]
     );
     return result.rows[0];
@@ -845,8 +868,9 @@ export class VPNDatabase {
     }
 
     values.push(id);
+    values.push(this.sourceAccountId);
     const result = await this.pool.query<VPNDownloadRecord>(
-      `UPDATE vpn_downloads SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      `UPDATE np_vpn_downloads SET ${fields.join(', ')} WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1} RETURNING *`,
       values
     );
 
@@ -858,7 +882,10 @@ export class VPNDatabase {
   }
 
   async getDownload(id: string): Promise<VPNDownloadRecord | null> {
-    const result = await this.pool.query<VPNDownloadRecord>('SELECT * FROM np_vpn_downloads WHERE id = $1', [id]);
+    const result = await this.pool.query<VPNDownloadRecord>(
+      'SELECT * FROM np_vpn_downloads WHERE id = $1 AND source_account_id = $2',
+      [id, this.sourceAccountId]
+    );
     return result.rows[0] || null;
   }
 
@@ -866,15 +893,17 @@ export class VPNDatabase {
     const result = await this.pool.query<VPNDownloadRecord>(
       `SELECT * FROM np_vpn_downloads
        WHERE status IN ('queued', 'connecting_vpn', 'downloading', 'paused')
-       ORDER BY created_at ASC`
+         AND source_account_id = $1
+       ORDER BY created_at ASC`,
+      [this.sourceAccountId]
     );
     return result.rows;
   }
 
   async getAllDownloads(limit: number = 100): Promise<VPNDownloadRecord[]> {
     const result = await this.pool.query<VPNDownloadRecord>(
-      'SELECT * FROM np_vpn_downloads ORDER BY created_at DESC LIMIT $1',
-      [limit]
+      'SELECT * FROM np_vpn_downloads WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [this.sourceAccountId, limit]
     );
     return result.rows;
   }
@@ -889,7 +918,9 @@ export class VPNDatabase {
       `SELECT
         COUNT(*) as total,
         COUNT(CASE WHEN status = 'connected' THEN 1 END) as active
-      FROM np_vpn_connections`
+      FROM np_vpn_connections
+      WHERE source_account_id = $1`,
+      [this.sourceAccountId]
     );
 
     // Get total and active downloads
@@ -898,17 +929,38 @@ export class VPNDatabase {
         COUNT(*) as total,
         COUNT(CASE WHEN status IN ('downloading', 'queued', 'connecting_vpn') THEN 1 END) as active,
         SUM(bytes_downloaded) as bytes
-      FROM np_vpn_downloads`
+      FROM np_vpn_downloads
+      WHERE source_account_id = $1`,
+      [this.sourceAccountId]
     );
 
     // Get provider stats
     const providersResult = await this.pool.query(
-      `SELECT * FROM vpn_provider_uptime ORDER BY total_connections DESC LIMIT 10`
+      `SELECT p.display_name, COUNT(c.id)::text as total_connections,
+        ROUND((COUNT(CASE WHEN c.error_message IS NULL THEN 1 END)::NUMERIC /
+               NULLIF(COUNT(c.id), 0) * 100), 2)::text AS success_rate_percent
+      FROM np_vpn_providers p
+      LEFT JOIN np_vpn_connections c ON p.id = c.provider_id AND c.source_account_id = $1
+      WHERE p.source_account_id = $1
+      GROUP BY p.id, p.display_name
+      ORDER BY COUNT(c.id) DESC
+      LIMIT 10`,
+      [this.sourceAccountId]
     );
 
     // Get top servers
     const serversResult = await this.pool.query(
-      `SELECT * FROM vpn_server_stats ORDER BY total_connections DESC, avg_download_speed DESC LIMIT 10`
+      `SELECT s.hostname, s.provider_id, s.country_code,
+        COUNT(DISTINCT c.id)::text AS total_connections,
+        AVG(sp.download_speed_mbps)::text AS avg_download_speed
+      FROM np_vpn_servers s
+      LEFT JOIN np_vpn_connections c ON s.id = c.server_id AND c.source_account_id = $1
+      LEFT JOIN np_vpn_server_performance sp ON s.id = sp.server_id AND sp.source_account_id = $1
+      WHERE s.source_account_id = $1
+      GROUP BY s.id, s.hostname, s.provider_id, s.country_code
+      ORDER BY COUNT(DISTINCT c.id) DESC, AVG(sp.download_speed_mbps) DESC
+      LIMIT 10`,
+      [this.sourceAccountId]
     );
 
     return {
