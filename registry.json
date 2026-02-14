@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-14T22:00:00.000Z",
+  "lastUpdated": "2026-02-14T21:12:56.000Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -9667,6 +9667,59 @@
         "defaultValue": "primary"
       },
       "dependencies": []
+    },
+    "observability": {
+      "name": "observability",
+      "version": "1.0.0",
+      "description": "Unified observability platform with Prometheus metrics, structured logging to Loki, and distributed tracing to Tempo",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/observability",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "minNselfVersion": "0.4.8",
+      "port": 3215,
+      "category": "infrastructure",
+      "path": "plugins/observability",
+      "language": "typescript",
+      "tables": [],
+      "tags": [
+        "observability",
+        "monitoring",
+        "metrics",
+        "prometheus",
+        "logging",
+        "loki",
+        "tracing",
+        "tempo",
+        "opentelemetry",
+        "grafana"
+      ]
+    },
+    "admin-api": {
+      "name": "admin-api",
+      "version": "1.0.0",
+      "description": "Comprehensive admin dashboard API for system health, user management, and metrics",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/admin-api",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "minNselfVersion": "0.4.8",
+      "port": 3214,
+      "category": "infrastructure",
+      "path": "plugins/admin-api",
+      "language": "typescript",
+      "tables": [
+        "np_admin_users",
+        "np_admin_audit_log"
+      ],
+      "tags": [
+        "admin",
+        "dashboard",
+        "metrics",
+        "health",
+        "system",
+        "management"
+      ]
     }
   },
   "categories": {

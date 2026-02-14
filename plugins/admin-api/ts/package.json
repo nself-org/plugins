@@ -1,0 +1,39 @@
+{
+  "name": "@nself/admin-api-plugin",
+  "version": "1.0.0",
+  "description": "Admin dashboard API for nself",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "nself-admin-api": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "nself",
+    "admin",
+    "dashboard",
+    "api",
+    "metrics",
+    "health"
+  ],
+  "author": "nself",
+  "license": "Source-Available",
+  "dependencies": {
+    "@nself/plugin-utils": "file:../../../shared",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

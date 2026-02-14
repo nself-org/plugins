@@ -1,0 +1,83 @@
+{
+  "name": "observability",
+  "version": "1.0.0",
+  "description": "Unified observability platform with Prometheus metrics, structured logging to Loki, and distributed tracing to Tempo",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/observability",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "infrastructure",
+  "tags": [
+    "observability",
+    "monitoring",
+    "metrics",
+    "prometheus",
+    "logging",
+    "loki",
+    "tracing",
+    "tempo",
+    "opentelemetry",
+    "grafana"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "metrics": "Expose Prometheus metrics endpoint",
+    "logs": "Ingest structured JSON logs to Loki",
+    "traces": "Ingest distributed traces to Tempo",
+    "dashboards": "List and retrieve Grafana dashboards"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "OBSERVABILITY_PLUGIN_PORT",
+      "OBSERVABILITY_PLUGIN_HOST",
+      "PORT",
+      "HOST",
+      "OBSERVABILITY_PROMETHEUS_ENABLED",
+      "OBSERVABILITY_METRICS_PATH",
+      "OBSERVABILITY_LOKI_ENABLED",
+      "OBSERVABILITY_LOKI_URL",
+      "OBSERVABILITY_TEMPO_ENABLED",
+      "OBSERVABILITY_TEMPO_URL",
+      "OBSERVABILITY_GRAFANA_URL",
+      "OBSERVABILITY_GRAFANA_API_KEY",
+      "LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3215,
+    "prometheusEnabled": true,
+    "metricsPath": "/metrics",
+    "lokiEnabled": true,
+    "lokiUrl": "http://loki:3100",
+    "tempoEnabled": true,
+    "tempoUrl": "http://tempo:9411",
+    "grafanaUrl": "http://grafana:3000"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [],
+    "network": [
+      "loki",
+      "tempo",
+      "grafana",
+      "prometheus"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "port": 3215
+}
