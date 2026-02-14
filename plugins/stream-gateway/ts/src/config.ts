@@ -33,6 +33,10 @@ export interface Config {
   appTvMaxDeviceStreams: number;
   appFamilyMaxConcurrent: number;
 
+  // URL signing (nTV v1 API)
+  signingSecret: string;
+  signedUrlExpirySeconds: number;
+
   // Logging
   logLevel: string;
 
@@ -98,6 +102,10 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     appTvMaxConcurrent: parseInt(process.env.SG_APP_TV_MAX_CONCURRENT ?? '5', 10),
     appTvMaxDeviceStreams: parseInt(process.env.SG_APP_TV_MAX_DEVICE_STREAMS ?? '1', 10),
     appFamilyMaxConcurrent: parseInt(process.env.SG_APP_FAMILY_MAX_CONCURRENT ?? '2', 10),
+
+    // URL signing (nTV v1 API)
+    signingSecret: process.env.SG_SIGNING_SECRET ?? '',
+    signedUrlExpirySeconds: parseInt(process.env.SG_SIGNED_URL_EXPIRY_SECONDS ?? '3600', 10),
 
     // Logging
     logLevel: process.env.LOG_LEVEL ?? 'info',

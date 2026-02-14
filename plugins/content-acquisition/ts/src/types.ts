@@ -205,3 +205,153 @@ export interface PipelineTriggerRequest {
   magnet_url?: string;
   torrent_url?: string;
 }
+
+// =============================================================================
+// Download State Machine
+// =============================================================================
+
+/**
+ * All possible download states.
+ *
+ * Happy path: created -> vpn_connecting -> searching -> downloading -> encoding
+ *             -> subtitles -> uploading -> finalizing -> completed
+ *
+ * Any state can transition to `failed` or `cancelled`.
+ */
+export type DownloadState =
+  | 'created'
+  | 'vpn_connecting'
+  | 'searching'
+  | 'downloading'
+  | 'encoding'
+  | 'subtitles'
+  | 'uploading'
+  | 'finalizing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'paused';
+
+export interface DownloadStateTransition {
+  id: string;
+  download_id: string;
+  from_state: string | null;
+  to_state: string;
+  metadata?: Record<string, unknown>;
+  created_at: Date;
+}
+
+// =============================================================================
+// Movie Monitoring
+// =============================================================================
+
+export interface MovieMonitoring {
+  id: string;
+  source_account_id: string;
+  user_id: string;
+  movie_title: string;
+  tmdb_id?: number;
+  release_date?: Date;
+  digital_release_date?: Date;
+  quality_profile: string;
+  auto_download: boolean;
+  auto_upgrade: boolean;
+  status: 'scheduled' | 'searching' | 'downloading' | 'downloaded' | 'failed';
+  downloaded_quality?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// =============================================================================
+// Downloads (state-machine driven)
+// =============================================================================
+
+export interface Download {
+  id: string;
+  source_account_id: string;
+  user_id: string;
+  content_type: string;
+  title: string;
+  state: DownloadState;
+  progress: number;
+  magnet_uri?: string;
+  torrent_id?: string;
+  encoding_job_id?: string;
+  quality_profile: string;
+  retry_count: number;
+  error_message?: string;
+  show_id?: string;
+  season_number?: number;
+  episode_number?: number;
+  tmdb_id?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// =============================================================================
+// Download Rules
+// =============================================================================
+
+export interface DownloadRule {
+  id: string;
+  source_account_id: string;
+  user_id: string;
+  name: string;
+  conditions: Record<string, unknown>;
+  action: 'auto-download' | 'notify' | 'skip';
+  priority: number;
+  enabled: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// =============================================================================
+// Download Queue
+// =============================================================================
+
+export interface DownloadQueueItem {
+  download_id: string;
+  priority: number;
+  created_at: Date;
+}
+
+// =============================================================================
+// Quality Profile Presets
+// =============================================================================
+
+export interface QualityProfilePreset {
+  name: string;
+  description: string;
+  max_resolution: string;
+  min_resolution: string;
+  preferred_sources: string[];
+  max_size_movie_gb: number;
+  max_size_episode_gb: number;
+}
+
+// =============================================================================
+// Dashboard Summary
+// =============================================================================
+
+export interface DashboardSummary {
+  active_downloads: number;
+  completed_today: number;
+  failed_today: number;
+  active_subscriptions: number;
+  monitored_movies: number;
+  enabled_feeds: number;
+  enabled_rules: number;
+  queue_depth: number;
+}
+
+// =============================================================================
+// Feed Validation Result
+// =============================================================================
+
+export interface FeedValidationResult {
+  valid: boolean;
+  title?: string;
+  item_count?: number;
+  latest_item_date?: string;
+  error?: string;
+}

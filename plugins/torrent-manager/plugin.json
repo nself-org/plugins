@@ -43,7 +43,8 @@
     "np_torrentmanager_trackers",
     "np_torrentmanager_search_cache",
     "np_torrentmanager_stats",
-    "np_torrentmanager_seeding_policy"
+    "np_torrentmanager_seeding_policy",
+    "np_torrent_seeding_policies"
   ],
   "views": [
     "np_torrentmanager_active_downloads",
@@ -74,7 +75,10 @@
     "POST /v1/downloads/:id/pause",
     "POST /v1/downloads/:id/resume",
     "GET /v1/stats",
-    "GET /v1/seeding"
+    "GET /v1/seeding",
+    "PUT /v1/seeding/:id/policy",
+    "GET /v1/seeding/:id/policy",
+    "GET /v1/sources"
   ],
   "cliCommands": [
     {

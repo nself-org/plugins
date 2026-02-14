@@ -27,6 +27,10 @@ export interface Config {
   commandMaxRetries: number;
   telemetryRetentionDays: number;
 
+  // nTV settings
+  bootstrapTokenTtl: number;
+  heartbeatOfflineTimeout: number;
+
   // Ingest settings
   ingestHeartbeatInterval: number;
   ingestHeartbeatTimeout: number;
@@ -102,6 +106,10 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     commandDefaultTimeout: parseInt(process.env.DEV_COMMAND_DEFAULT_TIMEOUT ?? '300', 10),
     commandMaxRetries: parseInt(process.env.DEV_COMMAND_MAX_RETRIES ?? '3', 10),
     telemetryRetentionDays: parseInt(process.env.DEV_TELEMETRY_RETENTION_DAYS ?? '30', 10),
+
+    // nTV settings
+    bootstrapTokenTtl: parseInt(process.env.DEV_BOOTSTRAP_TOKEN_TTL ?? '86400', 10),
+    heartbeatOfflineTimeout: parseInt(process.env.DEV_HEARTBEAT_OFFLINE_TIMEOUT ?? '90', 10),
 
     // Ingest settings
     ingestHeartbeatInterval: parseInt(process.env.DEV_INGEST_HEARTBEAT_INTERVAL ?? '10', 10),

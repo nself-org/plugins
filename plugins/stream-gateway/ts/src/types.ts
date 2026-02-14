@@ -169,6 +169,57 @@ export interface UpdateRuleRequest {
 }
 
 // =============================================================================
+// nTV v1 API Types
+// =============================================================================
+
+export interface V1AdmitRequest {
+  user_id: string;
+  content_id: string;
+  device_id?: string;
+  content_rating?: string;
+}
+
+export interface V1AdmitResponse {
+  admitted: true;
+  session_id: string;
+  signed_url: string;
+  token: string;
+  expires_at: string;
+}
+
+export interface V1AdmitDeniedResponse {
+  admitted: false;
+  reason: string;
+}
+
+export interface V1HeartbeatRequest {
+  session_id: string;
+}
+
+export interface V1HeartbeatResponse {
+  active: true;
+  duration_seconds: number;
+}
+
+export interface V1ActiveSession {
+  session_id: string;
+  user_id: string;
+  content_id: string;
+  device_id: string | null;
+  started_at: Date;
+  last_heartbeat: Date;
+}
+
+export interface FamilyMemberRecord extends Record<string, unknown> {
+  id: string;
+  source_account_id: string;
+  family_id: string;
+  user_id: string;
+  role: string;
+  created_at: Date;
+}
+
+// =============================================================================
 // Stats Types
 // =============================================================================
 

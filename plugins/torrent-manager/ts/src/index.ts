@@ -18,6 +18,7 @@ export * from './server.js';
 export * from './vpn-checker.js';
 export * from './clients/base.js';
 export * from './clients/transmission.js';
+export * from './sources/registry.js';
 
 /**
  * Start Torrent Manager Server

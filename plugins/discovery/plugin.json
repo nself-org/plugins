@@ -1,0 +1,89 @@
+{
+  "name": "discovery",
+  "version": "1.0.0",
+  "description": "Content discovery feeds with trending, popular, recently added, and continue watching functionality using cache-aside Redis pattern",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/discovery",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": [
+    "discovery",
+    "trending",
+    "popular",
+    "continue-watching",
+    "recommendations",
+    "feeds",
+    "media",
+    "cache"
+  ],
+  "tables": [
+    "np_disc_trending_cache",
+    "np_disc_popular_cache"
+  ],
+  "views": [
+    "np_disc_trending_live",
+    "np_disc_popular_live",
+    "np_disc_recent_live"
+  ],
+  "webhooks": [],
+  "actions": {
+    "init": "Initialize discovery plugin and cache tables",
+    "server": "Start discovery API server",
+    "status": "View cache and feed status",
+    "trending": "Display current trending content",
+    "popular": "Display popular content",
+    "recent": "Display recently added content",
+    "continue": "Display continue watching for a user",
+    "cache-clear": "Clear all cached feeds"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "DISCOVERY_PORT",
+      "REDIS_URL",
+      "TRENDING_WINDOW_HOURS",
+      "DEFAULT_LIMIT",
+      "CACHE_TTL_TRENDING",
+      "CACHE_TTL_POPULAR",
+      "CACHE_TTL_RECENT",
+      "CACHE_TTL_CONTINUE"
+    ]
+  },
+  "config": {
+    "port": 3022,
+    "webhookPath": null,
+    "trendingWindowHours": 24,
+    "defaultLimit": 20,
+    "cacheTtlTrending": 900,
+    "cacheTtlPopular": 3600,
+    "cacheTtlRecent": 1800,
+    "cacheTtlContinue": 300
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "read",
+      "create"
+    ],
+    "network": [
+      "redis"
+    ],
+    "filesystem": [
+      "cache"
+    ]
+  }
+}

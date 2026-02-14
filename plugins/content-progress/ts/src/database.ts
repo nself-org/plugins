@@ -85,7 +85,7 @@ export class ProgressDatabase {
       -- Progress Positions
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS progress_positions (
+      CREATE TABLE IF NOT EXISTS np_progress_positions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         user_id VARCHAR(255) NOT NULL,
@@ -106,24 +106,24 @@ export class ProgressDatabase {
         UNIQUE(source_account_id, user_id, content_type, content_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_progress_positions_source_account
-        ON progress_positions(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_positions_user
-        ON progress_positions(user_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_positions_content
-        ON progress_positions(content_type, content_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_positions_completed
-        ON progress_positions(completed);
-      CREATE INDEX IF NOT EXISTS idx_progress_positions_updated
-        ON progress_positions(updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_progress_positions_user_updated
-        ON progress_positions(user_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_positions_source_account
+        ON np_progress_positions(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_positions_user
+        ON np_progress_positions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_positions_content
+        ON np_progress_positions(content_type, content_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_positions_completed
+        ON np_progress_positions(completed);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_positions_updated
+        ON np_progress_positions(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_positions_user_updated
+        ON np_progress_positions(user_id, updated_at DESC);
 
       -- =====================================================================
       -- Progress History
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS progress_history (
+      CREATE TABLE IF NOT EXISTS np_progress_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         user_id VARCHAR(255) NOT NULL,
@@ -136,22 +136,22 @@ export class ProgressDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_progress_history_source_account
-        ON progress_history(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_history_user
-        ON progress_history(user_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_history_content
-        ON progress_history(content_type, content_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_history_created
-        ON progress_history(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_progress_history_user_created
-        ON progress_history(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_history_source_account
+        ON np_progress_history(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_history_user
+        ON np_progress_history(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_history_content
+        ON np_progress_history(content_type, content_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_history_created
+        ON np_progress_history(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_history_user_created
+        ON np_progress_history(user_id, created_at DESC);
 
       -- =====================================================================
       -- Watchlists
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS progress_watchlists (
+      CREATE TABLE IF NOT EXISTS np_progress_watchlists (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         user_id VARCHAR(255) NOT NULL,
@@ -164,20 +164,20 @@ export class ProgressDatabase {
         UNIQUE(source_account_id, user_id, content_type, content_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_progress_watchlists_source_account
-        ON progress_watchlists(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_watchlists_user
-        ON progress_watchlists(user_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_watchlists_priority
-        ON progress_watchlists(priority DESC);
-      CREATE INDEX IF NOT EXISTS idx_progress_watchlists_user_priority
-        ON progress_watchlists(user_id, priority DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_watchlists_source_account
+        ON np_progress_watchlists(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_watchlists_user
+        ON np_progress_watchlists(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_watchlists_priority
+        ON np_progress_watchlists(priority DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_watchlists_user_priority
+        ON np_progress_watchlists(user_id, priority DESC);
 
       -- =====================================================================
       -- Favorites
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS progress_favorites (
+      CREATE TABLE IF NOT EXISTS np_progress_favorites (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         user_id VARCHAR(255) NOT NULL,
@@ -187,18 +187,18 @@ export class ProgressDatabase {
         UNIQUE(source_account_id, user_id, content_type, content_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_progress_favorites_source_account
-        ON progress_favorites(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_favorites_user
-        ON progress_favorites(user_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_favorites_created
-        ON progress_favorites(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_favorites_source_account
+        ON np_progress_favorites(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_favorites_user
+        ON np_progress_favorites(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_favorites_created
+        ON np_progress_favorites(created_at DESC);
 
       -- =====================================================================
       -- Webhook Events
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS progress_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_progress_webhook_events (
         id VARCHAR(255) PRIMARY KEY,
         source_account_id VARCHAR(128) DEFAULT 'primary',
         event_type VARCHAR(128),
@@ -209,14 +209,14 @@ export class ProgressDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_progress_webhook_events_source_account
-        ON progress_webhook_events(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_progress_webhook_events_type
-        ON progress_webhook_events(event_type);
-      CREATE INDEX IF NOT EXISTS idx_progress_webhook_events_processed
-        ON progress_webhook_events(processed);
-      CREATE INDEX IF NOT EXISTS idx_progress_webhook_events_created
-        ON progress_webhook_events(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_webhook_events_source_account
+        ON np_progress_webhook_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_webhook_events_type
+        ON np_progress_webhook_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_webhook_events_processed
+        ON np_progress_webhook_events(processed);
+      CREATE INDEX IF NOT EXISTS idx_np_progress_webhook_events_created
+        ON np_progress_webhook_events(created_at DESC);
     `;
 
     await this.execute(schema);
@@ -236,7 +236,7 @@ export class ProgressDatabase {
     const completedAt = completed ? new Date() : null;
 
     const result = await this.query<ProgressPositionRecord>(
-      `INSERT INTO progress_positions (
+      `INSERT INTO np_progress_positions (
         source_account_id, user_id, content_type, content_id,
         position_seconds, duration_seconds, progress_percent,
         completed, completed_at, device_id, audio_track, subtitle_track,
@@ -245,18 +245,18 @@ export class ProgressDatabase {
       ON CONFLICT (source_account_id, user_id, content_type, content_id)
       DO UPDATE SET
         position_seconds = EXCLUDED.position_seconds,
-        duration_seconds = COALESCE(EXCLUDED.duration_seconds, progress_positions.duration_seconds),
+        duration_seconds = COALESCE(EXCLUDED.duration_seconds, np_progress_positions.duration_seconds),
         progress_percent = EXCLUDED.progress_percent,
         completed = EXCLUDED.completed,
         completed_at = CASE
-          WHEN EXCLUDED.completed AND progress_positions.completed_at IS NULL
+          WHEN EXCLUDED.completed AND np_progress_positions.completed_at IS NULL
           THEN EXCLUDED.completed_at
-          ELSE progress_positions.completed_at
+          ELSE np_progress_positions.completed_at
         END,
-        device_id = COALESCE(EXCLUDED.device_id, progress_positions.device_id),
-        audio_track = COALESCE(EXCLUDED.audio_track, progress_positions.audio_track),
-        subtitle_track = COALESCE(EXCLUDED.subtitle_track, progress_positions.subtitle_track),
-        quality = COALESCE(EXCLUDED.quality, progress_positions.quality),
+        device_id = COALESCE(EXCLUDED.device_id, np_progress_positions.device_id),
+        audio_track = COALESCE(EXCLUDED.audio_track, np_progress_positions.audio_track),
+        subtitle_track = COALESCE(EXCLUDED.subtitle_track, np_progress_positions.subtitle_track),
+        quality = COALESCE(EXCLUDED.quality, np_progress_positions.quality),
         metadata = EXCLUDED.metadata,
         updated_at = NOW()
       RETURNING *`,
@@ -305,7 +305,7 @@ export class ProgressDatabase {
 
   async getProgress(userId: string, contentType: ContentType, contentId: string): Promise<ProgressPositionRecord | null> {
     const result = await this.query<ProgressPositionRecord>(
-      `SELECT * FROM progress_positions
+      `SELECT * FROM np_progress_positions
        WHERE source_account_id = $1 AND user_id = $2 AND content_type = $3 AND content_id = $4`,
       [this.sourceAccountId, userId, contentType, contentId]
     );
@@ -315,7 +315,7 @@ export class ProgressDatabase {
 
   async getUserProgress(userId: string, limit = 100, offset = 0): Promise<ProgressPositionRecord[]> {
     const result = await this.query<ProgressPositionRecord>(
-      `SELECT * FROM progress_positions
+      `SELECT * FROM np_progress_positions
        WHERE source_account_id = $1 AND user_id = $2
        ORDER BY updated_at DESC
        LIMIT $3 OFFSET $4`,
@@ -327,7 +327,7 @@ export class ProgressDatabase {
 
   async deleteProgress(userId: string, contentType: ContentType, contentId: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM progress_positions
+      `DELETE FROM np_progress_positions
        WHERE source_account_id = $1 AND user_id = $2 AND content_type = $3 AND content_id = $4`,
       [this.sourceAccountId, userId, contentType, contentId]
     );
@@ -337,7 +337,7 @@ export class ProgressDatabase {
 
   async markCompleted(userId: string, contentType: ContentType, contentId: string): Promise<ProgressPositionRecord | null> {
     const result = await this.query<ProgressPositionRecord>(
-      `UPDATE progress_positions
+      `UPDATE np_progress_positions
        SET completed = TRUE,
            completed_at = COALESCE(completed_at, NOW()),
            progress_percent = 100,
@@ -363,7 +363,7 @@ export class ProgressDatabase {
     const result = await this.query<ContinueWatchingItem>(
       `SELECT id, source_account_id, user_id, content_type, content_id,
               position_seconds, duration_seconds, progress_percent, updated_at, metadata
-       FROM progress_positions
+       FROM np_progress_positions
        WHERE source_account_id = $1
          AND user_id = $2
          AND completed = FALSE
@@ -382,7 +382,7 @@ export class ProgressDatabase {
       `SELECT id, source_account_id, user_id, content_type, content_id,
               position_seconds, duration_seconds, progress_percent, completed,
               completed_at, updated_at, metadata
-       FROM progress_positions
+       FROM np_progress_positions
        WHERE source_account_id = $1 AND user_id = $2
        ORDER BY updated_at DESC
        LIMIT $3`,
@@ -398,7 +398,7 @@ export class ProgressDatabase {
 
   async insertHistoryEvent(request: CreateHistoryRequest): Promise<ProgressHistoryRecord> {
     const result = await this.query<ProgressHistoryRecord>(
-      `INSERT INTO progress_history (
+      `INSERT INTO np_progress_history (
         source_account_id, user_id, content_type, content_id,
         action, position_seconds, device_id, session_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -420,7 +420,7 @@ export class ProgressDatabase {
 
   async getUserHistory(userId: string, limit = 100, offset = 0): Promise<ProgressHistoryRecord[]> {
     const result = await this.query<ProgressHistoryRecord>(
-      `SELECT * FROM progress_history
+      `SELECT * FROM np_progress_history
        WHERE source_account_id = $1 AND user_id = $2
        ORDER BY created_at DESC
        LIMIT $3 OFFSET $4`,
@@ -436,7 +436,7 @@ export class ProgressDatabase {
 
   async addToWatchlist(request: AddToWatchlistRequest): Promise<WatchlistRecord> {
     const result = await this.query<WatchlistRecord>(
-      `INSERT INTO progress_watchlists (
+      `INSERT INTO np_progress_watchlists (
         source_account_id, user_id, content_type, content_id,
         priority, added_from, notes
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -461,7 +461,7 @@ export class ProgressDatabase {
 
   async getWatchlist(userId: string, limit = 100, offset = 0): Promise<WatchlistRecord[]> {
     const result = await this.query<WatchlistRecord>(
-      `SELECT * FROM progress_watchlists
+      `SELECT * FROM np_progress_watchlists
        WHERE source_account_id = $1 AND user_id = $2
        ORDER BY priority DESC, created_at DESC
        LIMIT $3 OFFSET $4`,
@@ -495,7 +495,7 @@ export class ProgressDatabase {
     }
 
     const result = await this.query<WatchlistRecord>(
-      `UPDATE progress_watchlists
+      `UPDATE np_progress_watchlists
        SET ${setParts.join(', ')}
        WHERE source_account_id = $1 AND user_id = $2 AND content_type = $3 AND content_id = $4
        RETURNING *`,
@@ -507,7 +507,7 @@ export class ProgressDatabase {
 
   async removeFromWatchlist(userId: string, contentType: ContentType, contentId: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM progress_watchlists
+      `DELETE FROM np_progress_watchlists
        WHERE source_account_id = $1 AND user_id = $2 AND content_type = $3 AND content_id = $4`,
       [this.sourceAccountId, userId, contentType, contentId]
     );
@@ -521,7 +521,7 @@ export class ProgressDatabase {
 
   async addToFavorites(request: AddToFavoritesRequest): Promise<FavoriteRecord> {
     const result = await this.query<FavoriteRecord>(
-      `INSERT INTO progress_favorites (
+      `INSERT INTO np_progress_favorites (
         source_account_id, user_id, content_type, content_id
       ) VALUES ($1, $2, $3, $4)
       ON CONFLICT (source_account_id, user_id, content_type, content_id)
@@ -535,7 +535,7 @@ export class ProgressDatabase {
 
   async getFavorites(userId: string, limit = 100, offset = 0): Promise<FavoriteRecord[]> {
     const result = await this.query<FavoriteRecord>(
-      `SELECT * FROM progress_favorites
+      `SELECT * FROM np_progress_favorites
        WHERE source_account_id = $1 AND user_id = $2
        ORDER BY created_at DESC
        LIMIT $3 OFFSET $4`,
@@ -547,7 +547,7 @@ export class ProgressDatabase {
 
   async removeFromFavorites(userId: string, contentType: ContentType, contentId: string): Promise<boolean> {
     const rowCount = await this.execute(
-      `DELETE FROM progress_favorites
+      `DELETE FROM np_progress_favorites
        WHERE source_account_id = $1 AND user_id = $2 AND content_type = $3 AND content_id = $4`,
       [this.sourceAccountId, userId, contentType, contentId]
     );
@@ -558,7 +558,7 @@ export class ProgressDatabase {
   async isFavorite(userId: string, contentType: ContentType, contentId: string): Promise<boolean> {
     const result = await this.query<{ exists: boolean }>(
       `SELECT EXISTS(
-        SELECT 1 FROM progress_favorites
+        SELECT 1 FROM np_progress_favorites
         WHERE source_account_id = $1 AND user_id = $2 AND content_type = $3 AND content_id = $4
       ) as exists`,
       [this.sourceAccountId, userId, contentType, contentId]
@@ -573,7 +573,7 @@ export class ProgressDatabase {
 
   async insertWebhookEvent(id: string, eventType: string, payload: Record<string, unknown>): Promise<void> {
     await this.execute(
-      `INSERT INTO progress_webhook_events (id, source_account_id, event_type, payload)
+      `INSERT INTO np_progress_webhook_events (id, source_account_id, event_type, payload)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (id) DO NOTHING`,
       [id, this.sourceAccountId, eventType, JSON.stringify(payload)]
@@ -582,7 +582,7 @@ export class ProgressDatabase {
 
   async markEventProcessed(id: string, error?: string): Promise<void> {
     await this.execute(
-      `UPDATE progress_webhook_events
+      `UPDATE np_progress_webhook_events
        SET processed = TRUE, processed_at = NOW(), error = $2
        WHERE id = $1`,
       [id, error ?? null]
@@ -592,7 +592,7 @@ export class ProgressDatabase {
   async listWebhookEvents(eventType?: string, limit = 100, offset = 0): Promise<WebhookEventRecord[]> {
     if (eventType) {
       const result = await this.query<WebhookEventRecord>(
-        `SELECT * FROM progress_webhook_events
+        `SELECT * FROM np_progress_webhook_events
          WHERE source_account_id = $1 AND event_type = $2
          ORDER BY created_at DESC
          LIMIT $3 OFFSET $4`,
@@ -602,7 +602,7 @@ export class ProgressDatabase {
     }
 
     const result = await this.query<WebhookEventRecord>(
-      `SELECT * FROM progress_webhook_events
+      `SELECT * FROM np_progress_webhook_events
        WHERE source_account_id = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -628,29 +628,29 @@ export class ProgressDatabase {
     }>(
       `WITH watch_time AS (
         SELECT COALESCE(SUM(position_seconds), 0) as total_seconds
-        FROM progress_positions
+        FROM np_progress_positions
         WHERE source_account_id = $1 AND user_id = $2
       ),
       counts AS (
         SELECT
           COUNT(*) FILTER (WHERE completed = TRUE) as completed,
           COUNT(*) FILTER (WHERE completed = FALSE AND progress_percent > 1) as in_progress
-        FROM progress_positions
+        FROM np_progress_positions
         WHERE source_account_id = $1 AND user_id = $2
       ),
       watchlist AS (
         SELECT COUNT(*) as count
-        FROM progress_watchlists
+        FROM np_progress_watchlists
         WHERE source_account_id = $1 AND user_id = $2
       ),
       favorites AS (
         SELECT COUNT(*) as count
-        FROM progress_favorites
+        FROM np_progress_favorites
         WHERE source_account_id = $1 AND user_id = $2
       ),
       most_watched AS (
         SELECT content_type
-        FROM progress_positions
+        FROM np_progress_positions
         WHERE source_account_id = $1 AND user_id = $2
         GROUP BY content_type
         ORDER BY COUNT(*) DESC
@@ -658,7 +658,7 @@ export class ProgressDatabase {
       ),
       recent AS (
         SELECT MAX(updated_at) as last_activity
-        FROM progress_positions
+        FROM np_progress_positions
         WHERE source_account_id = $1 AND user_id = $2
       )
       SELECT
@@ -704,7 +704,7 @@ export class ProgressDatabase {
     }>(
       `WITH users AS (
         SELECT COUNT(DISTINCT user_id) as count
-        FROM progress_positions
+        FROM np_progress_positions
         WHERE source_account_id = $1
       ),
       positions AS (
@@ -713,22 +713,22 @@ export class ProgressDatabase {
           COUNT(*) FILTER (WHERE completed = TRUE) as completed,
           COUNT(*) FILTER (WHERE completed = FALSE AND progress_percent > 1) as in_progress,
           MAX(updated_at) as last_activity
-        FROM progress_positions
+        FROM np_progress_positions
         WHERE source_account_id = $1
       ),
       watchlist AS (
         SELECT COUNT(*) as count
-        FROM progress_watchlists
+        FROM np_progress_watchlists
         WHERE source_account_id = $1
       ),
       favorites AS (
         SELECT COUNT(*) as count
-        FROM progress_favorites
+        FROM np_progress_favorites
         WHERE source_account_id = $1
       ),
       history AS (
         SELECT COUNT(*) as count
-        FROM progress_history
+        FROM np_progress_history
         WHERE source_account_id = $1
       )
       SELECT

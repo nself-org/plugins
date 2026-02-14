@@ -11,6 +11,7 @@ export type RecordingStatus =
   | 'scheduled'
   | 'starting'
   | 'recording'
+  | 'processing'
   | 'finalizing'
   | 'encoding'
   | 'uploading'
@@ -64,6 +65,7 @@ export interface RecordingRecord extends Record<string, unknown> {
   tags: string[];
   category: string | null;
   content_rating: string | null;
+  commercial_markers: Record<string, unknown>[] | null;
   custom_fields: Record<string, unknown>;
   metadata: Record<string, unknown>;
   created_by: string | null;
@@ -179,6 +181,29 @@ export interface UpdateScheduleRequest {
   priority?: RecordingPriority;
   active?: boolean;
   metadata?: Record<string, unknown>;
+}
+
+// =============================================================================
+// nTV v1 Request Types
+// =============================================================================
+
+export interface NtvCreateRecordingRequest {
+  channel_id: string;
+  program_id?: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+}
+
+export interface NtvScheduleRecordingRequest {
+  title: string;
+  channel_id: string;
+  program_id?: string;
+  start_time: string;
+  end_time: string;
+  recurring: boolean;
+  series_id?: string;
+  priority?: RecordingPriority;
 }
 
 export interface TriggerEncodeRequest {

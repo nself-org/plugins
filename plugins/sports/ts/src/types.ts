@@ -149,6 +149,30 @@ export interface WebhookEventRecord extends Record<string, unknown> {
   created_at: Date;
 }
 
+export interface StandingRecord extends Record<string, unknown> {
+  id: string;
+  source_account_id: string;
+  league_id: string;
+  team_id: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  points: number;
+  rank: number;
+  season: string;
+  synced_at: Date;
+}
+
+export interface FavoriteTeamRecord extends Record<string, unknown> {
+  id: string;
+  source_account_id: string;
+  user_id: string;
+  team_id: string;
+  notify_live: boolean;
+  auto_record: boolean;
+  created_at: Date;
+}
+
 // =============================================================================
 // Request Types
 // =============================================================================
@@ -234,6 +258,12 @@ export interface SyncRequest {
 
 export interface ReconcileRequest {
   lookback_days?: number;
+}
+
+export interface AddFavoriteRequest {
+  team_id: string;
+  notify_live?: boolean;
+  auto_record?: boolean;
 }
 
 // =============================================================================

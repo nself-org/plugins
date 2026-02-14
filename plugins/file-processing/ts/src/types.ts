@@ -315,6 +315,49 @@ export interface StorageAdapter {
 }
 
 // =============================================================================
+// Image Processing Types (nTV endpoints)
+// =============================================================================
+
+export interface PosterOutput {
+  width: number;
+  format: string;
+  path: string;
+  size: number;
+}
+
+export interface SpriteOutput {
+  sprite_path: string;
+  vtt_path: string;
+  frame_count: number;
+}
+
+export interface OptimizeOutput {
+  output_path: string;
+  original_size: number;
+  optimized_size: number;
+  savings_percent: number;
+}
+
+export interface PosterRequest {
+  input_path: string;
+  widths?: number[];
+  formats?: string[];
+}
+
+export interface SpriteRequest {
+  input_path: string;
+  grid?: string;
+  thumb_size?: string;
+}
+
+export interface OptimizeRequest {
+  input_path: string;
+  format?: string;
+  quality?: number;
+  strip_exif?: boolean;
+}
+
+// =============================================================================
 // Queue Job Data
 // =============================================================================
 

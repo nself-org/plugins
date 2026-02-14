@@ -22,7 +22,13 @@ export type CommandType =
   | 'scan_channels'
   | 'get_diagnostics'
   | 'set_config'
-  | 'custom';
+  | 'custom'
+  // nTV command types
+  | 'SCAN_CHANNELS'
+  | 'START_EVENT'
+  | 'STOP_EVENT'
+  | 'HEALTH'
+  | 'UPDATE';
 
 export type CommandStatus = 'dispatched' | 'acked' | 'running' | 'succeeded' | 'failed' | 'timeout' | 'cancelled';
 
@@ -143,6 +149,46 @@ export interface AuditLogRecord extends Record<string, unknown> {
   actor_id: string | null;
   details: Record<string, unknown>;
   created_at: Date;
+}
+
+export interface BootstrapTokenRecord extends Record<string, unknown> {
+  id: string;
+  source_account_id: string;
+  name: string;
+  token: string;
+  capabilities: string[];
+  expires_at: Date;
+  used: boolean;
+  used_by_device_id: string | null;
+  created_at: Date;
+}
+
+// =============================================================================
+// nTV v1 Request Types
+// =============================================================================
+
+export interface CreateBootstrapTokenRequest {
+  name: string;
+  capabilities?: string[];
+}
+
+export interface EnrollDeviceRequest {
+  token: string;
+  name: string;
+  public_key: string;
+}
+
+export interface DeviceHeartbeatRequest {
+  cpu_usage?: number;
+  memory_usage?: number;
+  temperature?: number;
+  disk_usage?: number;
+  signal_quality?: number;
+}
+
+export interface SendCommandRequest {
+  type: CommandType;
+  payload?: Record<string, unknown>;
 }
 
 // =============================================================================

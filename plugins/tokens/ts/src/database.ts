@@ -40,29 +40,29 @@ export class TokensDatabase {
     logger.info('Initializing tokens database schema...');
 
     await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS tokens_signing_keys (
+      CREATE TABLE IF NOT EXISTS np_tokens_signing_keys (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         name VARCHAR(255) NOT NULL,
         algorithm VARCHAR(20) NOT NULL DEFAULT 'hmac-sha256',
         key_material_encrypted TEXT NOT NULL,
         is_active BOOLEAN DEFAULT true,
-        rotated_from UUID REFERENCES tokens_signing_keys(id),
+        rotated_from UUID REFERENCES np_tokens_signing_keys(id),
         created_at TIMESTAMPTZ DEFAULT NOW(),
         rotated_at TIMESTAMPTZ,
         expires_at TIMESTAMPTZ,
         UNIQUE(source_account_id, name)
       )
     `);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_signing_keys_source_app ON tokens_signing_keys(source_account_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_signing_keys_source_app ON np_tokens_signing_keys(source_account_id)`);
 
     await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS tokens_issued (
+      CREATE TABLE IF NOT EXISTS np_tokens_issued (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         token_hash VARCHAR(128) NOT NULL,
         token_type VARCHAR(50) NOT NULL DEFAULT 'playback',
-        signing_key_id UUID REFERENCES tokens_signing_keys(id),
+        signing_key_id UUID REFERENCES np_tokens_signing_keys(id),
         user_id VARCHAR(255) NOT NULL,
         device_id VARCHAR(255),
         content_id VARCHAR(255) NOT NULL,
@@ -78,14 +78,14 @@ export class TokensDatabase {
         use_count INTEGER DEFAULT 0
       )
     `);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_issued_source_app ON tokens_issued(source_account_id)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_issued_hash ON tokens_issued(token_hash)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_issued_user ON tokens_issued(source_account_id, user_id)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_issued_content ON tokens_issued(source_account_id, content_id)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_issued_active ON tokens_issued(source_account_id, revoked, expires_at)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_source_app ON np_tokens_issued(source_account_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_hash ON np_tokens_issued(token_hash)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_user ON np_tokens_issued(source_account_id, user_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_content ON np_tokens_issued(source_account_id, content_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_active ON np_tokens_issued(source_account_id, revoked, expires_at)`);
 
     await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS tokens_encryption_keys (
+      CREATE TABLE IF NOT EXISTS np_tokens_encryption_keys (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         content_id VARCHAR(255) NOT NULL,
@@ -99,11 +99,11 @@ export class TokensDatabase {
         expires_at TIMESTAMPTZ
       )
     `);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_source_app ON tokens_encryption_keys(source_account_id)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_content ON tokens_encryption_keys(source_account_id, content_id, is_active)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_source_app ON np_tokens_encryption_keys(source_account_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_content ON np_tokens_encryption_keys(source_account_id, content_id, is_active)`);
 
     await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS tokens_entitlements (
+      CREATE TABLE IF NOT EXISTS np_tokens_entitlements (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         user_id VARCHAR(255) NOT NULL,
@@ -118,11 +118,11 @@ export class TokensDatabase {
         UNIQUE(source_account_id, user_id, content_id, entitlement_type)
       )
     `);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_entitlements_source_app ON tokens_entitlements(source_account_id)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_entitlements_user ON tokens_entitlements(source_account_id, user_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_entitlements_source_app ON np_tokens_entitlements(source_account_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_entitlements_user ON np_tokens_entitlements(source_account_id, user_id)`);
 
     await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS tokens_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_tokens_webhook_events (
         id VARCHAR(255) PRIMARY KEY,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         event_type VARCHAR(128) NOT NULL,
@@ -134,7 +134,7 @@ export class TokensDatabase {
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_tokens_webhook_events_source_app ON tokens_webhook_events(source_account_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_np_tokens_webhook_events_source_app ON np_tokens_webhook_events(source_account_id)`);
 
     logger.success('Tokens database schema initialized');
   }
@@ -145,7 +145,7 @@ export class TokensDatabase {
 
   async createSigningKey(name: string, algorithm: string, keyMaterialEncrypted: string): Promise<TokensSigningKeyRecord> {
     const result = await this.db.query<TokensSigningKeyRecord>(`
-      INSERT INTO tokens_signing_keys (source_account_id, name, algorithm, key_material_encrypted)
+      INSERT INTO np_tokens_signing_keys (source_account_id, name, algorithm, key_material_encrypted)
       VALUES ($1, $2, $3, $4)
       RETURNING *
     `, [this.sourceAccountId, name, algorithm, keyMaterialEncrypted]);
@@ -154,28 +154,28 @@ export class TokensDatabase {
 
   async getSigningKey(id: string): Promise<TokensSigningKeyRecord | null> {
     return this.db.queryOne<TokensSigningKeyRecord>(
-      `SELECT * FROM tokens_signing_keys WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_tokens_signing_keys WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
   }
 
   async getSigningKeyByName(name: string): Promise<TokensSigningKeyRecord | null> {
     return this.db.queryOne<TokensSigningKeyRecord>(
-      `SELECT * FROM tokens_signing_keys WHERE name = $1 AND source_account_id = $2 AND is_active = true`,
+      `SELECT * FROM np_tokens_signing_keys WHERE name = $1 AND source_account_id = $2 AND is_active = true`,
       [name, this.sourceAccountId]
     );
   }
 
   async getActiveSigningKey(): Promise<TokensSigningKeyRecord | null> {
     return this.db.queryOne<TokensSigningKeyRecord>(
-      `SELECT * FROM tokens_signing_keys WHERE source_account_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM np_tokens_signing_keys WHERE source_account_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
       [this.sourceAccountId]
     );
   }
 
   async listSigningKeys(): Promise<TokensSigningKeyRecord[]> {
     const result = await this.db.query<TokensSigningKeyRecord>(
-      `SELECT * FROM tokens_signing_keys WHERE source_account_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM np_tokens_signing_keys WHERE source_account_id = $1 ORDER BY created_at DESC`,
       [this.sourceAccountId]
     );
     return result.rows;
@@ -187,7 +187,7 @@ export class TokensDatabase {
     if (!oldKey) throw new Error('Signing key not found');
 
     const result = await this.db.query<TokensSigningKeyRecord>(`
-      INSERT INTO tokens_signing_keys (source_account_id, name, algorithm, key_material_encrypted, rotated_from)
+      INSERT INTO np_tokens_signing_keys (source_account_id, name, algorithm, key_material_encrypted, rotated_from)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `, [this.sourceAccountId, oldKey.name, oldKey.algorithm, newKeyMaterial, id]);
@@ -195,7 +195,7 @@ export class TokensDatabase {
     // Set old key to expire
     const expiresAt = new Date(Date.now() + expireOldAfterHours * 60 * 60 * 1000);
     await this.db.execute(`
-      UPDATE tokens_signing_keys SET rotated_at = NOW(), expires_at = $3
+      UPDATE np_tokens_signing_keys SET rotated_at = NOW(), expires_at = $3
       WHERE id = $1 AND source_account_id = $2
     `, [id, this.sourceAccountId, expiresAt]);
 
@@ -204,7 +204,7 @@ export class TokensDatabase {
 
   async deactivateSigningKey(id: string): Promise<void> {
     await this.db.execute(`
-      UPDATE tokens_signing_keys SET is_active = false
+      UPDATE np_tokens_signing_keys SET is_active = false
       WHERE id = $1 AND source_account_id = $2
     `, [id, this.sourceAccountId]);
   }
@@ -226,7 +226,7 @@ export class TokensDatabase {
     expires_at: Date;
   }): Promise<TokensIssuedRecord> {
     const result = await this.db.query<TokensIssuedRecord>(`
-      INSERT INTO tokens_issued (
+      INSERT INTO np_tokens_issued (
         source_account_id, token_hash, token_type, signing_key_id, user_id,
         device_id, content_id, content_type, permissions, ip_address, expires_at
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
@@ -241,35 +241,35 @@ export class TokensDatabase {
 
   async getIssuedTokenByHash(tokenHash: string): Promise<TokensIssuedRecord | null> {
     return this.db.queryOne<TokensIssuedRecord>(
-      `SELECT * FROM tokens_issued WHERE token_hash = $1`,
+      `SELECT * FROM np_tokens_issued WHERE token_hash = $1`,
       [tokenHash]
     );
   }
 
   async getIssuedToken(id: string): Promise<TokensIssuedRecord | null> {
     return this.db.queryOne<TokensIssuedRecord>(
-      `SELECT * FROM tokens_issued WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_tokens_issued WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
   }
 
   async updateTokenLastUsed(id: string): Promise<void> {
     await this.db.execute(`
-      UPDATE tokens_issued SET last_used_at = NOW(), use_count = use_count + 1
+      UPDATE np_tokens_issued SET last_used_at = NOW(), use_count = use_count + 1
       WHERE id = $1
     `, [id]);
   }
 
   async revokeToken(id: string, reason?: string): Promise<void> {
     await this.db.execute(`
-      UPDATE tokens_issued SET revoked = true, revoked_at = NOW(), revoked_reason = $3
+      UPDATE np_tokens_issued SET revoked = true, revoked_at = NOW(), revoked_reason = $3
       WHERE id = $1 AND source_account_id = $2
     `, [id, this.sourceAccountId, reason || null]);
   }
 
   async revokeUserTokens(userId: string, reason?: string): Promise<number> {
     const result = await this.db.query(
-      `UPDATE tokens_issued SET revoked = true, revoked_at = NOW(), revoked_reason = $3
+      `UPDATE np_tokens_issued SET revoked = true, revoked_at = NOW(), revoked_reason = $3
        WHERE source_account_id = $1 AND user_id = $2 AND revoked = false
        RETURNING id`,
       [this.sourceAccountId, userId, reason || null]
@@ -279,7 +279,7 @@ export class TokensDatabase {
 
   async revokeContentTokens(contentId: string, reason?: string): Promise<number> {
     const result = await this.db.query(
-      `UPDATE tokens_issued SET revoked = true, revoked_at = NOW(), revoked_reason = $3
+      `UPDATE np_tokens_issued SET revoked = true, revoked_at = NOW(), revoked_reason = $3
        WHERE source_account_id = $1 AND content_id = $2 AND revoked = false
        RETURNING id`,
       [this.sourceAccountId, contentId, reason || null]
@@ -293,7 +293,7 @@ export class TokensDatabase {
 
   async createEncryptionKey(contentId: string, keyMaterial: string, keyIv: string, keyUri: string): Promise<TokensEncryptionKeyRecord> {
     const result = await this.db.query<TokensEncryptionKeyRecord>(`
-      INSERT INTO tokens_encryption_keys (source_account_id, content_id, key_material_encrypted, key_iv, key_uri)
+      INSERT INTO np_tokens_encryption_keys (source_account_id, content_id, key_material_encrypted, key_iv, key_uri)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `, [this.sourceAccountId, contentId, keyMaterial, keyIv, keyUri]);
@@ -302,14 +302,14 @@ export class TokensDatabase {
 
   async getActiveEncryptionKey(contentId: string): Promise<TokensEncryptionKeyRecord | null> {
     return this.db.queryOne<TokensEncryptionKeyRecord>(
-      `SELECT * FROM tokens_encryption_keys WHERE source_account_id = $1 AND content_id = $2 AND is_active = true ORDER BY rotation_generation DESC LIMIT 1`,
+      `SELECT * FROM np_tokens_encryption_keys WHERE source_account_id = $1 AND content_id = $2 AND is_active = true ORDER BY rotation_generation DESC LIMIT 1`,
       [this.sourceAccountId, contentId]
     );
   }
 
   async getEncryptionKeyById(id: string): Promise<TokensEncryptionKeyRecord | null> {
     return this.db.queryOne<TokensEncryptionKeyRecord>(
-      `SELECT * FROM tokens_encryption_keys WHERE id = $1 AND source_account_id = $2`,
+      `SELECT * FROM np_tokens_encryption_keys WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
     );
   }
@@ -321,12 +321,12 @@ export class TokensDatabase {
     // Set old keys to expire
     const expiresAt = new Date(Date.now() + expireOldAfterHours * 60 * 60 * 1000);
     await this.db.execute(`
-      UPDATE tokens_encryption_keys SET rotated_at = NOW(), expires_at = $3
+      UPDATE np_tokens_encryption_keys SET rotated_at = NOW(), expires_at = $3
       WHERE source_account_id = $1 AND content_id = $2 AND is_active = true
     `, [this.sourceAccountId, contentId, expiresAt]);
 
     const result = await this.db.query<TokensEncryptionKeyRecord>(`
-      INSERT INTO tokens_encryption_keys (source_account_id, content_id, key_material_encrypted, key_iv, key_uri, rotation_generation)
+      INSERT INTO np_tokens_encryption_keys (source_account_id, content_id, key_material_encrypted, key_iv, key_uri, rotation_generation)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `, [this.sourceAccountId, contentId, newKeyMaterial, newKeyIv, newKeyUri, nextGeneration]);
@@ -340,7 +340,7 @@ export class TokensDatabase {
 
   async checkEntitlement(userId: string, contentId: string, entitlementType: string): Promise<TokensEntitlementRecord | null> {
     return this.db.queryOne<TokensEntitlementRecord>(
-      `SELECT * FROM tokens_entitlements
+      `SELECT * FROM np_tokens_entitlements
        WHERE source_account_id = $1 AND user_id = $2 AND content_id = $3
          AND entitlement_type = $4 AND revoked = false
          AND (expires_at IS NULL OR expires_at > NOW())`,
@@ -350,7 +350,7 @@ export class TokensDatabase {
 
   async hasAnyEntitlements(userId: string): Promise<boolean> {
     const result = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tokens_entitlements WHERE source_account_id = $1 AND user_id = $2`,
+      `SELECT COUNT(*) as count FROM np_tokens_entitlements WHERE source_account_id = $1 AND user_id = $2`,
       [this.sourceAccountId, userId]
     );
     return parseInt(result?.count ?? '0', 10) > 0;
@@ -366,7 +366,7 @@ export class TokensDatabase {
     granted_by: string;
   }): Promise<TokensEntitlementRecord> {
     const result = await this.db.query<TokensEntitlementRecord>(`
-      INSERT INTO tokens_entitlements (
+      INSERT INTO np_tokens_entitlements (
         source_account_id, user_id, content_id, content_type,
         entitlement_type, expires_at, metadata, granted_by
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -387,7 +387,7 @@ export class TokensDatabase {
 
   async revokeEntitlement(userId: string, contentId: string, entitlementType: string): Promise<void> {
     await this.db.execute(`
-      UPDATE tokens_entitlements SET revoked = true
+      UPDATE np_tokens_entitlements SET revoked = true
       WHERE source_account_id = $1 AND user_id = $2 AND content_id = $3 AND entitlement_type = $4
     `, [this.sourceAccountId, userId, contentId, entitlementType]);
   }
@@ -408,7 +408,7 @@ export class TokensDatabase {
     }
 
     const result = await this.db.query<TokensEntitlementRecord>(
-      `SELECT * FROM tokens_entitlements WHERE ${conditions.join(' AND ')} ORDER BY granted_at DESC`,
+      `SELECT * FROM np_tokens_entitlements WHERE ${conditions.join(' AND ')} ORDER BY granted_at DESC`,
       params
     );
     return result.rows;
@@ -420,7 +420,7 @@ export class TokensDatabase {
 
   async insertWebhookEvent(eventId: string, eventType: string, payload: Record<string, unknown>): Promise<void> {
     await this.db.execute(`
-      INSERT INTO tokens_webhook_events (id, source_account_id, event_type, payload)
+      INSERT INTO np_tokens_webhook_events (id, source_account_id, event_type, payload)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (id) DO NOTHING
     `, [eventId, this.sourceAccountId, eventType, JSON.stringify(payload)]);
@@ -431,35 +431,35 @@ export class TokensDatabase {
   // ============================================================================
 
   async getStats(): Promise<TokensStats> {
-    const totalSigning = await this.db.countScoped('tokens_signing_keys', this.sourceAccountId);
+    const totalSigning = await this.db.countScoped('np_tokens_signing_keys', this.sourceAccountId);
 
     const activeSigning = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tokens_signing_keys WHERE source_account_id = $1 AND is_active = true`,
+      `SELECT COUNT(*) as count FROM np_tokens_signing_keys WHERE source_account_id = $1 AND is_active = true`,
       [this.sourceAccountId]
     );
 
-    const totalIssued = await this.db.countScoped('tokens_issued', this.sourceAccountId);
+    const totalIssued = await this.db.countScoped('np_tokens_issued', this.sourceAccountId);
 
     const activeTokens = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tokens_issued WHERE source_account_id = $1 AND revoked = false AND expires_at > NOW()`,
+      `SELECT COUNT(*) as count FROM np_tokens_issued WHERE source_account_id = $1 AND revoked = false AND expires_at > NOW()`,
       [this.sourceAccountId]
     );
 
     const revokedTokens = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tokens_issued WHERE source_account_id = $1 AND revoked = true`,
+      `SELECT COUNT(*) as count FROM np_tokens_issued WHERE source_account_id = $1 AND revoked = true`,
       [this.sourceAccountId]
     );
 
     const expiredTokens = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tokens_issued WHERE source_account_id = $1 AND revoked = false AND expires_at <= NOW()`,
+      `SELECT COUNT(*) as count FROM np_tokens_issued WHERE source_account_id = $1 AND revoked = false AND expires_at <= NOW()`,
       [this.sourceAccountId]
     );
 
-    const totalEncryption = await this.db.countScoped('tokens_encryption_keys', this.sourceAccountId);
-    const totalEntitlements = await this.db.countScoped('tokens_entitlements', this.sourceAccountId);
+    const totalEncryption = await this.db.countScoped('np_tokens_encryption_keys', this.sourceAccountId);
+    const totalEntitlements = await this.db.countScoped('np_tokens_entitlements', this.sourceAccountId);
 
     const activeEntitlements = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tokens_entitlements WHERE source_account_id = $1 AND revoked = false AND (expires_at IS NULL OR expires_at > NOW())`,
+      `SELECT COUNT(*) as count FROM np_tokens_entitlements WHERE source_account_id = $1 AND revoked = false AND (expires_at IS NULL OR expires_at > NOW())`,
       [this.sourceAccountId]
     );
 

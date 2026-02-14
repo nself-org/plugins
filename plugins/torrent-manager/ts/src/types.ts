@@ -303,6 +303,36 @@ export interface SeedingPolicy {
 }
 
 // ============================================================================
+// Per-Download Seeding Policy
+// ============================================================================
+
+export interface DownloadSeedingPolicy {
+  id: string;
+  source_account_id: string;
+  download_id: string;
+  ratio_limit: number;
+  time_limit_hours: number;
+  auto_remove: boolean;
+  keep_files: boolean;
+  favorite: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// ============================================================================
+// Source Registry
+// ============================================================================
+
+export interface SourceRegistryEntry {
+  name: string;
+  active_from: string;
+  retired_at: string | null;
+  category: string;
+  trust_score: number;
+  strengths: string[];
+}
+
+// ============================================================================
 // Statistics
 // ============================================================================
 

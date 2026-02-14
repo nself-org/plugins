@@ -1,0 +1,88 @@
+{
+  "name": "podcast",
+  "version": "1.0.0",
+  "description": "Podcast RSS/Atom feed parsing, episode management, feed discovery, OPML import/export, and audio downloads",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/podcast",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": [
+    "podcast",
+    "rss",
+    "atom",
+    "feeds",
+    "episodes",
+    "opml",
+    "itunes",
+    "audio",
+    "media"
+  ],
+  "tables": [
+    "np_pod_feeds",
+    "np_pod_episodes"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize podcast database schema",
+    "server": "Start podcast server",
+    "status": "Show podcast statistics",
+    "feeds": "Manage podcast feed subscriptions",
+    "episodes": "Browse and manage episodes",
+    "discover": "Search for podcasts via iTunes/Podcast Index",
+    "refresh": "Refresh all or specific feeds",
+    "import": "Import OPML subscription file",
+    "export": "Export subscriptions as OPML",
+    "download": "Download episode audio"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PODCAST_PORT",
+      "PODCAST_ITUNES_SEARCH_URL",
+      "PODCAST_INDEX_API_KEY",
+      "PODCAST_INDEX_API_SECRET",
+      "PODCAST_REFRESH_ACTIVE_MINUTES",
+      "PODCAST_REFRESH_DORMANT_HOURS",
+      "PODCAST_DOWNLOAD_PATH"
+    ]
+  },
+  "config": {
+    "defaultPort": 3023,
+    "refreshActiveMinutes": 60,
+    "refreshDormantHours": 6,
+    "refreshStaleHours": 24,
+    "maxConsecutiveErrors": 7,
+    "downloadPath": "/data/podcasts"
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "downloads"
+    ]
+  }
+}

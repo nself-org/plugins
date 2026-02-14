@@ -62,7 +62,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_workflows (
+        CREATE TABLE IF NOT EXISTS np_workflows_workflows (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -88,19 +88,19 @@ export class DatabaseClient {
           tags JSONB DEFAULT '[]',
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_workflows_owner ON workflows_workflows(owner_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_workflows_status ON workflows_workflows(status);
-        CREATE INDEX IF NOT EXISTS idx_workflows_workflows_enabled ON workflows_workflows(is_enabled);
-        CREATE INDEX IF NOT EXISTS idx_workflows_workflows_source ON workflows_workflows(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_workflows_owner ON np_workflows_workflows(owner_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_workflows_status ON np_workflows_workflows(status);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_workflows_enabled ON np_workflows_workflows(is_enabled);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_workflows_source ON np_workflows_workflows(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_executions (
+        CREATE TABLE IF NOT EXISTS np_workflows_executions (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          workflow_id UUID NOT NULL REFERENCES workflows_workflows(id) ON DELETE CASCADE,
+          workflow_id UUID NOT NULL REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
           workflow_version INT NOT NULL,
           triggered_by TEXT NOT NULL CHECK (triggered_by IN ('manual', 'schedule', 'webhook', 'event')),
           triggered_by_user_id TEXT,
@@ -114,21 +114,21 @@ export class DatabaseClient {
           error_stack TEXT,
           failed_step_id TEXT,
           retry_count INT DEFAULT 0,
-          parent_execution_id UUID REFERENCES workflows_executions(id) ON DELETE SET NULL,
+          parent_execution_id UUID REFERENCES np_workflows_executions(id) ON DELETE SET NULL,
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_executions_workflow ON workflows_executions(workflow_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_executions_status ON workflows_executions(status);
-        CREATE INDEX IF NOT EXISTS idx_workflows_executions_created ON workflows_executions(created_at);
-        CREATE INDEX IF NOT EXISTS idx_workflows_executions_source ON workflows_executions(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_executions_workflow ON np_workflows_executions(workflow_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_executions_status ON np_workflows_executions(status);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_executions_created ON np_workflows_executions(created_at);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_executions_source ON np_workflows_executions(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_execution_steps (
+        CREATE TABLE IF NOT EXISTS np_workflows_execution_steps (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          execution_id UUID NOT NULL REFERENCES workflows_executions(id) ON DELETE CASCADE,
+          execution_id UUID NOT NULL REFERENCES np_workflows_executions(id) ON DELETE CASCADE,
           step_id TEXT NOT NULL,
           step_type TEXT NOT NULL,
           step_name TEXT NOT NULL,
@@ -142,18 +142,18 @@ export class DatabaseClient {
           error_stack TEXT,
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_execution_steps_execution ON workflows_execution_steps(execution_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_execution_steps_status ON workflows_execution_steps(status);
-        CREATE INDEX IF NOT EXISTS idx_workflows_execution_steps_source ON workflows_execution_steps(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_execution_steps_execution ON np_workflows_execution_steps(execution_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_execution_steps_status ON np_workflows_execution_steps(status);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_execution_steps_source ON np_workflows_execution_steps(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_triggers (
+        CREATE TABLE IF NOT EXISTS np_workflows_triggers (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          workflow_id UUID NOT NULL REFERENCES workflows_workflows(id) ON DELETE CASCADE,
+          workflow_id UUID NOT NULL REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
           type TEXT NOT NULL CHECK (type IN ('schedule', 'webhook', 'event')),
           schedule_cron TEXT,
           schedule_timezone TEXT DEFAULT 'UTC',
@@ -166,14 +166,14 @@ export class DatabaseClient {
           is_active BOOLEAN DEFAULT TRUE,
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_triggers_workflow ON workflows_triggers(workflow_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_triggers_type ON workflows_triggers(type);
-        CREATE INDEX IF NOT EXISTS idx_workflows_triggers_webhook ON workflows_triggers(webhook_token);
-        CREATE INDEX IF NOT EXISTS idx_workflows_triggers_source ON workflows_triggers(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_triggers_workflow ON np_workflows_triggers(workflow_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_triggers_type ON np_workflows_triggers(type);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_triggers_webhook ON np_workflows_triggers(webhook_token);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_triggers_source ON np_workflows_triggers(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_actions (
+        CREATE TABLE IF NOT EXISTS np_workflows_actions (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -190,13 +190,13 @@ export class DatabaseClient {
           metadata JSONB DEFAULT '{}',
           UNIQUE(source_account_id, type)
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_actions_type ON workflows_actions(type);
-        CREATE INDEX IF NOT EXISTS idx_workflows_actions_category ON workflows_actions(category);
-        CREATE INDEX IF NOT EXISTS idx_workflows_actions_source ON workflows_actions(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_actions_type ON np_workflows_actions(type);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_actions_category ON np_workflows_actions(category);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_actions_source ON np_workflows_actions(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_templates (
+        CREATE TABLE IF NOT EXISTS np_workflows_templates (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -215,38 +215,38 @@ export class DatabaseClient {
           thumbnail_url TEXT,
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_templates_category ON workflows_templates(category);
-        CREATE INDEX IF NOT EXISTS idx_workflows_templates_public ON workflows_templates(is_public);
-        CREATE INDEX IF NOT EXISTS idx_workflows_templates_source ON workflows_templates(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_templates_category ON np_workflows_templates(category);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_templates_public ON np_workflows_templates(is_public);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_templates_source ON np_workflows_templates(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_variables (
+        CREATE TABLE IF NOT EXISTS np_workflows_variables (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           owner_id TEXT NOT NULL,
-          workflow_id UUID REFERENCES workflows_workflows(id) ON DELETE CASCADE,
+          workflow_id UUID REFERENCES np_workflows_workflows(id) ON DELETE CASCADE,
           key TEXT NOT NULL,
           value JSONB NOT NULL,
           type TEXT NOT NULL DEFAULT 'string' CHECK (type IN ('string', 'number', 'boolean', 'object', 'array')),
           is_secret BOOLEAN DEFAULT FALSE,
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_variables_owner ON workflows_variables(owner_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_variables_workflow ON workflows_variables(workflow_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_variables_key ON workflows_variables(key);
-        CREATE INDEX IF NOT EXISTS idx_workflows_variables_source ON workflows_variables(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_variables_owner ON np_workflows_variables(owner_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_variables_workflow ON np_workflows_variables(workflow_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_variables_key ON np_workflows_variables(key);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_variables_source ON np_workflows_variables(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_webhook_logs (
+        CREATE TABLE IF NOT EXISTS np_workflows_webhook_logs (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          trigger_id UUID NOT NULL REFERENCES workflows_triggers(id) ON DELETE CASCADE,
-          execution_id UUID REFERENCES workflows_executions(id) ON DELETE SET NULL,
+          trigger_id UUID NOT NULL REFERENCES np_workflows_triggers(id) ON DELETE CASCADE,
+          execution_id UUID REFERENCES np_workflows_executions(id) ON DELETE SET NULL,
           method TEXT NOT NULL,
           path TEXT NOT NULL,
           headers JSONB DEFAULT '{}',
@@ -258,18 +258,18 @@ export class DatabaseClient {
           response JSONB DEFAULT '{}',
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_webhook_logs_trigger ON workflows_webhook_logs(trigger_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_webhook_logs_created ON workflows_webhook_logs(created_at);
-        CREATE INDEX IF NOT EXISTS idx_workflows_webhook_logs_source ON workflows_webhook_logs(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_webhook_logs_trigger ON np_workflows_webhook_logs(trigger_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_webhook_logs_created ON np_workflows_webhook_logs(created_at);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_webhook_logs_source ON np_workflows_webhook_logs(source_account_id);
       `);
 
       await client.query(`
-        CREATE TABLE IF NOT EXISTS workflows_approvals (
+        CREATE TABLE IF NOT EXISTS np_workflows_approvals (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          execution_id UUID NOT NULL REFERENCES workflows_executions(id) ON DELETE CASCADE,
+          execution_id UUID NOT NULL REFERENCES np_workflows_executions(id) ON DELETE CASCADE,
           step_id TEXT NOT NULL,
           message TEXT,
           required_approvers JSONB NOT NULL DEFAULT '[]',
@@ -280,9 +280,9 @@ export class DatabaseClient {
           expires_at TIMESTAMPTZ,
           metadata JSONB DEFAULT '{}'
         );
-        CREATE INDEX IF NOT EXISTS idx_workflows_approvals_execution ON workflows_approvals(execution_id);
-        CREATE INDEX IF NOT EXISTS idx_workflows_approvals_status ON workflows_approvals(status);
-        CREATE INDEX IF NOT EXISTS idx_workflows_approvals_source ON workflows_approvals(source_account_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_approvals_execution ON np_workflows_approvals(execution_id);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_approvals_status ON np_workflows_approvals(status);
+        CREATE INDEX IF NOT EXISTS idx_np_workflows_approvals_source ON np_workflows_approvals(source_account_id);
       `);
     } finally {
       client.release();
@@ -297,7 +297,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `INSERT INTO workflows_workflows (
+        `INSERT INTO np_workflows_workflows (
           source_account_id, name, description, owner_id, definition,
           trigger_type, trigger_config, timeout_seconds, max_retries,
           retry_delay_seconds, tags, metadata
@@ -321,7 +321,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_workflows WHERE id = $1 AND source_account_id = $2',
+        'SELECT * FROM np_workflows_workflows WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return result.rows[0] ?? null;
@@ -362,12 +362,12 @@ export class DatabaseClient {
       const limit = parseInt(query.limit ?? '50', 10);
       const offset = parseInt(query.offset ?? '0', 10);
 
-      const countResult = await client.query(`SELECT COUNT(*) FROM workflows_workflows WHERE ${where}`, params);
+      const countResult = await client.query(`SELECT COUNT(*) FROM np_workflows_workflows WHERE ${where}`, params);
       const total = parseInt(countResult.rows[0].count, 10);
 
       params.push(limit, offset);
       const result = await client.query(
-        `SELECT * FROM workflows_workflows WHERE ${where} ORDER BY updated_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+        `SELECT * FROM np_workflows_workflows WHERE ${where} ORDER BY updated_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
         params
       );
       return { workflows: result.rows, total };
@@ -422,7 +422,7 @@ export class DatabaseClient {
 
       params.push(id, this.sourceAccountId);
       const result = await client.query(
-        `UPDATE workflows_workflows SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
+        `UPDATE np_workflows_workflows SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
         params
       );
       return result.rows[0] ?? null;
@@ -435,7 +435,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'DELETE FROM workflows_workflows WHERE id = $1 AND source_account_id = $2',
+        'DELETE FROM np_workflows_workflows WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return (result.rowCount ?? 0) > 0;
@@ -451,7 +451,7 @@ export class DatabaseClient {
       if (!original) return null;
 
       const result = await client.query(
-        `INSERT INTO workflows_workflows (
+        `INSERT INTO np_workflows_workflows (
           source_account_id, name, description, owner_id, definition,
           trigger_type, trigger_config, timeout_seconds, max_retries,
           retry_delay_seconds, tags, metadata
@@ -475,7 +475,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `UPDATE workflows_workflows SET status = 'published', updated_at = NOW()
+        `UPDATE np_workflows_workflows SET status = 'published', updated_at = NOW()
          WHERE id = $1 AND source_account_id = $2 RETURNING *`,
         [id, this.sourceAccountId]
       );
@@ -489,7 +489,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `UPDATE workflows_workflows SET status = 'draft', updated_at = NOW()
+        `UPDATE np_workflows_workflows SET status = 'draft', updated_at = NOW()
          WHERE id = $1 AND source_account_id = $2 RETURNING *`,
         [id, this.sourceAccountId]
       );
@@ -510,7 +510,7 @@ export class DatabaseClient {
       if (!workflow) throw new Error('Workflow not found');
 
       const result = await client.query(
-        `INSERT INTO workflows_executions (
+        `INSERT INTO np_workflows_executions (
           source_account_id, workflow_id, workflow_version, triggered_by,
           triggered_by_user_id, input, status
         ) VALUES ($1, $2, $3, $4, $5, $6, 'pending') RETURNING *`,
@@ -522,7 +522,7 @@ export class DatabaseClient {
       );
 
       await client.query(
-        'UPDATE workflows_workflows SET total_executions = total_executions + 1 WHERE id = $1 AND source_account_id = $2',
+        'UPDATE np_workflows_workflows SET total_executions = total_executions + 1 WHERE id = $1 AND source_account_id = $2',
         [workflowId, this.sourceAccountId]
       );
 
@@ -536,7 +536,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_executions WHERE id = $1 AND source_account_id = $2',
+        'SELECT * FROM np_workflows_executions WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return result.rows[0] ?? null;
@@ -582,12 +582,12 @@ export class DatabaseClient {
       const limit = parseInt(query.limit ?? '50', 10);
       const offset = parseInt(query.offset ?? '0', 10);
 
-      const countResult = await client.query(`SELECT COUNT(*) FROM workflows_executions WHERE ${where}`, params);
+      const countResult = await client.query(`SELECT COUNT(*) FROM np_workflows_executions WHERE ${where}`, params);
       const total = parseInt(countResult.rows[0].count, 10);
 
       params.push(limit, offset);
       const result = await client.query(
-        `SELECT * FROM workflows_executions WHERE ${where} ORDER BY created_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+        `SELECT * FROM np_workflows_executions WHERE ${where} ORDER BY created_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
         params
       );
       return { executions: result.rows, total };
@@ -633,7 +633,7 @@ export class DatabaseClient {
 
       params.push(id, this.sourceAccountId);
       const result = await client.query(
-        `UPDATE workflows_executions SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
+        `UPDATE np_workflows_executions SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
         params
       );
 
@@ -642,7 +642,7 @@ export class DatabaseClient {
       if (execution && (status === 'completed' || status === 'failed')) {
         const statField = status === 'completed' ? 'successful_executions' : 'failed_executions';
         await client.query(
-          `UPDATE workflows_workflows SET ${statField} = ${statField} + 1 WHERE id = $1 AND source_account_id = $2`,
+          `UPDATE np_workflows_workflows SET ${statField} = ${statField} + 1 WHERE id = $1 AND source_account_id = $2`,
           [execution.workflow_id, this.sourceAccountId]
         );
       }
@@ -660,7 +660,7 @@ export class DatabaseClient {
       if (!original) return null;
 
       const result = await client.query(
-        `INSERT INTO workflows_executions (
+        `INSERT INTO np_workflows_executions (
           source_account_id, workflow_id, workflow_version, triggered_by,
           triggered_by_user_id, input, status, retry_count, parent_execution_id
         ) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8) RETURNING *`,
@@ -680,7 +680,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `UPDATE workflows_executions SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
+        `UPDATE np_workflows_executions SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
          WHERE id = $1 AND source_account_id = $2 AND status IN ('pending', 'running') RETURNING id`,
         [id, this.sourceAccountId]
       );
@@ -698,7 +698,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `INSERT INTO workflows_execution_steps (
+        `INSERT INTO np_workflows_execution_steps (
           source_account_id, execution_id, step_id, step_type, step_name, input
         ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
         [
@@ -716,7 +716,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_execution_steps WHERE execution_id = $1 AND source_account_id = $2 ORDER BY created_at',
+        'SELECT * FROM np_workflows_execution_steps WHERE execution_id = $1 AND source_account_id = $2 ORDER BY created_at',
         [executionId, this.sourceAccountId]
       );
       return result.rows;
@@ -736,7 +736,7 @@ export class DatabaseClient {
       const webhookSecret = input.type === 'webhook' ? (input.webhook_secret ?? crypto.randomBytes(32).toString('hex')) : null;
 
       const result = await client.query(
-        `INSERT INTO workflows_triggers (
+        `INSERT INTO np_workflows_triggers (
           source_account_id, workflow_id, type, schedule_cron, schedule_timezone,
           webhook_token, webhook_secret, event_type, event_filters, metadata
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
@@ -758,7 +758,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_triggers WHERE id = $1 AND source_account_id = $2',
+        'SELECT * FROM np_workflows_triggers WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return result.rows[0] ?? null;
@@ -771,7 +771,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_triggers WHERE webhook_token = $1 AND is_active = TRUE',
+        'SELECT * FROM np_workflows_triggers WHERE webhook_token = $1 AND is_active = TRUE',
         [token]
       );
       return result.rows[0] ?? null;
@@ -785,13 +785,13 @@ export class DatabaseClient {
     try {
       if (workflowId) {
         const result = await client.query(
-          'SELECT * FROM workflows_triggers WHERE workflow_id = $1 AND source_account_id = $2 ORDER BY created_at',
+          'SELECT * FROM np_workflows_triggers WHERE workflow_id = $1 AND source_account_id = $2 ORDER BY created_at',
           [workflowId, this.sourceAccountId]
         );
         return result.rows;
       }
       const result = await client.query(
-        'SELECT * FROM workflows_triggers WHERE source_account_id = $1 ORDER BY created_at',
+        'SELECT * FROM np_workflows_triggers WHERE source_account_id = $1 ORDER BY created_at',
         [this.sourceAccountId]
       );
       return result.rows;
@@ -832,7 +832,7 @@ export class DatabaseClient {
 
       params.push(id, this.sourceAccountId);
       const result = await client.query(
-        `UPDATE workflows_triggers SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
+        `UPDATE np_workflows_triggers SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
         params
       );
       return result.rows[0] ?? null;
@@ -845,7 +845,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'DELETE FROM workflows_triggers WHERE id = $1 AND source_account_id = $2',
+        'DELETE FROM np_workflows_triggers WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return (result.rowCount ?? 0) > 0;
@@ -863,13 +863,13 @@ export class DatabaseClient {
     try {
       if (category) {
         const result = await client.query(
-          'SELECT * FROM workflows_actions WHERE source_account_id = $1 AND category = $2 AND is_enabled = TRUE ORDER BY name',
+          'SELECT * FROM np_workflows_actions WHERE source_account_id = $1 AND category = $2 AND is_enabled = TRUE ORDER BY name',
           [this.sourceAccountId, category]
         );
         return result.rows;
       }
       const result = await client.query(
-        'SELECT * FROM workflows_actions WHERE source_account_id = $1 AND is_enabled = TRUE ORDER BY category, name',
+        'SELECT * FROM np_workflows_actions WHERE source_account_id = $1 AND is_enabled = TRUE ORDER BY category, name',
         [this.sourceAccountId]
       );
       return result.rows;
@@ -882,7 +882,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_actions WHERE type = $1 AND source_account_id = $2',
+        'SELECT * FROM np_workflows_actions WHERE type = $1 AND source_account_id = $2',
         [type, this.sourceAccountId]
       );
       return result.rows[0] ?? null;
@@ -899,7 +899,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `INSERT INTO workflows_templates (
+        `INSERT INTO np_workflows_templates (
           source_account_id, name, description, category, definition,
           author_id, is_public, tags, thumbnail_url, metadata
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
@@ -921,7 +921,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_templates WHERE id = $1 AND source_account_id = $2',
+        'SELECT * FROM np_workflows_templates WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return result.rows[0] ?? null;
@@ -952,12 +952,12 @@ export class DatabaseClient {
       const limit = parseInt(query.limit ?? '50', 10);
       const offset = parseInt(query.offset ?? '0', 10);
 
-      const countResult = await client.query(`SELECT COUNT(*) FROM workflows_templates WHERE ${where}`, params);
+      const countResult = await client.query(`SELECT COUNT(*) FROM np_workflows_templates WHERE ${where}`, params);
       const total = parseInt(countResult.rows[0].count, 10);
 
       params.push(limit, offset);
       const result = await client.query(
-        `SELECT * FROM workflows_templates WHERE ${where} ORDER BY install_count DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+        `SELECT * FROM np_workflows_templates WHERE ${where} ORDER BY install_count DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
         params
       );
       return { templates: result.rows, total };
@@ -1003,7 +1003,7 @@ export class DatabaseClient {
 
       params.push(id, this.sourceAccountId);
       const result = await client.query(
-        `UPDATE workflows_templates SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
+        `UPDATE np_workflows_templates SET ${fields.join(', ')} WHERE id = $${paramIdx} AND source_account_id = $${paramIdx + 1} RETURNING *`,
         params
       );
       return result.rows[0] ?? null;
@@ -1016,7 +1016,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'DELETE FROM workflows_templates WHERE id = $1 AND source_account_id = $2',
+        'DELETE FROM np_workflows_templates WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return (result.rowCount ?? 0) > 0;
@@ -1033,12 +1033,12 @@ export class DatabaseClient {
 
       // Increment install count
       await client.query(
-        'UPDATE workflows_templates SET install_count = install_count + 1 WHERE id = $1 AND source_account_id = $2',
+        'UPDATE np_workflows_templates SET install_count = install_count + 1 WHERE id = $1 AND source_account_id = $2',
         [templateId, this.sourceAccountId]
       );
 
       const result = await client.query(
-        `INSERT INTO workflows_workflows (
+        `INSERT INTO np_workflows_workflows (
           source_account_id, name, description, owner_id, definition, tags, metadata
         ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [
@@ -1061,7 +1061,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `INSERT INTO workflows_variables (
+        `INSERT INTO np_workflows_variables (
           source_account_id, owner_id, workflow_id, key, value, type, is_secret, metadata
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
         [
@@ -1080,7 +1080,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'SELECT * FROM workflows_variables WHERE id = $1 AND source_account_id = $2',
+        'SELECT * FROM np_workflows_variables WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return result.rows[0] ?? null;
@@ -1094,13 +1094,13 @@ export class DatabaseClient {
     try {
       if (workflowId) {
         const result = await client.query(
-          'SELECT * FROM workflows_variables WHERE workflow_id = $1 AND source_account_id = $2 ORDER BY key',
+          'SELECT * FROM np_workflows_variables WHERE workflow_id = $1 AND source_account_id = $2 ORDER BY key',
           [workflowId, this.sourceAccountId]
         );
         return result.rows;
       }
       const result = await client.query(
-        'SELECT * FROM workflows_variables WHERE source_account_id = $1 ORDER BY key',
+        'SELECT * FROM np_workflows_variables WHERE source_account_id = $1 ORDER BY key',
         [this.sourceAccountId]
       );
       return result.rows;
@@ -1113,7 +1113,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `UPDATE workflows_variables SET value = $1, updated_at = NOW()
+        `UPDATE np_workflows_variables SET value = $1, updated_at = NOW()
          WHERE id = $2 AND source_account_id = $3 RETURNING *`,
         [JSON.stringify(value), id, this.sourceAccountId]
       );
@@ -1127,7 +1127,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        'DELETE FROM workflows_variables WHERE id = $1 AND source_account_id = $2',
+        'DELETE FROM np_workflows_variables WHERE id = $1 AND source_account_id = $2',
         [id, this.sourceAccountId]
       );
       return (result.rowCount ?? 0) > 0;
@@ -1144,7 +1144,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `SELECT * FROM workflows_approvals WHERE source_account_id = $1 AND status = 'pending'
+        `SELECT * FROM np_workflows_approvals WHERE source_account_id = $1 AND status = 'pending'
          AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY created_at`,
         [this.sourceAccountId]
       );
@@ -1159,7 +1159,7 @@ export class DatabaseClient {
     try {
       const status = input.approved ? 'approved' : 'rejected';
       const result = await client.query(
-        `UPDATE workflows_approvals SET status = $1, approved_by = $2, approved_at = NOW(),
+        `UPDATE np_workflows_approvals SET status = $1, approved_by = $2, approved_at = NOW(),
          rejection_reason = $3, updated_at = NOW()
          WHERE id = $4 AND source_account_id = $5 AND status = 'pending' RETURNING *`,
         [status, input.approved_by, input.rejection_reason ?? null, approvalId, this.sourceAccountId]
@@ -1178,7 +1178,7 @@ export class DatabaseClient {
     const client = await this.getClient();
     try {
       const result = await client.query(
-        `INSERT INTO workflows_webhook_logs (
+        `INSERT INTO np_workflows_webhook_logs (
           source_account_id, trigger_id, method, path, headers, query, body, ip_address, user_agent
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::INET, $9) RETURNING *`,
         [
@@ -1200,12 +1200,12 @@ export class DatabaseClient {
   async getStats(): Promise<Record<string, number>> {
     const client = await this.getClient();
     try {
-      const workflows = await client.query('SELECT COUNT(*) FROM workflows_workflows WHERE source_account_id = $1', [this.sourceAccountId]);
-      const published = await client.query(`SELECT COUNT(*) FROM workflows_workflows WHERE source_account_id = $1 AND status = 'published'`, [this.sourceAccountId]);
-      const executions = await client.query('SELECT COUNT(*) FROM workflows_executions WHERE source_account_id = $1', [this.sourceAccountId]);
-      const triggers = await client.query('SELECT COUNT(*) FROM workflows_triggers WHERE source_account_id = $1', [this.sourceAccountId]);
-      const templates = await client.query('SELECT COUNT(*) FROM workflows_templates WHERE source_account_id = $1', [this.sourceAccountId]);
-      const pendingApprovals = await client.query(`SELECT COUNT(*) FROM workflows_approvals WHERE source_account_id = $1 AND status = 'pending'`, [this.sourceAccountId]);
+      const workflows = await client.query('SELECT COUNT(*) FROM np_workflows_workflows WHERE source_account_id = $1', [this.sourceAccountId]);
+      const published = await client.query(`SELECT COUNT(*) FROM np_workflows_workflows WHERE source_account_id = $1 AND status = 'published'`, [this.sourceAccountId]);
+      const executions = await client.query('SELECT COUNT(*) FROM np_workflows_executions WHERE source_account_id = $1', [this.sourceAccountId]);
+      const triggers = await client.query('SELECT COUNT(*) FROM np_workflows_triggers WHERE source_account_id = $1', [this.sourceAccountId]);
+      const templates = await client.query('SELECT COUNT(*) FROM np_workflows_templates WHERE source_account_id = $1', [this.sourceAccountId]);
+      const pendingApprovals = await client.query(`SELECT COUNT(*) FROM np_workflows_approvals WHERE source_account_id = $1 AND status = 'pending'`, [this.sourceAccountId]);
 
       return {
         total_workflows: parseInt(workflows.rows[0].count, 10),

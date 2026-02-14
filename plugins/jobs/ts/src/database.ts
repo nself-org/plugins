@@ -71,11 +71,11 @@ export class JobsDatabase {
    */
   async migrateMultiApp(): Promise<void> {
     const migResult = await this.query<{ exists: boolean }>(`SELECT EXISTS (
-      SELECT 1 FROM information_schema.columns WHERE table_name = 'jobs_tasks' AND column_name = 'source_account_id'
+      SELECT 1 FROM information_schema.columns WHERE table_name = 'np_np_jobs_tasks' AND column_name = 'source_account_id'
     )`);
     if (!migResult[0]?.exists) {
       logger.info('Running multi-app migration: adding source_account_id columns...');
-      for (const table of ['jobs_tasks', 'job_results', 'job_failures', 'job_schedules']) {
+      for (const table of ['np_np_jobs_tasks', 'np_jobs_np_jobs_job_results', 'np_jobs_np_jobs_job_failures', 'np_jobs_np_jobs_job_schedules']) {
         await this.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'`);
       }
       logger.info('Multi-app migration complete');
@@ -85,7 +85,7 @@ export class JobsDatabase {
   // Job operations
   async createJob(job: Partial<JobRecord>): Promise<JobRecord> {
     const result = await this.query<JobRecord>(
-      `INSERT INTO jobs_tasks (
+      `INSERT INTO np_jobs_tasks (
         bullmq_id, queue_name, job_type, priority, status, payload, options,
         scheduled_for, retry_count, max_retries, retry_delay, metadata, tags, source_account_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -132,14 +132,14 @@ export class JobsDatabase {
 
     params.push(this.sourceAccountId);
     await this.query(
-      `UPDATE jobs_tasks SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $${paramIndex}`,
+      `UPDATE np_jobs_tasks SET ${updates.join(', ')} WHERE id = $1 AND source_account_id = $${paramIndex}`,
       params
     );
   }
 
   async getJobByBullMQId(bullmqId: string): Promise<JobRecord | null> {
     const result = await this.query<JobRecord>(
-      'SELECT * FROM jobs_tasks WHERE bullmq_id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_jobs_tasks WHERE bullmq_id = $1 AND source_account_id = $2',
       [bullmqId, this.sourceAccountId]
     );
     return result[0] || null;
@@ -147,7 +147,7 @@ export class JobsDatabase {
 
   async saveJobResult(jobId: string, result: unknown, durationMs: number): Promise<void> {
     await this.query(
-      `INSERT INTO job_results (job_id, result, duration_ms, source_account_id)
+      `INSERT INTO np_jobs_job_results (job_id, result, duration_ms, source_account_id)
        VALUES ($1, $2, $3, $4)`,
       [jobId, JSON.stringify(result), durationMs, this.sourceAccountId]
     );
@@ -161,7 +161,7 @@ export class JobsDatabase {
     retryAt?: Date
   ): Promise<void> {
     await this.query(
-      `INSERT INTO job_failures (
+      `INSERT INTO np_jobs_job_failures (
         job_id, error_message, error_stack, attempt_number, will_retry, retry_at, source_account_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [jobId, error.message, error.stack || null, attemptNumber, willRetry, retryAt || null, this.sourceAccountId]
@@ -170,7 +170,7 @@ export class JobsDatabase {
 
   async incrementRetryCount(jobId: string): Promise<void> {
     await this.query(
-      'UPDATE jobs_tasks SET retry_count = retry_count + 1, updated_at = NOW() WHERE id = $1 AND source_account_id = $2',
+      'UPDATE np_jobs_tasks SET retry_count = retry_count + 1, updated_at = NOW() WHERE id = $1 AND source_account_id = $2',
       [jobId, this.sourceAccountId]
     );
   }
@@ -178,7 +178,7 @@ export class JobsDatabase {
   // Schedule operations
   async createSchedule(schedule: Partial<JobScheduleRecord>): Promise<JobScheduleRecord> {
     const result = await this.query<JobScheduleRecord>(
-      `INSERT INTO job_schedules (
+      `INSERT INTO np_jobs_job_schedules (
         name, description, job_type, queue_name, payload, options,
         cron_expression, timezone, enabled, max_runs, end_date, metadata, tags, source_account_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
@@ -206,19 +206,19 @@ export class JobsDatabase {
   async getSchedules(enabled?: boolean): Promise<JobScheduleRecord[]> {
     if (enabled !== undefined) {
       return this.query<JobScheduleRecord>(
-        'SELECT * FROM job_schedules WHERE enabled = $1 AND source_account_id = $2 ORDER BY next_run_at',
+        'SELECT * FROM np_jobs_job_schedules WHERE enabled = $1 AND source_account_id = $2 ORDER BY next_run_at',
         [enabled, this.sourceAccountId]
       );
     }
     return this.query<JobScheduleRecord>(
-      'SELECT * FROM job_schedules WHERE source_account_id = $1 ORDER BY next_run_at',
+      'SELECT * FROM np_jobs_job_schedules WHERE source_account_id = $1 ORDER BY next_run_at',
       [this.sourceAccountId]
     );
   }
 
   async updateScheduleRun(scheduleId: string, jobId: string): Promise<void> {
     await this.query(
-      `UPDATE job_schedules SET
+      `UPDATE np_jobs_job_schedules SET
         last_run_at = NOW(),
         last_job_id = $2,
         total_runs = total_runs + 1,
@@ -230,21 +230,21 @@ export class JobsDatabase {
 
   async updateScheduleSuccess(scheduleId: string): Promise<void> {
     await this.query(
-      'UPDATE job_schedules SET successful_runs = successful_runs + 1 WHERE id = $1 AND source_account_id = $2',
+      'UPDATE np_jobs_job_schedules SET successful_runs = successful_runs + 1 WHERE id = $1 AND source_account_id = $2',
       [scheduleId, this.sourceAccountId]
     );
   }
 
   async updateScheduleFailure(scheduleId: string): Promise<void> {
     await this.query(
-      'UPDATE job_schedules SET failed_runs = failed_runs + 1 WHERE id = $1 AND source_account_id = $2',
+      'UPDATE np_jobs_job_schedules SET failed_runs = failed_runs + 1 WHERE id = $1 AND source_account_id = $2',
       [scheduleId, this.sourceAccountId]
     );
   }
 
   async updateNextRun(scheduleId: string, nextRun: Date): Promise<void> {
     await this.query(
-      'UPDATE job_schedules SET next_run_at = $2 WHERE id = $1 AND source_account_id = $3',
+      'UPDATE np_jobs_job_schedules SET next_run_at = $2 WHERE id = $1 AND source_account_id = $3',
       [scheduleId, nextRun, this.sourceAccountId]
     );
   }
@@ -263,7 +263,7 @@ export class JobsDatabase {
           COUNT(*) AS total,
           AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE status = 'completed' AND completed_at IS NOT NULL) AS avg_duration_seconds,
           MAX(created_at) AS last_job_at
-        FROM jobs_tasks
+        FROM np_jobs_tasks
         WHERE source_account_id = $1
         GROUP BY queue_name
         ORDER BY queue_name`,
@@ -282,7 +282,7 @@ export class JobsDatabase {
           AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) FILTER (WHERE status = 'completed') AS avg_duration_seconds,
           MIN(created_at) AS first_job_at,
           MAX(created_at) AS last_job_at
-        FROM jobs_tasks
+        FROM np_jobs_tasks
         WHERE source_account_id = $1
         GROUP BY job_type
         ORDER BY total_jobs DESC
@@ -301,7 +301,7 @@ export class JobsDatabase {
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
         COUNT(*) as total
-      FROM jobs_tasks
+      FROM np_jobs_tasks
       WHERE source_account_id = $1`,
         [this.sourceAccountId]
       ),
@@ -318,7 +318,7 @@ export class JobsDatabase {
    * Delete all data for a specific source account across all tables.
    */
   async cleanupForAccount(sourceAccountId: string): Promise<{ tables: Record<string, number> }> {
-    const tables = ['job_results', 'job_failures', 'jobs_tasks', 'job_schedules'];
+    const tables = ['np_jobs_np_jobs_job_results', 'np_jobs_np_jobs_job_failures', 'np_np_jobs_tasks', 'np_jobs_np_jobs_job_schedules'];
     const result: Record<string, number> = {};
 
     for (const table of tables) {

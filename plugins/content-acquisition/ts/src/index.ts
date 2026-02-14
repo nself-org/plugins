@@ -15,6 +15,8 @@ export * from './database.js';
 export * from './server.js';
 export * from './rss-monitor.js';
 export * from './pipeline.js';
+export * from './state-machine.js';
+export * from './quality-profiles.js';
 
 async function startServer() {
   logger.info('Starting Content Acquisition Server', { version: '1.0.0' });

@@ -4,6 +4,8 @@
   "description": "TMDB metadata enrichment for movies and TV shows",
   "author": "nself",
   "license": "MIT",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/metadata-enrichment",
+  "repository": "https://github.com/acamarata/nself-plugins",
   "category": "media",
   "subcategory": "metadata",
   "path": "plugins/metadata-enrichment",

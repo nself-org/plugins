@@ -1,0 +1,78 @@
+{
+  "name": "dlna",
+  "version": "1.0.0",
+  "description": "DLNA/UPnP media server for smart TVs, game consoles, and DLNA renderers",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/dlna",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "media",
+  "tags": [
+    "dlna",
+    "upnp",
+    "ssdp",
+    "media-server",
+    "streaming",
+    "smart-tv"
+  ],
+  "tables": [
+    "np_dlna_media_items",
+    "np_dlna_renderers"
+  ],
+  "webhooks": {},
+  "actions": {
+    "server": "Start DLNA media server with SSDP discovery",
+    "scan": "Scan media directories and index files to database",
+    "renderers": "List discovered DLNA renderers on the network",
+    "media": "List indexed media items",
+    "status": "Show server status and statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "DLNA_PORT",
+      "DLNA_SSDP_PORT",
+      "DLNA_FRIENDLY_NAME",
+      "DLNA_MEDIA_PATHS",
+      "DLNA_UUID",
+      "DLNA_ADVERTISE_INTERVAL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3025,
+    "ssdpPort": 1900,
+    "advertiseInterval": 30,
+    "friendlyName": "nself-tv Media Server"
+  },
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "239.255.255.250",
+      "localhost"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "media"
+    ]
+  }
+}

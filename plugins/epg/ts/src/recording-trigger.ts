@@ -36,7 +36,7 @@ export async function scheduleRecording(
     start_time: Date;
     end_time: Date;
   }>(
-    `SELECT start_time, end_time FROM epg_schedules
+    `SELECT start_time, end_time FROM np_epg_schedules
      WHERE source_account_id = $1
        AND program_id = $2
        AND channel_id = $3

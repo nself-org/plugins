@@ -4,7 +4,10 @@
   "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
   "author": "nself",
   "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/tokens",
+  "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
+  "port": 3107,
   "category": "media",
   "tags": [
     "tokens",
