@@ -12,6 +12,8 @@ import {
   NotificationProvider,
   QueueItem,
   CreateNotificationInput,
+  DeliveryStats,
+  EngagementStats,
 } from './types.js';
 
 export class DatabaseClient {
@@ -185,7 +187,7 @@ export class DatabaseClient {
       const values = Object.values(updates);
 
       let query = 'UPDATE notification_messages SET status = $1, updated_at = NOW()';
-      const params: any[] = [status];
+      const params: unknown[] = [status];
 
       fields.forEach((field, index) => {
         query += `, ${field} = $${index + 2}`;
@@ -360,7 +362,7 @@ export class DatabaseClient {
   async updateProviderHealth(
     name: string,
     success: boolean,
-    _response?: any
+    _response?: unknown
   ): Promise<void> {
     const client = await this.getClient();
     try {
@@ -398,7 +400,7 @@ export class DatabaseClient {
   // Statistics
   // =============================================================================
 
-  async getDeliveryStats(days: number = 7): Promise<any[]> {
+  async getDeliveryStats(days: number = 7): Promise<DeliveryStats[]> {
     const client = await this.getClient();
     try {
       const result = await client.query(
@@ -424,7 +426,7 @@ export class DatabaseClient {
     }
   }
 
-  async getEngagementStats(days: number = 7): Promise<any[]> {
+  async getEngagementStats(days: number = 7): Promise<EngagementStats[]> {
     const client = await this.getClient();
     try {
       const result = await client.query(

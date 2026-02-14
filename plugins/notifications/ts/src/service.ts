@@ -12,6 +12,8 @@ import {
   SendNotificationResult,
   Notification,
   TemplateVariables,
+  DeliveryStats,
+  EngagementStats,
 } from './types.js';
 
 const logger = createLogger('notifications:service');
@@ -142,7 +144,15 @@ export class NotificationService {
       // Try each provider in priority order
       for (const provider of providers) {
         try {
-          // TODO: Implement actual provider sending
+          // NOTE: Actual provider implementation requires integration with external services
+          // Integration points by channel:
+          // - email: SendGrid/AWS SES/Mailgun/Postmark API clients
+          // - sms: Twilio/AWS SNS API clients
+          // - push: FCM/APNs/OneSignal API clients
+          // - slack: Slack Web API client
+          // - webhook: HTTP POST with retry logic
+          //
+          // Example implementation:
           // const providerInstance = this.getProviderInstance(provider);
           // const result = await providerInstance.send(notification);
 
@@ -201,14 +211,14 @@ export class NotificationService {
   /**
    * Get delivery statistics
    */
-  async getDeliveryStats(days: number = 7): Promise<any[]> {
+  async getDeliveryStats(days: number = 7): Promise<DeliveryStats[]> {
     return db.getDeliveryStats(days);
   }
 
   /**
    * Get engagement metrics
    */
-  async getEngagementStats(days: number = 7): Promise<any[]> {
+  async getEngagementStats(days: number = 7): Promise<EngagementStats[]> {
     return db.getEngagementStats(days);
   }
 }

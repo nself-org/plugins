@@ -76,7 +76,7 @@ export async function createServer(db: VPNDatabase) {
       // Fetch the most recent comprehensive leak test for the active connection
       const result = await db.query<{
         passed: boolean;
-        details: Record<string, any>;
+        details: Record<string, unknown>;
         tested_at: Date;
       }>(
         `SELECT passed, details, tested_at FROM vpn_leak_tests
@@ -516,8 +516,19 @@ export async function createServer(db: VPNDatabase) {
         created_at: download.created_at,
       };
 
-      // TODO: Start actual torrent download in background
-      // This would be handled by a torrent client manager
+      // NOTE: Torrent download requires integration with torrent-manager plugin
+      // Integration requirements:
+      // 1. Forward download request to torrent-manager plugin API
+      // 2. Include VPN interface binding information for network isolation
+      // 3. Monitor download progress via torrent-manager webhooks
+      //
+      // Example implementation:
+      // await axios.post(`${config.torrent_manager_url}/api/downloads`, {
+      //   magnet_link,
+      //   destination_path: destination,
+      //   vpn_interface: connection.interface,
+      //   vpn_ip: connection.vpn_ip
+      // });
 
       return response;
     } catch (error) {
@@ -576,7 +587,14 @@ export async function createServer(db: VPNDatabase) {
       error_message: 'Cancelled by user',
     });
 
-    // TODO: Stop actual torrent download
+    // NOTE: Torrent cancellation requires integration with torrent-manager plugin
+    // Integration requirements:
+    // 1. Send DELETE request to torrent-manager plugin to stop/remove torrent
+    // 2. Cleanup partial files if requested
+    // 3. Update download status based on torrent-manager response
+    //
+    // Example implementation:
+    // await axios.delete(`${config.torrent_manager_url}/api/downloads/${download.torrent_id}`);
 
     return { success: true, message: 'Download cancelled' };
   });

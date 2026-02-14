@@ -29,7 +29,9 @@ export async function processSendEmail(job: Job<SendEmailPayload>): Promise<Send
 
   await job.updateProgress(10);
 
-  // TODO: Integrate with actual email service
+  // NOTE: Email integration requires external SMTP service configuration
+  // Integration point: Replace this with your email provider (SendGrid, AWS SES, Mailgun, etc.)
+  // Example: await sendgridClient.send({ to, subject, html: body })
   logger.info(`Sending email to ${to}: ${subject}`);
 
   await job.updateProgress(50);
@@ -106,8 +108,10 @@ export async function processDatabaseBackup(
 
   logger.info(`Starting backup of database: ${database}`);
 
-  // TODO: Implement actual pg_dump logic
-  // This would use child_process to run pg_dump
+  // NOTE: Database backup requires pg_dump binary and PostgreSQL connection credentials
+  // Integration point: Use child_process.spawn('pg_dump', [...args]) with proper connection params
+  // Example: spawn('pg_dump', ['-h', host, '-U', user, '-d', database, '-f', destination])
+  // For production use, consider using the dedicated backup plugin instead
   const tablesBackedUp = tables?.length || 0;
 
   await job.updateProgress(50);
@@ -173,8 +177,10 @@ export async function processCustomJob(job: Job<CustomJobPayload>): Promise<unkn
 
   logger.info(`Processing custom action: ${action}`);
 
-  // TODO: Integrate with Hasura Actions
-  // This would make a GraphQL mutation to a Hasura Action endpoint
+  // NOTE: Hasura Actions integration requires GraphQL endpoint configuration
+  // Integration point: Make POST request to Hasura Actions endpoint with action name and data
+  // Example: await fetch(hasuraUrl, { method: 'POST', body: JSON.stringify({ action, input: data }) })
+  // Requires HASURA_ADMIN_SECRET and HASURA_GRAPHQL_ENDPOINT environment variables
 
   await job.updateProgress(100);
 

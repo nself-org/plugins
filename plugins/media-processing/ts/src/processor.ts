@@ -629,8 +629,14 @@ export class MediaProcessor {
     }
 
     if (job.input_type === 's3') {
-      // TODO: Implement S3 download with AWS SDK
-      throw new Error('S3 input type not yet implemented');
+      // NOTE: S3 download requires AWS SDK integration and S3 credentials
+      // Integration point: Install @aws-sdk/client-s3 and implement:
+      // const s3 = new S3Client({ region: 'us-east-1' });
+      // const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+      // const response = await s3.send(command);
+      // await pipeline(response.Body, fs.createWriteStream(tempPath));
+      // Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION environment variables
+      throw new Error('S3 input type not yet implemented - requires AWS SDK integration');
     }
 
     throw new Error(`Unknown input type: ${job.input_type}`);

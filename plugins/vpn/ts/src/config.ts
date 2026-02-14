@@ -41,7 +41,7 @@ export function loadConfig(): VPNPluginConfig {
     server_carousel_enabled: process.env.SERVER_CAROUSEL_ENABLED === 'true',
     carousel_interval_minutes: parseInt(process.env.CAROUSEL_INTERVAL_MINUTES || '60', 10),
     port: parseInt(process.env.PORT || '3200', 10),
-    log_level: (process.env.LOG_LEVEL as any) || 'info',
+    log_level: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
   };
 
   logger.info('Configuration loaded', {

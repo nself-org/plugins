@@ -28,7 +28,7 @@ program
       await database.initialize();
       spinner.succeed('Database initialized');
       await database.close();
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Initialization failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -52,13 +52,13 @@ program
       }
 
       console.log(chalk.bold(`\nFound ${results.length} subtitles:\n`));
-      results.slice(0, 10).forEach((sub: any, i: number) => {
+      results.slice(0, 10).forEach((sub, i: number) => {
         console.log(`${i + 1}. ${sub.attributes?.feature_details?.title || 'Unknown'}`);
         console.log(`   Language: ${sub.attributes?.language}`);
         console.log(`   Format: ${sub.attributes?.format}`);
         console.log('');
       });
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Search failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -87,7 +87,7 @@ program
         await database.close();
         process.exit(0);
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error(chalk.red('Failed to start server:'), error.message);
       process.exit(1);
     }
@@ -130,7 +130,7 @@ program
         console.log(`    Confidence:  ${(result.ffsubsyncResult.confidence * 100).toFixed(1)}%`);
         console.log(`    Offset:      ${result.ffsubsyncResult.offsetMs}ms`);
       }
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Sync failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -174,7 +174,7 @@ program
           console.log(chalk.gray(`    ... and ${result.issues.length - 20} more`));
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('QC validation failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -192,7 +192,7 @@ program
       const outputPath = await normalizer.normalizeToWebVTT(subtitle, options.output);
       spinner.succeed('Subtitle normalized to WebVTT');
       console.log(chalk.bold(`\nOutput: ${outputPath}`));
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Normalization failed');
       console.error(chalk.red(error.message));
       process.exit(1);

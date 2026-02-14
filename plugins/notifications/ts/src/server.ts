@@ -4,7 +4,7 @@
  * Multi-app aware: each request is scoped to a source_account_id
  */
 
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest } from 'fastify';
 import { createLogger, getAppContext } from '@nself/plugin-utils';
 import { config } from './config.js';
 import { notificationService } from './service.js';
@@ -25,8 +25,8 @@ const fastify = Fastify({
 
 fastify.decorateRequest('scopedDb', null);
 
-fastify.addHook('onRequest', async (request) => {
-  const ctx = getAppContext(request as any);
+fastify.addHook('onRequest', async (request: FastifyRequest) => {
+  const ctx = getAppContext(request);
   (request as unknown as Record<string, unknown>).scopedDb = db.forSourceAccount(ctx.sourceAccountId);
 });
 
@@ -219,8 +219,17 @@ fastify.get<{ Querystring: { days?: string } }>(
 
 // Webhook receiver (for provider callbacks)
 fastify.post('/webhooks/notifications', async (request, reply) => {
-  // TODO: Implement webhook signature verification
-  // TODO: Process delivery events (open, click, bounce, etc.)
+  // NOTE: Webhook signature verification is provider-specific
+  // Integration requirements:
+  // 1. For SendGrid: Verify Event Webhook signature using public key
+  // 2. For AWS SES: Verify SNS message signature
+  // 3. For Mailgun: Verify HMAC signature using webhook signing key
+  // 4. For Twilio: Verify X-Twilio-Signature header
+  //
+  // Delivery event processing should:
+  // - Update notification status (delivered, opened, clicked, bounced, failed)
+  // - Store engagement metrics in np_notif_engagement_events table
+  // - Trigger analytics updates for provider health monitoring
 
   logger.info('Webhook received', { body: request.body });
 

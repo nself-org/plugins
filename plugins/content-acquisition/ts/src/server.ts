@@ -15,6 +15,13 @@ import type { ContentAcquisitionConfig, PipelineTriggerRequest, DownloadState } 
 
 const logger = createLogger('content-acquisition:server');
 
+// Type guards for validated enums
+type SubscriptionType = 'tv_show' | 'movie_collection' | 'artist' | 'podcast';
+type FeedType = 'torrent_rss' | 'show_rss' | 'movie_rss';
+type ContentType = 'movie' | 'tv_show' | 'music' | 'podcast';
+type DownloadStatus = 'pending' | 'searching' | 'matched' | 'downloading' | 'completed' | 'failed';
+type DownloadAction = 'retry' | 'cancel';
+
 // ============================================================================
 // JSON Schema definitions for request validation
 // ============================================================================
@@ -252,7 +259,7 @@ export class ContentAcquisitionServer {
       const { contentType, contentId, contentName, qualityProfileId } = request.body;
       const sub = await this.database.createSubscription({
         source_account_id: sourceAccountId,
-        subscription_type: contentType as any,
+        subscription_type: contentType as SubscriptionType,
         content_id: contentId,
         content_name: contentName,
         quality_profile_id: qualityProfileId,
@@ -279,7 +286,7 @@ export class ContentAcquisitionServer {
     }, async (request: FastifyRequest<{ Params: { id: string }; Body: { contentType?: string; contentId?: string; contentName?: string; qualityProfileId?: string; enabled?: boolean; autoUpgrade?: boolean } }>, reply: FastifyReply) => {
       const { contentType, contentId, contentName, qualityProfileId, enabled, autoUpgrade } = request.body;
       const sub = await this.database.updateSubscription(request.params.id, {
-        subscription_type: contentType as any,
+        subscription_type: contentType as SubscriptionType | undefined,
         content_id: contentId,
         content_name: contentName,
         quality_profile_id: qualityProfileId,
@@ -313,7 +320,7 @@ export class ContentAcquisitionServer {
         source_account_id: sourceAccountId,
         name,
         url,
-        feed_type: feedType as any,
+        feed_type: feedType as FeedType,
       });
       return { feed };
     });
@@ -356,7 +363,7 @@ export class ContentAcquisitionServer {
       const feed = await this.database.updateRSSFeed(request.params.id, {
         name,
         url,
-        feed_type: feedType as any,
+        feed_type: feedType as FeedType | undefined,
         enabled,
         check_interval_minutes: checkIntervalMinutes,
       });
@@ -391,7 +398,7 @@ export class ContentAcquisitionServer {
       const { contentType, contentName, year, season, episode } = request.body;
       const item = await this.database.addToQueue({
         source_account_id: sourceAccountId,
-        content_type: contentType as any,
+        content_type: contentType as ContentType,
         content_name: contentName,
         year,
         season,
@@ -468,7 +475,7 @@ export class ContentAcquisitionServer {
         quality_profile: qualityProfile,
         auto_download: autoDownload,
         auto_upgrade: autoUpgrade,
-        status: status as any,
+        status: status as DownloadStatus | undefined,
       });
       if (!movie) {
         return reply.status(404).send({ error: 'Movie not found' });
@@ -634,7 +641,7 @@ export class ContentAcquisitionServer {
         user_id: sourceAccountId,
         name,
         conditions,
-        action: action as any,
+        action: action as DownloadAction,
         priority,
         enabled,
       });
@@ -654,7 +661,7 @@ export class ContentAcquisitionServer {
       const rule = await this.database.updateDownloadRule(request.params.id, {
         name,
         conditions,
-        action: action as any,
+        action: action as DownloadAction | undefined,
         priority,
         enabled,
       });

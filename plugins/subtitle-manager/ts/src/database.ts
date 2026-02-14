@@ -8,6 +8,7 @@ import type {
   SubtitleStats,
   QCResultRecord,
   InsertQCResultInput,
+  QualityCheckDetails,
 } from './types.js';
 
 const logger = createLogger('subtitle-manager:database');
@@ -297,7 +298,7 @@ export class SubtitleManagerDatabase {
   async updateDownloadQC(
     downloadId: string,
     qcStatus: string,
-    qcDetails: Record<string, any>,
+    qcDetails: QualityCheckDetails,
   ): Promise<void> {
     await this.pool.query(
       `UPDATE np_subtmgr_downloads

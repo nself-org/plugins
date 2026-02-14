@@ -122,8 +122,13 @@ export class TorrentSearchAggregator {
     }
 
     // Call searcher-specific method to fetch magnet
-    if ('getMagnetLink' in searcher && typeof (searcher as any).getMagnetLink === 'function') {
-      return await (searcher as any).getMagnetLink(result.sourceUrl);
+    // Type-safe check for getMagnetLink method
+    interface SearcherWithMagnetLink {
+      getMagnetLink(sourceUrl: string): Promise<string>;
+    }
+
+    if ('getMagnetLink' in searcher && typeof (searcher as SearcherWithMagnetLink).getMagnetLink === 'function') {
+      return await (searcher as SearcherWithMagnetLink).getMagnetLink(result.sourceUrl);
     }
 
     throw new Error(`Searcher ${result.source} does not support magnet fetching`);

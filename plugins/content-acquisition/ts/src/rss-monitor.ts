@@ -16,6 +16,22 @@ import type { RSSFeed, Subscription } from './types.js';
 
 const logger = createLogger('content-acquisition:rss');
 
+interface RSSFeedItem {
+  title?: string;
+  link?: string;
+  pubDate?: string;
+  enclosure?: {
+    url?: string;
+    type?: string;
+    length?: string;
+  };
+  content?: string;
+  contentSnippet?: string;
+  guid?: string;
+  categories?: string[];
+  [key: string]: unknown;
+}
+
 export class RSSFeedMonitor {
   private parser: Parser;
   private database: ContentAcquisitionDatabase;
@@ -43,7 +59,7 @@ export class RSSFeedMonitor {
             await this.checkFeed(feed);
           }
         }
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Scheduled feed check failed:', error);
       }
     });
@@ -67,7 +83,7 @@ export class RSSFeedMonitor {
       // Mark the feed as successfully checked
       await this.database.updateFeedLastChecked(feed.id);
       logger.info(`Processed ${processedCount} items from ${feed.name}`);
-    } catch (error: any) {
+    } catch (error) {
       // Record the failure on the feed so consecutive_failures increments
       await this.database.updateFeedLastChecked(feed.id, error.message).catch(() => {
         // If even the error recording fails, just log it
@@ -85,7 +101,7 @@ export class RSSFeedMonitor {
    * 4. For matched items, search torrent-manager for the best torrent
    * 5. Add matched items to the acquisition queue
    */
-  private async processItem(feed: RSSFeed, item: any): Promise<void> {
+  private async processItem(feed: RSSFeed, item: RSSFeedItem): Promise<void> {
     const title: string = item.title || '';
     const link: string = item.link || '';
     const magnetUri: string = item.enclosure?.url || '';

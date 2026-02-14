@@ -11,7 +11,7 @@ import {
   loadSecurityConfig,
 } from '@nself/plugin-utils';
 import { SubtitleManagerDatabase } from './database.js';
-import { OpenSubtitlesClient } from './opensubtitles-client.js';
+import { OpenSubtitlesClient, type OpenSubtitlesSearchResult } from './opensubtitles-client.js';
 import { SubtitleSynchronizer } from './sync.js';
 import { SubtitleQC } from './qc.js';
 import { SubtitleNormalizer } from './normalize.js';
@@ -499,8 +499,8 @@ export class SubtitleManagerServer {
 
     // Rank results by downloads and rating
     searchResults = searchResults
-      .filter((r: any) => r.attributes?.files?.length > 0)
-      .sort((a: any, b: any) => {
+      .filter((r: OpenSubtitlesSearchResult) => r.attributes?.files?.length > 0)
+      .sort((a: OpenSubtitlesSearchResult, b: OpenSubtitlesSearchResult) => {
         const aScore = (a.attributes?.download_count || 0) * 0.4 + (a.attributes?.ratings || 0) * 0.3;
         const bScore = (b.attributes?.download_count || 0) * 0.4 + (b.attributes?.ratings || 0) * 0.3;
         return bScore - aScore;

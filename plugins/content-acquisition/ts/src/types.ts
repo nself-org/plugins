@@ -39,13 +39,25 @@ export interface QualityProfile {
   updated_at: Date;
 }
 
+export interface ContentMetadata {
+  tmdb_id?: number;
+  imdb_id?: string;
+  tvdb_id?: number;
+  year?: number;
+  genres?: string[];
+  overview?: string;
+  poster_path?: string;
+  backdrop_path?: string;
+  [key: string]: unknown;
+}
+
 export interface Subscription {
   id: string;
   source_account_id: string;
   subscription_type: 'tv_show' | 'movie_collection' | 'artist' | 'podcast';
   content_id?: string;
   content_name: string;
-  content_metadata?: Record<string, any>;
+  content_metadata?: ContentMetadata;
   quality_profile_id?: string;
   enabled: boolean;
   auto_upgrade: boolean;
@@ -141,12 +153,23 @@ export interface AcquisitionQueueItem {
   priority: number;
   attempts: number;
   max_attempts: number;
-  matched_torrent?: Record<string, any>;
+  matched_torrent?: MatchedTorrentInfo;
   download_id?: string;
   error_message?: string;
   created_at: Date;
   started_at?: Date;
   completed_at?: Date;
+}
+
+export interface MatchedTorrentInfo {
+  name: string;
+  info_hash: string;
+  magnet_uri?: string;
+  size_bytes: number;
+  seeders: number;
+  quality?: string;
+  source: string;
+  [key: string]: unknown;
 }
 
 export interface AcquisitionHistoryItem {

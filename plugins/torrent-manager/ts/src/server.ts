@@ -17,6 +17,58 @@ import type { TorrentManagerConfig } from './types.js';
 
 const logger = createLogger('torrent-manager:server');
 
+// Request body interfaces
+interface AddTorrentBody {
+  magnet_uri: string;
+  category?: string;
+  download_path?: string;
+  requested_by?: string;
+}
+
+interface SearchBody {
+  query: string;
+  type?: string;
+  quality?: string;
+  minSeeders?: number;
+  maxResults?: number;
+}
+
+interface SmartSearchBody {
+  title: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  quality?: string;
+  minSeeders?: number;
+}
+
+interface FetchMagnetBody {
+  source: string;
+  sourceUrl: string;
+}
+
+interface ListQuery {
+  status?: string;
+  category?: string;
+  limit?: string;
+}
+
+interface DeleteQuery {
+  delete_files?: string;
+}
+
+interface ValidateQuery {
+  query_hash?: string;
+}
+
+interface SeedingConfigBody {
+  ratio_limit?: number;
+  time_limit_hours?: number;
+  auto_remove?: boolean;
+  keep_files?: boolean;
+  favorite?: boolean;
+}
+
 export class TorrentManagerServer {
   private fastify: ReturnType<typeof Fastify>;
   private database: TorrentDatabase;
@@ -132,8 +184,8 @@ export class TorrentManagerServer {
           },
         },
       },
-    }, async (request: FastifyRequest, reply: FastifyReply) => {
-      const { magnet_uri, category, download_path, requested_by } = request.body as any;
+    }, async (request: FastifyRequest<{ Body: AddTorrentBody }>, reply: FastifyReply) => {
+      const { magnet_uri, category, download_path, requested_by } = request.body;
 
       // Verify VPN if required
       if (this.config.vpn_required) {
@@ -185,8 +237,8 @@ export class TorrentManagerServer {
     });
 
     // List downloads
-    this.fastify.get('/v1/downloads', async (request: FastifyRequest) => {
-      const { status, category, limit } = request.query as any;
+    this.fastify.get('/v1/downloads', async (request: FastifyRequest<{ Querystring: ListQuery }>) => {
+      const { status, category, limit } = request.query;
       const downloads = await this.database.listDownloads({
         status,
         category,
@@ -258,9 +310,9 @@ export class TorrentManagerServer {
     });
 
     // Delete download
-    this.fastify.delete('/v1/downloads/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string };
-      const { delete_files } = request.query as any;
+    this.fastify.delete('/v1/downloads/:id', async (request: FastifyRequest<{ Params: { id: string }; Querystring: DeleteQuery }>, reply: FastifyReply) => {
+      const { id } = request.params;
+      const { delete_files } = request.query;
       const download = await this.database.getDownload(id);
 
       if (!download) {
@@ -300,8 +352,8 @@ export class TorrentManagerServer {
           },
         },
       },
-    }, async (request: FastifyRequest, reply: FastifyReply) => {
-      const { query, type, quality, minSeeders, maxResults } = request.body as any;
+    }, async (request: FastifyRequest<{ Body: SearchBody }>, reply: FastifyReply) => {
+      const { query, type, quality, minSeeders, maxResults } = request.body;
 
       if (!query) {
         reply.code(400).send({ error: 'query is required' });
@@ -360,8 +412,8 @@ export class TorrentManagerServer {
           },
         },
       },
-    }, async (request: FastifyRequest, reply: FastifyReply) => {
-      const { title, year, season, episode, quality, minSeeders } = request.body as any;
+    }, async (request: FastifyRequest<{ Body: SmartSearchBody }>, reply: FastifyReply) => {
+      const { title, year, season, episode, quality, minSeeders } = request.body;
 
       if (!title) {
         reply.code(400).send({ error: 'title is required' });
@@ -447,8 +499,8 @@ export class TorrentManagerServer {
           },
         },
       },
-    }, async (request: FastifyRequest, reply: FastifyReply) => {
-      const { source, sourceUrl } = request.body as any;
+    }, async (request: FastifyRequest<{ Body: FetchMagnetBody }>, reply: FastifyReply) => {
+      const { source, sourceUrl } = request.body;
 
       if (!source || !sourceUrl) {
         reply.code(400).send({ error: 'source and sourceUrl are required' });
@@ -460,7 +512,15 @@ export class TorrentManagerServer {
         const magnetUri = await aggregator.getMagnetLink({
           source,
           sourceUrl,
-        } as any);
+          name: '',
+          info_hash: '',
+          size_bytes: 0,
+          seeders: 0,
+          leechers: 0,
+          trusted_uploader: false,
+          category: 'other' as const,
+          score: 0,
+        });
 
         return { magnetUri };
       } catch (error: unknown) {
@@ -471,8 +531,8 @@ export class TorrentManagerServer {
     });
 
     // Get search cache
-    this.fastify.get('/v1/search/cache', async (request: FastifyRequest) => {
-      const { query_hash } = request.query as any;
+    this.fastify.get('/v1/search/cache', async (request: FastifyRequest<{ Querystring: ValidateQuery }>) => {
+      const { query_hash } = request.query;
       if (!query_hash) {
         return { error: 'query_hash required' };
       }
@@ -501,15 +561,9 @@ export class TorrentManagerServer {
           },
         },
       },
-    }, async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string };
-      const body = request.body as {
-        ratio_limit?: number;
-        time_limit_hours?: number;
-        auto_remove?: boolean;
-        keep_files?: boolean;
-        favorite?: boolean;
-      };
+    }, async (request: FastifyRequest<{ Params: { id: string }; Body: SeedingConfigBody }>, reply: FastifyReply) => {
+      const { id } = request.params;
+      const body = request.body;
 
       // Verify the download exists
       const download = await this.database.getDownload(id);
@@ -523,7 +577,7 @@ export class TorrentManagerServer {
       const autoRemove = isFavorite ? false : (body.auto_remove ?? true);
 
       try {
-        const appContext = getAppContext(request as any);
+        const appContext = getAppContext(request);
         await this.database.upsertDownloadSeedingPolicy(id, {
           source_account_id: appContext?.accountId || 'primary',
           ratio_limit: body.ratio_limit,
@@ -544,8 +598,8 @@ export class TorrentManagerServer {
     });
 
     // Get seeding policy for a specific download
-    this.fastify.get('/v1/seeding/:id/policy', async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string };
+    this.fastify.get('/v1/seeding/:id/policy', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+      const { id } = request.params;
 
       const policy = await this.database.getDownloadSeedingPolicy(id);
       if (!policy) {

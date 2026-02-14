@@ -50,7 +50,7 @@ export class YTSSearcher extends BaseTorrentSearcher {
       return [];
     }
 
-    const params: Record<string, any> = {
+    const params: Record<string, string | number> = {
       query_term: options.query,
       limit: options.maxResults || 50,
       page: 1,
@@ -130,7 +130,7 @@ export class YTSSearcher extends BaseTorrentSearcher {
       logger.info(`Found ${results.length} results from YTS`);
       return results;
 
-    } catch (error: any) {
+    } catch (error) {
       logger.warn(`YTS search failed: ${error.message}`);
       return [];
     }

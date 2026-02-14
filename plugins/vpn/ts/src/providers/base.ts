@@ -204,7 +204,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
         maxBuffer: 1024 * 1024 * 10, // 10MB
       });
       return result;
-    } catch (error: any) {
+    } catch (error) {
       if (error.killed && error.signal === 'SIGTERM') {
         throw new Error(`Command timed out after ${timeout}ms: ${command}`);
       }

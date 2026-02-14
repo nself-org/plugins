@@ -39,9 +39,20 @@ export interface VPNProviderRecord {
   openvpn_supported: boolean;
   kill_switch_available: boolean;
   split_tunneling_available: boolean;
-  config: Record<string, any>;
+  config: VPNProviderConfig;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface VPNProviderConfig {
+  api_url?: string;
+  config_url?: string;
+  supports_udp?: boolean;
+  supports_tcp?: boolean;
+  supports_wireguard?: boolean;
+  supports_openvpn?: boolean;
+  default_port?: number;
+  [key: string]: unknown;
 }
 
 export interface VPNCredentialRecord {
@@ -53,7 +64,7 @@ export interface VPNCredentialRecord {
   api_token_encrypted?: string;
   account_number?: string; // For Mullvad
   private_key_encrypted?: string; // For WireGuard
-  additional_data?: Record<string, any>;
+  additional_data?: Record<string, unknown>;
   expires_at?: Date;
   created_at: Date;
   updated_at: Date;
@@ -81,10 +92,19 @@ export interface VPNServerRecord {
   public_key?: string; // WireGuard public key
   endpoint_port?: number;
   owned: boolean; // Provider owns the hardware
-  metadata: Record<string, any>;
+  metadata: VPNServerMetadata;
   last_seen: Date;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface VPNServerMetadata {
+  provider_server_id?: string;
+  asn?: number;
+  dns_servers?: string[];
+  recommended?: boolean;
+  premium_only?: boolean;
+  [key: string]: unknown;
 }
 
 export interface VPNConnectionRecord {
@@ -106,8 +126,15 @@ export interface VPNConnectionRecord {
   kill_switch_enabled: boolean;
   port_forwarded?: number;
   requested_by?: string; // Plugin or user that requested connection
-  metadata: Record<string, any>;
+  metadata: VPNConnectionMetadata;
   created_at: Date;
+}
+
+export interface VPNConnectionMetadata {
+  disconnect_reason?: string;
+  reconnect_count?: number;
+  client_version?: string;
+  [key: string]: unknown;
 }
 
 export interface VPNDownloadRecord {
@@ -132,8 +159,15 @@ export interface VPNDownloadRecord {
   started_at?: Date;
   completed_at?: Date;
   error_message?: string;
-  metadata: Record<string, any>;
+  metadata: VPNDownloadMetadata;
   created_at: Date;
+}
+
+export interface VPNDownloadMetadata {
+  content_type?: string;
+  category?: string;
+  release_group?: string;
+  [key: string]: unknown;
 }
 
 export interface VPNConnectionLogRecord {
@@ -142,7 +176,7 @@ export interface VPNConnectionLogRecord {
   timestamp: Date;
   event_type: string; // 'connected', 'disconnected', 'error', 'reconnecting', etc.
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface VPNServerPerformanceRecord {
@@ -164,7 +198,7 @@ export interface VPNLeakTestRecord {
   passed: boolean;
   expected_value?: string;
   actual_value?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   tested_at: Date;
 }
 

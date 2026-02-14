@@ -103,7 +103,7 @@ export class X1337Searcher extends BaseTorrentSearcher {
           break;
         }
 
-      } catch (error: any) {
+      } catch (error) {
         logger.warn(`1337x mirror ${mirror} failed: ${error.message}`);
         // Continue to next mirror
         continue;
@@ -134,7 +134,7 @@ export class X1337Searcher extends BaseTorrentSearcher {
       }
 
       return magnetLink;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error(`Failed to fetch magnet link: ${error.message}`);
     }
   }

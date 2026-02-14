@@ -25,7 +25,7 @@ program
       await database.initialize();
       spinner.succeed('Database initialized');
       await database.close();
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Initialization failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -48,12 +48,12 @@ program
       }
 
       console.log(chalk.bold(`\nFound ${results.length} movies:\n`));
-      results.slice(0, 10).forEach((movie: any, i: number) => {
+      results.slice(0, 10).forEach((movie, i: number) => {
         console.log(`${i + 1}. ${movie.title} (${movie.release_date?.substring(0, 4)})`);
         console.log(`   ID: ${movie.id} | Rating: ${movie.vote_average}/10`);
         console.log('');
       });
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Search failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -76,12 +76,12 @@ program
       }
 
       console.log(chalk.bold(`\nFound ${results.length} TV shows:\n`));
-      results.slice(0, 10).forEach((show: any, i: number) => {
+      results.slice(0, 10).forEach((show, i: number) => {
         console.log(`${i + 1}. ${show.name} (${show.first_air_date?.substring(0, 4)})`);
         console.log(`   ID: ${show.id} | Rating: ${show.vote_average}/10`);
         console.log('');
       });
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Search failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -110,7 +110,7 @@ program
         await database.close();
         process.exit(0);
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error(chalk.red('Failed to start server:'), error.message);
       process.exit(1);
     }

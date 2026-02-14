@@ -18,6 +18,21 @@ import type {
 
 const logger = createLogger('vpn:database');
 
+// Internal types for database query results
+interface ProviderStatsRow {
+  display_name: string;
+  total_connections: string;
+  success_rate_percent: string | null;
+}
+
+interface ServerStatsRow {
+  hostname: string;
+  provider_id: string;
+  country_code: string;
+  total_connections: string | null;
+  avg_download_speed: string | null;
+}
+
 // Tables that belong to this plugin
 const ALL_TABLES = [
   'np_vpn_providers',
@@ -64,7 +79,7 @@ export class VPNDatabase {
   /**
    * Execute a raw query against the pool (for ad-hoc queries not covered by typed methods)
    */
-  async query<T extends Record<string, any> = any>(text: string, values?: any[]): Promise<QueryResult<T>> {
+  async query<T extends Record<string, unknown> = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResult<T>> {
     return this.pool.query<T>(text, values);
   }
 
@@ -556,7 +571,7 @@ export class VPNDatabase {
   }
 
   async getCredentials(providerId: string, encryptionKey: string): Promise<VPNCredentialRecord | null> {
-    const result = await this.pool.query<any>(
+    const result = await this.pool.query<VPNCredentialRecord>(
       `SELECT
         id, provider_id, username, account_number, additional_data, expires_at, created_at, updated_at,
         pgp_sym_decrypt(password_encrypted, $2) AS password_encrypted,
@@ -645,7 +660,7 @@ export class VPNDatabase {
     limit?: number;
   }): Promise<VPNServerRecord[]> {
     const conditions: string[] = ['1=1'];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     if (filters.provider) {
@@ -715,7 +730,7 @@ export class VPNDatabase {
 
   async updateConnection(id: string, updates: Partial<VPNConnectionRecord>): Promise<VPNConnectionRecord> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     const updateableFields: (keyof VPNConnectionRecord)[] = [
@@ -799,7 +814,7 @@ export class VPNDatabase {
 
   async updateDownload(id: string, updates: Partial<VPNDownloadRecord>): Promise<VPNDownloadRecord> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     const updateableFields: (keyof VPNDownloadRecord)[] = [
@@ -902,13 +917,13 @@ export class VPNDatabase {
       total_downloads: parseInt(String(downloadsResult.rows[0]?.total ?? '0')),
       active_downloads: parseInt(String(downloadsResult.rows[0]?.active ?? '0')),
       total_bytes_downloaded: downloadsResult.rows[0]?.bytes || '0',
-      providers: providersResult.rows.map((row: any) => ({
+      providers: providersResult.rows.map((row: ProviderStatsRow) => ({
         provider: row.display_name,
         connections: parseInt(row.total_connections),
         uptime_percentage: parseFloat(row.success_rate_percent || '0'),
         avg_speed_mbps: 0, // Would need performance data
       })),
-      top_servers: serversResult.rows.map((row: any) => ({
+      top_servers: serversResult.rows.map((row: ServerStatsRow) => ({
         server: row.hostname,
         provider: row.provider_id,
         country: row.country_code,

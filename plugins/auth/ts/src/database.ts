@@ -13,6 +13,7 @@ import {
   SessionRecord,
   LoginAttemptRecord,
   AuthStats,
+  AuthConfig,
 } from './types.js';
 
 const logger = createLogger('auth:database');
@@ -804,7 +805,7 @@ export class AuthDatabase {
 /**
  * Create auth database instance
  */
-export async function createAuthDatabase(config: any): Promise<AuthDatabase> {
+export async function createAuthDatabase(config: AuthConfig): Promise<AuthDatabase> {
   const db = await createDatabase(config.database);
   const authDb = new AuthDatabase(db);
   await authDb.initSchema();

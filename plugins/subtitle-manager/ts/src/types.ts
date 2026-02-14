@@ -36,9 +36,22 @@ export interface SubtitleDownloadRecord {
   sync_score?: number;
   source: string;
   qc_status?: string;
-  qc_details?: Record<string, any>;
+  qc_details?: QualityCheckDetails;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface QualityCheckDetails {
+  errors?: string[];
+  warnings?: string[];
+  info?: string[];
+  fix_count?: number;
+  original_encoding?: string;
+  output_encoding?: string;
+  timing_issues?: boolean;
+  overlaps_fixed?: number;
+  gaps_fixed?: number;
+  [key: string]: unknown;
 }
 
 export interface UpsertSubtitleInput {

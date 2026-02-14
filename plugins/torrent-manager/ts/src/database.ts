@@ -476,7 +476,7 @@ export class TorrentDatabase {
     limit?: number;
   }): Promise<TorrentDownload[]> {
     let query = 'SELECT * FROM np_torrentmanager_torrent_downloads WHERE 1=1';
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 1;
 
     if (filter?.status) {

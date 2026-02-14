@@ -88,8 +88,19 @@ export class VPNChecker {
    * Would integrate with VPN Manager's webhook system
    */
   async subscribeToVPNEvents(): Promise<void> {
-    // TODO: Implement webhook subscription to VPN Manager
-    // This would register a callback URL for VPN disconnect events
+    // NOTE: VPN webhook integration requires bidirectional plugin communication
+    // Integration requirements:
+    // 1. VPN Manager must expose POST /api/webhooks/subscribe endpoint
+    // 2. This service must expose POST /webhooks/vpn-events endpoint to receive callbacks
+    // 3. Webhook payload should include: event_type (connected|disconnected), provider, server, timestamp
+    // 4. On disconnect event: pause all active torrents, wait for reconnection
+    // 5. On reconnect event: verify IP changed, resume paused torrents
+    //
+    // Example implementation:
+    // await axios.post(`${this.vpnManagerUrl}/api/webhooks/subscribe`, {
+    //   url: `${this.torrentManagerUrl}/webhooks/vpn-events`,
+    //   events: ['vpn.disconnected', 'vpn.connected']
+    // });
     logger.info('VPN event subscription would be configured here');
   }
 

@@ -101,7 +101,7 @@ export class TPBSearcher extends BaseTorrentSearcher {
           break;
         }
 
-      } catch (error: any) {
+      } catch (error) {
         logger.warn(`TPB mirror ${mirror} failed: ${error.message}`);
         continue;
       }

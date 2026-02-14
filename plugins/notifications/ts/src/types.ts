@@ -31,6 +31,33 @@ export type FrequencyType = 'immediate' | 'hourly' | 'daily' | 'weekly' | 'disab
 export type BatchType = 'digest' | 'bulk' | 'scheduled';
 
 // =============================================================================
+// Statistics Types
+// =============================================================================
+
+export interface DeliveryStats {
+  channel: NotificationChannel;
+  category: NotificationCategory;
+  date: Date;
+  total: number;
+  delivered: number;
+  failed: number;
+  bounced: number;
+  delivery_rate: number;
+}
+
+export interface EngagementStats {
+  channel: NotificationChannel;
+  category: NotificationCategory;
+  date: Date;
+  total_sent: number;
+  total_opened: number;
+  total_clicked: number;
+  open_rate: number;
+  click_rate: number;
+  click_to_open_rate: number;
+}
+
+// =============================================================================
 // Template Types
 // =============================================================================
 

@@ -28,7 +28,7 @@ program
       await database.initialize();
       spinner.succeed('Database initialized');
       await database.close();
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Initialization failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -53,7 +53,7 @@ program
       await database.close();
       spinner.succeed(`Subscribed to ${name}`);
       console.log(chalk.green(`Subscription ID: ${sub.id}`));
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Subscription failed');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -83,7 +83,7 @@ program
         console.log(`   Priority: ${item.priority}`);
         console.log('');
       });
-    } catch (error: any) {
+    } catch (error) {
       spinner.fail('Failed to load queue');
       console.error(chalk.red(error.message));
       process.exit(1);
@@ -112,7 +112,7 @@ program
         await database.close();
         process.exit(0);
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error(chalk.red('Failed to start server:'), error.message);
       process.exit(1);
     }

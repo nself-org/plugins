@@ -108,6 +108,18 @@ export type TorrentDownloadStatus =
 
 export type TorrentCategory = 'movie' | 'tv' | 'music' | 'podcast' | 'other';
 
+export interface TorrentMetadata {
+  title?: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  quality?: string;
+  codec?: string;
+  source?: string;
+  release_group?: string;
+  [key: string]: unknown;
+}
+
 export interface TorrentDownload {
   id: string;
   source_account_id: string;
@@ -157,7 +169,7 @@ export interface TorrentDownload {
   // Metadata
   content_id?: string;
   requested_by: string;
-  metadata?: Record<string, any>;
+  metadata?: TorrentMetadata;
 
   // Timestamps
   added_at: Date;
@@ -372,7 +384,7 @@ export interface VPNStatus {
 
 export interface WebhookEvent {
   event: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   timestamp: Date;
 }
 
@@ -380,14 +392,14 @@ export interface WebhookEvent {
 // API Responses
 // ============================================================================
 
-export interface APIResponse<T = any> {
+export interface APIResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
   message?: string;
 }
 
-export interface PaginatedResponse<T = any> {
+export interface PaginatedResponse<T = unknown> {
   items: T[];
   total: number;
   page: number;

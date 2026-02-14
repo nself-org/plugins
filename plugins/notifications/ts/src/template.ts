@@ -91,24 +91,24 @@ export class TemplateEngine {
     });
 
     // Default value
-    Handlebars.registerHelper('default', (value: any, defaultValue: any) => {
+    Handlebars.registerHelper('default', (value: unknown, defaultValue: unknown) => {
       return value || defaultValue;
     });
 
     // Conditional helpers
-    Handlebars.registerHelper('eq', (a: any, b: any) => a === b);
-    Handlebars.registerHelper('ne', (a: any, b: any) => a !== b);
-    Handlebars.registerHelper('lt', (a: any, b: any) => a < b);
-    Handlebars.registerHelper('gt', (a: any, b: any) => a > b);
-    Handlebars.registerHelper('lte', (a: any, b: any) => a <= b);
-    Handlebars.registerHelper('gte', (a: any, b: any) => a >= b);
+    Handlebars.registerHelper('eq', (a: unknown, b: unknown) => a === b);
+    Handlebars.registerHelper('ne', (a: unknown, b: unknown) => a !== b);
+    Handlebars.registerHelper('lt', (a: number, b: number) => a < b);
+    Handlebars.registerHelper('gt', (a: number, b: number) => a > b);
+    Handlebars.registerHelper('lte', (a: number, b: number) => a <= b);
+    Handlebars.registerHelper('gte', (a: number, b: number) => a >= b);
 
     // Array helpers
-    Handlebars.registerHelper('join', (array: any[], separator: string = ', ') => {
+    Handlebars.registerHelper('join', (array: unknown[], separator: string = ', ') => {
       return Array.isArray(array) ? array.join(separator) : '';
     });
 
-    Handlebars.registerHelper('length', (array: any[]) => {
+    Handlebars.registerHelper('length', (array: unknown[]) => {
       return Array.isArray(array) ? array.length : 0;
     });
   }
