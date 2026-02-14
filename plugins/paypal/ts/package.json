@@ -22,7 +22,8 @@
     "fastify": "^4.24.0",
     "@fastify/cors": "^8.4.0",
     "dotenv": "^16.3.1",
-    "commander": "^11.1.0"
+    "commander": "^11.1.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

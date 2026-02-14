@@ -52,5 +52,10 @@
     "fastify": "^4.24.0",
     "pg": "^8.11.3"
   },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": false
+    }
+  },
   "license": "MIT"
 }

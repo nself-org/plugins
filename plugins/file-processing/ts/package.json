@@ -34,7 +34,8 @@
     "fluent-ffmpeg": "^2.1.2",
     "clamscan": "^2.1.2",
     "exifreader": "^4.18.0",
-    "file-type": "^19.0.0"
+    "file-type": "^19.0.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -15,7 +15,16 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "keywords": ["nself", "photos", "albums", "exif", "tagging", "faces", "thumbnails", "gallery"],
+  "keywords": [
+    "nself",
+    "photos",
+    "albums",
+    "exif",
+    "tagging",
+    "faces",
+    "thumbnails",
+    "gallery"
+  ],
   "author": "nself",
   "license": "Source-Available",
   "dependencies": {
@@ -23,7 +32,8 @@
     "commander": "^11.1.0",
     "dotenv": "^16.3.1",
     "fastify": "^4.24.0",
-    "@fastify/cors": "^8.4.0"
+    "@fastify/cors": "^8.4.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

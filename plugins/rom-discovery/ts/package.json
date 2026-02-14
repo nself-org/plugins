@@ -24,7 +24,8 @@
     "commander": "^11.1.0",
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
