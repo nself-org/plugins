@@ -26,8 +26,8 @@ async function startServer() {
 
   const db = new Database(getDatabaseConfig());
 
-  // Run multi-app migration to add source_account_id columns if missing
-  await db.migrateMultiApp();
+  // Initialize schema (creates tables if missing, runs migrations if they exist)
+  await db.initializeSchema();
 
   const fastify = Fastify({
     logger: {

@@ -75,10 +75,265 @@ export class Database {
   }
 
   // =========================================================================
-  // Migration: add source_account_id to existing tables
+  // Schema Initialization
   // =========================================================================
 
-  async migrateMultiApp(): Promise<void> {
+  async initializeSchema(): Promise<void> {
+    logger.info('Checking schema...');
+
+    // Check if schema exists by looking for the jobs table
+    const schemaExists = await this.pool.query(
+      `SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'np_fileproc_jobs'
+      )`,
+    );
+
+    if (!schemaExists.rows[0].exists) {
+      logger.info('Creating initial schema...');
+      await this.createInitialSchema();
+    } else {
+      logger.info('Schema exists, running migrations...');
+      await this.migrateMultiApp();
+    }
+  }
+
+  private async createInitialSchema(): Promise<void> {
+    const schema = `
+      -- Enable UUID extension
+      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+      -- =====================================================================
+      -- File Processing Jobs
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_fileproc_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        file_id VARCHAR(255) NOT NULL,
+        file_path TEXT NOT NULL,
+        file_name VARCHAR(500) NOT NULL,
+        file_size BIGINT NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        storage_provider VARCHAR(50) NOT NULL,
+        storage_bucket VARCHAR(255) NOT NULL,
+
+        -- Processing status
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        priority INTEGER DEFAULT 5,
+        attempts INTEGER DEFAULT 0,
+        max_attempts INTEGER DEFAULT 3,
+
+        -- Processing operations
+        operations JSONB NOT NULL DEFAULT '[]',
+
+        -- Results
+        thumbnails JSONB DEFAULT '[]',
+        metadata JSONB DEFAULT '{}',
+        scan_result JSONB,
+        optimization_result JSONB,
+
+        -- Error tracking
+        error_message TEXT,
+        error_stack TEXT,
+        last_error_at TIMESTAMPTZ,
+
+        -- Timing
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        duration_ms INTEGER,
+
+        -- Queue metadata
+        queue_name VARCHAR(100) DEFAULT 'default',
+        scheduled_for TIMESTAMPTZ,
+        webhook_url TEXT,
+        webhook_secret VARCHAR(255),
+        callback_data JSONB,
+
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_account ON np_fileproc_jobs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_file_id ON np_fileproc_jobs(file_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_status ON np_fileproc_jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_priority ON np_fileproc_jobs(priority DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_created ON np_fileproc_jobs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_queue ON np_fileproc_jobs(queue_name, status);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_jobs_scheduled ON np_fileproc_jobs(scheduled_for) WHERE status = 'pending';
+
+      -- =====================================================================
+      -- File Thumbnails
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_fileproc_thumbnails (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        job_id UUID REFERENCES np_fileproc_jobs(id) ON DELETE CASCADE,
+        file_id VARCHAR(255) NOT NULL,
+
+        -- Thumbnail details
+        thumbnail_path TEXT NOT NULL,
+        thumbnail_url TEXT,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        size_bytes BIGINT,
+        format VARCHAR(20) NOT NULL,
+
+        -- Processing details
+        source_width INTEGER,
+        source_height INTEGER,
+        quality INTEGER,
+        optimization_applied BOOLEAN DEFAULT FALSE,
+
+        -- Metadata
+        generation_time_ms INTEGER,
+        storage_provider VARCHAR(50) NOT NULL,
+        storage_bucket VARCHAR(255) NOT NULL,
+
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_account ON np_fileproc_thumbnails(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_job_id ON np_fileproc_thumbnails(job_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_file_id ON np_fileproc_thumbnails(file_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_dimensions ON np_fileproc_thumbnails(width, height);
+
+      -- =====================================================================
+      -- File Virus Scans
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_fileproc_scans (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        job_id UUID REFERENCES np_fileproc_jobs(id) ON DELETE CASCADE,
+        file_id VARCHAR(255) NOT NULL,
+
+        -- Scan details
+        scanner VARCHAR(50) NOT NULL DEFAULT 'clamav',
+        scan_status VARCHAR(20) NOT NULL,
+
+        -- Results
+        is_clean BOOLEAN,
+        threats_found INTEGER DEFAULT 0,
+        threat_names TEXT[],
+        signature_version VARCHAR(100),
+
+        -- Scan metadata
+        scan_duration_ms INTEGER,
+        file_size_scanned BIGINT,
+
+        -- Error handling
+        error_message TEXT,
+
+        -- Timestamps
+        scanned_at TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_account ON np_fileproc_scans(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_job_id ON np_fileproc_scans(job_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_file_id ON np_fileproc_scans(file_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_status ON np_fileproc_scans(scan_status);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_infected ON np_fileproc_scans(is_clean) WHERE is_clean = FALSE;
+
+      -- =====================================================================
+      -- File Metadata
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS np_fileproc_metadata (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        job_id UUID REFERENCES np_fileproc_jobs(id) ON DELETE CASCADE,
+        file_id VARCHAR(255) NOT NULL UNIQUE,
+
+        -- Basic file info
+        mime_type VARCHAR(100) NOT NULL,
+        file_extension VARCHAR(50),
+        file_size BIGINT NOT NULL,
+
+        -- Image metadata
+        width INTEGER,
+        height INTEGER,
+        aspect_ratio DECIMAL(10,4),
+        color_space VARCHAR(50),
+        bit_depth INTEGER,
+        has_alpha BOOLEAN,
+
+        -- EXIF data (before stripping)
+        exif_data JSONB,
+        camera_make VARCHAR(100),
+        camera_model VARCHAR(100),
+        lens_model VARCHAR(100),
+        focal_length VARCHAR(50),
+        aperture VARCHAR(50),
+        shutter_speed VARCHAR(50),
+        iso INTEGER,
+        flash VARCHAR(50),
+        orientation INTEGER,
+
+        -- Location data (if present)
+        gps_latitude DECIMAL(10,6),
+        gps_longitude DECIMAL(10,6),
+        gps_altitude DECIMAL(10,2),
+        location_name TEXT,
+
+        -- Date/time
+        date_taken TIMESTAMPTZ,
+        date_modified TIMESTAMPTZ,
+
+        -- Video metadata
+        duration_seconds DECIMAL(10,2),
+        video_codec VARCHAR(50),
+        audio_codec VARCHAR(50),
+        frame_rate DECIMAL(10,2),
+        bitrate BIGINT,
+
+        -- Audio metadata
+        audio_channels INTEGER,
+        sample_rate INTEGER,
+
+        -- Document metadata
+        page_count INTEGER,
+        word_count INTEGER,
+        author VARCHAR(255),
+        title VARCHAR(500),
+        subject VARCHAR(500),
+
+        -- Hashes for duplicate detection
+        md5_hash VARCHAR(32),
+        sha256_hash VARCHAR(64),
+        perceptual_hash VARCHAR(64),
+
+        -- Processing info
+        exif_stripped BOOLEAN DEFAULT FALSE,
+        metadata_extracted_at TIMESTAMPTZ,
+        extraction_duration_ms INTEGER,
+
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_account ON np_fileproc_metadata(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_file_id ON np_fileproc_metadata(file_id);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_mime_type ON np_fileproc_metadata(mime_type);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_dimensions ON np_fileproc_metadata(width, height);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_md5 ON np_fileproc_metadata(md5_hash);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_sha256 ON np_fileproc_metadata(sha256_hash);
+      CREATE INDEX IF NOT EXISTS idx_np_fileproc_metadata_date_taken ON np_fileproc_metadata(date_taken);
+    `;
+
+    await this.pool.query(schema);
+    logger.info('Initial schema created successfully');
+  }
+
+  // =========================================================================
+  // Migration: add source_account_id to existing tables (for old installs)
+  // =========================================================================
+
+  private async migrateMultiApp(): Promise<void> {
     for (const table of ALL_TABLES) {
       const colCheck = await this.pool.query(
         `SELECT 1 FROM information_schema.columns
