@@ -76,5 +76,7 @@
       "temp",
       "logs"
     ]
-  }
+  },
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/photos",
+  "repository": "https://github.com/acamarata/nself-plugins"
 }

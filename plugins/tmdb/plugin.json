@@ -80,5 +80,7 @@
       "logs",
       "cache"
     ]
-  }
+  },
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/tmdb",
+  "repository": "https://github.com/acamarata/nself-plugins"
 }
