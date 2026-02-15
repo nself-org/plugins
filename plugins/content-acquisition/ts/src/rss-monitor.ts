@@ -11,6 +11,7 @@ import axios from 'axios';
 import cron from 'node-cron';
 import { createLogger } from '@nself/plugin-utils';
 import { ContentAcquisitionDatabase } from './database.js';
+import { ContentMatcher } from './matcher.js';
 import type { PipelineOrchestrator } from './pipeline.js';
 import type { RSSFeed, Subscription } from './types.js';
 
@@ -37,12 +38,14 @@ export class RSSFeedMonitor {
   private database: ContentAcquisitionDatabase;
   private torrentManagerUrl: string;
   private pipeline: PipelineOrchestrator | null;
+  private matcher: ContentMatcher;
 
   constructor(database: ContentAcquisitionDatabase, torrentManagerUrl: string, pipeline?: PipelineOrchestrator) {
     this.database = database;
     this.torrentManagerUrl = torrentManagerUrl;
     this.pipeline = pipeline ?? null;
     this.parser = new Parser();
+    this.matcher = new ContentMatcher();
   }
 
   /**
@@ -247,15 +250,24 @@ export class RSSFeedMonitor {
    * Parse a torrent-style title into structured components.
    * Extracts: show/movie name, season, episode, and quality.
    */
-  private parseTitle(title: string): { title: string; season?: number; episode?: number; quality?: string } {
+  private parseTitle(title: string): { title: string; season?: number; episode?: number; quality?: string; year?: number } {
     const seasonMatch = title.match(/S(\d{2})E(\d{2})/i);
-    const qualityMatch = title.match(/\b(1080p|720p|2160p|480p)\b/i);
+
+    // Use ContentMatcher for better quality detection (includes HDR, Dolby Vision, 4K, etc.)
+    const qualities = this.matcher.extractQuality(title);
+    const year = this.matcher.extractYear(title);
+
+    // Normalize title using ContentMatcher
+    const normalizedTitle = this.matcher.normalizeTitle(
+      title.split(/\b(S\d{2}|1080p|720p|2160p|4K|HDR)\b/i)[0].trim()
+    );
 
     return {
-      title: title.split(/\b(S\d{2}|1080p|720p|2160p)\b/i)[0].trim(),
+      title: normalizedTitle,
       season: seasonMatch ? parseInt(seasonMatch[1]) : undefined,
       episode: seasonMatch ? parseInt(seasonMatch[2]) : undefined,
-      quality: qualityMatch ? qualityMatch[1] : undefined,
+      quality: qualities.length > 0 ? qualities.join(',') : undefined,
+      year: year ?? undefined,
     };
   }
 }
