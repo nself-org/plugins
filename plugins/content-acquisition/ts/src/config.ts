@@ -39,7 +39,7 @@ export function loadConfig(): ContentAcquisitionConfig {
     vpn_manager_url: vpnManagerUrl,
     subtitle_manager_url: process.env.SUBTITLE_MANAGER_URL || 'http://plugin-subtitle-manager:3204',
     media_processing_url: process.env.MEDIA_PROCESSING_URL || 'http://plugin-media-processing:3019',
-    ntv_backend_url: process.env.NTV_BACKEND_URL || 'http://localhost:4000',
+    ntv_backend_url: process.env.NTV_BACKEND_URL || 'http://auth:4000',
     redis_host: process.env.REDIS_HOST || 'redis',
     redis_port: parseInt(process.env.REDIS_PORT || '6379', 10),
     log_level: process.env.LOG_LEVEL || 'info',

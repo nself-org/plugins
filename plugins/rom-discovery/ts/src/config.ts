@@ -69,8 +69,8 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     maxConcurrentDownloads: parseInt(process.env.ROM_DISCOVERY_MAX_CONCURRENT_DOWNLOADS ?? '3', 10),
     maxDownloadSizeMb: parseInt(process.env.ROM_DISCOVERY_MAX_DOWNLOAD_SIZE_MB ?? '2048', 10),
 
-    // Integration
-    retroGamingUrl: process.env.ROM_DISCOVERY_RETRO_GAMING_URL ?? 'http://localhost:3033',
+    // Integration (Docker service names)
+    retroGamingUrl: process.env.ROM_DISCOVERY_RETRO_GAMING_URL ?? 'http://plugin-retro-gaming:3033',
     cdnUrl: process.env.ROM_DISCOVERY_CDN_URL ?? '',
 
     // Logging

@@ -22,7 +22,7 @@ export interface Config {
   storageUrl: string;
   fileProcessingUrl: string;
   sportsUrl: string;
-  mediaMetadataUrl: string;
+  gameMetadataUrl: string;
   devicesUrl: string;
   defaultLeadTimeMinutes: number;
   defaultTrailTimeMinutes: number;
@@ -91,12 +91,12 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     databasePassword: dbFromUrl?.password ?? process.env.POSTGRES_PASSWORD ?? '',
     databaseSsl: dbFromUrl?.ssl ?? process.env.POSTGRES_SSL === 'true',
 
-    // Recording settings
-    storageUrl: process.env.REC_STORAGE_URL ?? 'http://localhost:3301',
-    fileProcessingUrl: process.env.REC_FILE_PROCESSING_URL ?? 'http://localhost:3104',
-    sportsUrl: process.env.REC_SPORTS_URL ?? 'http://localhost:3201',
-    mediaMetadataUrl: process.env.REC_MEDIA_METADATA_URL ?? 'http://localhost:3202',
-    devicesUrl: process.env.REC_DEVICES_URL ?? 'http://localhost:3603',
+    // Recording settings (Docker service names for plugin-to-plugin communication)
+    storageUrl: process.env.REC_STORAGE_URL ?? 'http://plugin-object-storage:3301',
+    fileProcessingUrl: process.env.REC_FILE_PROCESSING_URL ?? 'http://plugin-file-processing:3104',
+    sportsUrl: process.env.REC_SPORTS_URL ?? 'http://plugin-sports:3035',
+    gameMetadataUrl: process.env.REC_GAME_METADATA_URL ?? 'http://plugin-game-metadata:3211',
+    devicesUrl: process.env.REC_DEVICES_URL ?? 'http://plugin-devices:3603',
     defaultLeadTimeMinutes: parseInt(process.env.REC_DEFAULT_LEAD_TIME_MINUTES ?? '5', 10),
     defaultTrailTimeMinutes: parseInt(process.env.REC_DEFAULT_TRAIL_TIME_MINUTES ?? '15', 10),
     encodeProfiles: (process.env.REC_ENCODE_PROFILES ?? '720p,1080p').split(','),
