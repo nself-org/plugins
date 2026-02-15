@@ -1,7 +1,7 @@
 {
   "name": "meetings",
   "version": "1.0.0",
-  "description": "Calendar integration and meeting management with room booking, Google/Outlook sync, recurring meetings, and availability tracking",
+  "description": "Calendar integration and meeting management with room booking, recurring meetings, and availability tracking. External calendar sync (Google/Outlook) planned for future release.",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/meetings",

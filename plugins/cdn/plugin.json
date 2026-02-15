@@ -1,7 +1,7 @@
 {
   "name": "cdn",
   "version": "1.0.0",
-  "description": "CDN management and integration plugin - cache purging, signed URLs, analytics",
+  "description": "CDN management and integration plugin - cache purging, signed URLs. Planned: analytics sync from Cloudflare/BunnyCDN",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/cdn",

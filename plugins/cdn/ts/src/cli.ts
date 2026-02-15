@@ -17,7 +17,7 @@ const program = new Command();
 
 program
   .name('nself-cdn')
-  .description('CDN management and integration plugin for nself')
+  .description('CDN management plugin for nself - cache purging, signed URLs (analytics sync planned)')
   .version('1.0.0');
 
 // Init command
@@ -285,7 +285,7 @@ program
 // Analytics command
 program
   .command('analytics')
-  .description('View and sync CDN analytics')
+  .description('View stored CDN analytics (sync from providers not yet implemented)')
   .argument('[action]', 'Action: view, sync', 'view')
   .option('--zone <zoneId>', 'Zone ID')
   .option('--days <days>', 'Number of days', '30')

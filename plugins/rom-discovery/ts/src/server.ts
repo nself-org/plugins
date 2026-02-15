@@ -128,45 +128,57 @@ export async function createServer(config?: Partial<Config>) {
   // ROM Search Endpoints
   // =========================================================================
 
-  app.get<{ Querystring: SearchRomsQuery }>('/api/roms/search', async (request) => {
-    const { roms, total } = await scopedDb(request).searchRoms({
-      query: request.query.q,
-      platform: request.query.platform,
-      region: request.query.region,
-      quality_min: request.query.quality_min ? parseInt(request.query.quality_min, 10) : undefined,
-      popularity_min: request.query.popularity_min ? parseInt(request.query.popularity_min, 10) : undefined,
-      verified_only: request.query.verified_only === 'true',
-      homebrew_only: request.query.homebrew_only === 'true',
-      community_only: request.query.community_only === 'true',
-      show_hacks: request.query.show_hacks === 'true',
-      show_translations: request.query.show_translations === 'true',
-      genre: request.query.genre,
-      sort: request.query.sort as 'popularity' | 'quality' | 'title' | 'year' | undefined,
-      order: request.query.order as 'asc' | 'desc' | undefined,
-      limit: request.query.limit ? parseInt(request.query.limit, 10) : undefined,
-      offset: request.query.offset ? parseInt(request.query.offset, 10) : undefined,
-    });
+  app.get<{ Querystring: SearchRomsQuery }>('/api/roms/search', async (request, reply) => {
+    try {
+      const { roms, total } = await scopedDb(request).searchRoms({
+        query: request.query.q,
+        platform: request.query.platform,
+        region: request.query.region,
+        quality_min: request.query.quality_min ? parseInt(request.query.quality_min, 10) : undefined,
+        popularity_min: request.query.popularity_min ? parseInt(request.query.popularity_min, 10) : undefined,
+        verified_only: request.query.verified_only === 'true',
+        homebrew_only: request.query.homebrew_only === 'true',
+        community_only: request.query.community_only === 'true',
+        show_hacks: request.query.show_hacks === 'true',
+        show_translations: request.query.show_translations === 'true',
+        genre: request.query.genre,
+        sort: request.query.sort as 'popularity' | 'quality' | 'title' | 'year' | undefined,
+        order: request.query.order as 'asc' | 'desc' | undefined,
+        limit: request.query.limit ? parseInt(request.query.limit, 10) : undefined,
+        offset: request.query.offset ? parseInt(request.query.offset, 10) : undefined,
+      });
 
-    return {
-      roms,
-      total,
-      limit: request.query.limit ? parseInt(request.query.limit, 10) : 50,
-      offset: request.query.offset ? parseInt(request.query.offset, 10) : 0,
-    };
+      return {
+        roms,
+        total,
+        limit: request.query.limit ? parseInt(request.query.limit, 10) : 50,
+        offset: request.query.offset ? parseInt(request.query.offset, 10) : 0,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /api/roms/search error', { error: message });
+      return reply.code(500).send({ error: message });
+    }
   });
 
   app.get<{ Params: { id: string } }>('/api/roms/:id', async (request, reply) => {
-    const rom = await scopedDb(request).getRomById(request.params.id);
-    if (!rom) {
-      return reply.status(404).send({ error: 'ROM not found' });
+    try {
+      const rom = await scopedDb(request).getRomById(request.params.id);
+      if (!rom) {
+        return reply.status(404).send({ error: 'ROM not found' });
+      }
+
+      // Increment search count for popularity tracking
+      await scopedDb(request).incrementSearchCount(rom.id).catch(() => {
+        // Non-critical, don't fail the request
+      });
+
+      return rom;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /api/roms/:id error', { error: message });
+      return reply.code(500).send({ error: message });
     }
-
-    // Increment search count for popularity tracking
-    await scopedDb(request).incrementSearchCount(rom.id).catch(() => {
-      // Non-critical, don't fail the request
-    });
-
-    return rom;
   });
 
   app.get('/api/roms/platforms', async (request) => {

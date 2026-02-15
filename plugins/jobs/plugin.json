@@ -1,7 +1,7 @@
 {
   "name": "jobs",
   "version": "1.0.0",
-  "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard",
+  "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard. HTTP requests and file cleanup processors are implemented; email/backup/Hasura actions require external integrations.",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/jobs",

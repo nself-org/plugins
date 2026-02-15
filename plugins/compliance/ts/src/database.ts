@@ -876,7 +876,7 @@ export class ComplianceDatabase {
           case 'notify': {
             // Just log the notification - no data changes
             // In production, this would trigger actual notifications
-            console.log(`Retention policy ${policyId} triggered notification - no data changes`);
+            logger.debug('Retention policy triggered notification', { policyId, action: 'notify' });
             break;
           }
 

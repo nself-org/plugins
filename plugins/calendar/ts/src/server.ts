@@ -154,16 +154,28 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.get<{ Querystring: { owner_id?: string } }>('/v1/calendars', async (request) => {
-    const calendars = await scopedDb(request).listCalendars(request.query.owner_id);
+    try {
+          const calendars = await scopedDb(request).listCalendars(request.query.owner_id);
     return { calendars, count: calendars.length };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /v1/calendars error', { error: message });
+      throw error;
+    }
   });
 
   app.get<{ Params: { id: string } }>('/v1/calendars/:id', async (request, reply) => {
-    const calendar = await scopedDb(request).getCalendar(request.params.id);
+    try {
+          const calendar = await scopedDb(request).getCalendar(request.params.id);
     if (!calendar) {
       return reply.status(404).send({ error: 'Calendar not found' });
     }
     return calendar;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /v1/calendars/:id error', { error: message });
+      return reply.code(500).send({ error: message });
+    }
   });
 
   app.put<{ Params: { id: string }; Body: UpdateCalendarRequest }>('/v1/calendars/:id', async (request, reply) => {

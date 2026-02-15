@@ -93,7 +93,7 @@ export function getProviderEndpoint(provider: StorageProvider, customEndpoint?: 
     case 'b2':
       throw new Error('Backblaze B2 requires explicit endpoint from your account');
     case 'azure':
-      throw new Error('Azure Blob Storage not yet implemented');
+      throw new Error('Azure Blob Storage is planned for future release. Currently supported: s3, minio, r2, gcs, b2, local. For Azure now, use S3-compatible API with custom endpoint.');
     case 'local':
       return undefined;
     default:

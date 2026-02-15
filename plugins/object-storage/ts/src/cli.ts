@@ -444,12 +444,17 @@ program
     }
   });
 
-// Lifecycle command (placeholder)
+// Lifecycle command (planned feature)
 program
   .command('lifecycle')
-  .description('Manage lifecycle rules (not yet implemented)')
+  .description('Manage lifecycle rules (planned feature)')
   .action(async () => {
-    console.log('Lifecycle management is not yet implemented.');
+    console.log('Lifecycle management is planned for a future release.');
+    console.log('Use provider-specific tools for now:');
+    console.log('  - S3: aws s3api put-bucket-lifecycle-configuration');
+    console.log('  - MinIO: mc ilm add');
+    console.log('  - R2: Cloudflare dashboard > R2 > bucket settings');
+    console.log('  - GCS: gsutil lifecycle set lifecycle.json gs://bucket');
     process.exit(0);
   });
 

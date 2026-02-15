@@ -636,7 +636,7 @@ export class MediaProcessor {
       // const response = await s3.send(command);
       // await pipeline(response.Body, fs.createWriteStream(tempPath));
       // Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION environment variables
-      throw new Error('S3 input type not yet implemented - requires AWS SDK integration');
+      throw new Error('S3 input type requires AWS SDK integration (planned feature). Currently supported: url, local. See inline comments for integration requirements.');
     }
 
     throw new Error(`Unknown input type: ${job.input_type}`);

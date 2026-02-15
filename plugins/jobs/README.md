@@ -9,14 +9,67 @@ BullMQ-based background job queue with priorities, scheduling, retry logic, and 
 - **Retry Logic**: Configurable exponential backoff
 - **Cron Scheduling**: Recurring jobs with cron expressions
 - **BullBoard Dashboard**: Web UI for monitoring jobs
-- **Pre-built Job Types**:
-  - `send-email` - Email sending
-  - `http-request` - HTTP requests with retry
-  - `database-backup` - PostgreSQL backups
-  - `file-cleanup` - Clean old jobs
-  - `custom` - Custom jobs via Hasura Actions
 - **Full Persistence**: All jobs tracked in PostgreSQL
 - **Telemetry**: Job statistics and performance metrics
+
+## Job Processors
+
+### ✅ Fully Implemented
+- `http-request` - HTTP requests with retry logic (uses native fetch)
+- `file-cleanup` - Clean old completed/failed jobs from database
+
+### 🔄 Stubs (Require External Integration)
+- `send-email` - Email sending (requires SMTP/SendGrid/SES integration)
+- `database-backup` - PostgreSQL backups (requires pg_dump binary and credentials)
+- `custom` - Hasura Actions integration (requires GraphQL endpoint configuration)
+
+See "Job Types" section below for integration instructions.
+
+## Current Features
+
+### ✅ Job Queue Infrastructure
+- BullMQ-based job queue with Redis
+- Multiple priority queues (default, high-priority, low-priority)
+- Configurable retry logic with exponential backoff
+- Cron-based scheduled/recurring jobs
+- BullBoard dashboard for monitoring
+- Full persistence in PostgreSQL
+
+### ✅ Implemented Job Processors
+- **HTTP Request** - Make HTTP/REST API calls with retry logic
+- **File Cleanup** - Clean old completed/failed jobs from database
+
+### ✅ Database Schema
+- All tables created and ready (jobs, job_results, job_failures, job_schedules)
+- Database views for monitoring (queue_stats, job_type_stats, recent_failures)
+- Cleanup functions for maintenance
+
+## Planned Job Processors
+
+The following job processors have placeholder implementations but require external service integration:
+
+### 🔄 Email Sending (Stub)
+**Status:** Requires SMTP service or email API integration (SendGrid, AWS SES, Mailgun, Nodemailer)
+
+Jobs are queued and tracked, but emails are not sent. Integration point is in `ts/src/processors.ts` (lines 27-49).
+
+**Endpoints:** Jobs accept email payloads but only log them.
+
+### 🔄 Database Backup (Stub)
+**Status:** Requires `pg_dump` binary and PostgreSQL credentials
+
+Jobs are queued and tracked, but backups are not created. Integration point is in `ts/src/processors.ts` (lines 101-130).
+
+**Note:** For production database backups, use the dedicated **backup plugin** instead.
+
+### 🔄 Hasura Actions (Stub)
+**Status:** Requires Hasura GraphQL endpoint configuration
+
+Custom jobs can be queued, but Hasura actions are not invoked. Integration point is in `ts/src/processors.ts` (lines 173-192).
+
+**Requires:**
+- `HASURA_GRAPHQL_ENDPOINT` environment variable
+- `HASURA_ADMIN_SECRET` environment variable
 
 ## Installation
 
@@ -301,7 +354,7 @@ nself plugin jobs schedule delete <name>
 
 ## Job Types
 
-### 1. Send Email
+### 1. Send Email (⚠️ Stub - Requires Integration)
 
 ```typescript
 type: 'send-email'
@@ -321,9 +374,17 @@ payload: {
 }
 ```
 
-**Note**: Integrate with your email service (SendGrid, AWS SES, etc.) in `src/processors.ts`
+**Status**: Stub implementation that logs the job but does not send emails.
 
-### 2. HTTP Request
+**Integration Required**: Replace stub in `ts/src/processors.ts` (lines 27-49) with your email service:
+- **SendGrid**: `npm install @sendgrid/mail`
+- **AWS SES**: `npm install @aws-sdk/client-ses`
+- **Mailgun**: `npm install mailgun-js`
+- **Nodemailer SMTP**: `npm install nodemailer`
+
+See code comments in `processSendEmail()` for integration point.
+
+### 2. HTTP Request (✅ Implemented)
 
 ```typescript
 type: 'http-request'
@@ -337,7 +398,9 @@ payload: {
 }
 ```
 
-### 3. Database Backup
+**Status**: Fully implemented using native `fetch()` API with timeout support and automatic retry logic.
+
+### 3. Database Backup (⚠️ Stub - Requires Integration)
 
 ```typescript
 type: 'database-backup'
@@ -350,20 +413,34 @@ payload: {
 }
 ```
 
-### 4. File Cleanup
+**Status**: Stub implementation that simulates backup but does not execute `pg_dump`.
+
+**Integration Required**: Replace stub in `ts/src/processors.ts` (lines 101-130) with actual backup logic:
+- Requires `pg_dump` binary in PATH
+- Requires database credentials (host, user, password)
+- Use `child_process.spawn()` to execute pg_dump
+- For production use, consider using the dedicated **backup plugin** instead
+
+See code comments in `processDatabaseBackup()` for integration point.
+
+### 4. File Cleanup (✅ Implemented)
 
 ```typescript
 type: 'file-cleanup'
 payload: {
-  target: 'completed_jobs' | 'failed_jobs' | 'old_files',
-  older_than_hours?: number,
-  older_than_days?: number,
-  path?: string,
-  pattern?: string
+  target: 'completed_jobs' | 'failed_jobs',
+  older_than_hours?: number,  // For completed_jobs
+  older_than_days?: number,   // For failed_jobs
 }
 ```
 
-### 5. Custom Jobs
+**Status**: Fully implemented. Calls database cleanup functions:
+- `cleanup_old_jobs(hours)` - Removes completed jobs older than N hours
+- `cleanup_old_failed_jobs(days)` - Removes failed jobs older than N days
+
+**Note**: File system cleanup (old_files target) is not implemented.
+
+### 5. Custom Jobs (⚠️ Stub - Requires Integration)
 
 ```typescript
 type: 'custom'
@@ -373,7 +450,15 @@ payload: {
 }
 ```
 
-Integrate with Hasura Actions for custom business logic.
+**Status**: Stub implementation that logs the action but does not call Hasura.
+
+**Integration Required**: Replace stub in `ts/src/processors.ts` (lines 173-192) with Hasura Actions integration:
+- Requires `HASURA_GRAPHQL_ENDPOINT` environment variable
+- Requires `HASURA_ADMIN_SECRET` environment variable
+- Make POST request to Hasura endpoint with action name and data
+- Use `graphql-request` or `fetch()` to call Hasura Actions
+
+See code comments in `processCustomJob()` for integration point.
 
 ## API Endpoints
 
@@ -664,6 +749,60 @@ Configure Redis maxmemory:
 maxmemory 2gb
 maxmemory-policy allkeys-lru
 ```
+
+## Implementation Roadmap
+
+### Phase 1: Current State ✅
+- Job queue infrastructure (BullMQ + Redis)
+- HTTP request processor
+- File cleanup processor
+- Database schema and views
+- BullBoard dashboard
+- CLI commands and API endpoints
+
+### Phase 2: Email Integration (Planned)
+**Estimated Effort:** 2-3 hours
+
+1. Choose email provider (SendGrid, AWS SES, Mailgun, or Nodemailer)
+2. Install provider SDK (`npm install @sendgrid/mail` or similar)
+3. Add environment variables (API keys, SMTP credentials)
+4. Replace stub in `ts/src/processors.ts` (lines 27-49)
+5. Test with real email sending
+
+### Phase 3: Database Backup Integration (Planned)
+**Estimated Effort:** 3-4 hours
+
+1. Verify `pg_dump` binary is installed and in PATH
+2. Add database connection credentials to environment
+3. Replace stub in `ts/src/processors.ts` (lines 101-130)
+4. Implement using `child_process.spawn('pg_dump', [...])`
+5. Add compression and encryption support
+6. Test with real database backup
+
+**Note:** For production use, the dedicated **backup plugin** is recommended instead.
+
+### Phase 4: Hasura Actions Integration (Planned)
+**Estimated Effort:** 2-3 hours
+
+1. Configure Hasura GraphQL endpoint and admin secret
+2. Add environment variables (`HASURA_GRAPHQL_ENDPOINT`, `HASURA_ADMIN_SECRET`)
+3. Replace stub in `ts/src/processors.ts` (lines 173-192)
+4. Implement using `graphql-request` or `fetch()`
+5. Test with real Hasura actions
+
+**Total Estimated Effort for Full Implementation:** 7-10 hours
+
+## Migration Guide
+
+When email, backup, or Hasura integrations are implemented:
+
+1. **No database migrations needed** - Schema is already complete
+2. **Add environment variables** - Provider API keys and endpoints
+3. **Install provider SDKs** - `npm install` in `ts/` directory
+4. **Update processor code** - Replace stubs in `ts/src/processors.ts`
+5. **Restart workers** - `nself plugin jobs worker` picks up new code
+
+No breaking changes expected - jobs will transparently upgrade from stub to working implementation.
 
 ## License
 

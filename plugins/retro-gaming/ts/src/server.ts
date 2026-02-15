@@ -100,27 +100,39 @@ export async function createServer(config?: Partial<RetroGamingConfig>) {
   // =========================================================================
 
   // List ROMs
-  app.get<{ Querystring: ListRomsQuery }>('/api/games/roms', async (request) => {
-    const roms = await scopedDb(request).listRoms({
-      platform: request.query.platform,
-      genre: request.query.genre,
-      favorite: request.query.favorite === 'true' ? true : request.query.favorite === 'false' ? false : undefined,
-      search: request.query.search,
-      sort: request.query.sort,
-      limit: request.query.limit ? parseInt(String(request.query.limit), 10) : 100,
-      offset: request.query.offset ? parseInt(String(request.query.offset), 10) : 0,
-    });
+  app.get<{ Querystring: ListRomsQuery }>('/api/games/roms', async (request, reply) => {
+    try {
+      const roms = await scopedDb(request).listRoms({
+        platform: request.query.platform,
+        genre: request.query.genre,
+        favorite: request.query.favorite === 'true' ? true : request.query.favorite === 'false' ? false : undefined,
+        search: request.query.search,
+        sort: request.query.sort,
+        limit: request.query.limit ? parseInt(String(request.query.limit), 10) : 100,
+        offset: request.query.offset ? parseInt(String(request.query.offset), 10) : 0,
+      });
 
-    return { roms, count: roms.length };
+      return { roms, count: roms.length };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /api/games/roms error', { error: message });
+      return reply.code(500).send({ error: message });
+    }
   });
 
   // Get ROM details
   app.get<{ Params: { id: string } }>('/api/games/roms/:id', async (request, reply) => {
-    const rom = await scopedDb(request).getRom(request.params.id);
-    if (!rom) {
-      return reply.status(404).send({ error: 'ROM not found' });
+    try {
+      const rom = await scopedDb(request).getRom(request.params.id);
+      if (!rom) {
+        return reply.status(404).send({ error: 'ROM not found' });
+      }
+      return rom;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /api/games/roms/:id error', { error: message });
+      return reply.code(500).send({ error: message });
     }
-    return rom;
   });
 
   // Create ROM entry
@@ -236,11 +248,17 @@ export async function createServer(config?: Partial<RetroGamingConfig>) {
 
   // Delete ROM
   app.delete<{ Params: { id: string } }>('/api/games/roms/:id', async (request, reply) => {
-    const deleted = await scopedDb(request).deleteRom(request.params.id);
-    if (!deleted) {
-      return reply.status(404).send({ error: 'ROM not found' });
+    try {
+      const deleted = await scopedDb(request).deleteRom(request.params.id);
+      if (!deleted) {
+        return reply.status(404).send({ error: 'ROM not found' });
+      }
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('DELETE /api/games/roms/:id error', { error: message });
+      return reply.code(500).send({ error: message });
     }
-    return { success: true };
   });
 
   // Scan/import ROMs

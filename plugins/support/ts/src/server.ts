@@ -125,9 +125,15 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.get<{ Params: { ticketId: string } }>('/api/support/tickets/:ticketId', async (request, reply) => {
-    const ticket = await scopedDb(request).getTicket(request.params.ticketId);
-    if (!ticket) return reply.status(404).send({ error: 'Ticket not found' });
-    return { success: true, ticket };
+    try {
+      const ticket = await scopedDb(request).getTicket(request.params.ticketId);
+      if (!ticket) return reply.status(404).send({ error: 'Ticket not found' });
+      return { success: true, ticket };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('GET /api/support/tickets/:ticketId error', { error: message });
+      return reply.code(500).send({ error: message });
+    }
   });
 
   app.get<{
