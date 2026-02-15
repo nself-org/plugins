@@ -1,7 +1,7 @@
 {
   "name": "file-processing",
   "version": "1.0.0",
-  "description": "File processing with thumbnails, optimization, and virus scanning for MinIO/S3/GCS/R2/B2/Azure",
+  "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/file-processing",
@@ -14,13 +14,11 @@
     "storage",
     "processing",
     "thumbnails",
-    "optimization",
-    "virus-scanning"
+    "optimization"
   ],
   "tables": [
     "np_fileproc_jobs",
     "np_fileproc_thumbnails",
-    "np_fileproc_scans",
     "np_fileproc_metadata"
   ],
   "actions": {
@@ -43,14 +41,11 @@
       "FILE_STORAGE_SECRET_KEY",
       "FILE_STORAGE_REGION",
       "FILE_THUMBNAIL_SIZES",
-      "FILE_ENABLE_VIRUS_SCAN",
       "FILE_ENABLE_OPTIMIZATION",
       "FILE_MAX_SIZE",
       "FILE_ALLOWED_TYPES",
       "FILE_STRIP_EXIF",
       "FILE_QUEUE_CONCURRENCY",
-      "CLAMAV_HOST",
-      "CLAMAV_PORT",
       "REDIS_URL",
       "PORT"
     ]

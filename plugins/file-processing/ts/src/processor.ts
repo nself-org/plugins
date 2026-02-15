@@ -77,9 +77,8 @@ export class FileProcessor {
             break;
 
           case 'scan':
-            if (this.config.enableVirusScan) {
-              results.scan = await this.scanFile(tempPath);
-            }
+            // Virus scanning removed - placeholder was giving false sense of security
+            // Implement real ClamAV integration if needed in future
             break;
         }
       }
@@ -270,22 +269,8 @@ export class FileProcessor {
     };
   }
 
-  /**
-   * Scan file for viruses (requires ClamAV)
-   */
-  private async scanFile(filePath: string): Promise<ScanResult> {
-    const startTime = Date.now();
-
-    // Placeholder - implement ClamAV integration
-    // For now, return clean result
-    return {
-      status: 'clean',
-      isClean: true,
-      threatsFound: 0,
-      threatNames: [],
-      scanDuration: Date.now() - startTime,
-    };
-  }
+  // Virus scanning feature removed - was placeholder giving false sense of security
+  // To implement: integrate ClamAV SDK with real scanning logic
 
   /**
    * Check if MIME type is an image

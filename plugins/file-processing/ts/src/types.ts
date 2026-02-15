@@ -6,9 +6,7 @@ export type StorageProvider = 'minio' | 's3' | 'gcs' | 'r2' | 'b2' | 'azure';
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
-export type ScanStatus = 'clean' | 'infected' | 'error' | 'timeout';
-
-export type ProcessingOperation = 'thumbnail' | 'optimize' | 'scan' | 'metadata';
+export type ProcessingOperation = 'thumbnail' | 'optimize' | 'metadata';
 
 // =============================================================================
 // Configuration
@@ -107,24 +105,6 @@ export interface FileThumbnail {
   updated_at: Date;
 }
 
-export interface FileScan {
-  id: string;
-  source_account_id: string;
-  job_id: string;
-  file_id: string;
-  scanner: string;
-  scan_status: ScanStatus;
-  is_clean?: boolean;
-  threats_found: number;
-  threat_names: string[];
-  signature_version?: string;
-  scan_duration_ms?: number;
-  file_size_scanned?: number;
-  error_message?: string;
-  scanned_at: Date;
-  created_at: Date;
-}
-
 export interface FileMetadata {
   id: string;
   source_account_id: string;
@@ -191,15 +171,6 @@ export interface ThumbnailResult {
   generationTime: number;
 }
 
-export interface ScanResult {
-  status: ScanStatus;
-  isClean: boolean;
-  threatsFound: number;
-  threatNames: string[];
-  signatureVersion?: string;
-  scanDuration: number;
-}
-
 export interface OptimizationResult {
   originalSize: number;
   optimizedSize: number;
@@ -220,7 +191,6 @@ export interface ProcessingResult {
   status: ProcessingStatus;
   thumbnails: ThumbnailResult[];
   metadata?: MetadataResult;
-  scan?: ScanResult;
   optimization?: OptimizationResult;
   error?: string;
   duration: number;

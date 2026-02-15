@@ -7,12 +7,10 @@ import { Pool } from 'pg';
 import type {
   ProcessingJob,
   FileThumbnail,
-  FileScan,
   FileMetadata,
   CreateJobRequest,
   ProcessingStatus,
   ThumbnailResult,
-  ScanResult,
   MetadataResult,
 } from './types.js';
 
@@ -21,7 +19,6 @@ const logger = createLogger('file-processing:database');
 // Tables that belong to this plugin
 const ALL_TABLES = [
   'np_fileproc_thumbnails',
-  'np_fileproc_scans',
   'np_fileproc_metadata',
   'np_fileproc_jobs',
 ] as const;
@@ -200,44 +197,6 @@ export class Database {
       CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_job_id ON np_fileproc_thumbnails(job_id);
       CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_file_id ON np_fileproc_thumbnails(file_id);
       CREATE INDEX IF NOT EXISTS idx_np_fileproc_thumbnails_dimensions ON np_fileproc_thumbnails(width, height);
-
-      -- =====================================================================
-      -- File Virus Scans
-      -- =====================================================================
-
-      CREATE TABLE IF NOT EXISTS np_fileproc_scans (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        job_id UUID REFERENCES np_fileproc_jobs(id) ON DELETE CASCADE,
-        file_id VARCHAR(255) NOT NULL,
-
-        -- Scan details
-        scanner VARCHAR(50) NOT NULL DEFAULT 'clamav',
-        scan_status VARCHAR(20) NOT NULL,
-
-        -- Results
-        is_clean BOOLEAN,
-        threats_found INTEGER DEFAULT 0,
-        threat_names TEXT[],
-        signature_version VARCHAR(100),
-
-        -- Scan metadata
-        scan_duration_ms INTEGER,
-        file_size_scanned BIGINT,
-
-        -- Error handling
-        error_message TEXT,
-
-        -- Timestamps
-        scanned_at TIMESTAMPTZ DEFAULT NOW(),
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_account ON np_fileproc_scans(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_job_id ON np_fileproc_scans(job_id);
-      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_file_id ON np_fileproc_scans(file_id);
-      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_status ON np_fileproc_scans(scan_status);
-      CREATE INDEX IF NOT EXISTS idx_np_fileproc_scans_infected ON np_fileproc_scans(is_clean) WHERE is_clean = FALSE;
 
       -- =====================================================================
       -- File Metadata
@@ -503,44 +462,6 @@ export class Database {
 
   // =========================================================================
   // Virus Scans
-  // =========================================================================
-
-  async saveScan(jobId: string, scan: ScanResult): Promise<string> {
-    const query = `
-      INSERT INTO np_fileproc_scans (
-        job_id, file_id, scan_status, is_clean,
-        threats_found, threat_names, signature_version,
-        scan_duration_ms, file_size_scanned,
-        source_account_id
-      )
-      SELECT
-        $1, j.file_id, $2, $3, $4, $5, $6, $7, j.file_size,
-        j.source_account_id
-      FROM np_fileproc_jobs j
-      WHERE j.id = $1 AND j.source_account_id = $8
-      RETURNING id
-    `;
-
-    const result = await this.pool.query(query, [
-      jobId,
-      scan.status,
-      scan.isClean,
-      scan.threatsFound,
-      scan.threatNames,
-      scan.signatureVersion,
-      scan.scanDuration,
-      this.sourceAccountId,
-    ]);
-
-    return result.rows[0].id;
-  }
-
-  async getScan(jobId: string): Promise<FileScan | null> {
-    const query = 'SELECT * FROM np_fileproc_scans WHERE job_id = $1 AND source_account_id = $2 ORDER BY scanned_at DESC LIMIT 1';
-    const result = await this.pool.query(query, [jobId, this.sourceAccountId]);
-    return result.rows[0] || null;
-  }
-
   // =========================================================================
   // Metadata
   // =========================================================================
