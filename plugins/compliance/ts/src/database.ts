@@ -750,6 +750,7 @@ export class ComplianceDatabase {
   async executeRetentionPolicy(policyId: string): Promise<RetentionExecutionRecord> {
     const startTime = Date.now();
 
+    // Create execution record
     const result = await this.query<Record<string, unknown>>(
       `INSERT INTO compliance_retention_executions (source_account_id, policy_id, status)
        VALUES ($1, $2, 'running') RETURNING *`,
@@ -757,15 +758,158 @@ export class ComplianceDatabase {
     );
 
     const execution = result.rows[0] as unknown as RetentionExecutionRecord;
-    const executionTimeMs = Date.now() - startTime;
+    let recordsDeleted = 0;
+    let recordsAnonymized = 0;
+    let recordsArchived = 0;
+    let status = 'completed';
+    let errorMessage: string | null = null;
 
-    // Note: Actual deletion logic would depend on the data_category and table_name
-    // This is a placeholder that records the execution
+    try {
+      // Fetch the retention policy
+      const policyResult = await this.query<Record<string, unknown>>(
+        'SELECT * FROM compliance_retention_policies WHERE source_account_id = $1 AND id = $2',
+        [this.sourceAccountId, policyId]
+      );
+
+      if (policyResult.rows.length === 0) {
+        throw new Error(`Retention policy ${policyId} not found`);
+      }
+
+      const policy = policyResult.rows[0] as unknown as {
+        retention_days: number;
+        retention_action: string;
+        table_name: string | null;
+        conditions: Record<string, unknown>;
+        is_enabled: boolean;
+      };
+
+      if (!policy.is_enabled) {
+        throw new Error(`Retention policy ${policyId} is disabled`);
+      }
+
+      // Calculate cutoff date (data older than this should be processed)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - policy.retention_days);
+      const cutoffTimestamp = cutoffDate.toISOString();
+
+      // If no table specified, skip (cannot process without target table)
+      if (!policy.table_name) {
+        throw new Error('Retention policy must specify a table_name for execution');
+      }
+
+      // Build WHERE clause from conditions
+      const conditionClauses: string[] = ['source_account_id = $1'];
+      const conditionValues: unknown[] = [this.sourceAccountId];
+      let paramIndex = 2;
+
+      // Add timestamp condition (assuming created_at column)
+      conditionClauses.push(`created_at < $${paramIndex}`);
+      conditionValues.push(cutoffTimestamp);
+      paramIndex++;
+
+      // Add custom conditions from policy.conditions if any
+      // Note: This is a basic implementation - production would need more sophisticated condition parsing
+      if (policy.conditions && Object.keys(policy.conditions).length > 0) {
+        for (const [key, value] of Object.entries(policy.conditions)) {
+          conditionClauses.push(`${key} = $${paramIndex}`);
+          conditionValues.push(value);
+          paramIndex++;
+        }
+      }
+
+      const whereClause = conditionClauses.join(' AND ');
+
+      // Execute retention action in a transaction
+      await this.execute('BEGIN');
+
+      try {
+        switch (policy.retention_action) {
+          case 'delete': {
+            // DELETE records matching criteria
+            const deleteResult = await this.query<Record<string, unknown>>(
+              `DELETE FROM ${policy.table_name} WHERE ${whereClause} RETURNING id`,
+              conditionValues
+            );
+            recordsDeleted = deleteResult.rows.length;
+            break;
+          }
+
+          case 'anonymize': {
+            // UPDATE records to anonymize PII
+            // This is a basic implementation - would need column mapping for full anonymization
+            const anonymizeResult = await this.query<Record<string, unknown>>(
+              `UPDATE ${policy.table_name}
+               SET
+                 email = 'anonymized-' || id || '@example.com',
+                 name = 'Anonymized User',
+                 phone = NULL,
+                 address = NULL,
+                 metadata = jsonb_set(metadata, '{anonymized}', 'true'::jsonb)
+               WHERE ${whereClause}
+               RETURNING id`,
+              conditionValues
+            );
+            recordsAnonymized = anonymizeResult.rows.length;
+            break;
+          }
+
+          case 'archive': {
+            // Move records to archive table (assumes archive table exists with same schema)
+            const archiveTableName = `${policy.table_name}_archive`;
+
+            // Insert into archive
+            await this.execute(
+              `INSERT INTO ${archiveTableName}
+               SELECT * FROM ${policy.table_name} WHERE ${whereClause}`,
+              conditionValues
+            );
+
+            // Delete from original table
+            const deleteResult = await this.query<Record<string, unknown>>(
+              `DELETE FROM ${policy.table_name} WHERE ${whereClause} RETURNING id`,
+              conditionValues
+            );
+            recordsArchived = deleteResult.rows.length;
+            break;
+          }
+
+          case 'notify': {
+            // Just log the notification - no data changes
+            // In production, this would trigger actual notifications
+            console.log(`Retention policy ${policyId} triggered notification - no data changes`);
+            break;
+          }
+
+          default:
+            throw new Error(`Unknown retention action: ${policy.retention_action}`);
+        }
+
+        await this.execute('COMMIT');
+      } catch (txError) {
+        await this.execute('ROLLBACK');
+        throw txError;
+      }
+
+    } catch (error) {
+      status = 'failed';
+      errorMessage = error instanceof Error ? error.message : String(error);
+    }
+
+    const executionTimeMs = Date.now() - startTime;
+    const recordsProcessed = recordsDeleted + recordsAnonymized + recordsArchived;
+
+    // Update execution record with results
     await this.execute(
       `UPDATE compliance_retention_executions SET
-        status = 'completed', execution_time_ms = $2, records_processed = 0
+        status = $2,
+        execution_time_ms = $3,
+        records_processed = $4,
+        records_deleted = $5,
+        records_anonymized = $6,
+        records_archived = $7,
+        error_message = $8
        WHERE id = $1`,
-      [execution.id, executionTimeMs]
+      [execution.id, status, executionTimeMs, recordsProcessed, recordsDeleted, recordsAnonymized, recordsArchived, errorMessage]
     );
 
     const updated = await this.query<Record<string, unknown>>(
