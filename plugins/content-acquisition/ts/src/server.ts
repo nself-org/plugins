@@ -8,10 +8,12 @@ import Parser from 'rss-parser';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext, loadSecurityConfig } from '@nself/plugin-utils';
 import { ContentAcquisitionDatabase } from './database.js';
 import { RSSFeedMonitor } from './rss-monitor.js';
+import { RSSMonitor } from './rss.js';
 import { PipelineOrchestrator } from './pipeline.js';
 import { DownloadStateMachine } from './state-machine.js';
 import { listQualityPresets } from './quality-profiles.js';
 import type { ContentAcquisitionConfig, PipelineTriggerRequest, DownloadState } from './types.js';
+import type { MatchCriteria } from './matcher.js';
 
 const logger = createLogger('content-acquisition:server');
 
@@ -199,6 +201,38 @@ const ruleTestBodySchema = {
   additionalProperties: false,
 };
 
+const rssPollBodySchema = {
+  type: 'object' as const,
+  required: ['url', 'criteria'],
+  properties: {
+    url: { type: 'string', format: 'uri' },
+    criteria: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          title: { type: 'string' },
+          year: { type: 'integer' },
+          quality: { type: 'array', items: { type: 'string' } },
+          category: { type: 'string' },
+        },
+      },
+    },
+    lastSeen: { type: 'string', format: 'date-time' },
+  },
+  additionalProperties: false,
+};
+
+const rssTestBodySchema = {
+  type: 'object' as const,
+  required: ['url'],
+  properties: {
+    url: { type: 'string', format: 'uri' },
+  },
+  additionalProperties: false,
+};
+
 // ============================================================================
 // Server
 // ============================================================================
@@ -209,6 +243,7 @@ export class ContentAcquisitionServer {
   private config: ContentAcquisitionConfig;
   private pipeline: PipelineOrchestrator;
   private stateMachine: DownloadStateMachine;
+  private rssMonitor: RSSMonitor;
 
   constructor(config: ContentAcquisitionConfig, database: ContentAcquisitionDatabase) {
     this.config = config;
@@ -216,6 +251,7 @@ export class ContentAcquisitionServer {
     this.fastify = Fastify({ logger: false });
     this.pipeline = new PipelineOrchestrator(database, config);
     this.stateMachine = new DownloadStateMachine(database.getPool());
+    this.rssMonitor = new RSSMonitor();
   }
 
   async initialize(): Promise<void> {
@@ -379,6 +415,62 @@ export class ContentAcquisitionServer {
         return reply.status(404).send({ error: 'Feed not found' });
       }
       return { deleted: true };
+    });
+
+    // -----------------------------------------------------------------------
+    // RSS Polling & Matching
+    // -----------------------------------------------------------------------
+
+    this.fastify.post('/api/rss/poll', {
+      schema: { body: rssPollBodySchema },
+    }, async (request: FastifyRequest<{ Body: { url: string; criteria: MatchCriteria[]; lastSeen?: string } }>, reply: FastifyReply) => {
+      const { url, criteria, lastSeen } = request.body;
+
+      try {
+        const lastSeenDate = lastSeen ? new Date(lastSeen) : undefined;
+        const matches = await this.rssMonitor.pollFeed(url, criteria, lastSeenDate);
+
+        return {
+          url,
+          itemCount: matches.length,
+          matches,
+          polledAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return reply.status(500).send({ error: `Failed to poll RSS feed: ${message}` });
+      }
+    });
+
+    this.fastify.post('/api/rss/test', {
+      schema: { body: rssTestBodySchema },
+    }, async (request: FastifyRequest<{ Body: { url: string } }>, reply: FastifyReply) => {
+      const { url } = request.body;
+
+      try {
+        const items = await this.rssMonitor.fetchFeed(url);
+
+        // Return sample of items
+        const sample = items.slice(0, 10).map(item => ({
+          title: item.title,
+          pubDate: item.pubDate,
+        }));
+
+        return {
+          url,
+          valid: true,
+          itemCount: items.length,
+          sample,
+          testedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return reply.status(422).send({
+          url,
+          valid: false,
+          error: `Failed to parse RSS feed: ${message}`,
+        });
+      }
     });
 
     // -----------------------------------------------------------------------

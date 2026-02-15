@@ -5,6 +5,7 @@
 
 import type { Job } from 'bullmq';
 import { createLogger } from '@nself/plugin-utils';
+import nodemailer from 'nodemailer';
 import type {
   SendEmailPayload,
   HttpRequestPayload,
@@ -22,30 +23,57 @@ const logger = createLogger('jobs:processors');
 
 /**
  * Send Email Processor
- * Placeholder - integrate with your email service (e.g., SendGrid, AWS SES)
+ * Sends emails via configured SMTP server using Nodemailer
  */
 export async function processSendEmail(job: Job<SendEmailPayload>): Promise<SendEmailResult> {
-  const { to, subject, body } = job.data;
+  const { to, subject, body, from, cc, bcc, attachments } = job.data;
 
   await job.updateProgress(10);
 
-  // NOTE: Email integration requires external SMTP service configuration
-  // Integration point: Replace this with your email provider (SendGrid, AWS SES, Mailgun, etc.)
-  // Example: await sendgridClient.send({ to, subject, html: body })
+  // Create transporter from environment variables
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || process.env.EMAIL_SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || process.env.EMAIL_SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true' || process.env.EMAIL_SMTP_SECURE === 'true', // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER || process.env.EMAIL_SMTP_USER,
+      pass: process.env.SMTP_PASSWORD || process.env.EMAIL_SMTP_PASSWORD,
+    },
+  });
+
+  await job.updateProgress(30);
+
   logger.info(`Sending email to ${to}: ${subject}`);
 
-  await job.updateProgress(50);
+  try {
+    const info = await transporter.sendMail({
+      from: from || process.env.SMTP_FROM || process.env.EMAIL_FROM || 'noreply@nself.org',
+      to: Array.isArray(to) ? to.join(', ') : to,
+      cc: cc ? (Array.isArray(cc) ? cc.join(', ') : cc) : undefined,
+      bcc: bcc ? (Array.isArray(bcc) ? bcc.join(', ') : bcc) : undefined,
+      subject,
+      html: body,
+      attachments: attachments?.map(att => ({
+        filename: att.filename,
+        content: att.content,
+        contentType: att.contentType,
+      })),
+    });
 
-  // Simulate async operation
-  await new Promise(resolve => setTimeout(resolve, 1000));
+    await job.updateProgress(100);
 
-  await job.updateProgress(100);
+    logger.info(`Email sent successfully: ${info.messageId}`);
 
-  return {
-    messageId: `msg_${Date.now()}`,
-    accepted: Array.isArray(to) ? to : [to],
-    rejected: [],
-  };
+    return {
+      messageId: info.messageId,
+      accepted: info.accepted as string[],
+      rejected: info.rejected as string[],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Email sending failed', { error: message });
+    throw new Error(`Email sending failed: ${message}`);
+  }
 }
 
 /**

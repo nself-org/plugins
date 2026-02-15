@@ -30,10 +30,13 @@
   "license": "Source-Available",
   "dependencies": {
     "@nself/plugin-utils": "file:../../../shared",
+    "@types/qrcode": "^1.5.6",
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0",
-    "pg": "^8.13.1"
+    "otplib": "^13.3.0",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

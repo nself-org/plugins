@@ -17,10 +17,10 @@ BullMQ-based background job queue with priorities, scheduling, retry logic, and 
 ### ✅ Fully Implemented
 - `http-request` - HTTP requests with retry logic (uses native fetch)
 - `file-cleanup` - Clean old completed/failed jobs from database
+- `send-email` - Email sending via SMTP (uses Nodemailer)
 
 ### 🔄 Stubs (Require External Integration)
-- `send-email` - Email sending (requires SMTP/SendGrid/SES integration)
-- `database-backup` - PostgreSQL backups (requires pg_dump binary and credentials)
+- `database-backup` - PostgreSQL backups (requires pg_dump binary and credentials - use backup plugin instead)
 - `custom` - Hasura Actions integration (requires GraphQL endpoint configuration)
 
 See "Job Types" section below for integration instructions.
@@ -38,6 +38,7 @@ See "Job Types" section below for integration instructions.
 ### ✅ Implemented Job Processors
 - **HTTP Request** - Make HTTP/REST API calls with retry logic
 - **File Cleanup** - Clean old completed/failed jobs from database
+- **Send Email** - Send emails via SMTP server (Nodemailer)
 
 ### ✅ Database Schema
 - All tables created and ready (jobs, job_results, job_failures, job_schedules)
@@ -48,12 +49,22 @@ See "Job Types" section below for integration instructions.
 
 The following job processors have placeholder implementations but require external service integration:
 
-### 🔄 Email Sending (Stub)
-**Status:** Requires SMTP service or email API integration (SendGrid, AWS SES, Mailgun, Nodemailer)
+### ✅ Email Sending (Implemented)
+**Status:** Fully implemented using Nodemailer with SMTP
 
-Jobs are queued and tracked, but emails are not sent. Integration point is in `ts/src/processors.ts` (lines 27-49).
+Emails are sent via configured SMTP server. Supports HTML content, attachments, CC/BCC.
 
-**Endpoints:** Jobs accept email payloads but only log them.
+**Required Configuration:**
+```bash
+SMTP_HOST=smtp.gmail.com           # SMTP server hostname
+SMTP_PORT=587                       # SMTP port (587 for TLS, 465 for SSL)
+SMTP_SECURE=false                   # true for port 465, false for other ports
+SMTP_USER=your-email@gmail.com      # SMTP username
+SMTP_PASSWORD=your-app-password     # SMTP password or app password
+SMTP_FROM=noreply@yourdomain.com    # Default from address
+```
+
+**Endpoints:** POST /api/jobs with type `send-email`
 
 ### 🔄 Database Backup (Stub)
 **Status:** Requires `pg_dump` binary and PostgreSQL credentials

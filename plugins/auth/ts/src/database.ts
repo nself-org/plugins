@@ -472,6 +472,17 @@ export class AuthDatabase {
     );
   }
 
+  async updateBackupCodes(userId: string, method: string, backupCodesEncrypted: string, remainingCount: number): Promise<void> {
+    await this.db.execute(
+      `UPDATE auth_mfa_enrollments
+       SET backup_codes_encrypted = $1,
+           backup_codes_remaining = $2,
+           last_used_at = NOW()
+       WHERE source_account_id = $3 AND user_id = $4 AND method = $5`,
+      [backupCodesEncrypted, remainingCount, this.currentAppId, userId, method]
+    );
+  }
+
   // =========================================================================
   // Device Code Methods
   // =========================================================================

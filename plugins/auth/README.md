@@ -21,6 +21,15 @@ Authentication plugin with sessions and login tracking.
 - Multi-tenant isolation support
 - Webhook event storage
 
+### ✅ TOTP 2FA
+- TOTP enrollment with QR codes
+- TOTP verification during enrollment
+- TOTP validation during login
+- Backup code generation (10 codes)
+- Backup code validation with auto-removal
+
+**Endpoints:** `/api/mfa/totp/enroll`, `/api/mfa/totp/verify`, `/api/mfa/totp/validate`, `/api/mfa/backup-code/validate`
+
 ## Planned Features
 
 The following features have database schema and API endpoints prepared, but return HTTP 501 (Not Implemented) until external dependencies are integrated:
@@ -46,17 +55,6 @@ Features:
 - Device management
 
 **Endpoints:** `/api/passkeys/register/start`, `/api/passkeys/register/finish`, `/api/passkeys/auth/start`, `/api/passkeys/auth/finish`
-
-### 🔄 TOTP 2FA (Planned)
-**Status:** Requires otplib or speakeasy library
-
-Features:
-- TOTP enrollment with QR codes
-- TOTP verification during login
-- Backup code generation
-- Recovery codes
-
-**Endpoints:** `/api/mfa/totp/enroll`, `/api/mfa/totp/verify`, `/api/mfa/totp/validate`, `/api/mfa/backup-codes/validate`
 
 ### 🔄 Magic Links (Planned)
 **Status:** Requires crypto module and notifications plugin integration
@@ -224,11 +222,12 @@ The plugin defines 15 webhook events (see `plugin.json`), but these will only fi
 - `auth.login.success` - Fires on successful login
 - `auth.login.failure` - Fires on failed login attempt
 - `auth.login.blocked` - Fires when login is blocked
+- `auth.mfa.enrolled` - Fires when MFA is enrolled
+- `auth.mfa.verified` - Fires when MFA enrollment is verified
 
 ### Planned Webhooks
 - OAuth events (linked, unlinked)
 - Passkey events (registered, used)
-- MFA events (enrolled, verified)
 - Magic link events (sent, used)
 - Device code events (initiated, authorized, denied, expired)
 
@@ -256,13 +255,13 @@ The plugin defines 15 webhook events (see `plugin.json`), but these will only fi
 - Implement authentication flow
 - Test with hardware keys and platform authenticators
 
-### Phase 4: TOTP 2FA (Planned)
-**Estimated Effort:** 4-6 hours
+### Phase 4: TOTP 2FA ✅
+**Status:** Implemented
 
-- Add otplib or speakeasy library
-- Generate QR codes for enrollment
-- Implement verification flow
-- Add backup code system
+- ✅ Added otplib library
+- ✅ QR code generation for enrollment
+- ✅ TOTP verification flow
+- ✅ Backup code system (10 codes with auto-removal)
 
 ### Phase 5: Magic Links (Planned)
 **Estimated Effort:** 3-4 hours
@@ -280,7 +279,7 @@ The plugin defines 15 webhook events (see `plugin.json`), but these will only fi
 - Add polling mechanism
 - Build authorization UI
 
-**Total Estimated Effort for Full Implementation:** 25-35 hours
+**Remaining Estimated Effort:** 21-30 hours (TOTP 2FA completed)
 
 ## Migration Guide
 

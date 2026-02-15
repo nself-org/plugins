@@ -6,6 +6,8 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createLogger } from '@nself/plugin-utils';
 import { AuthDatabase } from './database.js';
+import { TotpService } from './totp.js';
+import { encrypt, decrypt, encryptArray, decryptArray } from './crypto.js';
 import { AuthConfig, HealthCheckResponse, ReadyCheckResponse, LiveCheckResponse } from './types.js';
 
 const logger = createLogger('auth:server');
@@ -16,11 +18,13 @@ export class AuthServer {
   private db: AuthDatabase;
   private config: AuthConfig;
   private startTime: number;
+  private totpService: TotpService;
 
   constructor(db: AuthDatabase, config: AuthConfig) {
     this.db = db;
     this.config = config;
     this.startTime = Date.now();
+    this.totpService = new TotpService(config);
     this.app = Fastify({
       logger: false,
       trustProxy: true,
@@ -234,24 +238,121 @@ export class AuthServer {
   // TOTP 2FA Handlers (Stubs - requires otplib or speakeasy)
   // =========================================================================
 
-  private async handleTotpEnroll(request: FastifyRequest<{ Body: { userId: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Generate TOTP secret and QR code
-    reply.code(501).send({ error: 'TOTP enrollment not implemented - requires otplib or speakeasy library' });
+  private async handleTotpEnroll(request: FastifyRequest<{ Body: { userId: string; email?: string } }>, reply: FastifyReply): Promise<void> {
+    try {
+      const { userId, email } = request.body;
+      const enrollment = await this.totpService.generateSecret(userId, email);
+
+      // Encrypt secret and backup codes
+      const encryptionKey = this.config.security.encryptionKey;
+      const secretEncrypted = encrypt(enrollment.secret, encryptionKey);
+      const backupCodesEncrypted = encryptArray(enrollment.backupCodes, encryptionKey);
+
+      // Store in database
+      await this.db.insertMfaEnrollment({
+        user_id: userId,
+        method: 'totp',
+        secret_encrypted: secretEncrypted,
+        backup_codes_encrypted: backupCodesEncrypted,
+        backup_codes_remaining: enrollment.backupCodes.length,
+        verified: false,
+        algorithm: this.config.totp.algorithm.toUpperCase(),
+        digits: this.config.totp.digits,
+        period: this.config.totp.period,
+      });
+
+      reply.send({
+        secret: enrollment.secret,
+        qrCode: enrollment.qrCode,
+        backupCodes: enrollment.backupCodes,
+      });
+    } catch (error) {
+      logger.error('TOTP enrollment error', { error });
+      reply.code(500).send({ error: 'TOTP enrollment failed' });
+    }
   }
 
   private async handleTotpVerify(request: FastifyRequest<{ Body: { userId: string; code: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Verify TOTP code and complete enrollment
-    reply.code(501).send({ error: 'TOTP verification not implemented' });
+    try {
+      const { userId, code } = request.body;
+      const enrollment = await this.db.getMfaEnrollment(userId, 'totp');
+
+      if (!enrollment) {
+        reply.code(404).send({ error: 'TOTP not enrolled' });
+        return;
+      }
+
+      // Decrypt secret
+      const encryptionKey = this.config.security.encryptionKey;
+      const secret = decrypt(enrollment.secret_encrypted, encryptionKey);
+
+      const isValid = await this.totpService.verifyToken(secret, code);
+
+      if (isValid) {
+        await this.db.updateMfaVerified(userId, 'totp', true);
+        reply.send({ success: true, verified: true });
+      } else {
+        reply.code(400).send({ error: 'Invalid TOTP code' });
+      }
+    } catch (error) {
+      logger.error('TOTP verification error', { error });
+      reply.code(500).send({ error: 'TOTP verification failed' });
+    }
   }
 
   private async handleTotpValidate(request: FastifyRequest<{ Body: { userId: string; code: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Validate TOTP code during login
-    reply.code(501).send({ error: 'TOTP validation not implemented' });
+    try {
+      const { userId, code } = request.body;
+      const enrollment = await this.db.getMfaEnrollment(userId, 'totp');
+
+      if (!enrollment || !enrollment.verified) {
+        reply.code(404).send({ error: 'TOTP not configured' });
+        return;
+      }
+
+      // Decrypt secret
+      const encryptionKey = this.config.security.encryptionKey;
+      const secret = decrypt(enrollment.secret_encrypted, encryptionKey);
+
+      const isValid = await this.totpService.verifyToken(secret, code);
+      reply.send({ valid: isValid });
+    } catch (error) {
+      logger.error('TOTP validation error', { error });
+      reply.code(500).send({ error: 'TOTP validation failed' });
+    }
   }
 
   private async handleBackupCodeValidate(request: FastifyRequest<{ Body: { userId: string; code: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Validate backup code
-    reply.code(501).send({ error: 'Backup code validation not implemented' });
+    try {
+      const { userId, code } = request.body;
+      const enrollment = await this.db.getMfaEnrollment(userId, 'totp');
+
+      if (!enrollment || !enrollment.backup_codes_encrypted) {
+        reply.code(404).send({ error: 'MFA not enrolled' });
+        return;
+      }
+
+      // Decrypt backup codes
+      const encryptionKey = this.config.security.encryptionKey;
+      const backupCodes = decryptArray(enrollment.backup_codes_encrypted, encryptionKey);
+
+      const result = this.totpService.verifyBackupCode(code, backupCodes);
+
+      if (result.valid) {
+        // Re-encrypt remaining backup codes
+        const remainingEncrypted = encryptArray(result.remainingCodes, encryptionKey);
+
+        // Update database with new encrypted backup codes
+        await this.db.updateBackupCodes(userId, 'totp', remainingEncrypted, result.remainingCodes.length);
+
+        reply.send({ valid: true, remainingCodes: result.remainingCodes.length });
+      } else {
+        reply.send({ valid: false });
+      }
+    } catch (error) {
+      logger.error('Backup code validation error', { error });
+      reply.code(500).send({ error: 'Backup code validation failed' });
+    }
   }
 
   private async handleTotpDelete(request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply): Promise<void> {

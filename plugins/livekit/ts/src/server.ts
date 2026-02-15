@@ -220,7 +220,7 @@ export async function createServer(config?: Partial<Config>) {
         canPublishData: grants.canPublishData,
       });
 
-      const token = at.toJwt();
+      const token = await at.toJwt();
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
       const tokenRecord = await scopedDb(request).createToken(
