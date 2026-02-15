@@ -1386,7 +1386,10 @@
         "push",
         "sms",
         "templates",
-        "messaging"
+        "messaging",
+        "fcm",
+        "apns",
+        "mobile"
       ],
       "implementation": {
         "language": "typescript",
@@ -7067,7 +7070,7 @@
     "tmdb": {
       "name": "tmdb",
       "version": "1.0.0",
-      "description": "Media metadata enrichment from TMDB/IMDb with auto-matching and manual review queue",
+      "description": "Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support",
       "author": "nself",
       "license": "Source-Available",
       "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/tmdb",
@@ -7082,7 +7085,10 @@
         "tv-shows",
         "imdb",
         "media",
-        "matching"
+        "matching",
+        "tvdb",
+        "musicbrainz",
+        "enrichment"
       ],
       "implementation": {
         "language": "typescript",
