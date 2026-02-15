@@ -2,7 +2,7 @@
 
 Official plugin repository for [nself](https://github.com/acamarata/nself), the production-ready self-hosted backend infrastructure manager.
 
-**65 plugins** across **16 categories** — admin, authentication, automation, commerce, communication, compliance, content, data, development, infrastructure, integrations, media, monitoring, networking, sports, and streaming.
+**64 plugins** across **16 categories** — admin, authentication, automation, commerce, communication, compliance, content, data, development, infrastructure, integrations, media, monitoring, networking, sports, and streaming.
 
 Every plugin provides: PostgreSQL schema with `np_` namespaced tables, REST API, CLI tools, webhook handling, and multi-app isolation via `source_account_id`.
 
@@ -104,11 +104,10 @@ Plugin-specific variables are documented in each plugin's `plugin.json` and wiki
 | [social](plugins/social/) | 3502 | 0 | Universal social features plugin with posts, comments, reactions, follows, and bookmarks |
 | [support](plugins/support/) | 3111 | 0 | Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses, knowledge base, analytics |
 
-### Data (3 plugins)
+### Data (2 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [data-operations](plugins/data-operations/) | 3306 | 0 | Comprehensive data operations platform with GDPR-compliant export/deletion, bulk import/export, cross-platform migration, backup/restore, and data portability |
 | [documents](plugins/documents/) | 3106 | 0 | Document management and generation service with templates, versioning, and sharing |
 | [geolocation](plugins/geolocation/) | 3026 | 0 | Real-time location sharing, history tracking, geofencing, and proximity queries |
 

@@ -35,7 +35,7 @@ Command pages include action/subcommand syntax, argument shapes, and option flag
 
 ### Plugin Documentation
 
-See [[All Plugins|#all-plugins-65-total]] below for the complete catalog of 65 plugins organized across 16 categories.
+See [[All Plugins|#all-plugins-64-total]] below for the complete catalog of 64 plugins organized across 16 categories.
 
 **Popular Plugins:**
 - [[Stripe|plugins/Stripe]] - Payment processing and subscription management
@@ -100,7 +100,7 @@ Legacy `docs/` is retired. Public docs belong in `/.wiki` only.
 2. Commands in `COMMANDS.md` and `commands/*.md` must match action/CLI source files.
 3. Any drift between code and docs is treated as a defect.
 
-## All Plugins (65 Total)
+## All Plugins (64 Total)
 
 Organized across 16 categories: **Admin**, **Authentication**, **Automation**, **Commerce**, **Communication**, **Compliance**, **Content**, **Data**, **Development**, **Infrastructure**, **Integrations**, **Media**, **Monitoring**, **Networking**, **Sports**, **Streaming**
 
@@ -122,7 +122,6 @@ Organized across 16 categories: **Admin**, **Authentication**, **Automation**, *
 | [compliance](plugins/Compliance) | 3211 | compliance | Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting |
 | [content-acquisition](plugins/Content-Acquisition) | 3202 | media | Automated content acquisition with RSS monitoring, release calendar, and download rules engine |
 | [content-progress](plugins/Content-Progress) | 3022 | media | Track video, audio, and content playback progress with continue watching, watchlists, and favorites |
-| [data-operations](plugins/Data-Operations) | 3306 | data | Comprehensive data operations platform with GDPR-compliant export/deletion, bulk import/export, cross-platform migration, backup/restore, and data portability |
 | [ddns](plugins/Ddns) | 3217 | networking | Dynamic DNS updater with multi-provider support and external IP monitoring |
 | [devices](plugins/Devices) | 3603 | streaming | IoT device enrollment, trust management, and command dispatch service |
 | [documents](plugins/Documents) | 3106 | data | Document management and generation service with templates, versioning, and sharing |

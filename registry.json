@@ -7554,53 +7554,6 @@
         "sha256": ""
       }
     },
-    "data-operations": {
-      "name": "data-operations",
-      "version": "1.0.0",
-      "description": "Comprehensive data operations platform with GDPR-compliant export/deletion, bulk import/export, cross-platform migration, backup/restore, and data portability",
-      "author": "nself",
-      "license": "Source-Available",
-      "category": "data",
-      "path": "plugins/data-operations",
-      "language": "backend-service",
-      "minNselfVersion": "0.4.8",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "tables": [
-        "np_dataops_export_requests",
-        "np_dataops_import_requests",
-        "np_dataops_deletion_requests",
-        "np_dataops_migration_jobs",
-        "np_dataops_backup_snapshots",
-        "np_dataops_restore_jobs",
-        "np_dataops_transform_templates",
-        "np_dataops_plugin_registry",
-        "np_dataops_transfer_audit",
-        "np_dataops_backup_schedule",
-        "np_dataops_webhook_events"
-      ],
-      "webhooks": [
-        "export.completed",
-        "export.failed",
-        "import.completed",
-        "import.failed",
-        "deletion.completed",
-        "migration.completed",
-        "backup.completed",
-        "restore.completed"
-      ],
-      "tags": [
-        "gdpr",
-        "export",
-        "import",
-        "migration",
-        "backup",
-        "restore",
-        "deletion",
-        "compliance",
-        "privacy",
-        "data-transfer"
-      ]
-    },
     "rom-discovery": {
       "name": "rom-discovery",
       "version": "1.0.0",
@@ -9027,8 +8980,8 @@
     }
   },
   "metadata": {
-    "pluginCount": 65,
-    "lastUpdated": "2026-02-15T19:56:59.737Z",
+    "pluginCount": 64,
+    "lastUpdated": "2026-02-15T20:52:29Z",
     "version": "1.0.0"
   }
 }
