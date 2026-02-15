@@ -19,7 +19,6 @@
     "np_photos_albums",
     "np_photos_items",
     "np_photos_tags",
-    "np_photos_faces",
     "np_photos_webhook_events"
   ],
   "webhooks": {},
@@ -28,7 +27,6 @@
     "list": "List photos",
     "process-pending": "Process pending photos",
     "tags": "View tag statistics",
-    "faces": "Manage face groups",
     "search": "Search photos",
     "stats": "Show photo statistics"
   },
@@ -42,9 +40,7 @@
       "PHOTOS_THUMBNAIL_SMALL",
       "PHOTOS_THUMBNAIL_MEDIUM",
       "PHOTOS_THUMBNAIL_LARGE",
-      "PHOTOS_EXIF_EXTRACTION",
-      "PHOTOS_FACE_DETECTION",
-      "PHOTOS_FACE_DETECTION_PROVIDER"
+      "PHOTOS_EXIF_EXTRACTION"
     ]
   },
   "config": {
@@ -54,7 +50,6 @@
     "thumbnailQuality": 85,
     "thumbnailFormat": "webp",
     "exifExtraction": true,
-    "faceDetection": false,
     "processingConcurrency": 4
   },
   "multiApp": {

@@ -59,9 +59,6 @@ export function loadConfig(): PhotosConfig {
 
     // Processing
     exifExtraction: getEnvBool('PHOTOS_EXIF_EXTRACTION', true),
-    faceDetection: getEnvBool('PHOTOS_FACE_DETECTION', false),
-    faceDetectionProvider: getEnvOptional('PHOTOS_FACE_DETECTION_PROVIDER'),
-    faceDetectionApiKey: getEnvOptional('PHOTOS_FACE_DETECTION_API_KEY'),
     processingConcurrency: getEnvInt('PHOTOS_PROCESSING_CONCURRENCY', 4),
 
     // Search

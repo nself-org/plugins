@@ -73,17 +73,8 @@ export interface PhotosTagRecord {
   created_at: Date;
 }
 
-export interface PhotosFaceRecord {
-  id: string;
-  source_account_id: string;
-  name: string | null;
-  user_id: string | null;
-  representative_photo_id: string | null;
-  photo_count: number;
-  confirmed: boolean;
-  created_at: Date;
-  updated_at: Date;
-}
+// Face recognition removed - was placeholder
+// Can be re-implemented with real face-api.js if needed
 
 export interface PhotosWebhookEventRecord {
   id: string;
@@ -154,14 +145,8 @@ export interface AddTagRequest {
   faceRegion?: Record<string, unknown>;
 }
 
-export interface UpdateFaceRequest {
-  name?: string;
-  userId?: string;
-}
-
-export interface MergeFacesRequest {
-  mergeWithId: string;
-}
+// Face requests removed - feature not implemented
+// UpdateFaceRequest, MergeFacesRequest
 
 export interface SearchPhotosRequest {
   query?: string;
@@ -218,9 +203,6 @@ export interface PhotosConfig {
 
   // Processing
   exifExtraction: boolean;
-  faceDetection: boolean;
-  faceDetectionProvider: string;
-  faceDetectionApiKey: string;
   processingConcurrency: number;
 
   // Search
@@ -268,7 +250,6 @@ export interface PhotosStats {
   totalAlbums: number;
   totalPhotos: number;
   totalTags: number;
-  totalFaces: number;
   pendingProcessing: number;
   processedPhotos: number;
   totalStorageBytes: number;

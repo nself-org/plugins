@@ -27,8 +27,6 @@ import type {
   UpdatePhotoRequest,
   MovePhotoRequest,
   AddTagRequest,
-  UpdateFaceRequest,
-  MergeFacesRequest,
   SearchPhotosRequest,
 } from './types.js';
 
@@ -335,55 +333,8 @@ fastify.get<{ Params: { value: string }; Querystring: { limit?: string; offset?:
   );
 });
 
-// ============================================================================
-// Faces Endpoints
-// ============================================================================
-
-fastify.get<{ Querystring: { limit?: string; offset?: string } }>('/api/faces', async (request) => {
-  const { sourceAccountId } = getAppContext(request);
-  const scopedDb = photosDb.forSourceAccount(sourceAccountId);
-
-  return scopedDb.listFaces(
-    request.query.limit ? parseInt(request.query.limit, 10) : 50,
-    request.query.offset ? parseInt(request.query.offset, 10) : 0
-  );
-});
-
-fastify.put<{ Params: { id: string }; Body: UpdateFaceRequest }>('/api/faces/:id', async (request, reply) => {
-  const { sourceAccountId } = getAppContext(request);
-  const scopedDb = photosDb.forSourceAccount(sourceAccountId);
-
-  const face = await scopedDb.updateFace(request.params.id, {
-    name: request.body.name,
-    user_id: request.body.userId,
-  });
-
-  if (!face) { reply.code(404); throw new Error('Face not found'); }
-
-  await scopedDb.insertWebhookEvent(
-    `photos.face.identified-${face.id}`,
-    'photos.face.identified',
-    { faceId: face.id, name: request.body.name, userId: request.body.userId }
-  );
-
-  return face;
-});
-
-fastify.post<{ Params: { id: string }; Body: MergeFacesRequest }>('/api/faces/:id/merge', async (request, reply) => {
-  const { sourceAccountId } = getAppContext(request);
-  const scopedDb = photosDb.forSourceAccount(sourceAccountId);
-
-  const face = await scopedDb.mergeFaces(request.params.id, request.body.mergeWithId);
-  if (!face) { reply.code(404); throw new Error('Face not found'); }
-
-  await scopedDb.insertWebhookEvent(
-    `photos.face.merged-${face.id}-${request.body.mergeWithId}`,
-    'photos.face.merged',
-    { targetFaceId: face.id, mergedFaceId: request.body.mergeWithId }
-  );
-
-  return face;
-});
+// Face recognition removed - was placeholder returning empty data
+// Can be re-implemented with real face-api.js if needed in future
 
 // ============================================================================
 // Timeline Endpoint

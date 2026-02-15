@@ -8,7 +8,6 @@ import type {
   PhotosAlbumRecord,
   PhotosItemRecord,
   PhotosTagRecord,
-  PhotosFaceRecord,
   PhotosStats,
   TimelinePeriod,
 } from './types.js';
@@ -126,21 +125,8 @@ export class PhotosDatabase {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_photos_tags_value ON photos_tags(source_account_id, tag_type, tag_value)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_photos_tags_user ON photos_tags(source_account_id, tagged_user_id)`);
 
-    await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS photos_faces (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        name VARCHAR(255),
-        user_id VARCHAR(255),
-        representative_photo_id UUID REFERENCES photos_items(id),
-        photo_count INTEGER DEFAULT 0,
-        confirmed BOOLEAN DEFAULT false,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_photos_faces_source_app ON photos_faces(source_account_id)`);
-    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_photos_faces_user ON photos_faces(source_account_id, user_id)`);
+    // Face recognition removed - was placeholder returning empty data
+    // Can be re-implemented with real face-api.js if needed in future
 
     await this.db.execute(`
       CREATE TABLE IF NOT EXISTS photos_webhook_events (
@@ -527,68 +513,8 @@ export class PhotosDatabase {
     return { photos: result.rows, total };
   }
 
-  // ============================================================================
-  // Faces CRUD
-  // ============================================================================
-
-  async listFaces(limit: number = 50, offset: number = 0): Promise<{ faces: PhotosFaceRecord[]; total: number }> {
-    const countResult = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM photos_faces WHERE source_account_id = $1`,
-      [this.sourceAccountId]
-    );
-    const total = parseInt(countResult?.count ?? '0', 10);
-
-    const result = await this.db.query<PhotosFaceRecord>(
-      `SELECT * FROM photos_faces WHERE source_account_id = $1 ORDER BY photo_count DESC LIMIT $2 OFFSET $3`,
-      [this.sourceAccountId, limit, offset]
-    );
-
-    return { faces: result.rows, total };
-  }
-
-  async updateFace(id: string, updates: { name?: string; user_id?: string }): Promise<PhotosFaceRecord | null> {
-    const setClauses: string[] = ['updated_at = NOW()'];
-    const params: unknown[] = [id, this.sourceAccountId];
-    let paramIndex = 3;
-
-    if (updates.name !== undefined) { setClauses.push(`name = $${paramIndex++}`); params.push(updates.name); }
-    if (updates.user_id !== undefined) { setClauses.push(`user_id = $${paramIndex++}`); params.push(updates.user_id); }
-
-    const result = await this.db.query<PhotosFaceRecord>(
-      `UPDATE photos_faces SET ${setClauses.join(', ')} WHERE id = $1 AND source_account_id = $2 RETURNING *`,
-      params
-    );
-    return result.rows[0] || null;
-  }
-
-  async mergeFaces(id: string, mergeWithId: string): Promise<PhotosFaceRecord | null> {
-    // Move all tags referencing the merged face to the target face
-    const mergedFace = await this.db.queryOne<PhotosFaceRecord>(
-      `SELECT * FROM photos_faces WHERE id = $1 AND source_account_id = $2`,
-      [mergeWithId, this.sourceAccountId]
-    );
-
-    if (!mergedFace) return null;
-
-    // Update photo count on target
-    await this.db.execute(`
-      UPDATE photos_faces SET
-        photo_count = photo_count + $3,
-        updated_at = NOW()
-      WHERE id = $1 AND source_account_id = $2
-    `, [id, this.sourceAccountId, mergedFace.photo_count]);
-
-    // Delete merged face
-    await this.db.execute(
-      `DELETE FROM photos_faces WHERE id = $1 AND source_account_id = $2`,
-      [mergeWithId, this.sourceAccountId]
-    );
-
-    return this.db.queryOne<PhotosFaceRecord>(
-      `SELECT * FROM photos_faces WHERE id = $1 AND source_account_id = $2`,
-      [id, this.sourceAccountId]
-    );
-  }
+  // Face recognition removed - was placeholder returning empty data
+  // Can be re-implemented with real face-api.js if needed in future
 
   // ============================================================================
   // Timeline
@@ -715,7 +641,6 @@ export class PhotosDatabase {
     const totalAlbums = await this.db.countScoped('photos_albums', this.sourceAccountId);
     const totalPhotos = await this.db.countScoped('photos_items', this.sourceAccountId);
     const totalTags = await this.db.countScoped('photos_tags', this.sourceAccountId);
-    const totalFaces = await this.db.countScoped('photos_faces', this.sourceAccountId);
 
     const pending = await this.db.queryOne<{ count: string }>(
       `SELECT COUNT(*) as count FROM photos_items WHERE source_account_id = $1 AND processing_status = 'pending'`,
@@ -736,7 +661,6 @@ export class PhotosDatabase {
       totalAlbums,
       totalPhotos,
       totalTags,
-      totalFaces,
       pendingProcessing: parseInt(pending?.count ?? '0', 10),
       processedPhotos: parseInt(processed?.count ?? '0', 10),
       totalStorageBytes: parseInt(storage?.total ?? '0', 10),
