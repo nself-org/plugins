@@ -55,7 +55,7 @@ export function loadConfig(overrides?: Partial<JobsConfig>): JobsConfig {
 
   const cfg: JobsConfig = {
     // Redis
-    redisUrl: process.env.JOBS_REDIS_URL || 'redis://localhost:6379',
+    redisUrl: process.env.JOBS_REDIS_URL || 'redis://redis:6379',
 
     // Dashboard
     dashboardEnabled: process.env.JOBS_DASHBOARD_ENABLED !== 'false',

@@ -96,7 +96,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     sessionMaxDurationHours: parseInt(process.env.SG_SESSION_MAX_DURATION_HOURS ?? '12', 10),
     analyticsInterval: parseInt(process.env.SG_ANALYTICS_INTERVAL ?? '300', 10),
     realtimeUrl: process.env.SG_REALTIME_URL ?? 'http://localhost:3101',
-    redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+    redisUrl: process.env.REDIS_URL ?? 'redis://redis:6379',
 
     // Per-app overrides
     appTvMaxConcurrent: parseInt(process.env.SG_APP_TV_MAX_CONCURRENT ?? '5', 10),

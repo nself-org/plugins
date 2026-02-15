@@ -75,7 +75,7 @@ export function loadConfig(): FileProcessingConfig {
     clamavPort: parseInt(process.env.CLAMAV_PORT || '3310', 10),
 
     // Queue
-    redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+    redisUrl: process.env.REDIS_URL || 'redis://redis:6379',
 
     // Server
     port: parseInt(process.env.PORT || '3104', 10),

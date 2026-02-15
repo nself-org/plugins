@@ -121,7 +121,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     realtimeUrl: process.env.DEV_REALTIME_URL ?? 'http://localhost:3101',
     recordingUrl: process.env.DEV_RECORDING_URL ?? 'http://localhost:3602',
     streamGatewayUrl: process.env.DEV_STREAM_GATEWAY_URL ?? 'http://localhost:3601',
-    redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+    redisUrl: process.env.REDIS_URL ?? 'redis://redis:6379',
 
     // Per-app overrides
     appTvHeartbeatInterval: parseInt(process.env.DEV_APP_TV_HEARTBEAT_INTERVAL ?? '30', 10),

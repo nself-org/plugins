@@ -58,7 +58,7 @@ export function loadConfig(): NotificationConfig {
 
     queue: {
       backend: (process.env.NOTIFICATIONS_QUEUE_BACKEND || 'redis') as 'redis' | 'postgres',
-      redis_url: process.env.REDIS_URL || 'redis://localhost:6379',
+      redis_url: process.env.REDIS_URL || 'redis://redis:6379',
     },
 
     worker: {
