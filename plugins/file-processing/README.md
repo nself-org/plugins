@@ -12,7 +12,8 @@ Comprehensive file processing with thumbnail generation, image optimization, vid
 - **Multiple Storage Providers** - MinIO, AWS S3, Google Cloud Storage, Cloudflare R2, Backblaze B2, Azure Blob
 - **Queue Processing** - BullMQ-powered background processing
 - **Batch Processing** - Handle multiple files concurrently
-- **Webhooks** - Notify on completion
+- **Inbound Webhooks** - Receive notifications from storage providers on file upload
+- **Outbound Webhooks** - Notify on completion
 - **REST API** - HTTP endpoints for integration
 
 ## Installation
@@ -332,7 +333,77 @@ GET /api/stats
 GET /health
 ```
 
-### Webhooks
+### Inbound Webhooks (Storage Provider Notifications)
+
+The plugin can receive webhooks from storage providers to automatically process uploaded files.
+
+#### Supported Providers
+
+| Provider | Endpoint | Event Format |
+|----------|----------|-------------|
+| MinIO | `POST /webhook/minio` | S3-compatible |
+| AWS S3 | `POST /webhook/s3` | S3 Event Notifications |
+| Cloudflare R2 | `POST /webhook/r2` | S3-compatible |
+| Backblaze B2 | `POST /webhook/b2` | S3-compatible |
+| Google Cloud Storage | `POST /webhook/gcs` | Pub/Sub Notifications |
+| Azure Blob Storage | `POST /webhook/azure` | Event Grid |
+
+#### Configuration Examples
+
+**MinIO:**
+```bash
+# Configure MinIO to send webhooks on object creation
+mc event add myminio/media-raw arn:minio:sqs::webhook:file-processing \
+  --event put \
+  --suffix .jpg --suffix .png --suffix .mp4
+
+# Where webhook URL is: http://file-processing:3104/webhook/minio
+```
+
+**AWS S3:**
+```bash
+# Configure S3 bucket notification
+aws s3api put-bucket-notification-configuration \
+  --bucket my-bucket \
+  --notification-configuration '{
+    "LambdaFunctionConfigurations": [{
+      "LambdaFunctionArn": "arn:aws:lambda:...",
+      "Events": ["s3:ObjectCreated:*"]
+    }]
+  }'
+
+# Or use S3 Event Notifications with HTTP endpoint
+```
+
+**Google Cloud Storage:**
+```bash
+# Create Pub/Sub topic
+gcloud pubsub topics create file-processing-notifications
+
+# Configure bucket to publish to topic
+gsutil notification create -t file-processing-notifications \
+  -f json gs://my-bucket
+```
+
+#### How It Works
+
+1. File uploaded to storage bucket
+2. Storage provider sends webhook to plugin
+3. Plugin extracts file metadata from webhook
+4. Automatically creates processing job
+5. Job queued for thumbnail generation, optimization, etc.
+
+#### Webhook Response
+
+```json
+{
+  "received": true,
+  "provider": "minio",
+  "jobId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### Outbound Webhooks (Completion Notifications)
 
 When a job completes, the plugin can send a webhook to your application:
 

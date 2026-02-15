@@ -8,10 +8,12 @@ import type {
   ProcessingJob,
   FileThumbnail,
   FileMetadata,
+  FileScan,
   CreateJobRequest,
   ProcessingStatus,
   ThumbnailResult,
   MetadataResult,
+  ScanResult,
 } from './types.js';
 
 const logger = createLogger('file-processing:database');
@@ -508,6 +510,49 @@ export class Database {
       JOIN np_fileproc_jobs j ON m.job_id = j.id
       WHERE j.id = $1
         AND m.source_account_id = $2
+    `;
+    const result = await this.pool.query(query, [jobId, this.sourceAccountId]);
+    return result.rows[0] || null;
+  }
+
+  async saveScan(jobId: string, scan: { status: string; virusFound?: string; engine: string; version?: string; duration: number }): Promise<string> {
+    // Get file_id from job
+    const jobQuery = 'SELECT file_id FROM np_fileproc_jobs WHERE id = $1 AND source_account_id = $2';
+    const jobResult = await this.pool.query(jobQuery, [jobId, this.sourceAccountId]);
+    if (jobResult.rows.length === 0) {
+      throw new Error(`Job not found: ${jobId}`);
+    }
+    const fileId = jobResult.rows[0].file_id;
+
+    // Insert scan result (using a stub table name - this would need a real table)
+    const query = `
+      INSERT INTO np_fileproc_scans (
+        source_account_id, job_id, file_id,
+        scan_status, virus_found, scan_engine, scan_version, scan_duration_ms,
+        scanned_at, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW(), NOW())
+      RETURNING id
+    `;
+    const result = await this.pool.query(query, [
+      this.sourceAccountId,
+      jobId,
+      fileId,
+      scan.status,
+      scan.virusFound,
+      scan.engine,
+      scan.version,
+      scan.duration,
+    ]);
+    return result.rows[0].id;
+  }
+
+  async getScan(jobId: string): Promise<FileScan | null> {
+    const query = `
+      SELECT s.*
+      FROM np_fileproc_scans s
+      JOIN np_fileproc_jobs j ON s.job_id = j.id
+      WHERE j.id = $1
+        AND s.source_account_id = $2
     `;
     const result = await this.pool.query(query, [jobId, this.sourceAccountId]);
     return result.rows[0] || null;

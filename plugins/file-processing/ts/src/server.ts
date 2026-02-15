@@ -10,6 +10,7 @@ import { join } from 'path';
 import { loadConfig, validateConfig, getDatabaseConfig } from './config.js';
 import { Database } from './database.js';
 import { generatePosters, generateSpriteSheet, optimizeImage } from './image-processor.js';
+import { webhookHandler, type WebhookEvent } from './webhooks.js';
 import type {
   CreateJobRequest,
   ProcessingStatus,
@@ -239,6 +240,194 @@ async function startServer() {
     } catch (error) {
       reply.code(500);
       return { error: error instanceof Error ? error.message : 'Failed to get job' };
+    }
+  });
+
+  // =========================================================================
+  // Inbound Webhooks - Storage Provider Notifications
+  // =========================================================================
+
+  /**
+   * Helper to process webhook event and create processing job
+   */
+  async function processWebhookEvent(event: WebhookEvent, sdb: Database): Promise<string | null> {
+    // Only process upload events
+    if (!webhookHandler.isUploadEvent(event)) {
+      logger.debug('Skipping non-upload event', { eventType: event.eventType });
+      return null;
+    }
+
+    // Extract file ID from object key
+    const fileId = webhookHandler.extractFileId(event.key);
+    if (!fileId) {
+      logger.warn('Could not extract file ID from key', { key: event.key });
+      return null;
+    }
+
+    // Determine file type from key
+    const extension = event.key.split('.').pop()?.toLowerCase() || '';
+    const mimeType = getMimeTypeFromExtension(extension);
+
+    // Create processing job
+    const jobId = await sdb.createJob({
+      fileId,
+      filePath: event.key,
+      fileName: event.key.split('/').pop() || event.key,
+      fileSize: event.size || 0,
+      mimeType,
+      operations: ['thumbnail', 'optimize', 'metadata'],
+    });
+
+    logger.info('Created job from webhook', {
+      provider: event.provider,
+      bucket: event.bucket,
+      key: event.key,
+      fileId,
+      jobId,
+    });
+
+    return jobId;
+  }
+
+  /**
+   * Simple MIME type detection
+   */
+  function getMimeTypeFromExtension(ext: string): string {
+    const mimeTypes: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      avif: 'image/avif',
+      svg: 'image/svg+xml',
+      mp4: 'video/mp4',
+      webm: 'video/webm',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      pdf: 'application/pdf',
+    };
+
+    return mimeTypes[ext] || 'application/octet-stream';
+  }
+
+  // POST /webhook/minio - MinIO webhook receiver
+  fastify.post<{ Body: unknown }>('/webhook/minio', async (request, reply) => {
+    try {
+      const sdb = scopedDb(request);
+      const event = webhookHandler.parseMinIOWebhook(request.body as any);
+      const jobId = await processWebhookEvent(event, sdb);
+
+      return {
+        received: true,
+        provider: 'minio',
+        jobId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'MinIO webhook processing failed';
+      logger.error('POST /webhook/minio failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /webhook/s3 - AWS S3 webhook receiver
+  fastify.post<{ Body: unknown }>('/webhook/s3', async (request, reply) => {
+    try {
+      const sdb = scopedDb(request);
+      const event = webhookHandler.parseS3Webhook(request.body as any);
+      const jobId = await processWebhookEvent(event, sdb);
+
+      return {
+        received: true,
+        provider: 's3',
+        jobId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'S3 webhook processing failed';
+      logger.error('POST /webhook/s3 failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /webhook/r2 - Cloudflare R2 webhook receiver
+  fastify.post<{ Body: unknown }>('/webhook/r2', async (request, reply) => {
+    try {
+      const sdb = scopedDb(request);
+      const event = webhookHandler.parseR2Webhook(request.body as any);
+      const jobId = await processWebhookEvent(event, sdb);
+
+      return {
+        received: true,
+        provider: 'r2',
+        jobId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'R2 webhook processing failed';
+      logger.error('POST /webhook/r2 failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /webhook/b2 - Backblaze B2 webhook receiver
+  fastify.post<{ Body: unknown }>('/webhook/b2', async (request, reply) => {
+    try {
+      const sdb = scopedDb(request);
+      const event = webhookHandler.parseB2Webhook(request.body as any);
+      const jobId = await processWebhookEvent(event, sdb);
+
+      return {
+        received: true,
+        provider: 'b2',
+        jobId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'B2 webhook processing failed';
+      logger.error('POST /webhook/b2 failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /webhook/gcs - Google Cloud Storage webhook receiver
+  fastify.post<{ Body: unknown }>('/webhook/gcs', async (request, reply) => {
+    try {
+      const sdb = scopedDb(request);
+      const event = webhookHandler.parseGCSWebhook(request.body as any);
+      const jobId = await processWebhookEvent(event, sdb);
+
+      return {
+        received: true,
+        provider: 'gcs',
+        jobId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'GCS webhook processing failed';
+      logger.error('POST /webhook/gcs failed', { error: message });
+      reply.code(500);
+      return { error: message };
+    }
+  });
+
+  // POST /webhook/azure - Azure Blob Storage webhook receiver
+  fastify.post<{ Body: unknown }>('/webhook/azure', async (request, reply) => {
+    try {
+      const sdb = scopedDb(request);
+      const event = webhookHandler.parseAzureWebhook(request.body as any);
+      const jobId = await processWebhookEvent(event, sdb);
+
+      return {
+        received: true,
+        provider: 'azure',
+        jobId,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Azure webhook processing failed';
+      logger.error('POST /webhook/azure failed', { error: message });
+      reply.code(500);
+      return { error: message };
     }
   });
 

@@ -21,7 +21,30 @@ export function loadConfig(): NotificationConfig {
 
     email: {
       enabled: process.env.NOTIFICATIONS_EMAIL_ENABLED === 'true',
-      provider: (process.env.NOTIFICATIONS_EMAIL_PROVIDER || 'resend') as EmailProvider,
+      provider: (process.env.NOTIFICATIONS_EMAIL_PROVIDER || 'smtp') as EmailProvider,
+      from_address: process.env.NOTIFICATIONS_EMAIL_FROM || 'noreply@example.com',
+
+      // SMTP config
+      smtp_host: process.env.SMTP_HOST || 'localhost',
+      smtp_port: parseInt(process.env.SMTP_PORT || '587'),
+      smtp_secure: process.env.SMTP_SECURE === 'true',
+      smtp_user: process.env.SMTP_USER,
+      smtp_password: process.env.SMTP_PASS,
+
+      // SendGrid config
+      sendgrid_api_key: process.env.SENDGRID_API_KEY,
+
+      // Mailgun config
+      mailgun_api_key: process.env.MAILGUN_API_KEY,
+      mailgun_domain: process.env.MAILGUN_DOMAIN,
+
+      // AWS SES config
+      ses_region: process.env.AWS_SES_REGION,
+
+      // Resend config
+      resend_api_key: process.env.RESEND_API_KEY,
+
+      // Legacy fields for compatibility
       api_key: process.env.NOTIFICATIONS_EMAIL_API_KEY,
       from: process.env.NOTIFICATIONS_EMAIL_FROM || 'noreply@example.com',
       domain: process.env.NOTIFICATIONS_EMAIL_DOMAIN,
@@ -37,6 +60,18 @@ export function loadConfig(): NotificationConfig {
     push: {
       enabled: process.env.NOTIFICATIONS_PUSH_ENABLED === 'true',
       provider: process.env.NOTIFICATIONS_PUSH_PROVIDER as PushProvider | undefined,
+
+      // FCM (Firebase Cloud Messaging) config
+      fcm_server_key: process.env.FCM_SERVER_KEY,
+      fcm_service_account: process.env.FCM_SERVICE_ACCOUNT,
+
+      // APNs (Apple Push Notification service) config
+      apns_key_id: process.env.APNS_KEY_ID,
+      apns_key: process.env.APNS_KEY,
+      apns_team_id: process.env.APNS_TEAM_ID,
+      apns_production: process.env.APNS_PRODUCTION === 'true',
+
+      // Legacy fields for compatibility
       api_key: process.env.NOTIFICATIONS_PUSH_API_KEY,
       app_id: process.env.NOTIFICATIONS_PUSH_APP_ID,
       project_id: process.env.NOTIFICATIONS_PUSH_PROJECT_ID,
@@ -50,6 +85,13 @@ export function loadConfig(): NotificationConfig {
     sms: {
       enabled: process.env.NOTIFICATIONS_SMS_ENABLED === 'true',
       provider: process.env.NOTIFICATIONS_SMS_PROVIDER as SmsProvider | undefined,
+
+      // Twilio config
+      twilio_account_sid: process.env.TWILIO_ACCOUNT_SID,
+      twilio_auth_token: process.env.TWILIO_AUTH_TOKEN,
+      twilio_from_number: process.env.TWILIO_FROM_NUMBER,
+
+      // Legacy fields for compatibility
       account_sid: process.env.NOTIFICATIONS_SMS_ACCOUNT_SID,
       auth_token: process.env.NOTIFICATIONS_SMS_AUTH_TOKEN,
       auth_id: process.env.NOTIFICATIONS_SMS_AUTH_ID,

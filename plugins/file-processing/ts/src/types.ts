@@ -6,7 +6,7 @@ export type StorageProvider = 'minio' | 's3' | 'gcs' | 'r2' | 'b2' | 'azure';
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
-export type ProcessingOperation = 'thumbnail' | 'optimize' | 'metadata';
+export type ProcessingOperation = 'thumbnail' | 'optimize' | 'metadata' | 'scan';
 
 // =============================================================================
 // Configuration
@@ -157,6 +157,21 @@ export interface FileMetadata {
   updated_at: Date;
 }
 
+export interface FileScan {
+  id: string;
+  source_account_id: string;
+  job_id: string;
+  file_id: string;
+  scan_status: 'clean' | 'infected' | 'error';
+  virus_found?: string;
+  scan_engine: string;
+  scan_version?: string;
+  scan_duration_ms?: number;
+  scanned_at: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
 // =============================================================================
 // Processing Results
 // =============================================================================
@@ -183,6 +198,14 @@ export interface MetadataResult {
   extracted: Record<string, unknown>;
   exifStripped: boolean;
   extractionTime: number;
+}
+
+export interface ScanResult {
+  status: 'clean' | 'infected' | 'error';
+  virusFound?: string;
+  engine: string;
+  version?: string;
+  duration: number;
 }
 
 export interface ProcessingResult {

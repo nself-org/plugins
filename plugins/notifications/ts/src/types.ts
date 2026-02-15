@@ -356,6 +356,29 @@ export interface NotificationConfig {
   email: {
     enabled: boolean;
     provider?: EmailProvider;
+    from_address?: string;
+
+    // SMTP config
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_secure?: boolean;
+    smtp_user?: string;
+    smtp_password?: string;
+
+    // SendGrid config
+    sendgrid_api_key?: string;
+
+    // Mailgun config
+    mailgun_api_key?: string;
+    mailgun_domain?: string;
+
+    // AWS SES config
+    ses_region?: string;
+
+    // Resend config
+    resend_api_key?: string;
+
+    // Legacy fields for compatibility
     api_key?: string;
     from?: string;
     domain?: string;
@@ -370,6 +393,18 @@ export interface NotificationConfig {
   push: {
     enabled: boolean;
     provider?: PushProvider;
+
+    // FCM (Firebase Cloud Messaging) config
+    fcm_server_key?: string;
+    fcm_service_account?: string;
+
+    // APNs (Apple Push Notification service) config
+    apns_key_id?: string;
+    apns_key?: string;
+    apns_team_id?: string;
+    apns_production?: boolean;
+
+    // Legacy fields for compatibility
     api_key?: string;
     app_id?: string;
     project_id?: string;
@@ -382,6 +417,13 @@ export interface NotificationConfig {
   sms: {
     enabled: boolean;
     provider?: SmsProvider;
+
+    // Twilio config
+    twilio_account_sid?: string;
+    twilio_auth_token?: string;
+    twilio_from_number?: string;
+
+    // Legacy fields for compatibility
     account_sid?: string;
     auth_token?: string;
     auth_id?: string;

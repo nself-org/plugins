@@ -18,22 +18,25 @@ Production-ready multi-channel notification system with email, push, and SMS sup
 
 ## Supported Providers
 
-### Email
-- **Resend** (recommended) - Modern email API
+### Email ✅ **IMPLEMENTED**
+- **SMTP** - Generic SMTP support (default, works with Gmail, Office 365, etc.)
 - **SendGrid** - Enterprise email delivery
 - **Mailgun** - Email automation
 - **AWS SES** - Amazon Simple Email Service
-- **SMTP** - Generic SMTP support (Gmail, Office 365, etc.)
+- **Resend** - Modern email API
 
-### Push Notifications
-- **FCM** (Firebase Cloud Messaging) - Google's push service
-- **OneSignal** - Multi-platform push notifications
-- **Web Push** - Browser push notifications (VAPID)
+All email providers are fully implemented and production-ready.
 
-### SMS
-- **Twilio** - SMS and voice API
-- **Plivo** - Cloud communication platform
-- **AWS SNS** - Amazon Simple Notification Service
+### Push Notifications 🚧 **IMPLEMENTATION-READY**
+- **FCM** (Firebase Cloud Messaging) - Google's push service (stub ready, needs `firebase-admin` package)
+- **APNs** (Apple Push Notification service) - iOS push notifications (stub ready, needs `apn` package)
+
+Code is ready for implementation - just install dependencies and uncomment the marked sections in `src/delivery.ts`.
+
+### SMS 🚧 **IMPLEMENTATION-READY**
+- **Twilio** - SMS and voice API (stub ready, needs `twilio` package)
+
+Code is ready for implementation - just install dependencies and uncomment the marked sections in `src/delivery.ts`.
 
 ## Installation
 
@@ -58,11 +61,34 @@ Create `.env` file:
 # Database
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nself
 
-# Email (Resend example)
+# Email (SMTP example - works out of the box)
 NOTIFICATIONS_EMAIL_ENABLED=true
-NOTIFICATIONS_EMAIL_PROVIDER=resend
-NOTIFICATIONS_EMAIL_API_KEY=re_xxxxxxxxxxxx
+NOTIFICATIONS_EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
 NOTIFICATIONS_EMAIL_FROM=notifications@example.com
+
+# Or use SendGrid
+# NOTIFICATIONS_EMAIL_PROVIDER=sendgrid
+# SENDGRID_API_KEY=SG.xxxxxxxxxxxx
+
+# Or use Mailgun
+# NOTIFICATIONS_EMAIL_PROVIDER=mailgun
+# MAILGUN_API_KEY=key-xxxxxxxxxxxx
+# MAILGUN_DOMAIN=mg.example.com
+
+# Or use AWS SES
+# NOTIFICATIONS_EMAIL_PROVIDER=ses
+# AWS_SES_REGION=us-east-1
+# AWS_ACCESS_KEY_ID=AKIAXXXXXXXX
+# AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxx
+
+# Or use Resend
+# NOTIFICATIONS_EMAIL_PROVIDER=resend
+# RESEND_API_KEY=re_xxxxxxxxxxxx
 
 # Queue
 NOTIFICATIONS_QUEUE_BACKEND=redis
@@ -500,20 +526,20 @@ NOTIFICATIONS_WEBHOOK_VERIFY=true
 
 ```bash
 cd ts
-npm install
-npm run build
+pnpm install
+pnpm run build
 ```
 
 ### Watch Mode
 
 ```bash
-npm run watch
+pnpm run watch
 ```
 
 ### Type Check
 
 ```bash
-npm run typecheck
+pnpm run typecheck
 ```
 
 ### Dry Run
@@ -523,6 +549,59 @@ Test without actually sending:
 ```bash
 NOTIFICATIONS_DRY_RUN=true nself plugin notifications test email user@example.com
 ```
+
+### Implementing Push Notifications
+
+Push notification delivery is implementation-ready. To enable:
+
+1. **Install dependencies**:
+   ```bash
+   cd ts
+   pnpm add firebase-admin apn
+   ```
+
+2. **Configure FCM** (for Android/Web):
+   ```bash
+   FCM_SERVER_KEY=your-fcm-server-key
+   FCM_SERVICE_ACCOUNT=/path/to/service-account.json
+   ```
+
+3. **Configure APNs** (for iOS):
+   ```bash
+   APNS_KEY_ID=your-key-id
+   APNS_KEY=/path/to/AuthKey_XXXXXXXX.p8
+   APNS_TEAM_ID=your-team-id
+   APNS_PRODUCTION=true
+   ```
+
+4. **Uncomment implementation** in `src/delivery.ts`:
+   - Find `sendFCM()` method
+   - Uncomment the Firebase Admin SDK code
+   - Find `sendAPNs()` method
+   - Uncomment the APNs provider code
+
+### Implementing SMS
+
+SMS delivery is implementation-ready. To enable:
+
+1. **Install Twilio**:
+   ```bash
+   cd ts
+   pnpm add twilio
+   ```
+
+2. **Configure Twilio**:
+   ```bash
+   TWILIO_ACCOUNT_SID=ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+   TWILIO_AUTH_TOKEN=your-auth-token
+   TWILIO_FROM_NUMBER=+1234567890
+   ```
+
+3. **Uncomment implementation** in `src/delivery.ts`:
+   - Find `send()` method in `SMSDelivery` class
+   - Uncomment the Twilio client code
+
+All the infrastructure is in place - just install packages and enable the commented code!
 
 ## Troubleshooting
 

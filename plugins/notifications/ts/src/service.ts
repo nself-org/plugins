@@ -7,6 +7,7 @@ import { createLogger } from '@nself/plugin-utils';
 import { db, DatabaseClient } from './database.js';
 import { TemplateEngine } from './template.js';
 import { config } from './config.js';
+import { deliveryManager } from './delivery.js';
 import {
   CreateNotificationInput,
   SendNotificationResult,
@@ -144,25 +145,13 @@ export class NotificationService {
       // Try each provider in priority order
       for (const provider of providers) {
         try {
-          // NOTE: Actual provider implementation requires integration with external services
-          // Integration points by channel:
-          // - email: SendGrid/AWS SES/Mailgun/Postmark API clients
-          // - sms: Twilio/AWS SNS API clients
-          // - push: FCM/APNs/OneSignal API clients
-          // - slack: Slack Web API client
-          // - webhook: HTTP POST with retry logic
-          //
-          // Example implementation:
-          // const providerInstance = this.getProviderInstance(provider);
-          // const result = await providerInstance.send(notification);
-
-          // For now, simulate success
+          // Dry run mode - simulate delivery
           if (config.development.dry_run) {
             logger.info('[DRY RUN] Would send notification', {
               id: notification.id,
               channel: notification.channel,
               provider: provider.name,
-              to: notification.recipient_email || notification.recipient_phone,
+              to: notification.recipient_email || notification.recipient_phone || notification.recipient_push_token,
             });
 
             await db.updateProviderHealth(provider.name, true);
@@ -174,21 +163,84 @@ export class NotificationService {
             return { success: true, notification_id: notification.id };
           }
 
-          // Real implementation would send here
-          // const result = await this.sendViaProvider(provider, notification);
+          // Actual delivery using delivery manager
+          let deliveryResult;
 
-          await db.updateProviderHealth(provider.name, true);
-          await db.updateNotificationStatus(notification.id, 'delivered', {
-            provider: provider.name,
-            sent_at: new Date(),
-            delivered_at: new Date(),
-          });
+          switch (notification.channel) {
+            case 'email':
+              if (!notification.recipient_email) {
+                throw new Error('Email recipient required');
+              }
+              deliveryResult = await deliveryManager.sendEmail({
+                to: notification.recipient_email,
+                subject: notification.subject || 'Notification',
+                text: notification.body_text,
+                html: notification.body_html,
+              });
+              break;
 
-          return { success: true, notification_id: notification.id };
+            case 'push':
+              if (!notification.recipient_push_token) {
+                throw new Error('Push token required');
+              }
+              deliveryResult = await deliveryManager.sendPush({
+                token: notification.recipient_push_token,
+                title: notification.subject || 'Notification',
+                body: notification.body_text || '',
+              });
+              break;
+
+            case 'sms':
+              if (!notification.recipient_phone) {
+                throw new Error('Phone number required');
+              }
+              deliveryResult = await deliveryManager.sendSMS({
+                to: notification.recipient_phone,
+                body: notification.body_text || '',
+              });
+              break;
+
+            default:
+              throw new Error(`Unsupported channel: ${notification.channel}`);
+          }
+
+          // Check delivery result
+          if (deliveryResult.success) {
+            await db.updateProviderHealth(provider.name, true);
+            await db.updateNotificationStatus(notification.id, 'delivered', {
+              provider: provider.name,
+              provider_message_id: deliveryResult.message_id,
+              sent_at: new Date(),
+              delivered_at: new Date(),
+            });
+
+            logger.info('Notification delivered successfully', {
+              id: notification.id,
+              channel: notification.channel,
+              provider: provider.name,
+              message_id: deliveryResult.message_id,
+            });
+
+            return {
+              success: true,
+              notification_id: notification.id,
+              provider_response: deliveryResult.provider_response,
+            };
+          } else {
+            throw new Error(deliveryResult.error || 'Delivery failed');
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
           logger.error(`Provider ${provider.name} failed`, { error: message });
           await db.updateProviderHealth(provider.name, false);
+
+          // Update notification with error
+          await db.updateNotificationStatus(notification.id, 'failed', {
+            provider: provider.name,
+            error_message: message,
+            failed_at: new Date(),
+          });
+
           // Continue to next provider
           continue;
         }
