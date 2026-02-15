@@ -318,6 +318,18 @@ export async function createServer(config?: Partial<Config>) {
     '/api/bot/messages',
     async (request, reply) => {
       try {
+        // Authenticate bot using Authorization header
+        const authHeader = request.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return reply.status(401).send({ error: 'Missing or invalid Authorization header. Use: Bearer nbot_...' });
+        }
+
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        const bot = await scopedDb(request).validateBotToken(token);
+        if (!bot) {
+          return reply.status(401).send({ error: 'Invalid or disabled bot token' });
+        }
+
         const { channelId, content, messageType } = request.body;
         if (!channelId || !content) {
           return reply.status(400).send({ error: 'channelId and content are required' });
@@ -326,11 +338,9 @@ export async function createServer(config?: Partial<Config>) {
         // In a real implementation, this would create the message in the chat system
         // and then track it in bot_messages
         const messageId = crypto.randomUUID();
-        // Placeholder: the bot ID would come from the auth token
-        const botId = 'placeholder-bot-id';
 
         const botMessage = await scopedDb(request).createBotMessage(
-          botId, messageId, channelId, messageType ?? 'text'
+          bot.id, messageId, channelId, messageType ?? 'text'
         );
 
         return reply.status(201).send({ success: true, messageId, botMessage });

@@ -396,6 +396,15 @@ export class BotsDatabase {
     return (result.rows[0] ?? null) as unknown as BotRecord | null;
   }
 
+  async validateBotToken(token: string): Promise<BotRecord | null> {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const result = await this.query<Record<string, unknown>>(
+      'SELECT * FROM nchat_bots WHERE source_account_id = $1 AND token_hash = $2 AND is_enabled = true',
+      [this.sourceAccountId, tokenHash]
+    );
+    return (result.rows[0] ?? null) as unknown as BotRecord | null;
+  }
+
   async listBots(options: { ownerId?: string; isPublic?: boolean; isEnabled?: boolean; limit?: number; offset?: number } = {}): Promise<BotRecord[]> {
     const conditions: string[] = ['source_account_id = $1'];
     const params: unknown[] = [this.sourceAccountId];
