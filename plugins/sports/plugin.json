@@ -1,7 +1,7 @@
 {
   "name": "sports",
   "version": "1.0.0",
-  "description": "Comprehensive sports data plugin with live scores, schedules, standings, team rosters, player stats, and real-time game updates",
+  "description": "Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/sports",

@@ -1,7 +1,7 @@
 {
   "name": "notifications",
   "version": "1.0.0",
-  "description": "Multi-channel notifications (email, push, SMS) with templates, preferences, and delivery tracking",
+  "description": "Notification system with templates, preferences, and delivery tracking. Planned: Live delivery via email (SMTP/SendGrid), push (FCM/APNs), SMS (Twilio)",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/notifications",

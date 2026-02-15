@@ -1,7 +1,7 @@
 {
   "name": "geocoding",
   "version": "1.0.0",
-  "description": "Geocoding and location services plugin - forward/reverse geocoding, place search, geofences",
+  "description": "Geocoding plugin with geofence storage. Planned: Google Maps API integration for forward/reverse geocoding and place search",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/geocoding",

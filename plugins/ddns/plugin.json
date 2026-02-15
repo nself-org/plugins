@@ -1,7 +1,7 @@
 {
   "name": "ddns",
   "version": "1.0.0",
-  "description": "Dynamic DNS updater with multi-provider support and external IP monitoring",
+  "description": "Dynamic DNS plugin with external IP monitoring. Planned: DNS provider API integration (Cloudflare, Route53) for automated record updates",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/ddns",

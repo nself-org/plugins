@@ -1,7 +1,7 @@
 {
   "name": "auth",
   "version": "1.0.0",
-  "description": "Advanced authentication: OAuth, WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow",
+  "description": "Authentication plugin with sessions and login tracking. Planned: OAuth (5 providers), WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/auth",

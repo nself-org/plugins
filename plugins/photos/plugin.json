@@ -1,7 +1,7 @@
 {
   "name": "photos",
   "version": "1.0.0",
-  "description": "Photo album management with EXIF extraction, tagging, face grouping, and thumbnails",
+  "description": "Photo album management with EXIF extraction, tagging, and thumbnails. Planned: Face grouping and recognition",
   "author": "nself",
   "license": "Source-Available",
   "minNselfVersion": "0.4.8",

@@ -1,7 +1,7 @@
 {
   "name": "content-acquisition",
   "version": "1.0.0",
-  "description": "Automated content acquisition with RSS monitoring, release calendar, and download rules engine",
+  "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
   "author": "nself",
   "license": "MIT",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/content-acquisition",
