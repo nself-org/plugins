@@ -145,6 +145,7 @@ export function loadConfig(): AuthConfig {
       rpName: getEnvOptional('AUTH_WEBAUTHN_RP_NAME', 'nSelf'),
       rpId: getEnvOptional('AUTH_WEBAUTHN_RP_ID', 'localhost'),
       origin: getEnvOptional('AUTH_WEBAUTHN_ORIGIN', 'http://localhost:3014'),
+      timeout: getEnvInt('AUTH_WEBAUTHN_TIMEOUT', 60000),
     },
 
     // TOTP

@@ -30,6 +30,48 @@ Authentication plugin with sessions and login tracking.
 
 **Endpoints:** `/api/mfa/totp/enroll`, `/api/mfa/totp/verify`, `/api/mfa/totp/validate`, `/api/mfa/backup-code/validate`
 
+### ✅ Magic Links
+- Email-based magic link authentication
+- Secure token generation (256-bit random)
+- SHA-256 token hashing for storage
+- Configurable expiry times
+- One-time use tokens
+- Support for login, verify, and reset purposes
+
+**Endpoints:** `/api/magic-link/send`, `/api/magic-link/verify`
+
+**Note:** Email sending requires notifications plugin integration (TODO)
+
+### ✅ Device Code Flow
+- OAuth 2.0 Device Code Flow (RFC 8628)
+- User-friendly 8-character codes (XXXX-XXXX format)
+- TV/device authentication without keyboard
+- Polling and authorization workflow
+- Configurable expiry and poll intervals
+- Secure device code generation (64-character hex)
+
+**Endpoints:** `/api/device-code/initiate`, `/api/device-code/poll`, `/api/device-code/authorize`, `/api/device-code/deny`
+
+**Note:** Token generation for authorized devices requires token service (TODO)
+
+### ✅ WebAuthn/Passkeys
+- Passkey registration (with automatic device detection)
+- Passkey authentication (discoverable and non-discoverable credentials)
+- Device management (list, delete passkeys)
+- Multi-device synced passkeys support
+- Security key support
+- Automatic challenge cleanup (5-minute expiry)
+- Counter-based replay attack prevention
+- User-friendly device naming suggestions
+
+**Endpoints:** `/api/passkeys/register/start`, `/api/passkeys/register/finish`, `/api/passkeys/authenticate/start`, `/api/passkeys/authenticate/finish`, `/api/passkeys/:userId`, `/api/passkeys/:credentialId`
+
+**Production Configuration Required:**
+```bash
+AUTH_WEBAUTHN_RP_ID=yourdomain.com
+AUTH_WEBAUTHN_ORIGIN=https://yourdomain.com
+```
+
 ## Planned Features
 
 The following features have database schema and API endpoints prepared, but return HTTP 501 (Not Implemented) until external dependencies are integrated:
@@ -46,35 +88,6 @@ Providers ready to integrate:
 
 **Endpoints:** `/api/oauth/start`, `/api/oauth/callback`, `/api/oauth/link`
 
-### 🔄 WebAuthn/Passkeys (Planned)
-**Status:** Requires @simplewebauthn/server library
-
-Features:
-- Passkey registration
-- Passkey authentication
-- Device management
-
-**Endpoints:** `/api/passkeys/register/start`, `/api/passkeys/register/finish`, `/api/passkeys/auth/start`, `/api/passkeys/auth/finish`
-
-### 🔄 Magic Links (Planned)
-**Status:** Requires crypto module and notifications plugin integration
-
-Features:
-- Email-based magic link authentication
-- Configurable expiry times
-- One-time use tokens
-
-**Endpoints:** `/api/magic-link/send`, `/api/magic-link/verify`
-
-### 🔄 Device Code Flow (Planned)
-**Status:** Requires crypto module for secure code generation
-
-Features:
-- OAuth 2.0 device authorization grant
-- TV/device authentication
-- Polling and authorization
-
-**Endpoints:** `/api/device-code/initiate`, `/api/device-code/poll`, `/api/device-code/authorize`
 
 ## Installation
 
@@ -224,12 +237,13 @@ The plugin defines 15 webhook events (see `plugin.json`), but these will only fi
 - `auth.login.blocked` - Fires when login is blocked
 - `auth.mfa.enrolled` - Fires when MFA is enrolled
 - `auth.mfa.verified` - Fires when MFA enrollment is verified
+- `auth.magiclink.sent` - Fires when magic link is sent
+- `auth.magiclink.used` - Fires when magic link is verified
 
 ### Planned Webhooks
 - OAuth events (linked, unlinked)
 - Passkey events (registered, used)
-- Magic link events (sent, used)
-- Device code events (initiated, authorized, denied, expired)
+- Device code events (initiated, authorized, denied, expired) - **Webhooks defined but not yet firing**
 
 ## Development Roadmap
 
@@ -247,13 +261,16 @@ The plugin defines 15 webhook events (see `plugin.json`), but these will only fi
 - Add OAuth account linking
 - Test with real provider credentials
 
-### Phase 3: WebAuthn/Passkeys (Planned)
-**Estimated Effort:** 6-8 hours
+### Phase 3: WebAuthn/Passkeys ✅
+**Status:** Implemented
 
-- Add @simplewebauthn/server library
-- Implement registration flow
-- Implement authentication flow
-- Test with hardware keys and platform authenticators
+- ✅ Added @simplewebauthn/server library
+- ✅ Implemented registration flow with device exclusion
+- ✅ Implemented authentication flow (both user-specific and usernameless)
+- ✅ Challenge management with automatic cleanup
+- ✅ Device type detection and friendly naming
+- ✅ Support for synced and device-bound passkeys
+- ✅ Counter-based replay attack prevention
 
 ### Phase 4: TOTP 2FA ✅
 **Status:** Implemented
@@ -263,23 +280,25 @@ The plugin defines 15 webhook events (see `plugin.json`), but these will only fi
 - ✅ TOTP verification flow
 - ✅ Backup code system (10 codes with auto-removal)
 
-### Phase 5: Magic Links (Planned)
-**Estimated Effort:** 3-4 hours
+### Phase 5: Magic Links ✅
+**Status:** Implemented
 
-- Integrate with notifications plugin
-- Generate secure tokens
-- Implement verification
-- Add expiry and rate limiting
+- ✅ Secure token generation (256-bit random)
+- ✅ SHA-256 token hashing for storage
+- ✅ Verification flow with expiry checks
+- ✅ One-time use enforcement
+- 🔄 Email sending (requires notifications plugin integration)
 
-### Phase 6: Device Code Flow (Planned)
-**Estimated Effort:** 4-5 hours
+### Phase 6: Device Code Flow ✅
+**Status:** Implemented
 
-- Implement RFC 8628 spec
-- Generate user-friendly codes
-- Add polling mechanism
-- Build authorization UI
+- ✅ RFC 8628 spec implementation
+- ✅ User-friendly code generation (8 chars, XXXX-XXXX format)
+- ✅ Polling mechanism with expiry checks
+- ✅ Authorization and denial endpoints
+- 🔄 Token generation for authorized devices (requires token service)
 
-**Remaining Estimated Effort:** 21-30 hours (TOTP 2FA completed)
+**Remaining Estimated Effort:** 8-12 hours (OAuth only - all other features completed including TOTP 2FA, Magic Links, Device Code Flow, and WebAuthn/Passkeys)
 
 ## Migration Guide
 

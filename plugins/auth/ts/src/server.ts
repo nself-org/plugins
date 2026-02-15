@@ -7,8 +7,12 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { createLogger } from '@nself/plugin-utils';
 import { AuthDatabase } from './database.js';
 import { TotpService } from './totp.js';
+import { DeviceCodeService } from './device-code.js';
+import { MagicLinkService } from './magic-links.js';
+import { WebAuthnService } from './webauthn.js';
 import { encrypt, decrypt, encryptArray, decryptArray } from './crypto.js';
 import { AuthConfig, HealthCheckResponse, ReadyCheckResponse, LiveCheckResponse } from './types.js';
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 const logger = createLogger('auth:server');
 const PLUGIN_VERSION = '1.0.0';
@@ -19,18 +23,27 @@ export class AuthServer {
   private config: AuthConfig;
   private startTime: number;
   private totpService: TotpService;
+  private deviceCodeService: DeviceCodeService;
+  private magicLinkService: MagicLinkService;
+  private webAuthnService: WebAuthnService;
+  private challenges: Map<string, { challenge: string; userId?: string; timestamp: number }>;
 
   constructor(db: AuthDatabase, config: AuthConfig) {
     this.db = db;
     this.config = config;
     this.startTime = Date.now();
     this.totpService = new TotpService(config);
+    this.deviceCodeService = new DeviceCodeService(config);
+    this.magicLinkService = new MagicLinkService(config);
+    this.webAuthnService = new WebAuthnService(config);
+    this.challenges = new Map();
     this.app = Fastify({
       logger: false,
       trustProxy: true,
     });
 
     this.setupRoutes();
+    this.startChallengeCleanup();
   }
 
   /**
@@ -191,12 +204,52 @@ export class AuthServer {
   }
 
   // =========================================================================
-  // WebAuthn/Passkeys Handlers (Stubs - requires @simplewebauthn libraries)
+  // WebAuthn/Passkeys Handlers
   // =========================================================================
 
+  /**
+   * Start challenge cleanup timer
+   * Removes stale challenges (older than 5 minutes)
+   */
+  private startChallengeCleanup(): void {
+    setInterval(() => {
+      const now = Date.now();
+      const fiveMinutes = 5 * 60 * 1000;
+      for (const [key, data] of this.challenges.entries()) {
+        if (now - data.timestamp > fiveMinutes) {
+          this.challenges.delete(key);
+        }
+      }
+    }, 60000); // Run every minute
+  }
+
   private async handlePasskeyRegisterStart(request: FastifyRequest<{ Body: { userId: string; userName: string; userDisplayName: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Generate WebAuthn creation options
-    reply.code(501).send({ error: 'Passkey registration not implemented - requires @simplewebauthn library' });
+    try {
+      const { userId, userName, userDisplayName } = request.body;
+
+      // Get existing passkeys to exclude
+      const existingPasskeys = await this.db.getPasskeysByUser(userId);
+
+      // Generate registration options
+      const options = await this.webAuthnService.generateRegistrationOptions({
+        userId,
+        userName,
+        userDisplayName,
+        excludeCredentials: existingPasskeys,
+      });
+
+      // Store challenge for verification
+      this.challenges.set(userId, {
+        challenge: options.challenge,
+        userId,
+        timestamp: Date.now(),
+      });
+
+      reply.send(options);
+    } catch (error) {
+      logger.error('Passkey registration start error', { error });
+      reply.code(500).send({ error: 'Failed to start passkey registration' });
+    }
   }
 
   private async handlePasskeyRegisterFinish(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -377,62 +430,235 @@ export class AuthServer {
   }
 
   // =========================================================================
-  // Magic Link Handlers (Stubs - requires crypto and notifications integration)
+  // Magic Link Handlers
   // =========================================================================
 
-  private async handleMagicLinkSend(request: FastifyRequest<{ Body: { email: string; purpose: string; redirectUrl?: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Generate magic link and send email via notifications plugin
-    reply.code(501).send({ error: 'Magic link send not implemented - requires crypto and notifications plugin integration' });
+  private async handleMagicLinkSend(request: FastifyRequest<{ Body: { email: string; purpose: 'login' | 'verify' | 'reset'; redirectUrl?: string } }>, reply: FastifyReply): Promise<void> {
+    try {
+      const { email, purpose } = request.body;
+
+      // Validate purpose
+      if (!['login', 'verify', 'reset'].includes(purpose)) {
+        reply.code(400).send({ error: 'Invalid purpose. Must be login, verify, or reset' });
+        return;
+      }
+
+      // Generate magic link
+      const magicLink = await this.magicLinkService.generateMagicLink(email, purpose);
+      const tokenHash = this.magicLinkService.hashToken(magicLink.token);
+
+      // Store in database
+      await this.db.insertMagicLink({
+        email,
+        token_hash: tokenHash,
+        purpose,
+        expires_at: magicLink.expiresAt,
+        ip_address: request.ip || null,
+      });
+
+      // TODO: Send email via notifications plugin
+      // For now, we return the URL in development mode
+      // In production, this should ONLY be sent via email
+      logger.info('Magic link created', { email, purpose, url: magicLink.url });
+
+      // Calculate expiry duration
+      const expiresIn = Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000);
+
+      reply.send({
+        sent: true,
+        expiresIn,
+        // SECURITY: Remove this in production - only send via email!
+        url: magicLink.url,
+      });
+    } catch (error) {
+      logger.error('Magic link send error', { error });
+      reply.code(500).send({ error: 'Failed to send magic link' });
+    }
   }
 
   private async handleMagicLinkVerify(request: FastifyRequest<{ Body: { token: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Verify magic link token
-    reply.code(501).send({ error: 'Magic link verification not implemented' });
+    try {
+      const { token } = request.body;
+
+      // Hash the provided token
+      const tokenHash = this.magicLinkService.hashToken(token);
+
+      // Get magic link from database
+      const magicLink = await this.db.getMagicLink(tokenHash);
+
+      if (!magicLink) {
+        reply.code(404).send({ error: 'Invalid or expired magic link' });
+        return;
+      }
+
+      // Check if expired
+      if (this.magicLinkService.isExpired(magicLink.expires_at)) {
+        reply.code(400).send({ error: 'Magic link expired' });
+        return;
+      }
+
+      // Mark as used
+      await this.db.markMagicLinkUsed(tokenHash);
+
+      logger.info('Magic link verified', { email: magicLink.email, purpose: magicLink.purpose });
+
+      reply.send({
+        valid: true,
+        email: magicLink.email,
+        purpose: magicLink.purpose,
+      });
+    } catch (error) {
+      logger.error('Magic link verify error', { error });
+      reply.code(500).send({ error: 'Verification failed' });
+    }
   }
 
   // =========================================================================
-  // Device Code Handlers (Stubs - requires crypto for code generation)
+  // Device Code Handlers
   // =========================================================================
 
-  private async handleDeviceCodeInitiate(request: FastifyRequest<{ Body: { deviceId?: string; deviceName?: string; deviceType?: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Generate device code and user code
-    reply.code(501).send({ error: 'Device code initiation not implemented - requires crypto for code generation' });
+  private async handleDeviceCodeInitiate(request: FastifyRequest<{ Body: { deviceId?: string; deviceName?: string; deviceType?: string; scopes?: string[] } }>, reply: FastifyReply): Promise<void> {
+    try {
+      const { deviceId, deviceName, deviceType, scopes } = request.body;
+
+      // Generate device code and user code
+      const codeData = await this.deviceCodeService.initiate();
+
+      // Store in database
+      await this.db.insertDeviceCode({
+        device_code: codeData.deviceCode,
+        user_code: codeData.userCode,
+        device_id: deviceId || null,
+        device_name: deviceName || null,
+        device_type: deviceType || null,
+        scopes: scopes || [],
+        status: 'pending',
+        expires_at: codeData.expiresAt,
+        poll_interval: codeData.interval,
+      });
+
+      logger.info('Device code initiated', { userCode: codeData.userCode, deviceName });
+
+      reply.send({
+        deviceCode: codeData.deviceCode,
+        userCode: codeData.userCode,
+        verificationUrl: codeData.verificationUri,
+        expiresIn: this.config.deviceCode.expirySeconds,
+        pollInterval: codeData.interval,
+      });
+    } catch (error) {
+      logger.error('Device code initiation error', { error });
+      reply.code(500).send({ error: 'Device code initiation failed' });
+    }
   }
 
   private async handleDeviceCodePoll(request: FastifyRequest<{ Querystring: { deviceCode: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Poll device code status
-    const { deviceCode } = request.query;
-    const record = await this.db.getDeviceCodeByCode(deviceCode);
-    if (!record) {
-      reply.code(404).send({ error: 'Device code not found' });
-      return;
+    try {
+      const { deviceCode } = request.query;
+      const record = await this.db.getDeviceCodeByCode(deviceCode);
+
+      if (!record) {
+        reply.code(404).send({ error: 'Device code not found' });
+        return;
+      }
+
+      // Check expiration
+      if (this.deviceCodeService.isExpired(record.expires_at)) {
+        // Update status if not already expired
+        if (record.status !== 'expired') {
+          await this.db.updateDeviceCodeStatus(record.user_code, 'expired');
+        }
+        reply.send({ status: 'expired' });
+        return;
+      }
+
+      // Return status based on authorization state
+      if (record.status === 'authorized' && record.user_id) {
+        // TODO: Generate access/refresh tokens (requires token service)
+        reply.send({
+          status: 'authorized',
+          userId: record.user_id,
+          // accessToken: '...', // TODO: implement token generation
+          // refreshToken: '...', // TODO: implement token generation
+        });
+        return;
+      }
+
+      reply.send({ status: record.status });
+    } catch (error) {
+      logger.error('Device code poll error', { error });
+      reply.code(500).send({ error: 'Device code poll failed' });
     }
-    if (new Date() > record.expires_at) {
-      reply.send({ status: 'expired' });
-      return;
-    }
-    reply.send({ status: record.status });
   }
 
   private async handleDeviceCodeAuthorize(request: FastifyRequest<{ Body: { userCode: string; userId: string } }>, reply: FastifyReply): Promise<void> {
-    const { userCode, userId } = request.body;
-    const record = await this.db.getDeviceCodeByUserCode(userCode);
-    if (!record) {
-      reply.code(404).send({ error: 'User code not found' });
-      return;
+    try {
+      const { userCode, userId } = request.body;
+
+      const record = await this.db.getDeviceCodeByUserCode(userCode);
+      if (!record) {
+        reply.code(404).send({ error: 'User code not found' });
+        return;
+      }
+
+      // Check expiration
+      if (this.deviceCodeService.isExpired(record.expires_at)) {
+        reply.code(400).send({ error: 'Device code expired' });
+        return;
+      }
+
+      // Check if already authorized or denied
+      if (record.status === 'authorized') {
+        reply.code(400).send({ error: 'Device code already authorized' });
+        return;
+      }
+
+      if (record.status === 'denied') {
+        reply.code(400).send({ error: 'Device code already denied' });
+        return;
+      }
+
+      // Update status to authorized
+      await this.db.updateDeviceCodeStatus(userCode, 'authorized', userId);
+
+      logger.info('Device code authorized', { userCode, userId, deviceName: record.device_name });
+
+      reply.send({
+        authorized: true,
+        deviceName: record.device_name,
+      });
+    } catch (error) {
+      logger.error('Device code authorization error', { error });
+      reply.code(500).send({ error: 'Device code authorization failed' });
     }
-    if (new Date() > record.expires_at) {
-      reply.code(400).send({ error: 'Device code expired' });
-      return;
-    }
-    await this.db.updateDeviceCodeStatus(userCode, 'authorized', userId);
-    reply.send({ authorized: true, deviceName: record.device_name });
   }
 
   private async handleDeviceCodeDeny(request: FastifyRequest<{ Body: { userCode: string } }>, reply: FastifyReply): Promise<void> {
-    const { userCode } = request.body;
-    await this.db.updateDeviceCodeStatus(userCode, 'denied');
-    reply.send({ denied: true });
+    try {
+      const { userCode } = request.body;
+
+      const record = await this.db.getDeviceCodeByUserCode(userCode);
+      if (!record) {
+        reply.code(404).send({ error: 'User code not found' });
+        return;
+      }
+
+      // Check expiration
+      if (this.deviceCodeService.isExpired(record.expires_at)) {
+        reply.code(400).send({ error: 'Device code expired' });
+        return;
+      }
+
+      // Update status to denied
+      await this.db.updateDeviceCodeStatus(userCode, 'denied');
+
+      logger.info('Device code denied', { userCode });
+
+      reply.send({ denied: true });
+    } catch (error) {
+      logger.error('Device code denial error', { error });
+      reply.code(500).send({ error: 'Device code denial failed' });
+    }
   }
 
   // =========================================================================

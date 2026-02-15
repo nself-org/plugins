@@ -34,11 +34,14 @@ export interface PasskeyRecord {
   counter: number;
   device_type: string | null;
   backed_up: boolean;
-  transports: string[];
+  transports: string | null;
   friendly_name: string | null;
   last_used_at: Date | null;
   created_at: Date;
 }
+
+// Alias for database row type
+export type PasskeyRow = PasskeyRecord;
 
 export interface MfaEnrollmentRecord {
   id: string;
@@ -424,6 +427,7 @@ export interface AuthConfig {
     rpName: string;
     rpId: string;
     origin: string;
+    timeout: number;
   };
 
   // TOTP

@@ -30,6 +30,7 @@
   "license": "Source-Available",
   "dependencies": {
     "@nself/plugin-utils": "file:../../../shared",
+    "@simplewebauthn/server": "13.0.0",
     "@types/qrcode": "^1.5.6",
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
