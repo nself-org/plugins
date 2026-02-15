@@ -14,6 +14,9 @@
     "email",
     "push",
     "sms",
+    "fcm",
+    "apns",
+    "mobile",
     "messaging",
     "alerts",
     "templates"
@@ -24,7 +27,9 @@
     "np_notifications_messages",
     "np_notifications_queue",
     "np_notifications_providers",
-    "np_notifications_batches"
+    "np_notifications_batches",
+    "np_notifications_push_devices",
+    "np_notifications_push_delivery_log"
   ],
   "webhooks": {
     "delivery.succeeded": "Notification delivered successfully",
@@ -41,7 +46,10 @@
     "worker": "Start background worker for queue processing",
     "template": "Manage notification templates",
     "test": "Send test notifications",
-    "stats": "View notification statistics"
+    "stats": "View notification statistics",
+    "devices": "Manage push notification devices",
+    "send-push": "Send push notification to devices",
+    "preferences": "Manage user notification preferences"
   },
   "envVars": {
     "required": [
@@ -53,6 +61,12 @@
       "NOTIFICATIONS_EMAIL_FROM",
       "NOTIFICATIONS_PUSH_PROVIDER",
       "NOTIFICATIONS_PUSH_API_KEY",
+      "FCM_SERVER_KEY",
+      "FCM_PROJECT_ID",
+      "APNS_CERT_PATH",
+      "APNS_KEY_PATH",
+      "APNS_TEAM_ID",
+      "APNS_BUNDLE_ID",
       "NOTIFICATIONS_SMS_PROVIDER",
       "NOTIFICATIONS_SMS_ACCOUNT_SID",
       "NOTIFICATIONS_SMS_AUTH_TOKEN",

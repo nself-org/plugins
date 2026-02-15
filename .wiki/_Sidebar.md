@@ -21,15 +21,19 @@
 - [[Plugin System|architecture/Plugin-System]]
 - [[REST API|api/REST-API]]
 
-### Plugins
+### Popular Plugins
 - [[Stripe|plugins/Stripe]]
 - [[GitHub|plugins/GitHub]]
 - [[Shopify|plugins/Shopify]]
-- [[ID.me|plugins/IDme]]
-- [[Realtime|plugins/Realtime]]
+- [[AI|plugins/AI]]
+- [[Jobs|plugins/Jobs]]
 - [[Notifications|plugins/Notifications]]
 - [[File Processing|plugins/FileProcessing]]
-- [[Jobs|plugins/Jobs]]
+- [[Auth|plugins/Auth]]
+- [[Realtime|plugins/Realtime]]
+- [[Analytics|plugins/Analytics]]
+
+**View All:** [[Home|Home#all-plugins-65-total]] - 65 plugins across 16 categories
 
 ### Guides
 - [[Configuration|guides/Configuration]]

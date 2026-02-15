@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-14T22:08:48Z",
+  "lastUpdated": "2026-02-15T19:52:01Z",
   "plugins": {
     "stripe": {
       "name": "stripe",
@@ -8243,124 +8243,6 @@
       },
       "dependencies": []
     },
-    "metadata-enrichment": {
-      "name": "metadata-enrichment",
-      "version": "1.0.0",
-      "description": "Metadata enrichment with TMDB, TVDB, and MusicBrainz integration for movies, TV shows, and music",
-      "author": "nself",
-      "license": "Source-Available",
-      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/metadata-enrichment",
-      "repository": "https://github.com/acamarata/nself-plugins",
-      "path": "plugins/metadata-enrichment",
-      "minNselfVersion": "0.4.8",
-      "category": "media",
-      "tags": [
-        "metadata",
-        "tmdb",
-        "tvdb",
-        "musicbrainz",
-        "enrichment",
-        "movies",
-        "tv"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-metadata-enrichment",
-        "defaultPort": 3203,
-        "packageManager": "npm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_metaenrich_movies",
-        "np_metaenrich_tv_shows"
-      ],
-      "views": [],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "METADATA_ENRICHMENT_PORT",
-          "description": "Server port (default: 3203)"
-        },
-        {
-          "name": "TMDB_API_KEY",
-          "required": true,
-          "description": "TMDB API key"
-        },
-        {
-          "name": "TVDB_API_KEY",
-          "description": "TVDB API key (optional)"
-        },
-        {
-          "name": "MUSICBRAINZ_APP_NAME",
-          "description": "MusicBrainz app name for User-Agent"
-        }
-      ],
-      "cliCommands": [
-        {
-          "name": "server",
-          "description": "Start the metadata enrichment server"
-        },
-        {
-          "name": "search",
-          "description": "Search for metadata"
-        },
-        {
-          "name": "enrich",
-          "description": "Enrich content with metadata"
-        },
-        {
-          "name": "status",
-          "description": "Show enrichment statistics"
-        },
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "POST",
-          "path": "/api/enrich",
-          "description": "Enrich content with metadata"
-        },
-        {
-          "method": "GET",
-          "path": "/api/search",
-          "description": "Search TMDB/TVDB"
-        },
-        {
-          "method": "GET",
-          "path": "/api/movie/:id",
-          "description": "Get movie metadata"
-        },
-        {
-          "method": "GET",
-          "path": "/api/tv/:id",
-          "description": "Get TV show metadata"
-        },
-        {
-          "method": "GET",
-          "path": "/api/stats",
-          "description": "Enrichment statistics"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "dependencies": []
-    },
     "subtitle-manager": {
       "name": "subtitle-manager",
       "version": "1.0.0",
@@ -8699,6 +8581,306 @@
         "system",
         "management"
       ]
+    },
+    "ddns": {
+      "name": "ddns",
+      "version": "1.0.0",
+      "description": "Dynamic DNS updater with multi-provider support and external IP monitoring",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/ddns",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/ddns",
+      "minNselfVersion": "0.4.8",
+      "category": "networking",
+      "tags": [
+        "ddns",
+        "dns",
+        "dynamic-dns",
+        "duckdns",
+        "cloudflare",
+        "remote-access"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-ddns",
+        "defaultPort": 3217,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_ddns_config",
+        "np_ddns_update_log"
+      ],
+      "webhooks": {},
+      "apiEndpoints": {},
+      "cliCommands": {
+        "status": "Show current IP and domain status",
+        "update": "Force a DNS update",
+        "providers": "List available DNS providers",
+        "history": "Show update history",
+        "stats": "Show DDNS statistics"
+      },
+      "envVars": {
+        "required": [
+          "DATABASE_URL"
+        ],
+        "optional": [
+          "DDNS_PLUGIN_PORT",
+          "DDNS_PROVIDER",
+          "DDNS_DOMAIN",
+          "DDNS_TOKEN",
+          "DDNS_CHECK_INTERVAL",
+          "DDNS_CLOUDFLARE_API_KEY",
+          "DDNS_CLOUDFLARE_ZONE_ID"
+        ]
+      },
+      "dependencies": {
+        "npm": {
+          "@nself/plugin-utils": "file:../../../shared",
+          "fastify": "^4.24.0",
+          "@fastify/cors": "^8.4.0",
+          "dotenv": "^16.3.1",
+          "commander": "^11.1.0",
+          "pg": "^8.11.3"
+        }
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "views": [],
+      "checksums": {}
+    },
+    "game-metadata": {
+      "name": "game-metadata",
+      "version": "1.0.0",
+      "description": "Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/game-metadata",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/game-metadata",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "games",
+        "igdb",
+        "metadata",
+        "rom",
+        "retro-gaming",
+        "artwork"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-game-metadata",
+        "defaultPort": 3211,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_game_catalog",
+        "np_game_metadata",
+        "np_game_artwork",
+        "np_game_platforms",
+        "np_game_genres"
+      ],
+      "webhooks": {},
+      "apiEndpoints": {},
+      "cliCommands": {
+        "lookup": "Lookup game by name or hash",
+        "enrich": "Enrich metadata from IGDB",
+        "tiers": "Show tier requirements",
+        "platforms": "List platforms",
+        "stats": "Show statistics"
+      },
+      "envVars": {
+        "required": [
+          "DATABASE_URL"
+        ],
+        "optional": [
+          "GAME_METADATA_PLUGIN_PORT",
+          "IGDB_CLIENT_ID",
+          "IGDB_CLIENT_SECRET",
+          "GAME_METADATA_ARTWORK_PATH"
+        ]
+      },
+      "dependencies": {
+        "npm": {
+          "@nself/plugin-utils": "file:../../../shared",
+          "fastify": "^4.24.0",
+          "@fastify/cors": "^8.4.0",
+          "dotenv": "^16.3.1",
+          "commander": "^11.1.0",
+          "pg": "^8.11.3"
+        }
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "views": [],
+      "checksums": {}
+    },
+    "mdns": {
+      "name": "mdns",
+      "version": "1.0.0",
+      "description": "mDNS/Bonjour service discovery for zero-config LAN advertising",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/mdns",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/mdns",
+      "minNselfVersion": "0.4.8",
+      "category": "networking",
+      "tags": [
+        "mdns",
+        "bonjour",
+        "zeroconf",
+        "lan",
+        "service-discovery"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-mdns",
+        "defaultPort": 3216,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_mdns_services",
+        "np_mdns_discovery_log"
+      ],
+      "webhooks": {},
+      "apiEndpoints": {},
+      "cliCommands": {
+        "advertise": "Start advertising a service",
+        "discover": "Discover services on the network",
+        "services": "List advertised services",
+        "stats": "Show mDNS statistics"
+      },
+      "envVars": {
+        "required": [
+          "DATABASE_URL"
+        ],
+        "optional": [
+          "MDNS_PLUGIN_PORT",
+          "MDNS_SERVICE_TYPE",
+          "MDNS_INSTANCE_NAME",
+          "MDNS_DOMAIN"
+        ]
+      },
+      "dependencies": {
+        "npm": {
+          "@nself/plugin-utils": "file:../../../shared",
+          "fastify": "^4.24.0",
+          "@fastify/cors": "^8.4.0",
+          "dotenv": "^16.3.1",
+          "commander": "^11.1.0",
+          "pg": "^8.11.3"
+        }
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "views": [],
+      "checksums": {}
+    },
+    "podcast": {
+      "name": "podcast",
+      "version": "1.0.0",
+      "description": "Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management",
+      "author": "nself",
+      "license": "Source-Available",
+      "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/podcast",
+      "repository": "https://github.com/acamarata/nself-plugins",
+      "path": "plugins/podcast",
+      "minNselfVersion": "0.4.8",
+      "category": "media",
+      "tags": [
+        "podcast",
+        "rss",
+        "audio",
+        "episodes",
+        "subscriptions",
+        "playback"
+      ],
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "minNodeVersion": "18.0.0",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js",
+        "cliName": "nself-podcast",
+        "defaultPort": 3210,
+        "packageManager": "npm",
+        "framework": "fastify"
+      },
+      "tables": [
+        "np_podcast_podcasts",
+        "np_podcast_episodes",
+        "np_podcast_subscriptions",
+        "np_podcast_playback_positions",
+        "np_podcast_categories"
+      ],
+      "webhooks": {},
+      "apiEndpoints": {},
+      "cliCommands": {
+        "feeds": "List feeds",
+        "subscribe": "Subscribe to podcast",
+        "episodes": "List episodes",
+        "sync": "Sync RSS feeds",
+        "search": "Search podcasts",
+        "stats": "Show statistics"
+      },
+      "envVars": {
+        "required": [
+          "DATABASE_URL"
+        ],
+        "optional": [
+          "PODCAST_PLUGIN_PORT",
+          "PODCAST_RSS_POLL_INTERVAL",
+          "PODCAST_MAX_EPISODES",
+          "PODCAST_STORAGE_BACKEND"
+        ]
+      },
+      "dependencies": {
+        "npm": {
+          "@nself/plugin-utils": "file:../../../shared",
+          "fastify": "^4.24.0",
+          "@fastify/cors": "^8.4.0",
+          "dotenv": "^16.3.1",
+          "commander": "^11.1.0",
+          "pg": "^8.11.3"
+        }
+      },
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "uuid",
+        "defaultValue": "primary"
+      },
+      "views": [],
+      "checksums": {}
     }
   },
   "categories": {
@@ -8837,5 +9019,10 @@
       "description": "Content moderation, toxicity detection, and safety tools",
       "icon": "alert-triangle"
     }
+  },
+  "metadata": {
+    "pluginCount": 65,
+    "lastUpdated": "2026-02-15T19:56:59.737Z",
+    "version": "1.0.0"
   }
 }

@@ -1,0 +1,80 @@
+{
+  "name": "game-metadata",
+  "version": "1.0.0",
+  "description": "Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/game-metadata",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3211,
+  "category": "media",
+  "tags": [
+    "games",
+    "igdb",
+    "metadata",
+    "rom",
+    "retro-gaming",
+    "artwork"
+  ],
+  "tables": [
+    "np_game_catalog",
+    "np_game_metadata",
+    "np_game_artwork",
+    "np_game_platforms",
+    "np_game_genres"
+  ],
+  "webhooks": {},
+  "actions": {
+    "lookup": "Lookup game by name or hash",
+    "enrich": "Enrich metadata from IGDB",
+    "tiers": "Show tier requirements",
+    "platforms": "List platforms",
+    "stats": "Show statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "GAME_METADATA_PLUGIN_PORT",
+      "IGDB_CLIENT_ID",
+      "IGDB_CLIENT_SECRET",
+      "GAME_METADATA_ARTWORK_PATH"
+    ]
+  },
+  "config": {
+    "defaultPort": 3211,
+    "defaultArtworkPath": "./artwork",
+    "maxArtworkSizeMb": 50,
+    "igdbRateLimitPerSecond": 4,
+    "hashAlgorithms": ["md5", "sha1", "sha256", "crc32"]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  }
+}

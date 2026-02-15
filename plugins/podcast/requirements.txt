@@ -1,0 +1,28 @@
+# FastAPI framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# RSS/Atom parsing
+feedparser==6.0.11
+
+# HTTP client
+httpx==0.26.0
+
+# Scheduling
+APScheduler==3.10.4
+
+# Database (installed in Docker container)
+# asyncpg==0.29.0
+# psycopg2-binary==2.9.9
+
+# Utilities
+python-dateutil==2.8.2
+defusedxml==0.7.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0

@@ -1,22 +1,24 @@
 /**
  * Admin API Database Operations
- * Complete CRUD operations for admin users and audit logging
+ * CRUD operations for metrics snapshots and dashboard configuration
  */
 
 import { createDatabase, createLogger, type Database } from '@nself/plugin-utils';
 import type {
-  AdminUserRecord,
-  AuditLogRecord,
-  CreateAdminUserInput,
-  UpdateAdminUserInput,
-  CreateAuditLogInput,
-  AdminStats,
-  AdminAction,
+  MetricsSnapshotRecord,
+  DashboardConfigRecord,
+  DashboardStats,
+  MetricType,
+  SessionInfo,
+  SessionDetail,
+  StorageBreakdown,
+  TableStorageInfo,
+  DatabaseStorageInfo,
 } from './types.js';
 
 const logger = createLogger('admin-api:db');
 
-export class AdminDatabase {
+export class AdminApiDatabase {
   private db: Database;
   private readonly sourceAccountId: string;
 
@@ -25,8 +27,8 @@ export class AdminDatabase {
     this.sourceAccountId = this.normalizeSourceAccountId(sourceAccountId);
   }
 
-  forSourceAccount(sourceAccountId: string): AdminDatabase {
-    return new AdminDatabase(this.db, sourceAccountId);
+  forSourceAccount(sourceAccountId: string): AdminApiDatabase {
+    return new AdminApiDatabase(this.db, sourceAccountId);
   }
 
   getCurrentSourceAccountId(): string {
@@ -69,315 +71,440 @@ export class AdminDatabase {
       CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
       -- =====================================================================
-      -- Admin Users
+      -- Metrics Snapshots
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_admin_users (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        source_account_id VARCHAR(128) DEFAULT 'primary',
-        email TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL,
-        active BOOLEAN DEFAULT TRUE,
-        last_login_at TIMESTAMP WITH TIME ZONE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT np_admin_users_email_source_unique UNIQUE (email, source_account_id)
+      CREATE TABLE IF NOT EXISTS np_admin_metrics_snapshots (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        metric_type VARCHAR(50) NOT NULL DEFAULT 'system',
+        cpu_usage_percent DOUBLE PRECISION,
+        memory_used_bytes BIGINT,
+        memory_total_bytes BIGINT,
+        disk_used_bytes BIGINT,
+        disk_total_bytes BIGINT,
+        active_connections INTEGER,
+        request_count INTEGER,
+        error_count INTEGER,
+        avg_response_time_ms DOUBLE PRECISION,
+        active_sessions INTEGER,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_np_admin_users_source_account
-        ON np_admin_users(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_users_email
-        ON np_admin_users(email);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_users_role
-        ON np_admin_users(role);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_users_active
-        ON np_admin_users(active);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_users_created
-        ON np_admin_users(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_admin_metrics_source_account
+        ON np_admin_metrics_snapshots(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_admin_metrics_type
+        ON np_admin_metrics_snapshots(source_account_id, metric_type);
+      CREATE INDEX IF NOT EXISTS idx_np_admin_metrics_created
+        ON np_admin_metrics_snapshots(source_account_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_admin_metrics_type_created
+        ON np_admin_metrics_snapshots(source_account_id, metric_type, created_at DESC);
 
       -- =====================================================================
-      -- Admin Audit Log (Immutable)
+      -- Dashboard Configuration
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS np_admin_audit_log (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        source_account_id VARCHAR(128) DEFAULT 'primary',
-        admin_user_id UUID REFERENCES np_admin_users(id) ON DELETE SET NULL,
-        action TEXT NOT NULL,
-        entity_type TEXT,
-        entity_id UUID,
-        details JSONB DEFAULT '{}',
-        ip_address INET,
-        user_agent TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+      CREATE TABLE IF NOT EXISTS np_admin_dashboard_config (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        config_key VARCHAR(255) NOT NULL,
+        config_value JSONB NOT NULL DEFAULT '{}',
+        description TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(source_account_id, config_key)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_np_admin_audit_log_source_account
-        ON np_admin_audit_log(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_audit_log_admin_user
-        ON np_admin_audit_log(admin_user_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_audit_log_action
-        ON np_admin_audit_log(action, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_audit_log_entity
-        ON np_admin_audit_log(entity_type, entity_id);
-      CREATE INDEX IF NOT EXISTS idx_np_admin_audit_log_created
-        ON np_admin_audit_log(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_admin_dashboard_config_source_account
+        ON np_admin_dashboard_config(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_admin_dashboard_config_key
+        ON np_admin_dashboard_config(source_account_id, config_key);
     `;
 
-    await this.db.execute(schema);
+    await this.execute(schema);
     logger.info('Admin API schema initialized successfully');
   }
 
   // =========================================================================
-  // Admin Users
+  // Metrics Snapshot Operations
   // =========================================================================
 
-  async createAdminUser(input: CreateAdminUserInput): Promise<AdminUserRecord> {
-    logger.info('Creating admin user', { email: input.email, role: input.role });
-
-    const result = await this.query<AdminUserRecord>(
-      `INSERT INTO np_admin_users (source_account_id, email, password_hash, role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [this.sourceAccountId, input.email, input.password, input.role]
-    );
-
-    return result.rows[0];
-  }
-
-  async getAdminUser(id: string): Promise<AdminUserRecord | null> {
-    const result = await this.query<AdminUserRecord>(
-      `SELECT * FROM np_admin_users
-       WHERE id = $1 AND source_account_id = $2`,
-      [id, this.sourceAccountId]
-    );
-
-    return result.rows[0] ?? null;
-  }
-
-  async getAdminUserByEmail(email: string): Promise<AdminUserRecord | null> {
-    const result = await this.query<AdminUserRecord>(
-      `SELECT * FROM np_admin_users
-       WHERE email = $1 AND source_account_id = $2`,
-      [email, this.sourceAccountId]
-    );
-
-    return result.rows[0] ?? null;
-  }
-
-  async listAdminUsers(limit = 100, offset = 0): Promise<AdminUserRecord[]> {
-    const result = await this.query<AdminUserRecord>(
-      `SELECT * FROM np_admin_users
-       WHERE source_account_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [this.sourceAccountId, limit, offset]
-    );
-
-    return result.rows;
-  }
-
-  async updateAdminUser(id: string, input: UpdateAdminUserInput): Promise<AdminUserRecord | null> {
-    logger.info('Updating admin user', { id, fields: Object.keys(input) });
-
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    let paramIndex = 1;
-
-    if (input.email !== undefined) {
-      fields.push(`email = $${paramIndex++}`);
-      values.push(input.email);
-    }
-    if (input.password !== undefined) {
-      fields.push(`password_hash = $${paramIndex++}`);
-      values.push(input.password);
-    }
-    if (input.role !== undefined) {
-      fields.push(`role = $${paramIndex++}`);
-      values.push(input.role);
-    }
-    if (input.active !== undefined) {
-      fields.push(`active = $${paramIndex++}`);
-      values.push(input.active);
-    }
-
-    if (fields.length === 0) {
-      return this.getAdminUser(id);
-    }
-
-    fields.push(`updated_at = NOW()`);
-    values.push(id, this.sourceAccountId);
-
-    const result = await this.query<AdminUserRecord>(
-      `UPDATE np_admin_users
-       SET ${fields.join(', ')}
-       WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}
-       RETURNING *`,
-      values
-    );
-
-    return result.rows[0] ?? null;
-  }
-
-  async deleteAdminUser(id: string): Promise<boolean> {
-    logger.info('Deleting admin user', { id });
-
-    const count = await this.execute(
-      `DELETE FROM np_admin_users
-       WHERE id = $1 AND source_account_id = $2`,
-      [id, this.sourceAccountId]
-    );
-
-    return count > 0;
-  }
-
-  async updateLastLogin(id: string): Promise<void> {
-    await this.execute(
-      `UPDATE np_admin_users
-       SET last_login_at = NOW()
-       WHERE id = $1 AND source_account_id = $2`,
-      [id, this.sourceAccountId]
-    );
-  }
-
-  // =========================================================================
-  // Audit Log (Immutable)
-  // =========================================================================
-
-  async createAuditLog(input: CreateAuditLogInput): Promise<AuditLogRecord> {
-    logger.info('Creating audit log', { action: input.action, entity_type: input.entity_type });
-
-    const result = await this.query<AuditLogRecord>(
-      `INSERT INTO np_admin_audit_log (
-        source_account_id,
-        admin_user_id,
-        action,
-        entity_type,
-        entity_id,
-        details,
-        ip_address,
-        user_agent
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  async createSnapshot(snapshot: Omit<MetricsSnapshotRecord, 'id' | 'created_at'>): Promise<MetricsSnapshotRecord> {
+    const result = await this.query<MetricsSnapshotRecord>(
+      `INSERT INTO np_admin_metrics_snapshots (
+        source_account_id, metric_type, cpu_usage_percent,
+        memory_used_bytes, memory_total_bytes,
+        disk_used_bytes, disk_total_bytes,
+        active_connections, request_count, error_count,
+        avg_response_time_ms, active_sessions, metadata
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *`,
       [
-        this.sourceAccountId,
-        input.admin_user_id ?? null,
-        input.action,
-        input.entity_type ?? null,
-        input.entity_id ?? null,
-        JSON.stringify(input.details ?? {}),
-        input.ip_address ?? null,
-        input.user_agent ?? null,
+        this.sourceAccountId, snapshot.metric_type, snapshot.cpu_usage_percent,
+        snapshot.memory_used_bytes, snapshot.memory_total_bytes,
+        snapshot.disk_used_bytes, snapshot.disk_total_bytes,
+        snapshot.active_connections, snapshot.request_count, snapshot.error_count,
+        snapshot.avg_response_time_ms, snapshot.active_sessions,
+        JSON.stringify(snapshot.metadata),
       ]
     );
 
     return result.rows[0];
   }
 
-  async listAuditLogs(
-    limit = 100,
-    offset = 0,
-    filters?: {
-      admin_user_id?: string;
-      action?: AdminAction;
-      entity_type?: string;
-      entity_id?: string;
-      start_date?: Date;
-      end_date?: Date;
-    }
-  ): Promise<AuditLogRecord[]> {
+  async listSnapshots(filters: {
+    metricType?: MetricType;
+    from?: Date;
+    to?: Date;
+    limit?: number;
+  }): Promise<MetricsSnapshotRecord[]> {
     const conditions: string[] = ['source_account_id = $1'];
     const values: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
-    if (filters?.admin_user_id) {
-      conditions.push(`admin_user_id = $${paramIndex++}`);
-      values.push(filters.admin_user_id);
-    }
-    if (filters?.action) {
-      conditions.push(`action = $${paramIndex++}`);
-      values.push(filters.action);
-    }
-    if (filters?.entity_type) {
-      conditions.push(`entity_type = $${paramIndex++}`);
-      values.push(filters.entity_type);
-    }
-    if (filters?.entity_id) {
-      conditions.push(`entity_id = $${paramIndex++}`);
-      values.push(filters.entity_id);
-    }
-    if (filters?.start_date) {
-      conditions.push(`created_at >= $${paramIndex++}`);
-      values.push(filters.start_date);
-    }
-    if (filters?.end_date) {
-      conditions.push(`created_at <= $${paramIndex++}`);
-      values.push(filters.end_date);
+    if (filters.metricType) {
+      conditions.push(`metric_type = $${paramIndex}`);
+      values.push(filters.metricType);
+      paramIndex++;
     }
 
-    values.push(limit, offset);
+    if (filters.from) {
+      conditions.push(`created_at >= $${paramIndex}`);
+      values.push(filters.from);
+      paramIndex++;
+    }
 
-    const result = await this.query<AuditLogRecord>(
-      `SELECT * FROM np_admin_audit_log
+    if (filters.to) {
+      conditions.push(`created_at <= $${paramIndex}`);
+      values.push(filters.to);
+      paramIndex++;
+    }
+
+    // Suppress unused variable warning
+    void paramIndex;
+
+    const limit = filters.limit ?? 100;
+
+    const result = await this.query<MetricsSnapshotRecord>(
+      `SELECT * FROM np_admin_metrics_snapshots
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+       LIMIT ${limit}`,
       values
     );
 
     return result.rows;
   }
 
-  async getAuditLog(id: string): Promise<AuditLogRecord | null> {
-    const result = await this.query<AuditLogRecord>(
-      `SELECT * FROM np_admin_audit_log
-       WHERE id = $1 AND source_account_id = $2`,
-      [id, this.sourceAccountId]
+  async getLatestSnapshot(metricType?: MetricType): Promise<MetricsSnapshotRecord | null> {
+    const conditions: string[] = ['source_account_id = $1'];
+    const values: unknown[] = [this.sourceAccountId];
+
+    if (metricType) {
+      conditions.push('metric_type = $2');
+      values.push(metricType);
+    }
+
+    const result = await this.query<MetricsSnapshotRecord>(
+      `SELECT * FROM np_admin_metrics_snapshots
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      values
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async cleanupOldSnapshots(retentionDays: number): Promise<number> {
+    const count = await this.execute(
+      `DELETE FROM np_admin_metrics_snapshots
+       WHERE source_account_id = $1
+         AND created_at < NOW() - INTERVAL '${retentionDays} days'`,
+      [this.sourceAccountId]
+    );
+    return count;
+  }
+
+  // =========================================================================
+  // Dashboard Config Operations
+  // =========================================================================
+
+  async getConfig(configKey: string): Promise<DashboardConfigRecord | null> {
+    const result = await this.query<DashboardConfigRecord>(
+      `SELECT * FROM np_admin_dashboard_config
+       WHERE source_account_id = $1 AND config_key = $2`,
+      [this.sourceAccountId, configKey]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listConfigs(): Promise<DashboardConfigRecord[]> {
+    const result = await this.query<DashboardConfigRecord>(
+      `SELECT * FROM np_admin_dashboard_config
+       WHERE source_account_id = $1
+       ORDER BY config_key ASC`,
+      [this.sourceAccountId]
+    );
+    return result.rows;
+  }
+
+  async upsertConfig(configKey: string, configValue: Record<string, unknown>, description?: string): Promise<DashboardConfigRecord> {
+    const result = await this.query<DashboardConfigRecord>(
+      `INSERT INTO np_admin_dashboard_config (
+        source_account_id, config_key, config_value, description
+      ) VALUES ($1, $2, $3, $4)
+      ON CONFLICT (source_account_id, config_key) DO UPDATE SET
+        config_value = EXCLUDED.config_value,
+        description = COALESCE(EXCLUDED.description, np_admin_dashboard_config.description),
+        updated_at = NOW()
+      RETURNING *`,
+      [
+        this.sourceAccountId,
+        configKey,
+        JSON.stringify(configValue),
+        description ?? null,
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async deleteConfig(configKey: string): Promise<boolean> {
+    const count = await this.execute(
+      `DELETE FROM np_admin_dashboard_config
+       WHERE source_account_id = $1 AND config_key = $2`,
+      [this.sourceAccountId, configKey]
+    );
+    return count > 0;
+  }
+
+  // =========================================================================
+  // Session Queries (from pg_stat_activity)
+  // =========================================================================
+
+  async getActiveSessions(): Promise<SessionInfo> {
+    const sessionsResult = await this.query<SessionDetail & Record<string, unknown>>(
+      `SELECT
+        pid,
+        state,
+        query_start::text as query_start,
+        wait_event_type,
+        wait_event,
+        backend_type,
+        COALESCE(application_name, '') as application_name,
+        client_addr::text as client_addr,
+        EXTRACT(EPOCH FROM (NOW() - query_start))::double precision as duration_seconds
+       FROM pg_stat_activity
+       WHERE datname = current_database()
+         AND pid != pg_backend_pid()
+       ORDER BY state, query_start DESC NULLS LAST`
+    );
+
+    const maxResult = await this.query<{ setting: string } & Record<string, unknown>>(
+      `SELECT setting FROM pg_settings WHERE name = 'max_connections'`
+    );
+
+    const maxConnections = maxResult.rows[0] ? parseInt(String(maxResult.rows[0].setting), 10) : 100;
+
+    let totalActive = 0;
+    let totalIdle = 0;
+    let totalWaiting = 0;
+
+    for (const s of sessionsResult.rows) {
+      if (s.state === 'active') totalActive++;
+      else if (s.state === 'idle') totalIdle++;
+      else totalWaiting++;
+    }
+
+    return {
+      total_active: totalActive,
+      total_idle: totalIdle,
+      total_waiting: totalWaiting,
+      max_connections: maxConnections,
+      sessions: sessionsResult.rows.map(s => ({
+        pid: s.pid as number,
+        state: (s.state as string) ?? 'unknown',
+        query_start: s.query_start as string | null,
+        wait_event_type: s.wait_event_type as string | null,
+        wait_event: s.wait_event as string | null,
+        backend_type: s.backend_type as string,
+        application_name: s.application_name as string,
+        client_addr: s.client_addr as string | null,
+        duration_seconds: s.duration_seconds as number | null,
+      })),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // =========================================================================
+  // Storage Queries (from pg_catalog)
+  // =========================================================================
+
+  async getStorageBreakdown(): Promise<StorageBreakdown> {
+    // Database size
+    const dbResult = await this.query<{
+      db_name: string;
+      db_size: string;
+      db_size_pretty: string;
+    } & Record<string, unknown>>(
+      `SELECT
+        current_database() as db_name,
+        pg_database_size(current_database())::text as db_size,
+        pg_size_pretty(pg_database_size(current_database())) as db_size_pretty`
+    );
+
+    // Table count
+    const tableCountResult = await this.query<{ count: string } & Record<string, unknown>>(
+      `SELECT COUNT(*)::text as count
+       FROM information_schema.tables
+       WHERE table_schema NOT IN ('pg_catalog', 'information_schema')`
+    );
+
+    // Index count
+    const indexCountResult = await this.query<{ count: string } & Record<string, unknown>>(
+      `SELECT COUNT(*)::text as count
+       FROM pg_indexes
+       WHERE schemaname NOT IN ('pg_catalog', 'information_schema')`
+    );
+
+    // Table sizes
+    const tablesResult = await this.query<{
+      schema_name: string;
+      table_name: string;
+      total_size: string;
+      table_size: string;
+      index_size: string;
+      row_estimate: string;
+      size_pretty: string;
+    } & Record<string, unknown>>(
+      `SELECT
+        schemaname as schema_name,
+        relname as table_name,
+        pg_total_relation_size(relid)::text as total_size,
+        pg_relation_size(relid)::text as table_size,
+        pg_indexes_size(relid)::text as index_size,
+        n_live_tup::text as row_estimate,
+        pg_size_pretty(pg_total_relation_size(relid)) as size_pretty
+       FROM pg_stat_user_tables
+       ORDER BY pg_total_relation_size(relid) DESC
+       LIMIT 50`
+    );
+
+    const dbRow = dbResult.rows[0];
+    const dbInfo: DatabaseStorageInfo = {
+      name: dbRow?.db_name ?? 'unknown',
+      size_bytes: parseInt(String(dbRow?.db_size ?? '0'), 10),
+      size_pretty: String(dbRow?.db_size_pretty ?? '0 bytes'),
+      table_count: parseInt(String(tableCountResult.rows[0]?.count ?? '0'), 10),
+      index_count: parseInt(String(indexCountResult.rows[0]?.count ?? '0'), 10),
+    };
+
+    const tables: TableStorageInfo[] = tablesResult.rows.map(t => ({
+      schema_name: t.schema_name,
+      table_name: t.table_name,
+      total_size_bytes: parseInt(t.total_size, 10),
+      table_size_bytes: parseInt(t.table_size, 10),
+      index_size_bytes: parseInt(t.index_size, 10),
+      row_estimate: parseInt(t.row_estimate, 10),
+      size_pretty: t.size_pretty,
+    }));
+
+    return {
+      database: dbInfo,
+      tables,
+      total_size_bytes: dbInfo.size_bytes,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  // =========================================================================
+  // Database Health Check
+  // =========================================================================
+
+  async checkDatabaseHealth(): Promise<{
+    status: string;
+    latency_ms: number;
+    connection_count: number;
+    max_connections: number;
+    version: string;
+  }> {
+    const start = Date.now();
+
+    try {
+      const versionResult = await this.query<{ version: string } & Record<string, unknown>>('SELECT version()');
+      const latency = Date.now() - start;
+
+      const connResult = await this.query<{ count: string } & Record<string, unknown>>(
+        `SELECT COUNT(*)::text as count FROM pg_stat_activity WHERE datname = current_database()`
+      );
+
+      const maxResult = await this.query<{ setting: string } & Record<string, unknown>>(
+        `SELECT setting FROM pg_settings WHERE name = 'max_connections'`
+      );
+
+      return {
+        status: 'healthy',
+        latency_ms: latency,
+        connection_count: parseInt(String(connResult.rows[0]?.count ?? '0'), 10),
+        max_connections: parseInt(String(maxResult.rows[0]?.setting ?? '100'), 10),
+        version: String(versionResult.rows[0]?.version ?? 'unknown'),
+      };
+    } catch {
+      return {
+        status: 'unhealthy',
+        latency_ms: Date.now() - start,
+        connection_count: 0,
+        max_connections: 0,
+        version: 'unavailable',
+      };
+    }
   }
 
   // =========================================================================
   // Statistics
   // =========================================================================
 
-  async getStats(): Promise<AdminStats> {
-    const totalUsersResult = await this.query<{ count: number }>(
-      `SELECT COUNT(*)::int as count FROM np_admin_users
-       WHERE source_account_id = $1`,
+  async getStats(): Promise<DashboardStats> {
+    const result = await this.query<{
+      snapshots_total: string;
+      snapshots_today: string;
+      oldest_snapshot: Date | null;
+      newest_snapshot: Date | null;
+      config_entries: string;
+      avg_cpu_24h: string | null;
+      avg_memory_24h: string | null;
+      peak_connections_24h: string | null;
+      total_requests_24h: string | null;
+      total_errors_24h: string | null;
+    } & Record<string, unknown>>(
+      `SELECT
+        (SELECT COUNT(*) FROM np_admin_metrics_snapshots WHERE source_account_id = $1)::text as snapshots_total,
+        (SELECT COUNT(*) FROM np_admin_metrics_snapshots WHERE source_account_id = $1 AND created_at >= CURRENT_DATE)::text as snapshots_today,
+        (SELECT MIN(created_at) FROM np_admin_metrics_snapshots WHERE source_account_id = $1) as oldest_snapshot,
+        (SELECT MAX(created_at) FROM np_admin_metrics_snapshots WHERE source_account_id = $1) as newest_snapshot,
+        (SELECT COUNT(*) FROM np_admin_dashboard_config WHERE source_account_id = $1)::text as config_entries,
+        (SELECT AVG(cpu_usage_percent)::text FROM np_admin_metrics_snapshots WHERE source_account_id = $1 AND created_at >= NOW() - INTERVAL '24 hours' AND cpu_usage_percent IS NOT NULL) as avg_cpu_24h,
+        (SELECT AVG(memory_used_bytes * 100.0 / NULLIF(memory_total_bytes, 0))::text FROM np_admin_metrics_snapshots WHERE source_account_id = $1 AND created_at >= NOW() - INTERVAL '24 hours' AND memory_used_bytes IS NOT NULL) as avg_memory_24h,
+        (SELECT MAX(active_connections)::text FROM np_admin_metrics_snapshots WHERE source_account_id = $1 AND created_at >= NOW() - INTERVAL '24 hours') as peak_connections_24h,
+        (SELECT SUM(request_count)::text FROM np_admin_metrics_snapshots WHERE source_account_id = $1 AND created_at >= NOW() - INTERVAL '24 hours') as total_requests_24h,
+        (SELECT SUM(error_count)::text FROM np_admin_metrics_snapshots WHERE source_account_id = $1 AND created_at >= NOW() - INTERVAL '24 hours') as total_errors_24h`,
       [this.sourceAccountId]
     );
 
-    const totalAuditLogsResult = await this.query<{ count: number }>(
-      `SELECT COUNT(*)::int as count FROM np_admin_audit_log
-       WHERE source_account_id = $1`,
-      [this.sourceAccountId]
-    );
-
-    const auditLogsTodayResult = await this.query<{ count: number }>(
-      `SELECT COUNT(*)::int as count FROM np_admin_audit_log
-       WHERE source_account_id = $1
-       AND created_at >= CURRENT_DATE`,
-      [this.sourceAccountId]
-    );
-
-    const mostCommonActionsResult = await this.query<{ action: AdminAction; count: number }>(
-      `SELECT action, COUNT(*)::int as count
-       FROM np_admin_audit_log
-       WHERE source_account_id = $1
-       GROUP BY action
-       ORDER BY count DESC
-       LIMIT 10`,
-      [this.sourceAccountId]
-    );
-
+    const row = result.rows[0];
     return {
-      total_users: totalUsersResult.rows[0]?.count ?? 0,
-      total_audit_logs: totalAuditLogsResult.rows[0]?.count ?? 0,
-      audit_logs_today: auditLogsTodayResult.rows[0]?.count ?? 0,
-      most_common_actions: mostCommonActionsResult.rows,
+      snapshots_total: parseInt(row.snapshots_total, 10),
+      snapshots_today: parseInt(row.snapshots_today, 10),
+      oldest_snapshot: row.oldest_snapshot ? row.oldest_snapshot.toISOString() : null,
+      newest_snapshot: row.newest_snapshot ? row.newest_snapshot.toISOString() : null,
+      config_entries: parseInt(row.config_entries, 10),
+      avg_cpu_24h: row.avg_cpu_24h ? parseFloat(row.avg_cpu_24h) : null,
+      avg_memory_24h: row.avg_memory_24h ? parseFloat(row.avg_memory_24h) : null,
+      peak_connections_24h: row.peak_connections_24h ? parseInt(row.peak_connections_24h, 10) : null,
+      total_requests_24h: row.total_requests_24h ? parseInt(row.total_requests_24h, 10) : null,
+      total_errors_24h: row.total_errors_24h ? parseInt(row.total_errors_24h, 10) : null,
     };
   }
 }

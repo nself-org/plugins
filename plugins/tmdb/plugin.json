@@ -1,7 +1,7 @@
 {
   "name": "tmdb",
   "version": "1.0.0",
-  "description": "Media metadata enrichment from TMDB/IMDb with auto-matching and manual review queue",
+  "description": "Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support",
   "author": "nself",
   "license": "Source-Available",
   "minNselfVersion": "0.4.8",
@@ -12,8 +12,11 @@
     "movies",
     "tv-shows",
     "imdb",
+    "tvdb",
+    "musicbrainz",
     "media",
-    "matching"
+    "matching",
+    "enrichment"
   ],
   "tables": [
     "np_tmdb_movies",
@@ -45,6 +48,8 @@
       "TMDB_APP_IDS",
       "TMDB_API_READ_ACCESS_TOKEN",
       "OMDB_API_KEY",
+      "TVDB_API_KEY",
+      "MUSICBRAINZ_USER_AGENT",
       "TMDB_AUTO_ACCEPT_THRESHOLD",
       "TMDB_DEFAULT_LANGUAGE",
       "TMDB_CACHE_TTL_DAYS",
@@ -74,7 +79,9 @@
     ],
     "network": [
       "api.themoviedb.org",
-      "www.omdbapi.com"
+      "www.omdbapi.com",
+      "api.thetvdb.com",
+      "musicbrainz.org"
     ],
     "filesystem": [
       "logs",

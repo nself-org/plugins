@@ -1,0 +1,83 @@
+{
+  "name": "ddns",
+  "version": "1.0.0",
+  "description": "Dynamic DNS updater with multi-provider support and external IP monitoring",
+  "author": "nself",
+  "license": "Source-Available",
+  "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/ddns",
+  "repository": "https://github.com/acamarata/nself-plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3217,
+  "category": "networking",
+  "tags": [
+    "ddns",
+    "dns",
+    "dynamic-dns",
+    "duckdns",
+    "cloudflare",
+    "remote-access"
+  ],
+  "tables": [
+    "np_ddns_config",
+    "np_ddns_update_log"
+  ],
+  "webhooks": {},
+  "actions": {
+    "status": "Show current IP and domain status",
+    "update": "Force a DNS update",
+    "providers": "List available DNS providers",
+    "history": "Show update history",
+    "stats": "Show DDNS statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "DDNS_PLUGIN_PORT",
+      "DDNS_PROVIDER",
+      "DDNS_DOMAIN",
+      "DDNS_TOKEN",
+      "DDNS_CHECK_INTERVAL",
+      "DDNS_CLOUDFLARE_API_KEY",
+      "DDNS_CLOUDFLARE_ZONE_ID"
+    ]
+  },
+  "config": {
+    "defaultPort": 3217,
+    "checkInterval": 300,
+    "providers": [
+      "duckdns",
+      "cloudflare",
+      "noip",
+      "dynu"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  }
+}

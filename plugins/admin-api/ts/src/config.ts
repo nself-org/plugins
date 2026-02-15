@@ -1,47 +1,51 @@
 /**
- * Configuration loader for Admin API plugin
+ * Admin API Plugin Configuration
  */
 
-import * as dotenv from 'dotenv';
+import 'dotenv/config';
+import { loadSecurityConfig } from '@nself/plugin-utils';
 import type { Config } from './types.js';
 
 export type { Config };
 
-dotenv.config();
-
 export function loadConfig(overrides?: Partial<Config>): Config {
+  const security = loadSecurityConfig('ADMIN_API');
+
   const config: Config = {
-    database: {
-      host: process.env.POSTGRES_HOST ?? 'localhost',
-      port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
-      database: process.env.POSTGRES_DB ?? 'nself',
-      user: process.env.POSTGRES_USER ?? 'postgres',
-      password: process.env.POSTGRES_PASSWORD ?? '',
-      ssl: process.env.POSTGRES_SSL === 'true',
-    },
+    // Server
+    port: parseInt(process.env.ADMIN_API_PLUGIN_PORT ?? process.env.PORT ?? '3212', 10),
+    host: process.env.ADMIN_API_PLUGIN_HOST ?? process.env.HOST ?? '127.0.0.1',
 
-    server: {
-      port: parseInt(process.env.ADMIN_API_PORT ?? '3214', 10),
-      host: process.env.HOST ?? '0.0.0.0',
-    },
+    // Database
+    databaseHost: process.env.POSTGRES_HOST ?? 'localhost',
+    databasePort: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+    databaseName: process.env.POSTGRES_DB ?? 'nself',
+    databaseUser: process.env.POSTGRES_USER ?? 'postgres',
+    databasePassword: process.env.POSTGRES_PASSWORD ?? '',
+    databaseSsl: process.env.POSTGRES_SSL === 'true',
 
-    auth: {
-      jwtSecret: process.env.ADMIN_JWT_SECRET ?? 'change-me-in-production',
-      sessionTimeoutMinutes: parseInt(process.env.ADMIN_SESSION_TIMEOUT_MINUTES ?? '60', 10),
-    },
+    // Prometheus
+    prometheusUrl: process.env.PROMETHEUS_URL ?? '',
 
-    metrics: {
-      collectionIntervalSeconds: parseInt(process.env.ADMIN_METRICS_COLLECTION_INTERVAL_SECONDS ?? '60', 10),
-    },
+    // Cache
+    cacheTtlSeconds: parseInt(process.env.ADMIN_API_CACHE_TTL ?? '30', 10),
 
-    security: {
-      apiKey: process.env.ADMIN_API_KEY,
-      rateLimitMax: parseInt(process.env.ADMIN_RATE_LIMIT_MAX ?? '100', 10),
-      rateLimitWindowMs: parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-    },
+    // Metrics
+    metricsRetentionDays: parseInt(process.env.ADMIN_API_METRICS_RETENTION_DAYS ?? '90', 10),
+    snapshotIntervalMinutes: parseInt(process.env.ADMIN_API_SNAPSHOT_INTERVAL_MINUTES ?? '5', 10),
+
+    // WebSocket
+    wsEnabled: process.env.ADMIN_API_WS_ENABLED === 'true',
+
+    // Logging
+    logLevel: process.env.LOG_LEVEL ?? 'info',
+
+    // Security
+    security,
+
+    // Apply overrides
+    ...overrides,
   };
 
-  return overrides ? { ...config, ...overrides } : config;
+  return config;
 }
-
-export const config = loadConfig();

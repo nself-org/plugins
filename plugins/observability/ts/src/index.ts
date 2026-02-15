@@ -1,11 +1,9 @@
 /**
- * Observability Plugin
- * Main module exports
+ * Observability Plugin for nself
+ * Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration
  */
 
 export * from './types.js';
-export * from './config.js';
-export * from './metrics.js';
-export * from './logging.js';
-export * from './tracing.js';
-export * from './server.js';
+export { loadConfig } from './config.js';
+export { ObservabilityDatabase } from './database.js';
+export { createServer, startServer } from './server.js';

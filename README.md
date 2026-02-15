@@ -2,7 +2,7 @@
 
 Official plugin repository for [nself](https://github.com/acamarata/nself), the production-ready self-hosted backend infrastructure manager.
 
-**59 plugins** across **13 categories** — authentication, automation, commerce, communication, content, compliance, data, development, infrastructure, integrations, media, sports, and streaming.
+**65 plugins** across **16 categories** — admin, authentication, automation, commerce, communication, compliance, content, data, development, infrastructure, integrations, media, monitoring, networking, sports, and streaming.
 
 Every plugin provides: PostgreSQL schema with `np_` namespaced tables, REST API, CLI tools, webhook handling, and multi-app isolation via `source_account_id`.
 
@@ -43,130 +43,150 @@ Plugin-specific variables are documented in each plugin's `plugin.json` and wiki
 
 ## Plugin Catalog
 
+### Admin (1 plugin)
+
+| Plugin | Port | Tables | Description |
+|--------|------|--------|-------------|
+| [admin-api](plugins/admin-api/) | 3212 | 0 | Admin API service providing aggregated metrics, system health, session counts, storage breakdown, and real-time dashboard endpoints |
+
 ### Authentication (4 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [access-controls](plugins/access-controls/) | 3027 | 6 | Role-based and attribute-based access control (RBAC + ABAC) with policy engine |
-| [auth](plugins/auth/) | 3014 | 7 | OAuth, WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow |
-| [idme](plugins/idme/) | 3010 | 5 | ID.me OAuth with government-grade identity verification for 7 groups |
-| [vpn](plugins/vpn/) | 3200 | 8 | Multi-provider VPN management (NordVPN, PIA, Mullvad), kill switch, leak protection |
+| [access-controls](plugins/access-controls/) | 3027 | 0 | Role-based and attribute-based access control (RBAC + ABAC) with policy engine |
+| [auth](plugins/auth/) | 3014 | 0 | Advanced authentication: OAuth, WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow |
+| [idme](plugins/idme/) | 3010 | 0 | ID.me OAuth authentication with government-grade identity verification for 7 groups |
+| [vpn](plugins/vpn/) | 3200 | 0 | Multi-provider VPN management (3 VPN providers) and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection |
 
 ### Automation (2 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [bots](plugins/bots/) | — | 9 | Bot framework for nself-chat — commands, subscriptions, marketplace |
-| [workflows](plugins/workflows/) | 3712 | 9 | Trigger-action workflow engine with conditional logic, scheduling, and cross-plugin orchestration |
+| [bots](plugins/bots/) | 3103 | 0 | Bot framework for nself-chat - commands, subscriptions, marketplace, API keys, reviews |
+| [workflows](plugins/workflows/) | 3712 | 0 | Automation engine providing trigger-action workflow chains, conditional logic, scheduled tasks, webhook integrations, and cross-plugin orchestration |
 
 ### Commerce (5 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [donorbox](plugins/donorbox/) | 3005 | 7 | Donorbox donation data sync with webhook handling |
-| [entitlements](plugins/entitlements/) | 3714 | 8 | Feature gating, subscription plans, usage quotas, metered billing |
-| [paypal](plugins/paypal/) | 3004 | 14 | PayPal payment data sync with webhook handling |
-| [shopify](plugins/shopify/) | — | 9 | Shopify store, orders, products, and inventory synchronization |
-| [stripe](plugins/stripe/) | — | 23 | Stripe billing data sync — customers, subscriptions, invoices, payments |
+| [donorbox](plugins/donorbox/) | 3005 | 0 | Donorbox donation data sync with webhook handling |
+| [entitlements](plugins/entitlements/) | 3714 | 0 | Feature gating, subscription plan management, usage quota tracking, and metered billing |
+| [paypal](plugins/paypal/) | 3004 | 0 | PayPal payment data sync with webhook handling |
+| [shopify](plugins/shopify/) | 3003 | 0 | Shopify store, orders, and product synchronization |
+| [stripe](plugins/stripe/) | 3001 | 0 | Stripe billing data sync with webhook handling |
 
 ### Communication (5 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [chat](plugins/chat/) | 3401 | 6 | Messaging with conversations, participants, and moderation |
-| [invitations](plugins/invitations/) | 3402 | 4 | Invitation management with email/SMS delivery and tracking |
-| [livekit](plugins/livekit/) | — | 6 | LiveKit voice/video — room management, recording, quality monitoring |
-| [streaming](plugins/streaming/) | 3711 | 10 | Live broadcasting with RTMP/HLS, viewer analytics, chat integration, DVR |
-| [webhooks](plugins/webhooks/) | 3403 | 4 | Outbound webhook delivery with retry logic, HMAC signing, dead-letter queue |
+| [chat](plugins/chat/) | 3401 | 0 | Chat and messaging data management with conversation, messages, participants, and moderation |
+| [invitations](plugins/invitations/) | 3402 | 0 | Invitation management system with email/SMS delivery and tracking |
+| [livekit](plugins/livekit/) | 3107 | 0 | LiveKit voice/video infrastructure - room management, participant tracking, recording/egress, quality monitoring |
+| [streaming](plugins/streaming/) | 3711 | 0 | Live streaming and broadcasting with RTMP/HLS, viewer analytics, chat integration, multi-quality streams, DVR playback, and moderation |
+| [webhooks](plugins/webhooks/) | 3403 | 0 | Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue |
 
 ### Compliance (1 plugin)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [compliance](plugins/compliance/) | — | 17 | GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, breach notification, SIEM integration |
+| [compliance](plugins/compliance/) | 3211 | 0 | Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting |
 
 ### Content (8 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [activity-feed](plugins/activity-feed/) | 3503 | 4 | Universal activity feed with fan-out and aggregation |
-| [calendar](plugins/calendar/) | — | 6 | Calendar and event management with recurring events and iCal export |
-| [cms](plugins/cms/) | 3501 | 8 | Headless CMS with content types, posts, categories, tags, versioning |
-| [knowledge-base](plugins/knowledge-base/) | 3713 | 8 | Documentation, FAQ, semantic search, versioning, translations |
-| [link-preview](plugins/link-preview/) | 3718 | 7 | URL metadata extraction — Open Graph, Twitter Cards, oEmbed, caching |
-| [moderation](plugins/moderation/) | — | 18 | Content moderation with profanity filtering, toxicity detection, AI review, appeals |
-| [social](plugins/social/) | 3502 | 7 | Posts, comments, reactions, follows, and bookmarks |
-| [support](plugins/support/) | — | 9 | Helpdesk ticketing, SLA, canned responses, knowledge base |
+| [activity-feed](plugins/activity-feed/) | 3209 | 0 | Universal activity feed system with fan-out-on-read/write, aggregation, and subscriptions |
+| [calendar](plugins/calendar/) | 3105 | 0 | Calendar and event management with recurring events, iCal export, and RSVP tracking |
+| [cms](plugins/cms/) | 3501 | 0 | Headless CMS plugin with content types, posts, categories, tags, and versioning |
+| [knowledge-base](plugins/knowledge-base/) | 3713 | 0 | Knowledge base with documentation, FAQ, semantic search, versioning, translations, and analytics |
+| [link-preview](plugins/link-preview/) | 3718 | 0 | URL metadata extraction with Open Graph, Twitter Cards, oEmbed support, custom previews, and caching |
+| [moderation](plugins/moderation/) | 3208 | 0 | Unified content moderation platform with profanity filtering, toxicity detection, AI-powered review, rule-based policies, automated actions, manual review workflows, user strikes, and appeals management |
+| [social](plugins/social/) | 3502 | 0 | Universal social features plugin with posts, comments, reactions, follows, and bookmarks |
+| [support](plugins/support/) | 3111 | 0 | Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses, knowledge base, analytics |
 
 ### Data (3 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [data-operations](plugins/data-operations/) | 3306 | 11 | GDPR-compliant export/deletion, bulk import/export, cross-platform migration |
-| [documents](plugins/documents/) | — | 5 | Document management with templates, versioning, and sharing |
-| [geolocation](plugins/geolocation/) | 3026 | 5 | Real-time location sharing, history, geofencing, proximity queries |
+| [data-operations](plugins/data-operations/) | 3306 | 0 | Comprehensive data operations platform with GDPR-compliant export/deletion, bulk import/export, cross-platform migration, backup/restore, and data portability |
+| [documents](plugins/documents/) | 3106 | 0 | Document management and generation service with templates, versioning, and sharing |
+| [geolocation](plugins/geolocation/) | 3026 | 0 | Real-time location sharing, history tracking, geofencing, and proximity queries |
 
 ### Development (2 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [github](plugins/github/) | — | 8 | GitHub repository, issue, PR, and workflow integration |
-| [meetings](plugins/meetings/) | 3710 | 9 | Meeting management with room booking, Google/Outlook sync, availability |
+| [github](plugins/github/) | 3002 | 0 | GitHub repository, issue, and workflow integration |
+| [meetings](plugins/meetings/) | 3710 | 0 | Calendar integration and meeting management with room booking, Google/Outlook sync, recurring meetings, and availability tracking |
 
 ### Infrastructure (12 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [analytics](plugins/analytics/) | 3304 | 6 | Event tracking, counters, funnels, and quota management |
-| [backup](plugins/backup/) | — | 4 | PostgreSQL backup and restore automation with scheduling |
-| [cdn](plugins/cdn/) | 3036 | 4 | CDN management — cache purging, signed URLs, analytics |
-| [cloudflare](plugins/cloudflare/) | 3024 | 6 | Cloudflare zone, DNS, R2, cache, and analytics management |
-| [feature-flags](plugins/feature-flags/) | 3305 | 5 | Feature flags with targeting rules, segments, and evaluation engine |
-| [file-processing](plugins/file-processing/) | 3104 | 4 | File processing — thumbnails, optimization, virus scanning for S3/GCS/R2/B2 |
-| [geocoding](plugins/geocoding/) | 3203 | 4 | Forward/reverse geocoding, place search, geofences |
-| [jobs](plugins/jobs/) | — | 4 | BullMQ background job queue with priorities, scheduling, retries |
-| [notifications](plugins/notifications/) | 3102 | 6 | Multi-channel notifications (email, push, SMS) with templates and preferences |
-| [object-storage](plugins/object-storage/) | 3301 | 5 | Multi-provider object storage with S3-compatible API, presigned URLs, multipart |
-| [realtime](plugins/realtime/) | — | 6 | Socket.io real-time server with presence, typing indicators, rooms |
-| [search](plugins/search/) | — | 5 | Full-text search with PostgreSQL FTS and MeiliSearch support |
+| [analytics](plugins/analytics/) | 3206 | 0 | Event tracking, counters, funnels, and quota management analytics engine |
+| [backup](plugins/backup/) | 3210 | 0 | PostgreSQL backup and restore automation with scheduling |
+| [cdn](plugins/cdn/) | 3036 | 0 | CDN management and integration plugin - cache purging, signed URLs, analytics |
+| [cloudflare](plugins/cloudflare/) | 3024 | 0 | Cloudflare zone, DNS, R2, cache, and analytics management |
+| [feature-flags](plugins/feature-flags/) | 3207 | 0 | Feature flags service with targeting rules, segments, and evaluation engine |
+| [file-processing](plugins/file-processing/) | 3104 | 0 | File processing with thumbnails, optimization, and virus scanning for MinIO/S3/GCS/R2/B2/Azure |
+| [geocoding](plugins/geocoding/) | 3203 | 0 | Geocoding and location services plugin - forward/reverse geocoding, place search, geofences |
+| [jobs](plugins/jobs/) | 3105 | 0 | BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard |
+| [notifications](plugins/notifications/) | 3102 | 0 | Multi-channel notifications (email, push, SMS) with templates, preferences, and delivery tracking |
+| [object-storage](plugins/object-storage/) | 3301 | 0 | Multi-provider object storage with S3-compatible API, local storage, presigned URLs, and multipart uploads |
+| [realtime](plugins/realtime/) | 3109 | 0 | Socket.io real-time server with presence tracking, typing indicators, and room management |
+| [search](plugins/search/) | 3110 | 0 | Full-text search engine with PostgreSQL FTS and MeiliSearch support |
 
 ### Integrations (2 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [ai](plugins/ai/) | — | 10 | Unified AI gateway — multi-provider LLM, embeddings, semantic search, prompt templates |
-| [web3](plugins/web3/) | 3715 | 12 | Blockchain integration, NFTs, token-gated access, DAO governance, decentralized identity |
+| [ai](plugins/ai/) | 3101 | 0 | Unified AI gateway with multi-provider LLM support, embeddings, semantic search, prompt templates, and usage tracking |
+| [web3](plugins/web3/) | 3112 | 0 | Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity |
 
-### Media (12 plugins)
+### Media (13 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [content-acquisition](plugins/content-acquisition/) | 3202 | 8 | Automated content acquisition with RSS monitoring and download rules engine |
-| [content-progress](plugins/content-progress/) | 3022 | 5 | Playback progress tracking — continue watching, watchlists, favorites |
-| [epg](plugins/epg/) | — | 6 | Electronic program guide with XMLTV import and schedule queries |
-| [media-processing](plugins/media-processing/) | 3019 | 7 | FFmpeg-based media encoding with HLS streaming support |
-| [metadata-enrichment](plugins/metadata-enrichment/) | 3203 | 2 | TMDB metadata enrichment for movies and TV shows |
-| [photos](plugins/photos/) | — | 5 | Photo albums with EXIF extraction, tagging, face grouping |
-| [retro-gaming](plugins/retro-gaming/) | — | 6 | ROM library management, emulator cores, save states for nself-tv |
-| [rom-discovery](plugins/rom-discovery/) | — | 4 | ROM metadata, multi-source scraping, download orchestration for nself-tv |
-| [subtitle-manager](plugins/subtitle-manager/) | 3204 | 2 | Subtitle search and download via OpenSubtitles |
-| [tmdb](plugins/tmdb/) | — | 7 | TMDB/IMDb metadata enrichment with auto-matching and review queue |
-| [tokens](plugins/tokens/) | — | 5 | Secure content delivery tokens and HLS encryption key management |
-| [torrent-manager](plugins/torrent-manager/) | 3201 | 8 | Torrent downloading with Transmission/qBittorrent, VPN enforcement, search |
+| [content-acquisition](plugins/content-acquisition/) | 3202 | 0 | Automated content acquisition with RSS monitoring, release calendar, and download rules engine |
+| [content-progress](plugins/content-progress/) | 3022 | 0 | Track video, audio, and content playback progress with continue watching, watchlists, and favorites |
+| [epg](plugins/epg/) | 3031 | 0 | Electronic program guide with XMLTV import, channel management, and schedule queries |
+| [game-metadata](plugins/game-metadata/) | 3211 | 0 | Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management |
+| [media-processing](plugins/media-processing/) | 3019 | 0 | FFmpeg-based media encoding and processing with HLS streaming support |
+| [photos](plugins/photos/) | 3108 | 0 | Photo album management with EXIF extraction, tagging, face grouping, and thumbnails |
+| [podcast](plugins/podcast/) | 3210 | 0 | Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management |
+| [retro-gaming](plugins/retro-gaming/) | 3033 | 0 | Retro gaming ROM library management, emulator core serving, save state synchronization, play sessions, and controller configuration for nself-tv |
+| [rom-discovery](plugins/rom-discovery/) | 3034 | 0 | ROM metadata database, search, discovery, automated download orchestration, and multi-source scraping for nself-tv |
+| [subtitle-manager](plugins/subtitle-manager/) | 3204 | 0 | Subtitle search, download, and sync verification via OpenSubtitles |
+| [tmdb](plugins/tmdb/) | 3032 | 0 | Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support |
+| [tokens](plugins/tokens/) | 3107 | 0 | Secure content delivery tokens, HLS encryption key management, and entitlement checks |
+| [torrent-manager](plugins/torrent-manager/) | 3201 | 0 | Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement |
+
+### Monitoring (1 plugin)
+
+| Plugin | Port | Tables | Description |
+|--------|------|--------|-------------|
+| [observability](plugins/observability/) | 3215 | 0 | Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration |
+
+### Networking (2 plugins)
+
+| Plugin | Port | Tables | Description |
+|--------|------|--------|-------------|
+| [ddns](plugins/ddns/) | 3217 | 0 | Dynamic DNS updater with multi-provider support and external IP monitoring |
+| [mdns](plugins/mdns/) | 3216 | 0 | mDNS/Bonjour service discovery for zero-config LAN advertising |
 
 ### Sports (1 plugin)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [sports](plugins/sports/) | 3035 | 11 | Live scores, schedules, standings, rosters, player stats, real-time updates |
+| [sports](plugins/sports/) | 3035 | 0 | Comprehensive sports data plugin with live scores, schedules, standings, team rosters, player stats, and real-time game updates |
 
 ### Streaming (3 plugins)
 
 | Plugin | Port | Tables | Description |
 |--------|------|--------|-------------|
-| [devices](plugins/devices/) | 3603 | 5 | IoT device enrollment, trust management, and command dispatch |
-| [recording](plugins/recording/) | 3602 | 3 | Recording orchestration and archive management |
-| [stream-gateway](plugins/stream-gateway/) | 3601 | 4 | Stream admission and governance |
+| [devices](plugins/devices/) | 3603 | 0 | IoT device enrollment, trust management, and command dispatch service. |
+| [recording](plugins/recording/) | 3602 | 0 | Recording orchestration and archive management service. |
+| [stream-gateway](plugins/stream-gateway/) | 3601 | 0 | Stream admission and governance service. |
 
 ---
 

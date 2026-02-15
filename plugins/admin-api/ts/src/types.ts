@@ -1,282 +1,312 @@
 /**
- * Admin API Plugin Type Definitions
+ * Admin API Plugin Types
+ * Type definitions for system metrics, dashboard config, sessions, and storage
  */
 
 // =============================================================================
-// Core Types
+// Database Record Types
 // =============================================================================
 
-export type AdminRole = 'super_admin' | 'admin' | 'moderator';
-
-export type AdminAction =
-  | 'user_banned'
-  | 'user_unbanned'
-  | 'user_deleted'
-  | 'content_deleted'
-  | 'service_restarted'
-  | 'config_updated'
-  | 'alert_acknowledged';
-
-export type EntityType = 'user' | 'media_item' | 'service' | 'config' | 'alert';
-
-export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
-
-export type AlertSeverity = 'info' | 'warning' | 'error' | 'critical';
-
-export type AlertStatus = 'active' | 'acknowledged' | 'resolved';
-
-// =============================================================================
-// Admin User Types
-// =============================================================================
-
-export interface AdminUserRecord extends Record<string, unknown> {
+export interface MetricsSnapshotRecord {
+  [key: string]: unknown;
   id: string;
   source_account_id: string;
-  email: string;
-  password_hash: string;
-  role: AdminRole;
-  active: boolean;
-  last_login_at: Date | null;
+  metric_type: MetricType;
+  cpu_usage_percent: number | null;
+  memory_used_bytes: number | null;
+  memory_total_bytes: number | null;
+  disk_used_bytes: number | null;
+  disk_total_bytes: number | null;
+  active_connections: number | null;
+  request_count: number | null;
+  error_count: number | null;
+  avg_response_time_ms: number | null;
+  active_sessions: number | null;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+}
+
+export interface DashboardConfigRecord {
+  [key: string]: unknown;
+  id: string;
+  source_account_id: string;
+  config_key: string;
+  config_value: Record<string, unknown>;
+  description: string | null;
   created_at: Date;
   updated_at: Date;
 }
 
-export interface CreateAdminUserInput {
-  email: string;
-  password: string;
-  role: AdminRole;
+// =============================================================================
+// Enum Types
+// =============================================================================
+
+export type MetricType = 'system' | 'database' | 'storage' | 'network' | 'application';
+
+export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+
+// =============================================================================
+// System Metrics Types
+// =============================================================================
+
+export interface SystemMetrics {
+  cpu: CpuMetrics;
+  memory: MemoryMetrics;
+  disk: DiskMetrics;
+  network: NetworkMetrics;
+  process: ProcessMetrics;
+  timestamp: string;
 }
 
-export interface UpdateAdminUserInput {
-  email?: string;
-  password?: string;
-  role?: AdminRole;
-  active?: boolean;
+export interface CpuMetrics {
+  usage_percent: number;
+  load_average_1m: number;
+  load_average_5m: number;
+  load_average_15m: number;
+}
+
+export interface MemoryMetrics {
+  used_bytes: number;
+  total_bytes: number;
+  free_bytes: number;
+  usage_percent: number;
+  heap_used_bytes: number;
+  heap_total_bytes: number;
+  external_bytes: number;
+  rss_bytes: number;
+}
+
+export interface DiskMetrics {
+  used_bytes: number;
+  total_bytes: number;
+  free_bytes: number;
+  usage_percent: number;
+}
+
+export interface NetworkMetrics {
+  active_connections: number;
+  requests_per_minute: number;
+  avg_response_time_ms: number;
+  error_rate_percent: number;
+}
+
+export interface ProcessMetrics {
+  uptime_seconds: number;
+  pid: number;
+  node_version: string;
+  platform: string;
 }
 
 // =============================================================================
-// Audit Log Types
+// Dashboard Config Types
 // =============================================================================
 
-export interface AuditLogRecord extends Record<string, unknown> {
-  id: string;
-  source_account_id: string;
-  admin_user_id: string | null;
-  action: AdminAction;
-  entity_type: EntityType | null;
-  entity_id: string | null;
-  details: Record<string, unknown>;
-  ip_address: string | null;
-  user_agent: string | null;
-  created_at: Date;
+export interface DashboardConfig {
+  refresh_interval_seconds: number;
+  visible_panels: string[];
+  alert_thresholds: AlertThresholds;
+  retention_days: number;
 }
 
-export interface CreateAuditLogInput {
-  admin_user_id?: string;
-  action: AdminAction;
-  entity_type?: EntityType;
-  entity_id?: string;
-  details?: Record<string, unknown>;
-  ip_address?: string;
-  user_agent?: string;
+export interface AlertThresholds {
+  cpu_warning_percent: number;
+  cpu_critical_percent: number;
+  memory_warning_percent: number;
+  memory_critical_percent: number;
+  disk_warning_percent: number;
+  disk_critical_percent: number;
+  error_rate_warning_percent: number;
+  error_rate_critical_percent: number;
 }
 
 // =============================================================================
-// System Health Types
+// Session Types
 // =============================================================================
 
-export interface SystemHealth {
+export interface SessionInfo {
+  total_active: number;
+  total_idle: number;
+  total_waiting: number;
+  max_connections: number;
+  sessions: SessionDetail[];
+  timestamp: string;
+}
+
+export interface SessionDetail {
+  pid: number;
+  state: string;
+  query_start: string | null;
+  wait_event_type: string | null;
+  wait_event: string | null;
+  backend_type: string;
+  application_name: string;
+  client_addr: string | null;
+  duration_seconds: number | null;
+}
+
+// =============================================================================
+// Storage Breakdown Types
+// =============================================================================
+
+export interface StorageBreakdown {
+  database: DatabaseStorageInfo;
+  tables: TableStorageInfo[];
+  total_size_bytes: number;
+  timestamp: string;
+}
+
+export interface DatabaseStorageInfo {
+  name: string;
+  size_bytes: number;
+  size_pretty: string;
+  table_count: number;
+  index_count: number;
+}
+
+export interface TableStorageInfo {
+  schema_name: string;
+  table_name: string;
+  total_size_bytes: number;
+  table_size_bytes: number;
+  index_size_bytes: number;
+  row_estimate: number;
+  size_pretty: string;
+}
+
+// =============================================================================
+// Health Overview Types
+// =============================================================================
+
+export interface SystemHealthOverview {
   status: HealthStatus;
-  timestamp: Date;
-  uptime: number;
+  uptime_seconds: number;
   database: DatabaseHealth;
-  storage: StorageHealth;
-  queue: QueueHealth;
   services: ServiceHealth[];
+  prometheus: PrometheusHealth | null;
+  timestamp: string;
 }
 
 export interface DatabaseHealth {
   status: HealthStatus;
-  connection_pool: {
-    total: number;
-    idle: number;
-    active: number;
-    waiting: number;
-  };
-  slow_queries: number;
-  avg_query_time_ms: number;
-}
-
-export interface StorageHealth {
-  status: HealthStatus;
-  total_bytes: number;
-  used_bytes: number;
-  available_bytes: number;
-  usage_percent: number;
-  buckets: BucketStats[];
-}
-
-export interface BucketStats {
-  name: string;
-  size_bytes: number;
-  file_count: number;
-}
-
-export interface QueueHealth {
-  status: HealthStatus;
-  pending_jobs: number;
-  failed_jobs: number;
-  processing_jobs: number;
-  avg_wait_time_ms: number;
+  latency_ms: number;
+  connection_count: number;
+  max_connections: number;
+  version: string;
 }
 
 export interface ServiceHealth {
   name: string;
   status: HealthStatus;
-  uptime: number;
-  last_check: Date;
-  error?: string;
+  latency_ms: number | null;
+  last_check: string;
+  error: string | null;
+}
+
+export interface PrometheusHealth {
+  status: HealthStatus;
+  url: string;
+  latency_ms: number | null;
+  error: string | null;
 }
 
 // =============================================================================
-// User Metrics Types
+// Dashboard Stats Types
 // =============================================================================
 
-export interface UserMetrics {
-  dau: number;
-  wau: number;
-  mau: number;
-  signups_today: number;
-  signups_week: number;
-  signups_month: number;
-  total_users: number;
-  active_users: number;
-  banned_users: number;
-  retention_7d: number;
-  retention_30d: number;
-}
-
-export interface UserListItem {
-  id: string;
-  email: string;
-  created_at: Date;
-  last_login_at: Date | null;
-  banned: boolean;
-  banned_at: Date | null;
-  banned_reason: string | null;
-}
-
-export interface UserDetails extends UserListItem {
-  metadata: Record<string, unknown>;
-  total_content: number;
-  total_playback_hours: number;
+export interface DashboardStats {
+  snapshots_total: number;
+  snapshots_today: number;
+  oldest_snapshot: string | null;
+  newest_snapshot: string | null;
+  config_entries: number;
+  avg_cpu_24h: number | null;
+  avg_memory_24h: number | null;
+  peak_connections_24h: number | null;
+  total_requests_24h: number | null;
+  total_errors_24h: number | null;
 }
 
 // =============================================================================
-// Content Metrics Types
+// API Request/Response Types
 // =============================================================================
 
-export interface ContentMetrics {
-  total_items: number;
-  added_today: number;
-  added_week: number;
-  added_month: number;
-  total_storage_bytes: number;
-  storage_by_type: Record<string, number>;
-  most_viewed: ContentItem[];
+export interface CreateMetricsSnapshotRequest {
+  metric_type: MetricType;
+  cpu_usage_percent?: number;
+  memory_used_bytes?: number;
+  memory_total_bytes?: number;
+  disk_used_bytes?: number;
+  disk_total_bytes?: number;
+  active_connections?: number;
+  request_count?: number;
+  error_count?: number;
+  avg_response_time_ms?: number;
+  active_sessions?: number;
+  metadata?: Record<string, unknown>;
 }
 
-export interface ContentItem {
-  id: string;
-  title: string;
-  type: string;
-  view_count: number;
-  storage_bytes: number;
-  created_at: Date;
+export interface UpdateDashboardConfigRequest {
+  config_key: string;
+  config_value: Record<string, unknown>;
+  description?: string;
 }
 
-// =============================================================================
-// Playback Metrics Types
-// =============================================================================
-
-export interface PlaybackMetrics {
-  active_streams: number;
-  bandwidth_bytes_per_sec: number;
-  total_streams_today: number;
-  total_streams_week: number;
-  total_streams_month: number;
-  peak_concurrent_streams: number;
-  errors_per_hour: number;
-  avg_bitrate_kbps: number;
+export interface MetricsQueryParams {
+  metric_type?: MetricType;
+  from?: string;
+  to?: string;
+  limit?: number;
 }
 
 // =============================================================================
-// Alert Types
+// WebSocket Types
 // =============================================================================
 
-export interface AlertRecord {
-  id: string;
-  source_account_id: string;
-  severity: AlertSeverity;
-  status: AlertStatus;
-  title: string;
-  message: string;
-  details: Record<string, unknown>;
-  triggered_at: Date;
-  acknowledged_at: Date | null;
-  acknowledged_by: string | null;
-  resolved_at: Date | null;
-  created_at: Date;
-}
-
-export interface CreateAlertInput {
-  severity: AlertSeverity;
-  title: string;
-  message: string;
-  details?: Record<string, unknown>;
+export interface WsMessage {
+  type: 'metrics' | 'health' | 'sessions' | 'storage' | 'error';
+  data: unknown;
+  timestamp: string;
 }
 
 // =============================================================================
-// Configuration Types
+// Config Type
 // =============================================================================
 
 export interface Config {
-  database: {
-    host: string;
-    port: number;
-    database: string;
-    user: string;
-    password: string;
-    ssl: boolean;
-  };
-  server: {
-    port: number;
-    host: string;
-  };
-  auth: {
-    jwtSecret: string;
-    sessionTimeoutMinutes: number;
-  };
-  metrics: {
-    collectionIntervalSeconds: number;
-  };
-  security: {
-    apiKey?: string;
-    rateLimitMax: number;
-    rateLimitWindowMs: number;
-  };
+  // Server
+  port: number;
+  host: string;
+
+  // Database
+  databaseHost: string;
+  databasePort: number;
+  databaseName: string;
+  databaseUser: string;
+  databasePassword: string;
+  databaseSsl: boolean;
+
+  // Prometheus
+  prometheusUrl: string;
+
+  // Cache
+  cacheTtlSeconds: number;
+
+  // Metrics
+  metricsRetentionDays: number;
+  snapshotIntervalMinutes: number;
+
+  // WebSocket
+  wsEnabled: boolean;
+
+  // Logging
+  logLevel: string;
+
+  // Security
+  security: SecurityConfig;
 }
 
-// =============================================================================
-// Database Stats
-// =============================================================================
-
-export interface AdminStats {
-  total_users: number;
-  total_audit_logs: number;
-  audit_logs_today: number;
-  most_common_actions: Array<{
-    action: AdminAction;
-    count: number;
-  }>;
+export interface SecurityConfig {
+  apiKey?: string;
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
 }

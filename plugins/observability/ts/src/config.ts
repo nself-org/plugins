@@ -10,21 +10,25 @@ export interface Config {
   port: number;
   host: string;
 
-  // Prometheus
-  prometheusEnabled: boolean;
-  metricsPath: string;
+  // Database
+  databaseHost: string;
+  databasePort: number;
+  databaseName: string;
+  databaseUser: string;
+  databasePassword: string;
+  databaseSsl: boolean;
 
-  // Loki (log aggregation)
-  lokiEnabled: boolean;
-  lokiUrl: string;
+  // Health checks
+  checkIntervalSeconds: number;
+  watchdogTimeoutSeconds: number;
+  healthHistoryRetainDays: number;
 
-  // Tempo (distributed tracing)
-  tempoEnabled: boolean;
-  tempoUrl: string;
+  // Docker
+  dockerSocket: string;
+  dockerEnabled: boolean;
 
-  // Grafana
-  grafanaUrl: string;
-  grafanaApiKey: string;
+  // Watchdog
+  watchdogEnabled: boolean;
 
   // Logging
   logLevel: string;
@@ -39,23 +43,27 @@ export function loadConfig(overrides?: Partial<Config>): Config {
   const config: Config = {
     // Server
     port: parseInt(process.env.OBSERVABILITY_PLUGIN_PORT ?? process.env.PORT ?? '3215', 10),
-    host: process.env.OBSERVABILITY_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
+    host: process.env.OBSERVABILITY_PLUGIN_HOST ?? process.env.HOST ?? '127.0.0.1',
 
-    // Prometheus
-    prometheusEnabled: process.env.OBSERVABILITY_PROMETHEUS_ENABLED !== 'false',
-    metricsPath: process.env.OBSERVABILITY_METRICS_PATH ?? '/metrics',
+    // Database
+    databaseHost: process.env.POSTGRES_HOST ?? 'localhost',
+    databasePort: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
+    databaseName: process.env.POSTGRES_DB ?? 'nself',
+    databaseUser: process.env.POSTGRES_USER ?? 'postgres',
+    databasePassword: process.env.POSTGRES_PASSWORD ?? '',
+    databaseSsl: process.env.POSTGRES_SSL === 'true',
 
-    // Loki
-    lokiEnabled: process.env.OBSERVABILITY_LOKI_ENABLED !== 'false',
-    lokiUrl: process.env.OBSERVABILITY_LOKI_URL ?? 'http://loki:3100',
+    // Health checks
+    checkIntervalSeconds: parseInt(process.env.OBSERVABILITY_CHECK_INTERVAL ?? '30', 10),
+    watchdogTimeoutSeconds: parseInt(process.env.OBSERVABILITY_WATCHDOG_TIMEOUT ?? '120', 10),
+    healthHistoryRetainDays: parseInt(process.env.OBSERVABILITY_HISTORY_RETAIN_DAYS ?? '30', 10),
 
-    // Tempo
-    tempoEnabled: process.env.OBSERVABILITY_TEMPO_ENABLED !== 'false',
-    tempoUrl: process.env.OBSERVABILITY_TEMPO_URL ?? 'http://tempo:9411',
+    // Docker
+    dockerSocket: process.env.OBSERVABILITY_DOCKER_SOCKET ?? '/var/run/docker.sock',
+    dockerEnabled: process.env.OBSERVABILITY_DOCKER_ENABLED !== 'false',
 
-    // Grafana
-    grafanaUrl: process.env.OBSERVABILITY_GRAFANA_URL ?? 'http://grafana:3000',
-    grafanaApiKey: process.env.OBSERVABILITY_GRAFANA_API_KEY ?? '',
+    // Watchdog
+    watchdogEnabled: process.env.OBSERVABILITY_WATCHDOG_ENABLED !== 'false',
 
     // Logging
     logLevel: process.env.LOG_LEVEL ?? 'info',
@@ -66,19 +74,6 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     // Apply overrides
     ...overrides,
   };
-
-  // Validation
-  if (config.port < 1 || config.port > 65535) {
-    throw new Error('OBSERVABILITY_PLUGIN_PORT must be between 1 and 65535');
-  }
-
-  if (config.lokiEnabled && !config.lokiUrl) {
-    throw new Error('OBSERVABILITY_LOKI_URL is required when Loki is enabled');
-  }
-
-  if (config.tempoEnabled && !config.tempoUrl) {
-    throw new Error('OBSERVABILITY_TEMPO_URL is required when Tempo is enabled');
-  }
 
   return config;
 }

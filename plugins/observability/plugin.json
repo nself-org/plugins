@@ -1,60 +1,51 @@
 {
   "name": "observability",
   "version": "1.0.0",
-  "description": "Unified observability platform with Prometheus metrics, structured logging to Loki, and distributed tracing to Tempo",
+  "description": "Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/observability",
   "repository": "https://github.com/acamarata/nself-plugins",
   "minNselfVersion": "0.4.8",
-  "category": "infrastructure",
+  "port": 3215,
+  "category": "monitoring",
   "tags": [
     "observability",
-    "monitoring",
-    "metrics",
-    "prometheus",
-    "logging",
-    "loki",
-    "tracing",
-    "tempo",
-    "opentelemetry",
-    "grafana"
+    "health-checks",
+    "watchdog",
+    "service-discovery",
+    "monitoring"
   ],
-  "tables": [],
+  "tables": [
+    "np_observability_services",
+    "np_observability_health_history",
+    "np_observability_watchdog_events"
+  ],
   "webhooks": {},
   "actions": {
-    "metrics": "Expose Prometheus metrics endpoint",
-    "logs": "Ingest structured JSON logs to Loki",
-    "traces": "Ingest distributed traces to Tempo",
-    "dashboards": "List and retrieve Grafana dashboards"
+    "services": "List discovered services",
+    "health": "Check all services",
+    "watchdog": "Watchdog status",
+    "events": "Recent events",
+    "stats": "Show statistics"
   },
   "envVars": {
-    "required": [],
+    "required": [
+      "DATABASE_URL"
+    ],
     "optional": [
       "OBSERVABILITY_PLUGIN_PORT",
-      "OBSERVABILITY_PLUGIN_HOST",
-      "PORT",
-      "HOST",
-      "OBSERVABILITY_PROMETHEUS_ENABLED",
-      "OBSERVABILITY_METRICS_PATH",
-      "OBSERVABILITY_LOKI_ENABLED",
-      "OBSERVABILITY_LOKI_URL",
-      "OBSERVABILITY_TEMPO_ENABLED",
-      "OBSERVABILITY_TEMPO_URL",
-      "OBSERVABILITY_GRAFANA_URL",
-      "OBSERVABILITY_GRAFANA_API_KEY",
-      "LOG_LEVEL"
+      "OBSERVABILITY_CHECK_INTERVAL",
+      "OBSERVABILITY_DOCKER_SOCKET",
+      "OBSERVABILITY_WATCHDOG_ENABLED"
     ]
   },
   "config": {
     "defaultPort": 3215,
-    "prometheusEnabled": true,
-    "metricsPath": "/metrics",
-    "lokiEnabled": true,
-    "lokiUrl": "http://loki:3100",
-    "tempoEnabled": true,
-    "tempoUrl": "http://tempo:9411",
-    "grafanaUrl": "http://grafana:3000"
+    "checkIntervalSeconds": 30,
+    "watchdogTimeoutSeconds": 120,
+    "healthHistoryRetainDays": 30,
+    "dockerSocket": "/var/run/docker.sock"
   },
   "hooks": {
     "postInstall": null,
@@ -68,16 +59,19 @@
     "defaultValue": "primary"
   },
   "permissions": {
-    "database": [],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [
-      "loki",
-      "tempo",
-      "grafana",
-      "prometheus"
+      "*"
     ],
     "filesystem": [
-      "logs"
+      "logs",
+      "cache",
+      "temp"
     ]
-  },
-  "port": 3215
+  }
 }
