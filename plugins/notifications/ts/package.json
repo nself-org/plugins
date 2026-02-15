@@ -11,6 +11,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
     "worker": "tsx src/worker.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
