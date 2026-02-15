@@ -4,8 +4,9 @@ Production-ready object storage plugin for nself with multi-provider support (lo
 
 ## Features
 
-- **Multi-Provider Support**: Local filesystem, AWS S3, MinIO, Cloudflare R2, Google Cloud Storage, Backblaze B2
+- **Multi-Provider Support**: Local filesystem, AWS S3, MinIO, Cloudflare R2, Google Cloud Storage, Backblaze B2, Azure Blob Storage
 - **S3-Compatible API**: Full support for S3-compatible operations
+- **Azure Blob Storage**: Native Azure Blob Storage integration with SAS URLs
 - **Presigned URLs**: Generate temporary upload/download URLs
 - **Multipart Uploads**: Support for large file uploads
 - **Bucket Management**: Create, list, update, and delete buckets
@@ -35,12 +36,17 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/nself
 OS_DEFAULT_PROVIDER=local
 OS_STORAGE_BASE_PATH=/data/object-storage
 
-# Optional - S3-Compatible
+# Optional - S3-Compatible (s3, minio, r2, gcs, b2)
 OS_DEFAULT_PROVIDER=s3
 OS_S3_ENDPOINT=https://s3.us-east-1.amazonaws.com
 OS_S3_REGION=us-east-1
 OS_S3_ACCESS_KEY=your-access-key
 OS_S3_SECRET_KEY=your-secret-key
+
+# Optional - Azure Blob Storage
+OS_DEFAULT_PROVIDER=azure
+OS_S3_ACCESS_KEY=storage-account-name
+OS_S3_SECRET_KEY=storage-account-key
 ```
 
 ## Quick Start
@@ -210,6 +216,17 @@ OS_S3_REGION=auto
 OS_S3_ACCESS_KEY=your-r2-access-key
 OS_S3_SECRET_KEY=your-r2-secret-key
 ```
+
+### Azure Blob Storage
+
+```env
+OS_DEFAULT_PROVIDER=azure
+OS_S3_ACCESS_KEY=your-storage-account-name
+OS_S3_SECRET_KEY=your-storage-account-key
+OS_S3_BUCKET_PREFIX=prod-  # Optional container prefix
+```
+
+**Note**: For Azure, `OS_S3_ACCESS_KEY` is your Azure Storage account name, and `OS_S3_SECRET_KEY` is your account key.
 
 ## Development
 

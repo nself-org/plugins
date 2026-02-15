@@ -14,6 +14,7 @@ FFmpeg-based media encoding and processing with HLS streaming support for nself.
 - **Progress tracking** - Real-time encoding progress updates
 - **Multiple codecs** - Support for H.264, H.265, VP9, and AV1
 - **Flexible profiles** - Customizable encoding profiles with presets
+- **S3 input support** - Download and process videos directly from AWS S3 or S3-compatible storage
 
 ## Installation
 
@@ -48,6 +49,15 @@ cp .env.example .env
 - `MP_RATE_LIMIT_MAX` - Max requests per window (default: 50)
 - `MP_RATE_LIMIT_WINDOW_MS` - Rate limit window in ms (default: 60000)
 
+### S3 Input Configuration
+
+For S3 input support, configure AWS credentials:
+
+- `AWS_ACCESS_KEY_ID` - AWS access key (or `MP_AWS_ACCESS_KEY_ID`)
+- `AWS_SECRET_ACCESS_KEY` - AWS secret key (or `MP_AWS_SECRET_ACCESS_KEY`)
+- `AWS_REGION` - AWS region (or `MP_AWS_REGION`, default: us-east-1)
+- `MP_S3_ENDPOINT` - Custom S3 endpoint for MinIO or other S3-compatible services (optional)
+
 ## CLI Commands
 
 ### Initialize Database
@@ -73,8 +83,19 @@ npm run cli -- status
 ### Submit Encoding Job
 
 ```bash
+# Local file
 npm run cli -- submit /path/to/video.mp4
+
+# HTTP/HTTPS URL
 npm run cli -- submit https://example.com/video.mp4 --type url
+
+# S3 URL (s3:// format)
+npm run cli -- submit s3://my-bucket/videos/input.mp4 --type s3
+
+# S3 URL (HTTPS format)
+npm run cli -- submit https://my-bucket.s3.us-east-1.amazonaws.com/videos/input.mp4 --type s3
+
+# With custom profile and priority
 npm run cli -- submit /path/to/video.mp4 --profile <profile-id> --priority 10
 ```
 
@@ -208,11 +229,22 @@ curl -X POST http://localhost:3019/v1/profiles \
 ### Submit Encoding Job
 
 ```bash
+# Local file
 curl -X POST http://localhost:3019/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "input_url": "/path/to/video.mp4",
     "input_type": "file",
+    "profile_id": "profile-uuid-here",
+    "priority": 5
+  }'
+
+# S3 input
+curl -X POST http://localhost:3019/v1/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_url": "s3://my-bucket/videos/input.mp4",
+    "input_type": "s3",
     "profile_id": "profile-uuid-here",
     "priority": 5
   }'

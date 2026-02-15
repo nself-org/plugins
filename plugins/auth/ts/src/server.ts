@@ -10,6 +10,7 @@ import { TotpService } from './totp.js';
 import { DeviceCodeService } from './device-code.js';
 import { MagicLinkService } from './magic-links.js';
 import { WebAuthnService } from './webauthn.js';
+import { OAuthService, OAuthProvider } from './oauth.js';
 import { encrypt, decrypt, encryptArray, decryptArray } from './crypto.js';
 import { AuthConfig, HealthCheckResponse, ReadyCheckResponse, LiveCheckResponse } from './types.js';
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -26,6 +27,7 @@ export class AuthServer {
   private deviceCodeService: DeviceCodeService;
   private magicLinkService: MagicLinkService;
   private webAuthnService: WebAuthnService;
+  private oauthService: OAuthService;
   private challenges: Map<string, { challenge: string; userId?: string; timestamp: number }>;
 
   constructor(db: AuthDatabase, config: AuthConfig) {
@@ -36,6 +38,7 @@ export class AuthServer {
     this.deviceCodeService = new DeviceCodeService(config);
     this.magicLinkService = new MagicLinkService(config);
     this.webAuthnService = new WebAuthnService(config);
+    this.oauthService = new OAuthService(config, db);
     this.challenges = new Map();
     this.app = Fastify({
       logger: false,
@@ -145,42 +148,151 @@ export class AuthServer {
   }
 
   // =========================================================================
-  // OAuth Handlers (Stubs - full implementation requires provider SDKs)
+  // OAuth Handlers
   // =========================================================================
 
   private async handleOAuthListProviders(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const providers = [];
-    if (this.config.oauth.google) {
-      providers.push({ name: 'google', displayName: 'Google', enabled: true });
-    }
-    if (this.config.oauth.apple) {
-      providers.push({ name: 'apple', displayName: 'Apple', enabled: true });
-    }
-    if (this.config.oauth.facebook) {
-      providers.push({ name: 'facebook', displayName: 'Facebook', enabled: true });
-    }
-    if (this.config.oauth.github) {
-      providers.push({ name: 'github', displayName: 'GitHub', enabled: true });
-    }
-    if (this.config.oauth.microsoft) {
-      providers.push({ name: 'microsoft', displayName: 'Microsoft', enabled: true });
-    }
+    const providers = this.oauthService.getEnabledProviders().map(p => ({
+      name: p.name,
+      displayName: p.displayName,
+      enabled: true,
+    }));
     reply.send({ providers });
   }
 
-  private async handleOAuthStart(request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Generate OAuth authorization URL
-    reply.code(501).send({ error: 'OAuth start not implemented - requires provider SDKs' });
+  private async handleOAuthStart(request: FastifyRequest<{ Params: { provider: string }, Querystring: { redirectUri?: string; state?: string; scopes?: string } }>, reply: FastifyReply): Promise<void> {
+    try {
+      const { provider } = request.params;
+      const { redirectUri, state, scopes } = request.query;
+
+      if (!this.oauthService.isProviderEnabled(provider as OAuthProvider)) {
+        reply.code(400).send({ error: `Provider ${provider} is not configured` });
+        return;
+      }
+
+      const callbackUrl = `${this.config.magicLink.baseUrl}/api/oauth/${provider}/callback`;
+      const scopeList = scopes ? scopes.split(',') : undefined;
+
+      const authUrl = await this.oauthService.getAuthorizationUrl(
+        provider as OAuthProvider,
+        redirectUri || callbackUrl,
+        state,
+        scopeList
+      );
+
+      reply.send({
+        authorizationUrl: authUrl.url,
+        state: authUrl.state,
+      });
+    } catch (error) {
+      logger.error('OAuth start error', { error });
+      reply.code(500).send({ error: 'Failed to start OAuth flow' });
+    }
   }
 
-  private async handleOAuthCallback(request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Handle OAuth callback
-    reply.code(501).send({ error: 'OAuth callback not implemented - requires provider SDKs' });
+  private async handleOAuthCallback(request: FastifyRequest<{ Params: { provider: string }, Querystring: { code?: string; state?: string; error?: string } }>, reply: FastifyReply): Promise<void> {
+    try {
+      const { provider } = request.params;
+      const { code, state, error } = request.query;
+
+      if (error) {
+        logger.warn('OAuth callback error from provider', { provider, error });
+        reply.code(400).send({ error: `OAuth error: ${error}` });
+        return;
+      }
+
+      if (!code) {
+        reply.code(400).send({ error: 'Missing authorization code' });
+        return;
+      }
+
+      if (!this.oauthService.isProviderEnabled(provider as OAuthProvider)) {
+        reply.code(400).send({ error: `Provider ${provider} is not configured` });
+        return;
+      }
+
+      const callbackUrl = `${this.config.magicLink.baseUrl}/api/oauth/${provider}/callback`;
+      const result = await this.oauthService.handleCallback(
+        provider as OAuthProvider,
+        code,
+        callbackUrl
+      );
+
+      // Check if user exists with this provider
+      const existingProvider = await this.db.getOAuthProviderByProviderUserId(
+        provider as OAuthProvider,
+        result.profile.providerId
+      );
+
+      if (existingProvider) {
+        // User exists - update provider info and return user
+        await this.oauthService.linkProvider(
+          existingProvider.user_id,
+          provider as OAuthProvider,
+          result.profile,
+          result.tokens
+        );
+
+        reply.send({
+          userId: existingProvider.user_id,
+          provider,
+          providerEmail: result.profile.email,
+          providerName: result.profile.name,
+          providerAvatarUrl: result.profile.avatarUrl,
+          isNewUser: false,
+        });
+      } else {
+        // New user - return profile for registration
+        reply.send({
+          provider,
+          providerUserId: result.profile.providerId,
+          providerEmail: result.profile.email,
+          providerName: result.profile.name,
+          providerAvatarUrl: result.profile.avatarUrl,
+          isNewUser: true,
+          // Client should create user and call /link endpoint
+        });
+      }
+    } catch (error) {
+      logger.error('OAuth callback error', { error });
+      reply.code(500).send({ error: 'OAuth callback failed' });
+    }
   }
 
-  private async handleOAuthLink(request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply): Promise<void> {
-    // Stub: Link OAuth account to existing user
-    reply.code(501).send({ error: 'OAuth link not implemented' });
+  private async handleOAuthLink(request: FastifyRequest<{ Params: { provider: string }, Body: { userId: string; code: string; redirectUri?: string } }>, reply: FastifyReply): Promise<void> {
+    try {
+      const { provider } = request.params;
+      const { userId, code, redirectUri } = request.body;
+
+      if (!this.oauthService.isProviderEnabled(provider as OAuthProvider)) {
+        reply.code(400).send({ error: `Provider ${provider} is not configured` });
+        return;
+      }
+
+      const callbackUrl = redirectUri || `${this.config.magicLink.baseUrl}/api/oauth/${provider}/callback`;
+      const result = await this.oauthService.handleCallback(
+        provider as OAuthProvider,
+        code,
+        callbackUrl
+      );
+
+      await this.oauthService.linkProvider(
+        userId,
+        provider as OAuthProvider,
+        result.profile,
+        result.tokens
+      );
+
+      reply.send({
+        success: true,
+        provider,
+        providerEmail: result.profile.email,
+        providerName: result.profile.name,
+      });
+    } catch (error) {
+      logger.error('OAuth link error', { error });
+      reply.code(500).send({ error: 'Failed to link OAuth provider' });
+    }
   }
 
   private async handleOAuthUnlink(request: FastifyRequest<{ Params: { provider: string }, Body: { userId: string } }>, reply: FastifyReply): Promise<void> {

@@ -72,21 +72,59 @@ AUTH_WEBAUTHN_RP_ID=yourdomain.com
 AUTH_WEBAUTHN_ORIGIN=https://yourdomain.com
 ```
 
+### ✅ OAuth Authentication
+- Full OAuth 2.0 implementation using Passport.js
+- Complete authorization and callback flow
+- Account linking and unlinking
+- Token encryption and secure storage
+- Profile data extraction from all providers
+
+**Supported Providers:**
+- ✅ Google OAuth 2.0
+- ✅ Apple Sign In
+- ✅ Facebook Login
+- ✅ GitHub OAuth
+- ✅ Microsoft Azure AD / Personal Accounts
+
+**Endpoints:**
+- `GET /api/oauth/providers` - List enabled providers
+- `GET /api/oauth/:provider/start` - Start OAuth flow
+- `GET /api/oauth/:provider/callback` - Handle OAuth callback
+- `POST /api/oauth/:provider/link` - Link OAuth to existing user
+- `DELETE /api/oauth/:provider/unlink` - Unlink OAuth provider
+- `GET /api/oauth/connections/:userId` - List user's OAuth connections
+
+**Setup:** See [OAUTH-SETUP.md](./OAUTH-SETUP.md) for detailed configuration guide
+
+**Configuration:**
+```bash
+# Google
+OAUTH_GOOGLE_CLIENT_ID=your-client-id
+OAUTH_GOOGLE_CLIENT_SECRET=your-client-secret
+OAUTH_GOOGLE_SCOPES=profile,email
+
+# Apple
+OAUTH_APPLE_CLIENT_ID=your-service-id
+OAUTH_APPLE_TEAM_ID=your-team-id
+OAUTH_APPLE_KEY_ID=your-key-id
+OAUTH_APPLE_PRIVATE_KEY=your-private-key
+
+# Facebook
+OAUTH_FACEBOOK_APP_ID=your-app-id
+OAUTH_FACEBOOK_APP_SECRET=your-app-secret
+
+# GitHub
+OAUTH_GITHUB_CLIENT_ID=your-client-id
+OAUTH_GITHUB_CLIENT_SECRET=your-client-secret
+
+# Microsoft
+OAUTH_MICROSOFT_CLIENT_ID=your-client-id
+OAUTH_MICROSOFT_CLIENT_SECRET=your-client-secret
+```
+
 ## Planned Features
 
-The following features have database schema and API endpoints prepared, but return HTTP 501 (Not Implemented) until external dependencies are integrated:
-
-### 🔄 OAuth Authentication (Planned)
-**Status:** Requires provider SDKs (passport.js or similar)
-
-Providers ready to integrate:
-- Google OAuth 2.0
-- Apple Sign In
-- Facebook Login
-- GitHub OAuth
-- Microsoft Azure AD
-
-**Endpoints:** `/api/oauth/start`, `/api/oauth/callback`, `/api/oauth/link`
+The following features have database schema prepared but need additional implementation:
 
 
 ## Installation

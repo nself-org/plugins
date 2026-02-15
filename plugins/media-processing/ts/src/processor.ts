@@ -8,6 +8,9 @@ import { createLogger } from '@nself/plugin-utils';
 import { promises as fs } from 'fs';
 import { join, basename } from 'path';
 import { randomUUID } from 'crypto';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import type { Config } from './config.js';
 import type { MediaProcessingDatabase } from './database.js';
 import { FFmpegClient } from './ffmpeg.js';
@@ -629,14 +632,74 @@ export class MediaProcessor {
     }
 
     if (job.input_type === 's3') {
-      // NOTE: S3 download requires AWS SDK integration and S3 credentials
-      // Integration point: Install @aws-sdk/client-s3 and implement:
-      // const s3 = new S3Client({ region: 'us-east-1' });
-      // const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-      // const response = await s3.send(command);
-      // await pipeline(response.Body, fs.createWriteStream(tempPath));
-      // Requires AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION environment variables
-      throw new Error('S3 input type requires AWS SDK integration (planned feature). Currently supported: url, local. See inline comments for integration requirements.');
+      logger.info('Downloading from S3', { url: job.input_url });
+
+      // Parse S3 URL (s3://bucket/key or https://bucket.s3.region.amazonaws.com/key)
+      const s3UrlMatch = job.input_url.match(/^s3:\/\/([^\/]+)\/(.+)$/);
+      const httpsUrlMatch = job.input_url.match(/^https:\/\/([^.]+)\.s3[.-]([^.]+)\.amazonaws\.com\/(.+)$/);
+
+      let bucket: string;
+      let key: string;
+      let region: string | undefined;
+
+      if (s3UrlMatch) {
+        bucket = s3UrlMatch[1];
+        key = s3UrlMatch[2];
+        region = process.env.AWS_REGION || process.env.MP_AWS_REGION || 'us-east-1';
+      } else if (httpsUrlMatch) {
+        bucket = httpsUrlMatch[1];
+        region = httpsUrlMatch[2];
+        key = httpsUrlMatch[3];
+      } else {
+        throw new Error('Invalid S3 URL format. Use s3://bucket/key or https://bucket.s3.region.amazonaws.com/key');
+      }
+
+      // Initialize S3 client with credentials from environment
+      const s3Config: any = { region };
+
+      // Optional: custom endpoint for S3-compatible services (MinIO, etc.)
+      if (process.env.MP_S3_ENDPOINT) {
+        s3Config.endpoint = process.env.MP_S3_ENDPOINT;
+        s3Config.forcePathStyle = true;
+      }
+
+      // Optional: explicit credentials (otherwise uses AWS SDK default credential chain)
+      if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+        s3Config.credentials = {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        };
+      } else if (process.env.MP_AWS_ACCESS_KEY_ID && process.env.MP_AWS_SECRET_ACCESS_KEY) {
+        s3Config.credentials = {
+          accessKeyId: process.env.MP_AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.MP_AWS_SECRET_ACCESS_KEY,
+        };
+      }
+
+      const s3 = new S3Client(s3Config);
+      const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+
+      try {
+        const response = await s3.send(command);
+
+        if (!response.Body) {
+          throw new Error('S3 response body is empty');
+        }
+
+        // Stream S3 response to file
+        const writeStream = await fs.open(tempPath, 'w');
+        await pipeline(
+          response.Body as Readable,
+          (await import('fs')).createWriteStream('', { fd: writeStream.fd, autoClose: false })
+        );
+        await writeStream.close();
+
+        logger.info('S3 download complete', { bucket, key, path: tempPath });
+        return tempPath;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown S3 error';
+        throw new Error(`Failed to download from S3: ${message}`);
+      }
     }
 
     throw new Error(`Unknown input type: ${job.input_type}`);

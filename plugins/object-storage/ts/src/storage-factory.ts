@@ -7,6 +7,7 @@ import { createLogger } from '@nself/plugin-utils';
 import type { StorageBackend, StorageProvider, ProviderConfig, BucketRecord } from './types.js';
 import { LocalStorageBackend } from './storage-local.js';
 import { S3StorageBackend } from './storage-s3.js';
+import { AzureStorageBackend } from './storage-azure.js';
 import { getProviderEndpoint, isS3Compatible } from './config.js';
 
 const logger = createLogger('object-storage:factory');
@@ -63,6 +64,16 @@ export class StorageFactory {
 
     if (provider === 'local') {
       return new LocalStorageBackend(this.localBasePath);
+    }
+
+    if (provider === 'azure') {
+      const azureConfig: any = {
+        accountName: config.accessKeyId ?? this.defaultConfig.accessKeyId,
+        accountKey: config.secretAccessKey ?? this.defaultConfig.secretAccessKey,
+        containerPrefix: config.bucketPrefix ?? this.defaultConfig.bucketPrefix,
+      };
+
+      return new AzureStorageBackend(azureConfig);
     }
 
     if (isS3Compatible(provider)) {

@@ -62,6 +62,13 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     }
   }
 
+  // Validate Azure configuration
+  if (config.defaultProvider === 'azure') {
+    if (!config.s3AccessKey || !config.s3SecretKey) {
+      throw new Error('Azure Blob Storage requires OS_S3_ACCESS_KEY (account name) and OS_S3_SECRET_KEY (account key)');
+    }
+  }
+
   // Validate local storage path
   if (config.defaultProvider === 'local') {
     if (!config.storageBasePath) {
@@ -93,7 +100,7 @@ export function getProviderEndpoint(provider: StorageProvider, customEndpoint?: 
     case 'b2':
       throw new Error('Backblaze B2 requires explicit endpoint from your account');
     case 'azure':
-      throw new Error('Azure Blob Storage is planned for future release. Currently supported: s3, minio, r2, gcs, b2, local. For Azure now, use S3-compatible API with custom endpoint.');
+      return undefined; // Azure uses account name to construct endpoint
     case 'local':
       return undefined;
     default:

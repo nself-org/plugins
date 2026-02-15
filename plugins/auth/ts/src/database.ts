@@ -340,6 +340,80 @@ export class AuthDatabase {
     );
   }
 
+  async getOAuthProviderByProviderUserId(
+    provider: string,
+    providerUserId: string
+  ): Promise<OAuthProviderRecord | null> {
+    const result = await this.db.query<OAuthProviderRecord>(
+      `SELECT * FROM auth_oauth_providers
+       WHERE source_account_id = $1 AND provider = $2 AND provider_user_id = $3`,
+      [this.currentAppId, provider, providerUserId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async insertOAuthProvider(provider: Partial<OAuthProviderRecord>): Promise<string> {
+    const result = await this.db.query<{ id: string }>(
+      `INSERT INTO auth_oauth_providers (
+        source_account_id, user_id, provider, provider_user_id, provider_email,
+        provider_name, provider_avatar_url, access_token_encrypted, refresh_token_encrypted,
+        token_expires_at, scopes, raw_profile
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING id`,
+      [
+        this.currentAppId,
+        provider.user_id,
+        provider.provider,
+        provider.provider_user_id,
+        provider.provider_email || null,
+        provider.provider_name || null,
+        provider.provider_avatar_url || null,
+        provider.access_token_encrypted || null,
+        provider.refresh_token_encrypted || null,
+        provider.token_expires_at || null,
+        provider.scopes || [],
+        provider.raw_profile || {},
+      ]
+    );
+    return result.rows[0].id;
+  }
+
+  async updateOAuthProvider(
+    userId: string,
+    provider: string,
+    updates: Partial<OAuthProviderRecord>
+  ): Promise<void> {
+    await this.db.execute(
+      `UPDATE auth_oauth_providers SET
+        provider_user_id = COALESCE($4, provider_user_id),
+        provider_email = COALESCE($5, provider_email),
+        provider_name = COALESCE($6, provider_name),
+        provider_avatar_url = COALESCE($7, provider_avatar_url),
+        access_token_encrypted = COALESCE($8, access_token_encrypted),
+        refresh_token_encrypted = COALESCE($9, refresh_token_encrypted),
+        token_expires_at = COALESCE($10, token_expires_at),
+        scopes = COALESCE($11, scopes),
+        raw_profile = COALESCE($12, raw_profile),
+        last_used_at = COALESCE($13, last_used_at)
+       WHERE source_account_id = $1 AND user_id = $2 AND provider = $3`,
+      [
+        this.currentAppId,
+        userId,
+        provider,
+        updates.provider_user_id,
+        updates.provider_email,
+        updates.provider_name,
+        updates.provider_avatar_url,
+        updates.access_token_encrypted,
+        updates.refresh_token_encrypted,
+        updates.token_expires_at,
+        updates.scopes,
+        updates.raw_profile,
+        updates.last_used_at,
+      ]
+    );
+  }
+
   // =========================================================================
   // Passkey Methods
   // =========================================================================
