@@ -77,7 +77,7 @@ export function loadConfig(overrides?: Partial<JobsConfig>): JobsConfig {
 
     // Database - Priority: DATABASE_URL → POSTGRES_* vars → defaults
     database: {
-      host: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
+      host: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'postgres',
       port: dbFromUrl?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
       database: dbFromUrl?.database ?? process.env.POSTGRES_DB ?? 'nself',
       user: dbFromUrl?.user ?? process.env.POSTGRES_USER ?? 'postgres',

@@ -81,7 +81,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     host: process.env.SG_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
 
     // Database
-    databaseHost: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: dbFromUrl?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: dbFromUrl?.database ?? process.env.POSTGRES_DB ?? 'nself',
     databaseUser: dbFromUrl?.user ?? process.env.POSTGRES_USER ?? 'postgres',
@@ -95,7 +95,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     defaultMaxDeviceStreams: parseInt(process.env.SG_DEFAULT_MAX_DEVICE_STREAMS ?? '1', 10),
     sessionMaxDurationHours: parseInt(process.env.SG_SESSION_MAX_DURATION_HOURS ?? '12', 10),
     analyticsInterval: parseInt(process.env.SG_ANALYTICS_INTERVAL ?? '300', 10),
-    realtimeUrl: process.env.SG_REALTIME_URL ?? 'http://localhost:3101',
+    realtimeUrl: process.env.SG_REALTIME_URL ?? 'http://plugin-realtime:3101',
     redisUrl: process.env.REDIS_URL ?? 'redis://redis:6379',
 
     // Per-app overrides

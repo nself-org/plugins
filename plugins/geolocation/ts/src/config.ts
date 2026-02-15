@@ -52,7 +52,7 @@ export function loadConfig(): GeolocationConfig {
     logLevel: getEnvOptional('GEO_LOG_LEVEL', 'info') as 'debug' | 'info' | 'warn' | 'error',
 
     database: {
-      host: getEnvOptional('POSTGRES_HOST', 'localhost'),
+      host: getEnvOptional('POSTGRES_HOST', 'postgres'),
       port: getEnvInt('POSTGRES_PORT', 5432),
       database: getEnvOptional('POSTGRES_DB', 'nself'),
       user: getEnvOptional('POSTGRES_USER', 'postgres'),

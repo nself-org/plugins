@@ -77,7 +77,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     accounts,
     port: parseInt(process.env.PAYPAL_PLUGIN_PORT ?? process.env.PORT ?? '3004', 10),
     host: process.env.PAYPAL_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
-    databaseHost: process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: process.env.POSTGRES_DB ?? 'nself',
     databaseUser: process.env.POSTGRES_USER ?? 'postgres',

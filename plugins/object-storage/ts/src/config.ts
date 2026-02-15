@@ -30,7 +30,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     multipartThreshold: parseInt(process.env.OS_MULTIPART_THRESHOLD ?? '104857600', 10), // 100MB
 
     // Database
-    databaseHost: process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: process.env.POSTGRES_DB ?? 'nself',
     databaseUser: process.env.POSTGRES_USER ?? 'postgres',

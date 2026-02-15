@@ -78,7 +78,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
   // Parse DATABASE_URL if provided
   const databaseUrl = process.env.DATABASE_URL;
   let dbConfig = {
-    host: process.env.POSTGRES_HOST ?? 'localhost',
+    host: process.env.POSTGRES_HOST ?? 'postgres',
     port: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     database: process.env.POSTGRES_DB ?? 'nself',
     user: process.env.POSTGRES_USER ?? 'postgres',

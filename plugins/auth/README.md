@@ -119,6 +119,43 @@ AUTH_MICROSOFT_CLIENT_ID=...
 AUTH_MICROSOFT_CLIENT_SECRET=...
 ```
 
+### Production-Required Configuration
+
+**IMPORTANT:** The following environment variables are REQUIRED for production deployments. The default `localhost` values only work for local development.
+
+#### WebAuthn/Passkeys Configuration
+
+```bash
+# REQUIRED for production - must match your public domain
+AUTH_WEBAUTHN_RP_ID=yourdomain.com
+AUTH_WEBAUTHN_ORIGIN=https://yourdomain.com
+
+# Example for staging
+AUTH_WEBAUTHN_RP_ID=staging.yourdomain.com
+AUTH_WEBAUTHN_ORIGIN=https://staging.yourdomain.com
+```
+
+**Why required:** WebAuthn security requires the Relying Party ID (RP ID) and origin to match your publicly accessible domain. Passkeys will not work with `localhost` in production.
+
+#### Magic Link Configuration
+
+```bash
+# REQUIRED for production - must be publicly accessible
+AUTH_MAGIC_LINK_BASE_URL=https://yourdomain.com
+
+# Example for staging
+AUTH_MAGIC_LINK_BASE_URL=https://staging.yourdomain.com
+```
+
+**Why required:** Magic links are sent in emails and clicked by users from their email clients. They must point to your publicly accessible URL, not `localhost`.
+
+#### Docker Deployment Notes
+
+When deploying in Docker:
+- **Internal service URLs** use Docker service names (e.g., `postgres:5432`, `redis:6379`)
+- **External user-facing URLs** must use public domains (WebAuthn, Magic Links, OAuth redirects)
+- Set these environment variables in your `.env` file or deployment configuration
+
 See `plugin.json` for complete environment variable reference.
 
 ## Usage

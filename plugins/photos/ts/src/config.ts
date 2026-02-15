@@ -40,7 +40,7 @@ export function loadConfig(): PhotosConfig {
     logLevel: getEnvOptional('PHOTOS_LOG_LEVEL', 'info') as PhotosConfig['logLevel'],
 
     database: {
-      host: getEnvOptional('POSTGRES_HOST', 'localhost'),
+      host: getEnvOptional('POSTGRES_HOST', 'postgres'),
       port: getEnvInt('POSTGRES_PORT', 5432),
       database: getEnvOptional('POSTGRES_DB', 'nself'),
       user: getEnvOptional('POSTGRES_USER', 'postgres'),

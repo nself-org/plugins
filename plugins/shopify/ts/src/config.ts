@@ -62,7 +62,7 @@ export function loadConfig(overrides: Partial<ShopifyConfig> = {}): ShopifyConfi
     accounts,
 
     // Database
-    databaseHost: overrides.databaseHost ?? process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: overrides.databaseHost ?? process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: overrides.databasePort ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: overrides.databaseName ?? process.env.POSTGRES_DB ?? 'nself',
     databaseUser: overrides.databaseUser ?? process.env.POSTGRES_USER ?? 'postgres',

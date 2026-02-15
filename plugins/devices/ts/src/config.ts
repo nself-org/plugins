@@ -91,7 +91,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     host: process.env.DEV_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
 
     // Database
-    databaseHost: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: dbFromUrl?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: dbFromUrl?.database ?? process.env.POSTGRES_DB ?? 'nself',
     databaseUser: dbFromUrl?.user ?? process.env.POSTGRES_USER ?? 'postgres',
@@ -117,10 +117,10 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     ingestRetryMax: parseInt(process.env.DEV_INGEST_RETRY_MAX ?? '5', 10),
     ingestRetryBackoffBase: parseInt(process.env.DEV_INGEST_RETRY_BACKOFF_BASE ?? '5', 10),
 
-    // External service URLs
-    realtimeUrl: process.env.DEV_REALTIME_URL ?? 'http://localhost:3101',
-    recordingUrl: process.env.DEV_RECORDING_URL ?? 'http://localhost:3602',
-    streamGatewayUrl: process.env.DEV_STREAM_GATEWAY_URL ?? 'http://localhost:3601',
+    // External service URLs (Docker service names for container-to-container communication)
+    realtimeUrl: process.env.DEV_REALTIME_URL ?? 'http://plugin-realtime:3101',
+    recordingUrl: process.env.DEV_RECORDING_URL ?? 'http://plugin-recording:3602',
+    streamGatewayUrl: process.env.DEV_STREAM_GATEWAY_URL ?? 'http://plugin-stream-gateway:3601',
     redisUrl: process.env.REDIS_URL ?? 'redis://redis:6379',
 
     // Per-app overrides

@@ -103,7 +103,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     host: process.env.AI_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
 
     // Database
-    databaseHost: process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: process.env.POSTGRES_DB ?? 'nself',
     databaseUser: process.env.POSTGRES_USER ?? 'postgres',
@@ -128,7 +128,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     cohereApiKey: process.env.AI_COHERE_API_KEY ?? '',
 
     localEnabled: process.env.AI_LOCAL_ENABLED === 'true',
-    localBaseUrl: process.env.AI_LOCAL_BASE_URL ?? 'http://localhost:11434',
+    localBaseUrl: process.env.AI_LOCAL_BASE_URL ?? 'http://host.docker.internal:11434',
     localDefaultModel: process.env.AI_LOCAL_DEFAULT_MODEL ?? 'llama2',
 
     // Defaults

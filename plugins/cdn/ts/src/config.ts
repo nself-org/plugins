@@ -86,7 +86,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     host: process.env.CDN_PLUGIN_HOST ?? process.env.HOST ?? '0.0.0.0',
 
     // Database
-    databaseHost: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'localhost',
+    databaseHost: dbFromUrl?.host ?? process.env.POSTGRES_HOST ?? 'postgres',
     databasePort: dbFromUrl?.port ?? parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: dbFromUrl?.database ?? process.env.POSTGRES_DB ?? 'nself',
     databaseUser: dbFromUrl?.user ?? process.env.POSTGRES_USER ?? 'postgres',
