@@ -8,6 +8,7 @@ import cors from '@fastify/cors';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { LiveKitDatabase } from './database.js';
 import { loadConfig, type Config } from './config.js';
+import { AccessToken } from 'livekit-server-sdk';
 import type {
   CreateRoomRequest,
   CreateParticipantRequest,
@@ -204,15 +205,22 @@ export async function createServer(config?: Partial<Config>) {
         canPublishData: true,
       };
 
-      // Generate a placeholder token (real implementation would use livekit-server-sdk)
-      const tokenPayload = JSON.stringify({
-        roomName: body.roomName,
+      // Generate real LiveKit JWT token using livekit-server-sdk
+      const at = new AccessToken(fullConfig.livekitApiKey, fullConfig.livekitApiSecret, {
         identity: body.participantIdentity,
         name: body.participantName,
-        grants,
-        exp: Math.floor(expiresAt.getTime() / 1000),
+        ttl: ttl,
       });
-      const token = Buffer.from(tokenPayload).toString('base64url');
+
+      at.addGrant({
+        roomJoin: true,
+        room: body.roomName,
+        canPublish: grants.canPublish,
+        canSubscribe: grants.canSubscribe,
+        canPublishData: grants.canPublishData,
+      });
+
+      const token = at.toJwt();
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
       const tokenRecord = await scopedDb(request).createToken(
