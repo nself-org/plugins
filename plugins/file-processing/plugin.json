@@ -1,7 +1,7 @@
 {
   "name": "file-processing",
   "version": "1.0.0",
-  "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure",
+  "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure. Planned: Inbound webhook support for storage provider notifications",
   "author": "nself",
   "license": "Source-Available",
   "homepage": "https://github.com/acamarata/nself-plugins/tree/main/plugins/file-processing",
@@ -65,8 +65,7 @@
     "maxFileSize": 104857600,
     "queueConcurrency": 3,
     "enableOptimization": true,
-    "stripExif": true,
-    "webhookPath": "/webhooks/file-processing"
+    "stripExif": true
   },
   "hooks": {
     "postInstall": "install.sh",
