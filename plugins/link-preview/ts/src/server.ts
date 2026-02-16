@@ -9,6 +9,7 @@ import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getA
 import { LinkPreviewDatabase } from './database.js';
 import { loadConfig, type LinkPreviewConfig } from './config.js';
 import { MetadataFetcher } from './metadata-fetcher.js';
+import { OEmbedService } from './oembed-service.js';
 import type {
   FetchPreviewRequest,
   BatchFetchRequest,
@@ -39,6 +40,7 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
   await db.initializeSchema();
 
   const metadataFetcher = new MetadataFetcher(10000); // 10 second timeout
+  const oembedService = new OEmbedService(10000); // 10 second timeout
 
   // Create Fastify server
   const app = Fastify({
@@ -345,8 +347,13 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
   // =========================================================================
 
   app.get('/api/link-preview/oembed/providers', async (request) => {
-    const providers = await scopedDb(request).listOEmbedProviders();
-    return { data: providers };
+    const dbProviders = await scopedDb(request).listOEmbedProviders();
+    const builtInProviders = oembedService.getSupportedProviders();
+
+    return {
+      builtIn: builtInProviders,
+      custom: dbProviders,
+    };
   });
 
   app.post<{ Body: AddOEmbedProviderRequest }>('/api/link-preview/oembed/providers', async (request, reply) => {
@@ -370,25 +377,48 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
     const { url } = request.query as { url?: string };
     if (!url) return reply.status(400).send({ error: 'url query parameter is required' });
 
+    // Check built-in providers first
+    const providerMatch = oembedService.findProvider(url);
+    if (providerMatch) {
+      return {
+        provider_name: providerMatch.provider.name,
+        endpoint_url: providerMatch.endpoint,
+        url: providerMatch.provider.url,
+        supported: true,
+      };
+    }
+
+    // Fallback to database-configured providers
     const provider = await scopedDb(request).findOEmbedProvider(url);
     if (!provider) return reply.status(404).send({ error: 'No oEmbed provider found for this URL' });
     return provider;
   });
 
   app.get('/api/link-preview/oembed/fetch', async (request, reply) => {
-    const { url } = request.query as { url?: string };
+    const { url, maxwidth, maxheight } = request.query as { url?: string; maxwidth?: string; maxheight?: string };
     if (!url) return reply.status(400).send({ error: 'url query parameter is required' });
 
-    const provider = await scopedDb(request).findOEmbedProvider(url);
-    if (!provider) return reply.status(404).send({ error: 'No oEmbed provider found for this URL' });
+    // Try using the built-in oEmbed service first
+    const maxWidth = maxwidth ? parseInt(maxwidth, 10) : undefined;
+    const maxHeight = maxheight ? parseInt(maxheight, 10) : undefined;
 
-    // In production, this would actually call the oEmbed endpoint
+    const embedData = await oembedService.fetchEmbed(url, maxWidth, maxHeight);
+    if (embedData) {
+      return embedData;
+    }
+
+    // Fallback to database-configured providers
+    const provider = await scopedDb(request).findOEmbedProvider(url);
+    if (!provider) {
+      return reply.status(404).send({ error: 'No oEmbed provider found for this URL' });
+    }
+
+    // Return provider info if no embed data was fetched
     return {
       provider: provider.provider_name,
       endpoint: provider.endpoint_url,
       url,
-      type: 'link',
-      version: '1.0',
+      message: 'Provider found but embed fetch failed',
     };
   });
 
