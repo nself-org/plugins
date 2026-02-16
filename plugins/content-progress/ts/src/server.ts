@@ -5,16 +5,18 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { ZodError } from 'zod';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { ProgressDatabase } from './database.js';
 import { loadConfig, type Config } from './config.js';
-import type {
-  UpdateProgressRequest,
-  AddToWatchlistRequest,
-  UpdateWatchlistRequest,
-  AddToFavoritesRequest,
-  ContentType,
-} from './types.js';
+import type { ContentType } from './types.js';
+import {
+  UpdateProgressSchema,
+  AddToWatchlistSchema,
+  UpdateWatchlistSchema,
+  AddToFavoritesSchema,
+  formatZodError,
+} from './schemas.js';
 
 const logger = createLogger('progress:server');
 
@@ -135,15 +137,14 @@ export async function createServer(config?: Partial<Config>) {
   // Update progress
   app.post('/v1/progress', async (request, reply) => {
     try {
-      const body = request.body as UpdateProgressRequest;
-
-      if (!body.user_id || !body.content_type || !body.content_id || body.position_seconds === undefined) {
-        return reply.status(400).send({ error: 'Missing required fields' });
-      }
-
+      const body = UpdateProgressSchema.parse(request.body);
       const position = await scopedDb(request).updateProgress(body);
       return position;
     } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({ error: formatZodError(error) });
+      }
+
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Update progress failed', { error: message });
       return reply.status(500).send({ error: message });
@@ -239,15 +240,14 @@ export async function createServer(config?: Partial<Config>) {
 
   app.post('/v1/watchlist', async (request, reply) => {
     try {
-      const body = request.body as AddToWatchlistRequest;
-
-      if (!body.user_id || !body.content_type || !body.content_id) {
-        return reply.status(400).send({ error: 'Missing required fields' });
-      }
-
+      const body = AddToWatchlistSchema.parse(request.body);
       const item = await scopedDb(request).addToWatchlist(body);
       return item;
     } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({ error: formatZodError(error) });
+      }
+
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Add to watchlist failed', { error: message });
       return reply.status(500).send({ error: message });
@@ -262,19 +262,29 @@ export async function createServer(config?: Partial<Config>) {
   });
 
   app.put('/v1/watchlist/:userId/:contentType/:contentId', async (request, reply) => {
-    const { userId, contentType, contentId } = request.params as {
-      userId: string;
-      contentType: ContentType;
-      contentId: string;
-    };
-    const body = request.body as UpdateWatchlistRequest;
+    try {
+      const { userId, contentType, contentId } = request.params as {
+        userId: string;
+        contentType: ContentType;
+        contentId: string;
+      };
+      const body = UpdateWatchlistSchema.parse(request.body);
 
-    const item = await scopedDb(request).updateWatchlistItem(userId, contentType, contentId, body);
-    if (!item) {
-      return reply.status(404).send({ error: 'Watchlist item not found' });
+      const item = await scopedDb(request).updateWatchlistItem(userId, contentType, contentId, body);
+      if (!item) {
+        return reply.status(404).send({ error: 'Watchlist item not found' });
+      }
+
+      return item;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({ error: formatZodError(error) });
+      }
+
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Update watchlist failed', { error: message });
+      return reply.status(500).send({ error: message });
     }
-
-    return item;
   });
 
   app.delete('/v1/watchlist/:userId/:contentType/:contentId', async (request, reply) => {
@@ -298,15 +308,14 @@ export async function createServer(config?: Partial<Config>) {
 
   app.post('/v1/favorites', async (request, reply) => {
     try {
-      const body = request.body as AddToFavoritesRequest;
-
-      if (!body.user_id || !body.content_type || !body.content_id) {
-        return reply.status(400).send({ error: 'Missing required fields' });
-      }
-
+      const body = AddToFavoritesSchema.parse(request.body);
       const item = await scopedDb(request).addToFavorites(body);
       return item;
     } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send({ error: formatZodError(error) });
+      }
+
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Add to favorites failed', { error: message });
       return reply.status(500).send({ error: message });
