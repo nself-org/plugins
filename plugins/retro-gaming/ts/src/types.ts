@@ -14,6 +14,8 @@ export interface RetroGamingConfig {
   host: string;
   igdbClientId: string;
   igdbClientSecret: string;
+  igdbApiUrl: string;
+  igdbOAuthUrl: string;
   mobyGamesApiKey: string;
   storageBucket: string;
   romPathPrefix: string;

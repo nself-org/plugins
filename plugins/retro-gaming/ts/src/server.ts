@@ -33,7 +33,12 @@ export async function createServer(config?: Partial<RetroGamingConfig>) {
   await db.initializeSchema();
 
   // Initialize IGDB client
-  const igdb = new IgdbClient(fullConfig.igdbClientId, fullConfig.igdbClientSecret);
+  const igdb = new IgdbClient(
+    fullConfig.igdbClientId,
+    fullConfig.igdbClientSecret,
+    fullConfig.igdbApiUrl,
+    fullConfig.igdbOAuthUrl
+  );
 
   // Create Fastify server
   const app = Fastify({

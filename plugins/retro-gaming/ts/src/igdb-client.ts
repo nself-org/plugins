@@ -111,17 +111,26 @@ class TokenBucketRateLimiter {
 export class IgdbClient {
   private clientId: string;
   private clientSecret: string;
+  private apiUrl: string;
+  private oauthUrl: string;
   private accessToken: string | null = null;
   private tokenExpiresAt: number = 0;
   private http: AxiosInstance;
   private rateLimiter: TokenBucketRateLimiter;
 
-  constructor(clientId: string, clientSecret: string) {
+  constructor(
+    clientId: string,
+    clientSecret: string,
+    apiUrl: string = 'https://api.igdb.com/v4',
+    oauthUrl: string = 'https://id.twitch.tv/oauth2/token'
+  ) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
+    this.apiUrl = apiUrl;
+    this.oauthUrl = oauthUrl;
 
     this.http = axios.create({
-      baseURL: 'https://api.igdb.com/v4',
+      baseURL: this.apiUrl,
       timeout: 15000,
     });
 
@@ -152,7 +161,7 @@ export class IgdbClient {
     logger.info('Authenticating with Twitch/IGDB...');
 
     const response = await axios.post<IgdbAuthResponse>(
-      'https://id.twitch.tv/oauth2/token',
+      this.oauthUrl,
       null,
       {
         params: {

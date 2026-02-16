@@ -31,6 +31,8 @@ export function loadConfig(overrides?: Partial<RetroGamingConfig>): RetroGamingC
     // IGDB
     igdbClientId: process.env.IGDB_CLIENT_ID ?? '',
     igdbClientSecret: process.env.IGDB_CLIENT_SECRET ?? '',
+    igdbApiUrl: process.env.IGDB_API_URL ?? 'https://api.igdb.com/v4',
+    igdbOAuthUrl: process.env.IGDB_OAUTH_URL ?? 'https://id.twitch.tv/oauth2/token',
 
     // MobyGames
     mobyGamesApiKey: process.env.MOBYGAMES_API_KEY ?? '',
