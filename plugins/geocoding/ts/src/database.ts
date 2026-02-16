@@ -212,6 +212,29 @@ export class GeocodingDatabase {
         ON geo_places(category);
 
       -- =====================================================================
+      -- API Quotas and Rate Limiting
+      -- =====================================================================
+
+      CREATE TABLE IF NOT EXISTS geo_api_quotas (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+        quota_type VARCHAR(16) NOT NULL DEFAULT 'daily',
+        period_start TIMESTAMPTZ NOT NULL,
+        period_end TIMESTAMPTZ NOT NULL,
+        api_calls INTEGER DEFAULT 0,
+        geocode_calls INTEGER DEFAULT 0,
+        cache_hits INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(source_account_id, quota_type, period_start)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_geo_quotas_source_account
+        ON geo_api_quotas(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_geo_quotas_period
+        ON geo_api_quotas(period_start, period_end);
+
+      -- =====================================================================
       -- Analytics Views
       -- =====================================================================
 
@@ -871,6 +894,88 @@ export class GeocodingDatabase {
       total_places: row?.total_places ?? 0,
       cache_hit_rate: Math.max(0, Math.round(hitRate * 10) / 10),
       by_provider: byProvider,
+    };
+  }
+
+  // =========================================================================
+  // API Quotas and Rate Limiting
+  // =========================================================================
+
+  async incrementApiQuota(quotaType: 'daily' | 'monthly' = 'daily', isGeocodeCall: boolean = false, isCacheHit: boolean = false): Promise<void> {
+    const now = new Date();
+    let periodStart: Date;
+    let periodEnd: Date;
+
+    if (quotaType === 'daily') {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      periodEnd = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000);
+    } else {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+
+    await this.execute(
+      `INSERT INTO geo_api_quotas (
+        source_account_id, quota_type, period_start, period_end,
+        api_calls, geocode_calls, cache_hits
+      ) VALUES ($1, $2, $3, $4, 1, $5, $6)
+      ON CONFLICT (source_account_id, quota_type, period_start)
+      DO UPDATE SET
+        api_calls = geo_api_quotas.api_calls + 1,
+        geocode_calls = geo_api_quotas.geocode_calls + $5,
+        cache_hits = geo_api_quotas.cache_hits + $6,
+        updated_at = NOW()`,
+      [
+        this.sourceAccountId,
+        quotaType,
+        periodStart.toISOString(),
+        periodEnd.toISOString(),
+        isGeocodeCall ? 1 : 0,
+        isCacheHit ? 1 : 0,
+      ]
+    );
+  }
+
+  async getQuotaUsage(quotaType: 'daily' | 'monthly' = 'daily'): Promise<{
+    api_calls: number;
+    geocode_calls: number;
+    cache_hits: number;
+    period_start: Date;
+    period_end: Date;
+  } | null> {
+    const now = new Date();
+    let periodStart: Date;
+
+    if (quotaType === 'daily') {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const result = await this.query<{
+      api_calls: number;
+      geocode_calls: number;
+      cache_hits: number;
+      period_start: Date;
+      period_end: Date;
+    }>(
+      `SELECT api_calls, geocode_calls, cache_hits, period_start, period_end
+       FROM geo_api_quotas
+       WHERE source_account_id = $1 AND quota_type = $2 AND period_start = $3`,
+      [this.sourceAccountId, quotaType, periodStart.toISOString()]
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async checkQuotaLimit(quotaType: 'daily' | 'monthly' = 'daily', maxCalls: number): Promise<{ allowed: boolean; current: number; limit: number }> {
+    const usage = await this.getQuotaUsage(quotaType);
+    const current = usage?.api_calls ?? 0;
+
+    return {
+      allowed: current < maxCalls,
+      current,
+      limit: maxCalls,
     };
   }
 }

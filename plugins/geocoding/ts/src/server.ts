@@ -5,7 +5,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
+import { createLogger, ApiRateLimiter, createAuthHook, getAppContext } from '@nself/plugin-utils';
 import { GeocodingDatabase } from './database.js';
 import { loadConfig, type Config } from './config.js';
 import type {
@@ -44,13 +44,34 @@ export async function createServer(config?: Partial<Config>) {
     credentials: true,
   });
 
-  // Security middleware
+  // Security middleware - Per-user rate limiting
   const rateLimiter = new ApiRateLimiter(
     fullConfig.security.rateLimitMax ?? 500,
     fullConfig.security.rateLimitWindowMs ?? 60000
   );
 
-  app.addHook('preHandler', createRateLimitHook(rateLimiter) as never);
+  // Custom rate limiting hook that uses sourceAccountId instead of IP
+  app.addHook('preHandler', async (request, reply) => {
+    // Skip rate limiting for health check endpoints
+    if (request.url === '/health' || request.url === '/ready' || request.url === '/live') {
+      return;
+    }
+
+    // Use sourceAccountId as rate limit key (per-user/tenant)
+    const ctx = getAppContext(request);
+    const key = ctx.sourceAccountId;
+
+    // Add rate limit headers
+    reply.header('X-RateLimit-Limit', (fullConfig.security.rateLimitMax ?? 500).toString());
+    reply.header('X-RateLimit-Remaining', rateLimiter.getRemaining(key).toString());
+    reply.header('X-RateLimit-Reset', Math.ceil(rateLimiter.getResetTime(key) / 1000).toString());
+
+    if (!rateLimiter.check(key)) {
+      logger.warn('Rate limit exceeded', { sourceAccountId: key });
+      reply.header('Retry-After', '60');
+      return reply.status(429).send({ error: 'Too many requests' });
+    }
+  });
 
   if (fullConfig.security.apiKey) {
     app.addHook('preHandler', createAuthHook(fullConfig.security.apiKey) as never);
@@ -130,6 +151,9 @@ export async function createServer(config?: Partial<Config>) {
       if (fullConfig.cacheEnabled) {
         const cached = await scopedDb(request).getCachedGeocodeAnyProvider('forward', queryText);
         if (cached) {
+          // Track quota: API call + cache hit
+          await scopedDb(request).incrementApiQuota('daily', true, true);
+
           const result: GeoResult = {
             lat: cached.lat ?? 0,
             lng: cached.lng ?? 0,
@@ -151,6 +175,9 @@ export async function createServer(config?: Partial<Config>) {
           return { data: [result] };
         }
       }
+
+      // Track quota: API call + geocode call (cache miss)
+      await scopedDb(request).incrementApiQuota('daily', true, false);
 
       // Placeholder: would call external provider here
       // For now, return empty with a message
@@ -179,6 +206,9 @@ export async function createServer(config?: Partial<Config>) {
       if (fullConfig.cacheEnabled) {
         const cached = await scopedDb(request).getCachedGeocodeAnyProvider('reverse', queryText);
         if (cached) {
+          // Track quota: API call + cache hit
+          await scopedDb(request).incrementApiQuota('daily', true, true);
+
           const result: GeoResult = {
             lat: cached.lat ?? 0,
             lng: cached.lng ?? 0,
@@ -200,6 +230,9 @@ export async function createServer(config?: Partial<Config>) {
           return { data: [result] };
         }
       }
+
+      // Track quota: API call + geocode call (cache miss)
+      await scopedDb(request).incrementApiQuota('daily', true, false);
 
       return {
         data: [],
@@ -463,6 +496,42 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/stats', async (request) => {
     const stats = await scopedDb(request).getPluginStats();
     return stats;
+  });
+
+  // =========================================================================
+  // Quota Tracking Endpoints
+  // =========================================================================
+
+  app.get('/api/quota', async (request) => {
+    const daily = await scopedDb(request).getQuotaUsage('daily');
+    const monthly = await scopedDb(request).getQuotaUsage('monthly');
+    return {
+      daily: daily ?? { api_calls: 0, geocode_calls: 0, cache_hits: 0 },
+      monthly: monthly ?? { api_calls: 0, geocode_calls: 0, cache_hits: 0 },
+    };
+  });
+
+  app.get('/api/quota/check', async (request, reply) => {
+    try {
+      const query = request.query as { limit?: string; type?: string };
+      const limit = parseInt(query.limit ?? '1000', 10);
+      const quotaType = (query.type === 'monthly' ? 'monthly' : 'daily') as 'daily' | 'monthly';
+
+      const result = await scopedDb(request).checkQuotaLimit(quotaType, limit);
+
+      if (!result.allowed) {
+        return reply.status(429).send({
+          error: 'Quota exceeded',
+          ...result,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Quota check failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
   });
 
   // =========================================================================
