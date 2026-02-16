@@ -609,17 +609,21 @@ export class TmdbDatabase {
   }
 
   async getMoviesOlderThan(days: number, limit: number = 100): Promise<TmdbMovieRecord[]> {
+    // Validate days parameter to prevent SQL injection
+    const validatedDays = Math.max(0, Math.floor(days));
     const result = await this.db.query<TmdbMovieRecord>(
-      `SELECT * FROM tmdb_movies WHERE source_account_id = $1 AND synced_at < NOW() - INTERVAL '${days} days' ORDER BY synced_at ASC LIMIT $2`,
-      [this.sourceAccountId, limit]
+      'SELECT * FROM tmdb_movies WHERE source_account_id = $1 AND synced_at < NOW() - ($2 || \' days\')::INTERVAL ORDER BY synced_at ASC LIMIT $3',
+      [this.sourceAccountId, validatedDays, limit]
     );
     return result.rows;
   }
 
   async getTvShowsOlderThan(days: number, limit: number = 100): Promise<TmdbTvShowRecord[]> {
+    // Validate days parameter to prevent SQL injection
+    const validatedDays = Math.max(0, Math.floor(days));
     const result = await this.db.query<TmdbTvShowRecord>(
-      `SELECT * FROM tmdb_tv_shows WHERE source_account_id = $1 AND synced_at < NOW() - INTERVAL '${days} days' ORDER BY synced_at ASC LIMIT $2`,
-      [this.sourceAccountId, limit]
+      'SELECT * FROM tmdb_tv_shows WHERE source_account_id = $1 AND synced_at < NOW() - ($2 || \' days\')::INTERVAL ORDER BY synced_at ASC LIMIT $3',
+      [this.sourceAccountId, validatedDays, limit]
     );
     return result.rows;
   }

@@ -577,27 +577,54 @@ export async function createServer(config?: Partial<Config>) {
         return reply.status(404).send({ error: 'Recording not found' });
       }
 
-      // Fire-and-forget encoding request to file-processing plugin
+      // Dispatch encoding request to file-processing plugin with retry logic
       if (recording.file_path && recording.status === 'processing') {
         const encodeUrl = `${fullConfig.fileProcessingUrl}/v1/jobs`;
-        try {
-          fetch(encodeUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              recording_id: id,
-              input_path: recording.file_path,
-              profile: fullConfig.defaultEncodeProfile,
-              callback_url: `http://${fullConfig.host}:${fullConfig.port}/api/v1/recordings/${id}/encode-complete`,
-            }),
-          }).catch((err: unknown) => {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            logger.warn(`Fire-and-forget encode request failed for recording ${id}`, { error: msg });
-          });
-        } catch (err) {
+
+        // Helper function for exponential backoff retry
+        const fetchWithRetry = async (retries = 3): Promise<void> => {
+          for (let i = 0; i < retries; i++) {
+            try {
+              const response = await fetch(encodeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  recording_id: id,
+                  input_path: recording.file_path,
+                  profile: fullConfig.defaultEncodeProfile,
+                  callback_url: `http://${fullConfig.host}:${fullConfig.port}/api/v1/recordings/${id}/encode-complete`,
+                }),
+              });
+
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+
+              logger.info(`Encode job created for recording ${id}`);
+              return; // Success
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+
+              if (i === retries - 1) {
+                // Last attempt failed - log error and update recording status
+                logger.error(`Failed to create encode job after ${retries} attempts for recording ${id}`, { error: msg });
+                await db.updateRecording(id, { status: 'error', error_message: `Failed to create encode job: ${msg}` });
+                throw err;
+              }
+
+              // Exponential backoff: 1s, 2s, 4s
+              const delay = 1000 * Math.pow(2, i);
+              logger.warn(`Encode request failed (attempt ${i + 1}/${retries}), retrying in ${delay}ms`, { error: msg });
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        };
+
+        // Run async but don't block response
+        fetchWithRetry().catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : 'Unknown error';
-          logger.warn(`Failed to dispatch encode for recording ${id}`, { error: msg });
-        }
+          logger.error(`Encode dispatch failed permanently for recording ${id}`, { error: msg });
+        });
       }
 
       return { ok: true, recording };

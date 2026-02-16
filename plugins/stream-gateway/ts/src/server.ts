@@ -467,6 +467,31 @@ export async function createServer(config?: Partial<Config>) {
     return `${url}?token=${signature}&expires=${expires}&session=${sessionId}`;
   }
 
+  /**
+   * Verify a signed playback URL using constant-time comparison to prevent timing attacks.
+   */
+  function verifyPlaybackUrl(url: string, sessionId: string, expires: number, providedSignature: string, secret: string): boolean {
+    // Check if expired
+    if (Math.floor(Date.now() / 1000) > expires) {
+      return false;
+    }
+
+    // Regenerate expected signature
+    const payload = `${url}|${sessionId}|${expires}`;
+    const expectedSignature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+
+    // Use constant-time comparison to prevent timing attacks
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(providedSignature),
+        Buffer.from(expectedSignature)
+      );
+    } catch {
+      // timingSafeEqual throws if lengths don't match - return false
+      return false;
+    }
+  }
+
   // POST /v1/admit - Admit user to stream (nTV frontend)
   app.post('/v1/admit', async (request, reply) => {
     try {

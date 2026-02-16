@@ -957,11 +957,18 @@ export class SupportDatabase {
   }
 
   async recordArticleFeedback(articleId: string, helpful: boolean): Promise<void> {
-    const field = helpful ? 'helpful_count' : 'not_helpful_count';
-    await this.execute(
-      `UPDATE nchat_support_kb_articles SET ${field} = ${field} + 1 WHERE source_account_id = $1 AND id = $2`,
-      [this.sourceAccountId, articleId]
-    );
+    // Use conditional query to avoid SQL injection from dynamic field names
+    if (helpful) {
+      await this.execute(
+        'UPDATE nchat_support_kb_articles SET helpful_count = helpful_count + 1 WHERE source_account_id = $1 AND id = $2',
+        [this.sourceAccountId, articleId]
+      );
+    } else {
+      await this.execute(
+        'UPDATE nchat_support_kb_articles SET not_helpful_count = not_helpful_count + 1 WHERE source_account_id = $1 AND id = $2',
+        [this.sourceAccountId, articleId]
+      );
+    }
   }
 
   async incrementArticleViewCount(articleId: string): Promise<void> {

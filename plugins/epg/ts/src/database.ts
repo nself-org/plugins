@@ -365,8 +365,17 @@ export class EpgDatabase {
       ORDER BY c.sort_order ASC, c.channel_number ASC, c.name ASC
     `;
 
-    if (filters.limit) sql += ` LIMIT ${filters.limit}`;
-    if (filters.offset) sql += ` OFFSET ${filters.offset}`;
+    // Use parameterized queries for LIMIT and OFFSET to prevent SQL injection
+    if (filters.limit) {
+      sql += ` LIMIT $${paramIndex}`;
+      values.push(Math.max(0, Math.floor(filters.limit)));
+      paramIndex++;
+    }
+    if (filters.offset) {
+      sql += ` OFFSET $${paramIndex}`;
+      values.push(Math.max(0, Math.floor(filters.offset)));
+      paramIndex++;
+    }
 
     const result = await this.query<ChannelRecord>(sql, values);
     return result.rows;
@@ -719,6 +728,8 @@ export class EpgDatabase {
   }
 
   async getUpcomingAirings(programId: string, days = 14): Promise<(ScheduleEntry & { channel_name: string; channel_number: string | null })[]> {
+    // Validate days parameter to prevent SQL injection
+    const validatedDays = Math.max(0, Math.floor(days));
     const result = await this.query<ScheduleEntry & { channel_name: string; channel_number: string | null }>(
       `SELECT s.id as schedule_id, s.start_time, s.end_time, s.is_live, s.is_rerun,
               p.id as program_id, p.title, p.episode_title, p.description, p.categories,
@@ -730,9 +741,9 @@ export class EpgDatabase {
        WHERE s.source_account_id = $1
          AND s.program_id = $2
          AND s.start_time >= NOW()
-         AND s.start_time < NOW() + INTERVAL '${days} days'
+         AND s.start_time < NOW() + ($3 || ' days')::INTERVAL
        ORDER BY s.start_time ASC`,
-      [this.sourceAccountId, programId]
+      [this.sourceAccountId, programId, validatedDays]
     );
 
     return result.rows;
@@ -992,11 +1003,13 @@ export class EpgDatabase {
   }
 
   async cleanupOldSchedules(days: number): Promise<number> {
+    // Validate days parameter to prevent SQL injection
+    const validatedDays = Math.max(0, Math.floor(days));
     const count = await this.execute(
       `DELETE FROM np_epg_schedules
        WHERE source_account_id = $1
-         AND end_time < NOW() - INTERVAL '${days} days'`,
-      [this.sourceAccountId]
+         AND end_time < NOW() - ($2 || ' days')::INTERVAL`,
+      [this.sourceAccountId, validatedDays]
     );
     return count;
   }
