@@ -192,6 +192,13 @@ export function loadConfig(): AuthConfig {
       refreshTokenExpiresIn: getEnvOptional('AUTH_JWT_REFRESH_EXPIRES_IN', '7d'),
     },
 
+    // Email
+    email: {
+      notificationsUrl: getEnvOptional('NOTIFICATIONS_URL', 'http://notifications:3000'),
+      fromEmail: getEnvOptional('AUTH_FROM_EMAIL', 'noreply@nself.local'),
+      fromName: getEnvOptional('AUTH_FROM_NAME', 'nSelf Auth'),
+    },
+
     // Cleanup
     cleanup: {
       cron: getEnvOptional('AUTH_CLEANUP_CRON', '0 */6 * * *'),

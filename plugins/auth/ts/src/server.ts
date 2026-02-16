@@ -8,6 +8,7 @@ import { createLogger } from '@nself/plugin-utils';
 import { AuthDatabase } from './database.js';
 import { TotpService } from './totp.js';
 import { TokenService } from './tokens.js';
+import { EmailService } from './email.js';
 import { DeviceCodeService } from './device-code.js';
 import { MagicLinkService } from './magic-links.js';
 import { WebAuthnService } from './webauthn.js';
@@ -26,6 +27,7 @@ export class AuthServer {
   private startTime: number;
   private totpService: TotpService;
   private tokenService: TokenService;
+  private emailService: EmailService;
   private deviceCodeService: DeviceCodeService;
   private magicLinkService: MagicLinkService;
   private webAuthnService: WebAuthnService;
@@ -38,6 +40,7 @@ export class AuthServer {
     this.startTime = Date.now();
     this.totpService = new TotpService(config);
     this.tokenService = new TokenService(config.jwt);
+    this.emailService = new EmailService(config.email);
     this.deviceCodeService = new DeviceCodeService(config);
     this.magicLinkService = new MagicLinkService(config);
     this.webAuthnService = new WebAuthnService(config);
@@ -571,19 +574,26 @@ export class AuthServer {
         ip_address: request.ip || null,
       });
 
-      // TODO: Send email via notifications plugin
-      // For now, we return the URL in development mode
-      // In production, this should ONLY be sent via email
-      logger.info('Magic link created', { email, purpose, url: magicLink.url });
+      // Send email via notifications plugin
+      const emailSent = await this.emailService.sendMagicLinkEmail(
+        email,
+        magicLink.url,
+        undefined, // userId not available for new user verification
+        purpose
+      );
+
+      if (!emailSent) {
+        logger.warn('Failed to send magic link email', { email, purpose });
+      }
+
+      logger.info('Magic link created', { email, purpose, emailSent });
 
       // Calculate expiry duration
       const expiresIn = Math.floor((magicLink.expiresAt.getTime() - Date.now()) / 1000);
 
       reply.send({
-        sent: true,
+        sent: emailSent,
         expiresIn,
-        // SECURITY: Remove this in production - only send via email!
-        url: magicLink.url,
       });
     } catch (error) {
       logger.error('Magic link send error', { error });

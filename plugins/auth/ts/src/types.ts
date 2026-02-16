@@ -474,6 +474,13 @@ export interface AuthConfig {
     refreshTokenExpiresIn: string;
   };
 
+  // Email
+  email: {
+    notificationsUrl: string;
+    fromEmail: string;
+    fromName: string;
+  };
+
   // Cleanup
   cleanup: {
     cron: string;
