@@ -224,13 +224,42 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
     const preview = await scopedDb(request).getPreview(request.params.id);
     if (!preview) return reply.status(404).send({ error: 'Preview not found' });
 
-    // Re-fetch and update -- in production, would actually re-fetch the URL
-    const updated = await scopedDb(request).upsertPreview({
-      url: preview.url,
-      url_hash: preview.url_hash,
-      status: 'success',
-    });
-    return updated;
+    try {
+      // Re-fetch metadata from URL
+      const metadata = await metadataFetcher.fetchMetadata(preview.url);
+
+      // Update database with fresh metadata
+      const updated = await scopedDb(request).upsertPreview({
+        url: preview.url,
+        url_hash: preview.url_hash,
+        title: metadata.title,
+        description: metadata.description,
+        image_url: metadata.image,
+        site_name: metadata.siteName,
+        author_name: metadata.author,
+        published_date: metadata.publishedTime,
+        content_type: metadata.type,
+        favicon_url: metadata.favicon,
+        language: metadata.language,
+        video_url: metadata.videoUrl,
+        audio_url: metadata.audioUrl,
+        reading_time_minutes: metadata.estimatedReadTime,
+        status: 'success',
+      });
+
+      return updated;
+    } catch (error) {
+      logger.error('Failed to refresh preview', { id: request.params.id, url: preview.url, error });
+
+      // Update status to failed
+      const updated = await scopedDb(request).upsertPreview({
+        url: preview.url,
+        url_hash: preview.url_hash,
+        status: 'failed',
+      });
+
+      return updated;
+    }
   });
 
   // =========================================================================
