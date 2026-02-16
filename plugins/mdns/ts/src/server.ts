@@ -15,6 +15,7 @@ import type {
   DiscoverRequest,
   ListDiscoveryQuery,
 } from './types.js';
+import { discoverServices } from './discovery.js';
 
 const logger = createLogger('mdns:server');
 
@@ -229,17 +230,44 @@ export async function createServer(config?: Partial<Config>) {
         domain: request.body.domain ?? fullConfig.domain,
       });
 
-      // In a real implementation, this would perform actual mDNS discovery.
-      // For now, return discovered services from the database.
-      const discovered = await scopedDb(request).listDiscoveries({
+      // Perform real mDNS discovery on the network
+      const discovered = await discoverServices({
+        serviceType,
+        timeout: request.body.timeout ?? 5000,
+        domain: request.body.domain ?? fullConfig.domain,
+      });
+
+      // Store discovered services in database
+      for (const service of discovered) {
+        try {
+          await scopedDb(request).upsertDiscovery({
+            service_type: service.service_type,
+            service_name: service.service_name,
+            host: service.host,
+            port: service.port,
+            addresses: service.addresses,
+            txt_records: service.txt_records,
+          });
+        } catch (error) {
+          logger.warn('Failed to store discovery', {
+            service: service.service_name,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      const scanDuration = Date.now() - startTime;
+
+      // Convert to database record format for response
+      const services = await scopedDb(request).listDiscoveries({
         serviceType,
         isAvailable: true,
       });
 
-      const scanDuration = Date.now() - startTime;
-
       return {
-        services: discovered,
+        services: services.filter(s =>
+          discovered.some(d => d.service_name === s.service_name && d.host === s.host)
+        ),
         count: discovered.length,
         scan_duration_ms: scanDuration,
       };
