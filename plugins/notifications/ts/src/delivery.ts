@@ -4,6 +4,7 @@
  */
 
 import nodemailer, { Transporter } from 'nodemailer';
+import twilio from 'twilio';
 import { createLogger } from '@nself/plugin-utils';
 import { config } from './config.js';
 
@@ -397,6 +398,7 @@ export class PushDelivery {
 
 export class SMSDelivery {
   private twilioEnabled: boolean = false;
+  private twilioClient?: twilio.Twilio;
 
   constructor() {
     this.initializeSMSProvider();
@@ -405,54 +407,57 @@ export class SMSDelivery {
   private initializeSMSProvider(): void {
     if (config.sms.twilio_account_sid && config.sms.twilio_auth_token) {
       this.twilioEnabled = true;
+      this.twilioClient = twilio(
+        config.sms.twilio_account_sid,
+        config.sms.twilio_auth_token
+      );
       logger.info('Twilio SMS enabled');
-      // TODO: Initialize Twilio client
-      // import twilio from 'twilio';
-      //
-      // this.twilioClient = twilio(
-      //   config.sms.twilio_account_sid,
-      //   config.sms.twilio_auth_token
-      // );
     } else {
       logger.warn('No SMS provider configured');
     }
   }
 
   async send(message: SMSMessage): Promise<DeliveryResult> {
-    if (!this.twilioEnabled) {
+    if (!this.twilioEnabled || !this.twilioClient) {
       return {
         success: false,
         error: 'SMS provider not configured',
       };
     }
 
-    logger.warn('Twilio SMS delivery not yet implemented', { to: message.to });
+    try {
+      logger.info('Sending SMS via Twilio', { to: message.to });
 
-    // TODO: Implement Twilio SMS delivery
-    // try {
-    //   const result = await this.twilioClient.messages.create({
-    //     body: message.body,
-    //     from: message.from || config.sms.twilio_from_number,
-    //     to: message.to,
-    //     mediaUrl: message.media_url ? [message.media_url] : undefined,
-    //   });
-    //
-    //   return {
-    //     success: true,
-    //     message_id: result.sid,
-    //     provider_response: result,
-    //   };
-    // } catch (error) {
-    //   return {
-    //     success: false,
-    //     error: error.message,
-    //   };
-    // }
+      const result = await this.twilioClient.messages.create({
+        body: message.body,
+        from: message.from || config.sms.twilio_from_number,
+        to: message.to,
+        mediaUrl: message.media_url ? [message.media_url] : undefined,
+      });
 
-    return {
-      success: false,
-      error: 'Twilio SMS delivery not implemented - install twilio and uncomment code',
-    };
+      logger.info('SMS sent successfully', {
+        to: message.to,
+        sid: result.sid,
+        status: result.status,
+      });
+
+      return {
+        success: true,
+        message_id: result.sid,
+        provider_response: result,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to send SMS', {
+        to: message.to,
+        error: errorMessage,
+      });
+
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
   }
 }
 
