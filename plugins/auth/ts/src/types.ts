@@ -466,6 +466,14 @@ export interface AuthConfig {
     loginLockoutMinutes: number;
   };
 
+  // JWT Tokens
+  jwt: {
+    accessTokenSecret: string;
+    refreshTokenSecret: string;
+    accessTokenExpiresIn: string;
+    refreshTokenExpiresIn: string;
+  };
+
   // Cleanup
   cleanup: {
     cron: string;

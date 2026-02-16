@@ -7,6 +7,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { createLogger } from '@nself/plugin-utils';
 import { AuthDatabase } from './database.js';
 import { TotpService } from './totp.js';
+import { TokenService } from './tokens.js';
 import { DeviceCodeService } from './device-code.js';
 import { MagicLinkService } from './magic-links.js';
 import { WebAuthnService } from './webauthn.js';
@@ -24,6 +25,7 @@ export class AuthServer {
   private config: AuthConfig;
   private startTime: number;
   private totpService: TotpService;
+  private tokenService: TokenService;
   private deviceCodeService: DeviceCodeService;
   private magicLinkService: MagicLinkService;
   private webAuthnService: WebAuthnService;
@@ -35,6 +37,7 @@ export class AuthServer {
     this.config = config;
     this.startTime = Date.now();
     this.totpService = new TotpService(config);
+    this.tokenService = new TokenService(config.jwt);
     this.deviceCodeService = new DeviceCodeService(config);
     this.magicLinkService = new MagicLinkService(config);
     this.webAuthnService = new WebAuthnService(config);
@@ -686,12 +689,18 @@ export class AuthServer {
 
       // Return status based on authorization state
       if (record.status === 'authorized' && record.user_id) {
-        // TODO: Generate access/refresh tokens (requires token service)
+        // Generate access and refresh tokens
+        const tokens = this.tokenService.generateTokenPair({
+          userId: record.user_id,
+          sessionId: record.id,
+        });
+
         reply.send({
           status: 'authorized',
           userId: record.user_id,
-          // accessToken: '...', // TODO: implement token generation
-          // refreshToken: '...', // TODO: implement token generation
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresIn: tokens.expiresIn,
         });
         return;
       }

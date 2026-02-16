@@ -31,6 +31,7 @@
   "dependencies": {
     "@nself/plugin-utils": "file:../../../shared",
     "@simplewebauthn/server": "13.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/passport": "^1.0.17",
     "@types/passport-facebook": "^3.0.4",
     "@types/passport-github2": "^1.2.9",
@@ -39,6 +40,7 @@
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0",
+    "jsonwebtoken": "^9.0.3",
     "otplib": "^13.3.0",
     "passport": "^0.7.0",
     "passport-apple": "^2.0.2",

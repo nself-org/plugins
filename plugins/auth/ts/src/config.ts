@@ -184,6 +184,14 @@ export function loadConfig(): AuthConfig {
       loginLockoutMinutes: getEnvInt('AUTH_LOGIN_LOCKOUT_MINUTES', 15),
     },
 
+    // JWT Tokens
+    jwt: {
+      accessTokenSecret: getEnvOptional('AUTH_JWT_ACCESS_SECRET') || getEnv('AUTH_ENCRYPTION_KEY'),
+      refreshTokenSecret: getEnvOptional('AUTH_JWT_REFRESH_SECRET') || getEnv('AUTH_ENCRYPTION_KEY'),
+      accessTokenExpiresIn: getEnvOptional('AUTH_JWT_ACCESS_EXPIRES_IN', '15m'),
+      refreshTokenExpiresIn: getEnvOptional('AUTH_JWT_REFRESH_EXPIRES_IN', '7d'),
+    },
+
     // Cleanup
     cleanup: {
       cron: getEnvOptional('AUTH_CLEANUP_CRON', '0 */6 * * *'),
