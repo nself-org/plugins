@@ -295,11 +295,15 @@ export class DocumentsDatabase {
     `;
 
     if (filters.limit) {
-      sql += ` LIMIT ${filters.limit}`;
+      sql += ` LIMIT $${paramIndex}`;
+      values.push(filters.limit);
+      paramIndex++;
     }
 
     if (filters.offset) {
-      sql += ` OFFSET ${filters.offset}`;
+      sql += ` OFFSET $${paramIndex}`;
+      values.push(filters.offset);
+      paramIndex++;
     }
 
     const result = await this.query<DocumentRecord>(sql, values);
@@ -411,12 +415,13 @@ export class DocumentsDatabase {
     }
 
     const limit = filters.limit ?? 50;
+    values.push(limit);
 
     const result = await this.query<DocumentRecord>(
       `SELECT * FROM docs_documents
        WHERE ${conditions.join(' AND ')}
        ORDER BY updated_at DESC
-       LIMIT ${limit}`,
+       LIMIT $${paramIndex}`,
       values
     );
 
@@ -499,11 +504,15 @@ export class DocumentsDatabase {
     `;
 
     if (filters.limit) {
-      sql += ` LIMIT ${filters.limit}`;
+      sql += ` LIMIT $${paramIndex}`;
+      values.push(filters.limit);
+      paramIndex++;
     }
 
     if (filters.offset) {
-      sql += ` OFFSET ${filters.offset}`;
+      sql += ` OFFSET $${paramIndex}`;
+      values.push(filters.offset);
+      paramIndex++;
     }
 
     const result = await this.query<TemplateRecord>(sql, values);

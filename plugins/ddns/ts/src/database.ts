@@ -182,17 +182,23 @@ export class DdnsDatabase {
       paramIndex++;
     }
 
-    // Suppress unused variable warning
-    void paramIndex;
-
     let sql = `
       SELECT * FROM np_ddns_config
       WHERE ${conditions.join(' AND ')}
       ORDER BY domain ASC
     `;
 
-    if (filters.limit) sql += ` LIMIT ${filters.limit}`;
-    if (filters.offset) sql += ` OFFSET ${filters.offset}`;
+    if (filters.limit) {
+      sql += ` LIMIT $${paramIndex}`;
+      values.push(filters.limit);
+      paramIndex++;
+    }
+
+    if (filters.offset) {
+      sql += ` OFFSET $${paramIndex}`;
+      values.push(filters.offset);
+      paramIndex++;
+    }
 
     const result = await this.query<DdnsConfigRecord>(sql, values);
     return result.rows;
@@ -314,17 +320,23 @@ export class DdnsDatabase {
       paramIndex++;
     }
 
-    // Suppress unused variable warning
-    void paramIndex;
-
     let sql = `
       SELECT * FROM np_ddns_update_log
       WHERE ${conditions.join(' AND ')}
       ORDER BY created_at DESC
     `;
 
-    if (filters.limit) sql += ` LIMIT ${filters.limit}`;
-    if (filters.offset) sql += ` OFFSET ${filters.offset}`;
+    if (filters.limit) {
+      sql += ` LIMIT $${paramIndex}`;
+      values.push(filters.limit);
+      paramIndex++;
+    }
+
+    if (filters.offset) {
+      sql += ` OFFSET $${paramIndex}`;
+      values.push(filters.offset);
+      paramIndex++;
+    }
 
     const result = await this.query<DdnsUpdateLogRecord>(sql, values);
     return result.rows;
