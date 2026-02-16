@@ -8,6 +8,7 @@ import cors from '@fastify/cors';
 import { createLogger, ApiRateLimiter, createAuthHook, createRateLimitHook, getAppContext } from '@nself/plugin-utils';
 import { LinkPreviewDatabase } from './database.js';
 import { loadConfig, type LinkPreviewConfig } from './config.js';
+import { MetadataFetcher } from './metadata-fetcher.js';
 import type {
   FetchPreviewRequest,
   BatchFetchRequest,
@@ -36,6 +37,8 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
   const db = new LinkPreviewDatabase();
   await db.connect();
   await db.initializeSchema();
+
+  const metadataFetcher = new MetadataFetcher(10000); // 10 second timeout
 
   // Create Fastify server
   const app = Fastify({
@@ -164,14 +167,43 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
     }
 
     const urlHash = hashUrl(url);
-    // In production, this would actually fetch the URL and parse metadata.
-    // For now, we create/update the preview record.
-    const preview = await scopedDb(request).upsertPreview({
-      url,
-      url_hash: urlHash,
-      status: 'success',
-    });
-    return preview;
+
+    try {
+      // Fetch real metadata
+      const metadata = await metadataFetcher.fetchMetadata(url);
+
+      // Store in database with metadata
+      const preview = await scopedDb(request).upsertPreview({
+        url,
+        url_hash: urlHash,
+        title: metadata.title,
+        description: metadata.description,
+        image_url: metadata.image,
+        site_name: metadata.siteName,
+        author_name: metadata.author,
+        published_date: metadata.publishedTime,
+        content_type: metadata.type,
+        favicon_url: metadata.favicon,
+        language: metadata.language,
+        video_url: metadata.videoUrl,
+        audio_url: metadata.audioUrl,
+        reading_time_minutes: metadata.estimatedReadTime,
+        status: 'success',
+      });
+
+      return preview;
+    } catch (error) {
+      logger.error('Failed to fetch metadata', { url, error });
+
+      // Store failed preview
+      const preview = await scopedDb(request).upsertPreview({
+        url,
+        url_hash: urlHash,
+        status: 'failed',
+      });
+
+      return preview;
+    }
   });
 
   app.get<{ Params: { id: string } }>('/api/link-preview/:id', async (request, reply) => {
