@@ -16,6 +16,7 @@ import type {
   ListHistoryQuery,
   ProviderInfo,
 } from './types.js';
+import { createDDNSProvider, IPDetector } from './providers.js';
 
 const logger = createLogger('ddns:server');
 
@@ -93,6 +94,22 @@ export async function createServer(config?: Partial<Config>) {
   await db.connect();
   await db.initializeSchema();
 
+  // Initialize DNS provider (Cloudflare or Route53)
+  const provider = fullConfig.provider || 'cloudflare';
+  let ddnsProvider: ReturnType<typeof createDDNSProvider> | null = null;
+  try {
+    ddnsProvider = createDDNSProvider(provider, process.env as Record<string, string>);
+    logger.info('DNS provider initialized', { provider });
+  } catch (error) {
+    logger.warn('DNS provider not configured', {
+      provider,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+
+  // Initialize IP detector
+  const ipDetector = new IPDetector();
+
   // Create Fastify server
   const app = Fastify({
     logger: false,
@@ -167,6 +184,27 @@ export async function createServer(config?: Partial<Config>) {
       },
       timestamp: new Date().toISOString(),
     };
+  });
+
+  // =========================================================================
+  // IP Detection Endpoint
+  // =========================================================================
+
+  app.get('/api/ip', async (_request, reply) => {
+    try {
+      const ipv4 = await ipDetector.getIPv4();
+      const ipv6 = await ipDetector.getIPv6();
+
+      return {
+        ipv4,
+        ipv6,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('IP detection failed', { error: message });
+      return reply.status(500).send({ error: message });
+    }
   });
 
   // =========================================================================
@@ -339,39 +377,96 @@ export async function createServer(config?: Partial<Config>) {
           continue;
         }
 
-        // In a real implementation, this would call the provider's API.
-        // For now, we simulate a successful update.
-        logger.info('DNS update triggered', {
-          provider: cfg.provider,
-          domain: cfg.domain,
-          oldIp,
-          newIp: externalIp,
-        });
+        // Real DNS provider API integration
+        try {
+          if (!ddnsProvider) {
+            throw new Error(`DNS provider ${provider} not configured`);
+          }
 
-        await scopedDb(request).updateCurrentIp(cfg.id, externalIp);
-        await scopedDb(request).createUpdateLog({
-          source_account_id: scopedDb(request).getCurrentSourceAccountId(),
-          config_id: cfg.id,
-          provider: cfg.provider,
-          domain: cfg.domain,
-          old_ip: oldIp,
-          new_ip: externalIp,
-          status: 'success',
-          response_code: 200,
-          response_message: 'DNS record updated',
-          error: null,
-          duration_ms: Date.now() - startTime,
-        });
+          logger.info('DNS update triggered', {
+            provider: cfg.provider,
+            domain: cfg.domain,
+            oldIp,
+            newIp: externalIp,
+          });
 
-        results.push({
-          config_id: cfg.id,
-          provider: cfg.provider,
-          domain: cfg.domain,
-          old_ip: oldIp,
-          new_ip: externalIp,
-          status: 'success' as const,
-          message: 'DNS record updated',
-        });
+          // Update DNS record via provider API
+          // Note: cfg.token is used as record_id for Cloudflare/Route53
+          // cfg.zone_id should be set when creating the config
+          if (!cfg.zone_id || !cfg.token) {
+            throw new Error('zone_id and record_id (token) are required for DNS provider');
+          }
+
+          await ddnsProvider.updateRecord({
+            zone_id: cfg.zone_id,
+            record_id: cfg.token,
+            name: cfg.domain,
+            type: 'A',
+            content: externalIp,
+            ttl: 300,
+          });
+
+          // Update database
+          await scopedDb(request).updateCurrentIp(cfg.id, externalIp);
+          await scopedDb(request).createUpdateLog({
+            source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+            config_id: cfg.id,
+            provider: cfg.provider,
+            domain: cfg.domain,
+            old_ip: oldIp,
+            new_ip: externalIp,
+            status: 'success',
+            response_code: 200,
+            response_message: 'DNS record updated',
+            error: null,
+            duration_ms: Date.now() - startTime,
+          });
+
+          // Verify DNS propagation
+          const verified = await ddnsProvider.verifyRecord(cfg.domain, externalIp);
+
+          results.push({
+            config_id: cfg.id,
+            provider: cfg.provider,
+            domain: cfg.domain,
+            old_ip: oldIp,
+            new_ip: externalIp,
+            status: 'success' as const,
+            message: `DNS record updated${verified ? ' and verified' : ' (verification pending)'}`,
+          });
+        } catch (updateError) {
+          // Handle DNS update failure
+          const errorMessage = updateError instanceof Error ? updateError.message : 'Unknown error';
+          logger.error('DNS update failed', {
+            provider: cfg.provider,
+            domain: cfg.domain,
+            error: errorMessage,
+          });
+
+          await scopedDb(request).createUpdateLog({
+            source_account_id: scopedDb(request).getCurrentSourceAccountId(),
+            config_id: cfg.id,
+            provider: cfg.provider,
+            domain: cfg.domain,
+            old_ip: oldIp,
+            new_ip: externalIp,
+            status: 'failed',
+            response_code: null,
+            response_message: null,
+            error: [errorMessage],
+            duration_ms: Date.now() - startTime,
+          });
+
+          results.push({
+            config_id: cfg.id,
+            provider: cfg.provider,
+            domain: cfg.domain,
+            old_ip: oldIp,
+            new_ip: externalIp,
+            status: 'failed' as const,
+            message: errorMessage,
+          });
+        }
       }
 
       return { results, count: results.length };
