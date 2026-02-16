@@ -11,6 +11,7 @@ import { Strategy as GitHubStrategy } from 'passport-github2';
 import { BearerStrategy as MicrosoftStrategy } from 'passport-azure-ad';
 // @ts-ignore - passport-apple doesn't have types
 import AppleStrategy from 'passport-apple';
+import jwt from 'jsonwebtoken';
 import { createLogger } from '@nself/plugin-utils';
 import { AuthConfig, OAuthProviderRecord } from './types.js';
 import { AuthDatabase } from './database.js';
@@ -46,6 +47,8 @@ export class OAuthService {
   private db: AuthDatabase;
   private encryptionKey: string;
   private baseUrl: string;
+  private appleClientSecret: string | null = null;
+  private appleClientSecretExpiry: number = 0;
 
   constructor(config: AuthConfig, db: AuthDatabase) {
     this.config = config;
@@ -614,12 +617,52 @@ export class OAuthService {
   /**
    * Generate Apple client secret JWT
    * Required by Apple Sign In
+   * Cached for 10 minutes to avoid regenerating on every request
    */
   private generateAppleClientSecret(): string {
-    // This is a simplified version - production should use a JWT library
-    // For now, return a placeholder that needs to be implemented
-    logger.warn('Apple client secret generation not fully implemented - use JWT library');
-    return 'APPLE_CLIENT_SECRET_PLACEHOLDER';
+    // Check cache
+    if (this.appleClientSecret && Date.now() < this.appleClientSecretExpiry) {
+      return this.appleClientSecret;
+    }
+
+    if (!this.config.oauth.apple) {
+      throw new Error('Apple OAuth not configured');
+    }
+
+    const { teamId, keyId, privateKey, clientId } = this.config.oauth.apple;
+
+    if (!teamId || !keyId || !privateKey) {
+      throw new Error('Apple OAuth missing required fields: teamId, keyId, or privateKey');
+    }
+
+    // Generate JWT client secret
+    const now = Math.floor(Date.now() / 1000);
+    const expiresIn = 600; // 10 minutes (Apple allows up to 6 months, but shorter is more secure)
+
+    const claims = {
+      iss: teamId,
+      iat: now,
+      exp: now + expiresIn,
+      aud: 'https://appleid.apple.com',
+      sub: clientId,
+    };
+
+    // Sign JWT with ES256 algorithm and Apple private key
+    const secret = jwt.sign(claims, privateKey, {
+      algorithm: 'ES256',
+      header: {
+        alg: 'ES256',
+        kid: keyId,
+      },
+    } as any);
+
+    // Cache the secret for 9 minutes (slightly less than expiry to ensure validity)
+    this.appleClientSecret = secret;
+    this.appleClientSecretExpiry = Date.now() + (9 * 60 * 1000);
+
+    logger.debug('Generated Apple client secret', { expiresIn });
+
+    return secret;
   }
 
   /**
