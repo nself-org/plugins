@@ -6,6 +6,7 @@
 
 import { Command } from 'commander';
 import { createLogger } from '@nself/plugin-utils';
+import { AccessToken } from 'livekit-server-sdk';
 import { loadConfig } from './config.js';
 import { LiveKitDatabase } from './database.js';
 import { startServer } from './server.js';
@@ -249,13 +250,42 @@ program
   .argument('<room-name>', 'Room name')
   .argument('<identity>', 'Participant identity')
   .option('--ttl <seconds>', 'Token TTL in seconds', '3600')
+  .option('--name <name>', 'Participant display name', '')
+  .option('--can-publish', 'Allow publishing audio/video', true)
+  .option('--can-subscribe', 'Allow subscribing to streams', true)
+  .option('--can-publish-data', 'Allow publishing data messages', true)
   .action(async (roomName, identity, options) => {
     try {
       const config = loadConfig();
-      console.log(`\nToken generated for room: ${roomName}, identity: ${identity}`);
-      console.log(`TTL: ${options.ttl}s`);
-      console.log(`LiveKit URL: ${config.livekitUrl}`);
-      console.log('Note: Use the REST API for actual token generation with proper JWT signing');
+      const ttl = parseInt(options.ttl, 10);
+
+      // Generate real LiveKit JWT token using livekit-server-sdk
+      const at = new AccessToken(config.livekitApiKey, config.livekitApiSecret, {
+        identity,
+        name: options.name || identity,
+        ttl,
+      });
+
+      at.addGrant({
+        roomJoin: true,
+        room: roomName,
+        canPublish: options.canPublish,
+        canSubscribe: options.canSubscribe,
+        canPublishData: options.canPublishData,
+      });
+
+      const token = await at.toJwt();
+
+      // Output token
+      console.log(`\nToken generated successfully!`);
+      console.log(`\nRoom:       ${roomName}`);
+      console.log(`Identity:   ${identity}`);
+      console.log(`Name:       ${options.name || identity}`);
+      console.log(`TTL:        ${ttl}s`);
+      console.log(`URL:        ${config.livekitUrl}`);
+      console.log(`\nToken:`);
+      console.log(token);
+      console.log();
 
       process.exit(0);
     } catch (error) {
