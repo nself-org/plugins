@@ -370,19 +370,158 @@ export class AuthServer {
     }
   }
 
-  private async handlePasskeyRegisterFinish(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    // Stub: Verify and store passkey
-    reply.code(501).send({ error: 'Passkey registration not implemented' });
+  private async handlePasskeyRegisterFinish(
+    request: FastifyRequest<{ Body: { userId: string; credential: RegistrationResponseJSON; friendlyName?: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { userId, credential, friendlyName } = request.body;
+
+      // Get stored challenge
+      const challengeData = this.challenges.get(userId);
+      if (!challengeData) {
+        reply.code(400).send({ error: 'No registration challenge found' });
+        return;
+      }
+
+      // Verify registration response
+      const verification = await this.webAuthnService.verifyRegistrationResponse(
+        credential,
+        challengeData.challenge
+      );
+
+      if (!verification.verified || !verification.registrationInfo) {
+        reply.code(400).send({ error: 'Registration verification failed' });
+        return;
+      }
+
+      // Extract credential data
+      const { credential: credentialData, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+      const credentialId = this.webAuthnService.credentialIdToBase64(credentialData.id);
+      const publicKey = this.webAuthnService.publicKeyToBase64(credentialData.publicKey);
+
+      // Store passkey in database
+      const passkeyId = await this.db.insertPasskey({
+        user_id: userId,
+        credential_id: credentialId,
+        public_key: publicKey,
+        counter: credentialData.counter,
+        device_type: this.webAuthnService.getDeviceTypeName(credentialDeviceType),
+        backed_up: credentialBackedUp,
+        transports: credentialData.transports ? JSON.stringify(credentialData.transports) : null,
+        friendly_name: friendlyName || this.webAuthnService.suggestFriendlyName(
+          credentialDeviceType,
+          credentialBackedUp,
+          request.headers['user-agent']
+        ),
+      });
+
+      // Clear challenge
+      this.challenges.delete(userId);
+
+      logger.info('Passkey registered successfully', { userId, credentialId, passkeyId });
+
+      reply.send({
+        credentialId,
+        deviceType: this.webAuthnService.getDeviceTypeName(credentialDeviceType),
+      });
+    } catch (error) {
+      logger.error('Passkey registration finish error', { error });
+      reply.code(500).send({ error: 'Failed to complete passkey registration' });
+    }
   }
 
-  private async handlePasskeyAuthStart(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    // Stub: Generate WebAuthn request options
-    reply.code(501).send({ error: 'Passkey authentication not implemented' });
+  private async handlePasskeyAuthStart(
+    request: FastifyRequest<{ Body: { userId?: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { userId } = request.body;
+
+      // Get user's passkeys for authentication
+      const allowedPasskeys = userId ? await this.db.getPasskeysByUser(userId) : [];
+
+      // Generate authentication options
+      const options = await this.webAuthnService.generateAuthenticationOptions({
+        userId,
+        allowedCredentials: allowedPasskeys,
+      });
+
+      // Store challenge for verification
+      const challengeKey = userId || 'anonymous';
+      this.challenges.set(challengeKey, {
+        challenge: options.challenge,
+        userId,
+        timestamp: Date.now(),
+      });
+
+      reply.send(options);
+    } catch (error) {
+      logger.error('Passkey authentication start error', { error });
+      reply.code(500).send({ error: 'Failed to start passkey authentication' });
+    }
   }
 
-  private async handlePasskeyAuthFinish(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    // Stub: Verify passkey authentication
-    reply.code(501).send({ error: 'Passkey authentication not implemented' });
+  private async handlePasskeyAuthFinish(
+    request: FastifyRequest<{ Body: { credential: AuthenticationResponseJSON } }>,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const { credential } = request.body;
+
+      // Extract credential ID from response
+      const credentialId = credential.id;
+
+      // Get stored passkey
+      const passkey = await this.db.getPasskey(credentialId);
+      if (!passkey) {
+        reply.code(404).send({ error: 'Passkey not found' });
+        return;
+      }
+
+      // Get stored challenge
+      const challengeKey = passkey.user_id || 'anonymous';
+      const challengeData = this.challenges.get(challengeKey);
+      if (!challengeData) {
+        reply.code(400).send({ error: 'No authentication challenge found' });
+        return;
+      }
+
+      // Verify authentication response
+      const verification = await this.webAuthnService.verifyAuthenticationResponse(
+        credential,
+        challengeData.challenge,
+        passkey
+      );
+
+      if (!verification.verified || !verification.authenticationInfo) {
+        reply.code(400).send({ error: 'Authentication verification failed' });
+        return;
+      }
+
+      // Update counter to prevent replay attacks
+      await this.db.updatePasskeyCounter(credentialId, verification.authenticationInfo.newCounter);
+
+      // Clear challenge
+      this.challenges.delete(challengeKey);
+
+      // Generate tokens
+      const tokens = this.tokenService.generateTokenPair({
+        userId: passkey.user_id,
+        sessionId: passkey.id, // Use passkey ID as session identifier
+      });
+
+      logger.info('Passkey authentication successful', { userId: passkey.user_id, credentialId });
+
+      reply.send({
+        userId: passkey.user_id,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      });
+    } catch (error) {
+      logger.error('Passkey authentication finish error', { error });
+      reply.code(500).send({ error: 'Failed to complete passkey authentication' });
+    }
   }
 
   private async handlePasskeysList(request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply): Promise<void> {
