@@ -56,7 +56,7 @@ export function loadConfig(overrides?: Partial<Config>): Config {
     databasePort: parseInt(process.env.POSTGRES_PORT ?? '5432', 10),
     databaseName: process.env.POSTGRES_DB ?? 'nself',
     databaseUser: process.env.POSTGRES_USER ?? 'postgres',
-    databasePassword: process.env.POSTGRES_PASSWORD ?? '',
+    databasePassword: process.env.POSTGRES_PASSWORD ?? 'REQUIRED',
     databaseSsl: process.env.POSTGRES_SSL === 'true',
 
     // Social Settings
@@ -77,8 +77,12 @@ export function loadConfig(overrides?: Partial<Config>): Config {
   };
 
   // Validation
-  if (!config.databasePassword && config.databaseHost !== 'localhost') {
-    throw new Error('POSTGRES_PASSWORD must be set for non-localhost connections');
+  if (!config.databasePassword) {
+    throw new Error('POSTGRES_PASSWORD must be set and cannot be empty');
+  }
+
+  if (config.databasePassword.length < 8) {
+    throw new Error('POSTGRES_PASSWORD must be at least 8 characters long');
   }
 
   if (config.maxPostLength < 1 || config.maxPostLength > 100000) {
