@@ -1,0 +1,78 @@
+{
+  "name": "feature-flags",
+  "version": "1.0.0",
+  "description": "Feature flags service with targeting rules, segments, and evaluation engine",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/feature-flags",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3207,
+  "category": "infrastructure",
+  "tags": [
+    "feature-flags",
+    "feature-toggles",
+    "toggles",
+    "configuration",
+    "infrastructure"
+  ],
+  "tables": [
+    "np_flags_flags",
+    "np_flags_rules",
+    "np_flags_segments",
+    "np_flags_evaluations",
+    "np_flags_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start the API server",
+    "flags": "Manage feature flags",
+    "evaluate": "Evaluate flags for context",
+    "segments": "Manage user segments",
+    "stats": "View flag statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "FF_PLUGIN_PORT",
+      "FF_EVALUATION_LOG_ENABLED",
+      "FF_EVALUATION_LOG_SAMPLE_RATE",
+      "FF_CACHE_TTL_SECONDS",
+      "FF_API_KEY",
+      "FF_RATE_LIMIT_MAX",
+      "FF_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "evaluationLogEnabled": true,
+    "evaluationLogSampleRate": 100,
+    "cacheTtlSeconds": 30
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  }
+}

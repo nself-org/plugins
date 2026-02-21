@@ -1,0 +1,51 @@
+{
+  "name": "@nself/plugin-vpn",
+  "version": "1.0.0",
+  "description": "Multi-provider VPN management and torrent downloads with P2P optimization",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "cli": "node dist/cli.js"
+  },
+  "keywords": [
+    "vpn",
+    "torrent",
+    "p2p",
+    "nordvpn",
+    "mullvad",
+    "pia",
+    "transmission",
+    "wireguard",
+    "openvpn",
+    "security",
+    "privacy"
+  ],
+  "author": "nself",
+  "license": "MIT",
+  "dependencies": {
+    "@nself/plugin-utils": "file:../../../shared",
+    "fastify": "^4.26.0",
+    "@fastify/cors": "^9.0.1",
+    "commander": "^12.0.0",
+    "pg": "^8.11.3",
+    "@ctrl/transmission": "^7.0.0",
+    "chalk": "^5.3.0",
+    "ora": "^8.0.1",
+    "dotenv": "^16.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

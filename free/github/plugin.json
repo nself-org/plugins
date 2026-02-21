@@ -1,0 +1,79 @@
+{
+  "name": "github",
+  "version": "1.0.0",
+  "description": "GitHub repository, issue, and workflow integration",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "category": "development",
+  "tags": [
+    "github",
+    "git",
+    "ci",
+    "devops",
+    "issues",
+    "pull-requests"
+  ],
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "composite",
+    "defaultValue": "primary"
+  },
+  "tables": [
+    "np_github_repositories",
+    "np_github_issues",
+    "np_github_pull_requests",
+    "np_github_commits",
+    "np_github_releases",
+    "np_github_workflow_runs",
+    "np_github_deployments",
+    "np_github_webhook_events"
+  ],
+  "webhooks": {
+    "push": "Code pushed to repository",
+    "pull_request": "PR opened, closed, or merged",
+    "pull_request_review": "PR review submitted",
+    "issues": "Issue created, updated, or closed",
+    "issue_comment": "Comment on issue or PR",
+    "release": "Release published",
+    "workflow_run": "GitHub Actions workflow completed",
+    "deployment": "Deployment created",
+    "deployment_status": "Deployment status changed",
+    "create": "Branch or tag created",
+    "delete": "Branch or tag deleted",
+    "star": "Repository starred",
+    "fork": "Repository forked"
+  },
+  "actions": {
+    "sync": "Sync repository data",
+    "repos": "List and manage repositories",
+    "issues": "View and manage issues",
+    "prs": "View and manage pull requests",
+    "releases": "View releases",
+    "actions": "View workflow runs",
+    "webhook": "Manage webhook events"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "GITHUB_TOKEN"
+    ],
+    "optional": [
+      "GITHUB_WEBHOOK_SECRET",
+      "GITHUB_ORG",
+      "GITHUB_REPOS",
+      "GITHUB_API_KEYS",
+      "GITHUB_ACCOUNT_LABELS"
+    ]
+  },
+  "config": {
+    "apiVersion": "2022-11-28",
+    "webhookPath": "/webhooks/github",
+    "syncInterval": 3600,
+    "defaultBranch": "main"
+  },
+  "port": 3002
+}

@@ -1,0 +1,95 @@
+{
+  "name": "invitations",
+  "version": "1.0.0",
+  "description": "Invitation management system with email/SMS delivery and tracking",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3402,
+  "category": "communication",
+  "tags": [
+    "invitations",
+    "invite",
+    "onboarding",
+    "email",
+    "sms",
+    "referrals"
+  ],
+  "tables": [
+    "np_invites_invitations",
+    "np_invites_templates",
+    "np_invites_bulk_sends",
+    "np_invites_webhook_events"
+  ],
+  "webhooks": {
+    "invitation.created": "Track new invitation creation",
+    "invitation.sent": "Record invitation delivery",
+    "invitation.delivered": "Confirm invitation received",
+    "invitation.accepted": "Process invitation acceptance",
+    "invitation.declined": "Handle invitation decline",
+    "invitation.expired": "Process expired invitation",
+    "invitation.revoked": "Handle invitation revocation",
+    "bulk.started": "Bulk send started",
+    "bulk.completed": "Bulk send completed",
+    "template.created": "New template created",
+    "template.updated": "Template modified"
+  },
+  "actions": {
+    "create": "Create new invitation",
+    "validate": "Validate invitation code",
+    "accept": "Accept invitation",
+    "decline": "Decline invitation",
+    "templates": "Manage invitation templates",
+    "bulk": "Send bulk invitations",
+    "stats": "View invitation statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "INVITATIONS_PLUGIN_PORT",
+      "INVITATIONS_DEFAULT_EXPIRY_HOURS",
+      "INVITATIONS_CODE_LENGTH",
+      "INVITATIONS_MAX_BULK_SIZE",
+      "INVITATIONS_ACCEPT_URL_TEMPLATE",
+      "INVITATIONS_API_KEY",
+      "INVITATIONS_RATE_LIMIT_MAX",
+      "INVITATIONS_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "defaultExpiryHours": 168,
+    "codeLength": 32,
+    "maxBulkSize": 500,
+    "acceptUrlTemplate": "https://app.example.com/invite/{{code}}"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  }
+}

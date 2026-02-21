@@ -1,0 +1,87 @@
+{
+  "name": "content-progress",
+  "version": "1.0.0",
+  "description": "Track video, audio, and content playback progress with continue watching, watchlists, and favorites",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-progress",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3022,
+  "category": "media",
+  "tags": [
+    "media",
+    "video",
+    "audio",
+    "progress",
+    "watchlist",
+    "favorites"
+  ],
+  "tables": [
+    "np_progress_positions",
+    "np_progress_history",
+    "np_progress_watchlists",
+    "np_progress_favorites",
+    "np_progress_webhook_events"
+  ],
+  "webhooks": {
+    "progress.updated": "Update playback position",
+    "progress.completed": "Mark content as completed",
+    "watchlist.added": "Add content to watchlist",
+    "watchlist.removed": "Remove content from watchlist",
+    "favorite.added": "Add content to favorites",
+    "favorite.removed": "Remove content from favorites"
+  },
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start the webhook and API server",
+    "status": "Show plugin status and statistics",
+    "progress": "Manage playback progress",
+    "watchlist": "Manage watchlist items",
+    "favorites": "Manage favorite items",
+    "stats": "View user statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PROGRESS_PLUGIN_PORT",
+      "PROGRESS_COMPLETE_THRESHOLD",
+      "PROGRESS_HISTORY_SAMPLE_SECONDS",
+      "PROGRESS_HISTORY_RETENTION_DAYS",
+      "PROGRESS_API_KEY",
+      "PROGRESS_RATE_LIMIT_MAX",
+      "PROGRESS_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "completeThreshold": 95,
+    "historySampleSeconds": 30,
+    "historyRetentionDays": 365,
+    "webhookPath": "/webhooks/progress"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs"
+    ]
+  }
+}

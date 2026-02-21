@@ -1,0 +1,36 @@
+{
+  "name": "@nself/plugin-feature-flags",
+  "version": "1.0.0",
+  "description": "Feature flags plugin for nself",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "nself-feature-flags": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nself/plugin-utils": "file:../../../shared",
+    "fastify": "^4.24.0",
+    "@fastify/cors": "^8.4.0",
+    "dotenv": "^16.3.1",
+    "commander": "^11.1.0",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "tsx": "^4.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

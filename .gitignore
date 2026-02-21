@@ -1,0 +1,65 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE & editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment & credentials (never commit)
+.env
+.env.local
+.env.*.local
+.secrets/
+*.key
+*.pem
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+logs/
+
+# Cache & temp
+.cache/
+cache/
+*.tmp
+*.temp
+tmp/
+
+# Test output
+coverage/
+test-results/
+
+# AI agent directories (private — never commit)
+.ai/
+.claude/
+.codex/
+.cursor/
+
+# Planning & working documents (local only)
+todo.md
+TODO.md
+DONE.md
+FEEDBACK.md
+NEXT.md
+TRACKING.md
+PLAN.md
+
+# Plugin proposals (private)
+PROP1.md
+PROP2.md
+PROP3.md
+PROPTV.md
+FEEDTV.md
+NEEDED.md
+NEEDED2.md
+NEEDED3.md
