@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS github_repositories (
     id BIGINT PRIMARY KEY,                          -- GitHub repo ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     name VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,                -- owner/repo
@@ -52,6 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_github_repos_language ON github_repositories(lang
 
 CREATE TABLE IF NOT EXISTS github_issues (
     id BIGINT PRIMARY KEY,                          -- GitHub issue ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     repo_id BIGINT REFERENCES github_repositories(id),
     number INTEGER NOT NULL,
@@ -86,6 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_github_issues_created ON github_issues(created_at
 
 CREATE TABLE IF NOT EXISTS github_pull_requests (
     id BIGINT PRIMARY KEY,                          -- GitHub PR ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     repo_id BIGINT REFERENCES github_repositories(id),
     number INTEGER NOT NULL,
@@ -136,6 +139,7 @@ CREATE INDEX IF NOT EXISTS idx_github_prs_created ON github_pull_requests(create
 
 CREATE TABLE IF NOT EXISTS github_commits (
     sha VARCHAR(40) PRIMARY KEY,
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     repo_id BIGINT REFERENCES github_repositories(id),
     message TEXT,
@@ -168,6 +172,7 @@ CREATE INDEX IF NOT EXISTS idx_github_commits_date ON github_commits(author_date
 
 CREATE TABLE IF NOT EXISTS github_releases (
     id BIGINT PRIMARY KEY,                          -- GitHub release ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     repo_id BIGINT REFERENCES github_repositories(id),
     tag_name VARCHAR(255) NOT NULL,
@@ -196,6 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_github_releases_published ON github_releases(publ
 
 CREATE TABLE IF NOT EXISTS github_workflow_runs (
     id BIGINT PRIMARY KEY,                          -- GitHub workflow run ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     repo_id BIGINT REFERENCES github_repositories(id),
     workflow_id BIGINT,
@@ -231,6 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_github_workflows_created ON github_workflow_runs(
 
 CREATE TABLE IF NOT EXISTS github_deployments (
     id BIGINT PRIMARY KEY,                          -- GitHub deployment ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     node_id VARCHAR(255),
     repo_id BIGINT REFERENCES github_repositories(id),
     sha VARCHAR(40),
@@ -259,6 +266,7 @@ CREATE INDEX IF NOT EXISTS idx_github_deployments_status ON github_deployments(c
 
 CREATE TABLE IF NOT EXISTS github_webhook_events (
     id VARCHAR(255) PRIMARY KEY,                    -- GitHub delivery ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     event VARCHAR(100) NOT NULL,                    -- Event type
     action VARCHAR(100),                            -- Event action
     repo_id BIGINT,

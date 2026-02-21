@@ -4314,7 +4314,7 @@
       ],
       "multiApp": {
         "supported": true,
-        "isolationColumn": "app_id",
+        "isolationColumn": "source_account_id",
         "pkStrategy": "uuid",
         "defaultValue": "default"
       },
@@ -6218,7 +6218,7 @@
       ],
       "multiApp": {
         "supported": true,
-        "isolationColumn": "app_id",
+        "isolationColumn": "source_account_id",
         "pkStrategy": "uuid",
         "defaultValue": "default"
       },
@@ -6750,7 +6750,7 @@
       ],
       "multiApp": {
         "supported": true,
-        "isolationColumn": "app_id",
+        "isolationColumn": "source_account_id",
         "pkStrategy": "uuid",
         "defaultValue": "default"
       },
@@ -8500,7 +8500,12 @@
       "port": 3215,
       "category": "infrastructure",
       "path": "plugins/observability",
-      "language": "typescript",
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js"
+      },
       "tables": [],
       "tags": [
         "observability",
@@ -8527,7 +8532,12 @@
       "port": 3214,
       "category": "infrastructure",
       "path": "plugins/admin-api",
-      "language": "typescript",
+      "implementation": {
+        "language": "typescript",
+        "runtime": "node",
+        "entryPoint": "ts/dist/index.js",
+        "cli": "ts/dist/cli.js"
+      },
       "tables": [
         "np_admin_users",
         "np_admin_audit_log"
@@ -8551,7 +8561,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/ddns",
       "minNselfVersion": "0.4.8",
-      "category": "networking",
+      "category": "infrastructure",
       "tags": [
         "ddns",
         "dns",
@@ -8703,7 +8713,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/mdns",
       "minNselfVersion": "0.4.8",
-      "category": "networking",
+      "category": "infrastructure",
       "tags": [
         "mdns",
         "bonjour",
