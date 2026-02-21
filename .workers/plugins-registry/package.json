@@ -23,11 +23,11 @@
     "registry",
     "cloudflare-worker"
   ],
-  "author": "acamarata",
+  "author": "nself-org",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/acamarata/nself-plugins.git",
+    "url": "https://github.com/nself-org/plugins.git",
     "directory": ".workers/plugins-registry"
   }
 }

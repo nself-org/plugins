@@ -349,7 +349,7 @@ async function handleSync(request, env, ctx) {
  * Fetch registry from GitHub
  */
 async function fetchFromGitHub(env) {
-  const repo = env.GITHUB_REPO || 'acamarata/nself-plugins';
+  const repo = env.GITHUB_REPO || 'nself-org/plugins';
   const branch = env.GITHUB_BRANCH || 'main';
   const url = `https://raw.githubusercontent.com/${repo}/${branch}/registry.json`;
 

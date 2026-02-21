@@ -436,4 +436,4 @@ Source-Available License
 
 ## Support
 
-For issues and feature requests, visit the [nself-plugins repository](https://github.com/acamarata/nself-plugins).
+For issues and feature requests, visit the [nself-plugins repository](https://github.com/nself-org/plugins).

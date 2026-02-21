@@ -502,9 +502,9 @@ Source-Available (see LICENSE in repository root)
 
 ## Support
 
-- GitHub Issues: https://github.com/acamarata/nself-plugins/issues
-- Documentation: https://github.com/acamarata/nself-plugins
-- nself CLI: https://github.com/acamarata/nself
+- GitHub Issues: https://github.com/nself-org/plugins/issues
+- Documentation: https://github.com/nself-org/plugins
+- nself CLI: https://github.com/nself-org/cli
 
 ---
 

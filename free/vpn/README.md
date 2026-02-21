@@ -602,8 +602,8 @@ MIT License - See LICENSE file for details
 ## 📞 Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/acamarata/nself-plugins/issues
-- Documentation: https://github.com/acamarata/nself-plugins/wiki/VPN-Plugin
+- GitHub Issues: https://github.com/nself-org/plugins/issues
+- Documentation: https://github.com/nself-org/plugins/wiki/VPN-Plugin
 
 ---
 

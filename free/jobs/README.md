@@ -821,6 +821,6 @@ Source-Available (see LICENSE)
 
 ## Support
 
-- Documentation: https://github.com/acamarata/nself-plugins
-- Issues: https://github.com/acamarata/nself-plugins/issues
-- nself CLI: https://github.com/acamarata/nself
+- Documentation: https://github.com/nself-org/plugins
+- Issues: https://github.com/nself-org/plugins/issues
+- nself CLI: https://github.com/nself-org/cli

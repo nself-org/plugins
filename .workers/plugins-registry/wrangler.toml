@@ -15,7 +15,7 @@ id = "fddaf7f451f54f82a7d3712ae92882ea"
 
 # Environment variables
 [vars]
-GITHUB_REPO = "acamarata/nself-plugins"
+GITHUB_REPO = "nself-org/plugins"
 GITHUB_BRANCH = "main"
 CACHE_TTL = "300"
 REGISTRY_VERSION = "1.0.0"
@@ -30,7 +30,7 @@ binding = "PLUGINS_KV"
 id = "fddaf7f451f54f82a7d3712ae92882ea"
 
 [env.production.vars]
-GITHUB_REPO = "acamarata/nself-plugins"
+GITHUB_REPO = "nself-org/plugins"
 GITHUB_BRANCH = "main"
 CACHE_TTL = "300"
 REGISTRY_VERSION = "1.0.0"
