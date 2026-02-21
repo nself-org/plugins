@@ -1,0 +1,129 @@
+{
+  "name": "notifications",
+  "version": "1.0.0",
+  "description": "Notification system with templates, preferences, and delivery tracking. Planned: Live delivery via email (SMTP/SendGrid), push (FCM/APNs), SMS (Twilio)",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/notifications",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3102,
+  "category": "infrastructure",
+  "tags": [
+    "notifications",
+    "email",
+    "push",
+    "sms",
+    "fcm",
+    "apns",
+    "mobile",
+    "messaging",
+    "alerts",
+    "templates"
+  ],
+  "tables": [
+    "np_notifications_templates",
+    "np_notifications_preferences",
+    "np_notifications_messages",
+    "np_notifications_queue",
+    "np_notifications_providers",
+    "np_notifications_batches",
+    "np_notifications_push_devices",
+    "np_notifications_push_delivery_log"
+  ],
+  "webhooks": {
+    "delivery.succeeded": "Notification delivered successfully",
+    "delivery.failed": "Notification delivery failed",
+    "bounce": "Email bounced",
+    "complaint": "Email marked as spam",
+    "open": "Email opened",
+    "click": "Email link clicked",
+    "unsubscribe": "User unsubscribed from notifications"
+  },
+  "actions": {
+    "init": "Initialize notification system",
+    "server": "Start notification server",
+    "worker": "Start background worker for queue processing",
+    "template": "Manage notification templates",
+    "test": "Send test notifications",
+    "stats": "View notification statistics",
+    "devices": "Manage push notification devices",
+    "send-push": "Send push notification to devices",
+    "preferences": "Manage user notification preferences"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "NOTIFICATIONS_EMAIL_PROVIDER",
+      "NOTIFICATIONS_EMAIL_API_KEY",
+      "NOTIFICATIONS_EMAIL_FROM",
+      "NOTIFICATIONS_PUSH_PROVIDER",
+      "NOTIFICATIONS_PUSH_API_KEY",
+      "FCM_SERVER_KEY",
+      "FCM_PROJECT_ID",
+      "APNS_CERT_PATH",
+      "APNS_KEY_PATH",
+      "APNS_TEAM_ID",
+      "APNS_BUNDLE_ID",
+      "NOTIFICATIONS_SMS_PROVIDER",
+      "NOTIFICATIONS_SMS_ACCOUNT_SID",
+      "NOTIFICATIONS_SMS_AUTH_TOKEN",
+      "NOTIFICATIONS_SMS_FROM",
+      "NOTIFICATIONS_QUEUE_BACKEND",
+      "NOTIFICATIONS_BATCH_INTERVAL",
+      "NOTIFICATIONS_RETRY_ATTEMPTS",
+      "NOTIFICATIONS_RETRY_DELAY"
+    ]
+  },
+  "config": {
+    "webhookPath": "/webhooks/notifications",
+    "queueBackend": "redis",
+    "batchInterval": 86400,
+    "retryAttempts": 3,
+    "retryDelay": 1000,
+    "maxRetryDelay": 300000,
+    "rateLimits": {
+      "email": {
+        "perUser": 100,
+        "window": 3600
+      },
+      "push": {
+        "perUser": 200,
+        "window": 3600
+      },
+      "sms": {
+        "perUser": 20,
+        "window": 3600
+      }
+    }
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "templates"
+    ]
+  }
+}

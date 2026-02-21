@@ -41,8 +41,9 @@ test-results/
 
 # AI agent directories (private — never commit)
 .ai/
-.claude
-.codex
+.claude/
+.codex/
+.cursor/
 
 # Planning & working documents (local only)
 todo.md
@@ -62,4 +63,3 @@ FEEDTV.md
 NEEDED.md
 NEEDED2.md
 NEEDED3.md
-.claude/

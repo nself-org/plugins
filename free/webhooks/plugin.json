@@ -1,0 +1,88 @@
+{
+  "name": "webhooks",
+  "version": "1.0.0",
+  "description": "Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/webhooks",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3403,
+  "category": "communication",
+  "tags": [
+    "webhooks",
+    "events",
+    "notifications",
+    "delivery",
+    "integration"
+  ],
+  "tables": [
+    "np_webhooks_endpoints",
+    "np_webhooks_deliveries",
+    "np_webhooks_event_types",
+    "np_webhooks_dead_letters"
+  ],
+  "webhooks": {},
+  "actions": {
+    "register": "Register a new webhook endpoint",
+    "dispatch": "Dispatch an event to all matching endpoints",
+    "retry": "Retry failed deliveries",
+    "stats": "View delivery statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "WEBHOOKS_PLUGIN_PORT",
+      "WEBHOOKS_MAX_ATTEMPTS",
+      "WEBHOOKS_REQUEST_TIMEOUT_MS",
+      "WEBHOOKS_MAX_PAYLOAD_SIZE",
+      "WEBHOOKS_CONCURRENT_DELIVERIES",
+      "WEBHOOKS_RETRY_DELAYS",
+      "WEBHOOKS_AUTO_DISABLE_THRESHOLD",
+      "WEBHOOKS_API_KEY",
+      "WEBHOOKS_RATE_LIMIT_MAX",
+      "WEBHOOKS_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "maxAttempts": 5,
+    "requestTimeoutMs": 30000,
+    "maxPayloadSize": 1048576,
+    "concurrentDeliveries": 10,
+    "retryDelays": [
+      10000,
+      30000,
+      120000,
+      900000,
+      3600000
+    ],
+    "autoDisableThreshold": 10
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  }
+}

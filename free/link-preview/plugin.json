@@ -1,0 +1,111 @@
+{
+  "name": "link-preview",
+  "version": "1.0.0",
+  "description": "URL metadata extraction with Open Graph, Twitter Cards, oEmbed support, custom previews, and caching",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3718,
+  "category": "content",
+  "tags": [
+    "link-preview",
+    "oembed",
+    "open-graph",
+    "metadata",
+    "caching",
+    "url"
+  ],
+  "tables": [
+    "np_linkprev_link_previews",
+    "np_linkprev_link_preview_usage",
+    "np_linkprev_preview_templates",
+    "np_linkprev_oembed_providers",
+    "np_linkprev_url_blocklist",
+    "np_linkprev_preview_settings",
+    "np_linkprev_preview_analytics"
+  ],
+  "webhooks": {},
+  "actions": {
+    "fetch": "Fetch preview for a URL",
+    "refresh": "Refresh a cached preview",
+    "delete": "Delete a cached preview",
+    "template": "Manage custom preview templates",
+    "oembed": "Manage oEmbed providers",
+    "block": "Add URL to blocklist",
+    "blocklist": "List blocked URLs",
+    "check": "Check if URL is blocked",
+    "popular": "Show popular links",
+    "stats": "Show cache statistics",
+    "cache": "Cache management",
+    "cleanup": "Remove expired previews",
+    "status": "Show cache overview"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "LP_PLUGIN_PORT",
+      "LINK_PREVIEW_ENABLED",
+      "LINK_PREVIEW_CACHE_TTL_HOURS",
+      "LINK_PREVIEW_TIMEOUT_SECONDS",
+      "LINK_PREVIEW_USER_AGENT",
+      "LINK_PREVIEW_MAX_RESPONSE_SIZE_MB",
+      "LINK_PREVIEW_FOLLOW_REDIRECTS",
+      "LINK_PREVIEW_MAX_REDIRECTS",
+      "LINK_PREVIEW_RESPECT_ROBOTS_TXT",
+      "OEMBED_ENABLED",
+      "OEMBED_DISCOVERY",
+      "OEMBED_MAX_WIDTH",
+      "OEMBED_MAX_HEIGHT",
+      "LINK_PREVIEW_SAFETY_CHECK",
+      "LINK_PREVIEW_PHISHING_DETECTION",
+      "LINK_PREVIEW_RATE_LIMIT_PER_MINUTE",
+      "LINK_PREVIEW_RATE_LIMIT_PER_DOMAIN",
+      "LP_API_KEY",
+      "LP_RATE_LIMIT_MAX",
+      "LP_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "cacheTtlHours": 168,
+    "timeoutSeconds": 10,
+    "maxPreviewsPerMessage": 3,
+    "oembedEnabled": true,
+    "oembedMaxWidth": 1024,
+    "oembedMaxHeight": 768,
+    "safetyCheckEnabled": true,
+    "rateLimitPerMinute": 60,
+    "rateLimitPerDomain": 10,
+    "rateLimitMax": 200,
+    "rateLimitWindowMs": 60000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "outbound-http"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "name": "tokens",
+  "version": "1.0.0",
+  "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/tokens",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3107,
+  "category": "media",
+  "tags": [
+    "tokens",
+    "signed-urls",
+    "encryption",
+    "hls",
+    "drm",
+    "entitlement",
+    "access-control"
+  ],
+  "tables": [
+    "np_tokens_signing_keys",
+    "np_tokens_issued",
+    "np_tokens_encryption_keys",
+    "np_tokens_entitlements",
+    "np_tokens_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "issue": "Issue a signed access token",
+    "validate": "Validate a token",
+    "revoke": "Revoke tokens",
+    "keys": "Manage signing keys",
+    "entitlements": "Manage content entitlements",
+    "stats": "Show token statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "TOKENS_ENCRYPTION_KEY"
+    ],
+    "optional": [
+      "TOKENS_PLUGIN_PORT",
+      "TOKENS_APP_IDS",
+      "TOKENS_DEFAULT_TTL_SECONDS",
+      "TOKENS_HLS_ENCRYPTION_ENABLED",
+      "TOKENS_DEFAULT_ENTITLEMENT_CHECK",
+      "TOKENS_ALLOW_ALL_IF_NO_ENTITLEMENTS"
+    ]
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "config": {
+    "defaultTtlSeconds": 3600,
+    "maxTtlSeconds": 86400,
+    "hlsEncryptionEnabled": false,
+    "defaultEntitlementCheck": true,
+    "cleanupCron": "0 */4 * * *"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs"
+    ]
+  }
+}

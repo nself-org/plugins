@@ -1,0 +1,113 @@
+{
+  "name": "jobs",
+  "version": "1.0.0",
+  "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard. HTTP requests and file cleanup processors are implemented; email/backup/Hasura actions require external integrations.",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/jobs",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "port": 3105,
+  "category": "infrastructure",
+  "tags": [
+    "jobs",
+    "queue",
+    "bullmq",
+    "redis",
+    "background",
+    "scheduling",
+    "cron",
+    "workers"
+  ],
+  "tables": [
+    "np_jobs_tasks",
+    "np_jobs_job_results",
+    "np_jobs_job_schedules",
+    "np_jobs_job_failures"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize jobs infrastructure",
+    "server": "Start BullBoard dashboard server",
+    "worker": "Start job worker process",
+    "schedule": "Manage scheduled jobs",
+    "retry": "Retry failed jobs",
+    "stats": "View job statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "JOBS_REDIS_URL"
+    ],
+    "optional": [
+      "JOBS_DASHBOARD_ENABLED",
+      "JOBS_DASHBOARD_PORT",
+      "JOBS_DEFAULT_CONCURRENCY",
+      "JOBS_RETRY_ATTEMPTS",
+      "JOBS_RETRY_DELAY",
+      "JOBS_JOB_TIMEOUT",
+      "JOBS_ENABLE_TELEMETRY",
+      "JOBS_CLEAN_COMPLETED_AFTER",
+      "JOBS_CLEAN_FAILED_AFTER"
+    ]
+  },
+  "config": {
+    "dashboardPath": "/dashboard",
+    "dashboardPort": 3105,
+    "dashboardEnabled": true,
+    "defaultConcurrency": 5,
+    "retryAttempts": 3,
+    "retryDelay": 5000,
+    "jobTimeout": 60000,
+    "enableTelemetry": true,
+    "cleanCompletedAfter": 86400000,
+    "cleanFailedAfter": 604800000,
+    "queues": {
+      "default": {
+        "concurrency": 5,
+        "priority": 0
+      },
+      "high-priority": {
+        "concurrency": 3,
+        "priority": 10
+      },
+      "low-priority": {
+        "concurrency": 10,
+        "priority": -10
+      }
+    },
+    "jobTypes": [
+      "send-email",
+      "http-request",
+      "database-backup",
+      "file-cleanup",
+      "custom"
+    ]
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "redis"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  }
+}
