@@ -14,6 +14,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx/esm --test --experimental-test-module-mocks --test-force-exit tests/link-preview.test.ts"
   },

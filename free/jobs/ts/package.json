@@ -16,6 +16,7 @@
     "dev:worker": "tsx watch src/worker.ts",
     "worker": "node dist/worker.js",
     "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "NODE_OPTIONS='--experimental-strip-types' tsx --test tests/*.test.ts"
   },

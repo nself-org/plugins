@@ -12,6 +12,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "dev": "tsx src/server.ts",
+    "type-check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test": "node --import tsx/esm --test --experimental-test-module-mocks --test-force-exit tests/tokens.test.ts"

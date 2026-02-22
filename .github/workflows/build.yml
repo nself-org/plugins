@@ -57,6 +57,11 @@ jobs:
             echo "No TypeScript source for ${{ matrix.plugin }} - skipping"
           fi
 
+      - name: Build shared plugin-utils
+        if: steps.check-ts.outputs.has_ts == 'true'
+        working-directory: shared
+        run: pnpm install --frozen-lockfile && pnpm build
+
       - name: Install dependencies
         if: steps.check-ts.outputs.has_ts == 'true'
         working-directory: free/${{ matrix.plugin }}/ts

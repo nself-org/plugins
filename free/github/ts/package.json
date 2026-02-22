@@ -15,6 +15,7 @@
     "dev": "tsx watch src/server.ts",
     "sync": "node dist/cli.js sync",
     "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "NODE_OPTIONS='--experimental-strip-types' tsx --test tests/*.test.ts"
   },

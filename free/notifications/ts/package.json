@@ -13,6 +13,7 @@
     "dev": "tsx src/server.ts",
     "start": "node dist/server.js",
     "worker": "tsx src/worker.ts",
+    "type-check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test": "node --require tsx/cjs --test --test-force-exit tests/notifications.test.ts"
