@@ -13,7 +13,8 @@
     "watch": "tsc --watch",
     "dev": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "node --import tsx/esm --test --experimental-test-module-mocks --test-force-exit tests/tokens.test.ts"
   },
   "keywords": [
     "nself",

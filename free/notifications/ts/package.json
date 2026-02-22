@@ -14,7 +14,8 @@
     "start": "node dist/server.js",
     "worker": "tsx src/worker.ts",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "node --require tsx/cjs --test --test-force-exit tests/notifications.test.ts"
   },
   "keywords": [
     "nself",
