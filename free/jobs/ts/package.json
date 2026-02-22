@@ -16,7 +16,8 @@
     "dev:worker": "tsx watch src/worker.ts",
     "worker": "node dist/worker.js",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_OPTIONS='--experimental-strip-types' tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@bull-board/api": "^5.14.2",

@@ -15,7 +15,8 @@
     "dev": "tsx watch src/server.ts",
     "sync": "node dist/cli.js sync",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_OPTIONS='--experimental-strip-types' tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@nself/plugin-utils": "file:../../../shared",
