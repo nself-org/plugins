@@ -10,7 +10,14 @@
 export type VPNProvider =
   | 'nordvpn'
   | 'pia'
-  | 'mullvad';
+  | 'mullvad'
+  | 'surfshark'
+  | 'expressvpn'
+  | 'protonvpn'
+  | 'keepsolid'
+  | 'cyberghost'
+  | 'airvpn'
+  | 'windscribe';
 
 export type VPNProtocol = 'wireguard' | 'openvpn_udp' | 'openvpn_tcp' | 'ikev2' | 'nordlynx' | 'lightway';
 

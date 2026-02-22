@@ -17,11 +17,12 @@ BullMQ-based background job queue with priorities, scheduling, retry logic, and 
 ### ✅ Fully Implemented
 - `http-request` - HTTP requests with retry logic (uses native fetch)
 - `file-cleanup` - Clean old completed/failed jobs from database
-- `send-email` - Email sending via SMTP (uses Nodemailer)
+- `send-email` - Email sending via SMTP (Nodemailer) with optional notifications plugin routing
+- `database-backup` - PostgreSQL backups via pg_dump with S3/MinIO upload (AWS Sig V4)
 
-### 🔄 Stubs (Require External Integration)
-- `database-backup` - PostgreSQL backups (requires pg_dump binary and credentials - use backup plugin instead)
-- `custom` - Hasura Actions integration (requires GraphQL endpoint configuration)
+### Requires Runtime Dependencies
+
+- `custom` - Hasura Actions stub (requires `HASURA_GRAPHQL_ENDPOINT` and `HASURA_ADMIN_SECRET` env vars)
 
 See "Job Types" section below for integration instructions.
 
@@ -38,23 +39,22 @@ See "Job Types" section below for integration instructions.
 ### ✅ Implemented Job Processors
 - **HTTP Request** - Make HTTP/REST API calls with retry logic
 - **File Cleanup** - Clean old completed/failed jobs from database
-- **Send Email** - Send emails via SMTP server (Nodemailer)
+- **Send Email** - Send emails via SMTP (Nodemailer) or route through notifications plugin
+- **Database Backup** - PostgreSQL dumps via pg_dump with S3/MinIO upload (AWS Sig V4 auth)
 
 ### ✅ Database Schema
 - All tables created and ready (jobs, job_results, job_failures, job_schedules)
 - Database views for monitoring (queue_stats, job_type_stats, recent_failures)
 - Cleanup functions for maintenance
 
-## Planned Job Processors
-
-The following job processors have placeholder implementations but require external service integration:
+## Job Processor Details
 
 ### ✅ Email Sending (Implemented)
-**Status:** Fully implemented using Nodemailer with SMTP
 
-Emails are sent via configured SMTP server. Supports HTML content, attachments, CC/BCC.
+**Status:** Fully implemented. Routes through the notifications plugin when `NOTIFICATIONS_API_URL` is set, falls back to direct SMTP via Nodemailer.
 
-**Required Configuration:**
+**Configuration (direct SMTP):**
+
 ```bash
 SMTP_HOST=smtp.gmail.com           # SMTP server hostname
 SMTP_PORT=587                       # SMTP port (587 for TLS, 465 for SSL)
@@ -64,19 +64,45 @@ SMTP_PASSWORD=your-app-password     # SMTP password or app password
 SMTP_FROM=noreply@yourdomain.com    # Default from address
 ```
 
+**Configuration (notifications plugin routing):**
+
+```bash
+NOTIFICATIONS_API_URL=http://localhost:3102  # Route through notifications plugin
+NOTIFICATIONS_API_KEY=your-api-key           # Optional API key
+```
+
 **Endpoints:** POST /api/jobs with type `send-email`
 
-### 🔄 Database Backup (Stub)
-**Status:** Requires `pg_dump` binary and PostgreSQL credentials
+### ✅ Database Backup (Implemented)
 
-Jobs are queued and tracked, but backups are not created. Integration point is in `ts/src/processors.ts` (lines 101-130).
+**Status:** Fully implemented using `pg_dump` with S3/MinIO upload via AWS Signature V4.
 
-**Note:** For production database backups, use the dedicated **backup plugin** instead.
+**Destinations supported:**
 
-### 🔄 Hasura Actions (Stub)
-**Status:** Requires Hasura GraphQL endpoint configuration
+- Local path: `/backups/` or `/backups/dump.sql.gz`
+- AWS S3: `s3://bucket/path/`
+- MinIO: `minio://bucket/path/` (uses `MINIO_ENDPOINT` env var)
+- HTTP/HTTPS MinIO: `http://minio:9000/bucket/path/`
 
-Custom jobs can be queued, but Hasura actions are not invoked. Integration point is in `ts/src/processors.ts` (lines 173-192).
+**Configuration:**
+
+```bash
+DATABASE_URL=postgresql://...           # Takes precedence over POSTGRES_* vars
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=secret
+
+# For S3/MinIO upload
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=us-east-1                    # S3 region (default: us-east-1)
+MINIO_ENDPOINT=http://minio:9000        # MinIO base URL
+```
+
+### Hasura Actions (Requires Configuration)
+
+**Status:** Queues and tracks jobs, but does not invoke Hasura. Requires `HASURA_GRAPHQL_ENDPOINT` and `HASURA_ADMIN_SECRET` environment variables to be set before the integration point in `ts/src/processors.ts` can route to Hasura.
 
 **Requires:**
 - `HASURA_GRAPHQL_ENDPOINT` environment variable
@@ -365,7 +391,7 @@ nself plugin jobs schedule delete <name>
 
 ## Job Types
 
-### 1. Send Email (⚠️ Stub - Requires Integration)
+### 1. Send Email (✅ Implemented)
 
 ```typescript
 type: 'send-email'
@@ -385,15 +411,7 @@ payload: {
 }
 ```
 
-**Status**: Stub implementation that logs the job but does not send emails.
-
-**Integration Required**: Replace stub in `ts/src/processors.ts` (lines 27-49) with your email service:
-- **SendGrid**: `npm install @sendgrid/mail`
-- **AWS SES**: `npm install @aws-sdk/client-ses`
-- **Mailgun**: `npm install mailgun-js`
-- **Nodemailer SMTP**: `npm install nodemailer`
-
-See code comments in `processSendEmail()` for integration point.
+**Status**: Fully implemented. Routes through the notifications plugin HTTP API when `NOTIFICATIONS_API_URL` is set; falls back to direct SMTP via Nodemailer. Supports HTML, attachments, CC/BCC, and multi-recipient fan-out.
 
 ### 2. HTTP Request (✅ Implemented)
 
@@ -411,28 +429,20 @@ payload: {
 
 **Status**: Fully implemented using native `fetch()` API with timeout support and automatic retry logic.
 
-### 3. Database Backup (⚠️ Stub - Requires Integration)
+### 3. Database Backup (✅ Implemented)
 
 ```typescript
 type: 'database-backup'
 payload: {
   database: string,
   tables?: string[],
-  destination: string,
+  destination: string,  // local path, s3://, minio://, or http(s)://
   compression?: boolean,
   encryption?: boolean
 }
 ```
 
-**Status**: Stub implementation that simulates backup but does not execute `pg_dump`.
-
-**Integration Required**: Replace stub in `ts/src/processors.ts` (lines 101-130) with actual backup logic:
-- Requires `pg_dump` binary in PATH
-- Requires database credentials (host, user, password)
-- Use `child_process.spawn()` to execute pg_dump
-- For production use, consider using the dedicated **backup plugin** instead
-
-See code comments in `processDatabaseBackup()` for integration point.
+**Status**: Fully implemented. Runs `pg_dump` (must be in PATH) and writes to a local path or uploads to S3/MinIO using streaming PUT with AWS Signature V4. Reads connection from `DATABASE_URL` or individual `POSTGRES_*` env vars.
 
 ### 4. File Cleanup (✅ Implemented)
 
@@ -446,12 +456,11 @@ payload: {
 ```
 
 **Status**: Fully implemented. Calls database cleanup functions:
+
 - `cleanup_old_jobs(hours)` - Removes completed jobs older than N hours
 - `cleanup_old_failed_jobs(days)` - Removes failed jobs older than N days
 
-**Note**: File system cleanup (old_files target) is not implemented.
-
-### 5. Custom Jobs (⚠️ Stub - Requires Integration)
+### 5. Custom Jobs (Requires Configuration)
 
 ```typescript
 type: 'custom'
@@ -461,15 +470,7 @@ payload: {
 }
 ```
 
-**Status**: Stub implementation that logs the action but does not call Hasura.
-
-**Integration Required**: Replace stub in `ts/src/processors.ts` (lines 173-192) with Hasura Actions integration:
-- Requires `HASURA_GRAPHQL_ENDPOINT` environment variable
-- Requires `HASURA_ADMIN_SECRET` environment variable
-- Make POST request to Hasura endpoint with action name and data
-- Use `graphql-request` or `fetch()` to call Hasura Actions
-
-See code comments in `processCustomJob()` for integration point.
+**Status**: Jobs are queued and tracked. The Hasura Actions integration point in `processCustomJob()` (`ts/src/processors.ts`) requires `HASURA_GRAPHQL_ENDPOINT` and `HASURA_ADMIN_SECRET` environment variables to route actions to Hasura.
 
 ## API Endpoints
 
