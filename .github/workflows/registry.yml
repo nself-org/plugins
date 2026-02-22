@@ -1,0 +1,116 @@
+name: Registry Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'free/**/plugin.json'
+      - 'registry.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'free/**/plugin.json'
+      - 'registry.json'
+  workflow_dispatch:
+
+jobs:
+  validate-registry:
+    name: Validate Plugin Registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build registry from plugin.json files
+        id: build-registry
+        run: |
+          printf "Building plugin registry...\n"
+
+          python3 - << 'EOF'
+          import json
+          import os
+          import sys
+
+          plugins = []
+          errors = []
+
+          for root, dirs, files in os.walk('free'):
+            if 'plugin.json' in files:
+              path = os.path.join(root, 'plugin.json')
+              try:
+                with open(path) as f:
+                  data = json.load(f)
+                plugins.append({
+                  'name': data.get('name'),
+                  'version': data.get('version'),
+                  'description': data.get('description'),
+                  'port': data.get('port'),
+                  'category': data.get('category'),
+                  'license': data.get('license'),
+                  'path': root,
+                })
+              except json.JSONDecodeError as e:
+                errors.append(f"Invalid JSON in {path}: {e}")
+
+          if errors:
+            for err in errors:
+              print(f"ERROR: {err}")
+            sys.exit(1)
+
+          # Write computed registry
+          registry = {
+            'version': '1.0',
+            'plugins': sorted(plugins, key=lambda x: x['name'] or ''),
+            'total': len(plugins),
+          }
+
+          with open('computed-registry.json', 'w') as f:
+            json.dump(registry, f, indent=2)
+
+          print(f"Registry built: {len(plugins)} plugins")
+          for p in sorted(plugins, key=lambda x: x['name'] or ''):
+            print(f"  - {p['name']} v{p['version']} (port {p['port']})")
+          EOF
+
+      - name: Validate against existing registry.json
+        run: |
+          if [ ! -f "registry.json" ]; then
+            printf "No registry.json found - skipping comparison\n"
+            exit 0
+          fi
+
+          printf "Comparing computed registry with committed registry.json...\n"
+
+          python3 - << 'EOF'
+          import json
+
+          with open('registry.json') as f:
+            committed = json.load(f)
+          with open('computed-registry.json') as f:
+            computed = json.load(f)
+
+          committed_names = {p['name'] for p in committed.get('plugins', [])}
+          computed_names = {p['name'] for p in computed.get('plugins', [])}
+
+          missing = computed_names - committed_names
+          extra = committed_names - computed_names
+
+          if missing:
+            print(f"WARNING: Plugins in filesystem but not in registry.json: {missing}")
+            print("Run 'pnpm build:registry' to update registry.json")
+
+          if extra:
+            print(f"WARNING: Plugins in registry.json but not in filesystem: {extra}")
+
+          if not missing and not extra:
+            print("Registry is in sync")
+          EOF
+
+      - name: Upload computed registry
+        uses: actions/upload-artifact@v4
+        with:
+          name: computed-registry
+          path: computed-registry.json
+          retention-days: 7

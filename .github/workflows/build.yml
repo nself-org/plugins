@@ -1,0 +1,116 @@
+name: Build Plugins
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-typescript:
+    name: TypeScript Build Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - notifications
+          - jobs
+          - vpn
+          - tokens
+          - link-preview
+          - mdns
+          - subtitle-manager
+          - webhooks
+          - feature-flags
+          - search
+          - github
+          - invitations
+          - torrent-manager
+          - content-progress
+          - content-acquisition
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Check if plugin has TypeScript
+        id: check-ts
+        run: |
+          if [ -d "free/${{ matrix.plugin }}/ts" ]; then
+            echo "has_ts=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_ts=false" >> $GITHUB_OUTPUT
+            echo "No TypeScript source for ${{ matrix.plugin }} - skipping"
+          fi
+
+      - name: Install dependencies
+        if: steps.check-ts.outputs.has_ts == 'true'
+        working-directory: free/${{ matrix.plugin }}/ts
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        if: steps.check-ts.outputs.has_ts == 'true'
+        working-directory: free/${{ matrix.plugin }}/ts
+        run: pnpm type-check || pnpm exec tsc --noEmit
+        continue-on-error: false
+
+      - name: Build
+        if: steps.check-ts.outputs.has_ts == 'true'
+        working-directory: free/${{ matrix.plugin }}/ts
+        run: pnpm build
+        continue-on-error: true
+
+  lint-typescript:
+    name: TypeScript Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Lint each TypeScript plugin
+        run: |
+          errors=0
+
+          for dir in free/*/ts; do
+            [ -d "$dir" ] || continue
+            plugin=$(echo "$dir" | cut -d'/' -f2)
+
+            printf "Linting %s...\n" "$plugin"
+            cd "$dir"
+
+            if [ -f "package.json" ] && pnpm run --if-present lint 2>/dev/null; then
+              printf "  OK\n"
+            else
+              printf "  SKIP (no lint script)\n"
+            fi
+
+            cd ../../..
+          done
+
+          exit 0

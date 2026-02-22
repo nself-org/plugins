@@ -1,0 +1,118 @@
+name: Validate Plugins
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  schema-validation:
+    name: Plugin Schema Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate plugin.json files
+        run: |
+          errors=0
+
+          # Required top-level fields in every plugin.json
+          REQUIRED_FIELDS="name version description author license port category"
+
+          find free -name "plugin.json" | sort | while read -r file; do
+            plugin=$(dirname "$file")
+            printf "Checking %s...\n" "$plugin"
+
+            # Validate JSON syntax
+            if ! python3 -m json.tool "$file" > /dev/null 2>&1; then
+              printf "  ERROR: Invalid JSON in %s\n" "$file"
+              errors=$((errors + 1))
+              continue
+            fi
+
+            # Check required fields
+            for field in $REQUIRED_FIELDS; do
+              value=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('$field',''))" 2>/dev/null)
+              if [ -z "$value" ]; then
+                printf "  ERROR: Missing required field '%s' in %s\n" "$field" "$file"
+                errors=$((errors + 1))
+              fi
+            done
+
+            # Port must be numeric and in valid range (3100-3999)
+            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('port',0))" 2>/dev/null)
+            if ! echo "$port" | grep -qE '^[0-9]+$'; then
+              printf "  ERROR: Port must be numeric in %s (got: %s)\n" "$file" "$port"
+              errors=$((errors + 1))
+            elif [ "$port" -lt 3100 ] || [ "$port" -gt 3999 ]; then
+              printf "  WARNING: Port %s is outside expected range 3100-3999 in %s\n" "$port" "$file"
+            fi
+
+            # License must be MIT for free plugins
+            license=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('license',''))" 2>/dev/null)
+            if [ "$license" != "MIT" ]; then
+              printf "  WARNING: Free plugin %s has non-MIT license: %s\n" "$plugin" "$license"
+            fi
+
+            printf "  OK\n"
+          done
+
+          if [ $errors -gt 0 ]; then
+            printf "\n%d validation error(s) found\n" "$errors"
+            exit 1
+          fi
+
+          printf "\nAll plugin.json files are valid\n"
+
+      - name: Check for duplicate ports
+        run: |
+          printf "Checking for port conflicts...\n"
+
+          # Extract all ports and check for duplicates
+          ports=$(find free -name "plugin.json" -exec python3 -c "
+          import json, sys, os
+          for f in sys.argv[1:]:
+            try:
+              d = json.load(open(f))
+              print(d.get('port', ''), os.path.dirname(f))
+            except: pass
+          " {} + | sort)
+
+          dupes=$(echo "$ports" | awk '{print $1}' | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            printf "ERROR: Duplicate ports found:\n"
+            echo "$dupes" | while read -r port; do
+              echo "$ports" | grep "^$port " | while read -r line; do
+                printf "  Port %s used by: %s\n" "$line"
+              done
+            done
+            exit 1
+          fi
+
+          printf "No port conflicts found\n"
+
+      - name: Verify README exists for each plugin
+        run: |
+          errors=0
+          find free -maxdepth 1 -mindepth 1 -type d | sort | while read -r dir; do
+            if [ ! -f "$dir/README.md" ]; then
+              printf "ERROR: Missing README.md in %s\n" "$dir"
+              errors=$((errors + 1))
+            fi
+            if [ ! -f "$dir/plugin.json" ]; then
+              printf "ERROR: Missing plugin.json in %s\n" "$dir"
+              errors=$((errors + 1))
+            fi
+          done
+
+          if [ $errors -gt 0 ]; then
+            printf "\n%d missing file(s) found\n" "$errors"
+            exit 1
+          fi
+
+          printf "All plugins have required files\n"
