@@ -16,7 +16,7 @@ CACHE_TTL        = "300"
 REGISTRY_VERSION = "2.0.0"
 
 # Secrets (set via wrangler secret put <NAME>):
-#   GITHUB_TOKEN       — Fine-grained PAT with contents:read on nself-org/plugins-pro
+#   GH_ACCESS_TOKEN       — Fine-grained PAT with contents:read on nself-org/plugins-pro
 #                        Used to fetch the private pro registry from the GitHub Contents API.
 #   GITHUB_SYNC_TOKEN  — Bearer token for POST /api/sync (triggered by GitHub Actions)
 

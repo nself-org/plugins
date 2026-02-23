@@ -18,13 +18,14 @@
  *   POST /api/sync                  Force-refresh KV cache (webhook from GitHub Actions)
  *
  * KV cache keys:
- *   registry:free          — cached free registry JSON
- *   registry:pro           — cached pro registry JSON
- *   registry:combined      — cached merged output
+ *   registry:free          — cached free registry raw JSON (with timestamp envelope)
+ *   registry:pro           — cached pro registry raw JSON (with timestamp envelope)
+ *   registry:combined      — cached merged output (with timestamp envelope)
  *   stats:global           — request statistics
  *
  * Secrets (set via wrangler secret put):
  *   GITHUB_TOKEN           — Fine-grained PAT with contents:read on nself-org/plugins-pro
+ *                            Also used for authenticated free registry fetch (avoids raw CDN cache)
  *   GITHUB_SYNC_TOKEN      — Bearer token for POST /api/sync (from GitHub Actions)
  */
 
@@ -32,23 +33,26 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-const FREE_REGISTRY_URL =
-  'https://raw.githubusercontent.com/nself-org/plugins/main/registry.json';
+// GitHub Contents API for both registries — authenticated fetch avoids CDN cache lag
+const FREE_REGISTRY_API_URL =
+  'https://api.github.com/repos/nself-org/plugins/contents/registry.json';
 
-// GitHub Contents API — returns base64-encoded file so the PAT can authenticate
 const PRO_REGISTRY_API_URL =
   'https://api.github.com/repos/nself-org/plugins-pro/contents/registry.json';
+
+// Fallback: unauthenticated raw URL for free registry (used when GITHUB_TOKEN absent)
+const FREE_REGISTRY_RAW_URL =
+  'https://raw.githubusercontent.com/nself-org/plugins/main/registry.json';
 
 const KV_FREE     = 'registry:free';
 const KV_PRO      = 'registry:pro';
 const KV_COMBINED = 'registry:combined';
 const KV_STATS    = 'stats:global';
 
-// Default cache TTL in seconds (overridden by env.CACHE_TTL)
-const DEFAULT_CACHE_TTL = 300;
+const DEFAULT_CACHE_TTL = 300; // seconds
 
 // ---------------------------------------------------------------------------
-// CORS helpers
+// CORS + response helpers
 // ---------------------------------------------------------------------------
 
 function corsHeaders() {
@@ -80,38 +84,28 @@ export default {
     const path   = url.pathname.replace(/\/$/, '') || '/';
     const method = request.method.toUpperCase();
 
-    // CORS preflight
     if (method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
     try {
-      // GET /registry.json  or  GET /registry  or  GET /
       if (method === 'GET' && (path === '/registry.json' || path === '/registry' || path === '/')) {
         return await handleRegistry(url, env, ctx);
       }
-
-      // GET /plugins/:name  or  GET /plugins/:name/:version
       if (method === 'GET' && path.startsWith('/plugins/')) {
         return await handlePlugin(path, env, ctx);
       }
-
-      // GET /categories
       if (method === 'GET' && path === '/categories') {
         return await handleCategories(env, ctx);
       }
 
-      // GET /health
+
       if (method === 'GET' && path === '/health') {
         return handleHealth(env);
       }
-
-      // GET /stats
       if (method === 'GET' && path === '/stats') {
         return await handleStats(env);
       }
-
-      // POST /api/sync  — force refresh from GitHub
       if (method === 'POST' && path === '/api/sync') {
         return await handleSync(request, env, ctx);
       }
@@ -137,15 +131,16 @@ export default {
 };
 
 // ---------------------------------------------------------------------------
-// Registry handler — combined free + pro
+// Registry handler
 // ---------------------------------------------------------------------------
 
 async function handleRegistry(url, env, ctx) {
-  const tierFilter = url.searchParams.get('tier'); // 'free', 'pro', or null
+  const tierFilter = url.searchParams.get('tier');
   const cacheTtl   = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const bypassKv   = url.searchParams.get('nocache') === '1';
 
-  // For unfiltered requests, try the combined KV cache first
-  if (!tierFilter) {
+  // Serve combined from KV cache when no filter and not bypassing
+  if (!tierFilter && !bypassKv) {
     const cached = await kvGet(env, KV_COMBINED);
     if (cached && isFresh(cached, cacheTtl)) {
       ctx.waitUntil(bumpStat(env, 'registry_hits'));
@@ -158,48 +153,36 @@ async function handleRegistry(url, env, ctx) {
     }
   }
 
-  // Fetch both registries in parallel
   const [freeResult, proResult] = await Promise.allSettled([
-    fetchFreeRegistry(env, ctx, cacheTtl),
-    fetchProRegistry(env, ctx, cacheTtl),
+    fetchFreeRegistry(env, ctx, cacheTtl, bypassKv),
+    fetchProRegistry(env, ctx, cacheTtl, bypassKv),
   ]);
 
   const freePlugins = freeResult.status === 'fulfilled' ? freeResult.value : null;
   const proPlugins  = proResult.status  === 'fulfilled' ? proResult.value  : null;
 
   if (!freePlugins && !proPlugins) {
-    return jsonResponse({ error: 'Registry unavailable' }, 502);
+    return jsonResponse({ error: 'Registry unavailable — both sources failed' }, 502);
   }
 
-  // Build combined plugin list
   const allPlugins = [
     ...(freePlugins || []),
     ...(proPlugins  || []),
   ];
 
-  // Merge categories from both sources
-  const combinedCategories = mergeCategoriesFromPlugins(allPlugins);
-
   const combined = {
-    version:     '1.0.0',
-    fetchedAt:   new Date().toISOString(),
-    pluginCount: { free: (freePlugins || []).length, pro: (proPlugins || []).length, total: allPlugins.length },
+    version:      '1.0.0',
+    fetchedAt:    new Date().toISOString(),
+    pluginCount:  { free: (freePlugins || []).length, pro: (proPlugins || []).length, total: allPlugins.length },
     proAvailable: proPlugins !== null,
-    plugins:     allPlugins,
-    categories:  combinedCategories,
+    plugins:      allPlugins,
+    categories:   mergeCategoriesFromPlugins(allPlugins),
   };
 
-  // Cache combined result in KV
-  if (!tierFilter) {
-    ctx.waitUntil(kvPut(env, KV_COMBINED, combined));
+  // Cache combined result
+  if (!tierFilter && !bypassKv) {
+    ctx.waitUntil(kvPutWrapped(env, KV_COMBINED, combined));
     ctx.waitUntil(bumpStat(env, 'registry_fetches'));
-  }
-
-  // Apply tier filter if requested
-  let output = combined;
-  if (tierFilter === 'free' || tierFilter === 'pro') {
-    const filtered = allPlugins.filter(p => p.tier === tierFilter);
-    output = { ...combined, plugins: filtered, pluginCount: { ...combined.pluginCount } };
   }
 
   const headers = {
@@ -208,63 +191,93 @@ async function handleRegistry(url, env, ctx) {
     'X-Tier':        tierFilter || 'combined',
   };
 
-  // Warn if pro registry was unavailable
   if (!proPlugins) {
     headers['X-Pro-Registry-Status'] = 'unavailable';
-    headers['X-Warning'] = 'Pro registry could not be fetched; showing free plugins only';
+    headers['X-Warning'] = 'Pro registry unavailable — ensure GITHUB_TOKEN secret is set';
   }
 
-  return jsonResponse(output, 200, headers);
+  let outputPlugins = allPlugins;
+  if (tierFilter === 'free' || tierFilter === 'pro') {
+    outputPlugins = allPlugins.filter(p => p.tier === tierFilter);
+  }
+
+  return jsonResponse({ ...combined, plugins: outputPlugins }, 200, headers);
 }
 
 // ---------------------------------------------------------------------------
-// Fetch free registry (public GitHub raw)
+// Fetch free registry
+// Uses GitHub Contents API when GITHUB_TOKEN is available (bypasses CDN cache),
+// falls back to raw URL otherwise.
 // ---------------------------------------------------------------------------
 
-async function fetchFreeRegistry(env, ctx, cacheTtl) {
-  // Try KV cache
-  const cached = await kvGet(env, KV_FREE);
-  if (cached && isFresh(cached, cacheTtl)) {
-    return normalizeToArray(cached.data, 'free');
+async function fetchFreeRegistry(env, ctx, cacheTtl, bypass = false) {
+  if (!bypass) {
+    const cached = await kvGet(env, KV_FREE);
+    if (cached && isFresh(cached, cacheTtl)) {
+      return normalizeToArray(cached.data, 'free');
+    }
   }
 
-  const resp = await fetch(FREE_REGISTRY_URL, {
-    headers: { 'User-Agent': 'nself-plugin-registry/2.0' },
-    cf: { cacheTtl: 60, cacheEverything: false },
-  });
+  let data;
 
-  if (!resp.ok) {
-    throw new Error(`Free registry fetch failed: ${resp.status}`);
+  if (env.GH_ACCESS_TOKEN) {
+    // Authenticated GitHub API fetch — bypasses CDN, always returns latest commit
+    const resp = await fetch(FREE_REGISTRY_API_URL, {
+      headers: {
+        'Authorization': `token ${env.GH_ACCESS_TOKEN}`,
+        'Accept':        'application/vnd.github.v3+json',
+        'User-Agent':    'nself-plugin-registry/2.0',
+      },
+    });
+
+    if (resp.ok) {
+      const envelope = await resp.json();
+      try {
+        const raw = atob(envelope.content.replace(/\n/g, ''));
+        data = JSON.parse(raw);
+      } catch (e) {
+        console.error('Failed to decode free registry content:', e.message);
+      }
+    } else {
+      console.warn(`Free registry GitHub API fetch failed: ${resp.status}, falling back to raw URL`);
+    }
   }
 
-  const data = await resp.json();
+  // Fallback: unauthenticated raw URL
+  if (!data) {
+    const resp = await fetch(FREE_REGISTRY_RAW_URL, {
+      headers: { 'User-Agent': 'nself-plugin-registry/2.0' },
+    });
+    if (!resp.ok) {
+      throw new Error(`Free registry raw fetch failed: ${resp.status}`);
+    }
+    data = await resp.json();
+  }
 
-  // Cache raw data in KV
-  ctx.waitUntil(kvPut(env, KV_FREE, data));
-
+  ctx.waitUntil(kvPutWrapped(env, KV_FREE, data));
   return normalizeToArray(data, 'free');
 }
 
 // ---------------------------------------------------------------------------
-// Fetch pro registry (private GitHub via API + GITHUB_TOKEN secret)
+// Fetch pro registry (private GitHub Contents API)
 // ---------------------------------------------------------------------------
 
-async function fetchProRegistry(env, ctx, cacheTtl) {
-  // Try KV cache
-  const cached = await kvGet(env, KV_PRO);
-  if (cached && isFresh(cached, cacheTtl)) {
-    return normalizeToArray(cached.data, 'pro');
+async function fetchProRegistry(env, ctx, cacheTtl, bypass = false) {
+  if (!bypass) {
+    const cached = await kvGet(env, KV_PRO);
+    if (cached && isFresh(cached, cacheTtl)) {
+      return normalizeToArray(cached.data, 'pro');
+    }
   }
 
-  if (!env.GITHUB_TOKEN) {
+  if (!env.GH_ACCESS_TOKEN) {
     console.warn('GITHUB_TOKEN not set — pro registry unavailable');
     return null;
   }
 
-  // GitHub Contents API returns a JSON envelope with base64-encoded content
   const resp = await fetch(PRO_REGISTRY_API_URL, {
     headers: {
-      'Authorization': `token ${env.GITHUB_TOKEN}`,
+      'Authorization': `token ${env.GH_ACCESS_TOKEN}`,
       'Accept':        'application/vnd.github.v3+json',
       'User-Agent':    'nself-plugin-registry/2.0',
     },
@@ -277,8 +290,6 @@ async function fetchProRegistry(env, ctx, cacheTtl) {
   }
 
   const envelope = await resp.json();
-
-  // Decode base64 content
   let data;
   try {
     const raw = atob(envelope.content.replace(/\n/g, ''));
@@ -288,9 +299,7 @@ async function fetchProRegistry(env, ctx, cacheTtl) {
     return null;
   }
 
-  // Cache raw data in KV
-  ctx.waitUntil(kvPut(env, KV_PRO, data));
-
+  ctx.waitUntil(kvPutWrapped(env, KV_PRO, data));
   return normalizeToArray(data, 'pro');
 }
 
@@ -309,13 +318,11 @@ function normalizeToArray(data, expectedTier) {
   } else if (data && Array.isArray(data.plugins)) {
     raw = data.plugins;
   } else if (data && data.plugins && typeof data.plugins === 'object') {
-    // Object keyed by name (free registry format)
     raw = Object.values(data.plugins);
   } else {
     return [];
   }
 
-  // Guarantee tier field is correct
   return raw.map(p => ({ ...p, tier: p.tier || expectedTier }));
 }
 
@@ -324,42 +331,32 @@ function normalizeToArray(data, expectedTier) {
 // ---------------------------------------------------------------------------
 
 async function handlePlugin(path, env, ctx) {
-  const parts         = path.split('/').filter(Boolean); // ['plugins', 'name'] or ['plugins', 'name', 'ver']
-  const pluginName    = parts[1];
-  const requestedVer  = parts[2] || 'latest';
-  const cacheTtl      = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const parts        = path.split('/').filter(Boolean);
+  const pluginName   = parts[1];
+  const requestedVer = parts[2] || 'latest';
+  const cacheTtl     = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
 
   if (!pluginName) {
     return jsonResponse({ error: 'Plugin name required' }, 400);
   }
 
-  const [freePlugins, proPlugins] = await Promise.allSettled([
+  const [freeResult, proResult] = await Promise.allSettled([
     fetchFreeRegistry(env, ctx, cacheTtl),
     fetchProRegistry(env, ctx, cacheTtl),
   ]);
 
   const all = [
-    ...(freePlugins.status === 'fulfilled' ? (freePlugins.value || []) : []),
-    ...(proPlugins.status  === 'fulfilled' ? (proPlugins.value  || []) : []),
+    ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+    ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
   ];
 
   const plugin = all.find(p => p.name === pluginName);
-
   if (!plugin) {
-    return jsonResponse({
-      error:     'Plugin not found',
-      name:      pluginName,
-      available: all.map(p => p.name).sort(),
-    }, 404);
+    return jsonResponse({ error: 'Plugin not found', name: pluginName, available: all.map(p => p.name).sort() }, 404);
   }
 
-  // Version resolution
   if (requestedVer !== 'latest' && requestedVer !== plugin.version) {
-    return jsonResponse({
-      error:            'Version not found',
-      requestedVersion: requestedVer,
-      latestVersion:    plugin.version,
-    }, 404);
+    return jsonResponse({ error: 'Version not found', requestedVersion: requestedVer, latestVersion: plugin.version }, 404);
   }
 
   return jsonResponse(plugin, 200, { 'Cache-Control': 'public, max-age=60' });
@@ -371,20 +368,15 @@ async function handlePlugin(path, env, ctx) {
 
 async function handleCategories(env, ctx) {
   const cacheTtl = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
-
-  const [freePlugins, proPlugins] = await Promise.allSettled([
+  const [freeResult, proResult] = await Promise.allSettled([
     fetchFreeRegistry(env, ctx, cacheTtl),
     fetchProRegistry(env, ctx, cacheTtl),
   ]);
-
   const all = [
-    ...(freePlugins.status === 'fulfilled' ? (freePlugins.value || []) : []),
-    ...(proPlugins.status  === 'fulfilled' ? (proPlugins.value  || []) : []),
+    ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+    ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
   ];
-
-  const categories = mergeCategoriesFromPlugins(all);
-
-  return jsonResponse({ categories }, 200, {
+  return jsonResponse({ categories: mergeCategoriesFromPlugins(all) }, 200, {
     'Cache-Control': `public, max-age=${cacheTtl}`,
   });
 }
@@ -399,7 +391,7 @@ function handleHealth(env) {
     service:   'nself-plugin-registry',
     version:   env.REGISTRY_VERSION || '2.0.0',
     timestamp: new Date().toISOString(),
-    features:  ['dual-registry', 'kv-cache', 'tier-filter'],
+    features:  ['dual-registry', 'kv-cache', 'tier-filter', 'github-api-fetch'],
   });
 }
 
@@ -408,21 +400,22 @@ function handleHealth(env) {
 // ---------------------------------------------------------------------------
 
 async function handleStats(env) {
-  const stats = await kvGet(env, KV_STATS) || {
+  const stats = (await kvGet(env, KV_STATS)) || {
     registryHits:    0,
     registryFetches: 0,
     lastSync:        null,
   };
-
-  return jsonResponse(stats);
+  // Unwrap if stats were stored in the timestamp envelope
+  const data = stats.data || stats;
+  return jsonResponse(data);
 }
 
 // ---------------------------------------------------------------------------
-// Sync webhook — force-refresh KV cache
+// Sync — bust KV cache and fetch fresh from GitHub
+// Done in two steps: delete KV (async), then immediately fetch bypassing cache.
 // ---------------------------------------------------------------------------
 
 async function handleSync(request, env, ctx) {
-  // Verify bearer token
   const authHeader = request.headers.get('Authorization') || '';
   if (!authHeader.startsWith('Bearer ')) {
     return jsonResponse({ error: 'Unauthorized' }, 401);
@@ -432,7 +425,7 @@ async function handleSync(request, env, ctx) {
     return jsonResponse({ error: 'Invalid token' }, 403);
   }
 
-  // Bust all cache keys
+  // Delete KV cache entries
   if (env.PLUGINS_KV) {
     await Promise.all([
       env.PLUGINS_KV.delete(KV_FREE),
@@ -441,21 +434,26 @@ async function handleSync(request, env, ctx) {
     ]);
   }
 
-  // Warm the cache synchronously so the response includes counts
-  const [freePlugins, proPlugins] = await Promise.allSettled([
-    fetchFreeRegistry(env, ctx, 0),   // TTL=0 forces a real fetch
-    fetchProRegistry(env, ctx, 0),
+  // Fetch fresh — bypass=true so we skip KV read (already deleted)
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, 0, true),
+    fetchProRegistry(env, ctx, 0, true),
   ]);
 
-  const freeCount = freePlugins.status === 'fulfilled' ? (freePlugins.value || []).length : 0;
-  const proCount  = proPlugins.status  === 'fulfilled' ? (proPlugins.value  || []).length : 0;
+  const freeCount = freeResult.status === 'fulfilled' ? (freeResult.value || []).length : 0;
+  const proCount  = proResult.status  === 'fulfilled' ? (proResult.value  || []).length : 0;
+  const freeError = freeResult.status === 'rejected'  ? freeResult.reason?.message : null;
+  const proError  = proResult.status  === 'rejected'  ? proResult.reason?.message  : null;
 
-  // Update sync timestamp in stats
-  if (env.PLUGINS_KV) {
-    const stats = await kvGet(env, KV_STATS) || {};
-    stats.lastSync = new Date().toISOString();
-    await kvPut(env, KV_STATS, stats);
-  }
+  // Update last sync timestamp
+  ctx.waitUntil((async () => {
+    if (env.PLUGINS_KV) {
+      const existing = (await kvGet(env, KV_STATS)) || {};
+      const stats = existing.data || existing;
+      stats.lastSync = new Date().toISOString();
+      await env.PLUGINS_KV.put(KV_STATS, JSON.stringify(stats));
+    }
+  })());
 
   return jsonResponse({
     success:    true,
@@ -463,12 +461,14 @@ async function handleSync(request, env, ctx) {
     freeCount,
     proCount,
     totalCount: freeCount + proCount,
+    freeError,
+    proError,
     timestamp:  new Date().toISOString(),
   });
 }
 
 // ---------------------------------------------------------------------------
-// KV helpers
+// KV helpers — all values stored as { data, timestamp } envelope
 // ---------------------------------------------------------------------------
 
 async function kvGet(env, key) {
@@ -480,7 +480,7 @@ async function kvGet(env, key) {
   }
 }
 
-async function kvPut(env, key, data) {
+async function kvPutWrapped(env, key, data) {
   if (!env.PLUGINS_KV) return;
   try {
     await env.PLUGINS_KV.put(key, JSON.stringify({ data, timestamp: Date.now() }));
@@ -513,18 +513,16 @@ function ttlRemaining(entry, ttlSeconds) {
 async function bumpStat(env, key) {
   if (!env.PLUGINS_KV) return;
   try {
-    const stats = (await kvGet(env, KV_STATS)) || {
-      registryHits:    0,
-      registryFetches: 0,
-    };
+    const entry   = (await kvGet(env, KV_STATS)) || {};
+    const stats   = entry.data || entry;
     if (key === 'registry_hits')    stats.registryHits    = (stats.registryHits    || 0) + 1;
     if (key === 'registry_fetches') stats.registryFetches = (stats.registryFetches || 0) + 1;
     await env.PLUGINS_KV.put(KV_STATS, JSON.stringify(stats));
-  } catch { /* stats are best-effort */ }
+  } catch { /* best-effort */ }
 }
 
 // ---------------------------------------------------------------------------
-// Categories: build a deduplicated category map from the plugin list
+// Merge categories from combined plugin list
 // ---------------------------------------------------------------------------
 
 function mergeCategoriesFromPlugins(plugins) {
@@ -543,8 +541,5 @@ function mergeCategoriesFromPlugins(plugins) {
 }
 
 function toTitleCase(str) {
-  return str
-    .split(/[-_]/)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+  return str.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
