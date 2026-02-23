@@ -3,7 +3,7 @@
  * All provider implementations extend this class
  */
 
-import { exec as execCallback, type ExecException } from 'child_process';
+import { execFile as execFileCallback, type ExecException } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '@nself/plugin-utils';
 import type {
@@ -17,7 +17,7 @@ import type {
   LeakTestResult,
 } from '../types.js';
 
-const exec = promisify(execCallback);
+const execFile = promisify(execFileCallback);
 const logger = createLogger('vpn:provider');
 
 export abstract class BaseVPNProvider implements IVPNProvider {
@@ -139,12 +139,12 @@ export abstract class BaseVPNProvider implements IVPNProvider {
 
     try {
       // Test IP leak
-      const ipResult = await this.executeCommand('curl -4 -s https://ifconfig.io');
+      const ipResult = await this.executeCommandArgs('curl', ['-4', '-s', 'https://ifconfig.io']);
       tests.ip.actual = ipResult.stdout.trim();
       tests.ip.passed = tests.ip.actual === expectedIP;
 
       // Test DNS leak
-      const dnsResult = await this.executeCommand('nslookup -type=txt whoami.akamai.net');
+      const dnsResult = await this.executeCommandArgs('nslookup', ['-type=txt', 'whoami.akamai.net']);
       const dnsMatch = dnsResult.stdout.match(/(\d+\.\d+\.\d+\.\d+)/);
       if (dnsMatch) {
         tests.dns.actual = dnsMatch[1];
@@ -154,7 +154,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
 
       // Test IPv6 leak
       try {
-        const ipv6Result = await this.executeCommand('curl -6 -s --max-time 5 https://ifconfig.io');
+        const ipv6Result = await this.executeCommandArgs('curl', ['-6', '-s', '--max-time', '5', 'https://ifconfig.io']);
         if (ipv6Result.stdout.trim()) {
           tests.ipv6.leaked_ip = ipv6Result.stdout.trim();
           tests.ipv6.passed = false; // IPv6 should be blocked
@@ -195,11 +195,12 @@ export abstract class BaseVPNProvider implements IVPNProvider {
   // ============================================================================
 
   /**
-   * Execute shell command
+   * Execute shell command using execFile (safer than exec — no shell injection).
+   * Pass the command and its arguments as separate array elements.
    */
-  protected async executeCommand(command: string, timeout: number = 30000): Promise<{ stdout: string; stderr: string }> {
+  protected async executeCommandArgs(cmd: string, args: string[], timeout: number = 30000): Promise<{ stdout: string; stderr: string }> {
     try {
-      const result = await exec(command, {
+      const result = await execFile(cmd, args, {
         timeout,
         maxBuffer: 1024 * 1024 * 10, // 10MB
       });
@@ -207,10 +208,22 @@ export abstract class BaseVPNProvider implements IVPNProvider {
     } catch (error) {
       const execError = error as ExecException;
       if (execError.killed && execError.signal === 'SIGTERM') {
-        throw new Error(`Command timed out after ${timeout}ms: ${command}`);
+        throw new Error(`Command timed out after ${timeout}ms: ${cmd} ${args.join(' ')}`);
       }
       throw error;
     }
+  }
+
+  /**
+   * @deprecated Use executeCommandArgs(cmd, args) instead to avoid shell injection.
+   * Kept for backwards compatibility with subclass overrides; will be removed in a future release.
+   */
+  protected async executeCommand(command: string, timeout: number = 30000): Promise<{ stdout: string; stderr: string }> {
+    // Split naive shell string into cmd + args for execFile.
+    // This does NOT handle quoted arguments — callers should migrate to executeCommandArgs.
+    const parts = command.split(/\s+/);
+    const [cmd, ...args] = parts;
+    return this.executeCommandArgs(cmd, args, timeout);
   }
 
   /**
@@ -255,7 +268,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
    */
   protected async getInterfaceIP(interfaceName: string): Promise<string | null> {
     try {
-      const result = await this.executeCommand(`ip addr show ${interfaceName}`);
+      const result = await this.executeCommandArgs('ip', ['addr', 'show', interfaceName]);
       const match = result.stdout.match(/inet (\d+\.\d+\.\d+\.\d+)/);
       return match ? match[1] : null;
     } catch {
@@ -268,7 +281,7 @@ export abstract class BaseVPNProvider implements IVPNProvider {
    */
   protected async getDNSServers(): Promise<string[]> {
     try {
-      const result = await this.executeCommand('cat /etc/resolv.conf');
+      const result = await this.executeCommandArgs('cat', ['/etc/resolv.conf']);
       const lines = result.stdout.split('\n');
       const servers: string[] = [];
 
