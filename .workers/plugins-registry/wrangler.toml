@@ -1,44 +1,39 @@
 # Cloudflare Worker configuration for plugins.nself.org
-# Plugin Registry API for nself CLI
-#
-# This Worker serves the plugin registry from this repository.
-# It caches registry.json in KV for fast global access.
+# nself Plugin Registry — dual-registry architecture (free + pro combining Worker)
 
 name = "nself-plugin-registry"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
-# Workers KV namespace for caching
+# Workers KV namespace for caching free, pro, and combined registries
 [[kv_namespaces]]
 binding = "PLUGINS_KV"
 id = "fddaf7f451f54f82a7d3712ae92882ea"
 
-# Environment variables
+# Static environment variables
 [vars]
-GITHUB_REPO = "nself-org/plugins"
-GITHUB_BRANCH = "main"
-CACHE_TTL = "300"
-REGISTRY_VERSION = "1.0.0"
+CACHE_TTL        = "300"
+REGISTRY_VERSION = "2.0.0"
+
+# Secrets (set via wrangler secret put <NAME>):
+#   GITHUB_TOKEN       — Fine-grained PAT with contents:read on nself-org/plugins-pro
+#                        Used to fetch the private pro registry from the GitHub Contents API.
+#   GITHUB_SYNC_TOKEN  — Bearer token for POST /api/sync (triggered by GitHub Actions)
 
 # Production environment (plugins.nself.org)
 [env.production]
-name = "nself-plugin-registry"
+name  = "nself-plugin-registry"
 route = { pattern = "plugins.nself.org/*", zone_id = "3b7a327cd8756c5c736f0bbdfa251719" }
 
 [[env.production.kv_namespaces]]
 binding = "PLUGINS_KV"
-id = "fddaf7f451f54f82a7d3712ae92882ea"
+id      = "fddaf7f451f54f82a7d3712ae92882ea"
 
 [env.production.vars]
-GITHUB_REPO = "nself-org/plugins"
-GITHUB_BRANCH = "main"
-CACHE_TTL = "300"
-REGISTRY_VERSION = "1.0.0"
-
-# Secrets (set via wrangler secret put):
-# - GITHUB_SYNC_TOKEN: Token for webhook authentication from GitHub Actions
+CACHE_TTL        = "300"
+REGISTRY_VERSION = "2.0.0"
 
 # Development settings
 [dev]
-port = 8787
+port           = 8787
 local_protocol = "http"

@@ -29,5 +29,12 @@
     "type": "git",
     "url": "https://github.com/nself-org/plugins.git",
     "directory": ".workers/plugins-registry"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "sharp"
+    ]
   }
 }
