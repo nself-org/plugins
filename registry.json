@@ -28,7 +28,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-stripe",
         "defaultPort": 3001,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -431,7 +431,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-github",
         "defaultPort": 3002,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -617,7 +617,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-shopify",
         "defaultPort": 3003,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -852,7 +852,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-realtime",
         "defaultPort": 3101,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "socket.io"
       },
       "tables": [
@@ -1023,7 +1023,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-file-processing",
         "defaultPort": 3104,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -1215,7 +1215,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-jobs",
         "defaultPort": 3105,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -1399,7 +1399,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-notifications",
         "defaultPort": 3102,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -1624,7 +1624,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-idme",
         "defaultPort": 3010,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -1790,7 +1790,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-paypal",
         "defaultPort": 3004,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -2046,7 +2046,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-donorbox",
         "defaultPort": 3005,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -2264,7 +2264,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-auth",
         "defaultPort": 3014,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -2633,7 +2633,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-access-controls",
         "defaultPort": 3027,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -2723,7 +2723,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-activity-feed",
         "defaultPort": 3503,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -2827,7 +2827,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-ai",
         "defaultPort": 3705,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -2999,7 +2999,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-analytics",
         "defaultPort": 3304,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3100,7 +3100,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-backup",
         "defaultPort": 3013,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3225,7 +3225,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-bots",
         "defaultPort": 3708,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3379,7 +3379,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-calendar",
         "defaultPort": 3505,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3479,7 +3479,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-cdn",
         "defaultPort": 3036,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3602,7 +3602,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-chat",
         "defaultPort": 3401,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3718,7 +3718,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-cloudflare",
         "defaultPort": 3024,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3826,7 +3826,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-cms",
         "defaultPort": 3501,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -3949,7 +3949,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-compliance",
         "defaultPort": 3706,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4101,7 +4101,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-content-progress",
         "defaultPort": 3022,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4198,7 +4198,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-devices",
         "defaultPort": 3603,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4349,7 +4349,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-documents",
         "defaultPort": 3029,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4429,7 +4429,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-entitlements",
         "defaultPort": 3714,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4533,7 +4533,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-epg",
         "defaultPort": 3031,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4618,7 +4618,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-feature-flags",
         "defaultPort": 3305,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4707,7 +4707,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-geocoding",
         "defaultPort": 3203,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4841,7 +4841,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-geolocation",
         "defaultPort": 3026,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -4964,7 +4964,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-invitations",
         "defaultPort": 3402,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5070,7 +5070,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-knowledge-base",
         "defaultPort": 3713,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5184,7 +5184,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-link-preview",
         "defaultPort": 3718,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5343,7 +5343,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-livekit",
         "defaultPort": 3707,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5498,7 +5498,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-media-processing",
         "defaultPort": 3019,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5617,7 +5617,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-meetings",
         "defaultPort": 3710,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5717,7 +5717,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-moderation",
         "defaultPort": 3704,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -5873,7 +5873,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-object-storage",
         "defaultPort": 3301,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6007,7 +6007,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-photos",
         "defaultPort": 3716,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6096,7 +6096,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-recording",
         "defaultPort": 3602,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6253,7 +6253,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-search",
         "defaultPort": 3302,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6376,7 +6376,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-social",
         "defaultPort": 3502,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6492,7 +6492,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-sports",
         "defaultPort": 3035,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6665,7 +6665,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-stream-gateway",
         "defaultPort": 3601,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6787,7 +6787,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-streaming",
         "defaultPort": 3711,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -6885,7 +6885,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-support",
         "defaultPort": 3709,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7098,7 +7098,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-tmdb",
         "defaultPort": 3205,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7196,7 +7196,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-tokens",
         "defaultPort": 3307,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7283,7 +7283,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-web3",
         "defaultPort": 3715,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7391,7 +7391,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-webhooks",
         "defaultPort": 3403,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7496,7 +7496,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-workflows",
         "defaultPort": 3712,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7583,7 +7583,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-rom-discovery",
         "defaultPort": 3034,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7754,7 +7754,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-vpn",
         "defaultPort": 3200,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -7912,7 +7912,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-torrent-manager",
         "defaultPort": 3201,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8065,7 +8065,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-content-acquisition",
         "defaultPort": 3202,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8229,7 +8229,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-subtitle-manager",
         "defaultPort": 3204,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8343,7 +8343,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-retro-gaming",
         "defaultPort": 3033,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8578,7 +8578,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-ddns",
         "defaultPort": 3217,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8654,7 +8654,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-game-metadata",
         "defaultPort": 3211,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8729,7 +8729,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-mdns",
         "defaultPort": 3216,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
@@ -8801,7 +8801,7 @@
         "cli": "ts/dist/cli.js",
         "cliName": "nself-podcast",
         "defaultPort": 3210,
-        "packageManager": "npm",
+        "packageManager": "pnpm",
         "framework": "fastify"
       },
       "tables": [
