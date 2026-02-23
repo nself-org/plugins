@@ -1,7 +1,7 @@
 {
   "name": "vpn",
   "version": "1.0.0",
-  "description": "Multi-provider VPN management (3 VPN providers) and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection",
+  "description": "Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin.",
   "author": "nself",
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/vpn",
@@ -153,6 +153,17 @@
       "required": false,
       "description": "Minutes between server rotations",
       "default": "60"
+    },
+    {
+      "name": "TORRENT_MANAGER_URL",
+      "required": false,
+      "description": "URL of the torrent-manager plugin API. Required for torrent download forwarding.",
+      "default": "http://localhost:3210"
+    },
+    {
+      "name": "INTERNAL_API_KEY",
+      "required": false,
+      "description": "Shared API key for authenticating requests to sibling plugins (e.g. torrent-manager)"
     }
   ],
   "multiApp": {
@@ -167,7 +178,7 @@
     "Automatic server carousel for redundancy",
     "Kill switch and leak protection",
     "Port forwarding (PIA)",
-    "Torrent client integration with interface binding",
+    "Torrent download forwarding via torrent-manager plugin (requires torrent-manager to be installed)",
     "Connection monitoring and auto-reconnect",
     "DNS/IP/WebRTC leak testing",
     "Server performance tracking",

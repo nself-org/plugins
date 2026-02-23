@@ -144,14 +144,43 @@ export async function createServer(config?: Partial<LinkPreviewConfig>) {
     const cached = await scopedDb(request).getPreviewByUrl(url);
     if (cached) return cached;
 
-    // Return placeholder for uncached URL (actual fetching would happen async)
     const urlHash = hashUrl(url);
-    const preview = await scopedDb(request).upsertPreview({
-      url,
-      url_hash: urlHash,
-      status: 'partial',
-    });
-    return preview;
+
+    try {
+      // Fetch real metadata for uncached URL
+      const metadata = await metadataFetcher.fetchMetadata(url);
+
+      const preview = await scopedDb(request).upsertPreview({
+        url,
+        url_hash: urlHash,
+        title: metadata.title,
+        description: metadata.description,
+        image_url: metadata.image,
+        site_name: metadata.siteName,
+        author_name: metadata.author,
+        published_date: metadata.publishedTime,
+        content_type: metadata.type,
+        favicon_url: metadata.favicon,
+        language: metadata.language,
+        video_url: metadata.videoUrl,
+        audio_url: metadata.audioUrl,
+        reading_time_minutes: metadata.estimatedReadTime,
+        status: 'success',
+      });
+
+      return preview;
+    } catch (error) {
+      logger.error('Failed to fetch metadata', { url, error });
+
+      // Store failed preview rather than returning a stub
+      const preview = await scopedDb(request).upsertPreview({
+        url,
+        url_hash: urlHash,
+        status: 'failed',
+      });
+
+      return preview;
+    }
   });
 
   app.post<{ Body: FetchPreviewRequest }>('/api/link-preview/fetch', async (request, reply) => {

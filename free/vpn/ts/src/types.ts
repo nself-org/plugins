@@ -384,6 +384,8 @@ export interface VPNPluginConfig {
   carousel_interval_minutes: number;
   port: number;
   log_level: 'debug' | 'info' | 'warn' | 'error';
+  torrent_manager_url: string;
+  internal_api_key?: string;
 }
 
 // ============================================================================

@@ -1061,7 +1061,9 @@
         "defaultValue": "primary"
       },
       "views": [],
-      "checksums": {},
+      "checksums": {
+        "sha256": ""
+      },
       "tier": "free"
     },
     "notifications": {
