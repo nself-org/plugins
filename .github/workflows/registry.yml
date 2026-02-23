@@ -91,8 +91,18 @@ jobs:
           with open('computed-registry.json') as f:
             computed = json.load(f)
 
-          committed_names = {p['name'] for p in committed.get('plugins', [])}
-          computed_names = {p['name'] for p in computed.get('plugins', [])}
+          # Handle both list and dict formats for committed registry.json
+          committed_plugins = committed.get('plugins', [])
+          if isinstance(committed_plugins, dict):
+            committed_names = set(committed_plugins.keys())
+          else:
+            committed_names = {p['name'] for p in committed_plugins}
+
+          computed_plugins = computed.get('plugins', [])
+          if isinstance(computed_plugins, dict):
+            computed_names = set(computed_plugins.keys())
+          else:
+            computed_names = {p['name'] for p in computed_plugins}
 
           missing = computed_names - committed_names
           extra = committed_names - computed_names
