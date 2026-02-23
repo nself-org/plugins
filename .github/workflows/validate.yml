@@ -1,10 +1,10 @@
 name: Validate Plugins
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main]
+  push:
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
@@ -16,6 +16,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Validate plugin.json files
         run: |
@@ -96,7 +106,7 @@ jobs:
 
           printf "No port conflicts found\n"
 
-      - name: Verify README exists for each plugin
+      - name: Verify README and plugin.json exist for each plugin
         run: |
           errors=0
           find free -maxdepth 1 -mindepth 1 -type d | sort | while read -r dir; do
@@ -116,3 +126,57 @@ jobs:
           fi
 
           printf "All plugins have required files\n"
+
+  validate-registry-script:
+    name: Registry Validator (shared/validate-registry.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make validator executable
+        run: chmod +x shared/validate-registry.sh
+
+      - name: Run shared registry validator
+        run: bash shared/validate-registry.sh
+
+      - name: Run registry validator for changed plugins (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Identify plugin.json files changed in this PR
+          git fetch origin ${{ github.base_ref }} --depth=1
+
+          changed_plugins=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep -E '^free/[^/]+/plugin\.json$' \
+            | sed 's|free/\([^/]*\)/plugin\.json|\1|' \
+            | sort -u)
+
+          if [ -z "$changed_plugins" ]; then
+            echo "No plugin.json files changed in this PR — skipping per-plugin check."
+            exit 0
+          fi
+
+          echo "Changed plugins detected:"
+          echo "$changed_plugins"
+          echo ""
+
+          errors=0
+          while IFS= read -r plugin; do
+            [ -z "$plugin" ] && continue
+            echo "Validating plugin: $plugin"
+            if ! bash shared/validate-registry.sh --plugin "$plugin"; then
+              errors=$((errors + 1))
+            fi
+          done <<EOF
+          $changed_plugins
+          EOF
+
+          if [ "$errors" -gt 0 ]; then
+            echo ""
+            echo "ERROR: $errors plugin(s) failed validation. Fix errors before merging."
+            exit 1
+          fi
+
+          echo "All changed plugins passed validation."
