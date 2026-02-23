@@ -82,7 +82,7 @@ export class FeatureFlagsDatabase {
       -- Flags
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS ff_flags (
+      CREATE TABLE IF NOT EXISTS np_flags_flags (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         key VARCHAR(255) NOT NULL,
@@ -100,20 +100,20 @@ export class FeatureFlagsDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE(source_account_id, key)
       );
-      CREATE INDEX IF NOT EXISTS idx_ff_flags_source_account ON ff_flags(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_flags_key ON ff_flags(key);
-      CREATE INDEX IF NOT EXISTS idx_ff_flags_type ON ff_flags(flag_type);
-      CREATE INDEX IF NOT EXISTS idx_ff_flags_enabled ON ff_flags(enabled);
-      CREATE INDEX IF NOT EXISTS idx_ff_flags_tags ON ff_flags USING GIN(tags);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_flags_source_account ON np_flags_flags(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_flags_key ON np_flags_flags(key);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_flags_type ON np_flags_flags(flag_type);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_flags_enabled ON np_flags_flags(enabled);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_flags_tags ON np_flags_flags USING GIN(tags);
 
       -- =====================================================================
       -- Rules
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS ff_rules (
+      CREATE TABLE IF NOT EXISTS np_flags_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        flag_id UUID NOT NULL REFERENCES ff_flags(id) ON DELETE CASCADE,
+        flag_id UUID NOT NULL REFERENCES np_flags_flags(id) ON DELETE CASCADE,
         name VARCHAR(255),
         rule_type VARCHAR(32) NOT NULL,
         conditions JSONB NOT NULL,
@@ -123,15 +123,15 @@ export class FeatureFlagsDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      CREATE INDEX IF NOT EXISTS idx_ff_rules_source_account ON ff_rules(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_rules_flag_id ON ff_rules(flag_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_rules_priority ON ff_rules(priority DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_rules_source_account ON np_flags_rules(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_rules_flag_id ON np_flags_rules(flag_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_rules_priority ON np_flags_rules(priority DESC);
 
       -- =====================================================================
       -- Segments
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS ff_segments (
+      CREATE TABLE IF NOT EXISTS np_flags_segments (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         name VARCHAR(255) NOT NULL,
@@ -142,14 +142,14 @@ export class FeatureFlagsDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE(source_account_id, name)
       );
-      CREATE INDEX IF NOT EXISTS idx_ff_segments_source_account ON ff_segments(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_segments_name ON ff_segments(name);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_segments_source_account ON np_flags_segments(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_segments_name ON np_flags_segments(name);
 
       -- =====================================================================
       -- Evaluations
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS ff_evaluations (
+      CREATE TABLE IF NOT EXISTS np_flags_evaluations (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         flag_key VARCHAR(255) NOT NULL,
@@ -160,16 +160,16 @@ export class FeatureFlagsDatabase {
         reason VARCHAR(64),
         evaluated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      CREATE INDEX IF NOT EXISTS idx_ff_evaluations_source_account ON ff_evaluations(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_evaluations_flag_key ON ff_evaluations(flag_key);
-      CREATE INDEX IF NOT EXISTS idx_ff_evaluations_user_id ON ff_evaluations(user_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_evaluations_evaluated_at ON ff_evaluations(evaluated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_evaluations_source_account ON np_flags_evaluations(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_evaluations_flag_key ON np_flags_evaluations(flag_key);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_evaluations_user_id ON np_flags_evaluations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_evaluations_evaluated_at ON np_flags_evaluations(evaluated_at DESC);
 
       -- =====================================================================
       -- Webhook Events
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS ff_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_flags_webhook_events (
         id VARCHAR(255) PRIMARY KEY,
         source_account_id VARCHAR(128) DEFAULT 'primary',
         event_type VARCHAR(128),
@@ -179,9 +179,9 @@ export class FeatureFlagsDatabase {
         error TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      CREATE INDEX IF NOT EXISTS idx_ff_webhook_events_source_account ON ff_webhook_events(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_ff_webhook_events_type ON ff_webhook_events(event_type);
-      CREATE INDEX IF NOT EXISTS idx_ff_webhook_events_processed ON ff_webhook_events(processed);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_webhook_events_source_account ON np_flags_webhook_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_webhook_events_type ON np_flags_webhook_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_np_flags_webhook_events_processed ON np_flags_webhook_events(processed);
     `;
 
     await this.execute(schema);
@@ -194,7 +194,7 @@ export class FeatureFlagsDatabase {
 
   async createFlag(request: CreateFlagRequest): Promise<FlagRecord> {
     const result = await this.query<FlagRecord>(
-      `INSERT INTO ff_flags (
+      `INSERT INTO np_flags_flags (
         source_account_id, key, name, description, flag_type, enabled,
         default_value, tags, owner, stale_after_days
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -218,7 +218,7 @@ export class FeatureFlagsDatabase {
 
   async getFlag(key: string): Promise<FlagRecord | null> {
     const result = await this.query<FlagRecord>(
-      `SELECT * FROM ff_flags WHERE source_account_id = $1 AND key = $2`,
+      `SELECT * FROM np_flags_flags WHERE source_account_id = $1 AND key = $2`,
       [this.sourceAccountId, key]
     );
 
@@ -227,7 +227,7 @@ export class FeatureFlagsDatabase {
 
   async getFlagById(id: string): Promise<FlagRecord | null> {
     const result = await this.query<FlagRecord>(
-      `SELECT * FROM ff_flags WHERE source_account_id = $1 AND id = $2`,
+      `SELECT * FROM np_flags_flags WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, id]
     );
 
@@ -261,7 +261,7 @@ export class FeatureFlagsDatabase {
     const offset = options.offset ?? 0;
 
     const sql = `
-      SELECT * FROM ff_flags
+      SELECT * FROM np_flags_flags
       WHERE ${conditions.join(' AND ')}
       ORDER BY created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -334,7 +334,7 @@ export class FeatureFlagsDatabase {
     }
 
     const result = await this.query<FlagRecord>(
-      `UPDATE ff_flags SET ${updates.join(', ')}
+      `UPDATE np_flags_flags SET ${updates.join(', ')}
        WHERE source_account_id = $${paramIndex} AND key = $${paramIndex + 1}
        RETURNING *`,
       [...params, this.sourceAccountId, key]
@@ -345,7 +345,7 @@ export class FeatureFlagsDatabase {
 
   async deleteFlag(key: string): Promise<boolean> {
     const count = await this.execute(
-      `DELETE FROM ff_flags WHERE source_account_id = $1 AND key = $2`,
+      `DELETE FROM np_flags_flags WHERE source_account_id = $1 AND key = $2`,
       [this.sourceAccountId, key]
     );
 
@@ -354,7 +354,7 @@ export class FeatureFlagsDatabase {
 
   async enableFlag(key: string): Promise<boolean> {
     const count = await this.execute(
-      `UPDATE ff_flags SET enabled = true, updated_at = NOW()
+      `UPDATE np_flags_flags SET enabled = true, updated_at = NOW()
        WHERE source_account_id = $1 AND key = $2`,
       [this.sourceAccountId, key]
     );
@@ -364,7 +364,7 @@ export class FeatureFlagsDatabase {
 
   async disableFlag(key: string): Promise<boolean> {
     const count = await this.execute(
-      `UPDATE ff_flags SET enabled = false, updated_at = NOW()
+      `UPDATE np_flags_flags SET enabled = false, updated_at = NOW()
        WHERE source_account_id = $1 AND key = $2`,
       [this.sourceAccountId, key]
     );
@@ -388,7 +388,7 @@ export class FeatureFlagsDatabase {
 
   async updateFlagEvaluation(key: string): Promise<void> {
     await this.execute(
-      `UPDATE ff_flags
+      `UPDATE np_flags_flags
        SET last_evaluated_at = NOW(), evaluation_count = evaluation_count + 1
        WHERE source_account_id = $1 AND key = $2`,
       [this.sourceAccountId, key]
@@ -406,7 +406,7 @@ export class FeatureFlagsDatabase {
     }
 
     const result = await this.query<RuleRecord>(
-      `INSERT INTO ff_rules (
+      `INSERT INTO np_flags_rules (
         source_account_id, flag_id, name, rule_type, conditions, value, priority, enabled
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`,
@@ -427,7 +427,7 @@ export class FeatureFlagsDatabase {
 
   async getRulesByFlagId(flagId: string): Promise<RuleRecord[]> {
     const result = await this.query<RuleRecord>(
-      `SELECT * FROM ff_rules
+      `SELECT * FROM np_flags_rules
        WHERE source_account_id = $1 AND flag_id = $2
        ORDER BY priority DESC, created_at ASC`,
       [this.sourceAccountId, flagId]
@@ -438,7 +438,7 @@ export class FeatureFlagsDatabase {
 
   async getRule(ruleId: string): Promise<RuleRecord | null> {
     const result = await this.query<RuleRecord>(
-      `SELECT * FROM ff_rules WHERE source_account_id = $1 AND id = $2`,
+      `SELECT * FROM np_flags_rules WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, ruleId]
     );
 
@@ -490,7 +490,7 @@ export class FeatureFlagsDatabase {
     }
 
     const result = await this.query<RuleRecord>(
-      `UPDATE ff_rules SET ${updates.join(', ')}
+      `UPDATE np_flags_rules SET ${updates.join(', ')}
        WHERE source_account_id = $${paramIndex} AND id = $${paramIndex + 1}
        RETURNING *`,
       [...params, this.sourceAccountId, ruleId]
@@ -501,7 +501,7 @@ export class FeatureFlagsDatabase {
 
   async deleteRule(ruleId: string): Promise<boolean> {
     const count = await this.execute(
-      `DELETE FROM ff_rules WHERE source_account_id = $1 AND id = $2`,
+      `DELETE FROM np_flags_rules WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, ruleId]
     );
 
@@ -514,7 +514,7 @@ export class FeatureFlagsDatabase {
 
   async createSegment(request: CreateSegmentRequest): Promise<SegmentRecord> {
     const result = await this.query<SegmentRecord>(
-      `INSERT INTO ff_segments (source_account_id, name, description, match_type, rules)
+      `INSERT INTO np_flags_segments (source_account_id, name, description, match_type, rules)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [
@@ -531,7 +531,7 @@ export class FeatureFlagsDatabase {
 
   async getSegment(id: string): Promise<SegmentRecord | null> {
     const result = await this.query<SegmentRecord>(
-      `SELECT * FROM ff_segments WHERE source_account_id = $1 AND id = $2`,
+      `SELECT * FROM np_flags_segments WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, id]
     );
 
@@ -540,7 +540,7 @@ export class FeatureFlagsDatabase {
 
   async getSegmentByName(name: string): Promise<SegmentRecord | null> {
     const result = await this.query<SegmentRecord>(
-      `SELECT * FROM ff_segments WHERE source_account_id = $1 AND name = $2`,
+      `SELECT * FROM np_flags_segments WHERE source_account_id = $1 AND name = $2`,
       [this.sourceAccountId, name]
     );
 
@@ -549,7 +549,7 @@ export class FeatureFlagsDatabase {
 
   async listSegments(limit = 100, offset = 0): Promise<SegmentRecord[]> {
     const result = await this.query<SegmentRecord>(
-      `SELECT * FROM ff_segments
+      `SELECT * FROM np_flags_segments
        WHERE source_account_id = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -598,7 +598,7 @@ export class FeatureFlagsDatabase {
     }
 
     const result = await this.query<SegmentRecord>(
-      `UPDATE ff_segments SET ${updates.join(', ')}
+      `UPDATE np_flags_segments SET ${updates.join(', ')}
        WHERE source_account_id = $${paramIndex} AND id = $${paramIndex + 1}
        RETURNING *`,
       [...params, this.sourceAccountId, id]
@@ -609,7 +609,7 @@ export class FeatureFlagsDatabase {
 
   async deleteSegment(id: string): Promise<boolean> {
     const count = await this.execute(
-      `DELETE FROM ff_segments WHERE source_account_id = $1 AND id = $2`,
+      `DELETE FROM np_flags_segments WHERE source_account_id = $1 AND id = $2`,
       [this.sourceAccountId, id]
     );
 
@@ -627,7 +627,7 @@ export class FeatureFlagsDatabase {
     result: EvaluationResult
   ): Promise<void> {
     await this.execute(
-      `INSERT INTO ff_evaluations (
+      `INSERT INTO np_flags_evaluations (
         source_account_id, flag_key, user_id, context, result, rule_id, reason
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
@@ -675,7 +675,7 @@ export class FeatureFlagsDatabase {
     const offset = options.offset ?? 0;
 
     const sql = `
-      SELECT * FROM ff_evaluations
+      SELECT * FROM np_flags_evaluations
       WHERE ${conditions.join(' AND ')}
       ORDER BY evaluated_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -698,11 +698,11 @@ export class FeatureFlagsDatabase {
       last_evaluated_at: Date | null;
     }>(
       `SELECT
-        (SELECT COUNT(*) FROM ff_flags WHERE source_account_id = $1) as flags,
-        (SELECT COUNT(*) FROM ff_rules WHERE source_account_id = $1) as rules,
-        (SELECT COUNT(*) FROM ff_segments WHERE source_account_id = $1) as segments,
-        (SELECT COUNT(*) FROM ff_evaluations WHERE source_account_id = $1) as evaluations,
-        (SELECT MAX(evaluated_at) FROM ff_evaluations WHERE source_account_id = $1) as last_evaluated_at
+        (SELECT COUNT(*) FROM np_flags_flags WHERE source_account_id = $1) as flags,
+        (SELECT COUNT(*) FROM np_flags_rules WHERE source_account_id = $1) as rules,
+        (SELECT COUNT(*) FROM np_flags_segments WHERE source_account_id = $1) as segments,
+        (SELECT COUNT(*) FROM np_flags_evaluations WHERE source_account_id = $1) as evaluations,
+        (SELECT MAX(evaluated_at) FROM np_flags_evaluations WHERE source_account_id = $1) as last_evaluated_at
       `,
       [this.sourceAccountId]
     );
@@ -723,7 +723,7 @@ export class FeatureFlagsDatabase {
 
   async insertWebhookEvent(event: Omit<WebhookEventRecord, 'source_account_id' | 'created_at'>): Promise<void> {
     await this.execute(
-      `INSERT INTO ff_webhook_events (id, source_account_id, event_type, payload, processed, processed_at, error)
+      `INSERT INTO np_flags_webhook_events (id, source_account_id, event_type, payload, processed, processed_at, error)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         event.id,
@@ -739,7 +739,7 @@ export class FeatureFlagsDatabase {
 
   async markEventProcessed(eventId: string, error?: string): Promise<void> {
     await this.execute(
-      `UPDATE ff_webhook_events
+      `UPDATE np_flags_webhook_events
        SET processed = true, processed_at = NOW(), error = $1
        WHERE source_account_id = $2 AND id = $3`,
       [error ?? null, this.sourceAccountId, eventId]

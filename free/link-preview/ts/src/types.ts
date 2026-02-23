@@ -59,6 +59,12 @@ export interface LinkPreviewConfig {
 // Enum/Union Types
 // =============================================================================
 
+/**
+ * Preview fetch status values:
+ * - 'success': All metadata fetched successfully (title, description, image, etc.)
+ * - 'partial': Some fields fetched but others failed (e.g., title retrieved but image unavailable)
+ * - 'failed': Fetch failed entirely (network error, blocked URL, timeout)
+ */
 export type PreviewStatus = 'success' | 'failed' | 'partial';
 
 export type EmbedType = 'photo' | 'video' | 'rich' | 'link';

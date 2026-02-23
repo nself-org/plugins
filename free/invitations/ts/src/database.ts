@@ -73,7 +73,7 @@ export class InvitationsDatabase {
       -- Invitations Table
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS inv_invitations (
+      CREATE TABLE IF NOT EXISTS np_invites_invitations (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         type VARCHAR(64) NOT NULL DEFAULT 'app_signup',
@@ -98,38 +98,38 @@ export class InvitationsDatabase {
         metadata JSONB DEFAULT '{}',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT inv_invitations_check_contact
+        CONSTRAINT np_invites_invitations_check_contact
           CHECK (invitee_email IS NOT NULL OR invitee_phone IS NOT NULL OR channel = 'link'),
-        CONSTRAINT inv_invitations_check_status
+        CONSTRAINT np_invites_invitations_check_status
           CHECK (status IN ('pending', 'sent', 'delivered', 'accepted', 'declined', 'expired', 'revoked')),
-        CONSTRAINT inv_invitations_check_type
+        CONSTRAINT np_invites_invitations_check_type
           CHECK (type IN ('app_signup', 'family_join', 'team_join', 'event_attend', 'share_access')),
-        CONSTRAINT inv_invitations_check_channel
+        CONSTRAINT np_invites_invitations_check_channel
           CHECK (channel IN ('email', 'sms', 'link'))
       );
 
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_source_account
-        ON inv_invitations(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_inviter
-        ON inv_invitations(inviter_id);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_invitee_email
-        ON inv_invitations(invitee_email);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_code
-        ON inv_invitations(code);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_status
-        ON inv_invitations(status);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_type
-        ON inv_invitations(type);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_expires
-        ON inv_invitations(expires_at);
-      CREATE INDEX IF NOT EXISTS idx_inv_invitations_created
-        ON inv_invitations(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_source_account
+        ON np_invites_invitations(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_inviter
+        ON np_invites_invitations(inviter_id);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_invitee_email
+        ON np_invites_invitations(invitee_email);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_code
+        ON np_invites_invitations(code);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_status
+        ON np_invites_invitations(status);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_type
+        ON np_invites_invitations(type);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_expires
+        ON np_invites_invitations(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_invitations_created
+        ON np_invites_invitations(created_at DESC);
 
       -- =====================================================================
       -- Templates Table
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS inv_templates (
+      CREATE TABLE IF NOT EXISTS np_invites_templates (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         name VARCHAR(255) NOT NULL,
@@ -141,30 +141,30 @@ export class InvitationsDatabase {
         enabled BOOLEAN DEFAULT true,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT inv_templates_unique_name
+        CONSTRAINT np_invites_templates_unique_name
           UNIQUE(source_account_id, name),
-        CONSTRAINT inv_templates_check_type
+        CONSTRAINT np_invites_templates_check_type
           CHECK (type IN ('app_signup', 'family_join', 'team_join', 'event_attend', 'share_access')),
-        CONSTRAINT inv_templates_check_channel
+        CONSTRAINT np_invites_templates_check_channel
           CHECK (channel IN ('email', 'sms', 'link'))
       );
 
-      CREATE INDEX IF NOT EXISTS idx_inv_templates_source_account
-        ON inv_templates(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_inv_templates_type
-        ON inv_templates(type);
-      CREATE INDEX IF NOT EXISTS idx_inv_templates_enabled
-        ON inv_templates(enabled);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_templates_source_account
+        ON np_invites_templates(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_templates_type
+        ON np_invites_templates(type);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_templates_enabled
+        ON np_invites_templates(enabled);
 
       -- =====================================================================
       -- Bulk Sends Table
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS inv_bulk_sends (
+      CREATE TABLE IF NOT EXISTS np_invites_bulk_sends (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         inviter_id VARCHAR(255) NOT NULL,
-        template_id UUID REFERENCES inv_templates(id) ON DELETE SET NULL,
+        template_id UUID REFERENCES np_invites_templates(id) ON DELETE SET NULL,
         type VARCHAR(64) NOT NULL,
         total_count INTEGER DEFAULT 0,
         sent_count INTEGER DEFAULT 0,
@@ -175,26 +175,26 @@ export class InvitationsDatabase {
         started_at TIMESTAMP WITH TIME ZONE,
         completed_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT inv_bulk_sends_check_status
+        CONSTRAINT np_invites_bulk_sends_check_status
           CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-        CONSTRAINT inv_bulk_sends_check_type
+        CONSTRAINT np_invites_bulk_sends_check_type
           CHECK (type IN ('app_signup', 'family_join', 'team_join', 'event_attend', 'share_access'))
       );
 
-      CREATE INDEX IF NOT EXISTS idx_inv_bulk_sends_source_account
-        ON inv_bulk_sends(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_inv_bulk_sends_inviter
-        ON inv_bulk_sends(inviter_id);
-      CREATE INDEX IF NOT EXISTS idx_inv_bulk_sends_status
-        ON inv_bulk_sends(status);
-      CREATE INDEX IF NOT EXISTS idx_inv_bulk_sends_created
-        ON inv_bulk_sends(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_bulk_sends_source_account
+        ON np_invites_bulk_sends(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_bulk_sends_inviter
+        ON np_invites_bulk_sends(inviter_id);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_bulk_sends_status
+        ON np_invites_bulk_sends(status);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_bulk_sends_created
+        ON np_invites_bulk_sends(created_at DESC);
 
       -- =====================================================================
       -- Webhook Events Table
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS inv_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_invites_webhook_events (
         id VARCHAR(255) PRIMARY KEY,
         source_account_id VARCHAR(128) DEFAULT 'primary',
         event_type VARCHAR(128) NOT NULL,
@@ -205,14 +205,14 @@ export class InvitationsDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_inv_webhook_events_source_account
-        ON inv_webhook_events(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_inv_webhook_events_type
-        ON inv_webhook_events(event_type);
-      CREATE INDEX IF NOT EXISTS idx_inv_webhook_events_processed
-        ON inv_webhook_events(processed);
-      CREATE INDEX IF NOT EXISTS idx_inv_webhook_events_created
-        ON inv_webhook_events(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_webhook_events_source_account
+        ON np_invites_webhook_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_webhook_events_type
+        ON np_invites_webhook_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_webhook_events_processed
+        ON np_invites_webhook_events(processed);
+      CREATE INDEX IF NOT EXISTS idx_np_invites_webhook_events_created
+        ON np_invites_webhook_events(created_at DESC);
     `;
 
     await this.execute(schema);
@@ -225,7 +225,7 @@ export class InvitationsDatabase {
 
   async createInvitation(invitation: Omit<InvitationRecord, 'id' | 'source_account_id' | 'created_at' | 'updated_at'>): Promise<string> {
     const result = await this.query<{ id: string }>(
-      `INSERT INTO inv_invitations (
+      `INSERT INTO np_invites_invitations (
         source_account_id, type, inviter_id, invitee_email, invitee_phone, invitee_name,
         code, status, channel, message, role, resource_type, resource_id,
         expires_at, metadata
@@ -256,7 +256,7 @@ export class InvitationsDatabase {
 
   async getInvitation(id: string): Promise<InvitationRecord | null> {
     const result = await this.query<InvitationRecord>(
-      'SELECT * FROM inv_invitations WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_invites_invitations WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -265,7 +265,7 @@ export class InvitationsDatabase {
 
   async getInvitationByCode(code: string): Promise<InvitationRecord | null> {
     const result = await this.query<InvitationRecord>(
-      'SELECT * FROM inv_invitations WHERE code = $1 AND source_account_id = $2',
+      'SELECT * FROM np_invites_invitations WHERE code = $1 AND source_account_id = $2',
       [code, this.sourceAccountId]
     );
 
@@ -277,7 +277,7 @@ export class InvitationsDatabase {
     offset = 0,
     filters?: { type?: InvitationType; status?: InvitationStatus; inviter_id?: string }
   ): Promise<InvitationRecord[]> {
-    let sql = 'SELECT * FROM inv_invitations WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_invites_invitations WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
@@ -307,7 +307,7 @@ export class InvitationsDatabase {
   }
 
   async countInvitations(filters?: { type?: InvitationType; status?: InvitationStatus; inviter_id?: string }): Promise<number> {
-    let sql = 'SELECT COUNT(*) as count FROM inv_invitations WHERE source_account_id = $1';
+    let sql = 'SELECT COUNT(*) as count FROM np_invites_invitations WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
@@ -386,21 +386,21 @@ export class InvitationsDatabase {
     }
 
     await this.execute(
-      `UPDATE inv_invitations SET ${fields.join(', ')} WHERE id = $1 AND source_account_id = $${paramIndex}`,
+      `UPDATE np_invites_invitations SET ${fields.join(', ')} WHERE id = $1 AND source_account_id = $${paramIndex}`,
       [...params, this.sourceAccountId]
     );
   }
 
   async deleteInvitation(id: string): Promise<void> {
     await this.execute(
-      'DELETE FROM inv_invitations WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_invites_invitations WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
   }
 
   async markExpiredInvitations(): Promise<number> {
     return await this.execute(
-      `UPDATE inv_invitations
+      `UPDATE np_invites_invitations
        SET status = 'expired', updated_at = NOW()
        WHERE status IN ('pending', 'sent', 'delivered')
        AND expires_at < NOW()
@@ -415,7 +415,7 @@ export class InvitationsDatabase {
 
   async createTemplate(template: Omit<TemplateRecord, 'id' | 'source_account_id' | 'created_at' | 'updated_at'>): Promise<string> {
     const result = await this.query<{ id: string }>(
-      `INSERT INTO inv_templates (
+      `INSERT INTO np_invites_templates (
         source_account_id, name, type, channel, subject, body, variables, enabled
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -437,7 +437,7 @@ export class InvitationsDatabase {
 
   async getTemplate(id: string): Promise<TemplateRecord | null> {
     const result = await this.query<TemplateRecord>(
-      'SELECT * FROM inv_templates WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_invites_templates WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -446,7 +446,7 @@ export class InvitationsDatabase {
 
   async getTemplateByName(name: string): Promise<TemplateRecord | null> {
     const result = await this.query<TemplateRecord>(
-      'SELECT * FROM inv_templates WHERE name = $1 AND source_account_id = $2',
+      'SELECT * FROM np_invites_templates WHERE name = $1 AND source_account_id = $2',
       [name, this.sourceAccountId]
     );
 
@@ -454,7 +454,7 @@ export class InvitationsDatabase {
   }
 
   async listTemplates(limit = 100, offset = 0, filters?: { type?: InvitationType; channel?: InvitationChannel; enabled?: boolean }): Promise<TemplateRecord[]> {
-    let sql = 'SELECT * FROM inv_templates WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_invites_templates WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
@@ -532,14 +532,14 @@ export class InvitationsDatabase {
     }
 
     await this.execute(
-      `UPDATE inv_templates SET ${fields.join(', ')} WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}`,
+      `UPDATE np_invites_templates SET ${fields.join(', ')} WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}`,
       [...params, id, this.sourceAccountId]
     );
   }
 
   async deleteTemplate(id: string): Promise<void> {
     await this.execute(
-      'DELETE FROM inv_templates WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_invites_templates WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
   }
@@ -550,7 +550,7 @@ export class InvitationsDatabase {
 
   async createBulkSend(bulkSend: Omit<BulkSendRecord, 'id' | 'source_account_id' | 'created_at'>): Promise<string> {
     const result = await this.query<{ id: string }>(
-      `INSERT INTO inv_bulk_sends (
+      `INSERT INTO np_invites_bulk_sends (
         source_account_id, inviter_id, template_id, type, total_count,
         sent_count, failed_count, status, invitees, metadata, started_at, completed_at
       )
@@ -577,7 +577,7 @@ export class InvitationsDatabase {
 
   async getBulkSend(id: string): Promise<BulkSendRecord | null> {
     const result = await this.query<BulkSendRecord>(
-      'SELECT * FROM inv_bulk_sends WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_invites_bulk_sends WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -586,7 +586,7 @@ export class InvitationsDatabase {
 
   async listBulkSends(limit = 100, offset = 0): Promise<BulkSendRecord[]> {
     const result = await this.query<BulkSendRecord>(
-      `SELECT * FROM inv_bulk_sends
+      `SELECT * FROM np_invites_bulk_sends
        WHERE source_account_id = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -645,7 +645,7 @@ export class InvitationsDatabase {
     }
 
     await this.execute(
-      `UPDATE inv_bulk_sends SET ${fields.join(', ')} WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}`,
+      `UPDATE np_invites_bulk_sends SET ${fields.join(', ')} WHERE id = $${paramIndex} AND source_account_id = $${paramIndex + 1}`,
       [...params, id, this.sourceAccountId]
     );
   }
@@ -656,7 +656,7 @@ export class InvitationsDatabase {
 
   async insertWebhookEvent(event: Omit<WebhookEventRecord, 'source_account_id' | 'created_at'>): Promise<void> {
     await this.execute(
-      `INSERT INTO inv_webhook_events (id, source_account_id, event_type, payload, processed)
+      `INSERT INTO np_invites_webhook_events (id, source_account_id, event_type, payload, processed)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO NOTHING`,
       [event.id, this.sourceAccountId, event.event_type, JSON.stringify(event.payload), event.processed]
@@ -665,7 +665,7 @@ export class InvitationsDatabase {
 
   async markEventProcessed(id: string, error?: string): Promise<void> {
     await this.execute(
-      `UPDATE inv_webhook_events
+      `UPDATE np_invites_webhook_events
        SET processed = true, processed_at = NOW(), error = $2
        WHERE id = $1 AND source_account_id = $3`,
       [id, error ?? null, this.sourceAccountId]
@@ -679,7 +679,7 @@ export class InvitationsDatabase {
   async getStats(): Promise<InvitationStats> {
     const countResult = await this.query<{ status: InvitationStatus; count: string }>(
       `SELECT status, COUNT(*) as count
-       FROM inv_invitations
+       FROM np_invites_invitations
        WHERE source_account_id = $1
        GROUP BY status`,
       [this.sourceAccountId]
@@ -687,7 +687,7 @@ export class InvitationsDatabase {
 
     const typeResult = await this.query<{ type: InvitationType; count: string }>(
       `SELECT type, COUNT(*) as count
-       FROM inv_invitations
+       FROM np_invites_invitations
        WHERE source_account_id = $1
        GROUP BY type`,
       [this.sourceAccountId]
@@ -695,7 +695,7 @@ export class InvitationsDatabase {
 
     const channelResult = await this.query<{ channel: InvitationChannel; count: string }>(
       `SELECT channel, COUNT(*) as count
-       FROM inv_invitations
+       FROM np_invites_invitations
        WHERE source_account_id = $1
        GROUP BY channel`,
       [this.sourceAccountId]

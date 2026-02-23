@@ -77,7 +77,7 @@ export class WebhooksDatabase {
       -- Webhook Endpoints
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS webhook_endpoints (
+      CREATE TABLE IF NOT EXISTS np_webhooks_endpoints (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         url TEXT NOT NULL,
@@ -96,23 +96,23 @@ export class WebhooksDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_source_account
-        ON webhook_endpoints(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_enabled
-        ON webhook_endpoints(enabled);
-      CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_events
-        ON webhook_endpoints USING GIN(events);
-      CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_created
-        ON webhook_endpoints(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_endpoints_source_account
+        ON np_webhooks_endpoints(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_endpoints_enabled
+        ON np_webhooks_endpoints(enabled);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_endpoints_events
+        ON np_webhooks_endpoints USING GIN(events);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_endpoints_created
+        ON np_webhooks_endpoints(created_at DESC);
 
       -- =====================================================================
       -- Webhook Deliveries
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      CREATE TABLE IF NOT EXISTS np_webhooks_deliveries (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        endpoint_id UUID NOT NULL REFERENCES webhook_endpoints(id) ON DELETE CASCADE,
+        endpoint_id UUID NOT NULL REFERENCES np_webhooks_endpoints(id) ON DELETE CASCADE,
         event_type VARCHAR(128) NOT NULL,
         payload JSONB NOT NULL,
         status VARCHAR(32) DEFAULT 'pending',
@@ -128,24 +128,24 @@ export class WebhooksDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_source_account
-        ON webhook_deliveries(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_endpoint
-        ON webhook_deliveries(endpoint_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status
-        ON webhook_deliveries(status);
-      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_event_type
-        ON webhook_deliveries(event_type);
-      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_next_retry
-        ON webhook_deliveries(next_retry_at) WHERE status = 'pending';
-      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created
-        ON webhook_deliveries(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_source_account
+        ON np_webhooks_deliveries(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_endpoint
+        ON np_webhooks_deliveries(endpoint_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_status
+        ON np_webhooks_deliveries(status);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_event_type
+        ON np_webhooks_deliveries(event_type);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_next_retry
+        ON np_webhooks_deliveries(next_retry_at) WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_created
+        ON np_webhooks_deliveries(created_at DESC);
 
       -- =====================================================================
       -- Webhook Event Types
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS webhook_event_types (
+      CREATE TABLE IF NOT EXISTS np_webhooks_event_types (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         name VARCHAR(255) NOT NULL,
@@ -157,22 +157,22 @@ export class WebhooksDatabase {
         UNIQUE(source_account_id, name)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_webhook_event_types_source_account
-        ON webhook_event_types(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_event_types_name
-        ON webhook_event_types(name);
-      CREATE INDEX IF NOT EXISTS idx_webhook_event_types_source_plugin
-        ON webhook_event_types(source_plugin);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_event_types_source_account
+        ON np_webhooks_event_types(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_event_types_name
+        ON np_webhooks_event_types(name);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_event_types_source_plugin
+        ON np_webhooks_event_types(source_plugin);
 
       -- =====================================================================
       -- Webhook Dead Letters
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS webhook_dead_letters (
+      CREATE TABLE IF NOT EXISTS np_webhooks_dead_letters (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
-        delivery_id UUID REFERENCES webhook_deliveries(id),
-        endpoint_id UUID REFERENCES webhook_endpoints(id),
+        delivery_id UUID REFERENCES np_webhooks_deliveries(id),
+        endpoint_id UUID REFERENCES np_webhooks_endpoints(id),
         event_type VARCHAR(128),
         payload JSONB,
         last_error TEXT,
@@ -182,16 +182,16 @@ export class WebhooksDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_webhook_dead_letters_source_account
-        ON webhook_dead_letters(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_dead_letters_delivery
-        ON webhook_dead_letters(delivery_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_dead_letters_endpoint
-        ON webhook_dead_letters(endpoint_id);
-      CREATE INDEX IF NOT EXISTS idx_webhook_dead_letters_resolved
-        ON webhook_dead_letters(resolved);
-      CREATE INDEX IF NOT EXISTS idx_webhook_dead_letters_created
-        ON webhook_dead_letters(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_dead_letters_source_account
+        ON np_webhooks_dead_letters(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_dead_letters_delivery
+        ON np_webhooks_dead_letters(delivery_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_dead_letters_endpoint
+        ON np_webhooks_dead_letters(endpoint_id);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_dead_letters_resolved
+        ON np_webhooks_dead_letters(resolved);
+      CREATE INDEX IF NOT EXISTS idx_np_webhooks_dead_letters_created
+        ON np_webhooks_dead_letters(created_at DESC);
     `;
 
     await this.db.execute(schema);
@@ -210,7 +210,7 @@ export class WebhooksDatabase {
     const secret = this.generateSecret();
 
     const result = await this.db.query<WebhookEndpointRecord>(
-      `INSERT INTO webhook_endpoints (
+      `INSERT INTO np_webhooks_endpoints (
         source_account_id, url, description, secret, events, headers, metadata
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *`,
@@ -230,7 +230,7 @@ export class WebhooksDatabase {
 
   async getEndpoint(id: string): Promise<WebhookEndpointRecord | null> {
     const result = await this.db.query<WebhookEndpointRecord>(
-      'SELECT * FROM webhook_endpoints WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_webhooks_endpoints WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -238,7 +238,7 @@ export class WebhooksDatabase {
   }
 
   async listEndpoints(filters?: { enabled?: boolean }): Promise<WebhookEndpointRecord[]> {
-    let sql = 'SELECT * FROM webhook_endpoints WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_webhooks_endpoints WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
 
     if (filters?.enabled !== undefined) {
@@ -294,7 +294,7 @@ export class WebhooksDatabase {
     params.push(id, this.sourceAccountId);
 
     const result = await this.db.query<WebhookEndpointRecord>(
-      `UPDATE webhook_endpoints
+      `UPDATE np_webhooks_endpoints
        SET ${updates.join(', ')}
        WHERE id = $${paramIndex++} AND source_account_id = $${paramIndex}
        RETURNING *`,
@@ -306,7 +306,7 @@ export class WebhooksDatabase {
 
   async deleteEndpoint(id: string): Promise<boolean> {
     const result = await this.db.execute(
-      'DELETE FROM webhook_endpoints WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_webhooks_endpoints WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -317,7 +317,7 @@ export class WebhooksDatabase {
     const newSecret = this.generateSecret();
 
     const result = await this.db.query<{ secret: string }>(
-      `UPDATE webhook_endpoints
+      `UPDATE np_webhooks_endpoints
        SET secret = $1, updated_at = NOW()
        WHERE id = $2 AND source_account_id = $3
        RETURNING secret`,
@@ -329,7 +329,7 @@ export class WebhooksDatabase {
 
   async enableEndpoint(id: string): Promise<boolean> {
     const result = await this.db.execute(
-      `UPDATE webhook_endpoints
+      `UPDATE np_webhooks_endpoints
        SET enabled = TRUE, failure_count = 0, disabled_at = NULL, disabled_reason = NULL, updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
@@ -340,7 +340,7 @@ export class WebhooksDatabase {
 
   async disableEndpoint(id: string, reason: string): Promise<boolean> {
     const result = await this.db.execute(
-      `UPDATE webhook_endpoints
+      `UPDATE np_webhooks_endpoints
        SET enabled = FALSE, disabled_at = NOW(), disabled_reason = $1, updated_at = NOW()
        WHERE id = $2 AND source_account_id = $3`,
       [reason, id, this.sourceAccountId]
@@ -351,7 +351,7 @@ export class WebhooksDatabase {
 
   async recordEndpointSuccess(id: string): Promise<void> {
     await this.db.execute(
-      `UPDATE webhook_endpoints
+      `UPDATE np_webhooks_endpoints
        SET failure_count = 0, last_success_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
@@ -360,7 +360,7 @@ export class WebhooksDatabase {
 
   async recordEndpointFailure(id: string, autoDisableThreshold: number): Promise<void> {
     await this.db.execute(
-      `UPDATE webhook_endpoints
+      `UPDATE np_webhooks_endpoints
        SET failure_count = failure_count + 1,
            last_failure_at = NOW(),
            enabled = CASE
@@ -393,7 +393,7 @@ export class WebhooksDatabase {
     maxAttempts: number
   ): Promise<WebhookDeliveryRecord> {
     const result = await this.db.query<WebhookDeliveryRecord>(
-      `INSERT INTO webhook_deliveries (
+      `INSERT INTO np_webhooks_deliveries (
         source_account_id, endpoint_id, event_type, payload, signature, max_attempts
       ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
@@ -405,7 +405,7 @@ export class WebhooksDatabase {
 
   async getDelivery(id: string): Promise<WebhookDeliveryRecord | null> {
     const result = await this.db.query<WebhookDeliveryRecord>(
-      'SELECT * FROM webhook_deliveries WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_webhooks_deliveries WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
 
@@ -418,7 +418,7 @@ export class WebhooksDatabase {
     status?: DeliveryStatus;
     limit?: number;
   }): Promise<WebhookDeliveryRecord[]> {
-    let sql = 'SELECT * FROM webhook_deliveries WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_webhooks_deliveries WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
@@ -450,7 +450,7 @@ export class WebhooksDatabase {
 
   async getPendingDeliveries(limit: number): Promise<WebhookDeliveryRecord[]> {
     const result = await this.db.query<WebhookDeliveryRecord>(
-      `SELECT * FROM webhook_deliveries
+      `SELECT * FROM np_webhooks_deliveries
        WHERE source_account_id = $1
          AND status = 'pending'
          AND (next_retry_at IS NULL OR next_retry_at <= NOW())
@@ -507,14 +507,14 @@ export class WebhooksDatabase {
     }
 
     await this.db.execute(
-      `UPDATE webhook_deliveries SET ${updates.join(', ')} WHERE id = $1`,
+      `UPDATE np_webhooks_deliveries SET ${updates.join(', ')} WHERE id = $1`,
       params
     );
   }
 
   async retryDelivery(id: string): Promise<boolean> {
     const result = await this.db.execute(
-      `UPDATE webhook_deliveries
+      `UPDATE np_webhooks_deliveries
        SET status = 'pending', next_retry_at = NOW(), error_message = NULL
        WHERE id = $1 AND source_account_id = $2 AND status IN ('failed', 'dead_letter')`,
       [id, this.sourceAccountId]
@@ -529,7 +529,7 @@ export class WebhooksDatabase {
 
   async registerEventType(input: RegisterEventTypeInput): Promise<WebhookEventTypeRecord> {
     const result = await this.db.query<WebhookEventTypeRecord>(
-      `INSERT INTO webhook_event_types (
+      `INSERT INTO np_webhooks_event_types (
         source_account_id, name, description, source_plugin, schema, sample_payload
       ) VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (source_account_id, name) DO UPDATE SET
@@ -553,7 +553,7 @@ export class WebhooksDatabase {
 
   async listEventTypes(): Promise<WebhookEventTypeRecord[]> {
     const result = await this.db.query<WebhookEventTypeRecord>(
-      'SELECT * FROM webhook_event_types WHERE source_account_id = $1 ORDER BY name',
+      'SELECT * FROM np_webhooks_event_types WHERE source_account_id = $1 ORDER BY name',
       [this.sourceAccountId]
     );
 
@@ -566,7 +566,7 @@ export class WebhooksDatabase {
 
   async createDeadLetter(delivery: WebhookDeliveryRecord): Promise<WebhookDeadLetterRecord> {
     const result = await this.db.query<WebhookDeadLetterRecord>(
-      `INSERT INTO webhook_dead_letters (
+      `INSERT INTO np_webhooks_dead_letters (
         source_account_id, delivery_id, endpoint_id, event_type, payload, last_error, attempt_count
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *`,
@@ -585,7 +585,7 @@ export class WebhooksDatabase {
   }
 
   async listDeadLetters(resolved?: boolean): Promise<WebhookDeadLetterRecord[]> {
-    let sql = 'SELECT * FROM webhook_dead_letters WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_webhooks_dead_letters WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
 
     if (resolved !== undefined) {
@@ -601,7 +601,7 @@ export class WebhooksDatabase {
 
   async resolveDeadLetter(id: string): Promise<boolean> {
     const result = await this.db.execute(
-      `UPDATE webhook_dead_letters
+      `UPDATE np_webhooks_dead_letters
        SET resolved = TRUE, resolved_at = NOW()
        WHERE id = $1 AND source_account_id = $2`,
       [id, this.sourceAccountId]
@@ -620,7 +620,7 @@ export class WebhooksDatabase {
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE enabled = TRUE) as enabled,
         COUNT(*) FILTER (WHERE enabled = FALSE) as disabled
-      FROM webhook_endpoints
+      FROM np_webhooks_endpoints
       WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
@@ -638,7 +638,7 @@ export class WebhooksDatabase {
         COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
         COUNT(*) FILTER (WHERE status = 'dead_letter') as dead_letter
-      FROM webhook_deliveries
+      FROM np_webhooks_deliveries
       WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
@@ -652,13 +652,13 @@ export class WebhooksDatabase {
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE resolved = FALSE) as unresolved,
         COUNT(*) FILTER (WHERE resolved = TRUE) as resolved
-      FROM webhook_dead_letters
+      FROM np_webhooks_dead_letters
       WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );
 
     const eventTypes = await this.db.query<{ count: number }>(
-      'SELECT COUNT(*) as count FROM webhook_event_types WHERE source_account_id = $1',
+      'SELECT COUNT(*) as count FROM np_webhooks_event_types WHERE source_account_id = $1',
       [this.sourceAccountId]
     );
 
@@ -683,8 +683,8 @@ export class WebhooksDatabase {
           2
         ) as success_rate,
         ROUND(AVG(d.response_time_ms)) as avg_response_time_ms
-      FROM webhook_endpoints e
-      LEFT JOIN webhook_deliveries d ON e.id = d.endpoint_id AND d.source_account_id = e.source_account_id
+      FROM np_webhooks_endpoints e
+      LEFT JOIN np_webhooks_deliveries d ON e.id = d.endpoint_id AND d.source_account_id = e.source_account_id
       WHERE e.source_account_id = $1
       GROUP BY e.id, e.url
       ORDER BY total_deliveries DESC`,
@@ -705,7 +705,7 @@ export class WebhooksDatabase {
           (COUNT(*) FILTER (WHERE status = 'delivered')::DECIMAL / NULLIF(COUNT(*), 0)) * 100,
           2
         ) as success_rate
-      FROM webhook_deliveries
+      FROM np_webhooks_deliveries
       WHERE source_account_id = $1
       GROUP BY event_type
       ORDER BY total_deliveries DESC`,

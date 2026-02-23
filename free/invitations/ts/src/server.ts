@@ -374,7 +374,7 @@ export async function createServer(config?: Partial<Config>) {
     if (metadata) {
       const updatedMetadata = { ...invitation.metadata, ...metadata };
       await sdb.execute(
-        'UPDATE inv_invitations SET metadata = $1 WHERE id = $2',
+        'UPDATE np_invites_invitations SET metadata = $1 WHERE id = $2',
         [JSON.stringify(updatedMetadata), invitation.id]
       );
     }

@@ -388,13 +388,28 @@
         "framework": "fastify"
       },
       "tables": [
+        "np_github_organizations",
         "np_github_repositories",
+        "np_github_branches",
         "np_github_issues",
         "np_github_pull_requests",
+        "np_github_pr_reviews",
+        "np_github_issue_comments",
+        "np_github_pr_review_comments",
+        "np_github_commit_comments",
         "np_github_commits",
         "np_github_releases",
+        "np_github_tags",
+        "np_github_milestones",
+        "np_github_labels",
+        "np_github_workflows",
         "np_github_workflow_runs",
+        "np_github_workflow_jobs",
+        "np_github_check_suites",
+        "np_github_check_runs",
         "np_github_deployments",
+        "np_github_teams",
+        "np_github_collaborators",
         "np_github_webhook_events"
       ],
       "views": [

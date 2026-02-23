@@ -230,7 +230,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/commits', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_commits WHERE source_account_id = $1 ORDER BY author_date DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_commits WHERE source_account_id = $1 ORDER BY author_date DESC LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countCommits();
@@ -241,7 +241,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/releases', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_releases WHERE source_account_id = $1 ORDER BY published_at DESC NULLS LAST LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_releases WHERE source_account_id = $1 ORDER BY published_at DESC NULLS LAST LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countReleases();
@@ -256,7 +256,7 @@ export async function createServer(config?: Partial<Config>) {
       repo_id?: number;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_branches WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_branches WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (repo_id) {
       sql += ' AND repo_id = $2';
@@ -273,7 +273,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/tags', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_tags WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_tags WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countTags();
@@ -284,7 +284,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/milestones', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_milestones WHERE source_account_id = $1 ORDER BY due_on ASC NULLS LAST LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_milestones WHERE source_account_id = $1 ORDER BY due_on ASC NULLS LAST LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countMilestones();
@@ -299,7 +299,7 @@ export async function createServer(config?: Partial<Config>) {
       repo_id?: number;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_labels WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_labels WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (repo_id) {
       sql += ' AND repo_id = $2';
@@ -316,7 +316,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/workflows', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_workflows WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_workflows WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countWorkflows();
@@ -332,7 +332,7 @@ export async function createServer(config?: Partial<Config>) {
       conclusion?: string;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_workflow_runs WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_workflow_runs WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     let paramIndex = 2;
     if (status) {
@@ -358,7 +358,7 @@ export async function createServer(config?: Partial<Config>) {
       run_id?: number;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_workflow_jobs WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_workflow_jobs WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (run_id) {
       sql += ' AND run_id = $2';
@@ -375,7 +375,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/check-suites', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_check_suites WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_check_suites WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countCheckSuites();
@@ -386,7 +386,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/check-runs', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_check_runs WHERE source_account_id = $1 ORDER BY started_at DESC NULLS LAST LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_check_runs WHERE source_account_id = $1 ORDER BY started_at DESC NULLS LAST LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countCheckRuns();
@@ -401,7 +401,7 @@ export async function createServer(config?: Partial<Config>) {
       environment?: string;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_deployments WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_deployments WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (environment) {
       sql += ' AND environment = $2';
@@ -418,7 +418,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/teams', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_teams WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_teams WHERE source_account_id = $1 ORDER BY name LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countTeams();
@@ -433,7 +433,7 @@ export async function createServer(config?: Partial<Config>) {
       repo_id?: number;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_collaborators WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_collaborators WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (repo_id) {
       sql += ' AND repo_id = $2';
@@ -454,7 +454,7 @@ export async function createServer(config?: Partial<Config>) {
       pr_id?: number;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_pr_reviews WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_pr_reviews WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (pr_id) {
       sql += ' AND pull_request_id = $2';
@@ -471,7 +471,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/issue-comments', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_issue_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_issue_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countIssueComments();
@@ -482,7 +482,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/pr-review-comments', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_pr_review_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_pr_review_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countPRReviewComments();
@@ -493,7 +493,7 @@ export async function createServer(config?: Partial<Config>) {
   app.get('/api/commit-comments', async (request) => {
     const { limit = 100, offset = 0 } = request.query as { limit?: number; offset?: number };
     const result = await scopedDb(request).execute(
-      'SELECT * FROM github_commit_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_commit_comments WHERE source_account_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
       [scopedDb(request).getSourceAccountId(), limit, offset]
     );
     const total = await scopedDb(request).countCommitComments();
@@ -508,7 +508,7 @@ export async function createServer(config?: Partial<Config>) {
       event?: string;
     };
     const accountId = scopedDb(request).getSourceAccountId();
-    let sql = 'SELECT * FROM github_webhook_events WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_webhook_events WHERE source_account_id = $1';
     const params: unknown[] = [accountId];
     if (event) {
       sql += ' AND event = $2';
