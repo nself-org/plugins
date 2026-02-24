@@ -6,7 +6,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { createBullBoard } from '@bull-board/api';
-import type { BaseAdapter } from '@bull-board/api/dist/typings/lib/baseAdapter.js';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { FastifyAdapter } from '@bull-board/fastify';
 import { Queue } from 'bullmq';
@@ -82,7 +81,7 @@ async function startServer() {
     serverAdapter.setBasePath(config.dashboardPath);
 
     createBullBoard({
-      queues: Object.values(queues).map(q => new BullMQAdapter(q) as unknown as BaseAdapter),
+      queues: Object.values(queues).map(q => new BullMQAdapter(q)) as any,
       serverAdapter,
     });
 
