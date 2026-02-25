@@ -54,7 +54,7 @@
   },
   "multiApp": {
     "supported": false,
-    "isolationColumn": null,
+    "isolationColumn": "source_account_id",
     "pkStrategy": null,
     "defaultValue": null
   },
