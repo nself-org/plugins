@@ -191,7 +191,8 @@ install_github_runner() {
 
   (
     cd "$RUNNER_DIR"
-    ./config.sh \
+    # RUNNER_ALLOW_RUNASROOT=1 is required when nself runs as root (e.g. on Hetzner VPS)
+    RUNNER_ALLOW_RUNASROOT=1 ./config.sh \
       --url "$runner_config_url" \
       --token "$reg_token" \
       --name "$runner_name" \
@@ -250,7 +251,8 @@ _start_runner() {
   plugin_info "Starting runner (nohup)..."
   (
     cd "$RUNNER_DIR"
-    nohup ./run.sh >> "${LOG_DIR}/runner.log" 2>&1 &
+    # RUNNER_ALLOW_RUNASROOT=1 is required when nself runs as root
+    RUNNER_ALLOW_RUNASROOT=1 nohup ./run.sh >> "${LOG_DIR}/runner.log" 2>&1 &
     echo $! > "$PID_FILE"
   )
   plugin_success "Runner started (PID: $(cat "$PID_FILE"))"

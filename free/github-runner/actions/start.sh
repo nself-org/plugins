@@ -46,7 +46,7 @@ mkdir -p "$LOG_DIR"
 plugin_info "Starting runner (nohup)..."
 (
   cd "$RUNNER_DIR"
-  nohup ./run.sh >> "${LOG_DIR}/runner.log" 2>&1 &
+  RUNNER_ALLOW_RUNASROOT=1 nohup ./run.sh >> "${LOG_DIR}/runner.log" 2>&1 &
   echo $! > "$PID_FILE"
 )
 plugin_success "Runner started (PID: $(cat "$PID_FILE"))"
