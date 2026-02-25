@@ -1,0 +1,72 @@
+{
+  "name": "github-runner",
+  "version": "1.0.0",
+  "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.9.0",
+  "port": 0,
+  "category": "development",
+  "tags": [
+    "github",
+    "ci",
+    "cd",
+    "actions",
+    "runner",
+    "self-hosted",
+    "devops"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "start": "Start the GitHub Actions runner",
+    "stop": "Stop the GitHub Actions runner",
+    "status": "Show runner registration and process status",
+    "logs": "Tail runner logs",
+    "update": "Update runner to latest version"
+  },
+  "envVars": {
+    "required": [
+      "GITHUB_RUNNER_PAT",
+      "GITHUB_RUNNER_ORG"
+    ],
+    "optional": [
+      "GITHUB_RUNNER_NAME",
+      "GITHUB_RUNNER_LABELS",
+      "GITHUB_RUNNER_SCOPE",
+      "GITHUB_RUNNER_REPO",
+      "GITHUB_RUNNER_GROUP",
+      "GITHUB_RUNNER_VERSION"
+    ]
+  },
+  "config": {
+    "defaultLabels": "self-hosted,linux,x64,ubuntu-latest",
+    "defaultScope": "org",
+    "runnerDir": "${HOME}/.nself/runners/github-runner",
+    "logDir": "${HOME}/.nself/logs/plugins/github-runner"
+  },
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false,
+    "isolationColumn": null,
+    "pkStrategy": null,
+    "defaultValue": null
+  },
+  "permissions": {
+    "database": [],
+    "network": [
+      "github.com",
+      "*.actions.githubusercontent.com"
+    ],
+    "filesystem": [
+      "logs",
+      "runners"
+    ]
+  }
+}

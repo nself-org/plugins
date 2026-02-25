@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-23T18:21:05Z",
+  "lastUpdated": "2026-02-25T00:09:53Z",
   "plugins": {
     "content-acquisition": {
       "name": "content-acquisition",
@@ -2049,6 +2049,113 @@
       },
       "checksums": {
         "sha256": ""
+      },
+      "tier": "free"
+    },
+    "github-runner": {
+      "name": "github-runner",
+      "version": "1.0.0",
+      "description": "GitHub Actions self-hosted runner. Registers your server with a GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "plugins/github-runner",
+      "minNselfVersion": "0.9.0",
+      "category": "development",
+      "tags": [
+        "github",
+        "ci",
+        "cd",
+        "actions",
+        "runner",
+        "self-hosted",
+        "devops"
+      ],
+      "implementation": {
+        "language": "bash",
+        "runtime": "bash",
+        "entryPoint": "install.sh"
+      },
+      "tables": [],
+      "webhooks": [],
+      "cliCommands": [
+        {
+          "name": "start",
+          "description": "Start the runner"
+        },
+        {
+          "name": "stop",
+          "description": "Stop the runner"
+        },
+        {
+          "name": "status",
+          "description": "Show runner status"
+        },
+        {
+          "name": "logs",
+          "description": "Tail runner logs"
+        },
+        {
+          "name": "update",
+          "description": "Update to latest runner version"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "GITHUB_RUNNER_PAT",
+          "required": true,
+          "description": "GitHub PAT with 'admin:org' scope"
+        },
+        {
+          "name": "GITHUB_RUNNER_ORG",
+          "required": true,
+          "description": "GitHub organization name"
+        },
+        {
+          "name": "GITHUB_RUNNER_NAME",
+          "required": false,
+          "default": "<hostname>-nself",
+          "description": "Runner display name"
+        },
+        {
+          "name": "GITHUB_RUNNER_LABELS",
+          "required": false,
+          "default": "self-hosted,linux,x64,ubuntu-latest",
+          "description": "Runner labels (include ubuntu-latest for drop-in compatibility)"
+        },
+        {
+          "name": "GITHUB_RUNNER_SCOPE",
+          "required": false,
+          "default": "org",
+          "description": "org or repo"
+        },
+        {
+          "name": "GITHUB_RUNNER_REPO",
+          "required": false,
+          "description": "Repo name (scope=repo only)"
+        },
+        {
+          "name": "GITHUB_RUNNER_GROUP",
+          "required": false,
+          "description": "Runner group (default: Default)"
+        },
+        {
+          "name": "GITHUB_RUNNER_VERSION",
+          "required": false,
+          "description": "Pin runner version (default: latest)"
+        }
+      ],
+      "dependencies": [],
+      "checksums": {
+        "sha256": ""
+      },
+      "multiApp": {
+        "supported": false,
+        "isolationColumn": null,
+        "pkStrategy": null,
+        "defaultValue": null
       },
       "tier": "free"
     }
