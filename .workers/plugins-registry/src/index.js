@@ -100,6 +100,9 @@ export default {
       }
 
 
+      if (method === 'GET' && path === '/manifest.json') {
+        return await handleManifest(env, ctx);
+      }
       if (method === 'GET' && path === '/health') {
         return handleHealth(env);
       }
@@ -117,6 +120,7 @@ export default {
           'GET /plugins/:name',
           'GET /plugins/:name/:version',
           'GET /categories',
+          'GET /manifest.json',
           'GET /health',
           'GET /stats',
           'POST /api/sync',
@@ -464,6 +468,57 @@ async function handleSync(request, env, ctx) {
     freeError,
     proError,
     timestamp:  new Date().toISOString(),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Manifest endpoint — returns CLI-compatible flat array of all plugins.
+//
+// Used by `nself plugin outdated` to compare installed versions against latest.
+// Format: [{ name, version, tier, description, downloadUrl }, ...]
+//
+// Merges free + pro registries the same way handleRegistry does, then shapes
+// each entry to the minimal manifest schema the CLI expects.
+// ---------------------------------------------------------------------------
+
+async function handleManifest(env, ctx) {
+  const cacheTtl  = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const KV_MANIFEST = 'registry:manifest';
+
+  // Serve from KV cache if fresh
+  const cached = await kvGet(env, KV_MANIFEST);
+  if (cached && isFresh(cached, cacheTtl)) {
+    return jsonResponse(cached.data, 200, {
+      'Cache-Control': `public, max-age=${ttlRemaining(cached, cacheTtl)}`,
+      'X-Cache': 'HIT',
+    });
+  }
+
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, cacheTtl),
+    fetchProRegistry(env, ctx, cacheTtl),
+  ]);
+
+  const allPlugins = [
+    ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+    ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
+  ];
+
+  // Shape to manifest format
+  const manifest = allPlugins.map(p => ({
+    name:        p.name        || '',
+    version:     p.version     || '0.0.0',
+    tier:        p.tier        || 'free',
+    description: p.description || '',
+    downloadUrl: p.downloadUrl || p.homepage || `https://github.com/nself-org/plugins/tree/main/${p.name}`,
+  }));
+
+  // Cache the manifest
+  ctx.waitUntil(kvPutWrapped(env, KV_MANIFEST, manifest));
+
+  return jsonResponse(manifest, 200, {
+    'Cache-Control': `public, max-age=${cacheTtl}`,
+    'X-Cache': 'MISS',
   });
 }
 
