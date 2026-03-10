@@ -3,7 +3,7 @@ import { createLogger } from '@nself/plugin-utils';
 const logger = createLogger('link-preview:webhooks');
 
 export class LinkPreviewWebhookHandler {
-  async handle(type: string, payload: unknown): Promise<void> {
+  async handle(type: string, _payload: unknown): Promise<void> {
     logger.debug('Webhook', { type });
   }
 
