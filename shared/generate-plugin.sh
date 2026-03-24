@@ -1156,7 +1156,7 @@ export class ${PASCAL_NAME}Client {
   async listRecords(options: { limit?: number; after?: string } = {}): Promise<${PASCAL_NAME}ApiRecord[]> {
     logger.info('Fetching ${PLUGIN_NAME} records', options);
 
-    // TODO: Replace with actual ${PASCAL_NAME} API endpoint and pagination logic
+    // TODO_SCAFFOLD: Replace with actual ${PASCAL_NAME} API endpoint and pagination logic
     const params = new URLSearchParams();
     if (options.limit) params.set('limit', String(options.limit));
     if (options.after) params.set('after', options.after);
@@ -1180,7 +1180,7 @@ export class ${PASCAL_NAME}Client {
    */
   async testConnection(): Promise<boolean> {
     try {
-      // TODO: Replace with a lightweight ${PASCAL_NAME} API health/ping endpoint
+      // TODO_SCAFFOLD: Replace with a lightweight ${PASCAL_NAME} API health/ping endpoint
       await this.get('/');
       return true;
     } catch {
@@ -1550,19 +1550,19 @@ export class ${PASCAL_NAME}WebhookHandler {
 
   private async handleCreated(payload: ${PASCAL_NAME}WebhookPayload): Promise<void> {
     logger.info('Handling created event', { id: payload.id });
-    // TODO: Upsert the created resource into the database
+    // TODO_SCAFFOLD: Upsert the created resource into the database
     // const record = payload.data as ${PASCAL_NAME}ApiRecord;
     // await this.db.upsertRecord({ ... });
   }
 
   private async handleUpdated(payload: ${PASCAL_NAME}WebhookPayload): Promise<void> {
     logger.info('Handling updated event', { id: payload.id });
-    // TODO: Update the resource in the database
+    // TODO_SCAFFOLD: Update the resource in the database
   }
 
   private async handleDeleted(payload: ${PASCAL_NAME}WebhookPayload): Promise<void> {
     logger.info('Handling deleted event', { id: payload.id });
-    // TODO: Mark the resource as deleted or remove it
+    // TODO_SCAFFOLD: Mark the resource as deleted or remove it
   }
 }
 WEBHOOKS
@@ -1659,7 +1659,7 @@ export async function createServer(config?: Partial<Config>) {
     },
     async (request, reply) => {
       try {
-        // TODO: Add signature verification here if ${PASCAL_NAME} supports it
+        // TODO_SCAFFOLD: Add signature verification here if ${PASCAL_NAME} supports it
         // verifySignature(request.rawBody, request.headers['x-${PLUGIN_NAME}-signature'], fullConfig.webhookSecret);
 
         await webhookHandler.handleEvent(request.body);
