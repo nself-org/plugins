@@ -191,8 +191,43 @@ schema_generate_from_api() {
     local api_response="$2"
     local table_name="$3"
 
-    # This is a placeholder - each plugin should implement its own logic
-    plugin_warn "schema_generate_from_api should be implemented per plugin"
+    # Generate PostgreSQL CREATE TABLE from JSON payload using jq.
+    # Maps: string→TEXT, number→NUMERIC, boolean→BOOLEAN, object/array→JSONB, null→TEXT
+    if ! command -v jq >/dev/null 2>&1; then
+        plugin_warn "jq is required for schema_generate_from_api"
+        return 1
+    fi
+
+    local prefix="np_${plugin_name}_"
+    local full_table="${prefix}${table_name}"
+
+    # Escape SQL identifier
+    local safe_table
+    safe_table=$(printf '%s' "$full_table" | tr -cd 'a-z0-9_')
+
+    # Generate columns from JSON keys
+    local columns
+    columns=$(printf '%s' "$api_response" | jq -r '
+        to_entries | map(
+            .key as $k | .value |
+            if type == "string" then "\($k) TEXT"
+            elif type == "number" then
+                if . == (. | floor) then "\($k) BIGINT"
+                else "\($k) NUMERIC"
+                end
+            elif type == "boolean" then "\($k) BOOLEAN"
+            elif type == "object" or type == "array" then "\($k) JSONB"
+            else "\($k) TEXT"
+            end
+        ) | join(",\n    ")
+    ')
+
+    if [ -z "$columns" ]; then
+        plugin_warn "No columns could be derived from API response"
+        return 1
+    fi
+
+    printf 'CREATE TABLE IF NOT EXISTS %s (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    source_account_id TEXT NOT NULL DEFAULT '"'"'primary'"'"',\n    %s,\n    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\n' "$safe_table" "$columns"
 }
 
 # =============================================================================
