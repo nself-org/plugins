@@ -39,7 +39,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ## Pro Plugins
 
-52+ production-grade plugins starting at $0.99/month ($9.99/year).
+59 production-grade plugins starting at $0.99/month ($9.99/year).
 
 No other self-hosted backend ships anything close to this. These are not thin wrappers. Each plugin is a complete service with its own database schema, API surface, and production-tested logic built for the nself stack.
 
@@ -136,7 +136,7 @@ Building this yourself takes months. Some examples:
 | Live streaming (RTMP/HLS + DVR) | 3-6 weeks | $100-$500+/month |
 | EPG + media metadata enrichment | 2-4 weeks | No managed equivalent |
 
-With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9.99/yr) covers all 52+ plugins, not per-seat, not per-request, not per-service. Higher tiers (Pro, Elite, Business, Business+, Enterprise) add AI suite, support levels, and managed DevOps.
+With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9.99/yr) covers all 59 plugins, not per-seat, not per-request, not per-service. Higher tiers (Pro, Elite, Business, Business+, Enterprise) add AI suite, support levels, and managed DevOps.
 
 [See pricing tiers at nself.org/pricing](https://nself.org/pricing)
 

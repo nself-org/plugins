@@ -6,13 +6,15 @@
  *
  * ContentAcquisitionServer uses a class-based pattern with initialize() + start().
  * We instantiate it directly with a test port to run against a real server.
+ *
+ * Server and database modules are loaded via dynamic import() so that a missing
+ * @nself/plugin-utils build (dist/ not present) does not crash the entire test
+ * file before the skip logic can take effect.
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer as createNetServer } from 'node:net';
-import { ContentAcquisitionServer } from '../src/server.js';
-import { ContentAcquisitionDatabase } from '../src/database.js';
 import type { ContentAcquisitionConfig } from '../src/types.js';
 
 // All required env vars must be present for integration tests
@@ -38,6 +40,9 @@ function getFreePort(): Promise<number> {
 }
 
 async function withServer(fn: (baseUrl: string) => Promise<void>) {
+  const { ContentAcquisitionServer } = await import('../src/server.js');
+  const { ContentAcquisitionDatabase } = await import('../src/database.js');
+
   const port = await getFreePort();
 
   const config: ContentAcquisitionConfig = {
