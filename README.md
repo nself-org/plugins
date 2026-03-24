@@ -37,15 +37,15 @@ Have a plugin to share? Add it to the `community/` directory and open a PR.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
-## Pro Plugins — $9.99/year
+## Pro Plugins
 
-49 production-grade plugins. Less than a dollar a month.
+52+ production-grade plugins starting at $0.99/month ($9.99/year).
 
 No other self-hosted backend ships anything close to this. These are not thin wrappers. Each plugin is a complete service with its own database schema, API surface, and production-tested logic built for the nself stack.
 
-[Get Pro Plugins at nself.org/pricing](https://nself.org/pricing) · [Browse catalog at nself.org/plugins](https://nself.org/plugins)
+[See pricing tiers at nself.org/pricing](https://nself.org/pricing) · [Browse catalog at nself.org/plugins](https://nself.org/plugins)
 
-### What $9.99/year includes
+### What Pro Plugins include
 
 #### AI and intelligence
 
@@ -123,22 +123,22 @@ No other self-hosted backend ships anything close to this. These are not thin wr
 - `web3` — NFT support, token-gated access, DAO governance, and decentralized identity.
 - `torrent-manager` — Torrent client integration with Transmission and qBittorrent, multi-source search, VPN enforcement.
 
-### Why $9.99/year
+### Why Pro Plugins
 
 Building this yourself takes months. Some examples:
 
 | What you'd need to build | Rough effort | Managed alternative cost |
 | --- | --- | --- |
-| Stripe webhook sync (23 tables, 60+ events) | 2–3 weeks | N/A (you still need the integration) |
-| GDPR/HIPAA compliance tooling | 3–6 months | $100–$1,000+/month (Osano, OneTrust) |
-| LiveKit voice/video integration | 1–2 weeks | $50–$500+/month |
-| AI gateway with multi-provider support | 1–2 weeks | $25–$200+/month |
-| Live streaming (RTMP/HLS + DVR) | 3–6 weeks | $100–$500+/month |
-| EPG + media metadata enrichment | 2–4 weeks | No managed equivalent |
+| Stripe webhook sync (23 tables, 60+ events) | 2-3 weeks | N/A (you still need the integration) |
+| GDPR/HIPAA compliance tooling | 3-6 months | $100-$1,000+/month (Osano, OneTrust) |
+| LiveKit voice/video integration | 1-2 weeks | $50-$500+/month |
+| AI gateway with multi-provider support | 1-2 weeks | $25-$200+/month |
+| Live streaming (RTMP/HLS + DVR) | 3-6 weeks | $100-$500+/month |
+| EPG + media metadata enrichment | 2-4 weeks | No managed equivalent |
 
-With nself Pro Plugins, you self-host everything and pay $9.99/year for the integration layer — not per-seat, not per-request, not per-service.
+With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9.99/yr) covers all 52+ plugins, not per-seat, not per-request, not per-service. Higher tiers (Pro, Elite, Business, Business+, Enterprise) add AI suite, support levels, and managed DevOps.
 
-[Get Pro Plugins at nself.org/pricing](https://nself.org/pricing)
+[See pricing tiers at nself.org/pricing](https://nself.org/pricing)
 
 ## Documentation
 
