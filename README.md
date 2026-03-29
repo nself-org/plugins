@@ -136,7 +136,7 @@ Building this yourself takes months. Some examples:
 | Live streaming (RTMP/HLS + DVR) | 3-6 weeks | $100-$500+/month |
 | EPG + media metadata enrichment | 2-4 weeks | No managed equivalent |
 
-With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9.99/yr) covers all 59 plugins, not per-seat, not per-request, not per-service. Higher tiers (Pro, Elite, Business, Business+, Enterprise) add AI suite, support levels, and managed DevOps.
+With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9.99/yr) covers all 52 plugins, not per-seat, not per-request, not per-service. Higher tiers (Pro, Elite, Business, Business+, Enterprise) add AI suite, support levels, and managed DevOps.
 
 [See pricing tiers at nself.org/pricing](https://nself.org/pricing)
 
