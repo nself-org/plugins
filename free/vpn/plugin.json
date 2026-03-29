@@ -9,29 +9,11 @@
   "category": "authentication",
   "subcategory": "orchestration",
   "path": "plugins/vpn",
-  "language": "typescript",
-  "runtime": "node",
-  "minNselfVersion": "0.4.8",
+  "language": "go",
+  "minNselfVersion": "0.9.9",
   "port": 3200,
-  "dependencies": {
-    "npm": [
-      "@nself/plugin-utils",
-      "fastify",
-      "fastify-cors",
-      "commander",
-      "@ctrl/transmission",
-      "wireguard-tools",
-      "node-openvpn",
-      "pg"
-    ],
-    "system": [
-      "wireguard-tools",
-      "openvpn",
-      "transmission-cli",
-      "curl",
-      "jq"
-    ]
-  },
+  "dependencies": [],
+  "optionalDependencies": [],
   "tables": [
     "np_vpn_providers",
     "np_vpn_credentials",
@@ -50,11 +32,13 @@
   ],
   "webhooks": [],
   "apiEndpoints": [
+    "GET /api/health",
     "GET /api/providers",
     "GET /api/providers/:id",
     "POST /api/providers/:id/credentials",
     "GET /api/servers",
     "GET /api/servers/p2p",
+    "POST /api/servers/sync",
     "POST /api/connect",
     "POST /api/disconnect",
     "GET /api/status",
@@ -190,5 +174,19 @@
     "nordvpn",
     "pia",
     "mullvad"
-  ]
+  ],
+  "binary_name": "vpn",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "status": "stable",
+  "tier": "free",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false
 }

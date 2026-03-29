@@ -27,7 +27,6 @@ fi
 
 # Try systemd first
 if command -v systemctl &>/dev/null; then
-  local svc_name
   svc_name="actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
   if systemctl is-enabled --quiet "$svc_name" 2>/dev/null; then
     plugin_info "Starting systemd service..."

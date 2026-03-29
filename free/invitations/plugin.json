@@ -18,10 +18,7 @@
     "referrals"
   ],
   "tables": [
-    "np_invites_invitations",
-    "np_invites_templates",
-    "np_invites_bulk_sends",
-    "np_invites_webhook_events"
+    "np_invitations_invitations"
   ],
   "webhooks": {
     "invitation.created": "Track new invitation creation",

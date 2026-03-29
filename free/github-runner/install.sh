@@ -175,34 +175,38 @@ install_github_runner() {
   fi
 
   # ------------------------------------------------------------------
-  # 5. Configure runner
+  # 5. Configure runner (skipped during update if credentials exist)
   # ------------------------------------------------------------------
-  plugin_info "Configuring runner..."
-  local reg_token
-  reg_token=$(get_registration_token)
+  if [[ "${SKIP_CONFIGURE:-false}" == "true" && -f "${RUNNER_DIR}/.credentials" ]]; then
+    plugin_info "Skipping configuration (SKIP_CONFIGURE=true, existing credentials found)."
+  else
+    plugin_info "Configuring runner..."
+    local reg_token
+    reg_token=$(get_registration_token)
 
-  local runner_name="${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
-  local runner_labels="${GITHUB_RUNNER_LABELS:-self-hosted,linux,x64,ubuntu-latest}"
-  local runner_config_url
-  runner_config_url=$(config_url)
+    local runner_name="${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+    local runner_labels="${GITHUB_RUNNER_LABELS:-self-hosted,linux,x64,ubuntu-latest}"
+    local runner_config_url
+    runner_config_url=$(config_url)
 
-  local group_flag=""
-  [[ -n "${GITHUB_RUNNER_GROUP:-}" ]] && group_flag="--runnergroup ${GITHUB_RUNNER_GROUP}"
+    local config_args=()
+    config_args+=(--url "$runner_config_url")
+    config_args+=(--token "$reg_token")
+    config_args+=(--name "$runner_name")
+    config_args+=(--labels "$runner_labels")
+    if [[ -n "${GITHUB_RUNNER_GROUP:-}" ]]; then
+      config_args+=(--runnergroup "$GITHUB_RUNNER_GROUP")
+    fi
+    config_args+=(--unattended --replace)
 
-  (
-    cd "$RUNNER_DIR"
-    # RUNNER_ALLOW_RUNASROOT=1 is required when nself runs as root (e.g. on Hetzner VPS)
-    RUNNER_ALLOW_RUNASROOT=1 ./config.sh \
-      --url "$runner_config_url" \
-      --token "$reg_token" \
-      --name "$runner_name" \
-      --labels "$runner_labels" \
-      $group_flag \
-      --unattended \
-      --replace
-  )
-  plugin_success "Runner configured: $runner_name"
-  plugin_success "Labels: $runner_labels"
+    (
+      cd "$RUNNER_DIR"
+      # RUNNER_ALLOW_RUNASROOT=1 is required when nself runs as root (e.g. on Hetzner VPS)
+      RUNNER_ALLOW_RUNASROOT=1 ./config.sh "${config_args[@]}"
+    )
+    plugin_success "Runner configured: $runner_name"
+    plugin_success "Labels: $runner_labels"
+  fi
 
   # ------------------------------------------------------------------
   # 6. Install as service or start via nohup

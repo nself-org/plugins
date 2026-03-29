@@ -4,11 +4,19 @@
   "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
   "author": "nself",
   "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
   "repository": "https://github.com/nself-org/plugins",
   "minNselfVersion": "0.9.0",
+  "language": "bash",
+  "entryPoint": "install.sh",
   "port": 0,
   "category": "development",
+  "status": "stable",
+  "tier": "free",
   "tags": [
     "github",
     "ci",
@@ -18,6 +26,8 @@
     "self-hosted",
     "devops"
   ],
+  "dependencies": [],
+  "optionalDependencies": [],
   "tables": [],
   "webhooks": {},
   "actions": {

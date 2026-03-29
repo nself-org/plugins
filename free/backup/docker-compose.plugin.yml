@@ -1,0 +1,38 @@
+services:
+  backup:
+    image: nself/nself-backup:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_backup
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3050"
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+      BACKUP_STORAGE_PATH: /data/backups
+    volumes:
+      - backup_data:/data/backups
+    ports:
+      - "127.0.0.1:3050:3050"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3050/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_BACKUP_MEMORY:-256m}
+          cpus: '${PLUGIN_BACKUP_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  backup_data:

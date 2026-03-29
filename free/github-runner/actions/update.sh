@@ -17,7 +17,7 @@ fi
 # Get current version
 current_ver="(unknown)"
 if [[ -f "${RUNNER_DIR}/bin/Runner.Listener" ]]; then
-  current_ver=$(${RUNNER_DIR}/bin/Runner.Listener --version 2>/dev/null | head -1 || echo "(unknown)")
+  current_ver=$("${RUNNER_DIR}/bin/Runner.Listener" --version 2>/dev/null | head -1 || echo "(unknown)")
 fi
 
 plugin_info "Current version: $current_ver"

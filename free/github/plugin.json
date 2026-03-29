@@ -6,6 +6,10 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github",
   "repository": "https://github.com/nself-org/plugins",
+  "language": "go",
+  "entryPoint": "nself-github",
+  "tier": "free",
+  "isCommercial": false,
   "minNselfVersion": "0.4.8",
   "category": "development",
   "tags": [

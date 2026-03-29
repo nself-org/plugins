@@ -1,0 +1,57 @@
+{
+  "name": "backup",
+  "version": "1.0.0",
+  "description": "PostgreSQL backup and restore automation with scheduling",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.4.8",
+  "language": "go",
+  "entryPoint": "cmd/main",
+  "category": "infrastructure",
+  "tags": [
+    "backup",
+    "restore",
+    "database",
+    "automation",
+    "disaster-recovery"
+  ],
+  "tables": [
+    "np_backup_jobs",
+    "np_backup_schedules"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start backup automation server"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PORT",
+      "BACKUP_STORAGE_PATH",
+      "BACKUP_PG_DUMP_PATH",
+      "BACKUP_PG_RESTORE_PATH",
+      "PLUGIN_INTERNAL_SECRET"
+    ]
+  },
+  "config": {
+    "defaultPort": 3050,
+    "defaultStoragePath": "/tmp/nself-backups"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "port": 3050,
+  "status": "stable",
+  "tier": "free"
+}

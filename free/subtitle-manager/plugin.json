@@ -9,8 +9,8 @@
   "category": "media",
   "subcategory": "subtitles",
   "path": "plugins/subtitle-manager",
-  "language": "typescript",
-  "runtime": "node",
+  "language": "go",
+  "runtime": "go",
   "minNselfVersion": "0.4.8",
   "port": 3204,
   "dependencies": {
