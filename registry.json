@@ -2158,6 +2158,969 @@
         "defaultValue": null
       },
       "tier": "free"
+    },
+    "backup": {
+      "name": "backup",
+      "version": "1.0.0",
+      "description": "PostgreSQL backup and restore automation with scheduling",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/backup",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/backup",
+      "minNselfVersion": "1.0.0",
+      "category": "infrastructure",
+      "tags": [
+        "backup",
+        "restore",
+        "database",
+        "automation",
+        "disaster-recovery"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/main",
+        "defaultPort": 3050
+      },
+      "tables": [
+        "np_backup_jobs",
+        "np_backup_schedules"
+      ],
+      "webhooks": [],
+      "cliCommands": [
+        {
+          "name": "init",
+          "description": "Initialize database schema"
+        },
+        {
+          "name": "server",
+          "description": "Start backup automation server"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Server port (default: 3050)"
+        },
+        {
+          "name": "BACKUP_STORAGE_PATH",
+          "required": false,
+          "description": "Path for storing backups"
+        },
+        {
+          "name": "BACKUP_PG_DUMP_PATH",
+          "required": false,
+          "description": "Path to pg_dump binary"
+        },
+        {
+          "name": "BACKUP_PG_RESTORE_PATH",
+          "required": false,
+          "description": "Path to pg_restore binary"
+        },
+        {
+          "name": "PLUGIN_INTERNAL_SECRET",
+          "required": false,
+          "description": "Internal plugin secret"
+        }
+      ],
+      "multiApp": {
+        "supported": false,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": null,
+        "defaultValue": null
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "cron": {
+      "name": "cron",
+      "version": "0.1.0",
+      "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/cron",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/cron",
+      "minNselfVersion": "0.9.9",
+      "category": "automation",
+      "tags": [
+        "cron",
+        "scheduler",
+        "jobs",
+        "automation",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "nself-cron",
+        "defaultPort": 3051
+      },
+      "tables": [
+        "np_cron_jobs",
+        "np_cron_runs"
+      ],
+      "webhooks": [],
+      "cliCommands": [],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Server port (default: 3051)"
+        },
+        {
+          "name": "CRON_TIMEOUT_SECS",
+          "required": false,
+          "description": "Job timeout in seconds"
+        },
+        {
+          "name": "CRON_RETENTION_DAYS",
+          "required": false,
+          "description": "Run history retention in days"
+        }
+      ],
+      "multiApp": {
+        "supported": false,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": null,
+        "defaultValue": null
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "donorbox": {
+      "name": "donorbox",
+      "version": "1.0.0",
+      "description": "Donorbox donation data sync with webhook handling",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/donorbox",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/donorbox",
+      "minNselfVersion": "0.9.9",
+      "category": "commerce",
+      "tags": [
+        "donations",
+        "fundraising",
+        "campaigns",
+        "donorbox",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "donorbox",
+        "defaultPort": 3074
+      },
+      "tables": [
+        "np_donorbox_campaigns",
+        "np_donorbox_donors",
+        "np_donorbox_donations",
+        "np_donorbox_plans",
+        "np_donorbox_events",
+        "np_donorbox_tickets",
+        "np_donorbox_webhook_events"
+      ],
+      "webhooks": [
+        "donation.created"
+      ],
+      "cliCommands": [
+        {
+          "name": "sync",
+          "description": "Sync all Donorbox data to database"
+        },
+        {
+          "name": "reconcile",
+          "description": "Re-sync recent data to catch gaps from missed webhooks"
+        },
+        {
+          "name": "server",
+          "description": "Start the Donorbox plugin server"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "DONORBOX_API_KEY",
+          "required": true,
+          "description": "Donorbox API key"
+        },
+        {
+          "name": "DONORBOX_EMAIL",
+          "required": true,
+          "description": "Donorbox account email"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Server port (default: 3074)"
+        },
+        {
+          "name": "DONORBOX_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook signature secret"
+        },
+        {
+          "name": "PLUGIN_INTERNAL_SECRET",
+          "required": false,
+          "description": "Internal plugin secret"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "mlflow": {
+      "name": "mlflow",
+      "version": "1.0.0",
+      "description": "MLflow experiment tracking and model registry",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/mlflow",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/mlflow",
+      "minNselfVersion": "1.0.0",
+      "category": "infrastructure",
+      "tags": [
+        "mlflow",
+        "ml",
+        "machine-learning",
+        "experiment-tracking",
+        "model-registry",
+        "mlops"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "mlflow",
+        "defaultPort": 5000
+      },
+      "tables": [],
+      "webhooks": [],
+      "cliCommands": [
+        {
+          "name": "experiments",
+          "description": "List and manage MLflow experiments"
+        },
+        {
+          "name": "runs",
+          "description": "List and manage experiment runs"
+        },
+        {
+          "name": "models",
+          "description": "Browse the model registry"
+        },
+        {
+          "name": "artifacts",
+          "description": "View and download run artifacts"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "MLFLOW_DEFAULT_ARTIFACT_ROOT",
+          "required": false,
+          "description": "Default artifact storage root"
+        },
+        {
+          "name": "MLFLOW_BACKEND_STORE_URI",
+          "required": false,
+          "description": "Backend store URI"
+        },
+        {
+          "name": "MLFLOW_TRACKING_USERNAME",
+          "required": false,
+          "description": "MLflow tracking username"
+        },
+        {
+          "name": "MLFLOW_TRACKING_PASSWORD",
+          "required": false,
+          "description": "MLflow tracking password"
+        }
+      ],
+      "multiApp": {
+        "supported": false,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": null,
+        "defaultValue": null
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "monitoring": {
+      "name": "monitoring",
+      "version": "1.0.0",
+      "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/monitoring",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/monitoring",
+      "minNselfVersion": "1.0.0",
+      "category": "infrastructure",
+      "tags": [
+        "monitoring",
+        "observability",
+        "prometheus",
+        "grafana",
+        "loki",
+        "promtail",
+        "tempo",
+        "alertmanager",
+        "metrics",
+        "logging",
+        "tracing"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "monitoring",
+        "defaultPort": 0
+      },
+      "tables": [],
+      "webhooks": [],
+      "cliCommands": [
+        {
+          "name": "status",
+          "description": "Show status of all monitoring services"
+        },
+        {
+          "name": "dashboards",
+          "description": "List available Grafana dashboards"
+        },
+        {
+          "name": "alerts",
+          "description": "Show active alerts from Alertmanager"
+        },
+        {
+          "name": "logs",
+          "description": "Tail logs from monitoring services"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "MONITORING_ENABLED",
+          "required": false,
+          "description": "Enable monitoring stack"
+        },
+        {
+          "name": "GRAFANA_ENABLED",
+          "required": false,
+          "description": "Enable Grafana"
+        },
+        {
+          "name": "PROMETHEUS_ENABLED",
+          "required": false,
+          "description": "Enable Prometheus"
+        },
+        {
+          "name": "LOKI_ENABLED",
+          "required": false,
+          "description": "Enable Loki"
+        },
+        {
+          "name": "TEMPO_ENABLED",
+          "required": false,
+          "description": "Enable Tempo"
+        },
+        {
+          "name": "ALERTMANAGER_ENABLED",
+          "required": false,
+          "description": "Enable Alertmanager"
+        },
+        {
+          "name": "GRAFANA_ADMIN_USER",
+          "required": false,
+          "description": "Grafana admin username"
+        },
+        {
+          "name": "GRAFANA_ADMIN_PASSWORD",
+          "required": false,
+          "description": "Grafana admin password"
+        }
+      ],
+      "multiApp": {
+        "supported": false,
+        "isolationColumn": null,
+        "pkStrategy": null,
+        "defaultValue": null
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "notify": {
+      "name": "notify",
+      "version": "0.1.0",
+      "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/notify",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/notify",
+      "minNselfVersion": "0.9.9",
+      "category": "communication",
+      "tags": [
+        "notifications",
+        "email",
+        "webhooks",
+        "templates"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "notify",
+        "defaultPort": 3052
+      },
+      "tables": [
+        "np_notify_notifications",
+        "np_notify_templates"
+      ],
+      "webhooks": [],
+      "cliCommands": [],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PORT",
+          "required": false,
+          "description": "Server port (default: 3052)"
+        },
+        {
+          "name": "PLUGIN_INTERNAL_SECRET",
+          "required": false,
+          "description": "Internal plugin secret"
+        },
+        {
+          "name": "SMTP_HOST",
+          "required": false,
+          "description": "SMTP server host"
+        },
+        {
+          "name": "SMTP_PORT",
+          "required": false,
+          "description": "SMTP server port"
+        },
+        {
+          "name": "SMTP_USER",
+          "required": false,
+          "description": "SMTP username"
+        },
+        {
+          "name": "SMTP_PASSWORD",
+          "required": false,
+          "description": "SMTP password"
+        },
+        {
+          "name": "SMTP_FROM",
+          "required": false,
+          "description": "Default from address"
+        },
+        {
+          "name": "WEBHOOK_HMAC_SECRET",
+          "required": false,
+          "description": "HMAC secret for webhook signing"
+        }
+      ],
+      "multiApp": {
+        "supported": false,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": null,
+        "defaultValue": null
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "paypal": {
+      "name": "paypal",
+      "version": "1.0.0",
+      "description": "PayPal payment data sync with webhook handling",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/paypal",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/paypal",
+      "minNselfVersion": "1.0.0",
+      "category": "commerce",
+      "tags": [
+        "payments",
+        "donations",
+        "subscriptions",
+        "paypal",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "nself-paypal",
+        "defaultPort": 3071
+      },
+      "tables": [
+        "np_paypal_transactions",
+        "np_paypal_orders",
+        "np_paypal_captures",
+        "np_paypal_authorizations",
+        "np_paypal_refunds",
+        "np_paypal_subscriptions",
+        "np_paypal_subscription_plans",
+        "np_paypal_products",
+        "np_paypal_disputes",
+        "np_paypal_payouts",
+        "np_paypal_invoices",
+        "np_paypal_payers",
+        "np_paypal_balances",
+        "np_paypal_webhook_events"
+      ],
+      "webhooks": [
+        "PAYMENT.CAPTURE.COMPLETED",
+        "PAYMENT.CAPTURE.DENIED",
+        "PAYMENT.CAPTURE.REFUNDED",
+        "PAYMENT.CAPTURE.REVERSED",
+        "PAYMENT.CAPTURE.PENDING",
+        "CHECKOUT.ORDER.COMPLETED",
+        "CHECKOUT.ORDER.APPROVED",
+        "CHECKOUT.ORDER.VOIDED",
+        "BILLING.SUBSCRIPTION.CREATED",
+        "BILLING.SUBSCRIPTION.ACTIVATED",
+        "BILLING.SUBSCRIPTION.UPDATED",
+        "BILLING.SUBSCRIPTION.CANCELLED",
+        "BILLING.SUBSCRIPTION.SUSPENDED",
+        "BILLING.SUBSCRIPTION.EXPIRED",
+        "CUSTOMER.DISPUTE.CREATED",
+        "CUSTOMER.DISPUTE.UPDATED",
+        "CUSTOMER.DISPUTE.RESOLVED",
+        "CUSTOMER.DISPUTE.OTHER",
+        "PAYMENT.PAYOUTSBATCH.SUCCESS",
+        "PAYMENT.PAYOUTSBATCH.DENIED",
+        "PAYMENT.PAYOUTSBATCH.PROCESSING",
+        "INVOICING.INVOICE.PAID",
+        "INVOICING.INVOICE.CANCELLED",
+        "PAYMENT.SALE.REFUNDED",
+        "PAYMENT.SALE.COMPLETED"
+      ],
+      "cliCommands": [
+        {
+          "name": "sync",
+          "description": "Sync all PayPal data to database"
+        },
+        {
+          "name": "reconcile",
+          "description": "Re-sync recent data to catch gaps from missed webhooks"
+        },
+        {
+          "name": "server",
+          "description": "Start the PayPal plugin server"
+        },
+        {
+          "name": "status",
+          "description": "Show sync status and statistics"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "PAYPAL_CLIENT_ID",
+          "required": true,
+          "description": "PayPal client ID"
+        },
+        {
+          "name": "PAYPAL_CLIENT_SECRET",
+          "required": true,
+          "description": "PayPal client secret"
+        },
+        {
+          "name": "PAYPAL_CLIENT_IDS",
+          "required": false,
+          "description": "Multi-account client IDs"
+        },
+        {
+          "name": "PAYPAL_CLIENT_SECRETS",
+          "required": false,
+          "description": "Multi-account client secrets"
+        },
+        {
+          "name": "PAYPAL_ACCOUNT_LABELS",
+          "required": false,
+          "description": "Multi-account labels"
+        },
+        {
+          "name": "PAYPAL_WEBHOOK_IDS",
+          "required": false,
+          "description": "Webhook IDs per account"
+        },
+        {
+          "name": "PAYPAL_WEBHOOK_SECRETS",
+          "required": false,
+          "description": "Webhook secrets per account"
+        },
+        {
+          "name": "PAYPAL_ENVIRONMENT",
+          "required": false,
+          "description": "sandbox or live"
+        },
+        {
+          "name": "PAYPAL_SYNC_INTERVAL",
+          "required": false,
+          "description": "Sync interval in seconds"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "shopify": {
+      "name": "shopify",
+      "version": "1.0.0",
+      "description": "Shopify store, orders, and product synchronization",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/shopify",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/shopify",
+      "minNselfVersion": "1.0.0",
+      "category": "commerce",
+      "tags": [
+        "shopify",
+        "ecommerce",
+        "orders",
+        "products",
+        "inventory"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "nself-shopify",
+        "defaultPort": 3072
+      },
+      "tables": [
+        "np_shopify_shops",
+        "np_shopify_products",
+        "np_shopify_variants",
+        "np_shopify_collections",
+        "np_shopify_customers",
+        "np_shopify_orders",
+        "np_shopify_order_items",
+        "np_shopify_inventory",
+        "np_shopify_webhook_events"
+      ],
+      "webhooks": [
+        "orders/create",
+        "orders/updated",
+        "orders/paid",
+        "orders/fulfilled",
+        "orders/cancelled",
+        "products/create",
+        "products/update",
+        "products/delete",
+        "customers/create",
+        "customers/update",
+        "inventory_levels/update",
+        "refunds/create",
+        "fulfillments/create"
+      ],
+      "cliCommands": [
+        {
+          "name": "sync",
+          "description": "Sync store data"
+        },
+        {
+          "name": "products",
+          "description": "List and manage products"
+        },
+        {
+          "name": "orders",
+          "description": "View and manage orders"
+        },
+        {
+          "name": "customers",
+          "description": "View customers"
+        },
+        {
+          "name": "inventory",
+          "description": "Check inventory levels"
+        },
+        {
+          "name": "webhook",
+          "description": "Manage webhook events"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "SHOPIFY_ACCESS_TOKEN",
+          "required": true,
+          "description": "Shopify access token"
+        },
+        {
+          "name": "SHOPIFY_SHOP_DOMAIN",
+          "required": true,
+          "description": "Shopify shop domain"
+        },
+        {
+          "name": "SHOPIFY_API_VERSION",
+          "required": false,
+          "description": "Shopify API version"
+        },
+        {
+          "name": "SHOPIFY_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook signature secret"
+        },
+        {
+          "name": "SHOPIFY_SYNC_INTERVAL",
+          "required": false,
+          "description": "Sync interval in seconds"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "composite",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
+    },
+    "stripe": {
+      "name": "stripe",
+      "version": "1.0.0",
+      "description": "Stripe billing data sync with webhook handling",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/stripe",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/stripe",
+      "minNselfVersion": "1.0.0",
+      "category": "commerce",
+      "tags": [
+        "payments",
+        "billing",
+        "subscriptions",
+        "stripe",
+        "webhooks"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "nself-stripe",
+        "defaultPort": 3070
+      },
+      "tables": [
+        "np_stripe_customers",
+        "np_stripe_products",
+        "np_stripe_prices",
+        "np_stripe_coupons",
+        "np_stripe_promotion_codes",
+        "np_stripe_subscriptions",
+        "np_stripe_subscription_items",
+        "np_stripe_subscription_schedules",
+        "np_stripe_invoices",
+        "np_stripe_invoice_items",
+        "np_stripe_credit_notes",
+        "np_stripe_charges",
+        "np_stripe_refunds",
+        "np_stripe_disputes",
+        "np_stripe_payment_intents",
+        "np_stripe_setup_intents",
+        "np_stripe_payment_methods",
+        "np_stripe_balance_transactions",
+        "np_stripe_payouts",
+        "np_stripe_discounts",
+        "np_stripe_checkout_sessions",
+        "np_stripe_tax_ids",
+        "np_stripe_tax_rates",
+        "np_stripe_webhook_events"
+      ],
+      "webhooks": [
+        "customer.created",
+        "customer.updated",
+        "customer.deleted",
+        "product.created",
+        "product.updated",
+        "product.deleted",
+        "price.created",
+        "price.updated",
+        "price.deleted",
+        "coupon.created",
+        "coupon.updated",
+        "coupon.deleted",
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+        "invoice.created",
+        "invoice.updated",
+        "invoice.paid",
+        "invoice.payment_failed",
+        "invoice.payment_succeeded",
+        "charge.captured",
+        "charge.failed",
+        "charge.refunded",
+        "charge.succeeded",
+        "charge.dispute.created",
+        "charge.dispute.updated",
+        "charge.dispute.closed",
+        "payment_intent.created",
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "payment_intent.canceled",
+        "checkout.session.completed",
+        "checkout.session.expired",
+        "payout.created",
+        "payout.paid",
+        "payout.failed"
+      ],
+      "cliCommands": [
+        {
+          "name": "sync",
+          "description": "Sync all Stripe data to database"
+        },
+        {
+          "name": "reconcile",
+          "description": "Re-sync recent data to catch gaps from missed webhooks"
+        },
+        {
+          "name": "customers",
+          "description": "Manage customer data"
+        },
+        {
+          "name": "subscriptions",
+          "description": "View and manage subscriptions"
+        },
+        {
+          "name": "invoices",
+          "description": "View invoice history"
+        },
+        {
+          "name": "webhook",
+          "description": "Manage webhook endpoint"
+        }
+      ],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        },
+        {
+          "name": "STRIPE_API_KEY",
+          "required": true,
+          "description": "Stripe API key"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRET",
+          "required": false,
+          "description": "Webhook endpoint secret"
+        },
+        {
+          "name": "STRIPE_API_KEYS",
+          "required": false,
+          "description": "Multi-account API keys"
+        },
+        {
+          "name": "STRIPE_ACCOUNT_LABELS",
+          "required": false,
+          "description": "Multi-account labels"
+        },
+        {
+          "name": "STRIPE_WEBHOOK_SECRETS",
+          "required": false,
+          "description": "Multi-account webhook secrets"
+        },
+        {
+          "name": "STRIPE_ACCOUNT_ID",
+          "required": false,
+          "description": "Stripe Connect account ID"
+        },
+        {
+          "name": "STRIPE_SYNC_INTERVAL",
+          "required": false,
+          "description": "Sync interval in seconds"
+        },
+        {
+          "name": "STRIPE_API_VERSION",
+          "required": false,
+          "description": "Stripe API version"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free"
     }
   },
   "categories": {
