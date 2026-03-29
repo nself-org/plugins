@@ -39,7 +39,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ## Pro Plugins
 
-59 production-grade plugins starting at $0.99/month ($9.99/year).
+52 production-grade plugins starting at $0.99/month ($9.99/year).
 
 No other self-hosted backend ships anything close to this. These are not thin wrappers. Each plugin is a complete service with its own database schema, API surface, and production-tested logic built for the nself stack.
 
