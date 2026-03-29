@@ -6,7 +6,7 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
   "port": 3402,
   "category": "communication",
   "tags": [

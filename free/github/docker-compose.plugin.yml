@@ -1,0 +1,38 @@
+services:
+  github:
+    image: nself/nself-github:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_github
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3002"
+      HOST: "0.0.0.0"
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      GITHUB_ORG: ${GITHUB_ORG:-}
+      GITHUB_REPOS: ${GITHUB_REPOS:-}
+      GITHUB_API_KEYS: ${GITHUB_API_KEYS:-}
+      GITHUB_ACCOUNT_LABELS: ${GITHUB_ACCOUNT_LABELS:-}
+    ports:
+      - "127.0.0.1:3002:3002"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_GITHUB_MEMORY:-256m}
+          cpus: '${PLUGIN_GITHUB_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

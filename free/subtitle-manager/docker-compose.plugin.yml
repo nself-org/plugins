@@ -1,0 +1,30 @@
+services:
+  subtitle-manager:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/subtitle-manager
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_subtitle_manager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3204:3204"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - SUBTITLE_MANAGER_PORT=3204
+      - OPENSUBTITLES_API_KEY=${OPENSUBTITLES_API_KEY}
+      - SUBTITLE_STORAGE_PATH=/data/subtitles
+    volumes:
+      - subtitle_data:/data/subtitles
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3204/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ${DOCKER_NETWORK}
+
+volumes:
+  subtitle_data:

@@ -1,0 +1,46 @@
+services:
+  paypal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nself/nself-paypal:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_paypal
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3071"
+      HOST: "0.0.0.0"
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+      PAYPAL_ENVIRONMENT: ${PAYPAL_ENVIRONMENT:-sandbox}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      PAYPAL_WEBHOOK_SECRET: ${PAYPAL_WEBHOOK_SECRET:-}
+      PAYPAL_CLIENT_IDS: ${PAYPAL_CLIENT_IDS:-}
+      PAYPAL_CLIENT_SECRETS: ${PAYPAL_CLIENT_SECRETS:-}
+      PAYPAL_WEBHOOK_IDS: ${PAYPAL_WEBHOOK_IDS:-}
+      PAYPAL_WEBHOOK_SECRETS: ${PAYPAL_WEBHOOK_SECRETS:-}
+      PAYPAL_ACCOUNT_LABELS: ${PAYPAL_ACCOUNT_LABELS:-}
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+    ports:
+      - "127.0.0.1:3071:3071"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3071/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_PAYPAL_MEMORY:-256m}
+          cpus: '${PLUGIN_PAYPAL_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

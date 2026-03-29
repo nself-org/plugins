@@ -1,0 +1,77 @@
+{
+  "name": "notify",
+  "version": "0.1.0",
+  "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.9.9",
+  "category": "communication",
+  "language": "go",
+  "tags": [
+    "notifications",
+    "email",
+    "webhooks",
+    "templates"
+  ],
+  "tables": [
+    "np_notify_notifications",
+    "np_notify_templates"
+  ],
+  "dependencies": [],
+  "optionalDependencies": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PORT",
+      "PLUGIN_INTERNAL_SECRET",
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASSWORD",
+      "SMTP_FROM",
+      "WEBHOOK_HMAC_SECRET"
+    ]
+  },
+  "config": {
+    "defaultPort": 3052
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3052,
+  "status": "stable",
+  "binary_name": "notify",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "free"
+}

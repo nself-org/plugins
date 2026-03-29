@@ -1,0 +1,42 @@
+services:
+  notifications:
+    image: nself/nself-notifications:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_notifications
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3102"
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NOTIFICATIONS_PUSH_PROVIDER: ${NOTIFICATIONS_PUSH_PROVIDER:-}
+      NOTIFICATIONS_PUSH_API_KEY: ${NOTIFICATIONS_PUSH_API_KEY:-}
+      NOTIFICATIONS_SMS_PROVIDER: ${NOTIFICATIONS_SMS_PROVIDER:-}
+      NOTIFICATIONS_SMS_AUTH_TOKEN: ${NOTIFICATIONS_SMS_AUTH_TOKEN:-}
+      NOTIFICATIONS_SMS_FROM: ${NOTIFICATIONS_SMS_FROM:-}
+    ports:
+      - "127.0.0.1:3102:3102"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3102/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_NOTIFICATIONS_MEMORY:-256m}
+          cpus: '${PLUGIN_NOTIFICATIONS_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,37 @@
+services:
+  webhooks:
+    image: nself/nself-webhooks:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_webhooks
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3060"
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+      WEBHOOKS_MAX_ATTEMPTS: ${WEBHOOKS_MAX_ATTEMPTS:-5}
+      WEBHOOKS_REQUEST_TIMEOUT_MS: ${WEBHOOKS_REQUEST_TIMEOUT_MS:-30000}
+      WEBHOOKS_CONCURRENT_DELIVERIES: ${WEBHOOKS_CONCURRENT_DELIVERIES:-10}
+      WEBHOOKS_RETRY_DELAYS: ${WEBHOOKS_RETRY_DELAYS:-10000,30000,120000,900000,3600000}
+      WEBHOOKS_AUTO_DISABLE_THRESHOLD: ${WEBHOOKS_AUTO_DISABLE_THRESHOLD:-10}
+    ports:
+      - "127.0.0.1:3060:3060"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3060/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_WEBHOOKS_MEMORY:-256m}
+          cpus: '${PLUGIN_WEBHOOKS_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

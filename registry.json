@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-02-25T00:09:53Z",
+  "lastUpdated": "2026-03-29T00:00:00Z",
   "plugins": {
     "content-acquisition": {
       "name": "content-acquisition",
@@ -12,7 +12,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-acquisition",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/content-acquisition",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "media",
       "tags": [
         "content",
@@ -178,7 +178,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-progress",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/content-progress",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "media",
       "tags": [
         "media",
@@ -276,7 +276,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/feature-flags",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/feature-flags",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
       "tags": [
         "feature-flags",
@@ -366,7 +366,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/github",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "development",
       "tags": [
         "github",
@@ -569,7 +569,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/invitations",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "communication",
       "tags": [
         "invitations",
@@ -676,7 +676,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/jobs",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/jobs",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
       "tags": [
         "jobs",
@@ -858,7 +858,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/link-preview",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "content",
       "tags": [
         "link-preview",
@@ -1016,7 +1016,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mdns",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/mdns",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
       "tags": [
         "mdns",
@@ -1090,7 +1090,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/notifications",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/notifications",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
       "tags": [
         "notifications",
@@ -1319,7 +1319,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/search",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/search",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
       "tags": [
         "search",
@@ -1442,7 +1442,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/subtitle-manager",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/subtitle-manager",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "media",
       "tags": [
         "subtitles",
@@ -1555,7 +1555,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/tokens",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/tokens",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "media",
       "tags": [
         "tokens",
@@ -1642,7 +1642,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/torrent-manager",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/torrent-manager",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "media",
       "tags": [
         "torrent",
@@ -1795,7 +1795,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/vpn",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/vpn",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
       "tags": [
         "vpn",
@@ -1957,7 +1957,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/webhooks",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/webhooks",
-      "minNselfVersion": "0.4.8",
+      "minNselfVersion": "1.0.0",
       "category": "communication",
       "tags": [
         "webhooks",
@@ -2061,7 +2061,7 @@
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/github-runner",
-      "minNselfVersion": "0.9.0",
+      "minNselfVersion": "1.0.0",
       "category": "development",
       "tags": [
         "github",

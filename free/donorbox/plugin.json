@@ -1,0 +1,97 @@
+{
+  "name": "donorbox",
+  "version": "1.0.0",
+  "description": "Donorbox donation data sync with webhook handling",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "0.9.9",
+  "category": "commerce",
+  "language": "go",
+  "tags": [
+    "donations",
+    "fundraising",
+    "campaigns",
+    "donorbox",
+    "webhooks"
+  ],
+  "tables": [
+    "np_donorbox_campaigns",
+    "np_donorbox_donors",
+    "np_donorbox_donations",
+    "np_donorbox_plans",
+    "np_donorbox_events",
+    "np_donorbox_tickets",
+    "np_donorbox_webhook_events"
+  ],
+  "dependencies": [],
+  "optionalDependencies": [],
+  "webhooks": {
+    "donation.created": "Sync new donation to database"
+  },
+  "actions": {
+    "sync": "Sync all Donorbox data to database",
+    "reconcile": "Re-sync recent data to catch gaps from missed webhooks",
+    "server": "Start the Donorbox plugin server",
+    "status": "Show sync status and statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "DONORBOX_API_KEY",
+      "DONORBOX_EMAIL"
+    ],
+    "optional": [
+      "PORT",
+      "DONORBOX_WEBHOOK_SECRET",
+      "PLUGIN_INTERNAL_SECRET"
+    ]
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "config": {
+    "defaultPort": 3074,
+    "syncInterval": 3600,
+    "webhookPath": "/webhooks/donorbox",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "donorbox.org"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  },
+  "port": 3074,
+  "status": "stable",
+  "binary_name": "donorbox",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "free",
+  "requires_license": false
+}

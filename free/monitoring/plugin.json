@@ -1,0 +1,91 @@
+{
+  "name": "monitoring",
+  "version": "1.0.0",
+  "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/monitoring",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "tags": [
+    "monitoring",
+    "observability",
+    "prometheus",
+    "grafana",
+    "loki",
+    "promtail",
+    "tempo",
+    "alertmanager",
+    "metrics",
+    "logging",
+    "tracing"
+  ],
+  "port": 0,
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "status": "Show status of all monitoring services",
+    "dashboards": "List available Grafana dashboards",
+    "alerts": "Show active alerts from Alertmanager",
+    "logs": "Tail logs from monitoring services"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "MONITORING_ENABLED",
+      "GRAFANA_ENABLED",
+      "PROMETHEUS_ENABLED",
+      "LOKI_ENABLED",
+      "TEMPO_ENABLED",
+      "ALERTMANAGER_ENABLED",
+      "GRAFANA_ADMIN_USER",
+      "GRAFANA_ADMIN_PASSWORD",
+      "GRAFANA_ROUTE",
+      "PROMETHEUS_ROUTE",
+      "ALERTMANAGER_ROUTE",
+      "PROMETHEUS_RETENTION_TIME",
+      "LOKI_RETENTION_PERIOD",
+      "REDIS_ENABLED"
+    ]
+  },
+  "config": {
+    "grafanaPort": 3000,
+    "prometheusPort": 9090,
+    "lokiPort": 3100,
+    "tempoPort": 3200,
+    "alertmanagerPort": 9093,
+    "cadvisorPort": 8082,
+    "nodeExporterPort": 9100,
+    "postgresExporterPort": 9187,
+    "redisExporterPort": 9121,
+    "defaultRetention": "15d",
+    "scrapeInterval": "15s"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false,
+    "isolationColumn": null,
+    "pkStrategy": null,
+    "defaultValue": null
+  },
+  "permissions": {
+    "database": [],
+    "network": [
+      "prometheus",
+      "grafana",
+      "loki",
+      "tempo",
+      "alertmanager"
+    ],
+    "filesystem": [
+      "logs",
+      "docker-socket"
+    ]
+  },
+  "dependencies": []
+}

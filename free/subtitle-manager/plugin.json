@@ -11,7 +11,7 @@
   "path": "plugins/subtitle-manager",
   "language": "go",
   "runtime": "go",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
   "port": 3204,
   "dependencies": {
     "npm": [

@@ -10,7 +10,7 @@
   "requires_license": false,
   "homepage": "https://nself.org/plugins",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
   "language": "go",
   "entryPoint": "cmd/main",
   "category": "infrastructure",

@@ -10,7 +10,7 @@
   "entryPoint": "nself-github",
   "tier": "free",
   "isCommercial": false,
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
   "category": "development",
   "tags": [
     "github",

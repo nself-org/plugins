@@ -10,7 +10,7 @@
   "requires_license": false,
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.9.0",
+  "minNselfVersion": "1.0.0",
   "language": "bash",
   "entryPoint": "install.sh",
   "port": 0,

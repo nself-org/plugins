@@ -384,7 +384,7 @@ generate_plugin_json() {
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/free/${PLUGIN_NAME}",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
   "category": "${CATEGORY}",
   "tags": [
     "${PLUGIN_NAME}"
@@ -1930,7 +1930,7 @@ print_registry_entry() {
     "homepage": "https://github.com/nself-org/plugins/tree/main/free/${PLUGIN_NAME}",
     "repository": "https://github.com/nself-org/plugins",
     "path": "free/${PLUGIN_NAME}",
-    "minNselfVersion": "0.4.8",
+    "minNselfVersion": "1.0.0",
     "category": "${CATEGORY}",
     "tags": [
       "${PLUGIN_NAME}"
