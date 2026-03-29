@@ -3,16 +3,21 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nself-jobs
+    container_name: ${COMPOSE_PROJECT_NAME}_plugin_jobs
     restart: unless-stopped
     ports:
-      - "3105:3105"
+      - "127.0.0.1:3105:3105"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - JOBS_PORT=3105
       - JOBS_POLL_INTERVAL_MS=${JOBS_POLL_INTERVAL_MS:-1000}
       - JOBS_RETRY_ATTEMPTS=${JOBS_RETRY_ATTEMPTS:-3}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
-      - nself-network
+      - ${DOCKER_NETWORK}
+
+networks:
+  ${DOCKER_NETWORK}:
+    external: true
