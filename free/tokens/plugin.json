@@ -6,7 +6,9 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/tokens",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
+  "language": "go",
+  "runtime": "go",
   "port": 3107,
   "category": "media",
   "tags": [

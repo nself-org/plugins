@@ -1,0 +1,32 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "cluster", "service"]
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: "default"
+
+receivers:
+  - name: "default"
+    # Configure your alert receivers here. Examples:
+    #
+    # Webhook:
+    #   webhook_configs:
+    #     - url: "http://your-webhook-endpoint:5001/alerts"
+    #
+    # Email:
+    #   email_configs:
+    #     - to: "alerts@example.com"
+    #       from: "alertmanager@example.com"
+    #       smarthost: "smtp.example.com:587"
+    #       auth_username: "alertmanager@example.com"
+    #       auth_password: "password"
+
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "cluster", "service"]

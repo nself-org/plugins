@@ -86,7 +86,7 @@ export class LinkPreviewDatabase {
       -- Link Previews Cache
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_link_previews (
+      CREATE TABLE IF NOT EXISTS np_linkprev_link_previews (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         url TEXT NOT NULL,
@@ -124,22 +124,22 @@ export class LinkPreviewDatabase {
         UNIQUE(source_account_id, url_hash)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_source_account ON lp_link_previews(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_hash ON lp_link_previews(url_hash);
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_url ON lp_link_previews(url);
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_expires ON lp_link_previews(cache_expires_at);
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_site ON lp_link_previews(site_name);
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_created ON lp_link_previews(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_lp_previews_status ON lp_link_previews(status);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_source_account ON np_linkprev_link_previews(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_hash ON np_linkprev_link_previews(url_hash);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_url ON np_linkprev_link_previews(url);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_expires ON np_linkprev_link_previews(cache_expires_at);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_site ON np_linkprev_link_previews(site_name);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_created ON np_linkprev_link_previews(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_previews_status ON np_linkprev_link_previews(status);
 
       -- =====================================================================
       -- Link Preview Usage Tracking
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_link_preview_usage (
+      CREATE TABLE IF NOT EXISTS np_linkprev_link_preview_usage (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-        preview_id UUID NOT NULL REFERENCES lp_link_previews(id) ON DELETE CASCADE,
+        preview_id UUID NOT NULL REFERENCES np_linkprev_link_previews(id) ON DELETE CASCADE,
         message_id VARCHAR(255),
         user_id VARCHAR(255),
         channel_id VARCHAR(255),
@@ -148,17 +148,17 @@ export class LinkPreviewDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_usage_source_account ON lp_link_preview_usage(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_usage_preview ON lp_link_preview_usage(preview_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_usage_message ON lp_link_preview_usage(message_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_usage_user ON lp_link_preview_usage(user_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_usage_created ON lp_link_preview_usage(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_usage_source_account ON np_linkprev_link_preview_usage(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_usage_preview ON np_linkprev_link_preview_usage(preview_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_usage_message ON np_linkprev_link_preview_usage(message_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_usage_user ON np_linkprev_link_preview_usage(user_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_usage_created ON np_linkprev_link_preview_usage(created_at DESC);
 
       -- =====================================================================
       -- Custom Preview Templates
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_preview_templates (
+      CREATE TABLE IF NOT EXISTS np_linkprev_preview_templates (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         name VARCHAR(255) NOT NULL,
@@ -174,14 +174,14 @@ export class LinkPreviewDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_templates_source_account ON lp_preview_templates(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_templates_active ON lp_preview_templates(is_active, priority DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_templates_source_account ON np_linkprev_preview_templates(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_templates_active ON np_linkprev_preview_templates(is_active, priority DESC);
 
       -- =====================================================================
       -- oEmbed Provider Registry
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_oembed_providers (
+      CREATE TABLE IF NOT EXISTS np_linkprev_oembed_providers (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         provider_name VARCHAR(255) NOT NULL,
@@ -198,14 +198,14 @@ export class LinkPreviewDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_oembed_source_account ON lp_oembed_providers(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_oembed_active ON lp_oembed_providers(is_active);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_oembed_source_account ON np_linkprev_oembed_providers(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_oembed_active ON np_linkprev_oembed_providers(is_active);
 
       -- =====================================================================
       -- URL Blocklist
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_url_blocklist (
+      CREATE TABLE IF NOT EXISTS np_linkprev_url_blocklist (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         url_pattern TEXT NOT NULL,
@@ -217,15 +217,15 @@ export class LinkPreviewDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_blocklist_source_account ON lp_url_blocklist(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_blocklist_pattern ON lp_url_blocklist(url_pattern);
-      CREATE INDEX IF NOT EXISTS idx_lp_blocklist_expires ON lp_url_blocklist(expires_at) WHERE expires_at IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_blocklist_source_account ON np_linkprev_url_blocklist(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_blocklist_pattern ON np_linkprev_url_blocklist(url_pattern);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_blocklist_expires ON np_linkprev_url_blocklist(expires_at) WHERE expires_at IS NOT NULL;
 
       -- =====================================================================
       -- Preview Settings (per-channel/user)
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_preview_settings (
+      CREATE TABLE IF NOT EXISTS np_linkprev_preview_settings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         scope VARCHAR(20) NOT NULL,
@@ -244,18 +244,18 @@ export class LinkPreviewDatabase {
         UNIQUE(source_account_id, scope, scope_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_settings_source_account ON lp_preview_settings(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_settings_scope ON lp_preview_settings(scope, scope_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_settings_source_account ON np_linkprev_preview_settings(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_settings_scope ON np_linkprev_preview_settings(scope, scope_id);
 
       -- =====================================================================
       -- Analytics
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS lp_preview_analytics (
+      CREATE TABLE IF NOT EXISTS np_linkprev_preview_analytics (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         date DATE NOT NULL,
-        preview_id UUID REFERENCES lp_link_previews(id) ON DELETE CASCADE,
+        preview_id UUID REFERENCES np_linkprev_link_previews(id) ON DELETE CASCADE,
         views_count INTEGER DEFAULT 0,
         clicks_count INTEGER DEFAULT 0,
         unique_users_count INTEGER DEFAULT 0,
@@ -264,9 +264,9 @@ export class LinkPreviewDatabase {
         UNIQUE(source_account_id, date, preview_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_lp_analytics_source_account ON lp_preview_analytics(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_lp_analytics_date ON lp_preview_analytics(date DESC);
-      CREATE INDEX IF NOT EXISTS idx_lp_analytics_preview ON lp_preview_analytics(preview_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_analytics_source_account ON np_linkprev_preview_analytics(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_analytics_date ON np_linkprev_preview_analytics(date DESC);
+      CREATE INDEX IF NOT EXISTS idx_np_linkprev_analytics_preview ON np_linkprev_preview_analytics(preview_id);
     `;
 
     await this.db.execute(schema);
@@ -279,7 +279,7 @@ export class LinkPreviewDatabase {
 
   async upsertPreview(data: UpsertPreviewRequest): Promise<LinkPreviewRecord> {
     const result = await this.db.query<LinkPreviewRecord>(
-      `INSERT INTO lp_link_previews (
+      `INSERT INTO np_linkprev_link_previews (
         source_account_id, url, url_hash, title, description, image_url,
         video_url, audio_url, site_name, favicon_url, embed_html, embed_type,
         provider_name, provider_url, author_name, author_url, published_date,
@@ -292,27 +292,27 @@ export class LinkPreviewDatabase {
         $24, $25, $26, $27, $28, $29
       )
       ON CONFLICT (source_account_id, url_hash) DO UPDATE SET
-        title = COALESCE(EXCLUDED.title, lp_link_previews.title),
-        description = COALESCE(EXCLUDED.description, lp_link_previews.description),
-        image_url = COALESCE(EXCLUDED.image_url, lp_link_previews.image_url),
-        video_url = COALESCE(EXCLUDED.video_url, lp_link_previews.video_url),
-        audio_url = COALESCE(EXCLUDED.audio_url, lp_link_previews.audio_url),
-        site_name = COALESCE(EXCLUDED.site_name, lp_link_previews.site_name),
-        favicon_url = COALESCE(EXCLUDED.favicon_url, lp_link_previews.favicon_url),
-        embed_html = COALESCE(EXCLUDED.embed_html, lp_link_previews.embed_html),
-        embed_type = COALESCE(EXCLUDED.embed_type, lp_link_previews.embed_type),
-        provider_name = COALESCE(EXCLUDED.provider_name, lp_link_previews.provider_name),
-        provider_url = COALESCE(EXCLUDED.provider_url, lp_link_previews.provider_url),
-        author_name = COALESCE(EXCLUDED.author_name, lp_link_previews.author_name),
-        author_url = COALESCE(EXCLUDED.author_url, lp_link_previews.author_url),
-        metadata = COALESCE(EXCLUDED.metadata, lp_link_previews.metadata),
-        status = COALESCE(EXCLUDED.status, lp_link_previews.status),
+        title = COALESCE(EXCLUDED.title, np_linkprev_link_previews.title),
+        description = COALESCE(EXCLUDED.description, np_linkprev_link_previews.description),
+        image_url = COALESCE(EXCLUDED.image_url, np_linkprev_link_previews.image_url),
+        video_url = COALESCE(EXCLUDED.video_url, np_linkprev_link_previews.video_url),
+        audio_url = COALESCE(EXCLUDED.audio_url, np_linkprev_link_previews.audio_url),
+        site_name = COALESCE(EXCLUDED.site_name, np_linkprev_link_previews.site_name),
+        favicon_url = COALESCE(EXCLUDED.favicon_url, np_linkprev_link_previews.favicon_url),
+        embed_html = COALESCE(EXCLUDED.embed_html, np_linkprev_link_previews.embed_html),
+        embed_type = COALESCE(EXCLUDED.embed_type, np_linkprev_link_previews.embed_type),
+        provider_name = COALESCE(EXCLUDED.provider_name, np_linkprev_link_previews.provider_name),
+        provider_url = COALESCE(EXCLUDED.provider_url, np_linkprev_link_previews.provider_url),
+        author_name = COALESCE(EXCLUDED.author_name, np_linkprev_link_previews.author_name),
+        author_url = COALESCE(EXCLUDED.author_url, np_linkprev_link_previews.author_url),
+        metadata = COALESCE(EXCLUDED.metadata, np_linkprev_link_previews.metadata),
+        status = COALESCE(EXCLUDED.status, np_linkprev_link_previews.status),
         error_message = EXCLUDED.error_message,
-        fetch_duration_ms = COALESCE(EXCLUDED.fetch_duration_ms, lp_link_previews.fetch_duration_ms),
-        http_status_code = COALESCE(EXCLUDED.http_status_code, lp_link_previews.http_status_code),
-        content_type = COALESCE(EXCLUDED.content_type, lp_link_previews.content_type),
-        content_length = COALESCE(EXCLUDED.content_length, lp_link_previews.content_length),
-        is_safe = COALESCE(EXCLUDED.is_safe, lp_link_previews.is_safe),
+        fetch_duration_ms = COALESCE(EXCLUDED.fetch_duration_ms, np_linkprev_link_previews.fetch_duration_ms),
+        http_status_code = COALESCE(EXCLUDED.http_status_code, np_linkprev_link_previews.http_status_code),
+        content_type = COALESCE(EXCLUDED.content_type, np_linkprev_link_previews.content_type),
+        content_length = COALESCE(EXCLUDED.content_length, np_linkprev_link_previews.content_length),
+        is_safe = COALESCE(EXCLUDED.is_safe, np_linkprev_link_previews.is_safe),
         updated_at = NOW()
       RETURNING *`,
       [
@@ -352,7 +352,7 @@ export class LinkPreviewDatabase {
 
   async getPreview(id: string): Promise<LinkPreviewRecord | null> {
     const result = await this.db.query<LinkPreviewRecord>(
-      'SELECT * FROM lp_link_previews WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_linkprev_link_previews WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -360,7 +360,7 @@ export class LinkPreviewDatabase {
 
   async getPreviewByUrl(url: string): Promise<LinkPreviewRecord | null> {
     const result = await this.db.query<LinkPreviewRecord>(
-      `SELECT * FROM lp_link_previews
+      `SELECT * FROM np_linkprev_link_previews
        WHERE source_account_id = $1 AND url = $2
        AND (cache_expires_at IS NULL OR cache_expires_at > NOW())
        ORDER BY created_at DESC LIMIT 1`,
@@ -371,7 +371,7 @@ export class LinkPreviewDatabase {
 
   async getPreviewByHash(urlHash: string): Promise<LinkPreviewRecord | null> {
     const result = await this.db.query<LinkPreviewRecord>(
-      `SELECT * FROM lp_link_previews
+      `SELECT * FROM np_linkprev_link_previews
        WHERE source_account_id = $1 AND url_hash = $2
        AND (cache_expires_at IS NULL OR cache_expires_at > NOW())`,
       [this.sourceAccountId, urlHash]
@@ -392,7 +392,7 @@ export class LinkPreviewDatabase {
     params.push(limit, offset);
 
     const result = await this.db.query<LinkPreviewRecord>(
-      `SELECT * FROM lp_link_previews
+      `SELECT * FROM np_linkprev_link_previews
        WHERE ${conditions.join(' AND ')}
        ORDER BY created_at DESC
        LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
@@ -403,7 +403,7 @@ export class LinkPreviewDatabase {
 
   async deletePreview(id: string): Promise<boolean> {
     const rowCount = await this.db.execute(
-      'DELETE FROM lp_link_previews WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_linkprev_link_previews WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return rowCount > 0;
@@ -411,8 +411,8 @@ export class LinkPreviewDatabase {
 
   async getPreviewsForMessage(messageId: string): Promise<LinkPreviewRecord[]> {
     const result = await this.db.query<LinkPreviewRecord>(
-      `SELECT lp.* FROM lp_link_previews lp
-       INNER JOIN lp_link_preview_usage lpu ON lpu.preview_id = lp.id
+      `SELECT lp.* FROM np_linkprev_link_previews lp
+       INNER JOIN np_linkprev_link_preview_usage lpu ON lpu.preview_id = lp.id
        WHERE lpu.source_account_id = $1 AND lpu.message_id = $2
        ORDER BY lpu.created_at`,
       [this.sourceAccountId, messageId]
@@ -423,7 +423,7 @@ export class LinkPreviewDatabase {
   async cleanupExpiredPreviews(): Promise<number> {
     const result = await this.db.query<{ count: string }>(
       `WITH deleted AS (
-        DELETE FROM lp_link_previews
+        DELETE FROM np_linkprev_link_previews
         WHERE source_account_id = $1
           AND cache_expires_at IS NOT NULL
           AND cache_expires_at < NOW()
@@ -438,7 +438,7 @@ export class LinkPreviewDatabase {
   async clearCache(): Promise<number> {
     const result = await this.db.query<{ count: string }>(
       `WITH deleted AS (
-        DELETE FROM lp_link_previews
+        DELETE FROM np_linkprev_link_previews
         WHERE source_account_id = $1
         RETURNING id
       )
@@ -454,7 +454,7 @@ export class LinkPreviewDatabase {
 
   async trackUsage(data: TrackUsageRequest): Promise<LinkPreviewUsageRecord> {
     const result = await this.db.query<LinkPreviewUsageRecord>(
-      `INSERT INTO lp_link_preview_usage (
+      `INSERT INTO np_linkprev_link_preview_usage (
         source_account_id, preview_id, message_id, user_id, channel_id
       ) VALUES ($1, $2, $3, $4, $5)
       RETURNING *`,
@@ -471,7 +471,7 @@ export class LinkPreviewDatabase {
 
   async recordClick(usageId: string): Promise<boolean> {
     const rowCount = await this.db.execute(
-      `UPDATE lp_link_preview_usage
+      `UPDATE np_linkprev_link_preview_usage
        SET clicked = true, clicked_at = NOW()
        WHERE id = $1 AND source_account_id = $2 AND clicked = false`,
       [usageId, this.sourceAccountId]
@@ -481,7 +481,7 @@ export class LinkPreviewDatabase {
 
   async getUsageForPreview(previewId: string, limit = 100): Promise<LinkPreviewUsageRecord[]> {
     const result = await this.db.query<LinkPreviewUsageRecord>(
-      `SELECT * FROM lp_link_preview_usage
+      `SELECT * FROM np_linkprev_link_preview_usage
        WHERE source_account_id = $1 AND preview_id = $2
        ORDER BY created_at DESC LIMIT $3`,
       [this.sourceAccountId, previewId, limit]
@@ -495,7 +495,7 @@ export class LinkPreviewDatabase {
 
   async createTemplate(data: CreateTemplateRequest): Promise<LinkPreviewTemplateRecord> {
     const result = await this.db.query<LinkPreviewTemplateRecord>(
-      `INSERT INTO lp_preview_templates (
+      `INSERT INTO np_linkprev_preview_templates (
         source_account_id, name, description, url_pattern, priority,
         template_html, css_styles, metadata_extractors
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -516,7 +516,7 @@ export class LinkPreviewDatabase {
 
   async getTemplate(id: string): Promise<LinkPreviewTemplateRecord | null> {
     const result = await this.db.query<LinkPreviewTemplateRecord>(
-      'SELECT * FROM lp_preview_templates WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_linkprev_preview_templates WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -524,7 +524,7 @@ export class LinkPreviewDatabase {
 
   async listTemplates(limit = 100, offset = 0): Promise<LinkPreviewTemplateRecord[]> {
     const result = await this.db.query<LinkPreviewTemplateRecord>(
-      `SELECT * FROM lp_preview_templates
+      `SELECT * FROM np_linkprev_preview_templates
        WHERE source_account_id = $1
        ORDER BY priority DESC, created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -578,7 +578,7 @@ export class LinkPreviewDatabase {
     updates.push('updated_at = NOW()');
 
     const result = await this.db.query<LinkPreviewTemplateRecord>(
-      `UPDATE lp_preview_templates SET ${updates.join(', ')}
+      `UPDATE np_linkprev_preview_templates SET ${updates.join(', ')}
        WHERE id = $1 AND source_account_id = $2
        RETURNING *`,
       params
@@ -588,7 +588,7 @@ export class LinkPreviewDatabase {
 
   async deleteTemplate(id: string): Promise<boolean> {
     const rowCount = await this.db.execute(
-      'DELETE FROM lp_preview_templates WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_linkprev_preview_templates WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return rowCount > 0;
@@ -596,7 +596,7 @@ export class LinkPreviewDatabase {
 
   async findMatchingTemplate(url: string): Promise<LinkPreviewTemplateRecord | null> {
     const templates = await this.db.query<LinkPreviewTemplateRecord>(
-      `SELECT * FROM lp_preview_templates
+      `SELECT * FROM np_linkprev_preview_templates
        WHERE source_account_id = $1 AND is_active = true
        ORDER BY priority DESC`,
       [this.sourceAccountId]
@@ -622,7 +622,7 @@ export class LinkPreviewDatabase {
 
   async addOEmbedProvider(data: AddOEmbedProviderRequest): Promise<OEmbedProviderRecord> {
     const result = await this.db.query<OEmbedProviderRecord>(
-      `INSERT INTO lp_oembed_providers (
+      `INSERT INTO np_linkprev_oembed_providers (
         source_account_id, provider_name, provider_url, endpoint_url,
         url_schemes, formats, max_width, max_height
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -643,7 +643,7 @@ export class LinkPreviewDatabase {
 
   async getOEmbedProvider(id: string): Promise<OEmbedProviderRecord | null> {
     const result = await this.db.query<OEmbedProviderRecord>(
-      'SELECT * FROM lp_oembed_providers WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_linkprev_oembed_providers WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return result.rows[0] ?? null;
@@ -658,7 +658,7 @@ export class LinkPreviewDatabase {
     }
 
     const result = await this.db.query<OEmbedProviderRecord>(
-      `SELECT * FROM lp_oembed_providers
+      `SELECT * FROM np_linkprev_oembed_providers
        WHERE ${conditions.join(' AND ')}
        ORDER BY provider_name`,
       params
@@ -703,7 +703,7 @@ export class LinkPreviewDatabase {
     updates.push('updated_at = NOW()');
 
     const result = await this.db.query<OEmbedProviderRecord>(
-      `UPDATE lp_oembed_providers SET ${updates.join(', ')}
+      `UPDATE np_linkprev_oembed_providers SET ${updates.join(', ')}
        WHERE id = $1 AND source_account_id = $2
        RETURNING *`,
       params
@@ -713,7 +713,7 @@ export class LinkPreviewDatabase {
 
   async deleteOEmbedProvider(id: string): Promise<boolean> {
     const rowCount = await this.db.execute(
-      'DELETE FROM lp_oembed_providers WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_linkprev_oembed_providers WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return rowCount > 0;
@@ -745,7 +745,7 @@ export class LinkPreviewDatabase {
 
   async addToBlocklist(data: AddToBlocklistRequest): Promise<UrlBlocklistRecord> {
     const result = await this.db.query<UrlBlocklistRecord>(
-      `INSERT INTO lp_url_blocklist (
+      `INSERT INTO np_linkprev_url_blocklist (
         source_account_id, url_pattern, pattern_type, reason,
         description, added_by, expires_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -765,7 +765,7 @@ export class LinkPreviewDatabase {
 
   async listBlocklist(limit = 100, offset = 0): Promise<UrlBlocklistRecord[]> {
     const result = await this.db.query<UrlBlocklistRecord>(
-      `SELECT * FROM lp_url_blocklist
+      `SELECT * FROM np_linkprev_url_blocklist
        WHERE source_account_id = $1
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -776,7 +776,7 @@ export class LinkPreviewDatabase {
 
   async removeFromBlocklist(id: string): Promise<boolean> {
     const rowCount = await this.db.execute(
-      'DELETE FROM lp_url_blocklist WHERE id = $1 AND source_account_id = $2',
+      'DELETE FROM np_linkprev_url_blocklist WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
     return rowCount > 0;
@@ -795,7 +795,7 @@ export class LinkPreviewDatabase {
     // Check exact match
     const exactResult = await this.db.query<{ exists: boolean }>(
       `SELECT EXISTS(
-        SELECT 1 FROM lp_url_blocklist
+        SELECT 1 FROM np_linkprev_url_blocklist
         WHERE source_account_id = $1
           AND pattern_type = 'exact'
           AND url_pattern = $2
@@ -808,7 +808,7 @@ export class LinkPreviewDatabase {
     // Check domain match
     const domainResult = await this.db.query<{ exists: boolean }>(
       `SELECT EXISTS(
-        SELECT 1 FROM lp_url_blocklist
+        SELECT 1 FROM np_linkprev_url_blocklist
         WHERE source_account_id = $1
           AND pattern_type = 'domain'
           AND $2 LIKE '%' || url_pattern
@@ -820,7 +820,7 @@ export class LinkPreviewDatabase {
 
     // Check regex match
     const regexEntries = await this.db.query<UrlBlocklistRecord>(
-      `SELECT * FROM lp_url_blocklist
+      `SELECT * FROM np_linkprev_url_blocklist
        WHERE source_account_id = $1
          AND pattern_type = 'regex'
          AND (expires_at IS NULL OR expires_at > NOW())`,
@@ -845,7 +845,7 @@ export class LinkPreviewDatabase {
 
   async getSettings(scope: SettingsScope, scopeId?: string): Promise<LinkPreviewSettingsRecord | null> {
     const result = await this.db.query<LinkPreviewSettingsRecord>(
-      `SELECT * FROM lp_preview_settings
+      `SELECT * FROM np_linkprev_preview_settings
        WHERE source_account_id = $1 AND scope = $2 AND scope_id IS NOT DISTINCT FROM $3`,
       [this.sourceAccountId, scope, scopeId ?? null]
     );
@@ -854,21 +854,21 @@ export class LinkPreviewDatabase {
 
   async upsertSettings(data: UpdateSettingsRequest): Promise<LinkPreviewSettingsRecord> {
     const result = await this.db.query<LinkPreviewSettingsRecord>(
-      `INSERT INTO lp_preview_settings (
+      `INSERT INTO np_linkprev_preview_settings (
         source_account_id, scope, scope_id, enabled, auto_expand,
         show_images, show_videos, max_previews_per_message,
         preview_position, custom_css, blocked_domains, allowed_domains
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       ON CONFLICT (source_account_id, scope, scope_id) DO UPDATE SET
-        enabled = COALESCE(EXCLUDED.enabled, lp_preview_settings.enabled),
-        auto_expand = COALESCE(EXCLUDED.auto_expand, lp_preview_settings.auto_expand),
-        show_images = COALESCE(EXCLUDED.show_images, lp_preview_settings.show_images),
-        show_videos = COALESCE(EXCLUDED.show_videos, lp_preview_settings.show_videos),
-        max_previews_per_message = COALESCE(EXCLUDED.max_previews_per_message, lp_preview_settings.max_previews_per_message),
-        preview_position = COALESCE(EXCLUDED.preview_position, lp_preview_settings.preview_position),
-        custom_css = COALESCE(EXCLUDED.custom_css, lp_preview_settings.custom_css),
-        blocked_domains = COALESCE(EXCLUDED.blocked_domains, lp_preview_settings.blocked_domains),
-        allowed_domains = COALESCE(EXCLUDED.allowed_domains, lp_preview_settings.allowed_domains),
+        enabled = COALESCE(EXCLUDED.enabled, np_linkprev_preview_settings.enabled),
+        auto_expand = COALESCE(EXCLUDED.auto_expand, np_linkprev_preview_settings.auto_expand),
+        show_images = COALESCE(EXCLUDED.show_images, np_linkprev_preview_settings.show_images),
+        show_videos = COALESCE(EXCLUDED.show_videos, np_linkprev_preview_settings.show_videos),
+        max_previews_per_message = COALESCE(EXCLUDED.max_previews_per_message, np_linkprev_preview_settings.max_previews_per_message),
+        preview_position = COALESCE(EXCLUDED.preview_position, np_linkprev_preview_settings.preview_position),
+        custom_css = COALESCE(EXCLUDED.custom_css, np_linkprev_preview_settings.custom_css),
+        blocked_domains = COALESCE(EXCLUDED.blocked_domains, np_linkprev_preview_settings.blocked_domains),
+        allowed_domains = COALESCE(EXCLUDED.allowed_domains, np_linkprev_preview_settings.allowed_domains),
         updated_at = NOW()
       RETURNING *`,
       [
@@ -895,13 +895,13 @@ export class LinkPreviewDatabase {
 
   async updateAnalytics(previewId: string, date: string, viewed: boolean, clicked: boolean): Promise<void> {
     await this.db.execute(
-      `INSERT INTO lp_preview_analytics (
+      `INSERT INTO np_linkprev_preview_analytics (
         source_account_id, date, preview_id,
         views_count, clicks_count
       ) VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (source_account_id, date, preview_id) DO UPDATE SET
-        views_count = lp_preview_analytics.views_count + $4,
-        clicks_count = lp_preview_analytics.clicks_count + $5`,
+        views_count = np_linkprev_preview_analytics.views_count + $4,
+        clicks_count = np_linkprev_preview_analytics.clicks_count + $5`,
       [
         this.sourceAccountId,
         date,
@@ -923,7 +923,7 @@ export class LinkPreviewDatabase {
     }
 
     const result = await this.db.query<LinkPreviewAnalyticsRecord>(
-      `SELECT * FROM lp_preview_analytics
+      `SELECT * FROM np_linkprev_preview_analytics
        WHERE ${conditions.join(' AND ')}
        ORDER BY date DESC`,
       params
@@ -943,8 +943,8 @@ export class LinkPreviewDatabase {
           THEN ROUND(COUNT(*) FILTER (WHERE lpu.clicked = true)::decimal / COUNT(DISTINCT lpu.id), 4)
           ELSE 0
         END as click_through_rate
-       FROM lp_link_previews lp
-       LEFT JOIN lp_link_preview_usage lpu ON lpu.preview_id = lp.id AND lpu.source_account_id = lp.source_account_id
+       FROM np_linkprev_link_previews lp
+       LEFT JOIN np_linkprev_link_preview_usage lpu ON lpu.preview_id = lp.id AND lpu.source_account_id = lp.source_account_id
        WHERE lp.source_account_id = $1
        GROUP BY lp.id
        HAVING COUNT(DISTINCT lpu.message_id) > 0
@@ -977,7 +977,7 @@ export class LinkPreviewDatabase {
         COALESCE(AVG(fetch_duration_ms), 0) as avg_fetch_duration_ms,
         SUM(CASE WHEN embed_html IS NOT NULL THEN 1 ELSE 0 END) as oembed_count,
         COUNT(DISTINCT site_name) as unique_sites
-       FROM lp_link_previews
+       FROM np_linkprev_link_previews
        WHERE source_account_id = $1`,
       [this.sourceAccountId]
     );

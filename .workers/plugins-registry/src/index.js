@@ -1,408 +1,600 @@
 /**
- * nself Plugin Registry - Cloudflare Worker
+ * nself Plugin Registry — Cloudflare Worker
  *
- * Provides a fast, cached API for the nself plugin registry.
- * Syncs from GitHub and serves plugin metadata to nself CLI.
+ * Dual-registry combining architecture.
+ *
+ * Serves a unified plugin registry that merges:
+ *   - Free registry  (public, plugins/registry.json on GitHub)
+ *   - Pro registry   (private, plugins-pro/registry.json via GitHub API with token)
  *
  * Endpoints:
- *   GET /registry.json          - Full registry (cached)
- *   GET /plugins/:name          - Plugin info (latest version)
- *   GET /plugins/:name/:version - Plugin info (specific version)
- *   GET /health                 - Health check
- *   GET /stats                  - Registry statistics
- *   POST /api/sync              - Webhook to sync from GitHub
+ *   GET /registry.json              Combined registry (free + pro), or ?tier=free|pro to filter
+ *   GET /registry                   Alias for /registry.json
+ *   GET /plugins/:name              Single plugin metadata (free or pro)
+ *   GET /plugins/:name/:version     Single plugin at specific version
+ *   GET /categories                 All categories (merged from both registries)
+ *   GET /health                     Health check
+ *   GET /stats                      Cache statistics
+ *   POST /api/sync                  Force-refresh KV cache (webhook from GitHub Actions)
+ *
+ * KV cache keys:
+ *   registry:free          — cached free registry raw JSON (with timestamp envelope)
+ *   registry:pro           — cached pro registry raw JSON (with timestamp envelope)
+ *   registry:combined      — cached merged output (with timestamp envelope)
+ *   stats:global           — request statistics
+ *
+ * Secrets (set via wrangler secret put):
+ *   GITHUB_TOKEN           — Fine-grained PAT with contents:read on nself-org/plugins-pro
+ *                            Also used for authenticated free registry fetch (avoids raw CDN cache)
+ *   GITHUB_SYNC_TOKEN      — Bearer token for POST /api/sync (from GitHub Actions)
  */
 
-// CORS headers for browser access (if needed)
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
-// Cache keys
-const REGISTRY_CACHE_KEY = 'registry:latest';
-const STATS_CACHE_KEY = 'stats:global';
+// GitHub Contents API for both registries — authenticated fetch avoids CDN cache lag
+const FREE_REGISTRY_API_URL =
+  'https://api.github.com/repos/nself-org/plugins/contents/registry.json';
 
-/**
- * Main request handler
- */
+const PRO_REGISTRY_API_URL =
+  'https://api.github.com/repos/nself-org/plugins-pro/contents/registry.json';
+
+// Fallback: unauthenticated raw URL for free registry (used when GITHUB_TOKEN absent)
+const FREE_REGISTRY_RAW_URL =
+  'https://raw.githubusercontent.com/nself-org/plugins/main/registry.json';
+
+const KV_FREE     = 'registry:free';
+const KV_PRO      = 'registry:pro';
+const KV_COMBINED = 'registry:combined';
+const KV_STATS    = 'stats:global';
+
+const DEFAULT_CACHE_TTL = 300; // seconds
+
+// ---------------------------------------------------------------------------
+// CORS + response helpers
+// ---------------------------------------------------------------------------
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+function jsonResponse(body, status = 200, extra = {}) {
+  return new Response(JSON.stringify(body, null, 2), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...corsHeaders(),
+      ...extra,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Main fetch handler
+// ---------------------------------------------------------------------------
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
+    const url    = new URL(request.url);
+    const path   = url.pathname.replace(/\/$/, '') || '/';
+    const method = request.method.toUpperCase();
 
-    // Handle CORS preflight
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
     try {
-      // Route requests
-      if (path === '/registry.json' || path === '/') {
-        return await handleRegistry(env, ctx);
+      if (method === 'GET' && (path === '/registry.json' || path === '/registry' || path === '/')) {
+        return await handleRegistry(url, env, ctx);
+      }
+      if (method === 'GET' && path.startsWith('/plugins/')) {
+        return await handlePlugin(path, env, ctx);
+      }
+      if (method === 'GET' && path === '/categories') {
+        return await handleCategories(env, ctx);
       }
 
-      if (path.startsWith('/plugins/')) {
-        return await handlePluginInfo(path, env);
-      }
 
-      if (path === '/health') {
+      if (method === 'GET' && path === '/manifest.json') {
+        return await handleManifest(env, ctx);
+      }
+      if (method === 'GET' && path === '/health') {
         return handleHealth(env);
       }
-
-      if (path === '/stats') {
+      if (method === 'GET' && path === '/stats') {
         return await handleStats(env);
       }
-
-      if (path === '/api/sync' && request.method === 'POST') {
+      if (method === 'POST' && path === '/api/sync') {
         return await handleSync(request, env, ctx);
       }
 
-      if (path === '/categories') {
-        return await handleCategories(env);
-      }
-
-      // 404 for unknown routes
-      return new Response(JSON.stringify({
+      return jsonResponse({
         error: 'Not found',
         endpoints: [
-          'GET /registry.json',
+          'GET /registry.json[?tier=free|pro]',
           'GET /plugins/:name',
           'GET /plugins/:name/:version',
+          'GET /categories',
+          'GET /manifest.json',
           'GET /health',
           'GET /stats',
-          'GET /categories'
-        ]
-      }), {
-        status: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
+          'POST /api/sync',
+        ],
+      }, 404);
 
-    } catch (error) {
-      console.error('Request error:', error);
-      return new Response(JSON.stringify({
-        error: 'Internal server error',
-        message: error.message
-      }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
-        }
-      });
+    } catch (err) {
+      console.error('Unhandled error:', err);
+      return jsonResponse({ error: 'Internal server error', message: err.message }, 500);
     }
-  }
+  },
 };
 
-/**
- * Get full registry (with caching)
- */
-async function handleRegistry(env, ctx) {
-  const cacheTtl = parseInt(env.CACHE_TTL) || 300;
+// ---------------------------------------------------------------------------
+// Registry handler
+// ---------------------------------------------------------------------------
 
-  // Try KV cache first
-  if (env.PLUGINS_KV) {
-    const cached = await env.PLUGINS_KV.get(REGISTRY_CACHE_KEY, 'json');
-    if (cached && cached.timestamp) {
-      const age = (Date.now() - cached.timestamp) / 1000;
-      if (age < cacheTtl) {
-        // Increment stats asynchronously
-        ctx.waitUntil(incrementStats(env, 'registry_hits'));
+async function handleRegistry(url, env, ctx) {
+  const tierFilter = url.searchParams.get('tier');
+  const cacheTtl   = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const bypassKv   = url.searchParams.get('nocache') === '1';
 
-        return new Response(JSON.stringify(cached.data), {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': `public, max-age=${Math.floor(cacheTtl - age)}`,
-            'X-Cache': 'HIT',
-            'X-Cache-Age': Math.floor(age).toString(),
-            ...corsHeaders
-          }
-        });
-      }
+  // Serve combined from KV cache when no filter and not bypassing
+  if (!tierFilter && !bypassKv) {
+    const cached = await kvGet(env, KV_COMBINED);
+    if (cached && isFresh(cached, cacheTtl)) {
+      ctx.waitUntil(bumpStat(env, 'registry_hits'));
+      return jsonResponse(cached.data, 200, {
+        'Cache-Control': `public, max-age=${ttlRemaining(cached, cacheTtl)}`,
+        'X-Cache':       'HIT',
+        'X-Cache-Age':   String(cacheAge(cached)),
+        'X-Tier':        'combined',
+      });
     }
   }
 
-  // Fetch from GitHub
-  const registry = await fetchFromGitHub(env);
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, cacheTtl, bypassKv),
+    fetchProRegistry(env, ctx, cacheTtl, bypassKv),
+  ]);
 
-  if (!registry) {
-    return new Response(JSON.stringify({ error: 'Failed to fetch registry' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
+  const freePlugins = freeResult.status === 'fulfilled' ? freeResult.value : null;
+  const proPlugins  = proResult.status  === 'fulfilled' ? proResult.value  : null;
+
+  if (!freePlugins && !proPlugins) {
+    return jsonResponse({ error: 'Registry unavailable — both sources failed' }, 502);
   }
 
-  // Cache in KV
-  if (env.PLUGINS_KV) {
-    ctx.waitUntil(
-      env.PLUGINS_KV.put(REGISTRY_CACHE_KEY, JSON.stringify({
-        data: registry,
-        timestamp: Date.now()
-      }))
-    );
-  }
+  const allPlugins = [
+    ...(freePlugins || []),
+    ...(proPlugins  || []),
+  ];
 
-  // Increment stats asynchronously
-  ctx.waitUntil(incrementStats(env, 'registry_fetches'));
-
-  return new Response(JSON.stringify(registry), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': `public, max-age=${cacheTtl}`,
-      'X-Cache': 'MISS',
-      ...corsHeaders
-    }
-  });
-}
-
-/**
- * Get specific plugin info
- */
-async function handlePluginInfo(path, env) {
-  const parts = path.split('/').filter(Boolean);
-  // parts = ['plugins', 'name'] or ['plugins', 'name', 'version']
-
-  if (parts.length < 2) {
-    return new Response(JSON.stringify({ error: 'Plugin name required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  const pluginName = parts[1];
-  const requestedVersion = parts[2] || 'latest';
-
-  // Get registry
-  let registry;
-  if (env.PLUGINS_KV) {
-    const cached = await env.PLUGINS_KV.get(REGISTRY_CACHE_KEY, 'json');
-    if (cached && cached.data) {
-      registry = cached.data;
-    }
-  }
-
-  if (!registry) {
-    registry = await fetchFromGitHub(env);
-  }
-
-  if (!registry || !registry.plugins) {
-    return new Response(JSON.stringify({ error: 'Registry unavailable' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  // Find plugin (plugins is an object keyed by name)
-  const plugin = registry.plugins[pluginName];
-
-  if (!plugin) {
-    return new Response(JSON.stringify({
-      error: 'Plugin not found',
-      available: Object.keys(registry.plugins)
-    }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  // Version resolution (for now, we only have latest)
-  // In future, could support version history
-  if (requestedVersion !== 'latest' && requestedVersion !== plugin.version) {
-    return new Response(JSON.stringify({
-      error: 'Version not found',
-      requestedVersion,
-      availableVersion: plugin.version
-    }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  return new Response(JSON.stringify(plugin), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=60',
-      ...corsHeaders
-    }
-  });
-}
-
-/**
- * Health check endpoint
- */
-function handleHealth(env) {
-  return new Response(JSON.stringify({
-    status: 'healthy',
-    service: 'nself-plugin-registry',
-    version: env.REGISTRY_VERSION || '1.0.0',
-    timestamp: new Date().toISOString()
-  }), {
-    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-  });
-}
-
-/**
- * Get registry statistics
- */
-async function handleStats(env) {
-  let stats = {
-    registryHits: 0,
-    registryFetches: 0,
-    pluginDownloads: {},
-    lastSync: null
+  const combined = {
+    version:      '1.0.0',
+    fetchedAt:    new Date().toISOString(),
+    pluginCount:  { free: (freePlugins || []).length, pro: (proPlugins || []).length, total: allPlugins.length },
+    proAvailable: proPlugins !== null,
+    plugins:      allPlugins,
+    categories:   mergeCategoriesFromPlugins(allPlugins),
   };
 
-  if (env.PLUGINS_KV) {
-    const cached = await env.PLUGINS_KV.get(STATS_CACHE_KEY, 'json');
-    if (cached) {
-      stats = cached;
+  // Cache combined result
+  if (!tierFilter && !bypassKv) {
+    ctx.waitUntil(kvPutWrapped(env, KV_COMBINED, combined));
+    ctx.waitUntil(bumpStat(env, 'registry_fetches'));
+  }
+
+  const headers = {
+    'Cache-Control': `public, max-age=${cacheTtl}`,
+    'X-Cache':       'MISS',
+    'X-Tier':        tierFilter || 'combined',
+  };
+
+  if (!proPlugins) {
+    headers['X-Pro-Registry-Status'] = 'unavailable';
+    headers['X-Warning'] = 'Pro registry unavailable — ensure GITHUB_TOKEN secret is set';
+  }
+
+  let outputPlugins = allPlugins;
+  if (tierFilter === 'free' || tierFilter === 'pro') {
+    outputPlugins = allPlugins.filter(p => p.tier === tierFilter);
+  }
+
+  return jsonResponse({ ...combined, plugins: outputPlugins }, 200, headers);
+}
+
+// ---------------------------------------------------------------------------
+// Fetch free registry
+// Uses GitHub Contents API when GITHUB_TOKEN is available (bypasses CDN cache),
+// falls back to raw URL otherwise.
+// ---------------------------------------------------------------------------
+
+async function fetchFreeRegistry(env, ctx, cacheTtl, bypass = false) {
+  if (!bypass) {
+    const cached = await kvGet(env, KV_FREE);
+    if (cached && isFresh(cached, cacheTtl)) {
+      return normalizeToArray(cached.data, 'free');
     }
   }
 
-  return new Response(JSON.stringify(stats), {
-    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-  });
-}
+  let data;
 
-/**
- * Get available categories
- */
-async function handleCategories(env) {
-  let registry;
-  if (env.PLUGINS_KV) {
-    const cached = await env.PLUGINS_KV.get(REGISTRY_CACHE_KEY, 'json');
-    if (cached && cached.data) {
-      registry = cached.data;
-    }
-  }
-
-  if (!registry) {
-    registry = await fetchFromGitHub(env);
-  }
-
-  const categories = registry?.categories || {};
-
-  return new Response(JSON.stringify({ categories }), {
-    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-  });
-}
-
-/**
- * Handle sync webhook from GitHub Actions
- */
-async function handleSync(request, env, ctx) {
-  // Verify authorization
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  const token = authHeader.slice(7);
-  if (token !== env.GITHUB_SYNC_TOKEN) {
-    return new Response(JSON.stringify({ error: 'Invalid token' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  // Force refresh from GitHub
-  const registry = await fetchFromGitHub(env);
-
-  if (!registry) {
-    return new Response(JSON.stringify({ error: 'Failed to fetch registry' }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
-  // Update cache
-  if (env.PLUGINS_KV) {
-    await env.PLUGINS_KV.put(REGISTRY_CACHE_KEY, JSON.stringify({
-      data: registry,
-      timestamp: Date.now()
-    }));
-
-    // Update sync timestamp in stats
-    const stats = await env.PLUGINS_KV.get(STATS_CACHE_KEY, 'json') || {};
-    stats.lastSync = new Date().toISOString();
-    await env.PLUGINS_KV.put(STATS_CACHE_KEY, JSON.stringify(stats));
-  }
-
-  return new Response(JSON.stringify({
-    success: true,
-    message: 'Registry synced',
-    pluginCount: Object.keys(registry.plugins || {}).length,
-    timestamp: new Date().toISOString()
-  }), {
-    headers: { 'Content-Type': 'application/json', ...corsHeaders }
-  });
-}
-
-/**
- * Fetch registry from GitHub
- */
-async function fetchFromGitHub(env) {
-  const repo = env.GITHUB_REPO || 'acamarata/nself-plugins';
-  const branch = env.GITHUB_BRANCH || 'main';
-  const url = `https://raw.githubusercontent.com/${repo}/${branch}/registry.json`;
-
-  try {
-    const response = await fetch(url, {
+  if (env.GH_ACCESS_TOKEN) {
+    // Authenticated GitHub API fetch — bypasses CDN, always returns latest commit
+    const resp = await fetch(FREE_REGISTRY_API_URL, {
       headers: {
-        'User-Agent': 'nself-plugin-registry/1.0'
-      }
+        'Authorization': `token ${env.GH_ACCESS_TOKEN}`,
+        'Accept':        'application/vnd.github.v3+json',
+        'User-Agent':    'nself-plugin-registry/2.0',
+      },
     });
 
-    if (!response.ok) {
-      console.error(`GitHub fetch failed: ${response.status}`);
-      return null;
+    if (resp.ok) {
+      const envelope = await resp.json();
+      try {
+        const raw = atob(envelope.content.replace(/\n/g, ''));
+        data = JSON.parse(raw);
+      } catch (e) {
+        console.error('Failed to decode free registry content:', e.message);
+      }
+    } else {
+      console.warn(`Free registry GitHub API fetch failed: ${resp.status}, falling back to raw URL`);
     }
+  }
 
-    const registry = await response.json();
+  // Fallback: unauthenticated raw URL
+  if (!data) {
+    const resp = await fetch(FREE_REGISTRY_RAW_URL, {
+      headers: { 'User-Agent': 'nself-plugin-registry/2.0' },
+    });
+    if (!resp.ok) {
+      throw new Error(`Free registry raw fetch failed: ${resp.status}`);
+    }
+    data = await resp.json();
+  }
 
-    // Add metadata
-    registry.fetchedAt = new Date().toISOString();
-    registry.source = 'github';
+  ctx.waitUntil(kvPutWrapped(env, KV_FREE, data));
+  return normalizeToArray(data, 'free');
+}
 
-    return registry;
+// ---------------------------------------------------------------------------
+// Fetch pro registry (private GitHub Contents API)
+// ---------------------------------------------------------------------------
 
-  } catch (error) {
-    console.error('GitHub fetch error:', error);
+async function fetchProRegistry(env, ctx, cacheTtl, bypass = false) {
+  if (!bypass) {
+    const cached = await kvGet(env, KV_PRO);
+    if (cached && isFresh(cached, cacheTtl)) {
+      return normalizeToArray(cached.data, 'pro');
+    }
+  }
+
+  if (!env.GH_ACCESS_TOKEN) {
+    console.warn('GITHUB_TOKEN not set — pro registry unavailable');
+    return null;
+  }
+
+  const resp = await fetch(PRO_REGISTRY_API_URL, {
+    headers: {
+      'Authorization': `token ${env.GH_ACCESS_TOKEN}`,
+      'Accept':        'application/vnd.github.v3+json',
+      'User-Agent':    'nself-plugin-registry/2.0',
+    },
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    console.error(`Pro registry fetch failed: ${resp.status} — ${body.slice(0, 200)}`);
+    return null;
+  }
+
+  const envelope = await resp.json();
+  let data;
+  try {
+    const raw = atob(envelope.content.replace(/\n/g, ''));
+    data = JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to decode pro registry content:', e.message);
+    return null;
+  }
+
+  ctx.waitUntil(kvPutWrapped(env, KV_PRO, data));
+  return normalizeToArray(data, 'pro');
+}
+
+// ---------------------------------------------------------------------------
+// Normalize registry formats → flat array with tier guaranteed
+//
+// Free registry format: { plugins: { "name": { ... } } }  (object keyed by name)
+// Pro registry format:  { plugins: [ { name, tier, ... } ] }  (array)
+// ---------------------------------------------------------------------------
+
+function normalizeToArray(data, expectedTier) {
+  let raw;
+
+  if (Array.isArray(data)) {
+    raw = data;
+  } else if (data && Array.isArray(data.plugins)) {
+    raw = data.plugins;
+  } else if (data && data.plugins && typeof data.plugins === 'object') {
+    raw = Object.values(data.plugins);
+  } else {
+    return [];
+  }
+
+  return raw.map(p => ({ ...p, tier: p.tier || expectedTier }));
+}
+
+// ---------------------------------------------------------------------------
+// Single plugin endpoint
+// ---------------------------------------------------------------------------
+
+async function handlePlugin(path, env, ctx) {
+  const parts        = path.split('/').filter(Boolean);
+  const pluginName   = parts[1];
+  const requestedVer = parts[2] || 'latest';
+  const cacheTtl     = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+
+  if (!pluginName) {
+    return jsonResponse({ error: 'Plugin name required' }, 400);
+  }
+
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, cacheTtl),
+    fetchProRegistry(env, ctx, cacheTtl),
+  ]);
+
+  const all = [
+    ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+    ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
+  ];
+
+  const plugin = all.find(p => p.name === pluginName);
+  if (!plugin) {
+    return jsonResponse({ error: 'Plugin not found', name: pluginName, available: all.map(p => p.name).sort() }, 404);
+  }
+
+  if (requestedVer !== 'latest' && requestedVer !== plugin.version) {
+    return jsonResponse({ error: 'Version not found', requestedVersion: requestedVer, latestVersion: plugin.version }, 404);
+  }
+
+  return jsonResponse(plugin, 200, { 'Cache-Control': 'public, max-age=60' });
+}
+
+// ---------------------------------------------------------------------------
+// Categories endpoint
+// ---------------------------------------------------------------------------
+
+async function handleCategories(env, ctx) {
+  const cacheTtl = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, cacheTtl),
+    fetchProRegistry(env, ctx, cacheTtl),
+  ]);
+  const all = [
+    ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+    ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
+  ];
+  return jsonResponse({ categories: mergeCategoriesFromPlugins(all) }, 200, {
+    'Cache-Control': `public, max-age=${cacheTtl}`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+
+function handleHealth(env) {
+  return jsonResponse({
+    status:    'healthy',
+    service:   'nself-plugin-registry',
+    version:   env.REGISTRY_VERSION || '2.0.0',
+    timestamp: new Date().toISOString(),
+    features:  ['dual-registry', 'kv-cache', 'tier-filter', 'github-api-fetch'],
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+async function handleStats(env) {
+  const stats = (await kvGet(env, KV_STATS)) || {
+    registryHits:    0,
+    registryFetches: 0,
+    lastSync:        null,
+  };
+  // Unwrap if stats were stored in the timestamp envelope
+  const data = stats.data || stats;
+  return jsonResponse(data);
+}
+
+// ---------------------------------------------------------------------------
+// Sync — bust KV cache and fetch fresh from GitHub
+// Done in two steps: delete KV (async), then immediately fetch bypassing cache.
+// ---------------------------------------------------------------------------
+
+async function handleSync(request, env, ctx) {
+  const authHeader = request.headers.get('Authorization') || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return jsonResponse({ error: 'Unauthorized' }, 401);
+  }
+  const token = authHeader.slice(7);
+  if (!env.GITHUB_SYNC_TOKEN || token !== env.GITHUB_SYNC_TOKEN) {
+    return jsonResponse({ error: 'Invalid token' }, 403);
+  }
+
+  // Delete KV cache entries
+  if (env.PLUGINS_KV) {
+    await Promise.all([
+      env.PLUGINS_KV.delete(KV_FREE),
+      env.PLUGINS_KV.delete(KV_PRO),
+      env.PLUGINS_KV.delete(KV_COMBINED),
+    ]);
+  }
+
+  // Fetch fresh — bypass=true so we skip KV read (already deleted)
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, 0, true),
+    fetchProRegistry(env, ctx, 0, true),
+  ]);
+
+  const freeCount = freeResult.status === 'fulfilled' ? (freeResult.value || []).length : 0;
+  const proCount  = proResult.status  === 'fulfilled' ? (proResult.value  || []).length : 0;
+  const freeError = freeResult.status === 'rejected'  ? freeResult.reason?.message : null;
+  const proError  = proResult.status  === 'rejected'  ? proResult.reason?.message  : null;
+
+  // Update last sync timestamp
+  ctx.waitUntil((async () => {
+    if (env.PLUGINS_KV) {
+      const existing = (await kvGet(env, KV_STATS)) || {};
+      const stats = existing.data || existing;
+      stats.lastSync = new Date().toISOString();
+      await env.PLUGINS_KV.put(KV_STATS, JSON.stringify(stats));
+    }
+  })());
+
+  return jsonResponse({
+    success:    true,
+    message:    'Registry caches refreshed',
+    freeCount,
+    proCount,
+    totalCount: freeCount + proCount,
+    freeError,
+    proError,
+    timestamp:  new Date().toISOString(),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Manifest endpoint — returns CLI-compatible flat array of all plugins.
+//
+// Used by `nself plugin outdated` to compare installed versions against latest.
+// Format: [{ name, version, tier, description, downloadUrl }, ...]
+//
+// Merges free + pro registries the same way handleRegistry does, then shapes
+// each entry to the minimal manifest schema the CLI expects.
+// ---------------------------------------------------------------------------
+
+async function handleManifest(env, ctx) {
+  const cacheTtl  = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const KV_MANIFEST = 'registry:manifest';
+
+  // Serve from KV cache if fresh
+  const cached = await kvGet(env, KV_MANIFEST);
+  if (cached && isFresh(cached, cacheTtl)) {
+    return jsonResponse(cached.data, 200, {
+      'Cache-Control': `public, max-age=${ttlRemaining(cached, cacheTtl)}`,
+      'X-Cache': 'HIT',
+    });
+  }
+
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, cacheTtl),
+    fetchProRegistry(env, ctx, cacheTtl),
+  ]);
+
+  const allPlugins = [
+    ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+    ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
+  ];
+
+  // Shape to manifest format
+  const manifest = allPlugins.map(p => ({
+    name:        p.name        || '',
+    version:     p.version     || '0.0.0',
+    tier:        p.tier        || 'free',
+    description: p.description || '',
+    downloadUrl: p.downloadUrl || p.homepage || `https://github.com/nself-org/plugins/tree/main/${p.name}`,
+  }));
+
+  // Cache the manifest
+  ctx.waitUntil(kvPutWrapped(env, KV_MANIFEST, manifest));
+
+  return jsonResponse(manifest, 200, {
+    'Cache-Control': `public, max-age=${cacheTtl}`,
+    'X-Cache': 'MISS',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// KV helpers — all values stored as { data, timestamp } envelope
+// ---------------------------------------------------------------------------
+
+async function kvGet(env, key) {
+  if (!env.PLUGINS_KV) return null;
+  try {
+    return await env.PLUGINS_KV.get(key, 'json');
+  } catch {
     return null;
   }
 }
 
-/**
- * Increment statistics counter
- */
-async function incrementStats(env, key) {
+async function kvPutWrapped(env, key, data) {
   if (!env.PLUGINS_KV) return;
-
   try {
-    const stats = await env.PLUGINS_KV.get(STATS_CACHE_KEY, 'json') || {
-      registryHits: 0,
-      registryFetches: 0,
-      pluginDownloads: {}
-    };
-
-    if (key === 'registry_hits') {
-      stats.registryHits = (stats.registryHits || 0) + 1;
-    } else if (key === 'registry_fetches') {
-      stats.registryFetches = (stats.registryFetches || 0) + 1;
-    } else if (key.startsWith('download:')) {
-      const plugin = key.slice(9);
-      stats.pluginDownloads[plugin] = (stats.pluginDownloads[plugin] || 0) + 1;
-    }
-
-    await env.PLUGINS_KV.put(STATS_CACHE_KEY, JSON.stringify(stats));
-  } catch (error) {
-    console.error('Stats update error:', error);
+    await env.PLUGINS_KV.put(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch (e) {
+    console.error(`KV put failed for key ${key}:`, e.message);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cache freshness helpers
+// ---------------------------------------------------------------------------
+
+function isFresh(entry, ttlSeconds) {
+  if (!entry || !entry.timestamp) return false;
+  return (Date.now() - entry.timestamp) / 1000 < ttlSeconds;
+}
+
+function cacheAge(entry) {
+  return Math.floor((Date.now() - (entry.timestamp || 0)) / 1000);
+}
+
+function ttlRemaining(entry, ttlSeconds) {
+  return Math.max(0, Math.floor(ttlSeconds - cacheAge(entry)));
+}
+
+// ---------------------------------------------------------------------------
+// Stats helper
+// ---------------------------------------------------------------------------
+
+async function bumpStat(env, key) {
+  if (!env.PLUGINS_KV) return;
+  try {
+    const entry   = (await kvGet(env, KV_STATS)) || {};
+    const stats   = entry.data || entry;
+    if (key === 'registry_hits')    stats.registryHits    = (stats.registryHits    || 0) + 1;
+    if (key === 'registry_fetches') stats.registryFetches = (stats.registryFetches || 0) + 1;
+    await env.PLUGINS_KV.put(KV_STATS, JSON.stringify(stats));
+  } catch { /* best-effort */ }
+}
+
+// ---------------------------------------------------------------------------
+// Merge categories from combined plugin list
+// ---------------------------------------------------------------------------
+
+function mergeCategoriesFromPlugins(plugins) {
+  const cats = {};
+  for (const p of plugins) {
+    const cat = p.category || 'other';
+    if (!cats[cat]) {
+      cats[cat] = { name: toTitleCase(cat), count: 0, tiers: [] };
+    }
+    cats[cat].count += 1;
+    if (p.tier && !cats[cat].tiers.includes(p.tier)) {
+      cats[cat].tiers.push(p.tier);
+    }
+  }
+  return cats;
+}
+
+function toTitleCase(str) {
+  return str.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }

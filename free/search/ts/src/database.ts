@@ -83,7 +83,7 @@ export class SearchDatabase {
       -- Search Indexes
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS search_indexes (
+      CREATE TABLE IF NOT EXISTS np_search_indexes (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         name VARCHAR(255) NOT NULL,
@@ -103,15 +103,15 @@ export class SearchDatabase {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE(source_account_id, name)
       );
-      CREATE INDEX IF NOT EXISTS idx_search_indexes_account ON search_indexes(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_search_indexes_name ON search_indexes(name);
-      CREATE INDEX IF NOT EXISTS idx_search_indexes_enabled ON search_indexes(enabled);
+      CREATE INDEX IF NOT EXISTS idx_np_search_indexes_account ON np_search_indexes(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_search_indexes_name ON np_search_indexes(name);
+      CREATE INDEX IF NOT EXISTS idx_np_search_indexes_enabled ON np_search_indexes(enabled);
 
       -- =====================================================================
       -- Search Documents
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS search_documents (
+      CREATE TABLE IF NOT EXISTS np_search_documents (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         index_name VARCHAR(255) NOT NULL,
@@ -121,17 +121,17 @@ export class SearchDatabase {
         indexed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE(source_account_id, index_name, source_id)
       );
-      CREATE INDEX IF NOT EXISTS idx_search_documents_account ON search_documents(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_search_documents_index ON search_documents(index_name);
-      CREATE INDEX IF NOT EXISTS idx_search_documents_source_id ON search_documents(source_id);
-      CREATE INDEX IF NOT EXISTS idx_search_documents_vector ON search_documents USING GIN(search_vector);
-      CREATE INDEX IF NOT EXISTS idx_search_documents_content ON search_documents USING GIN(content);
+      CREATE INDEX IF NOT EXISTS idx_np_search_documents_account ON np_search_documents(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_search_documents_index ON np_search_documents(index_name);
+      CREATE INDEX IF NOT EXISTS idx_np_search_documents_source_id ON np_search_documents(source_id);
+      CREATE INDEX IF NOT EXISTS idx_np_search_documents_vector ON np_search_documents USING GIN(search_vector);
+      CREATE INDEX IF NOT EXISTS idx_np_search_documents_content ON np_search_documents USING GIN(content);
 
       -- =====================================================================
       -- Search Synonyms
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS search_synonyms (
+      CREATE TABLE IF NOT EXISTS np_search_synonyms (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         index_name VARCHAR(255) NOT NULL,
@@ -140,15 +140,15 @@ export class SearchDatabase {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE(source_account_id, index_name, word)
       );
-      CREATE INDEX IF NOT EXISTS idx_search_synonyms_account ON search_synonyms(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_search_synonyms_index ON search_synonyms(index_name);
-      CREATE INDEX IF NOT EXISTS idx_search_synonyms_word ON search_synonyms(word);
+      CREATE INDEX IF NOT EXISTS idx_np_search_synonyms_account ON np_search_synonyms(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_search_synonyms_index ON np_search_synonyms(index_name);
+      CREATE INDEX IF NOT EXISTS idx_np_search_synonyms_word ON np_search_synonyms(word);
 
       -- =====================================================================
       -- Search Query Analytics
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS search_queries (
+      CREATE TABLE IF NOT EXISTS np_search_queries (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         source_account_id VARCHAR(128) DEFAULT 'primary',
         index_name VARCHAR(255),
@@ -160,16 +160,16 @@ export class SearchDatabase {
         clicked_result_id VARCHAR(255),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      CREATE INDEX IF NOT EXISTS idx_search_queries_account ON search_queries(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_search_queries_index ON search_queries(index_name);
-      CREATE INDEX IF NOT EXISTS idx_search_queries_text ON search_queries USING GIN(to_tsvector('english', query_text));
-      CREATE INDEX IF NOT EXISTS idx_search_queries_created ON search_queries(created_at);
+      CREATE INDEX IF NOT EXISTS idx_np_search_queries_account ON np_search_queries(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_search_queries_index ON np_search_queries(index_name);
+      CREATE INDEX IF NOT EXISTS idx_np_search_queries_text ON np_search_queries USING GIN(to_tsvector('english', query_text));
+      CREATE INDEX IF NOT EXISTS idx_np_search_queries_created ON np_search_queries(created_at);
 
       -- =====================================================================
       -- Webhook Events
       -- =====================================================================
 
-      CREATE TABLE IF NOT EXISTS search_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_search_webhook_events (
         id VARCHAR(255) PRIMARY KEY,
         source_account_id VARCHAR(128) DEFAULT 'primary',
         event_type VARCHAR(128),
@@ -179,10 +179,10 @@ export class SearchDatabase {
         error TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
-      CREATE INDEX IF NOT EXISTS idx_search_webhook_events_account ON search_webhook_events(source_account_id);
-      CREATE INDEX IF NOT EXISTS idx_search_webhook_events_type ON search_webhook_events(event_type);
-      CREATE INDEX IF NOT EXISTS idx_search_webhook_events_processed ON search_webhook_events(processed);
-      CREATE INDEX IF NOT EXISTS idx_search_webhook_events_created ON search_webhook_events(created_at);
+      CREATE INDEX IF NOT EXISTS idx_np_search_webhook_events_account ON np_search_webhook_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_search_webhook_events_type ON np_search_webhook_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_np_search_webhook_events_processed ON np_search_webhook_events(processed);
+      CREATE INDEX IF NOT EXISTS idx_np_search_webhook_events_created ON np_search_webhook_events(created_at);
     `;
 
     await this.db.execute(schema);
@@ -195,7 +195,7 @@ export class SearchDatabase {
 
   async createIndex(request: CreateIndexRequest): Promise<SearchIndexRecord> {
     const result = await this.query<Record<string, unknown>>(
-      `INSERT INTO search_indexes (
+      `INSERT INTO np_search_indexes (
         source_account_id, name, description, source_table, source_id_column,
         searchable_fields, filterable_fields, sortable_fields, ranking_rules,
         settings, engine
@@ -221,7 +221,7 @@ export class SearchDatabase {
 
   async getIndex(name: string): Promise<SearchIndexRecord | null> {
     const result = await this.query<Record<string, unknown>>(
-      'SELECT * FROM search_indexes WHERE source_account_id = $1 AND name = $2',
+      'SELECT * FROM np_search_indexes WHERE source_account_id = $1 AND name = $2',
       [this.sourceAccountId, name]
     );
 
@@ -230,7 +230,7 @@ export class SearchDatabase {
 
   async listIndexes(): Promise<SearchIndexRecord[]> {
     const result = await this.query<Record<string, unknown>>(
-      'SELECT * FROM search_indexes WHERE source_account_id = $1 ORDER BY created_at DESC',
+      'SELECT * FROM np_search_indexes WHERE source_account_id = $1 ORDER BY created_at DESC',
       [this.sourceAccountId]
     );
 
@@ -278,7 +278,7 @@ export class SearchDatabase {
     sets.push(`updated_at = NOW()`);
 
     const result = await this.query<Record<string, unknown>>(
-      `UPDATE search_indexes SET ${sets.join(', ')}
+      `UPDATE np_search_indexes SET ${sets.join(', ')}
        WHERE source_account_id = $1 AND name = $2
        RETURNING *`,
       params
@@ -290,19 +290,19 @@ export class SearchDatabase {
   async deleteIndex(name: string): Promise<boolean> {
     // Delete documents first
     await this.execute(
-      'DELETE FROM search_documents WHERE source_account_id = $1 AND index_name = $2',
+      'DELETE FROM np_search_documents WHERE source_account_id = $1 AND index_name = $2',
       [this.sourceAccountId, name]
     );
 
     // Delete synonyms
     await this.execute(
-      'DELETE FROM search_synonyms WHERE source_account_id = $1 AND index_name = $2',
+      'DELETE FROM np_search_synonyms WHERE source_account_id = $1 AND index_name = $2',
       [this.sourceAccountId, name]
     );
 
     // Delete index
     const count = await this.execute(
-      'DELETE FROM search_indexes WHERE source_account_id = $1 AND name = $2',
+      'DELETE FROM np_search_indexes WHERE source_account_id = $1 AND name = $2',
       [this.sourceAccountId, name]
     );
 
@@ -311,9 +311,9 @@ export class SearchDatabase {
 
   async updateIndexDocumentCount(name: string): Promise<void> {
     await this.execute(
-      `UPDATE search_indexes
+      `UPDATE np_search_indexes
        SET document_count = (
-         SELECT COUNT(*) FROM search_documents
+         SELECT COUNT(*) FROM np_search_documents
          WHERE source_account_id = $1 AND index_name = $2
        ),
        last_indexed_at = NOW()
@@ -353,7 +353,7 @@ export class SearchDatabase {
     const searchText = this.buildSearchVector(index, content);
 
     const result = await this.query<Record<string, unknown>>(
-      `INSERT INTO search_documents (
+      `INSERT INTO np_search_documents (
         source_account_id, index_name, source_id, content, search_vector
       ) VALUES ($1, $2, $3, $4, to_tsvector('english', $5))
       ON CONFLICT (source_account_id, index_name, source_id) DO UPDATE SET
@@ -387,7 +387,7 @@ export class SearchDatabase {
 
   async getDocument(indexName: string, sourceId: string): Promise<SearchDocumentRecord | null> {
     const result = await this.query<Record<string, unknown>>(
-      'SELECT * FROM search_documents WHERE source_account_id = $1 AND index_name = $2 AND source_id = $3',
+      'SELECT * FROM np_search_documents WHERE source_account_id = $1 AND index_name = $2 AND source_id = $3',
       [this.sourceAccountId, indexName, sourceId]
     );
 
@@ -396,7 +396,7 @@ export class SearchDatabase {
 
   async deleteDocument(indexName: string, sourceId: string): Promise<boolean> {
     const count = await this.execute(
-      'DELETE FROM search_documents WHERE source_account_id = $1 AND index_name = $2 AND source_id = $3',
+      'DELETE FROM np_search_documents WHERE source_account_id = $1 AND index_name = $2 AND source_id = $3',
       [this.sourceAccountId, indexName, sourceId]
     );
 
@@ -461,7 +461,7 @@ export class SearchDatabase {
         content,
         ts_rank_cd(search_vector, websearch_to_tsquery('english', $${paramIndex})) as score
         ${request.highlight ? `, ts_headline('english', content::text, websearch_to_tsquery('english', $${paramIndex}), 'MaxWords=50, MinWords=20') as headline` : ''}
-      FROM search_documents
+      FROM np_search_documents
       ${whereClause}
         AND search_vector @@ websearch_to_tsquery('english', $${paramIndex})
       ORDER BY score DESC
@@ -482,7 +482,7 @@ export class SearchDatabase {
     // Count total
     const countSql = `
       SELECT COUNT(*) as total
-      FROM search_documents
+      FROM np_search_documents
       ${whereClause}
         AND search_vector @@ websearch_to_tsquery('english', $${paramIndex})
     `;
@@ -537,7 +537,7 @@ export class SearchDatabase {
         SELECT
           content->>'${field}' as value,
           COUNT(*) as count
-        FROM search_documents
+        FROM np_search_documents
         ${whereClause}
           AND search_vector @@ websearch_to_tsquery('english', $${paramIndex})
           AND content->>'${field}' IS NOT NULL
@@ -585,7 +585,7 @@ export class SearchDatabase {
         SELECT
           unnest(string_to_array(regexp_replace(content::text, '[^a-zA-Z0-9 ]', ' ', 'g'), ' ')) as word,
           index_name
-        FROM search_documents
+        FROM np_search_documents
         WHERE source_account_id = $1 AND index_name = ANY($2)
       ) words
       WHERE word ILIKE $3 || '%' AND length(word) > 2
@@ -635,7 +635,7 @@ export class SearchDatabase {
       // Clear existing documents if full reindex
       if (options.fullReindex) {
         await this.execute(
-          'DELETE FROM search_documents WHERE source_account_id = $1 AND index_name = $2',
+          'DELETE FROM np_search_documents WHERE source_account_id = $1 AND index_name = $2',
           [this.sourceAccountId, indexName]
         );
       }
@@ -693,7 +693,7 @@ export class SearchDatabase {
 
   async addSynonym(indexName: string, word: string, synonyms: string[]): Promise<SearchSynonymRecord> {
     const result = await this.query<Record<string, unknown>>(
-      `INSERT INTO search_synonyms (source_account_id, index_name, word, synonyms)
+      `INSERT INTO np_search_synonyms (source_account_id, index_name, word, synonyms)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (source_account_id, index_name, word) DO UPDATE SET
          synonyms = EXCLUDED.synonyms
@@ -706,7 +706,7 @@ export class SearchDatabase {
 
   async getSynonyms(indexName: string): Promise<SearchSynonymRecord[]> {
     const result = await this.query<Record<string, unknown>>(
-      'SELECT * FROM search_synonyms WHERE source_account_id = $1 AND index_name = $2 ORDER BY word',
+      'SELECT * FROM np_search_synonyms WHERE source_account_id = $1 AND index_name = $2 ORDER BY word',
       [this.sourceAccountId, indexName]
     );
 
@@ -715,7 +715,7 @@ export class SearchDatabase {
 
   async deleteSynonym(indexName: string, id: string): Promise<boolean> {
     const count = await this.execute(
-      'DELETE FROM search_synonyms WHERE source_account_id = $1 AND index_name = $2 AND id = $3',
+      'DELETE FROM np_search_synonyms WHERE source_account_id = $1 AND index_name = $2 AND id = $3',
       [this.sourceAccountId, indexName, id]
     );
 
@@ -735,7 +735,7 @@ export class SearchDatabase {
     userId?: string
   ): Promise<void> {
     await this.execute(
-      `INSERT INTO search_queries (
+      `INSERT INTO np_search_queries (
         source_account_id, index_name, query_text, filters, result_count, took_ms, user_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
@@ -762,7 +762,7 @@ export class SearchDatabase {
         COUNT(*) as count,
         AVG(result_count) as avg_results,
         AVG(took_ms) as avg_time_ms
-      FROM search_queries
+      FROM np_search_queries
       WHERE source_account_id = $1
         AND created_at > NOW() - INTERVAL '${days} days'
       GROUP BY query_text
@@ -789,7 +789,7 @@ export class SearchDatabase {
         query_text as query,
         COUNT(*) as count,
         MAX(created_at) as last_searched
-      FROM search_queries
+      FROM np_search_queries
       WHERE source_account_id = $1
         AND result_count = 0
         AND created_at > NOW() - INTERVAL '${days} days'
@@ -820,7 +820,7 @@ export class SearchDatabase {
         AVG(result_count) as avg_results,
         AVG(took_ms) as avg_time_ms,
         (SUM(CASE WHEN result_count = 0 THEN 1 ELSE 0 END)::float / COUNT(*)) as zero_results_rate
-      FROM search_queries
+      FROM np_search_queries
       WHERE source_account_id = $1
         AND created_at > NOW() - INTERVAL '${days} days'`,
       [this.sourceAccountId]
@@ -843,7 +843,7 @@ export class SearchDatabase {
 
   async cleanupOldAnalytics(retentionDays: number): Promise<number> {
     const count = await this.execute(
-      `DELETE FROM search_queries
+      `DELETE FROM np_search_queries
        WHERE source_account_id = $1
          AND created_at < NOW() - INTERVAL '${retentionDays} days'`,
       [this.sourceAccountId]
@@ -858,7 +858,7 @@ export class SearchDatabase {
 
   async insertWebhookEvent(eventType: string, payload: Record<string, unknown>): Promise<void> {
     await this.execute(
-      `INSERT INTO search_webhook_events (id, source_account_id, event_type, payload)
+      `INSERT INTO np_search_webhook_events (id, source_account_id, event_type, payload)
        VALUES ($1, $2, $3, $4)`,
       [
         `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -871,7 +871,7 @@ export class SearchDatabase {
 
   async markEventProcessed(eventId: string, error?: string): Promise<void> {
     await this.execute(
-      `UPDATE search_webhook_events
+      `UPDATE np_search_webhook_events
        SET processed = true, processed_at = NOW(), error = $2
        WHERE id = $1`,
       [eventId, error ?? null]

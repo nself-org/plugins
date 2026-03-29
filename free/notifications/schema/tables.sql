@@ -14,6 +14,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 CREATE TABLE IF NOT EXISTS np_notifications_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     name VARCHAR(255) NOT NULL UNIQUE,          -- Template identifier (welcome_email, password_reset, etc.)
     category VARCHAR(50) NOT NULL,              -- transactional, marketing, system, alert
     channels JSONB NOT NULL DEFAULT '["email"]', -- Supported channels: email, push, sms
@@ -43,6 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_np_notifications_templates_active ON np_notificat
 
 CREATE TABLE IF NOT EXISTS np_notifications_preferences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     user_id UUID NOT NULL,
     channel VARCHAR(20) NOT NULL,               -- email, push, sms
     category VARCHAR(50) NOT NULL,              -- transactional, marketing, system, alert
@@ -67,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_np_notifications_preferences_enabled ON np_notifi
 
 CREATE TABLE IF NOT EXISTS np_notifications_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     user_id UUID NOT NULL,
     template_id UUID REFERENCES np_notifications_templates(id),
     template_name VARCHAR(255),                 -- Denormalized for history
@@ -139,6 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_np_notifications_messages_provider_id ON np_notif
 
 CREATE TABLE IF NOT EXISTS np_notifications_queue (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     notification_id UUID NOT NULL REFERENCES np_notifications_messages(id) ON DELETE CASCADE,
     status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed
     priority INTEGER DEFAULT 5,
@@ -165,6 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_np_notifications_queue_priority ON np_notificatio
 
 CREATE TABLE IF NOT EXISTS np_notifications_providers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     name VARCHAR(50) NOT NULL UNIQUE,           -- resend, sendgrid, mailgun, ses, twilio, fcm, etc.
     type VARCHAR(20) NOT NULL,                  -- email, push, sms
     priority INTEGER DEFAULT 5,                 -- Lower = higher priority
@@ -201,6 +206,7 @@ CREATE INDEX IF NOT EXISTS idx_np_notifications_providers_health ON np_notificat
 
 CREATE TABLE IF NOT EXISTS np_notifications_batches (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     name VARCHAR(255),
     category VARCHAR(50),
     batch_type VARCHAR(50) DEFAULT 'digest',    -- digest, bulk, scheduled

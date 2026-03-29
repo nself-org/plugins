@@ -1,0 +1,34 @@
+services:
+  vpn:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/vpn
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_vpn
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3200:3200"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3200"
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ${DOCKER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_VPN_MEMORY:-256m}
+          cpus: '${PLUGIN_VPN_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

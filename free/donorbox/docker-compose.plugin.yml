@@ -1,0 +1,36 @@
+services:
+  donorbox:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/donorbox
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_donorbox
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3074:3074"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "3074"
+      DONORBOX_API_KEY: ${DONORBOX_API_KEY:-}
+      DONORBOX_EMAIL: ${DONORBOX_EMAIL:-}
+      DONORBOX_WEBHOOK_SECRET: ${DONORBOX_WEBHOOK_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3074/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ${DOCKER_NETWORK}
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_DONORBOX_MEMORY:-256m}
+          cpus: '${PLUGIN_DONORBOX_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

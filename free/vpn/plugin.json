@@ -1,7 +1,7 @@
 {
   "name": "vpn",
   "version": "1.0.0",
-  "description": "Multi-provider VPN management (3 VPN providers) and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection",
+  "description": "Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin.",
   "author": "nself",
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/vpn",
@@ -9,29 +9,11 @@
   "category": "authentication",
   "subcategory": "orchestration",
   "path": "plugins/vpn",
-  "language": "typescript",
-  "runtime": "node",
-  "minNselfVersion": "0.4.8",
+  "language": "go",
+  "minNselfVersion": "0.9.9",
   "port": 3200,
-  "dependencies": {
-    "npm": [
-      "@nself/plugin-utils",
-      "fastify",
-      "fastify-cors",
-      "commander",
-      "@ctrl/transmission",
-      "wireguard-tools",
-      "node-openvpn",
-      "pg"
-    ],
-    "system": [
-      "wireguard-tools",
-      "openvpn",
-      "transmission-cli",
-      "curl",
-      "jq"
-    ]
-  },
+  "dependencies": [],
+  "optionalDependencies": [],
   "tables": [
     "np_vpn_providers",
     "np_vpn_credentials",
@@ -50,11 +32,13 @@
   ],
   "webhooks": [],
   "apiEndpoints": [
+    "GET /api/health",
     "GET /api/providers",
     "GET /api/providers/:id",
     "POST /api/providers/:id/credentials",
     "GET /api/servers",
     "GET /api/servers/p2p",
+    "POST /api/servers/sync",
     "POST /api/connect",
     "POST /api/disconnect",
     "GET /api/status",
@@ -153,6 +137,17 @@
       "required": false,
       "description": "Minutes between server rotations",
       "default": "60"
+    },
+    {
+      "name": "TORRENT_MANAGER_URL",
+      "required": false,
+      "description": "URL of the torrent-manager plugin API. Required for torrent download forwarding.",
+      "default": "http://localhost:3210"
+    },
+    {
+      "name": "INTERNAL_API_KEY",
+      "required": false,
+      "description": "Shared API key for authenticating requests to sibling plugins (e.g. torrent-manager)"
     }
   ],
   "multiApp": {
@@ -167,7 +162,7 @@
     "Automatic server carousel for redundancy",
     "Kill switch and leak protection",
     "Port forwarding (PIA)",
-    "Torrent client integration with interface binding",
+    "Torrent download forwarding via torrent-manager plugin (requires torrent-manager to be installed)",
     "Connection monitoring and auto-reconnect",
     "DNS/IP/WebRTC leak testing",
     "Server performance tracking",
@@ -179,5 +174,19 @@
     "nordvpn",
     "pia",
     "mullvad"
-  ]
+  ],
+  "binary_name": "vpn",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "status": "stable",
+  "tier": "free",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false
 }

@@ -16,7 +16,7 @@ importers:
         version: 9.0.1
       '@nself/plugin-utils':
         specifier: file:../../../shared
-        version: file:../../../shared(fastify@4.29.1)
+        version: file:../../../shared(fastify@4.29.1)(pg@8.18.0)
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -240,6 +240,7 @@ packages:
     resolution: {directory: ../../../shared, type: directory}
     peerDependencies:
       fastify: ^4.24.0
+      pg: ^8.11.3
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -722,13 +723,11 @@ snapshots:
     dependencies:
       fast-deep-equal: 3.1.3
 
-  '@nself/plugin-utils@file:../../../shared(fastify@4.29.1)':
+  '@nself/plugin-utils@file:../../../shared(fastify@4.29.1)(pg@8.18.0)':
     dependencies:
       dotenv: 16.6.1
       fastify: 4.29.1
       pg: 8.18.0
-    transitivePeerDependencies:
-      - pg-native
 
   '@pinojs/redact@0.4.0': {}
 

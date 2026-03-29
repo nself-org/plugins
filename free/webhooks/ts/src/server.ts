@@ -273,7 +273,7 @@ export async function createServer(config?: Partial<Config>) {
   app.post<{ Params: { id: string } }>('/v1/dead-letter/:id/retry', async (request, reply) => {
     const currentDb = scopedDb(request);
     const deadLetter = await currentDb.query<{ delivery_id: string }>(
-      'SELECT delivery_id FROM webhook_dead_letters WHERE id = $1 AND source_account_id = $2',
+      'SELECT delivery_id FROM np_webhooks_dead_letters WHERE id = $1 AND source_account_id = $2',
       [request.params.id, currentDb.getCurrentSourceAccountId()]
     );
 

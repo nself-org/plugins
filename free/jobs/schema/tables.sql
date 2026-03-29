@@ -30,6 +30,7 @@ CREATE TYPE job_priority AS ENUM (
 
 CREATE TABLE IF NOT EXISTS jobs_tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     bullmq_id VARCHAR(255) UNIQUE,              -- BullMQ job ID
     queue_name VARCHAR(100) NOT NULL DEFAULT 'default',
     job_type VARCHAR(100) NOT NULL,             -- send-email, http-request, etc.
@@ -88,6 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_tasks_queue_status ON jobs_tasks(queue_name,
 
 CREATE TABLE IF NOT EXISTS job_results (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     job_id UUID NOT NULL REFERENCES jobs_tasks(id) ON DELETE CASCADE,
 
     -- Result data
@@ -115,6 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_job_results_created_at ON job_results(created_at)
 
 CREATE TABLE IF NOT EXISTS job_failures (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     job_id UUID NOT NULL REFERENCES jobs_tasks(id) ON DELETE CASCADE,
 
     -- Error details
@@ -149,6 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_job_failures_will_retry ON job_failures(will_retr
 
 CREATE TABLE IF NOT EXISTS job_schedules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
 
     -- Schedule identification
     name VARCHAR(255) UNIQUE NOT NULL,

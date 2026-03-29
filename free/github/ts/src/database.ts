@@ -77,7 +77,7 @@ export class GitHubDatabase {
       -- =======================================================================
       -- Organizations
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_organizations (
+      CREATE TABLE IF NOT EXISTS np_github_organizations (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -106,13 +106,13 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_orgs_login ON github_organizations(login);
-      CREATE INDEX IF NOT EXISTS idx_github_orgs_source ON github_organizations(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_orgs_login ON np_github_organizations(login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_orgs_source ON np_github_organizations(source_account_id);
 
       -- =======================================================================
       -- Repositories
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_repositories (
+      CREATE TABLE IF NOT EXISTS np_github_repositories (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -156,15 +156,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_repos_owner ON github_repositories(owner_login);
-      CREATE INDEX IF NOT EXISTS idx_github_repos_name ON github_repositories(full_name);
-      CREATE INDEX IF NOT EXISTS idx_github_repos_language ON github_repositories(language);
-      CREATE INDEX IF NOT EXISTS idx_github_repos_source ON github_repositories(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_repos_owner ON np_github_repositories(owner_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_repos_name ON np_github_repositories(full_name);
+      CREATE INDEX IF NOT EXISTS idx_np_github_repos_language ON np_github_repositories(language);
+      CREATE INDEX IF NOT EXISTS idx_np_github_repos_source ON np_github_repositories(source_account_id);
 
       -- =======================================================================
       -- Branches
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_branches (
+      CREATE TABLE IF NOT EXISTS np_github_branches (
         id VARCHAR(500) NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         repo_id BIGINT,
@@ -177,14 +177,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_branches_repo ON github_branches(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_branches_name ON github_branches(name);
-      CREATE INDEX IF NOT EXISTS idx_github_branches_source ON github_branches(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_branches_repo ON np_github_branches(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_branches_name ON np_github_branches(name);
+      CREATE INDEX IF NOT EXISTS idx_np_github_branches_source ON np_github_branches(source_account_id);
 
       -- =======================================================================
       -- Issues
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_issues (
+      CREATE TABLE IF NOT EXISTS np_github_issues (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -211,16 +211,16 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_issues_repo ON github_issues(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_issues_state ON github_issues(state);
-      CREATE INDEX IF NOT EXISTS idx_github_issues_user ON github_issues(user_login);
-      CREATE INDEX IF NOT EXISTS idx_github_issues_created ON github_issues(created_at);
-      CREATE INDEX IF NOT EXISTS idx_github_issues_source ON github_issues(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issues_repo ON np_github_issues(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issues_state ON np_github_issues(state);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issues_user ON np_github_issues(user_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issues_created ON np_github_issues(created_at);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issues_source ON np_github_issues(source_account_id);
 
       -- =======================================================================
       -- Pull Requests
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_pull_requests (
+      CREATE TABLE IF NOT EXISTS np_github_pull_requests (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -263,17 +263,17 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_prs_repo ON github_pull_requests(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_prs_state ON github_pull_requests(state);
-      CREATE INDEX IF NOT EXISTS idx_github_prs_user ON github_pull_requests(user_login);
-      CREATE INDEX IF NOT EXISTS idx_github_prs_merged ON github_pull_requests(merged);
-      CREATE INDEX IF NOT EXISTS idx_github_prs_created ON github_pull_requests(created_at);
-      CREATE INDEX IF NOT EXISTS idx_github_prs_source ON github_pull_requests(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_prs_repo ON np_github_pull_requests(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_prs_state ON np_github_pull_requests(state);
+      CREATE INDEX IF NOT EXISTS idx_np_github_prs_user ON np_github_pull_requests(user_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_prs_merged ON np_github_pull_requests(merged);
+      CREATE INDEX IF NOT EXISTS idx_np_github_prs_created ON np_github_pull_requests(created_at);
+      CREATE INDEX IF NOT EXISTS idx_np_github_prs_source ON np_github_pull_requests(source_account_id);
 
       -- =======================================================================
       -- Pull Request Reviews
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_pr_reviews (
+      CREATE TABLE IF NOT EXISTS np_github_pr_reviews (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -291,15 +291,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_pr_reviews_pr ON github_pr_reviews(pull_request_id);
-      CREATE INDEX IF NOT EXISTS idx_github_pr_reviews_user ON github_pr_reviews(user_login);
-      CREATE INDEX IF NOT EXISTS idx_github_pr_reviews_state ON github_pr_reviews(state);
-      CREATE INDEX IF NOT EXISTS idx_github_pr_reviews_source ON github_pr_reviews(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_reviews_pr ON np_github_pr_reviews(pull_request_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_reviews_user ON np_github_pr_reviews(user_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_reviews_state ON np_github_pr_reviews(state);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_reviews_source ON np_github_pr_reviews(source_account_id);
 
       -- =======================================================================
       -- Issue Comments
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_issue_comments (
+      CREATE TABLE IF NOT EXISTS np_github_issue_comments (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -318,15 +318,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_issue_comments_repo ON github_issue_comments(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_issue_comments_issue ON github_issue_comments(issue_number);
-      CREATE INDEX IF NOT EXISTS idx_github_issue_comments_user ON github_issue_comments(user_login);
-      CREATE INDEX IF NOT EXISTS idx_github_issue_comments_source ON github_issue_comments(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issue_comments_repo ON np_github_issue_comments(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issue_comments_issue ON np_github_issue_comments(issue_number);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issue_comments_user ON np_github_issue_comments(user_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_issue_comments_source ON np_github_issue_comments(source_account_id);
 
       -- =======================================================================
       -- Pull Request Review Comments
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_pr_review_comments (
+      CREATE TABLE IF NOT EXISTS np_github_pr_review_comments (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -352,14 +352,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_pr_review_comments_pr ON github_pr_review_comments(pull_request_id);
-      CREATE INDEX IF NOT EXISTS idx_github_pr_review_comments_review ON github_pr_review_comments(review_id);
-      CREATE INDEX IF NOT EXISTS idx_github_pr_review_comments_source ON github_pr_review_comments(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_review_comments_pr ON np_github_pr_review_comments(pull_request_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_review_comments_review ON np_github_pr_review_comments(review_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_pr_review_comments_source ON np_github_pr_review_comments(source_account_id);
 
       -- =======================================================================
       -- Commit Comments
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_commit_comments (
+      CREATE TABLE IF NOT EXISTS np_github_commit_comments (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -379,14 +379,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_commit_comments_repo ON github_commit_comments(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_commit_comments_commit ON github_commit_comments(commit_sha);
-      CREATE INDEX IF NOT EXISTS idx_github_commit_comments_source ON github_commit_comments(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commit_comments_repo ON np_github_commit_comments(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commit_comments_commit ON np_github_commit_comments(commit_sha);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commit_comments_source ON np_github_commit_comments(source_account_id);
 
       -- =======================================================================
       -- Commits
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_commits (
+      CREATE TABLE IF NOT EXISTS np_github_commits (
         sha VARCHAR(40) NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -412,15 +412,15 @@ export class GitHubDatabase {
         PRIMARY KEY (sha, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_commits_repo ON github_commits(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_commits_author ON github_commits(author_login);
-      CREATE INDEX IF NOT EXISTS idx_github_commits_date ON github_commits(author_date);
-      CREATE INDEX IF NOT EXISTS idx_github_commits_source ON github_commits(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commits_repo ON np_github_commits(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commits_author ON np_github_commits(author_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commits_date ON np_github_commits(author_date);
+      CREATE INDEX IF NOT EXISTS idx_np_github_commits_source ON np_github_commits(source_account_id);
 
       -- =======================================================================
       -- Releases
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_releases (
+      CREATE TABLE IF NOT EXISTS np_github_releases (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -442,15 +442,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_releases_repo ON github_releases(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_releases_tag ON github_releases(tag_name);
-      CREATE INDEX IF NOT EXISTS idx_github_releases_published ON github_releases(published_at);
-      CREATE INDEX IF NOT EXISTS idx_github_releases_source ON github_releases(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_releases_repo ON np_github_releases(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_releases_tag ON np_github_releases(tag_name);
+      CREATE INDEX IF NOT EXISTS idx_np_github_releases_published ON np_github_releases(published_at);
+      CREATE INDEX IF NOT EXISTS idx_np_github_releases_source ON np_github_releases(source_account_id);
 
       -- =======================================================================
       -- Tags
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_tags (
+      CREATE TABLE IF NOT EXISTS np_github_tags (
         id VARCHAR(500) NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         repo_id BIGINT,
@@ -466,14 +466,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_tags_repo ON github_tags(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_tags_name ON github_tags(name);
-      CREATE INDEX IF NOT EXISTS idx_github_tags_source ON github_tags(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_tags_repo ON np_github_tags(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_tags_name ON np_github_tags(name);
+      CREATE INDEX IF NOT EXISTS idx_np_github_tags_source ON np_github_tags(source_account_id);
 
       -- =======================================================================
       -- Milestones
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_milestones (
+      CREATE TABLE IF NOT EXISTS np_github_milestones (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -494,14 +494,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_milestones_repo ON github_milestones(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_milestones_state ON github_milestones(state);
-      CREATE INDEX IF NOT EXISTS idx_github_milestones_source ON github_milestones(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_milestones_repo ON np_github_milestones(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_milestones_state ON np_github_milestones(state);
+      CREATE INDEX IF NOT EXISTS idx_np_github_milestones_source ON np_github_milestones(source_account_id);
 
       -- =======================================================================
       -- Labels
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_labels (
+      CREATE TABLE IF NOT EXISTS np_github_labels (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -514,14 +514,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_labels_repo ON github_labels(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_labels_name ON github_labels(name);
-      CREATE INDEX IF NOT EXISTS idx_github_labels_source ON github_labels(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_labels_repo ON np_github_labels(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_labels_name ON np_github_labels(name);
+      CREATE INDEX IF NOT EXISTS idx_np_github_labels_source ON np_github_labels(source_account_id);
 
       -- =======================================================================
       -- Workflows
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_workflows (
+      CREATE TABLE IF NOT EXISTS np_github_workflows (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -537,14 +537,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_workflows_repo ON github_workflows(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_workflows_state ON github_workflows(state);
-      CREATE INDEX IF NOT EXISTS idx_github_workflows_source ON github_workflows(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflows_repo ON np_github_workflows(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflows_state ON np_github_workflows(state);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflows_source ON np_github_workflows(source_account_id);
 
       -- =======================================================================
       -- Workflow Runs
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_workflow_runs (
+      CREATE TABLE IF NOT EXISTS np_github_workflow_runs (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -571,18 +571,18 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_repo ON github_workflow_runs(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_workflow ON github_workflow_runs(workflow_id);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_status ON github_workflow_runs(status);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_conclusion ON github_workflow_runs(conclusion);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_event ON github_workflow_runs(event);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_created ON github_workflow_runs(created_at);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_runs_source ON github_workflow_runs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_repo ON np_github_workflow_runs(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_workflow ON np_github_workflow_runs(workflow_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_status ON np_github_workflow_runs(status);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_conclusion ON np_github_workflow_runs(conclusion);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_event ON np_github_workflow_runs(event);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_created ON np_github_workflow_runs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_runs_source ON np_github_workflow_runs(source_account_id);
 
       -- =======================================================================
       -- Workflow Jobs
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_workflow_jobs (
+      CREATE TABLE IF NOT EXISTS np_github_workflow_jobs (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -607,15 +607,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_jobs_run ON github_workflow_jobs(run_id);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_jobs_status ON github_workflow_jobs(status);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_jobs_conclusion ON github_workflow_jobs(conclusion);
-      CREATE INDEX IF NOT EXISTS idx_github_workflow_jobs_source ON github_workflow_jobs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_jobs_run ON np_github_workflow_jobs(run_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_jobs_status ON np_github_workflow_jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_jobs_conclusion ON np_github_workflow_jobs(conclusion);
+      CREATE INDEX IF NOT EXISTS idx_np_github_workflow_jobs_source ON np_github_workflow_jobs(source_account_id);
 
       -- =======================================================================
       -- Check Suites
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_check_suites (
+      CREATE TABLE IF NOT EXISTS np_github_check_suites (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -635,15 +635,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_check_suites_repo ON github_check_suites(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_check_suites_sha ON github_check_suites(head_sha);
-      CREATE INDEX IF NOT EXISTS idx_github_check_suites_status ON github_check_suites(status);
-      CREATE INDEX IF NOT EXISTS idx_github_check_suites_source ON github_check_suites(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_suites_repo ON np_github_check_suites(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_suites_sha ON np_github_check_suites(head_sha);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_suites_status ON np_github_check_suites(status);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_suites_source ON np_github_check_suites(source_account_id);
 
       -- =======================================================================
       -- Check Runs
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_check_runs (
+      CREATE TABLE IF NOT EXISTS np_github_check_runs (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -666,16 +666,16 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_check_runs_suite ON github_check_runs(check_suite_id);
-      CREATE INDEX IF NOT EXISTS idx_github_check_runs_sha ON github_check_runs(head_sha);
-      CREATE INDEX IF NOT EXISTS idx_github_check_runs_status ON github_check_runs(status);
-      CREATE INDEX IF NOT EXISTS idx_github_check_runs_name ON github_check_runs(name);
-      CREATE INDEX IF NOT EXISTS idx_github_check_runs_source ON github_check_runs(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_runs_suite ON np_github_check_runs(check_suite_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_runs_sha ON np_github_check_runs(head_sha);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_runs_status ON np_github_check_runs(status);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_runs_name ON np_github_check_runs(name);
+      CREATE INDEX IF NOT EXISTS idx_np_github_check_runs_source ON np_github_check_runs(source_account_id);
 
       -- =======================================================================
       -- Deployments
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_deployments (
+      CREATE TABLE IF NOT EXISTS np_github_deployments (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -697,15 +697,15 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_deployments_repo ON github_deployments(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_deployments_env ON github_deployments(environment);
-      CREATE INDEX IF NOT EXISTS idx_github_deployments_status ON github_deployments(current_status);
-      CREATE INDEX IF NOT EXISTS idx_github_deployments_source ON github_deployments(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_deployments_repo ON np_github_deployments(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_deployments_env ON np_github_deployments(environment);
+      CREATE INDEX IF NOT EXISTS idx_np_github_deployments_status ON np_github_deployments(current_status);
+      CREATE INDEX IF NOT EXISTS idx_np_github_deployments_source ON np_github_deployments(source_account_id);
 
       -- =======================================================================
       -- Teams
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_teams (
+      CREATE TABLE IF NOT EXISTS np_github_teams (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         node_id VARCHAR(255),
@@ -725,14 +725,14 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_teams_org ON github_teams(org_login);
-      CREATE INDEX IF NOT EXISTS idx_github_teams_slug ON github_teams(slug);
-      CREATE INDEX IF NOT EXISTS idx_github_teams_source ON github_teams(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_teams_org ON np_github_teams(org_login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_teams_slug ON np_github_teams(slug);
+      CREATE INDEX IF NOT EXISTS idx_np_github_teams_source ON np_github_teams(source_account_id);
 
       -- =======================================================================
       -- Collaborators
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_collaborators (
+      CREATE TABLE IF NOT EXISTS np_github_collaborators (
         id BIGINT NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         repo_id BIGINT,
@@ -745,13 +745,13 @@ export class GitHubDatabase {
         PRIMARY KEY (repo_id, id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_collaborators_login ON github_collaborators(login);
-      CREATE INDEX IF NOT EXISTS idx_github_collaborators_source ON github_collaborators(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_collaborators_login ON np_github_collaborators(login);
+      CREATE INDEX IF NOT EXISTS idx_np_github_collaborators_source ON np_github_collaborators(source_account_id);
 
       -- =======================================================================
       -- Webhook Events
       -- =======================================================================
-      CREATE TABLE IF NOT EXISTS github_webhook_events (
+      CREATE TABLE IF NOT EXISTS np_github_webhook_events (
         id VARCHAR(255) NOT NULL,
         source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
         event VARCHAR(100) NOT NULL,
@@ -767,30 +767,30 @@ export class GitHubDatabase {
         PRIMARY KEY (id, source_account_id)
       );
 
-      CREATE INDEX IF NOT EXISTS idx_github_events_event ON github_webhook_events(event);
-      CREATE INDEX IF NOT EXISTS idx_github_events_repo ON github_webhook_events(repo_id);
-      CREATE INDEX IF NOT EXISTS idx_github_events_processed ON github_webhook_events(processed);
-      CREATE INDEX IF NOT EXISTS idx_github_events_received ON github_webhook_events(received_at);
-      CREATE INDEX IF NOT EXISTS idx_github_events_source ON github_webhook_events(source_account_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_events_event ON np_github_webhook_events(event);
+      CREATE INDEX IF NOT EXISTS idx_np_github_events_repo ON np_github_webhook_events(repo_id);
+      CREATE INDEX IF NOT EXISTS idx_np_github_events_processed ON np_github_webhook_events(processed);
+      CREATE INDEX IF NOT EXISTS idx_np_github_events_received ON np_github_webhook_events(received_at);
+      CREATE INDEX IF NOT EXISTS idx_np_github_events_source ON np_github_webhook_events(source_account_id);
 
       -- =======================================================================
       -- Views (multi-app aware)
       -- =======================================================================
 
-      CREATE OR REPLACE VIEW github_open_items AS
+      CREATE OR REPLACE VIEW np_github_open_items AS
       SELECT
         r.source_account_id,
         r.full_name AS repo,
         COUNT(DISTINCT i.id) FILTER (WHERE i.state = 'open') AS open_issues,
         COUNT(DISTINCT p.id) FILTER (WHERE p.state = 'open') AS open_prs,
         COUNT(DISTINCT p.id) FILTER (WHERE p.state = 'open' AND p.draft = TRUE) AS draft_prs
-      FROM github_repositories r
-      LEFT JOIN github_issues i ON r.id = i.repo_id AND r.source_account_id = i.source_account_id
-      LEFT JOIN github_pull_requests p ON r.id = p.repo_id AND r.source_account_id = p.source_account_id
+      FROM np_github_repositories r
+      LEFT JOIN np_github_issues i ON r.id = i.repo_id AND r.source_account_id = i.source_account_id
+      LEFT JOIN np_github_pull_requests p ON r.id = p.repo_id AND r.source_account_id = p.source_account_id
       GROUP BY r.source_account_id, r.full_name
       ORDER BY open_issues + open_prs DESC;
 
-      CREATE OR REPLACE VIEW github_recent_activity AS
+      CREATE OR REPLACE VIEW np_github_recent_activity AS
       SELECT
         c.source_account_id,
         'commit' AS type,
@@ -799,8 +799,8 @@ export class GitHubDatabase {
         c.author_login AS user_login,
         r.full_name AS repo,
         c.author_date AS created_at
-      FROM github_commits c
-      JOIN github_repositories r ON c.repo_id = r.id AND c.source_account_id = r.source_account_id
+      FROM np_github_commits c
+      JOIN np_github_repositories r ON c.repo_id = r.id AND c.source_account_id = r.source_account_id
       WHERE c.author_date > NOW() - INTERVAL '7 days'
       UNION ALL
       SELECT
@@ -811,8 +811,8 @@ export class GitHubDatabase {
         p.user_login,
         r.full_name AS repo,
         p.created_at
-      FROM github_pull_requests p
-      JOIN github_repositories r ON p.repo_id = r.id AND p.source_account_id = r.source_account_id
+      FROM np_github_pull_requests p
+      JOIN np_github_repositories r ON p.repo_id = r.id AND p.source_account_id = r.source_account_id
       WHERE p.created_at > NOW() - INTERVAL '7 days'
       UNION ALL
       SELECT
@@ -823,13 +823,13 @@ export class GitHubDatabase {
         i.user_login,
         r.full_name AS repo,
         i.created_at
-      FROM github_issues i
-      JOIN github_repositories r ON i.repo_id = r.id AND i.source_account_id = r.source_account_id
+      FROM np_github_issues i
+      JOIN np_github_repositories r ON i.repo_id = r.id AND i.source_account_id = r.source_account_id
       WHERE i.created_at > NOW() - INTERVAL '7 days'
       ORDER BY created_at DESC
       LIMIT 100;
 
-      CREATE OR REPLACE VIEW github_workflow_stats AS
+      CREATE OR REPLACE VIEW np_github_workflow_stats AS
       SELECT
         w.source_account_id,
         r.full_name AS repo,
@@ -843,13 +843,13 @@ export class GitHubDatabase {
           NULLIF(COUNT(*) FILTER (WHERE w.conclusion IS NOT NULL), 0) * 100, 2
         ) AS success_rate,
         AVG(EXTRACT(EPOCH FROM (w.updated_at - w.run_started_at))) FILTER (WHERE w.conclusion IS NOT NULL) AS avg_duration_seconds
-      FROM github_workflow_runs w
-      JOIN github_repositories r ON w.repo_id = r.id AND w.source_account_id = r.source_account_id
+      FROM np_github_workflow_runs w
+      JOIN np_github_repositories r ON w.repo_id = r.id AND w.source_account_id = r.source_account_id
       WHERE w.created_at > NOW() - INTERVAL '30 days'
       GROUP BY w.source_account_id, r.full_name, w.workflow_name
       ORDER BY total_runs DESC;
 
-      CREATE OR REPLACE VIEW github_pr_review_stats AS
+      CREATE OR REPLACE VIEW np_github_pr_review_stats AS
       SELECT
         pr.source_account_id,
         r.full_name AS repo,
@@ -859,13 +859,13 @@ export class GitHubDatabase {
         AVG(EXTRACT(EPOCH FROM (COALESCE(pr.merged_at, pr.closed_at) - pr.created_at)) / 3600) FILTER (WHERE pr.state = 'closed') AS avg_hours_to_close,
         ROUND(AVG(pr.review_comments)::numeric, 1) AS avg_review_comments,
         ROUND(AVG(pr.commits)::numeric, 1) AS avg_commits
-      FROM github_pull_requests pr
-      JOIN github_repositories r ON pr.repo_id = r.id AND pr.source_account_id = r.source_account_id
+      FROM np_github_pull_requests pr
+      JOIN np_github_repositories r ON pr.repo_id = r.id AND pr.source_account_id = r.source_account_id
       WHERE pr.created_at > NOW() - INTERVAL '90 days'
       GROUP BY pr.source_account_id, r.full_name
       ORDER BY total_prs DESC;
 
-      CREATE OR REPLACE VIEW github_contributor_stats AS
+      CREATE OR REPLACE VIEW np_github_contributor_stats AS
       SELECT
         c.source_account_id,
         c.author_login AS contributor,
@@ -875,15 +875,15 @@ export class GitHubDatabase {
         SUM(c.deletions) AS total_deletions,
         COUNT(DISTINCT pr.id) AS prs_opened,
         COUNT(DISTINCT pr.id) FILTER (WHERE pr.merged = TRUE) AS prs_merged
-      FROM github_commits c
-      JOIN github_repositories r ON c.repo_id = r.id AND c.source_account_id = r.source_account_id
-      LEFT JOIN github_pull_requests pr ON pr.repo_id = r.id AND pr.user_login = c.author_login AND pr.source_account_id = c.source_account_id
+      FROM np_github_commits c
+      JOIN np_github_repositories r ON c.repo_id = r.id AND c.source_account_id = r.source_account_id
+      LEFT JOIN np_github_pull_requests pr ON pr.repo_id = r.id AND pr.user_login = c.author_login AND pr.source_account_id = c.source_account_id
       WHERE c.author_date > NOW() - INTERVAL '90 days'
         AND c.author_login IS NOT NULL
       GROUP BY c.source_account_id, c.author_login, r.full_name
       ORDER BY commit_count DESC;
 
-      CREATE OR REPLACE VIEW github_milestone_progress AS
+      CREATE OR REPLACE VIEW np_github_milestone_progress AS
       SELECT
         m.source_account_id,
         r.full_name AS repo,
@@ -896,11 +896,11 @@ export class GitHubDatabase {
           m.closed_issues::numeric / NULLIF(m.open_issues + m.closed_issues, 0) * 100, 2
         ) AS completion_percent,
         m.due_on
-      FROM github_milestones m
-      JOIN github_repositories r ON m.repo_id = r.id AND m.source_account_id = r.source_account_id
+      FROM np_github_milestones m
+      JOIN np_github_repositories r ON m.repo_id = r.id AND m.source_account_id = r.source_account_id
       ORDER BY m.due_on ASC NULLS LAST;
 
-      CREATE OR REPLACE VIEW github_check_status AS
+      CREATE OR REPLACE VIEW np_github_check_status AS
       SELECT
         cs.source_account_id,
         r.full_name AS repo,
@@ -912,9 +912,9 @@ export class GitHubDatabase {
         COUNT(cr.id) FILTER (WHERE cr.conclusion = 'success') AS passed,
         COUNT(cr.id) FILTER (WHERE cr.conclusion = 'failure') AS failed,
         cs.updated_at
-      FROM github_check_suites cs
-      JOIN github_repositories r ON cs.repo_id = r.id AND cs.source_account_id = r.source_account_id
-      LEFT JOIN github_check_runs cr ON cr.check_suite_id = cs.id AND cr.source_account_id = cs.source_account_id
+      FROM np_github_check_suites cs
+      JOIN np_github_repositories r ON cs.repo_id = r.id AND cs.source_account_id = r.source_account_id
+      LEFT JOIN np_github_check_runs cr ON cr.check_suite_id = cs.id AND cr.source_account_id = cs.source_account_id
       WHERE cs.created_at > NOW() - INTERVAL '7 days'
       GROUP BY cs.source_account_id, r.full_name, cs.head_branch, cs.head_sha, cs.status, cs.conclusion, cs.updated_at
       ORDER BY cs.updated_at DESC;
@@ -926,7 +926,7 @@ export class GitHubDatabase {
     const migrationCheck = await this.db.queryOne<{ exists: boolean }>(
       `SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'github_repositories' AND column_name = 'source_account_id'
+        WHERE table_name = 'np_github_repositories' AND column_name = 'source_account_id'
       )`
     );
 
@@ -934,28 +934,28 @@ export class GitHubDatabase {
       logger.info('Migrating GitHub schema for multi-app support...');
 
       const tables = [
-        { name: 'github_organizations', pk: 'id' },
-        { name: 'github_repositories', pk: 'id' },
-        { name: 'github_branches', pk: 'id' },
-        { name: 'github_issues', pk: 'id' },
-        { name: 'github_pull_requests', pk: 'id' },
-        { name: 'github_pr_reviews', pk: 'id' },
-        { name: 'github_issue_comments', pk: 'id' },
-        { name: 'github_pr_review_comments', pk: 'id' },
-        { name: 'github_commit_comments', pk: 'id' },
-        { name: 'github_commits', pk: 'sha' },
-        { name: 'github_releases', pk: 'id' },
-        { name: 'github_tags', pk: 'id' },
-        { name: 'github_milestones', pk: 'id' },
-        { name: 'github_labels', pk: 'id' },
-        { name: 'github_workflows', pk: 'id' },
-        { name: 'github_workflow_runs', pk: 'id' },
-        { name: 'github_workflow_jobs', pk: 'id' },
-        { name: 'github_check_suites', pk: 'id' },
-        { name: 'github_check_runs', pk: 'id' },
-        { name: 'github_deployments', pk: 'id' },
-        { name: 'github_teams', pk: 'id' },
-        { name: 'github_webhook_events', pk: 'id' },
+        { name: 'np_github_organizations', pk: 'id' },
+        { name: 'np_github_repositories', pk: 'id' },
+        { name: 'np_github_branches', pk: 'id' },
+        { name: 'np_github_issues', pk: 'id' },
+        { name: 'np_github_pull_requests', pk: 'id' },
+        { name: 'np_github_pr_reviews', pk: 'id' },
+        { name: 'np_github_issue_comments', pk: 'id' },
+        { name: 'np_github_pr_review_comments', pk: 'id' },
+        { name: 'np_github_commit_comments', pk: 'id' },
+        { name: 'np_github_commits', pk: 'sha' },
+        { name: 'np_github_releases', pk: 'id' },
+        { name: 'np_github_tags', pk: 'id' },
+        { name: 'np_github_milestones', pk: 'id' },
+        { name: 'np_github_labels', pk: 'id' },
+        { name: 'np_github_workflows', pk: 'id' },
+        { name: 'np_github_workflow_runs', pk: 'id' },
+        { name: 'np_github_workflow_jobs', pk: 'id' },
+        { name: 'np_github_check_suites', pk: 'id' },
+        { name: 'np_github_check_runs', pk: 'id' },
+        { name: 'np_github_deployments', pk: 'id' },
+        { name: 'np_github_teams', pk: 'id' },
+        { name: 'np_github_webhook_events', pk: 'id' },
       ];
 
       for (const { name, pk } of tables) {
@@ -965,9 +965,9 @@ export class GitHubDatabase {
       }
 
       // Collaborators has a composite PK (repo_id, id)
-      await this.db.query(`ALTER TABLE github_collaborators ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'`);
-      await this.db.query(`ALTER TABLE github_collaborators DROP CONSTRAINT IF EXISTS github_collaborators_pkey`);
-      await this.db.query(`ALTER TABLE github_collaborators ADD PRIMARY KEY (repo_id, id, source_account_id)`);
+      await this.db.query(`ALTER TABLE np_github_collaborators ADD COLUMN IF NOT EXISTS source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'`);
+      await this.db.query(`ALTER TABLE np_github_collaborators DROP CONSTRAINT IF EXISTS np_github_collaborators_pkey`);
+      await this.db.query(`ALTER TABLE np_github_collaborators ADD PRIMARY KEY (repo_id, id, source_account_id)`);
 
       logger.success('GitHub multi-app migration complete');
     }
@@ -981,7 +981,7 @@ export class GitHubDatabase {
 
   async upsertOrganization(org: GitHubOrganizationRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_organizations (
+      `INSERT INTO np_github_organizations (
         id, source_account_id, node_id, login, name, description, company, blog, location, email,
         twitter_username, is_verified, html_url, avatar_url, public_repos,
         public_gists, followers, following, type, total_private_repos,
@@ -1026,7 +1026,7 @@ export class GitHubDatabase {
 
   async upsertRepository(repo: GitHubRepositoryRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_repositories (
+      `INSERT INTO np_github_repositories (
         id, source_account_id, node_id, name, full_name, owner_login, owner_type, private,
         description, fork, url, html_url, clone_url, ssh_url, homepage,
         language, languages, default_branch, size, stargazers_count,
@@ -1099,28 +1099,28 @@ export class GitHubDatabase {
 
   async getRepository(id: number): Promise<GitHubRepositoryRecord | null> {
     return this.db.queryOne<GitHubRepositoryRecord>(
-      'SELECT * FROM github_repositories WHERE id = $1 AND source_account_id = $2',
+      'SELECT * FROM np_github_repositories WHERE id = $1 AND source_account_id = $2',
       [id, this.sourceAccountId]
     );
   }
 
   async getRepositoryByFullName(fullName: string): Promise<GitHubRepositoryRecord | null> {
     return this.db.queryOne<GitHubRepositoryRecord>(
-      'SELECT * FROM github_repositories WHERE full_name = $1 AND source_account_id = $2',
+      'SELECT * FROM np_github_repositories WHERE full_name = $1 AND source_account_id = $2',
       [fullName, this.sourceAccountId]
     );
   }
 
   async listRepositories(limit = 100, offset = 0): Promise<GitHubRepositoryRecord[]> {
     const result = await this.db.query<GitHubRepositoryRecord>(
-      'SELECT * FROM github_repositories WHERE source_account_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3',
+      'SELECT * FROM np_github_repositories WHERE source_account_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3',
       [this.sourceAccountId, limit, offset]
     );
     return result.rows;
   }
 
   async countRepositories(): Promise<number> {
-    return this.db.countScoped('github_repositories', this.sourceAccountId);
+    return this.db.countScoped('np_github_repositories', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1129,7 +1129,7 @@ export class GitHubDatabase {
 
   async upsertBranch(branch: GitHubBranchRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_branches (id, source_account_id, repo_id, name, sha, protected, protection_enabled, protection, updated_at)
+      `INSERT INTO np_github_branches (id, source_account_id, repo_id, name, sha, protected, protection_enabled, protection, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       ON CONFLICT (id, source_account_id) DO UPDATE SET
         sha = EXCLUDED.sha,
@@ -1154,7 +1154,7 @@ export class GitHubDatabase {
   }
 
   async countBranches(): Promise<number> {
-    return this.db.countScoped('github_branches', this.sourceAccountId);
+    return this.db.countScoped('np_github_branches', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1163,7 +1163,7 @@ export class GitHubDatabase {
 
   async upsertIssue(issue: GitHubIssueRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_issues (
+      `INSERT INTO np_github_issues (
         id, source_account_id, node_id, repo_id, number, title, body, state, state_reason,
         locked, user_login, user_id, labels, assignees, milestone, comments,
         reactions, html_url, closed_at, closed_by_login, created_at, updated_at, synced_at
@@ -1210,7 +1210,7 @@ export class GitHubDatabase {
   }
 
   async listIssues(repoId?: number, state?: string, limit = 100, offset = 0): Promise<GitHubIssueRecord[]> {
-    let sql = 'SELECT * FROM github_issues WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_issues WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
@@ -1232,9 +1232,9 @@ export class GitHubDatabase {
 
   async countIssues(state?: string): Promise<number> {
     if (state) {
-      return this.db.countScoped('github_issues', this.sourceAccountId, 'state = $1', [state]);
+      return this.db.countScoped('np_github_issues', this.sourceAccountId, 'state = $1', [state]);
     }
-    return this.db.countScoped('github_issues', this.sourceAccountId);
+    return this.db.countScoped('np_github_issues', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1243,7 +1243,7 @@ export class GitHubDatabase {
 
   async upsertPullRequest(pr: GitHubPullRequestRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_pull_requests (
+      `INSERT INTO np_github_pull_requests (
         id, source_account_id, node_id, repo_id, number, title, body, state, draft, locked,
         user_login, user_id, head_ref, head_sha, head_repo_id, base_ref, base_sha, merged,
         mergeable, mergeable_state, merged_by_login, merged_at, merge_commit_sha,
@@ -1311,7 +1311,7 @@ export class GitHubDatabase {
   }
 
   async listPullRequests(repoId?: number, state?: string, limit = 100, offset = 0): Promise<GitHubPullRequestRecord[]> {
-    let sql = 'SELECT * FROM github_pull_requests WHERE source_account_id = $1';
+    let sql = 'SELECT * FROM np_github_pull_requests WHERE source_account_id = $1';
     const params: unknown[] = [this.sourceAccountId];
     let paramIndex = 2;
 
@@ -1333,9 +1333,9 @@ export class GitHubDatabase {
 
   async countPullRequests(state?: string): Promise<number> {
     if (state) {
-      return this.db.countScoped('github_pull_requests', this.sourceAccountId, 'state = $1', [state]);
+      return this.db.countScoped('np_github_pull_requests', this.sourceAccountId, 'state = $1', [state]);
     }
-    return this.db.countScoped('github_pull_requests', this.sourceAccountId);
+    return this.db.countScoped('np_github_pull_requests', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1344,7 +1344,7 @@ export class GitHubDatabase {
 
   async upsertPRReview(review: GitHubPullRequestReviewRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_pr_reviews (
+      `INSERT INTO np_github_pr_reviews (
         id, source_account_id, node_id, repo_id, pull_request_id, pull_request_number, user_login,
         user_id, body, state, html_url, commit_id, submitted_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
@@ -1372,7 +1372,7 @@ export class GitHubDatabase {
   }
 
   async countPRReviews(): Promise<number> {
-    return this.db.countScoped('github_pr_reviews', this.sourceAccountId);
+    return this.db.countScoped('np_github_pr_reviews', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1381,7 +1381,7 @@ export class GitHubDatabase {
 
   async upsertIssueComment(comment: GitHubIssueCommentRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_issue_comments (
+      `INSERT INTO np_github_issue_comments (
         id, source_account_id, node_id, repo_id, issue_number, issue_id, pull_request_number,
         user_login, user_id, body, reactions, html_url, created_at, updated_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
@@ -1409,7 +1409,7 @@ export class GitHubDatabase {
   }
 
   async countIssueComments(): Promise<number> {
-    return this.db.countScoped('github_issue_comments', this.sourceAccountId);
+    return this.db.countScoped('np_github_issue_comments', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1418,7 +1418,7 @@ export class GitHubDatabase {
 
   async upsertPRReviewComment(comment: GitHubPullRequestReviewCommentRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_pr_review_comments (
+      `INSERT INTO np_github_pr_review_comments (
         id, source_account_id, node_id, repo_id, pull_request_id, pull_request_number, review_id,
         user_login, user_id, body, path, position, original_position, diff_hunk,
         commit_id, original_commit_id, in_reply_to_id, reactions, html_url,
@@ -1451,7 +1451,7 @@ export class GitHubDatabase {
   }
 
   async countPRReviewComments(): Promise<number> {
-    return this.db.countScoped('github_pr_review_comments', this.sourceAccountId);
+    return this.db.countScoped('np_github_pr_review_comments', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1460,7 +1460,7 @@ export class GitHubDatabase {
 
   async upsertCommitComment(comment: GitHubCommitCommentRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_commit_comments (
+      `INSERT INTO np_github_commit_comments (
         id, source_account_id, node_id, repo_id, commit_sha, user_login, user_id, body, path,
         position, line, reactions, html_url, created_at, updated_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
@@ -1488,7 +1488,7 @@ export class GitHubDatabase {
   }
 
   async countCommitComments(): Promise<number> {
-    return this.db.countScoped('github_commit_comments', this.sourceAccountId);
+    return this.db.countScoped('np_github_commit_comments', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1497,7 +1497,7 @@ export class GitHubDatabase {
 
   async upsertCommit(commit: GitHubCommitRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_commits (
+      `INSERT INTO np_github_commits (
         sha, source_account_id, node_id, repo_id, message, author_name, author_email, author_login,
         author_date, committer_name, committer_email, committer_login, committer_date,
         tree_sha, parents, additions, deletions, total, html_url, verified,
@@ -1545,7 +1545,7 @@ export class GitHubDatabase {
   }
 
   async countCommits(): Promise<number> {
-    return this.db.countScoped('github_commits', this.sourceAccountId);
+    return this.db.countScoped('np_github_commits', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1554,7 +1554,7 @@ export class GitHubDatabase {
 
   async upsertRelease(release: GitHubReleaseRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_releases (
+      `INSERT INTO np_github_releases (
         id, source_account_id, node_id, repo_id, tag_name, target_commitish, name, body, draft,
         prerelease, author_login, html_url, tarball_url, zipball_url, assets,
         created_at, published_at, synced_at
@@ -1595,7 +1595,7 @@ export class GitHubDatabase {
   }
 
   async countReleases(): Promise<number> {
-    return this.db.countScoped('github_releases', this.sourceAccountId);
+    return this.db.countScoped('np_github_releases', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1604,7 +1604,7 @@ export class GitHubDatabase {
 
   async upsertTag(tag: GitHubTagRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_tags (id, source_account_id, repo_id, name, sha, message, tagger_name, tagger_email, tagger_date, zipball_url, tarball_url, synced_at)
+      `INSERT INTO np_github_tags (id, source_account_id, repo_id, name, sha, message, tagger_name, tagger_email, tagger_date, zipball_url, tarball_url, synced_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
       ON CONFLICT (id, source_account_id) DO UPDATE SET
         sha = EXCLUDED.sha,
@@ -1630,7 +1630,7 @@ export class GitHubDatabase {
   }
 
   async countTags(): Promise<number> {
-    return this.db.countScoped('github_tags', this.sourceAccountId);
+    return this.db.countScoped('np_github_tags', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1639,7 +1639,7 @@ export class GitHubDatabase {
 
   async upsertMilestone(milestone: GitHubMilestoneRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_milestones (
+      `INSERT INTO np_github_milestones (
         id, source_account_id, node_id, repo_id, number, title, description, state, creator_login,
         open_issues, closed_issues, html_url, due_on, created_at, updated_at, closed_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
@@ -1672,7 +1672,7 @@ export class GitHubDatabase {
   }
 
   async countMilestones(): Promise<number> {
-    return this.db.countScoped('github_milestones', this.sourceAccountId);
+    return this.db.countScoped('np_github_milestones', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1681,7 +1681,7 @@ export class GitHubDatabase {
 
   async upsertLabel(label: GitHubLabelRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_labels (id, source_account_id, node_id, repo_id, name, color, description, is_default, synced_at)
+      `INSERT INTO np_github_labels (id, source_account_id, node_id, repo_id, name, color, description, is_default, synced_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       ON CONFLICT (id, source_account_id) DO UPDATE SET
         name = EXCLUDED.name,
@@ -1703,7 +1703,7 @@ export class GitHubDatabase {
   }
 
   async countLabels(): Promise<number> {
-    return this.db.countScoped('github_labels', this.sourceAccountId);
+    return this.db.countScoped('np_github_labels', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1712,7 +1712,7 @@ export class GitHubDatabase {
 
   async upsertWorkflow(workflow: GitHubWorkflowRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_workflows (id, source_account_id, node_id, repo_id, name, path, state, badge_url, html_url, created_at, updated_at, synced_at)
+      `INSERT INTO np_github_workflows (id, source_account_id, node_id, repo_id, name, path, state, badge_url, html_url, created_at, updated_at, synced_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
       ON CONFLICT (id, source_account_id) DO UPDATE SET
         name = EXCLUDED.name,
@@ -1740,7 +1740,7 @@ export class GitHubDatabase {
   }
 
   async countWorkflows(): Promise<number> {
-    return this.db.countScoped('github_workflows', this.sourceAccountId);
+    return this.db.countScoped('np_github_workflows', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1749,7 +1749,7 @@ export class GitHubDatabase {
 
   async upsertWorkflowRun(run: GitHubWorkflowRunRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_workflow_runs (
+      `INSERT INTO np_github_workflow_runs (
         id, source_account_id, node_id, repo_id, workflow_id, workflow_name, name, head_branch,
         head_sha, run_number, run_attempt, event, status, conclusion, actor_login,
         triggering_actor_login, html_url, jobs_url, logs_url, run_started_at,
@@ -1796,7 +1796,7 @@ export class GitHubDatabase {
   }
 
   async countWorkflowRuns(): Promise<number> {
-    return this.db.countScoped('github_workflow_runs', this.sourceAccountId);
+    return this.db.countScoped('np_github_workflow_runs', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1805,7 +1805,7 @@ export class GitHubDatabase {
 
   async upsertWorkflowJob(job: GitHubWorkflowJobRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_workflow_jobs (
+      `INSERT INTO np_github_workflow_jobs (
         id, source_account_id, node_id, repo_id, run_id, run_attempt, workflow_name, name, status,
         conclusion, head_sha, html_url, runner_id, runner_name, runner_group_id,
         runner_group_name, labels, steps, started_at, completed_at, synced_at
@@ -1838,7 +1838,7 @@ export class GitHubDatabase {
   }
 
   async countWorkflowJobs(): Promise<number> {
-    return this.db.countScoped('github_workflow_jobs', this.sourceAccountId);
+    return this.db.countScoped('np_github_workflow_jobs', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1847,7 +1847,7 @@ export class GitHubDatabase {
 
   async upsertCheckSuite(suite: GitHubCheckSuiteRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_check_suites (
+      `INSERT INTO np_github_check_suites (
         id, source_account_id, node_id, repo_id, head_branch, head_sha, status, conclusion,
         app_id, app_slug, pull_requests, before_sha, after_sha, created_at, updated_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
@@ -1875,7 +1875,7 @@ export class GitHubDatabase {
   }
 
   async countCheckSuites(): Promise<number> {
-    return this.db.countScoped('github_check_suites', this.sourceAccountId);
+    return this.db.countScoped('np_github_check_suites', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1884,7 +1884,7 @@ export class GitHubDatabase {
 
   async upsertCheckRun(run: GitHubCheckRunRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_check_runs (
+      `INSERT INTO np_github_check_runs (
         id, source_account_id, node_id, repo_id, check_suite_id, head_sha, name, status, conclusion,
         external_id, html_url, details_url, app_id, app_slug, output, pull_requests,
         started_at, completed_at, synced_at
@@ -1915,7 +1915,7 @@ export class GitHubDatabase {
   }
 
   async countCheckRuns(): Promise<number> {
-    return this.db.countScoped('github_check_runs', this.sourceAccountId);
+    return this.db.countScoped('np_github_check_runs', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1924,7 +1924,7 @@ export class GitHubDatabase {
 
   async upsertDeployment(deployment: GitHubDeploymentRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_deployments (
+      `INSERT INTO np_github_deployments (
         id, source_account_id, node_id, repo_id, sha, ref, task, environment, description,
         creator_login, statuses, current_status, production_environment,
         transient_environment, payload, created_at, updated_at, synced_at
@@ -1966,7 +1966,7 @@ export class GitHubDatabase {
   }
 
   async countDeployments(): Promise<number> {
-    return this.db.countScoped('github_deployments', this.sourceAccountId);
+    return this.db.countScoped('np_github_deployments', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -1975,7 +1975,7 @@ export class GitHubDatabase {
 
   async upsertTeam(team: GitHubTeamRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_teams (
+      `INSERT INTO np_github_teams (
         id, source_account_id, node_id, org_login, name, slug, description, privacy, permission,
         parent_id, members_count, repos_count, html_url, created_at, updated_at, synced_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
@@ -2009,7 +2009,7 @@ export class GitHubDatabase {
   }
 
   async countTeams(): Promise<number> {
-    return this.db.countScoped('github_teams', this.sourceAccountId);
+    return this.db.countScoped('np_github_teams', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -2018,7 +2018,7 @@ export class GitHubDatabase {
 
   async upsertCollaborator(collab: GitHubCollaboratorRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_collaborators (id, source_account_id, repo_id, login, type, site_admin, permissions, role_name, synced_at)
+      `INSERT INTO np_github_collaborators (id, source_account_id, repo_id, login, type, site_admin, permissions, role_name, synced_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       ON CONFLICT (repo_id, id, source_account_id) DO UPDATE SET
         login = EXCLUDED.login,
@@ -2044,7 +2044,7 @@ export class GitHubDatabase {
   }
 
   async countCollaborators(): Promise<number> {
-    return this.db.countScoped('github_collaborators', this.sourceAccountId);
+    return this.db.countScoped('np_github_collaborators', this.sourceAccountId);
   }
 
   // =========================================================================
@@ -2053,7 +2053,7 @@ export class GitHubDatabase {
 
   async insertWebhookEvent(event: GitHubWebhookEventRecord): Promise<void> {
     await this.db.execute(
-      `INSERT INTO github_webhook_events (
+      `INSERT INTO np_github_webhook_events (
         id, source_account_id, event, action, repo_id, repo_full_name, sender_login, data,
         processed, processed_at, error, received_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
@@ -2071,7 +2071,7 @@ export class GitHubDatabase {
 
   async markEventProcessed(id: string, error?: string): Promise<void> {
     await this.db.execute(
-      `UPDATE github_webhook_events SET
+      `UPDATE np_github_webhook_events SET
         processed = TRUE,
         processed_at = NOW(),
         error = $3
@@ -2087,29 +2087,29 @@ export class GitHubDatabase {
   async cleanupForAccount(sourceAccountId: string): Promise<number> {
     return this.db.cleanupForAccount([
       // Child tables first
-      'github_webhook_events',
-      'github_check_runs',
-      'github_check_suites',
-      'github_workflow_jobs',
-      'github_workflow_runs',
-      'github_workflows',
-      'github_deployments',
-      'github_collaborators',
-      'github_pr_review_comments',
-      'github_pr_reviews',
-      'github_commit_comments',
-      'github_issue_comments',
-      'github_commits',
-      'github_releases',
-      'github_tags',
-      'github_milestones',
-      'github_labels',
-      'github_pull_requests',
-      'github_issues',
-      'github_branches',
-      'github_teams',
-      'github_repositories',
-      'github_organizations',
+      'np_github_webhook_events',
+      'np_github_check_runs',
+      'np_github_check_suites',
+      'np_github_workflow_jobs',
+      'np_github_workflow_runs',
+      'np_github_workflows',
+      'np_github_deployments',
+      'np_github_collaborators',
+      'np_github_pr_review_comments',
+      'np_github_pr_reviews',
+      'np_github_commit_comments',
+      'np_github_issue_comments',
+      'np_github_commits',
+      'np_github_releases',
+      'np_github_tags',
+      'np_github_milestones',
+      'np_github_labels',
+      'np_github_pull_requests',
+      'np_github_issues',
+      'np_github_branches',
+      'np_github_teams',
+      'np_github_repositories',
+      'np_github_organizations',
     ], sourceAccountId);
   }
 

@@ -230,5 +230,5 @@ npm run dev
 
 ## Support
 
-- [GitHub Issues](https://github.com/acamarata/nself-plugins/issues)
+- [GitHub Issues](https://github.com/nself-org/plugins/issues)
 - [GitHub API Documentation](https://docs.github.com/en/rest)

@@ -6,7 +6,9 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-progress",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
+  "runtime": "go",
+  "language": "go",
   "port": 3022,
   "category": "media",
   "tags": [

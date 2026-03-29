@@ -1,0 +1,35 @@
+# nSelf Plugin Compose Template
+# Replace {PLUGIN_NAME}, {PORT}, {IMAGE} before use
+
+services:
+  {PLUGIN_NAME}:
+    image: {IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}_{PLUGIN_NAME}
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: "{PORT}"
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+    ports:
+      - "127.0.0.1:{PORT}:{PORT}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:{PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_{UPPER_NAME}_MEMORY:-256m}
+          cpus: '${PLUGIN_{UPPER_NAME}_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

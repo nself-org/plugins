@@ -1,0 +1,24 @@
+services:
+  torrent-manager:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/torrent-manager
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_torrent_manager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3201:3201"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - TORRENT_MANAGER_PORT=3201
+      - VPN_MANAGER_URL=${VPN_MANAGER_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3201/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ${DOCKER_NETWORK}

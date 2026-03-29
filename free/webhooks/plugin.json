@@ -4,11 +4,15 @@
   "description": "Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue",
   "author": "nself",
   "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/webhooks",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
-  "port": 3403,
+  "minNselfVersion": "0.9.9",
   "category": "communication",
+  "language": "go",
   "tags": [
     "webhooks",
     "events",
@@ -18,46 +22,30 @@
   ],
   "tables": [
     "np_webhooks_endpoints",
-    "np_webhooks_deliveries",
-    "np_webhooks_event_types",
-    "np_webhooks_dead_letters"
+    "np_webhooks_deliveries"
   ],
-  "webhooks": {},
-  "actions": {
-    "register": "Register a new webhook endpoint",
-    "dispatch": "Dispatch an event to all matching endpoints",
-    "retry": "Retry failed deliveries",
-    "stats": "View delivery statistics"
-  },
+  "dependencies": [],
+  "optionalDependencies": [],
   "envVars": {
     "required": [
       "DATABASE_URL"
     ],
     "optional": [
-      "WEBHOOKS_PLUGIN_PORT",
+      "PORT",
+      "PLUGIN_INTERNAL_SECRET",
       "WEBHOOKS_MAX_ATTEMPTS",
       "WEBHOOKS_REQUEST_TIMEOUT_MS",
-      "WEBHOOKS_MAX_PAYLOAD_SIZE",
       "WEBHOOKS_CONCURRENT_DELIVERIES",
       "WEBHOOKS_RETRY_DELAYS",
-      "WEBHOOKS_AUTO_DISABLE_THRESHOLD",
-      "WEBHOOKS_API_KEY",
-      "WEBHOOKS_RATE_LIMIT_MAX",
-      "WEBHOOKS_RATE_LIMIT_WINDOW_MS"
+      "WEBHOOKS_AUTO_DISABLE_THRESHOLD"
     ]
   },
   "config": {
+    "defaultPort": 3060,
     "maxAttempts": 5,
     "requestTimeoutMs": 30000,
-    "maxPayloadSize": 1048576,
     "concurrentDeliveries": 10,
-    "retryDelays": [
-      10000,
-      30000,
-      120000,
-      900000,
-      3600000
-    ],
+    "retryDelays": [10000, 30000, 120000, 900000, 3600000],
     "autoDisableThreshold": 10
   },
   "hooks": {
@@ -66,10 +54,7 @@
     "postSync": null
   },
   "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
+    "supported": false
   },
   "permissions": {
     "database": [
@@ -79,10 +64,20 @@
       "delete"
     ],
     "network": [
-      "*"
+      "outbound"
     ],
-    "filesystem": [
-      "logs"
-    ]
-  }
+    "filesystem": []
+  },
+  "port": 3060,
+  "status": "stable",
+  "binary_name": "webhooks",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "free"
 }

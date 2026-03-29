@@ -516,19 +516,49 @@ export async function createServer(db: VPNDatabase) {
         created_at: download.created_at,
       };
 
-      // NOTE: Torrent download requires integration with torrent-manager plugin
-      // Integration requirements:
-      // 1. Forward download request to torrent-manager plugin API
-      // 2. Include VPN interface binding information for network isolation
-      // 3. Monitor download progress via torrent-manager webhooks
-      //
-      // Example implementation:
-      // await axios.post(`${config.torrent_manager_url}/api/downloads`, {
-      //   magnet_link,
-      //   destination_path: destination,
-      //   vpn_interface: connection.interface,
-      //   vpn_ip: connection.vpn_ip
-      // });
+      // Forward to torrent-manager plugin for actual download execution
+      try {
+        const tmHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (config.internal_api_key) tmHeaders['Authorization'] = `Bearer ${config.internal_api_key}`;
+
+        const tmResponse = await fetch(`${config.torrent_manager_url}/api/downloads`, {
+          method: 'POST',
+          headers: tmHeaders,
+          body: JSON.stringify({
+            download_id: download.id,
+            magnet_link,
+            destination_path: destination || config.download_path,
+            vpn_interface: connection.interface_name,
+            vpn_ip: connection.vpn_ip,
+          }),
+        });
+
+        if (tmResponse.ok) {
+          const tmData = await tmResponse.json() as Record<string, unknown>;
+          logger.info('Forwarded download to torrent-manager', {
+            download_id: download.id,
+            torrent_manager_id: tmData['id'],
+          });
+          // Store the torrent-manager's tracking ID in metadata for cancellation
+          await db.updateDownload(download.id, {
+            status: 'downloading',
+            metadata: { ...download.metadata, torrent_manager_id: tmData['id'] },
+          });
+          response.status = 'downloading';
+        } else {
+          logger.warn('Torrent-manager returned error, download queued', {
+            download_id: download.id,
+            status: tmResponse.status,
+          });
+        }
+      } catch (tmError) {
+        // Torrent-manager may not be running — log warning but keep download record queued
+        logger.warn('Could not reach torrent-manager, download queued locally', {
+          download_id: download.id,
+          torrent_manager_url: config.torrent_manager_url,
+          error: tmError instanceof Error ? tmError.message : String(tmError),
+        });
+      }
 
       return response;
     } catch (error) {
@@ -587,14 +617,38 @@ export async function createServer(db: VPNDatabase) {
       error_message: 'Cancelled by user',
     });
 
-    // NOTE: Torrent cancellation requires integration with torrent-manager plugin
-    // Integration requirements:
-    // 1. Send DELETE request to torrent-manager plugin to stop/remove torrent
-    // 2. Cleanup partial files if requested
-    // 3. Update download status based on torrent-manager response
-    //
-    // Example implementation:
-    // await axios.delete(`${config.torrent_manager_url}/api/downloads/${download.torrent_id}`);
+    // Cancel in torrent-manager if it was forwarded there
+    const torrentManagerId = (download.metadata as Record<string, unknown>)?.torrent_manager_id as string | undefined;
+    if (torrentManagerId) {
+      try {
+        const tmHeaders: Record<string, string> = {};
+        if (config.internal_api_key) tmHeaders['Authorization'] = `Bearer ${config.internal_api_key}`;
+
+        const tmResponse = await fetch(`${config.torrent_manager_url}/api/downloads/${torrentManagerId}`, {
+          method: 'DELETE',
+          headers: tmHeaders,
+        });
+
+        if (!tmResponse.ok && tmResponse.status !== 404) {
+          logger.warn('Torrent-manager cancel returned unexpected status', {
+            download_id: request.params.id,
+            torrent_manager_id: torrentManagerId,
+            status: tmResponse.status,
+          });
+        } else {
+          logger.info('Cancelled download in torrent-manager', {
+            download_id: request.params.id,
+            torrent_manager_id: torrentManagerId,
+          });
+        }
+      } catch (tmError) {
+        // Non-fatal: DB record is already marked cancelled
+        logger.warn('Could not reach torrent-manager for cancellation', {
+          download_id: request.params.id,
+          error: tmError instanceof Error ? tmError.message : String(tmError),
+        });
+      }
+    }
 
     return { success: true, message: 'Download cancelled' };
   });

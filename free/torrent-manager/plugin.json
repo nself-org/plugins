@@ -9,9 +9,9 @@
   "category": "media",
   "subcategory": "download",
   "path": "plugins/torrent-manager",
-  "language": "typescript",
-  "runtime": "node",
-  "minNselfVersion": "0.4.8",
+  "language": "go",
+  "runtime": "go",
+  "minNselfVersion": "1.0.0",
   "port": 3201,
   "dependencies": {
     "npm": [

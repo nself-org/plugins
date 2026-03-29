@@ -100,7 +100,7 @@ npm run deploy
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GITHUB_REPO` | `acamarata/nself-plugins` | Source repository |
+| `GITHUB_REPO` | `nself-org/plugins` | Source repository |
 | `GITHUB_BRANCH` | `main` | Branch to fetch from |
 | `CACHE_TTL` | `300` | Cache TTL in seconds |
 | `REGISTRY_VERSION` | `1.0.0` | API version |

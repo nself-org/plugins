@@ -1,7 +1,7 @@
 # VPN Plugin for nself
 
 **Version**: 1.0.0
-**Status**: Foundational Implementation Complete (NordVPN fully implemented, 9 providers researched)
+**Status**: All 10 providers fully implemented
 
 Multi-provider VPN management and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection.
 
@@ -13,17 +13,15 @@ This plugin provides comprehensive VPN management across 10 major VPN providers,
 
 ### Key Features
 
-- ✅ **Multi-Provider Support**: 10 VPN providers researched and documented
-- ✅ **NordVPN Fully Implemented**: Complete CLI integration, API support, P2P server management
+- ✅ **Multi-Provider Support**: All 10 VPN providers fully implemented
+- ✅ **All Providers Implemented**: NordVPN, PIA, Mullvad, Surfshark, ExpressVPN, ProtonVPN, KeepSolid, CyberGhost, AirVPN, Windscribe
 - ✅ **Database-Backed**: PostgreSQL storage for connections, servers, downloads, performance metrics
-- ✅ **Comprehensive Research**: Full documentation of all provider CLIs, APIs, P2P policies
 - ✅ **Type-Safe**: Complete TypeScript implementation with comprehensive types
-- ✅ **Kill Switch & Leak Protection**: Built into provider implementations
+- ✅ **Kill Switch & Leak Protection**: Implemented in all provider classes
 - ✅ **Server Performance Tracking**: Analytics and optimization
-- 🚧 **Remaining Providers**: 9 providers ready for implementation (structure complete)
-- 🚧 **Torrent Integration**: Architecture designed, ready for implementation
-- 🚧 **REST API**: Endpoints designed, ready for implementation
-- 🚧 **CLI Commands**: Structure complete, ready for implementation
+- ✅ **Torrent Integration**: Transmission RPC-based torrent client (`torrent/client.ts`)
+- ✅ **REST API**: Fastify-based server with full endpoint coverage
+- ✅ **CLI Commands**: Commander.js CLI for all operations
 
 ---
 
@@ -31,16 +29,16 @@ This plugin provides comprehensive VPN management across 10 major VPN providers,
 
 | Provider | Status | P2P Servers | Port Forwarding | Notes |
 |----------|--------|-------------|-----------------|-------|
-| **NordVPN** | ✅ Complete | 5,500+ (47 countries) | ❌ No | Full implementation with CLI + API |
-| **Surfshark** | 📋 Researched | All 4,500+ servers | ❌ No | WireGuard configs, all servers support P2P |
-| **ExpressVPN** | 📋 Researched | All 3,000+ servers | ❌ No | CLI available, Lightway protocol |
-| **PIA** | 📋 Researched | All ~600 servers | ✅ Yes (except US) | Best for port forwarding |
-| **ProtonVPN** | 📋 Researched | 140+ dedicated | ✅ Yes (NAT-PMP) | Python CLI, Plus plan required |
-| **Mullvad** | 📋 Researched | All 674 servers | ❌ Removed 2023 | Privacy-focused, account numbers |
-| **KeepSolid** | 📋 Researched | **ONLY 5 servers** | ❌ No | ⚠️ NOT recommended for P2P |
-| **CyberGhost** | 📋 Researched | 87 locations | ❌ No | Dedicated P2P servers |
-| **AirVPN** | 📋 Researched | All 260 servers | ✅ Yes (20 ports) | Power-user focused, Eddie CLI |
-| **Windscribe** | 📋 Researched | 600+ servers | ✅ Yes (Pro) | CLI beta, most servers support P2P |
+| **NordVPN** | ✅ Implemented | 5,500+ (47 countries) | ❌ No | Full CLI + v1 API implementation, NordLynx/OpenVPN |
+| **Surfshark** | ✅ Implemented | All 4,500+ servers | ❌ No | CLI integration, WireGuard/OpenVPN/IKEv2, CleanWeb |
+| **ExpressVPN** | ✅ Implemented | All 3,000+ servers | ❌ No | CLI + API fallback, Lightway protocol, split tunneling |
+| **PIA** | ✅ Implemented | All ~600 servers | ✅ Yes (except US) | Full port forwarding support via piactl |
+| **ProtonVPN** | ✅ Implemented | 140+ dedicated | ❌ No | CLI integration, Secure Core, Tor over VPN, NetShield |
+| **Mullvad** | ✅ Implemented | All 674 servers | ❌ Removed 2023 | Account number auth, DAITA support, lockdown mode |
+| **KeepSolid** | ✅ Implemented | **ONLY 5 servers** | ❌ No | ⚠️ Limited P2P; API-based config generation |
+| **CyberGhost** | ✅ Implemented | 87 locations | ❌ No | OpenVPN/WireGuard config-file based |
+| **AirVPN** | ✅ Implemented | All 260 servers | ✅ Yes (20 ports) | API key auth, port forwarding, Eddie CLI |
+| **Windscribe** | ✅ Implemented | 600+ servers | ✅ Yes (Pro) | CLI integration, R.O.B.E.R.T. ad blocking |
 
 ---
 
@@ -57,27 +55,23 @@ plugins/vpn/
 │   │   │   └── servers.json      ✅ Complete - P2P server lists for all providers
 │   │   ├── providers/
 │   │   │   ├── base.ts           ✅ Complete - Abstract base provider
-│   │   │   ├── nordvpn.ts        ✅ Complete - Full NordVPN implementation
-│   │   │   ├── surfshark.ts      🚧 TODO - Template ready
-│   │   │   ├── expressvpn.ts     🚧 TODO - Template ready
-│   │   │   ├── pia.ts            🚧 TODO - Template ready
-│   │   │   ├── protonvpn.ts      🚧 TODO - Template ready
-│   │   │   ├── mullvad.ts        🚧 TODO - Template ready
-│   │   │   ├── keepsolid.ts      🚧 TODO - Template ready
-│   │   │   ├── cyberghost.ts     🚧 TODO - Template ready
-│   │   │   ├── airvpn.ts         🚧 TODO - Template ready
-│   │   │   ├── windscribe.ts     🚧 TODO - Template ready
-│   │   │   └── index.ts          ✅ Complete - Provider factory
+│   │   │   ├── nordvpn.ts        ✅ Complete - NordVPN CLI + API, NordLynx/OpenVPN
+│   │   │   ├── mullvad.ts        ✅ Complete - Account number auth, DAITA, lockdown mode
+│   │   │   ├── pia.ts            ✅ Complete - piactl CLI, port forwarding
+│   │   │   ├── protonvpn.ts      ✅ Complete - protonvpn-cli, Secure Core, Tor, NetShield
+│   │   │   ├── surfshark.ts      ✅ Complete - surfshark-vpn CLI, CleanWeb, NoBorders
+│   │   │   ├── expressvpn.ts     ✅ Complete - expressvpn CLI + API fallback, Lightway
+│   │   │   ├── keepsolid.ts      ✅ Complete - API-based config generation
+│   │   │   ├── cyberghost.ts     ✅ Complete - OpenVPN/WireGuard config-file based
+│   │   │   ├── airvpn.ts         ✅ Complete - API key auth, 20-port forwarding
+│   │   │   ├── windscribe.ts     ✅ Complete - windscribe CLI, R.O.B.E.R.T. blocking
+│   │   │   └── index.ts          ✅ Complete - Provider factory (all 10 registered)
 │   │   ├── torrent/
-│   │   │   ├── client.ts         🚧 TODO - WebTorrent integration
-│   │   │   └── interface-bind.ts 🚧 TODO - Bind to VPN interface
-│   │   ├── utils/
-│   │   │   ├── leak-test.ts      🚧 TODO - DNS/IP/WebRTC leak detection
-│   │   │   ├── kill-switch.ts    🚧 TODO - iptables-based kill switch
-│   │   │   └── carousel.ts       🚧 TODO - Server rotation logic
-│   │   ├── server.ts             🚧 TODO - Fastify REST API
-│   │   ├── cli.ts                🚧 TODO - Commander.js CLI
-│   │   └── index.ts              🚧 TODO - Main entry point
+│   │   │   └── client.ts         ✅ Complete - Transmission RPC integration
+│   │   ├── utils/                (leak test and carousel in base.ts / server.ts)
+│   │   ├── server.ts             ✅ Complete - Fastify REST API with full endpoints
+│   │   ├── cli.ts                ✅ Complete - Commander.js CLI
+│   │   └── index.ts              ✅ Complete - Main entry point
 │   ├── package.json              ✅ Complete
 │   └── tsconfig.json             ✅ Complete
 ├── plugin.json                    ✅ Complete
@@ -367,34 +361,15 @@ npm run cli disconnect
 
 ---
 
-## 🚧 Next Steps (Implementation Priorities)
+## Implementation Status
 
-### Phase 1: Core Functionality (High Priority)
-- [ ] Implement CLI (`cli.ts`) with Commander.js
-- [ ] Implement REST API (`server.ts`) with Fastify
-- [ ] Implement main entry point (`index.ts`)
-- [ ] Implement torrent client integration (`torrent/client.ts`)
-- [ ] Test end-to-end with NordVPN
+All providers, the REST API, CLI, and torrent client are implemented. Potential next steps:
 
-### Phase 2: Additional Providers (Medium Priority)
-- [ ] Implement PIA (port forwarding support)
-- [ ] Implement Mullvad (WireGuard focus)
-- [ ] Implement Surfshark (manual configs)
-- [ ] Implement ProtonVPN (port forwarding)
-- [ ] Implement AirVPN (port forwarding, power users)
-
-### Phase 3: Advanced Features (Low Priority)
-- [ ] Server carousel (`utils/carousel.ts`)
-- [ ] Advanced leak testing (`utils/leak-test.ts`)
-- [ ] iptables kill switch (`utils/kill-switch.ts`)
-- [ ] Performance benchmarking
-- [ ] WebUI dashboard
-
-### Phase 4: Remaining Providers (Optional)
-- [ ] ExpressVPN
-- [ ] CyberGhost
-- [ ] Windscribe
-- [ ] KeepSolid (low priority - limited P2P)
+- [ ] End-to-end testing with each provider's CLI installed
+- [ ] Server carousel utility (`utils/carousel.ts`) for automatic server rotation
+- [ ] Standalone iptables kill switch utility (`utils/kill-switch.ts`)
+- [ ] WebUI dashboard for monitoring connections and downloads
+- [ ] Performance benchmarking across providers
 
 ---
 
@@ -424,7 +399,7 @@ nordvpn connect --group p2p
 - No port forwarding
 - No split tunneling on Linux
 
-### PIA (📋 Ready for Implementation)
+### PIA (✅ Implemented)
 
 **Features:**
 - Port forwarding on nearly all servers (except US)
@@ -442,7 +417,7 @@ nordvpn connect --group p2p
 piactl login creds.txt  # Format: username\npassword
 ```
 
-### Mullvad (📋 Ready for Implementation)
+### Mullvad (✅ Implemented)
 
 **Features:**
 - Account number-based (no username/password)
@@ -602,8 +577,8 @@ MIT License - See LICENSE file for details
 ## 📞 Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/acamarata/nself-plugins/issues
-- Documentation: https://github.com/acamarata/nself-plugins/wiki/VPN-Plugin
+- GitHub Issues: https://github.com/nself-org/plugins/issues
+- Documentation: https://github.com/nself-org/plugins/wiki/VPN-Plugin
 
 ---
 

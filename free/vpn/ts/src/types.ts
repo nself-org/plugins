@@ -10,7 +10,14 @@
 export type VPNProvider =
   | 'nordvpn'
   | 'pia'
-  | 'mullvad';
+  | 'mullvad'
+  | 'surfshark'
+  | 'expressvpn'
+  | 'protonvpn'
+  | 'keepsolid'
+  | 'cyberghost'
+  | 'airvpn'
+  | 'windscribe';
 
 export type VPNProtocol = 'wireguard' | 'openvpn_udp' | 'openvpn_tcp' | 'ikev2' | 'nordlynx' | 'lightway';
 
@@ -377,6 +384,8 @@ export interface VPNPluginConfig {
   carousel_interval_minutes: number;
   port: number;
   log_level: 'debug' | 'info' | 'warn' | 'error';
+  torrent_manager_url: string;
+  internal_api_key?: string;
 }
 
 // ============================================================================

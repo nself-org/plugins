@@ -1,0 +1,64 @@
+{
+  "name": "mlflow",
+  "version": "1.0.0",
+  "description": "MLflow experiment tracking and model registry",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mlflow",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "tags": [
+    "mlflow",
+    "ml",
+    "machine-learning",
+    "experiment-tracking",
+    "model-registry",
+    "mlops"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "experiments": "List and manage MLflow experiments",
+    "runs": "List and manage experiment runs",
+    "models": "Browse the model registry",
+    "artifacts": "View and download run artifacts"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "MLFLOW_DEFAULT_ARTIFACT_ROOT",
+      "MLFLOW_BACKEND_STORE_URI",
+      "MLFLOW_TRACKING_USERNAME",
+      "MLFLOW_TRACKING_PASSWORD"
+    ]
+  },
+  "config": {
+    "defaultPort": 5000,
+    "defaultArtifactRoot": "/mlflow/artifacts"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "artifacts"
+    ]
+  },
+  "dependencies": [],
+  "port": 5000
+}

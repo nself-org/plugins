@@ -304,7 +304,7 @@ plugin_cache_clear() {
 # Validation Functions
 # =============================================================================
 
-# Validate plugin.json
+# Validate plugin.json (basic manifest check — required fields present)
 plugin_validate_manifest() {
     local plugin_dir="$1"
     local manifest="${plugin_dir}/plugin.json"
@@ -324,6 +324,284 @@ plugin_validate_manifest() {
     done
 
     return 0
+}
+
+# =============================================================================
+# Validate plugin.json — full schema validation
+# =============================================================================
+
+# validate_plugin_json <plugin_json_path> [--quiet]
+#
+# Validates a plugin.json (the per-plugin manifest) against the nself schema:
+#   - Required fields present and non-empty: name, version, description,
+#     author, license, category, tags, tables
+#   - version follows semver (x.y.z)
+#   - category is one of the 13 official categories
+#   - all table names carry the np_ prefix
+#   - multiApp.isolationColumn is source_account_id (if multiApp is declared)
+#   - source_account_id column present in schema/tables.sql (if file exists)
+#
+# Note: plugin.json does NOT contain an 'implementation' field — that lives
+# only in registry.json. Use validate-registry.sh for registry validation.
+#
+# Returns 0 if valid, 1 if any errors. Prints errors to stderr.
+# With --quiet, suppresses all output (useful for CI gating).
+#
+# Bash 3.2+ compatible.
+validate_plugin_json() {
+    local manifest="$1"
+    local quiet="${2:-}"
+
+    # -------------------------------------------------------------------
+    # File existence and JSON validity
+    # -------------------------------------------------------------------
+    if [[ ! -f "$manifest" ]]; then
+        printf "\033[31m[ERROR]\033[0m plugin.json not found: %s\n" "$manifest" >&2
+        return 1
+    fi
+
+    local _vp_py3=""
+    local _vp_py_candidate
+    for _vp_py_candidate in python3 /usr/bin/python3 /opt/homebrew/bin/python3; do
+        if command -v "$_vp_py_candidate" >/dev/null 2>&1; then
+            _vp_py3="$_vp_py_candidate"
+            break
+        fi
+    done
+    if [[ -z "$_vp_py3" ]]; then
+        plugin_error "python3 is required for validate_plugin_json"
+        return 1
+    fi
+
+    if ! "$_vp_py3" -c "import json, sys; json.load(open(sys.argv[1]))" "$manifest" 2>/dev/null; then
+        printf "\033[31m[ERROR]\033[0m %s: Invalid JSON — fix syntax errors first.\n" "$manifest" >&2
+        return 1
+    fi
+
+    # -------------------------------------------------------------------
+    # Extract fields to a temp file (avoids eval of JSON arrays/special chars)
+    # -------------------------------------------------------------------
+    local _vp_tmpdir
+    _vp_tmpdir=$(mktemp -d 2>/dev/null || mktemp -d -t 'vpj')
+    local _vp_datafile="${_vp_tmpdir}/data"
+
+    "$_vp_py3" - "$manifest" "$_vp_datafile" <<'PYEOF'
+import json, sys
+
+with open(sys.argv[1]) as f:
+    p = json.load(f)
+
+outfile = sys.argv[2]
+lines = []
+
+def w(key, val):
+    if isinstance(val, (list, dict)):
+        lines.append(key + "=" + json.dumps(val, separators=(',', ':')))
+    elif val is None:
+        lines.append(key + "=")
+    else:
+        lines.append(key + "=" + str(val))
+
+w("VPJ_NAME",        p.get("name", ""))
+w("VPJ_VERSION",     p.get("version", ""))
+w("VPJ_DESCRIPTION", p.get("description", ""))
+w("VPJ_AUTHOR",      p.get("author", ""))
+w("VPJ_LICENSE",     p.get("license", ""))
+w("VPJ_CATEGORY",    p.get("category", ""))
+w("VPJ_MINNSELF",    p.get("minNselfVersion", ""))
+
+tags = p.get("tags")
+lines.append("VPJ_TAGS_PRESENT=" + ("1" if tags is not None else "0"))
+lines.append("VPJ_TAGS_COUNT="   + str(len(tags) if isinstance(tags, list) else 0))
+
+tables = p.get("tables")
+lines.append("VPJ_TABLES_PRESENT=" + ("1" if tables is not None else "0"))
+lines.append("VPJ_TABLES_COUNT="   + str(len(tables) if isinstance(tables, list) else 0))
+w("VPJ_TABLES_JSON", tables if isinstance(tables, list) else [])
+
+multi = p.get("multiApp")
+lines.append("VPJ_MULTI_PRESENT=" + ("1" if isinstance(multi, dict) else "0"))
+w("VPJ_MULTI_ISOLATION", multi.get("isolationColumn","") if isinstance(multi, dict) else "")
+
+with open(outfile, 'w') as f:
+    f.write("\n".join(lines) + "\n")
+PYEOF
+
+    # Read fields from temp file (one key=value per line)
+    local _vp_field_reader
+    _vp_field_reader() {
+        grep "^${1}=" "$_vp_datafile" 2>/dev/null | head -1 | cut -d'=' -f2-
+    }
+
+    local _vp_name; _vp_name=$(_vp_field_reader VPJ_NAME)
+    local _vp_version; _vp_version=$(_vp_field_reader VPJ_VERSION)
+    local _vp_description; _vp_description=$(_vp_field_reader VPJ_DESCRIPTION)
+    local _vp_author; _vp_author=$(_vp_field_reader VPJ_AUTHOR)
+    local _vp_license; _vp_license=$(_vp_field_reader VPJ_LICENSE)
+    local _vp_category; _vp_category=$(_vp_field_reader VPJ_CATEGORY)
+    local _vp_minnself; _vp_minnself=$(_vp_field_reader VPJ_MINNSELF)
+    local _vp_tags_present; _vp_tags_present=$(_vp_field_reader VPJ_TAGS_PRESENT)
+    local _vp_tags_count; _vp_tags_count=$(_vp_field_reader VPJ_TAGS_COUNT)
+    local _vp_tables_present; _vp_tables_present=$(_vp_field_reader VPJ_TABLES_PRESENT)
+    local _vp_tables_count; _vp_tables_count=$(_vp_field_reader VPJ_TABLES_COUNT)
+    local _vp_tables_json; _vp_tables_json=$(_vp_field_reader VPJ_TABLES_JSON)
+    local _vp_multi_present; _vp_multi_present=$(_vp_field_reader VPJ_MULTI_PRESENT)
+    local _vp_multi_isolation; _vp_multi_isolation=$(_vp_field_reader VPJ_MULTI_ISOLATION)
+
+    rm -rf "$_vp_tmpdir"
+
+    # Plugin directory (parent of manifest file)
+    local _vp_dir
+    _vp_dir="$(cd "$(dirname "$manifest")" && pwd)"
+
+    # Error counter
+    local _vp_errors=0
+
+    # Valid categories
+    local _vp_valid_cats="authentication automation commerce communication content data development infrastructure integrations media streaming sports compliance"
+
+    # Output helpers (use stderr to not pollute caller's stdout)
+    _vp_err_out() {
+        [[ "$quiet" == "--quiet" ]] && return 0
+        printf "\033[31m[ERROR]\033[0m %s — %s: %s\n" "${_vp_name:-unknown}" "$1" "$2" >&2
+    }
+    _vp_warn_out() {
+        [[ "$quiet" == "--quiet" ]] && return 0
+        printf "\033[33m[WARN]\033[0m  %s — %s: %s\n" "${_vp_name:-unknown}" "$1" "$2" >&2
+    }
+
+    # -------------------------------------------------------------------
+    # 1. Required string fields
+    # -------------------------------------------------------------------
+    local _vp_check_val
+    for _vp_check_val in \
+        "name:$_vp_name" \
+        "version:$_vp_version" \
+        "description:$_vp_description" \
+        "author:$_vp_author" \
+        "license:$_vp_license" \
+        "category:$_vp_category"
+    do
+        local _vp_fname="${_vp_check_val%%:*}"
+        local _vp_fval="${_vp_check_val#*:}"
+        if [[ -z "$_vp_fval" ]]; then
+            _vp_err_out "$_vp_fname" "Required field is missing or empty"
+            _vp_errors=$((_vp_errors + 1))
+        fi
+    done
+
+    # -------------------------------------------------------------------
+    # 2. Semver: x.y.z (digits only)
+    # -------------------------------------------------------------------
+    if [[ -n "$_vp_version" ]]; then
+        local _vp_vc="${_vp_version#v}"
+        local _vp_vmaj="${_vp_vc%%.*}"
+        local _vp_vrest="${_vp_vc#*.}"
+        local _vp_vmin="${_vp_vrest%%.*}"
+        local _vp_vpat="${_vp_vrest#*.}"
+        local _vp_ver_ok=true
+        [[ "$_vp_vc" != *.*.* ]]         && _vp_ver_ok=false
+        [[ "$_vp_vmaj" =~ [^0-9] ]]       && _vp_ver_ok=false
+        [[ "$_vp_vmin" =~ [^0-9] ]]       && _vp_ver_ok=false
+        [[ "$_vp_vpat" =~ [^0-9] ]]       && _vp_ver_ok=false
+        if [[ "$_vp_ver_ok" == "false" ]]; then
+            _vp_err_out "version" "Invalid semver: '$_vp_version' (expected x.y.z)"
+            _vp_errors=$((_vp_errors + 1))
+        fi
+    fi
+
+    # -------------------------------------------------------------------
+    # 3. Category validation
+    # -------------------------------------------------------------------
+    if [[ -n "$_vp_category" ]]; then
+        local _vp_cat_ok=false
+        local _vp_c
+        for _vp_c in $_vp_valid_cats; do
+            [[ "$_vp_c" == "$_vp_category" ]] && _vp_cat_ok=true && break
+        done
+        if [[ "$_vp_cat_ok" == "false" ]]; then
+            _vp_err_out "category" "Invalid: '$_vp_category'. Valid: $_vp_valid_cats"
+            _vp_errors=$((_vp_errors + 1))
+        fi
+    fi
+
+    # -------------------------------------------------------------------
+    # 4. Tags — present and non-empty
+    # -------------------------------------------------------------------
+    if [[ "${_vp_tags_present:-0}" == "0" ]]; then
+        _vp_err_out "tags" "Required field 'tags' is missing"
+        _vp_errors=$((_vp_errors + 1))
+    elif [[ "${_vp_tags_count:-0}" == "0" ]]; then
+        _vp_err_out "tags" "tags array is empty — at least one tag required"
+        _vp_errors=$((_vp_errors + 1))
+    fi
+
+    # -------------------------------------------------------------------
+    # 5. Tables — present; all entries carry np_ prefix
+    # -------------------------------------------------------------------
+    if [[ "${_vp_tables_present:-0}" == "0" ]]; then
+        _vp_err_out "tables" "Required field 'tables' is missing"
+        _vp_errors=$((_vp_errors + 1))
+    else
+        local _vp_table_list
+        _vp_table_list=$("$_vp_py3" -c "
+import json, sys
+tables = json.loads(sys.argv[1])
+for t in tables:
+    print(t)
+" "$_vp_tables_json" 2>/dev/null)
+
+        local _vp_table
+        while IFS= read -r _vp_table; do
+            [[ -z "$_vp_table" ]] && continue
+            case "$_vp_table" in
+                np_*) ;;
+                *)
+                    _vp_err_out "tables" "Table '$_vp_table' missing np_ prefix"
+                    _vp_errors=$((_vp_errors + 1))
+                    ;;
+            esac
+        done <<< "$_vp_table_list"
+    fi
+
+    # -------------------------------------------------------------------
+    # 6. SQL schema: source_account_id column required
+    # -------------------------------------------------------------------
+    local _vp_sql="${_vp_dir}/schema/tables.sql"
+    if [[ -f "$_vp_sql" ]]; then
+        if ! grep -q "source_account_id" "$_vp_sql" 2>/dev/null; then
+            _vp_err_out "schema/tables.sql" "Missing source_account_id column (required for multi-app isolation)"
+            _vp_errors=$((_vp_errors + 1))
+        fi
+    fi
+
+    # -------------------------------------------------------------------
+    # 7. multiApp isolation column must be source_account_id
+    # -------------------------------------------------------------------
+    if [[ "${_vp_multi_present:-0}" == "1" ]]; then
+        if [[ "$_vp_multi_isolation" != "source_account_id" ]]; then
+            _vp_err_out "multiApp.isolationColumn" "Must be 'source_account_id', found: '$_vp_multi_isolation'"
+            _vp_errors=$((_vp_errors + 1))
+        fi
+    fi
+
+    # -------------------------------------------------------------------
+    # 8. minNselfVersion — recommended
+    # -------------------------------------------------------------------
+    if [[ -z "$_vp_minnself" ]]; then
+        _vp_warn_out "minNselfVersion" "Recommended field is missing"
+    fi
+
+    # -------------------------------------------------------------------
+    # Result
+    # -------------------------------------------------------------------
+    if [[ $_vp_errors -eq 0 ]]; then
+        [[ "$quiet" != "--quiet" ]] && plugin_success "plugin.json valid: ${_vp_name} v${_vp_version}"
+        return 0
+    else
+        [[ "$quiet" != "--quiet" ]] && plugin_error "plugin.json has $_vp_errors error(s): ${manifest}"
+        return 1
+    fi
 }
 
 # =============================================================================

@@ -1,0 +1,190 @@
+name: Registry Consistency Check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  registry-consistency:
+    name: Registry Consistency Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Check all free/ plugins have registry.json entries
+        run: |
+          errors=0
+
+          # Build list of plugin directories in free/
+          disk_plugins=$(find free -maxdepth 1 -mindepth 1 -type d \
+            | xargs -I{} basename {} \
+            | sort)
+
+          # Build list of plugin names from registry.json
+          registry_plugins=$(python3 -c "
+          import json, sys
+          with open('registry.json') as f:
+            data = json.load(f)
+          plugins = data.get('plugins', {})
+          if isinstance(plugins, dict):
+            for name in sorted(plugins.keys()):
+              print(name)
+          elif isinstance(plugins, list):
+            for p in sorted(plugins, key=lambda x: x.get('name','')):
+              print(p.get('name',''))
+          ")
+
+          echo "Plugins on disk (free/):"
+          echo "$disk_plugins"
+          echo ""
+          echo "Plugins in registry.json:"
+          echo "$registry_plugins"
+          echo ""
+
+          # Check every disk plugin has a registry entry
+          while IFS= read -r plugin; do
+            [ -z "$plugin" ] && continue
+            if ! echo "$registry_plugins" | grep -qx "$plugin"; then
+              echo "ERROR: Plugin '$plugin' exists in free/ but has no entry in registry.json"
+              errors=$((errors + 1))
+            fi
+          done <<EOF
+          $disk_plugins
+          EOF
+
+          # Check every registry entry has a corresponding disk directory
+          while IFS= read -r plugin; do
+            [ -z "$plugin" ] && continue
+            if ! echo "$disk_plugins" | grep -qx "$plugin"; then
+              echo "WARNING: Plugin '$plugin' is in registry.json but not found in free/ (may be pro or community)"
+            fi
+          done <<EOF
+          $registry_plugins
+          EOF
+
+          if [ "$errors" -gt 0 ]; then
+            echo ""
+            echo "FAILED: $errors plugin(s) are missing from registry.json"
+            echo "Run 'pnpm build:registry' or manually add the entry to registry.json"
+            exit 1
+          fi
+
+          echo "All free/ plugins have entries in registry.json"
+
+      - name: Validate plugin.json required fields for all plugins
+        run: |
+          errors=0
+          REQUIRED_FIELDS="name version description category"
+
+          find free -name "plugin.json" | sort | while read -r file; do
+            plugin=$(dirname "$file" | xargs basename)
+
+            # Validate JSON syntax first
+            if ! python3 -m json.tool "$file" > /dev/null 2>&1; then
+              echo "ERROR: Invalid JSON syntax in $file"
+              errors=$((errors + 1))
+              continue
+            fi
+
+            # Check required fields
+            for field in $REQUIRED_FIELDS; do
+              value=$(python3 -c "
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          print(d.get(sys.argv[2], ''))
+              " "$file" "$field" 2>/dev/null)
+
+              if [ -z "$value" ]; then
+                echo "ERROR: '$plugin/plugin.json' missing required field: $field"
+                errors=$((errors + 1))
+              fi
+            done
+
+            # Validate entrypoint field exists (under implementation or as top-level)
+            entrypoint=$(python3 -c "
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          impl = d.get('implementation', {})
+          if isinstance(impl, dict):
+            print(impl.get('entryPoint', ''))
+          else:
+            print(d.get('entrypoint', ''))
+            " "$file" 2>/dev/null)
+
+            if [ -z "$entrypoint" ]; then
+              echo "WARNING: '$plugin/plugin.json' has no entrypoint defined (implementation.entryPoint)"
+            fi
+          done
+
+          if [ "$errors" -gt 0 ]; then
+            echo ""
+            echo "FAILED: $errors field validation error(s) across plugin.json files"
+            exit 1
+          fi
+
+          echo "All plugin.json files passed required field checks"
+
+      - name: Run shared registry validator
+        run: |
+          chmod +x shared/validate-registry.sh
+          bash shared/validate-registry.sh
+
+      - name: Registry version consistency check
+        run: |
+          errors=0
+
+          # For each free plugin, compare version in plugin.json vs registry.json
+          find free -name "plugin.json" | sort | while read -r file; do
+            plugin=$(dirname "$file" | xargs basename)
+
+            disk_version=$(python3 -c "
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          print(d.get('version', ''))
+            " "$file" 2>/dev/null)
+
+            registry_version=$(python3 -c "
+          import json, sys
+          with open('registry.json') as f:
+            data = json.load(f)
+          plugins = data.get('plugins', {})
+          if isinstance(plugins, dict):
+            p = plugins.get(sys.argv[1], {})
+            print(p.get('version', ''))
+          elif isinstance(plugins, list):
+            match = next((p for p in plugins if p.get('name') == sys.argv[1]), {})
+            print(match.get('version', ''))
+            " "$plugin" 2>/dev/null)
+
+            if [ -z "$registry_version" ]; then
+              # Not in registry — already caught by the consistency check above
+              continue
+            fi
+
+            if [ "$disk_version" != "$registry_version" ]; then
+              echo "ERROR: Version mismatch for '$plugin': plugin.json=$disk_version, registry.json=$registry_version"
+              errors=$((errors + 1))
+            fi
+          done
+
+          if [ "$errors" -gt 0 ]; then
+            echo ""
+            echo "FAILED: $errors version mismatch(es) between plugin.json and registry.json"
+            exit 1
+          fi
+
+          echo "All plugin versions are consistent between plugin.json and registry.json"

@@ -6,7 +6,7 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "minNselfVersion": "1.0.0",
   "port": 3402,
   "category": "communication",
   "tags": [
@@ -18,10 +18,7 @@
     "referrals"
   ],
   "tables": [
-    "np_invites_invitations",
-    "np_invites_templates",
-    "np_invites_bulk_sends",
-    "np_invites_webhook_events"
+    "np_invitations_invitations"
   ],
   "webhooks": {
     "invitation.created": "Track new invitation creation",

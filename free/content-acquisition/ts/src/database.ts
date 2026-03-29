@@ -152,7 +152,7 @@ export class ContentAcquisitionDatabase {
       CREATE INDEX IF NOT EXISTS idx_calendar_release_date
         ON np_contentacquisition_release_calendar(release_date, monitoring_enabled);
 
-      CREATE TABLE IF NOT EXISTS acquisition_queue (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_acquisition_queue (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         content_type VARCHAR(50) NOT NULL,
@@ -176,9 +176,9 @@ export class ContentAcquisitionDatabase {
       );
 
       CREATE INDEX IF NOT EXISTS idx_queue_status
-        ON acquisition_queue(status, priority DESC, created_at);
+        ON np_contentacquisition_acquisition_queue(status, priority DESC, created_at);
 
-      CREATE TABLE IF NOT EXISTS acquisition_history (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_acquisition_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         content_type VARCHAR(50) NOT NULL,
@@ -193,14 +193,14 @@ export class ContentAcquisitionDatabase {
         download_id UUID,
         status VARCHAR(50) NOT NULL,
         acquired_from VARCHAR(100),
-        upgrade_of UUID REFERENCES acquisition_history(id),
+        upgrade_of UUID REFERENCES np_contentacquisition_acquisition_history(id),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
       CREATE INDEX IF NOT EXISTS idx_history_account
-        ON acquisition_history(source_account_id, created_at DESC);
+        ON np_contentacquisition_acquisition_history(source_account_id, created_at DESC);
 
-      CREATE TABLE IF NOT EXISTS acquisition_rules (
+      CREATE TABLE IF NOT EXISTS np_contentacquisition_acquisition_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_account_id UUID NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -428,7 +428,7 @@ export class ContentAcquisitionDatabase {
 
   async getQueue(accountId: string): Promise<AcquisitionQueueItem[]> {
     const result = await this.pool.query(
-      `SELECT * FROM acquisition_queue
+      `SELECT * FROM np_contentacquisition_acquisition_queue
        WHERE source_account_id = $1 AND status IN ('pending', 'searching', 'matched', 'downloading')
        ORDER BY priority DESC, created_at ASC`,
       [accountId]
@@ -438,7 +438,7 @@ export class ContentAcquisitionDatabase {
 
   async addToQueue(item: Partial<AcquisitionQueueItem>): Promise<AcquisitionQueueItem> {
     const result = await this.pool.query(
-      `INSERT INTO acquisition_queue (source_account_id, content_type, content_name, year, season,
+      `INSERT INTO np_contentacquisition_acquisition_queue (source_account_id, content_type, content_name, year, season,
         episode, quality_profile_id, requested_by, request_source_id, priority)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
@@ -1144,7 +1144,7 @@ export class ContentAcquisitionDatabase {
 
   async listAcquisitionHistory(accountId: string, days: number = 90): Promise<AcquisitionHistoryItem[]> {
     const result = await this.pool.query(
-      `SELECT * FROM acquisition_history
+      `SELECT * FROM np_contentacquisition_acquisition_history
        WHERE source_account_id = $1
          AND created_at >= NOW() - ($2 || ' days')::INTERVAL
        ORDER BY created_at DESC`,

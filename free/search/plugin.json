@@ -6,8 +6,13 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/search",
   "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.4.8",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "minNselfVersion": "0.9.9",
   "category": "infrastructure",
+  "language": "go",
   "tags": [
     "search",
     "fts",
@@ -92,5 +97,16 @@
       "cache"
     ]
   },
-  "port": 3110
+  "port": 3302,
+  "status": "stable",
+  "binary_name": "search",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "free"
 }
