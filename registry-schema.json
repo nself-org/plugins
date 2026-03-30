@@ -172,8 +172,8 @@
             },
             "pkStrategy": {
               "type": "string",
-              "enum": ["single", "composite"],
-              "description": "Primary key strategy: single (IDs globally unique) or composite (ID + source_account_id)"
+              "enum": ["single", "composite", "uuid"],
+              "description": "Primary key strategy: single (IDs globally unique), composite (ID + source_account_id), or uuid (UUID primary key)"
             },
             "defaultValue": {
               "type": "string",
