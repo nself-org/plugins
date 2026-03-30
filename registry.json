@@ -669,7 +669,7 @@
     },
     "jobs": {
       "name": "jobs",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard",
       "author": "nself",
       "license": "MIT",
@@ -1083,7 +1083,7 @@
     },
     "notifications": {
       "name": "notifications",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "description": "Multi-channel notifications (email, push, SMS) with templates, preferences, and delivery tracking",
       "author": "nself",
       "license": "MIT",
@@ -2581,12 +2581,6 @@
           "description": "Grafana admin password"
         }
       ],
-      "multiApp": {
-        "supported": false,
-        "isolationColumn": null,
-        "pkStrategy": null,
-        "defaultValue": null
-      },
       "checksums": {
         "sha256": ""
       },

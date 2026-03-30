@@ -84,12 +84,15 @@ jobs:
           printf "Checking for port conflicts...\n"
 
           # Extract all ports and check for duplicates
+          # Port 0 means "no HTTP server" — skip it in the duplicate check
           ports=$(find free -name "plugin.json" -exec python3 -c "
           import json, sys, os
           for f in sys.argv[1:]:
             try:
               d = json.load(open(f))
-              print(d.get('port', ''), os.path.dirname(f))
+              port = d.get('port', '')
+              if str(port) != '0' and port != '' and port is not None:
+                print(port, os.path.dirname(f))
             except: pass
           " {} + | sort)
 

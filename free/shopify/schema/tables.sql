@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS shopify_shops (
     id BIGINT PRIMARY KEY,                          -- Shopify shop ID
+    source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary', -- Multi-app isolation (nself required)
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
     domain VARCHAR(255),
