@@ -39,7 +39,8 @@ jobs:
           fi
 
           # Validate against schema (with format support)
-          npm install -g ajv-cli ajv-formats
+          # ajv-cli@4 supports -c flag for custom formats; v5+ changed the API
+          npm install -g ajv-cli@4 ajv-formats
           ajv validate -s registry-schema.json -d registry.json -c ajv-formats
 
       - name: Validate plugin manifests
