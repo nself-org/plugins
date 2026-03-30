@@ -2172,9 +2172,7 @@
       },
       "multiApp": {
         "supported": false,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": null,
-        "defaultValue": null
+        "isolationColumn": "source_account_id"
       },
       "tier": "free"
     },
@@ -2252,9 +2250,7 @@
       ],
       "multiApp": {
         "supported": false,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": null,
-        "defaultValue": null
+        "isolationColumn": "source_account_id"
       },
       "checksums": {
         "sha256": ""
@@ -2316,9 +2312,7 @@
       ],
       "multiApp": {
         "supported": false,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": null,
-        "defaultValue": null
+        "isolationColumn": "source_account_id"
       },
       "checksums": {
         "sha256": ""
@@ -2498,9 +2492,7 @@
       ],
       "multiApp": {
         "supported": false,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": null,
-        "defaultValue": null
+        "isolationColumn": "source_account_id"
       },
       "checksums": {
         "sha256": ""
@@ -2684,9 +2676,7 @@
       ],
       "multiApp": {
         "supported": false,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": null,
-        "defaultValue": null
+        "isolationColumn": "source_account_id"
       },
       "checksums": {
         "sha256": ""
