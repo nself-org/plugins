@@ -1041,24 +1041,52 @@
         "np_mdns_discovery_log"
       ],
       "webhooks": [],
-      "apiEndpoints": {},
-      "cliCommands": {
-        "advertise": "Start advertising a service",
-        "discover": "Discover services on the network",
-        "services": "List advertised services",
-        "stats": "Show mDNS statistics"
-      },
-      "envVars": {
-        "required": [
-          "DATABASE_URL"
-        ],
-        "optional": [
-          "MDNS_PLUGIN_PORT",
-          "MDNS_SERVICE_TYPE",
-          "MDNS_INSTANCE_NAME",
-          "MDNS_DOMAIN"
-        ]
-      },
+      "apiEndpoints": [],
+      "cliCommands": [
+        {
+          "name": "advertise",
+          "description": "Start advertising a service"
+        },
+        {
+          "name": "discover",
+          "description": "Discover services on the network"
+        },
+        {
+          "name": "services",
+          "description": "List advertised services"
+        },
+        {
+          "name": "stats",
+          "description": "Show mDNS statistics"
+        }
+      ],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection URL"
+        },
+        {
+          "name": "MDNS_PLUGIN_PORT",
+          "required": false,
+          "description": "Plugin HTTP port"
+        },
+        {
+          "name": "MDNS_SERVICE_TYPE",
+          "required": false,
+          "description": "mDNS service type"
+        },
+        {
+          "name": "MDNS_INSTANCE_NAME",
+          "required": false,
+          "description": "mDNS instance name"
+        },
+        {
+          "name": "MDNS_DOMAIN",
+          "required": false,
+          "description": "mDNS domain"
+        }
+      ],
       "dependencies": [],
       "multiApp": {
         "supported": true,
