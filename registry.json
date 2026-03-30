@@ -1040,7 +1040,7 @@
         "np_mdns_services",
         "np_mdns_discovery_log"
       ],
-      "webhooks": {},
+      "webhooks": [],
       "apiEndpoints": {},
       "cliCommands": {
         "advertise": "Start advertising a service",
@@ -1059,16 +1059,7 @@
           "MDNS_DOMAIN"
         ]
       },
-      "dependencies": {
-        "npm": {
-          "@nself/plugin-utils": "file:../../../shared",
-          "fastify": "^4.24.0",
-          "@fastify/cors": "^8.4.0",
-          "dotenv": "^16.3.1",
-          "commander": "^11.1.0",
-          "pg": "^8.11.3"
-        }
-      },
+      "dependencies": [],
       "multiApp": {
         "supported": true,
         "isolationColumn": "source_account_id",
