@@ -8,7 +8,7 @@ on:
       - main
     paths:
       - 'registry.json'
-      - 'plugins/*/plugin.json'
+      - 'free/*/plugin.json'
       - '.workers/**'
   workflow_dispatch:
     inputs:
@@ -45,7 +45,7 @@ jobs:
 
       - name: Validate plugin manifests
         run: |
-          for plugin in plugins/*/plugin.json; do
+          for plugin in free/*/plugin.json; do
             if ! jq empty "$plugin" 2>/dev/null; then
               echo "ERROR: $plugin is not valid JSON"
               exit 1
@@ -55,7 +55,7 @@ jobs:
 
       - name: Check version consistency
         run: |
-          for plugin_dir in plugins/*/; do
+          for plugin_dir in free/*/; do
             plugin_name=$(basename "$plugin_dir")
             manifest_version=$(jq -r '.version' "$plugin_dir/plugin.json")
             registry_version=$(jq -r ".plugins.\"$plugin_name\".version" registry.json)
@@ -81,7 +81,7 @@ jobs:
 
       - name: Generate checksums
         run: |
-          for plugin_dir in plugins/*/; do
+          for plugin_dir in free/*/; do
             plugin_name=$(basename "$plugin_dir")
             checksum=$(tar -cf - "$plugin_dir" 2>/dev/null | sha256sum | cut -d' ' -f1)
 
