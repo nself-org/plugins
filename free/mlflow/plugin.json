@@ -6,6 +6,7 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mlflow",
   "repository": "https://github.com/nself-org/plugins",
+  "language": "config",
   "minNselfVersion": "1.0.0",
   "category": "infrastructure",
   "tags": [

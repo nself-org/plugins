@@ -6,6 +6,7 @@
   "license": "MIT",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/jobs",
   "repository": "https://github.com/nself-org/plugins",
+  "language": "go",
   "runtime": "go",
   "minNselfVersion": "0.9.9",
   "port": 3105,

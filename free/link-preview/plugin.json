@@ -4,6 +4,7 @@
   "description": "URL metadata extraction with Open Graph, Twitter Cards, and caching",
   "author": "nself",
   "license": "MIT",
+  "language": "go",
   "lang": "go",
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
   "repository": "https://github.com/nself-org/plugins",
