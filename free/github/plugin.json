@@ -94,5 +94,8 @@
     "syncInterval": 3600,
     "defaultBranch": "main"
   },
-  "port": 3002
+  "port": 3002,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false
 }

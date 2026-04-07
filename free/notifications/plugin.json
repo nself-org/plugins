@@ -1,6 +1,6 @@
 {
   "name": "notifications",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Multi-channel notification service. Channels: Email (SMTP), Push (placeholder), SMS (placeholder). HTTP endpoints for sending notifications, managing templates, and user notification preferences.",
   "author": "nself",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "notify",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
   "author": "nself",
   "license": "MIT",

@@ -9,7 +9,7 @@
   "repository": "https://github.com/nself-org/plugins",
   "minNselfVersion": "1.0.0",
   "port": 3216,
-  "category": "networking",
+  "category": "infrastructure",
   "tags": [
     "mdns",
     "bonjour",
@@ -70,5 +70,10 @@
       "cache",
       "temp"
     ]
-  }
+  },
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
 }

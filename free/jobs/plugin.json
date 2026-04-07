@@ -1,6 +1,6 @@
 {
   "name": "jobs",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "description": "PostgreSQL-backed background job queue with priorities, scheduling, retries, and REST API. Simplified Go implementation using database polling instead of Redis/BullMQ.",
   "author": "nself",
   "license": "MIT",
@@ -68,5 +68,10 @@
     "filesystem": [
       "logs"
     ]
-  }
+  },
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
 }

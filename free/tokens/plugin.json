@@ -74,5 +74,10 @@
     "filesystem": [
       "logs"
     ]
-  }
+  },
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
 }

@@ -88,5 +88,10 @@
       "docker-socket"
     ]
   },
-  "dependencies": []
+  "dependencies": [],
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
 }

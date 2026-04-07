@@ -9,7 +9,7 @@
   "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
   "repository": "https://github.com/nself-org/plugins",
   "minNselfVersion": "1.0.0",
-  "port": 3718,
+  "port": 3736,
   "category": "content",
   "tags": [
     "link-preview",
@@ -62,5 +62,10 @@
     "filesystem": [
       "logs"
     ]
-  }
+  },
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
 }

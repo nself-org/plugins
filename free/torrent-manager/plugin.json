@@ -252,5 +252,10 @@
     "Torrent health verification",
     "API and CLI interfaces",
     "Webhook events for state changes"
-  ]
+  ],
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
 }

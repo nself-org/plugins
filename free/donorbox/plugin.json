@@ -93,5 +93,8 @@
   "min_memory_mb": 64,
   "systemd_after": "network.target",
   "tier": "free",
-  "requires_license": false
+  "requires_license": false,
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": []
 }

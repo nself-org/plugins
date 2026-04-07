@@ -121,5 +121,6 @@
   "tier": "free",
   "isCommercial": false,
   "licenseType": "free",
-  "requires_license": false
+  "requires_license": false,
+  "requiredEntitlements": []
 }

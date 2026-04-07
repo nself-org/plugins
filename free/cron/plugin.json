@@ -1,6 +1,6 @@
 {
   "name": "cron",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
   "author": "nself",
   "license": "MIT",

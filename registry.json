@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-03-30T10:20:00Z",
+  "lastUpdated": "2026-04-07T00:00:00Z",
   "plugins": {
     "content-acquisition": {
       "name": "content-acquisition",
@@ -269,7 +269,7 @@
     },
     "feature-flags": {
       "name": "feature-flags",
-      "version": "2.0.0",
+      "version": "1.0.0",
       "description": "Feature flags service with targeting rules, segments, and evaluation engine",
       "author": "nself",
       "license": "MIT",
@@ -669,7 +669,7 @@
     },
     "jobs": {
       "name": "jobs",
-      "version": "2.0.0",
+      "version": "1.0.0",
       "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard",
       "author": "nself",
       "license": "MIT",
@@ -1102,7 +1102,7 @@
     },
     "notifications": {
       "name": "notifications",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "description": "Multi-channel notifications (email, push, SMS) with templates, preferences, and delivery tracking",
       "author": "nself",
       "license": "MIT",
@@ -1110,7 +1110,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/notifications",
       "minNselfVersion": "1.0.0",
-      "category": "infrastructure",
+      "category": "communication",
       "tags": [
         "notifications",
         "email",
@@ -1815,7 +1815,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "plugins/vpn",
       "minNselfVersion": "1.0.0",
-      "category": "infrastructure",
+      "category": "authentication",
       "tags": [
         "vpn",
         "nordvpn",
@@ -2259,7 +2259,7 @@
     },
     "cron": {
       "name": "cron",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
       "author": "nself",
       "license": "MIT",
@@ -2599,7 +2599,7 @@
     },
     "notify": {
       "name": "notify",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
       "author": "nself",
       "license": "MIT",
