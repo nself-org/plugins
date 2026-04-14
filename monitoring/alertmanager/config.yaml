@@ -1,0 +1,85 @@
+# Alertmanager configuration for nSelf monitoring plugin.
+# Env vars: PAGERDUTY_KEY, SMS_WEBHOOK_URL, SLACK_WEBHOOK_URL
+# Receivers route by severity: critical -> PagerDuty+SMS, warn -> Slack, info -> inbox.
+
+global:
+  resolve_timeout: 5m
+  smtp_require_tls: true
+
+# Inhibition: critical suppresses warn/info for same service+alertname.
+inhibit_rules:
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity =~ "warning|info"
+    equal:
+      - alertname
+      - service
+
+route:
+  receiver: inbox
+  group_by:
+    - alertname
+    - service
+    - env
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Test alerts go to null receiver.
+    - matchers:
+        - alertname =~ "Test.*"
+      receiver: "null"
+      continue: false
+
+    # Critical: PagerDuty + SMS.
+    - matchers:
+        - severity = critical
+      receiver: pagerduty-sms
+      repeat_interval: 1h
+      continue: false
+
+    # Warning: Slack channel.
+    - matchers:
+        - severity = warning
+      receiver: slack
+      repeat_interval: 4h
+      continue: false
+
+    # Info: internal inbox webhook.
+    - matchers:
+        - severity = info
+      receiver: inbox
+      repeat_interval: 12h
+      continue: false
+
+receivers:
+  - name: "null"
+
+  - name: pagerduty-sms
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_KEY}"
+        description: '{{ template "pagerduty.default.description" . }}'
+        severity: critical
+    webhook_configs:
+      - url: "${SMS_WEBHOOK_URL}"
+        send_resolved: true
+
+  - name: slack
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "#alerts"
+        send_resolved: true
+        title: '{{ .GroupLabels.alertname }} [{{ .Status | toUpper }}]'
+        text: >-
+          {{ range .Alerts }}
+          *{{ .Labels.alertname }}* ({{ .Labels.severity }})
+          {{ .Annotations.summary }}
+          {{ end }}
+
+  - name: inbox
+    webhook_configs:
+      - url: "http://ping_api:8001/alerts/inbox"
+        send_resolved: true
+
+templates: []

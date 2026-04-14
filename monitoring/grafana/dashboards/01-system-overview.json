@@ -1,0 +1,111 @@
+{
+  "annotations": { "list": [] },
+  "description": "Host-level system metrics: CPU, memory, disk, network, containers",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "CPU Usage (Stacked)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (mode) (rate(node_cpu_seconds_total{env=\"$env\"}[$__rate_interval]))",
+          "legendFormat": "{{mode}}"
+        }
+      ],
+      "options": { "tooltip": { "mode": "multi" } }
+    },
+    {
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes{env=\"$env\"} - node_memory_MemAvailable_bytes{env=\"$env\"}", "legendFormat": "Used" },
+        { "expr": "node_memory_MemAvailable_bytes{env=\"$env\"}", "legendFormat": "Available" }
+      ]
+    },
+    {
+      "title": "Disk Usage %",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.7 }, { "color": "red", "value": 0.9 }] } }, "overrides": [] },
+      "targets": [
+        { "expr": "1 - (node_filesystem_avail_bytes{mountpoint=\"/\",env=\"$env\"} / node_filesystem_size_bytes{mountpoint=\"/\",env=\"$env\"})", "legendFormat": "Root FS" }
+      ]
+    },
+    {
+      "title": "Disk I/O",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "targets": [
+        { "expr": "rate(node_disk_read_bytes_total{env=\"$env\"}[$__rate_interval])", "legendFormat": "Read" },
+        { "expr": "rate(node_disk_written_bytes_total{env=\"$env\"}[$__rate_interval])", "legendFormat": "Write" }
+      ]
+    },
+    {
+      "title": "Network Bytes",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{env=\"$env\"}[$__rate_interval])", "legendFormat": "RX {{device}}" },
+        { "expr": "rate(node_network_transmit_bytes_total{env=\"$env\"}[$__rate_interval])", "legendFormat": "TX {{device}}" }
+      ]
+    },
+    {
+      "title": "Container Count",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "count(container_last_seen{env=\"$env\"})", "legendFormat": "Containers" }
+      ]
+    },
+    {
+      "title": "Container Restarts (24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 5 }] } }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(increase(container_restart_count{env=\"$env\"}[24h]))", "legendFormat": "Restarts" }
+      ]
+    },
+    {
+      "title": "Load Average",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 21, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "node_load1{env=\"$env\"}", "legendFormat": "1m" },
+        { "expr": "node_load5{env=\"$env\"}", "legendFormat": "5m" },
+        { "expr": "node_load15{env=\"$env\"}", "legendFormat": "15m" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "system"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true, "auto_min": "1m" }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "01 - System Overview",
+  "uid": "nself-system-overview",
+  "version": 1
+}

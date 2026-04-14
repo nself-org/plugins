@@ -1,0 +1,59 @@
+{
+  "annotations": { "list": [] },
+  "description": "Synthetic monitoring: uptime per flow, latency, last failure, failure rate",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Uptime Per Flow",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        { "expr": "avg_over_time(probe_success{env=\"$env\"}[24h])", "legendFormat": "{{probe}}", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "title": "Synthetic Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "expr": "probe_duration_seconds{env=\"$env\"}", "legendFormat": "{{probe}}" }
+      ]
+    },
+    {
+      "title": "Last Failure Time",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "probe_success{env=\"$env\"} == 0", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "title": "Failure Rate by Region",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (region) (increase(probe_failures_total{env=\"$env\"}[24h]))", "legendFormat": "{{region}}", "format": "table", "instant": true }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "synthetics"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "13 - Synthetics",
+  "uid": "nself-synthetics",
+  "version": 1
+}

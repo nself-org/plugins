@@ -1,0 +1,44 @@
+# Synthetic check: chat message + topic classification.
+name: chat
+description: Login, send a chat message, verify streaming response and topic classification.
+schedule: "${SYNTHETIC_INTERVAL_SECONDS:-300}s"
+timeout: 30s
+steps:
+  - name: login
+    request:
+      method: POST
+      url: "${NSELF_AUTH_URL}/signin/email-password"
+      headers:
+        Content-Type: application/json
+      body:
+        email: "${SYNTHETIC_USER_EMAIL}"
+        password: "${SYNTHETIC_USER_PASSWORD}"
+    assertions:
+      - status == 200
+    extract:
+      token: json.session.accessToken
+
+  - name: send_message
+    request:
+      method: POST
+      url: "${NSELF_API_URL}/api/chat"
+      headers:
+        Content-Type: application/json
+        Authorization: "Bearer ${token}"
+      body:
+        message: "synthetic health check ping"
+        stream: true
+    assertions:
+      - status == 200
+    timeout: 15s
+
+  - name: verify_classification
+    request:
+      method: GET
+      url: "${NSELF_API_URL}/api/chat/latest"
+      headers:
+        Authorization: "Bearer ${token}"
+    assertions:
+      - status == 200
+      - json.topic != ""
+      - response_time_ms < 3000

@@ -1,0 +1,21 @@
+# Synthetic check: login flow.
+# Runs every SYNTHETIC_INTERVAL_SECONDS (default 300).
+name: login
+description: Verify authentication endpoint returns 200 with valid token.
+schedule: "${SYNTHETIC_INTERVAL_SECONDS:-300}s"
+timeout: 10s
+steps:
+  - name: login
+    request:
+      method: POST
+      url: "${NSELF_AUTH_URL}/signin/email-password"
+      headers:
+        Content-Type: application/json
+      body:
+        email: "${SYNTHETIC_USER_EMAIL}"
+        password: "${SYNTHETIC_USER_PASSWORD}"
+    assertions:
+      - status == 200
+      - json.session.accessToken != ""
+    extract:
+      token: json.session.accessToken

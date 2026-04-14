@@ -1,0 +1,69 @@
+{
+  "annotations": { "list": [{ "name": "Deploys", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "expr": "changes(deploy_timestamp{env=\"$env\"}[5m]) > 0", "tagKeys": "service", "titleFormat": "Deploy" }] },
+  "description": "Error analysis: heatmap by service and hour, top routes, stack traces, deploy correlation",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Error Rate Heatmap (Service x Hour)",
+      "type": "heatmap",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (service) (rate(http_requests_total{env=\"$env\",status=~\"5..\"}[$__rate_interval]))", "legendFormat": "{{service}}", "format": "heatmap" }
+      ],
+      "options": { "calculate": true, "yAxis": { "unit": "reqps" } }
+    },
+    {
+      "title": "Top Error Routes",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "topk(20, sum by (service, method, route) (increase(http_requests_total{env=\"$env\",status=~\"5..\"}[1h])))", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "title": "Error Delta vs Baseline",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{env=\"$env\",status=~\"5..\"}[$__rate_interval])) - sum(rate(http_requests_total{env=\"$env\",status=~\"5..\"}[$__rate_interval] offset 7d))", "legendFormat": "Delta vs 7d ago" }
+      ]
+    },
+    {
+      "title": "Top Stack Traces (Loki)",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 18 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "{env=\"$env\",service=~\"$service\"} |= \"err.stack\" | json | line_format \"{{.service}}: {{.msg}}\"", "maxLines": 50 }
+      ]
+    },
+    {
+      "title": "Error Rate vs Deploy Markers",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (service) (rate(http_requests_total{env=\"$env\",service=~\"$service\",status=~\"5..\"}[$__rate_interval]))", "legendFormat": "{{service}} 5xx" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "errors"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "service", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": "label_values(http_requests_total{env=\"$env\"}, service)", "multi": true, "includeAll": true },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "DS_LOKI", "type": "datasource", "query": "loki" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "05 - Error Heatmap",
+  "uid": "nself-error-heatmap",
+  "version": 1
+}

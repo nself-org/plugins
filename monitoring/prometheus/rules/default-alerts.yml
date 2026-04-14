@@ -1,0 +1,223 @@
+# Default alert rules for nSelf monitoring plugin.
+# 21 alert rules covering: infrastructure, application, AI, security, data.
+
+groups:
+  - name: infrastructure
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          runbook_url: "https://docs.nself.org/runbooks/service-down"
+
+      - alert: DiskSpaceHigh
+        expr: (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 > 80
+        for: 15m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Disk usage above 80% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          runbook_url: "https://docs.nself.org/runbooks/disk-space"
+
+      - alert: DiskSpaceCritical
+        expr: (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Disk usage above 90% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          runbook_url: "https://docs.nself.org/runbooks/disk-space"
+
+      - alert: MemoryHigh
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
+        for: 15m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Memory usage above 85% on {{ $labels.instance }}"
+          runbook_url: "https://docs.nself.org/runbooks/memory"
+
+      - alert: OOMKilled
+        expr: increase(container_oom_events_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "OOM kill detected for {{ $labels.name }}"
+          runbook_url: "https://docs.nself.org/runbooks/oom"
+
+      - alert: ContainerRestartLoop
+        expr: increase(container_restart_count[10m]) > 3
+        for: 0m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Container {{ $labels.name }} restarted more than 3 times in 10m"
+          runbook_url: "https://docs.nself.org/runbooks/restart-loop"
+
+      - alert: BackupFailed
+        expr: time() - backup_last_success_timestamp_seconds > 86400
+        for: 0m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "No successful backup in over 24 hours"
+          runbook_url: "https://docs.nself.org/runbooks/backup-failed"
+
+      - alert: CertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 14
+        for: 0m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "TLS certificate expires in {{ $value | humanizeDuration }} for {{ $labels.instance }}"
+          runbook_url: "https://docs.nself.org/runbooks/cert-expiry"
+
+      - alert: CertExpired
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 0
+        for: 0m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "TLS certificate EXPIRED for {{ $labels.instance }}"
+          runbook_url: "https://docs.nself.org/runbooks/cert-expiry"
+
+  - name: application
+    rules:
+      - alert: HTTP5xxSpike
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (service) / sum(rate(http_requests_total[5m])) by (service) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "5xx error rate above 5% for {{ $labels.service }}"
+          runbook_url: "https://docs.nself.org/runbooks/error-rate"
+
+      - alert: HTTPLatencyP95High
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)) > 2
+        for: 10m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "P95 latency above 2s for {{ $labels.service }}"
+          runbook_url: "https://docs.nself.org/runbooks/latency"
+
+      - alert: HTTPLatencyP99Critical
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)) > 5
+        for: 5m
+        labels:
+          severity: critical
+          category: application
+        annotations:
+          summary: "P99 latency above 5s for {{ $labels.service }}"
+          runbook_url: "https://docs.nself.org/runbooks/latency"
+
+      - alert: ErrorRateHigh
+        expr: sum(rate(log_entries_total{level="error"}[5m])) by (service) > 1
+        for: 10m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "Error log rate above 1/s for {{ $labels.service }}"
+          runbook_url: "https://docs.nself.org/runbooks/error-rate"
+
+      - alert: LicenseExpiringSoon
+        expr: (nself_license_expiry_timestamp_seconds - time()) / 86400 < 7
+        for: 0m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "nSelf license expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.nself.org/runbooks/license"
+
+      - alert: RateLimitSpike
+        expr: sum(rate(http_requests_total{status="429"}[5m])) > 10
+        for: 0m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "Rate limiting spike: {{ $value }} 429s/sec"
+          runbook_url: "https://docs.nself.org/runbooks/rate-limit"
+
+  - name: database
+    rules:
+      - alert: DBConnectionsExhausted
+        expr: pg_stat_activity_count / pg_settings_max_connections * 100 > 90
+        for: 0m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Database connections above 90% capacity"
+          runbook_url: "https://docs.nself.org/runbooks/db-connections"
+
+      - alert: ReplicationLagHigh
+        expr: pg_replication_lag_bytes > 52428800
+        for: 0m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Replication lag above 50MB"
+          runbook_url: "https://docs.nself.org/runbooks/replication-lag"
+
+  - name: queue
+    rules:
+      - alert: QueueDepthRising
+        expr: queue_depth > 1000 and delta(queue_depth[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          category: queue
+        annotations:
+          summary: "Queue depth above 1000 and rising for {{ $labels.queue }}"
+          runbook_url: "https://docs.nself.org/runbooks/queue-depth"
+
+      - alert: QueueDLQGrowth
+        expr: increase(queue_dlq_total[1h]) > 50
+        for: 0m
+        labels:
+          severity: warning
+          category: queue
+        annotations:
+          summary: "Dead letter queue growing: {{ $value }} messages in last hour"
+          runbook_url: "https://docs.nself.org/runbooks/queue-dlq"
+
+  - name: ai
+    rules:
+      - alert: AIProviderDown
+        expr: sum(rate(ai_requests_total{status="error"}[5m])) by (provider) / sum(rate(ai_requests_total[5m])) by (provider) > 0.5
+        for: 0m
+        labels:
+          severity: critical
+          category: ai
+        annotations:
+          summary: "AI provider {{ $labels.provider }} error rate above 50%"
+          runbook_url: "https://docs.nself.org/runbooks/ai-provider"
+
+      - alert: AIBurnRateHigh
+        expr: ai:cost_hourly_usd > 50
+        for: 0m
+        labels:
+          severity: warning
+          category: ai
+        annotations:
+          summary: "AI cost burn rate above $50/hr (current: ${{ $value }})"
+          runbook_url: "https://docs.nself.org/runbooks/ai-cost"

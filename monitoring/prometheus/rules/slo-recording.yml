@@ -1,0 +1,69 @@
+# SLO error budget recording rules.
+# These feed the 12-slo.json Grafana dashboard.
+
+groups:
+  - name: slo-error-budget
+    interval: 1m
+    rules:
+      # Platform uptime: 99.9% over 30d. Budget = 43.2 min/month.
+      - record: slo:platform_uptime:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - avg_over_time(up[30d]))
+            / 0.001
+          )
+
+      # Chat P95 latency: target < 2s over 28d.
+      - record: slo:chat_latency_p95:error_budget_remaining
+        expr: |
+          1 - (
+            avg_over_time(
+              (histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="chat"}[5m])) by (le)) > bool 2)[28d:5m]
+            )
+            / 0.001
+          )
+
+      # API P99 latency: target < 500ms over 28d (excluding AI).
+      - record: slo:api_latency_p99:error_budget_remaining
+        expr: |
+          1 - (
+            avg_over_time(
+              (histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service!="ai"}[5m])) by (le)) > bool 0.5)[28d:5m]
+            )
+            / 0.001
+          )
+
+      # Mux F1 score: target > 0.85 over 7d.
+      - record: slo:mux_f1:error_budget_remaining
+        expr: |
+          1 - (
+            (1 - avg_over_time(mux_classification_f1_score[7d]))
+            / 0.15
+          )
+
+      # Backup success: 100% over 30d.
+      - record: slo:backup_success:error_budget_remaining
+        expr: |
+          1 - clamp_min(
+            increase(backup_failures_total[30d])
+            / (increase(backup_runs_total[30d]) + 1),
+            0
+          )
+
+      # AI call success: 99% over 7d.
+      - record: slo:ai_success:error_budget_remaining
+        expr: |
+          1 - (
+            sum(increase(ai_requests_total{status="error"}[7d]))
+            / (sum(increase(ai_requests_total[7d])) + 1)
+            / 0.01
+          )
+
+      # Auth success: 99.5% over 28d.
+      - record: slo:auth_success:error_budget_remaining
+        expr: |
+          1 - (
+            sum(increase(http_requests_total{service="auth",status=~"5.."}[28d]))
+            / (sum(increase(http_requests_total{service="auth"}[28d])) + 1)
+            / 0.005
+          )

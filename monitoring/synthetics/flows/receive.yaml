@@ -1,0 +1,29 @@
+# Synthetic check: WebSocket echo.
+name: receive
+description: Connect via WebSocket, send a message, verify echo within 1s.
+schedule: "${SYNTHETIC_INTERVAL_SECONDS:-300}s"
+timeout: 10s
+steps:
+  - name: login
+    request:
+      method: POST
+      url: "${NSELF_AUTH_URL}/signin/email-password"
+      headers:
+        Content-Type: application/json
+      body:
+        email: "${SYNTHETIC_USER_EMAIL}"
+        password: "${SYNTHETIC_USER_PASSWORD}"
+    assertions:
+      - status == 200
+    extract:
+      token: json.session.accessToken
+
+  - name: ws_echo
+    websocket:
+      url: "${NSELF_WS_URL}/ws/chat"
+      headers:
+        Authorization: "Bearer ${token}"
+      send: '{"type":"ping","id":"synthetic-check"}'
+      expect:
+        timeout: 1s
+        match: '"type":"pong"'

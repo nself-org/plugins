@@ -1,0 +1,75 @@
+{
+  "annotations": { "list": [] },
+  "description": "Audit log observability: events/min, actor top 20, failed auth heatmap, permission denied, admin timeline, IP anomalies",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Audit Events/min by Type",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "sum by (audit_event) (count_over_time({job=\"audit\",env=\"$env\"} | json [$__interval])) / ($__interval_ms / 60000)", "legendFormat": "{{audit_event}}" }
+      ]
+    },
+    {
+      "title": "Actor Top 20",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "topk(20, sum by (actor) (count_over_time({job=\"audit\",env=\"$env\"} | json [24h])))", "legendFormat": "{{actor}}", "instant": true }
+      ]
+    },
+    {
+      "title": "Failed Auth Attempts Heatmap",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "sum by (actor) (count_over_time({job=\"audit\",env=\"$env\"} | json | audit_event=~\"auth.failed.*\" [$__interval]))", "legendFormat": "{{actor}}" }
+      ]
+    },
+    {
+      "title": "Permission Denied Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "sum(count_over_time({job=\"audit\",env=\"$env\"} | json | audit_event=\"permission.denied\" [$__interval]))", "legendFormat": "Denied/interval" }
+      ]
+    },
+    {
+      "title": "Admin Actions Timeline",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "{job=\"audit\",env=\"$env\"} | json | audit_event=~\"admin.*\"", "maxLines": 100 }
+      ]
+    },
+    {
+      "title": "Source IP Anomalies",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "topk(20, sum by (meta_source_ip) (count_over_time({job=\"audit\",env=\"$env\"} | json [24h])))", "format": "table", "instant": true }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "audit", "security"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "DS_LOKI", "type": "datasource", "query": "loki" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "15 - Audit",
+  "uid": "nself-audit",
+  "version": 1
+}

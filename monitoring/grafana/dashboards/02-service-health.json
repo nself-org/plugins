@@ -1,0 +1,94 @@
+{
+  "annotations": { "list": [] },
+  "description": "Service health: up/down, RPS, latency percentiles, error rates, apdex",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Service Up/Down",
+      "type": "table",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "up{env=\"$env\", service=~\"$service\"}", "format": "table", "instant": true }
+      ],
+      "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true } } }]
+    },
+    {
+      "title": "Requests Per Second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (service) (rate(http_requests_total{env=\"$env\", service=~\"$service\"}[$__rate_interval]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "Latency p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le, service) (rate(http_request_duration_seconds_bucket{env=\"$env\", service=~\"$service\"}[$__rate_interval])))", "legendFormat": "p50 {{service}}" },
+        { "expr": "histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket{env=\"$env\", service=~\"$service\"}[$__rate_interval])))", "legendFormat": "p95 {{service}}" },
+        { "expr": "histogram_quantile(0.99, sum by (le, service) (rate(http_request_duration_seconds_bucket{env=\"$env\", service=~\"$service\"}[$__rate_interval])))", "legendFormat": "p99 {{service}}" }
+      ]
+    },
+    {
+      "title": "5xx Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "expr": "sum by (service) (rate(http_requests_total{env=\"$env\", service=~\"$service\", status=~\"5..\"}[$__rate_interval]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "4xx Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (service) (rate(http_requests_total{env=\"$env\", service=~\"$service\", status=~\"4..\"}[$__rate_interval]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "In-Flight Requests",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 4, "x": 16, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (service) (http_requests_in_flight{env=\"$env\", service=~\"$service\"})", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "Apdex Score",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.7 }, { "color": "green", "value": 0.9 }] } }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "(sum(rate(http_request_duration_seconds_bucket{le=\"0.5\",env=\"$env\",service=~\"$service\"}[$__rate_interval])) + sum(rate(http_request_duration_seconds_bucket{le=\"2.0\",env=\"$env\",service=~\"$service\"}[$__rate_interval])) / 2) / sum(rate(http_request_duration_seconds_count{env=\"$env\",service=~\"$service\"}[$__rate_interval]))",
+          "legendFormat": "Apdex"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "service-health"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "service", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": "label_values(up{env=\"$env\"}, service)", "multi": true, "includeAll": true },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "02 - Service Health",
+  "uid": "nself-service-health",
+  "version": 1
+}

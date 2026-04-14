@@ -1,0 +1,41 @@
+groups:
+  - name: audit
+    rules:
+      # AuditSpike: audit events exceed 3 standard deviations above baseline.
+      - alert: AuditSpike
+        expr: |
+          sum(rate(log_entries_total{job="audit"}[5m])) >
+          (avg_over_time(sum(rate(log_entries_total{job="audit"}[5m]))[7d:1h])
+           + 3 * stddev_over_time(sum(rate(log_entries_total{job="audit"}[5m]))[7d:1h]))
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Audit event spike detected"
+          description: "Audit event rate is more than 3 standard deviations above the 7-day baseline."
+
+      # AdminActionOffHours: admin mutation between 00:00 and 05:00 UTC.
+      - alert: AdminActionOffHours
+        expr: |
+          sum(rate(log_entries_total{job="audit",audit_event=~"admin.*"}[5m])) > 0
+          and on() hour() >= 0 and on() hour() < 5
+        for: 1m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Admin action detected during off-hours (00:00-05:00 UTC)"
+          description: "An admin mutation was performed during non-business hours. Verify this was authorized."
+
+      # MassDelete: more than 100 deletes in 5 minutes from a single actor.
+      - alert: MassDelete
+        expr: |
+          sum by (actor) (increase(log_entries_total{job="audit",audit_event=~".*delete.*"}[5m])) > 100
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Mass deletion detected from actor {{ $labels.actor }}"
+          description: "More than 100 delete events in 5 minutes from a single actor. Immediate review required."

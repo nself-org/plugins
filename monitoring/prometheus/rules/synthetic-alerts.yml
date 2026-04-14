@@ -1,0 +1,17 @@
+# Alert on 3 consecutive synthetic check failures.
+
+groups:
+  - name: synthetics
+    rules:
+      - alert: SyntheticCheckFailing
+        expr: |
+          increase(synthetic_check_failure[15m]) >= 3
+          and
+          increase(synthetic_check_success[15m]) == 0
+        for: 0m
+        labels:
+          severity: critical
+          category: synthetic
+        annotations:
+          summary: "Synthetic flow '{{ $labels.flow }}' failed 3+ consecutive times"
+          runbook_url: "https://docs.nself.org/runbooks/synthetic-check"

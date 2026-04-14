@@ -1,0 +1,77 @@
+# Status page configuration for status.nself.org.
+# Data source: Prometheus via read-only proxy at api.nself.org/prom-public.
+# Auth: STATUS_PAGE_PROM_PROXY_TOKEN (vault).
+
+site:
+  title: "nSelf Status"
+  url: "https://status.nself.org"
+  description: "Current status of nSelf platform services."
+  logo: "/logo.svg"
+
+data_source:
+  type: prometheus
+  url: "${STATUS_PAGE_PROM_URL:-http://prometheus:9090}"
+  proxy_url: "https://api.nself.org/prom-public"
+  proxy_token: "${STATUS_PAGE_PROM_PROXY_TOKEN}"
+  availability_metric: "service:availability_30d"
+
+components:
+  - name: API
+    description: "Hasura GraphQL + Auth"
+    query: 'avg_over_time(up{job="hasura"}[5m]) and avg_over_time(up{job="auth"}[5m])'
+    services:
+      - hasura
+      - auth
+
+  - name: AI Providers
+    description: "ɳClaw AI pipeline"
+    query: '1 - (sum(rate(ai_requests_total{status="error"}[5m])) / sum(rate(ai_requests_total[5m])))'
+    services:
+      - ai
+      - claw
+
+  - name: Mux
+    description: "Email triage and classification"
+    query: 'avg_over_time(up{job="mux"}[5m])'
+    services:
+      - mux
+
+  - name: Storage
+    description: "MinIO object storage"
+    query: 'avg_over_time(up{job="minio"}[5m])'
+    services:
+      - minio
+
+  - name: Web Apps
+    description: "nself.org, docs, cloud dashboard"
+    query: 'avg_over_time(probe_success{job="blackbox",target=~".*nself.org.*"}[5m])'
+    services:
+      - web
+
+display:
+  # 90-day uptime grid: one square per day, color-coded.
+  uptime_days: 90
+  colors:
+    operational: "#22c55e"      # green
+    degraded: "#eab308"         # yellow
+    major_outage: "#ef4444"     # red
+    maintenance: "#3b82f6"      # blue
+
+incidents:
+  # Incidents created via web/base/incidents auto-post here.
+  source: "https://api.nself.org/incidents"
+  webhook_notify:
+    - type: slack
+      url: "${SLACK_WEBHOOK_URL}"
+    - type: discord
+      url: "${DISCORD_WEBHOOK_URL}"
+
+  feeds:
+    rss: "/rss.xml"
+    atom: "/atom.xml"
+
+subscribers:
+  # Elastic Email list for status notifications.
+  provider: elastic-email
+  list: "nself-status"
+  api_key: "${ELASTIC_EMAIL_ADMIN_API_KEY}"

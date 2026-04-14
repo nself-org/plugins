@@ -1,0 +1,75 @@
+{
+  "annotations": { "list": [] },
+  "description": "Plugin ecosystem health: license checks, uptime, versions, install rate, errors",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "License Checks/min by Tier",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (tier) (rate(plugin_license_checks_total{env=\"$env\"}[$__rate_interval])) * 60", "legendFormat": "{{tier}}" }
+      ]
+    },
+    {
+      "title": "License Check Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(plugin_license_errors_total{env=\"$env\"}[$__rate_interval]))", "legendFormat": "Errors/s" }
+      ]
+    },
+    {
+      "title": "Plugin Uptime",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "avg_over_time(up{env=\"$env\",job=~\"plugin-.*\"}[24h])", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "title": "Version Distribution",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "count by (plugin, version) (plugin_info{env=\"$env\"})", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "title": "Plugin Install Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (plugin) (rate(plugin_installs_total{env=\"$env\"}[$__rate_interval]))", "legendFormat": "{{plugin}}" }
+      ]
+    },
+    {
+      "title": "Plugin Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (plugin) (rate(plugin_errors_total{env=\"$env\"}[$__rate_interval]))", "legendFormat": "{{plugin}}" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "plugins"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "09 - Plugin Health",
+  "uid": "nself-plugin-health",
+  "version": 1
+}

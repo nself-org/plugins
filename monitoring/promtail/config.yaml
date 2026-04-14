@@ -1,0 +1,104 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Extract service name from container label.
+      - source_labels: ['__meta_docker_container_label_com_nself_service']
+        target_label: service
+      # Extract plugin name.
+      - source_labels: ['__meta_docker_container_label_com_nself_plugin']
+        target_label: plugin
+      # Extract tenant.
+      - source_labels: ['__meta_docker_container_label_com_nself_tenant']
+        target_label: tenant
+      # Container name as fallback service label.
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      # Environment from container label or default.
+      - source_labels: ['__meta_docker_container_label_com_nself_env']
+        target_label: env
+        replacement: 'dev'
+
+    pipeline_stages:
+      # Parse JSON log lines.
+      - json:
+          expressions:
+            level: level
+            trace_id: trace_id
+            user_id: user_id
+            request_id: request_id
+            job: job
+
+      # Promote only bounded-cardinality fields as labels.
+      # High-cardinality fields (user_id, request_id, trace_id) stay in log body.
+      - labels:
+          level:
+          job:
+
+      # Route audit logs to audit tenant.
+      - match:
+          selector: '{job="audit"}'
+          stages:
+            - tenant:
+                source: env
+                value: 'audit-{{ .Value }}'
+
+      # Drop healthz endpoint logs (noisy, low value).
+      - match:
+          selector: '{service=~".+"}'
+          stages:
+            - regex:
+                expression: '"path":"(/healthz|/health|/ready|/live)"'
+            - drop:
+                source: path
+                expression: '/health.*'
+                drop_counter_reason: healthz_filtered
+
+      # Drop 200-status logs older than 1h (reduces volume).
+      - match:
+          selector: '{level="info"}'
+          stages:
+            - regex:
+                expression: '"status":200'
+            - timestamp:
+                source: ts
+                format: RFC3339Nano
+            - drop:
+                older_than: 1h
+                drop_counter_reason: old_200_filtered
+
+  # Audit log dedicated job (catches any audit-labeled containers).
+  - job_name: audit
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_label_com_nself_service']
+        regex: 'audit'
+        action: keep
+      - source_labels: ['__meta_docker_container_label_com_nself_env']
+        target_label: env
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            audit_event: audit_event
+            actor: actor
+      - labels:
+          level:
+      - tenant:
+          source: env
+          value: 'audit-{{ .Value }}'

@@ -1,0 +1,53 @@
+{
+  "annotations": { "list": [] },
+  "description": "SLO tracking: burn-rate panels, error budget remaining, multi-window multi-burn-rate alerts",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "SLO Burn Rate (1h / 6h)",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total{env=\"$env\",service=\"$service\",status=~\"5..\"}[1h])) / sum(rate(http_requests_total{env=\"$env\",service=\"$service\"}[1h])) / (1 - $slo_target)", "legendFormat": "1h burn rate" },
+        { "expr": "sum(rate(http_requests_total{env=\"$env\",service=\"$service\",status=~\"5..\"}[6h])) / sum(rate(http_requests_total{env=\"$env\",service=\"$service\"}[6h])) / (1 - $slo_target)", "legendFormat": "6h burn rate" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "thresholdsStyle": { "mode": "line" } }, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] } }, "overrides": [] }
+    },
+    {
+      "title": "Error Budget Remaining %",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.25 }, { "color": "green", "value": 0.5 }] } }, "overrides": [] },
+      "targets": [
+        { "expr": "1 - (sum(increase(http_requests_total{env=\"$env\",service=\"$service\",status=~\"5..\"}[30d])) / sum(increase(http_requests_total{env=\"$env\",service=\"$service\"}[30d]))) / (1 - $slo_target)", "legendFormat": "Budget Remaining" }
+      ]
+    },
+    {
+      "title": "Multi-Window Multi-Burn-Rate Alert Status",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "ALERTS{alertname=~\"SLO.*\",env=\"$env\"}", "format": "table", "instant": true }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "slo"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "service", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": "label_values(http_requests_total{env=\"$env\"}, service)", "multi": false },
+      { "name": "slo_target", "type": "custom", "query": "0.999,0.995,0.99,0.95", "current": { "text": "0.999", "value": "0.999" } },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "title": "12 - SLO",
+  "uid": "nself-slo",
+  "version": 1
+}

@@ -1,0 +1,209 @@
+# SLO burn-rate alerts using Multi-Window Multi-Burn-Rate (MWMBR).
+# Each SLO has two alert pairs: fast-burn (5m/1h, rate 14.4) and slow-burn (30m/6h, rate 6).
+# Error budget recording rules are in slo-recording.yml.
+
+groups:
+  - name: slo-burn-rate
+    rules:
+      # --- SLO 1: Platform Uptime 99.9% (30d) ---
+      - alert: SLO_PlatformUptime_FastBurn
+        expr: |
+          (1 - avg_over_time(up[5m])) > (14.4 * 0.001)
+          and
+          (1 - avg_over_time(up[1h])) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          slo: platform_uptime
+          window: fast
+        annotations:
+          summary: "Platform uptime SLO fast-burn: error budget consumed at 14.4x rate"
+          runbook_url: "https://docs.nself.org/runbooks/slo-uptime"
+
+      - alert: SLO_PlatformUptime_SlowBurn
+        expr: |
+          (1 - avg_over_time(up[30m])) > (6 * 0.001)
+          and
+          (1 - avg_over_time(up[6h])) > (6 * 0.001)
+        for: 5m
+        labels:
+          severity: warning
+          slo: platform_uptime
+          window: slow
+        annotations:
+          summary: "Platform uptime SLO slow-burn: error budget consumed at 6x rate"
+          runbook_url: "https://docs.nself.org/runbooks/slo-uptime"
+
+      # --- SLO 2: Chat P95 Latency < 2s (28d) ---
+      - alert: SLO_ChatLatencyP95_FastBurn
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="chat"}[5m])) by (le)) > 2
+          and
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="chat"}[1h])) by (le)) > 2
+        for: 2m
+        labels:
+          severity: critical
+          slo: chat_latency_p95
+          window: fast
+        annotations:
+          summary: "Chat P95 latency SLO fast-burn: latency exceeds 2s target"
+          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+
+      - alert: SLO_ChatLatencyP95_SlowBurn
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="chat"}[30m])) by (le)) > 2
+          and
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="chat"}[6h])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          slo: chat_latency_p95
+          window: slow
+        annotations:
+          summary: "Chat P95 latency SLO slow-burn: latency exceeds 2s target"
+          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+
+      # --- SLO 3: API P99 Latency < 500ms (28d, excluding AI) ---
+      - alert: SLO_APILatencyP99_FastBurn
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service!="ai"}[5m])) by (le)) > 0.5
+          and
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service!="ai"}[1h])) by (le)) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          slo: api_latency_p99
+          window: fast
+        annotations:
+          summary: "API P99 latency SLO fast-burn: latency exceeds 500ms target"
+          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+
+      - alert: SLO_APILatencyP99_SlowBurn
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service!="ai"}[30m])) by (le)) > 0.5
+          and
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service!="ai"}[6h])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: api_latency_p99
+          window: slow
+        annotations:
+          summary: "API P99 latency SLO slow-burn: latency exceeds 500ms target"
+          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+
+      # --- SLO 4: Mux Classification F1 > 0.85 (7d) ---
+      - alert: SLO_MuxF1_FastBurn
+        expr: |
+          (1 - mux_classification_f1_score) > (14.4 * 0.15)
+          and
+          (1 - avg_over_time(mux_classification_f1_score[1h])) > (14.4 * 0.15)
+        for: 2m
+        labels:
+          severity: critical
+          slo: mux_f1
+          window: fast
+        annotations:
+          summary: "Mux F1 SLO fast-burn: classification quality degrading"
+          runbook_url: "https://docs.nself.org/runbooks/slo-mux"
+
+      - alert: SLO_MuxF1_SlowBurn
+        expr: |
+          (1 - avg_over_time(mux_classification_f1_score[30m])) > (6 * 0.15)
+          and
+          (1 - avg_over_time(mux_classification_f1_score[6h])) > (6 * 0.15)
+        for: 5m
+        labels:
+          severity: warning
+          slo: mux_f1
+          window: slow
+        annotations:
+          summary: "Mux F1 SLO slow-burn: classification quality degrading"
+          runbook_url: "https://docs.nself.org/runbooks/slo-mux"
+
+      # --- SLO 5: Backup Success Rate 100% (30d) ---
+      - alert: SLO_BackupSuccess_FastBurn
+        expr: |
+          increase(backup_failures_total[5m]) > 0
+          and
+          increase(backup_failures_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          slo: backup_success
+          window: fast
+        annotations:
+          summary: "Backup SLO fast-burn: backup failures detected"
+          runbook_url: "https://docs.nself.org/runbooks/slo-backup"
+
+      - alert: SLO_BackupSuccess_SlowBurn
+        expr: |
+          increase(backup_failures_total[30m]) > 0
+          and
+          increase(backup_failures_total[6h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          slo: backup_success
+          window: slow
+        annotations:
+          summary: "Backup SLO slow-burn: recurring backup failures"
+          runbook_url: "https://docs.nself.org/runbooks/slo-backup"
+
+      # --- SLO 6: AI Call Success > 99% (7d) ---
+      - alert: SLO_AISuccess_FastBurn
+        expr: |
+          sum(rate(ai_requests_total{status="error"}[5m])) / sum(rate(ai_requests_total[5m])) > (14.4 * 0.01)
+          and
+          sum(rate(ai_requests_total{status="error"}[1h])) / sum(rate(ai_requests_total[1h])) > (14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+          slo: ai_success
+          window: fast
+        annotations:
+          summary: "AI call SLO fast-burn: error rate consuming budget at 14.4x"
+          runbook_url: "https://docs.nself.org/runbooks/slo-ai"
+
+      - alert: SLO_AISuccess_SlowBurn
+        expr: |
+          sum(rate(ai_requests_total{status="error"}[30m])) / sum(rate(ai_requests_total[30m])) > (6 * 0.01)
+          and
+          sum(rate(ai_requests_total{status="error"}[6h])) / sum(rate(ai_requests_total[6h])) > (6 * 0.01)
+        for: 5m
+        labels:
+          severity: warning
+          slo: ai_success
+          window: slow
+        annotations:
+          summary: "AI call SLO slow-burn: error rate consuming budget at 6x"
+          runbook_url: "https://docs.nself.org/runbooks/slo-ai"
+
+      # --- SLO 7: Auth Success > 99.5% (28d) ---
+      - alert: SLO_AuthSuccess_FastBurn
+        expr: |
+          sum(rate(http_requests_total{service="auth",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="auth"}[5m])) > (14.4 * 0.005)
+          and
+          sum(rate(http_requests_total{service="auth",status=~"5.."}[1h])) / sum(rate(http_requests_total{service="auth"}[1h])) > (14.4 * 0.005)
+        for: 2m
+        labels:
+          severity: critical
+          slo: auth_success
+          window: fast
+        annotations:
+          summary: "Auth SLO fast-burn: error rate consuming budget at 14.4x"
+          runbook_url: "https://docs.nself.org/runbooks/slo-auth"
+
+      - alert: SLO_AuthSuccess_SlowBurn
+        expr: |
+          sum(rate(http_requests_total{service="auth",status=~"5.."}[30m])) / sum(rate(http_requests_total{service="auth"}[30m])) > (6 * 0.005)
+          and
+          sum(rate(http_requests_total{service="auth",status=~"5.."}[6h])) / sum(rate(http_requests_total{service="auth"}[6h])) > (6 * 0.005)
+        for: 5m
+        labels:
+          severity: warning
+          slo: auth_success
+          window: slow
+        annotations:
+          summary: "Auth SLO slow-burn: error rate consuming budget at 6x"
+          runbook_url: "https://docs.nself.org/runbooks/slo-auth"

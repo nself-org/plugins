@@ -1,0 +1,69 @@
+{
+  "annotations": { "list": [] },
+  "description": "Log exploration: volume, error rates, pattern detection, audit events, correlation search",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Log Volume by Service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "sum by (service) (count_over_time({env=\"$env\",service=~\"$service\"}[$__interval]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "Error Log Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "sum by (service) (count_over_time({env=\"$env\",service=~\"$service\",level=\"error\"}[$__interval]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "Top Log Templates (Pattern Detection)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "topk(20, sum by (__pattern__) (count_over_time({env=\"$env\",service=~\"$service\"} | pattern `<_>` [1h])))", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "title": "Audit Event Volume",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "sum by (audit_event) (count_over_time({job=\"audit\",env=\"$env\"} | json [$__interval]))", "legendFormat": "{{audit_event}}" }
+      ]
+    },
+    {
+      "title": "Correlation Search",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "targets": [
+        { "expr": "{env=\"$env\",service=~\"$service\"} | json | trace_id = `$trace_id`", "maxLines": 100 }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "logs"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "service", "type": "query", "datasource": { "type": "loki", "uid": "${DS_LOKI}" }, "query": "label_values({env=\"$env\"}, service)", "multi": true, "includeAll": true },
+      { "name": "trace_id", "type": "textbox", "label": "Trace ID" },
+      { "name": "DS_LOKI", "type": "datasource", "query": "loki" },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "10 - Logs Explorer",
+  "uid": "nself-logs-explorer",
+  "version": 1
+}

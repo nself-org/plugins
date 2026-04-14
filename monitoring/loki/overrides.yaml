@@ -1,0 +1,9 @@
+# Per-tenant retention overrides.
+# Audit tenants get 365-day hot retention.
+overrides:
+  "audit-dev":
+    retention_period: 8760h    # 365 days
+  "audit-staging":
+    retention_period: 8760h
+  "audit-prod":
+    retention_period: 8760h

@@ -1,0 +1,43 @@
+# GlitchTip (Sentry-compatible) error tracking for nSelf.
+# Deployed at errors.nself.org.
+# Env: GLITCHTIP_SECRET_KEY, GLITCHTIP_DATABASE_URL, GLITCHTIP_REDIS_URL
+
+services:
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    container_name: nself-glitchtip
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY}"
+      DATABASE_URL: "${GLITCHTIP_DATABASE_URL:-postgres://nself:nself@postgres:5432/glitchtip}"
+      REDIS_URL: "${GLITCHTIP_REDIS_URL:-redis://redis:6379/2}"
+      GLITCHTIP_DOMAIN: "https://errors.nself.org"
+      DEFAULT_FROM_EMAIL: "noreply@nself.org"
+      EMAIL_URL: "smtp://${SMTP_HOST}:${SMTP_PORT}"
+      CELERY_WORKER_AUTOSCALE: "1,3"
+      ENABLE_ORGANIZATION_CREATION: "false"
+    ports:
+      - "127.0.0.1:8066:8000"
+    networks:
+      - nself
+    depends_on:
+      - postgres
+      - redis
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:latest
+    container_name: nself-glitchtip-worker
+    restart: unless-stopped
+    command: ./bin/run-celery-with-beat.sh
+    environment:
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY}"
+      DATABASE_URL: "${GLITCHTIP_DATABASE_URL:-postgres://nself:nself@postgres:5432/glitchtip}"
+      REDIS_URL: "${GLITCHTIP_REDIS_URL:-redis://redis:6379/2}"
+    networks:
+      - nself
+    depends_on:
+      - glitchtip
+
+networks:
+  nself:
+    external: true

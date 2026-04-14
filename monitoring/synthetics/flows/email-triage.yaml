@@ -1,0 +1,48 @@
+# Synthetic check: email triage pipeline.
+name: email-triage
+description: Send test email, verify mux classification and action trigger.
+schedule: "${SYNTHETIC_INTERVAL_SECONDS:-300}s"
+timeout: 60s
+steps:
+  - name: login
+    request:
+      method: POST
+      url: "${NSELF_AUTH_URL}/signin/email-password"
+      headers:
+        Content-Type: application/json
+      body:
+        email: "${SYNTHETIC_USER_EMAIL}"
+        password: "${SYNTHETIC_USER_PASSWORD}"
+    assertions:
+      - status == 200
+    extract:
+      token: json.session.accessToken
+
+  - name: send_test_email
+    request:
+      method: POST
+      url: "${NSELF_API_URL}/api/mux/test-email"
+      headers:
+        Content-Type: application/json
+        Authorization: "Bearer ${token}"
+      body:
+        subject: "synthetic-check-${TIMESTAMP}"
+        body: "This is a synthetic monitoring check. Please classify and triage."
+    assertions:
+      - status == 200
+    extract:
+      email_id: json.id
+
+  - name: verify_classification
+    request:
+      method: GET
+      url: "${NSELF_API_URL}/api/mux/emails/${email_id}"
+      headers:
+        Authorization: "Bearer ${token}"
+    retry:
+      max: 6
+      interval: 5s
+    assertions:
+      - status == 200
+      - json.classification != ""
+      - json.action_triggered == true

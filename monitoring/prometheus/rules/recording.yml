@@ -1,0 +1,34 @@
+groups:
+  - name: sli
+    interval: 30s
+    rules:
+      - record: service:http_request_rate_5m
+        expr: sum(rate(http_requests_total[5m])) by (service)
+
+      - record: service:http_error_rate_5m
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (service) / sum(rate(http_requests_total[5m])) by (service)
+
+      - record: service:http_p95_5m
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le))
+
+      - record: service:http_p99_5m
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le))
+
+      - record: ai:cost_hourly_usd
+        expr: sum(increase(ai_cost_usd_total[1h])) by (provider, model)
+
+      - record: cache:hit_ratio_5m
+        expr: sum(rate(cache_hits_total[5m])) by (service, cache) / (sum(rate(cache_hits_total[5m])) by (service, cache) + sum(rate(cache_misses_total[5m])) by (service, cache))
+
+      # Business metrics (§1.10)
+      - record: users_active_daily
+        expr: count(count by (user) (http_requests_total{route!~"/health|/metrics|/ready"}  offset 0s unless http_requests_total{route!~"/health|/metrics|/ready"} offset 1d))
+
+      - record: users_active_monthly
+        expr: count(count by (user) (http_requests_total{route!~"/health|/metrics|/ready"} offset 0s unless http_requests_total{route!~"/health|/metrics|/ready"} offset 30d))
+
+      - record: sessions_started_total
+        expr: sum(rate(http_requests_total{route="/api/auth/login"}[5m])) by (service)
+
+      - record: messages_per_session
+        expr: sum(rate(claw_messages_total[1h])) / sum(rate(http_requests_total{route="/api/auth/login"}[1h]))

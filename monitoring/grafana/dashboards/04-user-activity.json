@@ -1,0 +1,96 @@
+{
+  "annotations": { "list": [] },
+  "description": "User engagement: DAU, MAU, sessions, messages, topics, churn",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "DAU",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "count(count by (user_id) (increase(user_activity_total{env=\"$env\",tenant=~\"$tenant\"}[24h]) > 0))", "legendFormat": "DAU" }
+      ]
+    },
+    {
+      "title": "MAU",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "count(count by (user_id) (increase(user_activity_total{env=\"$env\",tenant=~\"$tenant\"}[30d]) > 0))", "legendFormat": "MAU" }
+      ]
+    },
+    {
+      "title": "DAU/MAU Ratio",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "min": 0, "max": 1, "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        { "expr": "count(count by (user_id) (increase(user_activity_total{env=\"$env\"}[24h]) > 0)) / count(count by (user_id) (increase(user_activity_total{env=\"$env\"}[30d]) > 0))", "legendFormat": "Stickiness" }
+      ]
+    },
+    {
+      "title": "New Users / Day",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(increase(user_registrations_total{env=\"$env\",tenant=~\"$tenant\"}[24h]))", "legendFormat": "New" }
+      ]
+    },
+    {
+      "title": "Sessions / Hour",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(user_sessions_total{env=\"$env\",tenant=~\"$tenant\"}[$__rate_interval])) * 3600", "legendFormat": "Sessions/hr" }
+      ]
+    },
+    {
+      "title": "Messages / User / Day (Histogram)",
+      "type": "histogram",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum by (le) (increase(user_messages_per_day_bucket{env=\"$env\",tenant=~\"$tenant\"}[24h]))", "legendFormat": "{{le}}", "format": "heatmap" }
+      ]
+    },
+    {
+      "title": "Topic Count",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(topics_active_total{env=\"$env\",tenant=~\"$tenant\"})", "legendFormat": "Active Topics" }
+      ]
+    },
+    {
+      "title": "Churn Estimate (7d rolling)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        { "expr": "1 - (count(count by (user_id) (increase(user_activity_total{env=\"$env\"}[7d]) > 0)) / count(count by (user_id) (increase(user_activity_total{env=\"$env\"}[14d]) > 0)))", "legendFormat": "Churn" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["nself", "users"],
+  "templating": {
+    "list": [
+      { "name": "env", "type": "custom", "query": "dev,staging,prod", "current": { "text": "prod", "value": "prod" } },
+      { "name": "tenant", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": "label_values(user_activity_total{env=\"$env\"}, tenant)", "multi": true, "includeAll": true },
+      { "name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus" },
+      { "name": "interval", "type": "interval", "query": "1m,5m,15m,1h", "auto": true }
+    ]
+  },
+  "time": { "from": "now-7d", "to": "now" },
+  "title": "04 - User Activity",
+  "uid": "nself-user-activity",
+  "version": 1
+}
