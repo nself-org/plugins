@@ -1,0 +1,42 @@
+services:
+  github-runner:
+    image: nself/nself-github-runner:latest
+    container_name: ${COMPOSE_PROJECT_NAME}_github_runner
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    environment:
+      PORT: "3053"
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+      GITHUB_RUNNER_PAT: ${GITHUB_RUNNER_PAT}
+      GITHUB_RUNNER_ORG: ${GITHUB_RUNNER_ORG}
+      GITHUB_RUNNER_NAME: ${GITHUB_RUNNER_NAME:-}
+      GITHUB_RUNNER_LABELS: ${GITHUB_RUNNER_LABELS:-self-hosted,linux,x64}
+      GITHUB_RUNNER_GROUP: ${GITHUB_RUNNER_GROUP:-Default}
+      GITHUB_RUNNER_DIR: /runner
+      GITHUB_RUNNER_LOG_PATH: /logs/runner.log
+    volumes:
+      - github_runner_data:/runner
+      - github_runner_logs:/logs
+    ports:
+      - "127.0.0.1:3053:3053"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3053/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${PLUGIN_GITHUB_RUNNER_MEMORY:-256m}
+          cpus: '${PLUGIN_GITHUB_RUNNER_CPU:-0.5}'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  github_runner_data:
+  github_runner_logs:

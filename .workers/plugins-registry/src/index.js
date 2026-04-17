@@ -10,9 +10,14 @@
  * Endpoints:
  *   GET /registry.json              Combined registry (free + pro), or ?tier=free|pro to filter
  *   GET /registry                   Alias for /registry.json
+ *   GET /plugins                    List all plugins with optional ?tier and ?category filters
+ *   GET /plugins/revocations        Plugin revocation list
  *   GET /plugins/:name              Single plugin metadata (free or pro)
  *   GET /plugins/:name/:version     Single plugin at specific version
+ *   GET /plugins/:name/tarball      Signed download redirect (302 + X-Signature header)
+ *   GET /plugins/:name/signature    Ed25519 signature metadata for the plugin tarball
  *   GET /categories                 All categories (merged from both registries)
+ *   GET /manifest.json              CLI-compatible flat plugin array
  *   GET /health                     Health check
  *   GET /stats                      Cache statistics
  *   POST /api/sync                  Force-refresh KV cache (webhook from GitHub Actions)
@@ -21,13 +26,19 @@
  *   registry:free          — cached free registry raw JSON (with timestamp envelope)
  *   registry:pro           — cached pro registry raw JSON (with timestamp envelope)
  *   registry:combined      — cached merged output (with timestamp envelope)
+ *   revocations:list       — JSON array of revoked plugin versions
  *   stats:global           — request statistics
  *
  * Secrets (set via wrangler secret put):
- *   GITHUB_TOKEN           — Fine-grained PAT with contents:read on nself-org/plugins-pro
+ *   GH_ACCESS_TOKEN        — Fine-grained PAT with contents:read on nself-org/plugins-pro
  *                            Also used for authenticated free registry fetch (avoids raw CDN cache)
  *   GITHUB_SYNC_TOKEN      — Bearer token for POST /api/sync (from GitHub Actions)
+ *   SIGNING_PRIVATE_KEY    — Ed25519 private key (32 bytes as hex, 64 hex chars)
+ *   SIGNING_PUBLIC_KEY     — Ed25519 public key  (32 bytes as hex, 64 hex chars)
  */
+
+import { signMessage, canonicalPluginString } from './sign.js';
+import { handleRevocations, isRevoked } from './revocations.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,6 +103,12 @@ export default {
       if (method === 'GET' && (path === '/registry.json' || path === '/registry' || path === '/')) {
         return await handleRegistry(url, env, ctx);
       }
+      if (method === 'GET' && path === '/plugins') {
+        return await handlePluginList(url, env, ctx);
+      }
+      if (method === 'GET' && path === '/plugins/revocations') {
+        return await handleRevocations(env);
+      }
       if (method === 'GET' && path.startsWith('/plugins/')) {
         return await handlePlugin(path, env, ctx);
       }
@@ -117,8 +134,12 @@ export default {
         error: 'Not found',
         endpoints: [
           'GET /registry.json[?tier=free|pro]',
+          'GET /plugins[?tier=free|pro][&category=X]',
+          'GET /plugins/revocations',
           'GET /plugins/:name',
           'GET /plugins/:name/:version',
+          'GET /plugins/:name/tarball',
+          'GET /plugins/:name/signature',
           'GET /categories',
           'GET /manifest.json',
           'GET /health',
@@ -331,18 +352,59 @@ function normalizeToArray(data, expectedTier) {
 }
 
 // ---------------------------------------------------------------------------
-// Single plugin endpoint
+// Plugin list endpoint — GET /plugins[?tier=free|pro][&category=X]
+// ---------------------------------------------------------------------------
+
+async function handlePluginList(url, env, ctx) {
+  const tierFilter     = url.searchParams.get('tier');
+  const categoryFilter = url.searchParams.get('category');
+  const cacheTtl       = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+
+  const [freeResult, proResult] = await Promise.allSettled([
+    fetchFreeRegistry(env, ctx, cacheTtl),
+    fetchProRegistry(env, ctx, cacheTtl),
+  ]);
+
+  const freePlugins = freeResult.status === 'fulfilled' ? (freeResult.value || []) : [];
+  const proPlugins  = proResult.status  === 'fulfilled' ? (proResult.value  || []) : [];
+  let all           = [...freePlugins, ...proPlugins];
+
+  if (tierFilter === 'free' || tierFilter === 'pro') {
+    all = all.filter(p => p.tier === tierFilter);
+  }
+  if (categoryFilter) {
+    all = all.filter(p => (p.category || '').toLowerCase() === categoryFilter.toLowerCase());
+  }
+
+  return jsonResponse(
+    {
+      plugins: all,
+      total:   all.length,
+      free:    all.filter(p => p.tier === 'free').length,
+      pro:     all.filter(p => p.tier === 'pro').length,
+    },
+    200,
+    { 'Cache-Control': `public, max-age=${cacheTtl}` },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Single plugin endpoint — GET /plugins/:name[/:version|/tarball|/signature]
 // ---------------------------------------------------------------------------
 
 async function handlePlugin(path, env, ctx) {
-  const parts        = path.split('/').filter(Boolean);
-  const pluginName   = parts[1];
-  const requestedVer = parts[2] || 'latest';
-  const cacheTtl     = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+  const parts      = path.split('/').filter(Boolean);
+  // parts[0] = 'plugins', parts[1] = name, parts[2] = version | 'tarball' | 'signature' | undefined
+  const pluginName = parts[1];
+  const subResource = parts[2] || 'latest';
+  const cacheTtl   = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
 
   if (!pluginName) {
     return jsonResponse({ error: 'Plugin name required' }, 400);
   }
+
+  // Route sub-resource requests before registry lookup when name is clearly a sub-resource
+  // (handled below after plugin lookup — we need the plugin record for both)
 
   const [freeResult, proResult] = await Promise.allSettled([
     fetchFreeRegistry(env, ctx, cacheTtl),
@@ -359,11 +421,101 @@ async function handlePlugin(path, env, ctx) {
     return jsonResponse({ error: 'Plugin not found', name: pluginName, available: all.map(p => p.name).sort() }, 404);
   }
 
-  if (requestedVer !== 'latest' && requestedVer !== plugin.version) {
-    return jsonResponse({ error: 'Version not found', requestedVersion: requestedVer, latestVersion: plugin.version }, 404);
+  // Dispatch sub-resource
+  if (subResource === 'tarball') {
+    return handlePluginTarball(plugin, env);
+  }
+  if (subResource === 'signature') {
+    return handlePluginSignature(plugin, env);
+  }
+
+  // Version lookup
+  if (subResource !== 'latest' && subResource !== plugin.version) {
+    return jsonResponse({ error: 'Version not found', requestedVersion: subResource, latestVersion: plugin.version }, 404);
   }
 
   return jsonResponse(plugin, 200, { 'Cache-Control': 'public, max-age=60' });
+}
+
+// ---------------------------------------------------------------------------
+// Tarball redirect — GET /plugins/:name/tarball
+// Constructs the GitHub release tarball URL, optionally signs it, and redirects.
+// ---------------------------------------------------------------------------
+
+async function handlePluginTarball(plugin, env) {
+  const { name, version, tier } = plugin;
+  const resolvedVersion = version || '0.0.0';
+
+  const repo      = (tier === 'pro') ? 'plugins-pro' : 'plugins';
+  const tarballUrl =
+    `https://github.com/nself-org/${repo}/releases/download/v${resolvedVersion}/${name}-${resolvedVersion}.tar.gz`;
+
+  // Check revocation before serving
+  const revoked = await isRevoked(env, name, resolvedVersion);
+  if (revoked) {
+    return jsonResponse(
+      { error: 'Plugin version revoked', plugin: name, version: resolvedVersion },
+      410,
+    );
+  }
+
+  const headers = {
+    'Location':                    tarballUrl,
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control':               'public, max-age=300',
+  };
+
+  // Sign the tarball URL with the Ed25519 private key (best-effort)
+  if (env.SIGNING_PRIVATE_KEY) {
+    const canonical  = canonicalPluginString(name, resolvedVersion, tarballUrl);
+    const signature  = await signMessage(canonical, env.SIGNING_PRIVATE_KEY);
+    if (signature) {
+      headers['X-Signature']  = signature;
+      headers['X-Signed-For'] = canonical;
+    }
+  }
+
+  return new Response(null, { status: 302, headers });
+}
+
+// ---------------------------------------------------------------------------
+// Signature endpoint — GET /plugins/:name/signature
+// Returns Ed25519 signature metadata for the plugin tarball.
+// ---------------------------------------------------------------------------
+
+async function handlePluginSignature(plugin, env) {
+  const { name, version, tier } = plugin;
+  const resolvedVersion = version || '0.0.0';
+
+  if (!env.SIGNING_PRIVATE_KEY || !env.SIGNING_PUBLIC_KEY) {
+    return jsonResponse(
+      { error: 'Signing not configured — SIGNING_PRIVATE_KEY and SIGNING_PUBLIC_KEY secrets required' },
+      503,
+    );
+  }
+
+  const repo       = (tier === 'pro') ? 'plugins-pro' : 'plugins';
+  const tarballUrl =
+    `https://github.com/nself-org/${repo}/releases/download/v${resolvedVersion}/${name}-${resolvedVersion}.tar.gz`;
+  const canonical  = canonicalPluginString(name, resolvedVersion, tarballUrl);
+  const signature  = await signMessage(canonical, env.SIGNING_PRIVATE_KEY);
+
+  if (!signature) {
+    return jsonResponse({ error: 'Signing failed — check SIGNING_PRIVATE_KEY secret format' }, 500);
+  }
+
+  return jsonResponse(
+    {
+      plugin:    name,
+      version:   resolvedVersion,
+      signature,
+      algorithm: 'ed25519',
+      publicKey: env.SIGNING_PUBLIC_KEY,
+      signedFor: canonical,
+    },
+    200,
+    { 'Cache-Control': 'public, max-age=300' },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +547,19 @@ function handleHealth(env) {
     service:   'nself-plugin-registry',
     version:   env.REGISTRY_VERSION || '2.0.0',
     timestamp: new Date().toISOString(),
-    features:  ['dual-registry', 'kv-cache', 'tier-filter', 'github-api-fetch'],
+    features:  [
+      'dual-registry',
+      'kv-cache',
+      'tier-filter',
+      'github-api-fetch',
+      'plugin-list',
+      'tarball-redirect',
+      'ed25519-signatures',
+      'revocations',
+    ],
+    signing: {
+      configured: Boolean(env.SIGNING_PRIVATE_KEY && env.SIGNING_PUBLIC_KEY),
+    },
   });
 }
 
