@@ -41,15 +41,10 @@ Code is ready for implementation - just install dependencies and uncomment the m
 ## Installation
 
 ```bash
-# Install the plugin
-cd ~/Sites/nself-plugins/plugins/notifications
-bash install.sh
-
-# Install TypeScript dependencies
-cd ts
-npm install
-npm run build
+nself plugin install notifications
 ```
+
+No license key required. MIT-licensed.
 
 ## Quick Start
 

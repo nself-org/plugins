@@ -16,10 +16,10 @@ Production-ready outbound webhook delivery service with retry logic, HMAC signin
 ## Installation
 
 ```bash
-cd plugins/webhooks/ts
-npm install
-npm run build
+nself plugin install webhooks
 ```
+
+No license key required. MIT-licensed.
 
 ## Quick Start
 

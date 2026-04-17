@@ -18,10 +18,10 @@ Track video, audio, and content playback progress with continue watching, watchl
 ### Installation
 
 ```bash
-cd plugins/content-progress/ts
-npm install
-npm run build
+nself plugin install content-progress
 ```
+
+No license key required. MIT-licensed.
 
 ### Configuration
 

@@ -12,20 +12,11 @@ Sync GitHub repository data to PostgreSQL with real-time webhook support.
 
 ## Installation
 
-### TypeScript Implementation
-
 ```bash
-# Install shared utilities first
-cd shared
-npm install
-npm run build
-cd ..
-
-# Install the GitHub plugin
-cd plugins/github/ts
-npm install
-npm run build
+nself plugin install github
 ```
+
+No license key required. MIT-licensed. The CLI fetches the current binary, verifies its checksum, and registers the plugin with your nself stack.
 
 ## Configuration
 

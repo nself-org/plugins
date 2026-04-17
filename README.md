@@ -11,25 +11,60 @@ Free and open-source plugins for [nself](https://nself.org) — the self-hosted 
 nself plugin install <name>
 ```
 
-## Free Plugins
+## Free Plugins (25)
+
+All 25 plugins are MIT-licensed and listed below (per F03 PLUGIN-INVENTORY-FREE).
 
 | Plugin | Description | Category |
 | ------ | ----------- | -------- |
-| [content-acquisition](./free/content-acquisition/) | Content ingestion and acquisition | Content |
-| [content-progress](./free/content-progress/) | Track user content progress | Content |
-| [feature-flags](./free/feature-flags/) | Feature flag management | Dev Tools |
-| [github](./free/github/) | GitHub integration and OAuth | Auth |
-| [invitations](./free/invitations/) | User invitation flows | Users |
-| [jobs](./free/jobs/) | Background job processing | Infrastructure |
-| [link-preview](./free/link-preview/) | Link preview generation | Utilities |
-| [mdns](./free/mdns/) | Local network mDNS discovery | Networking |
-| [notifications](./free/notifications/) | Notification system | Communication |
-| [search](./free/search/) | Full-text search via MeiliSearch | Search |
-| [subtitle-manager](./free/subtitle-manager/) | Subtitle file management | Media |
-| [tokens](./free/tokens/) | API token management | Auth |
-| [torrent-manager](./free/torrent-manager/) | Torrent client integration | Media |
-| [vpn](./free/vpn/) | VPN configuration management | Networking |
-| [webhooks](./free/webhooks/) | Webhook handling and routing | Infrastructure |
+| [backup](./free/backup/) | PostgreSQL backup and restore automation with scheduling | Infrastructure |
+| [content-acquisition](./free/content-acquisition/) | Content ingestion and acquisition with download rules | Media |
+| [content-progress](./free/content-progress/) | Track video, audio, and content playback progress | Media |
+| [cron](./free/cron/) | Cron job scheduler with HTTP callbacks and run history | Automation |
+| [donorbox](./free/donorbox/) | Donorbox donation data sync with webhook handling | Commerce |
+| [feature-flags](./free/feature-flags/) | Feature flag management with targeting rules and segments | Infrastructure |
+| [github](./free/github/) | GitHub repository, issue, and workflow integration | Development |
+| [github-runner](./free/github-runner/) | GitHub Actions self-hosted runner for private repos | Development |
+| [invitations](./free/invitations/) | Invitation management with email/SMS delivery and tracking | Communication |
+| [jobs](./free/jobs/) | PostgreSQL-backed background job queue with priorities and retries | Infrastructure |
+| [link-preview](./free/link-preview/) | URL metadata extraction with Open Graph and Twitter Cards | Content |
+| [mdns](./free/mdns/) | mDNS/Bonjour service discovery for zero-config LAN advertising | Networking |
+| [mlflow](./free/mlflow/) | MLflow experiment tracking and model registry | Data |
+| [monitoring](./free/monitoring/) | Full monitoring stack: Prometheus, Grafana, Loki, and exporters (10 services) | Infrastructure |
+| [notifications](./free/notifications/) | Multi-channel notification service: Email, Push, SMS | Communication |
+| [notify](./free/notify/) | Newer notification plugin focused on Email (SMTP) and Webhook (HMAC) | Communication |
+| [paypal](./free/paypal/) | PayPal payment data sync with webhook handling | Commerce |
+| [search](./free/search/) | Full-text search engine with PostgreSQL FTS and MeiliSearch | Infrastructure |
+| [shopify](./free/shopify/) | Shopify store, orders, and product synchronization | Commerce |
+| [stripe](./free/stripe/) | Stripe billing data sync with webhook handling | Commerce |
+| [subtitle-manager](./free/subtitle-manager/) | Subtitle search, download, and sync via OpenSubtitles | Media |
+| [tokens](./free/tokens/) | Secure content delivery tokens and HLS encryption key management | Media |
+| [torrent-manager](./free/torrent-manager/) | Torrent downloading with Transmission/qBittorrent integration | Media |
+| [vpn](./free/vpn/) | Multi-provider VPN management (NordVPN, PIA, Mullvad) | Authentication |
+| [webhooks](./free/webhooks/) | Outbound webhook delivery with retry logic, HMAC signing, and DLQ | Communication |
+
+Install any plugin with `nself plugin install <name>`. No license key required.
+
+> Note: `notifications` (older, 695-line implementation) and `notify` (newer, focused on Email + Webhook channels) are two separate plugins. New projects should prefer `notify`.
+
+## Monitoring Services (10)
+
+The `monitoring` plugin bundles 10 individual observability services (per F05 PLUGIN-INVENTORY-MONITORING). They are wired together by the parent plugin's docker-compose templates and ship as one install.
+
+| Service | Purpose | Default Port |
+| ------- | ------- | ------------ |
+| [alertmanager](./monitoring/alertmanager/) | Alert routing and deduplication for Prometheus | 9093 |
+| [glitchtip](./monitoring/glitchtip/) | Open-source Sentry-compatible error tracking | 8000 |
+| [grafana](./monitoring/grafana/) | Metrics, logs, and traces dashboards | 3000 |
+| [loki](./monitoring/loki/) | Log aggregation backend | 3100 |
+| [otel-collector](./monitoring/otel-collector/) | OpenTelemetry traces, metrics, and logs ingest | 4317 (gRPC), 4318 (HTTP) |
+| [prometheus](./monitoring/prometheus/) | Metrics scraping and storage | 9090 |
+| [promtail](./monitoring/promtail/) | Log shipping agent (sends to Loki) | 9080 |
+| [status](./monitoring/status/) | Public status page generator | internal |
+| [synthetics](./monitoring/synthetics/) | k6-based synthetic flow probes | internal |
+| [web-vitals](./monitoring/web-vitals/) | Core Web Vitals client beacon and ingest | internal |
+
+Install the bundle with `nself plugin install monitoring`. SLO definitions live in `./monitoring/docs/slos.md`.
 
 ## Community Plugins
 

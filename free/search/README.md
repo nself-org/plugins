@@ -19,10 +19,10 @@ Full-text search engine plugin for nself with PostgreSQL FTS and MeiliSearch sup
 ### 1. Installation
 
 ```bash
-cd plugins/search/ts
-npm install
-npm run build
+nself plugin install search
 ```
+
+No license key required. MIT-licensed.
 
 ### 2. Configuration
 

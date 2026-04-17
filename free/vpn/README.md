@@ -42,6 +42,14 @@ This plugin provides comprehensive VPN management across 10 major VPN providers,
 
 ---
 
+## Installation
+
+```bash
+nself plugin install vpn
+```
+
+No license key required. MIT-licensed.
+
 ## 🏗️ Architecture
 
 ```

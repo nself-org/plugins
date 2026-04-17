@@ -14,13 +14,13 @@ Production-ready feature flags service with advanced targeting rules, user segme
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Installation
 
 ```bash
-cd ts
-npm install
-npm run build
+nself plugin install feature-flags
 ```
+
+No license key required. MIT-licensed.
 
 ### 2. Configure Environment
 

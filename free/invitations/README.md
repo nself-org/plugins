@@ -18,10 +18,10 @@ Production-ready invitation management system for nself. Create, track, and mana
 ### Installation
 
 ```bash
-cd plugins/invitations/ts
-npm install
-npm run build
+nself plugin install invitations
 ```
+
+No license key required. MIT-licensed.
 
 ### Configuration
 
