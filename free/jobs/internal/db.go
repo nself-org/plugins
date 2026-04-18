@@ -63,6 +63,11 @@ func NewDB(pool *pgxpool.Pool) *DB {
 }
 
 // EnsureTables creates the jobs tables if they do not exist.
+//
+// S18 upgrade: adds callback_url + signing + DLQ fields so the queue plugin
+// ships a real HTTP-callback dispatcher (replacing the prior no-op worker).
+// Existing rows get the new columns via ADD COLUMN IF NOT EXISTS so the
+// migration is safe on warm installs.
 func (d *DB) EnsureTables(ctx context.Context) error {
 	ddl := `
 CREATE TABLE IF NOT EXISTS np_jobs_queues (
@@ -87,17 +92,132 @@ CREATE TABLE IF NOT EXISTS np_jobs_jobs (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- S18 additions: real HTTP-callback dispatch, DLQ parity with webhooks plugin.
+ALTER TABLE np_jobs_jobs ADD COLUMN IF NOT EXISTS callback_url TEXT;
+ALTER TABLE np_jobs_jobs ADD COLUMN IF NOT EXISTS sign_payload BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE np_jobs_jobs ADD COLUMN IF NOT EXISTS last_status_code INTEGER;
+ALTER TABLE np_jobs_jobs ADD COLUMN IF NOT EXISTS last_duration_ms BIGINT;
+ALTER TABLE np_jobs_jobs ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
+ALTER TABLE np_jobs_jobs ADD COLUMN IF NOT EXISTS dlq BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS np_jobs_history (
+    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    job_id        TEXT NOT NULL,
+    attempt       INTEGER NOT NULL,
+    success       BOOLEAN NOT NULL,
+    status_code   INTEGER,
+    error         TEXT,
+    duration_ms   BIGINT,
+    triggered_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_status ON np_jobs_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_queue ON np_jobs_jobs(queue);
 CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_scheduled ON np_jobs_jobs(scheduled_at) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_priority ON np_jobs_jobs(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_history_job_id ON np_jobs_history(job_id);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_dlq ON np_jobs_jobs(dlq) WHERE dlq = TRUE;
 `
 	_, err := d.pool.Exec(ctx, ddl)
 	return err
 }
 
+// RecordJobRun inserts a history row for one dispatch attempt.
+func (d *DB) RecordJobRun(ctx context.Context, jobID string, attempt int, success bool, statusCode *int, errMsg *string, durationMs int64) error {
+	_, err := d.pool.Exec(ctx,
+		`INSERT INTO np_jobs_history (job_id, attempt, success, status_code, error, duration_ms)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		jobID, attempt, success, statusCode, errMsg, durationMs)
+	return err
+}
+
+// MarkDLQ permanently moves a job to the dead-letter queue (status=failed, dlq=true).
+func (d *DB) MarkDLQ(ctx context.Context, id string, errMsg string) error {
+	_, err := d.pool.Exec(ctx,
+		`UPDATE np_jobs_jobs
+		 SET status = $1, dlq = TRUE, error = $2, completed_at = now(), updated_at = now()
+		 WHERE id = $3`,
+		StatusFailed, errMsg, id)
+	return err
+}
+
+// ListDLQ returns jobs currently in the dead-letter queue.
+func (d *DB) ListDLQ(ctx context.Context, limit, offset int) ([]Job, error) {
+	rows, err := d.pool.Query(ctx,
+		`SELECT id, queue, payload, priority, status, attempts, max_attempts,
+		        scheduled_at, started_at, completed_at, error, created_at, updated_at
+		 FROM np_jobs_jobs WHERE dlq = TRUE
+		 ORDER BY updated_at DESC LIMIT $1 OFFSET $2`,
+		limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var jobs []Job
+	for rows.Next() {
+		var j Job
+		if err := rows.Scan(&j.ID, &j.Queue, &j.Payload, &j.Priority, &j.Status,
+			&j.Attempts, &j.MaxAttempts, &j.ScheduledAt, &j.StartedAt,
+			&j.CompletedAt, &j.Error, &j.CreatedAt, &j.UpdatedAt); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
+}
+
+// ReviveDLQ pulls a job out of DLQ, resetting attempts so the worker picks it up again.
+func (d *DB) ReviveDLQ(ctx context.Context, id string) (*Job, error) {
+	var j Job
+	err := d.pool.QueryRow(ctx,
+		`UPDATE np_jobs_jobs
+		 SET dlq = FALSE, status = $1, attempts = 0, error = NULL,
+		     started_at = NULL, completed_at = NULL,
+		     scheduled_at = now(), updated_at = now()
+		 WHERE id = $2 AND dlq = TRUE
+		 RETURNING id, queue, payload, priority, status, attempts, max_attempts,
+		           scheduled_at, started_at, completed_at, error, created_at, updated_at`,
+		StatusPending, id,
+	).Scan(
+		&j.ID, &j.Queue, &j.Payload, &j.Priority, &j.Status,
+		&j.Attempts, &j.MaxAttempts, &j.ScheduledAt, &j.StartedAt,
+		&j.CompletedAt, &j.Error, &j.CreatedAt, &j.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &j, nil
+}
+
+// CreateJobOpts controls optional fields on CreateJob.
+type CreateJobOpts struct {
+	CallbackURL string
+	SignPayload *bool
+	AccountID   string
+}
+
 // CreateJob inserts a new job and ensures the queue exists. Returns the created job.
-func (d *DB) CreateJob(ctx context.Context, queue string, payload json.RawMessage, priority int, delay time.Duration, maxAttempts int) (*Job, error) {
+//
+// S18: optional callback_url enables the real dispatcher to POST the payload
+// to a receiver. When unset the worker treats the job as ack-only (legacy
+// behavior preserved for existing callers).
+func (d *DB) CreateJob(ctx context.Context, queue string, payload json.RawMessage, priority int, delay time.Duration, maxAttempts int, opts ...CreateJobOpts) (*Job, error) {
+	var o CreateJobOpts
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	signPayload := true
+	if o.SignPayload != nil {
+		signPayload = *o.SignPayload
+	}
+	accountID := o.AccountID
+	if accountID == "" {
+		accountID = "primary"
+	}
+
 	// Ensure queue record exists.
 	_, err := d.pool.Exec(ctx,
 		`INSERT INTO np_jobs_queues (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
@@ -109,13 +229,18 @@ func (d *DB) CreateJob(ctx context.Context, queue string, payload json.RawMessag
 
 	scheduledAt := time.Now().Add(delay)
 
+	var callbackURL interface{}
+	if o.CallbackURL != "" {
+		callbackURL = o.CallbackURL
+	}
+
 	var j Job
 	err = d.pool.QueryRow(ctx,
-		`INSERT INTO np_jobs_jobs (queue, payload, priority, max_attempts, scheduled_at)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO np_jobs_jobs (queue, payload, priority, max_attempts, scheduled_at, callback_url, sign_payload, source_account_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING id, queue, payload, priority, status, attempts, max_attempts,
 		           scheduled_at, started_at, completed_at, error, created_at, updated_at`,
-		queue, payload, priority, maxAttempts, scheduledAt,
+		queue, payload, priority, maxAttempts, scheduledAt, callbackURL, signPayload, accountID,
 	).Scan(
 		&j.ID, &j.Queue, &j.Payload, &j.Priority, &j.Status,
 		&j.Attempts, &j.MaxAttempts, &j.ScheduledAt, &j.StartedAt,
@@ -125,6 +250,21 @@ func (d *DB) CreateJob(ctx context.Context, queue string, payload json.RawMessag
 		return nil, err
 	}
 	return &j, nil
+}
+
+// GetCallbackURL returns the callback URL + sign_payload setting for a job.
+// A nil URL means the job has no callback and should be ack-processed.
+func (d *DB) GetCallbackURL(ctx context.Context, id string) (*string, bool, error) {
+	var url *string
+	var sign bool
+	err := d.pool.QueryRow(ctx,
+		`SELECT callback_url, sign_payload FROM np_jobs_jobs WHERE id = $1`,
+		id,
+	).Scan(&url, &sign)
+	if err == pgx.ErrNoRows {
+		return nil, true, nil
+	}
+	return url, sign, err
 }
 
 // GetJob retrieves a single job by ID.
@@ -300,13 +440,28 @@ func (d *DB) CompleteJob(ctx context.Context, id string) error {
 	return err
 }
 
-// FailJob marks a job as failed with an error message, or resets to pending if retries remain.
+// FailJob marks a job as failed with an error message, or resets to pending
+// with capped exponential backoff if retries remain.
+//
+// S18: backoff schedule matches the webhooks plugin (2s, 8s, 30s, 2m, 5m) —
+// shared standard across jobs/webhooks/cron so operators see consistent retry
+// behavior across all three plugins. Attempts is 1-indexed (ClaimNextJob
+// already bumped it before dispatch).
 func (d *DB) FailJob(ctx context.Context, id string, errMsg string, maxAttempts int) error {
+	// Compute backoff in SQL so the math lives next to the update. attempts=1
+	// → 2s; 2→8s; 3→30s; 4→120s; anything higher caps at 300s.
 	_, err := d.pool.Exec(ctx,
 		`UPDATE np_jobs_jobs
 		 SET error = $1,
 		     status = CASE WHEN attempts >= $2 THEN $3 ELSE $4 END,
-		     scheduled_at = CASE WHEN attempts >= $2 THEN scheduled_at ELSE now() + interval '5 seconds' END,
+		     scheduled_at = CASE
+		         WHEN attempts >= $2 THEN scheduled_at
+		         WHEN attempts = 1   THEN now() + interval '2 seconds'
+		         WHEN attempts = 2   THEN now() + interval '8 seconds'
+		         WHEN attempts = 3   THEN now() + interval '30 seconds'
+		         WHEN attempts = 4   THEN now() + interval '2 minutes'
+		         ELSE                     now() + interval '5 minutes'
+		     END,
 		     updated_at = now()
 		 WHERE id = $5`,
 		errMsg, maxAttempts, StatusFailed, StatusPending, id,

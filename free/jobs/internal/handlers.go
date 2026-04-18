@@ -20,12 +20,18 @@ func NewHandlers(db *DB) *Handlers {
 }
 
 // createJobRequest is the JSON body for POST /v1/jobs.
+//
+// S18: callback_url + sign_payload enable real HTTP dispatch. Omit
+// callback_url to keep the legacy ack-only behavior.
 type createJobRequest struct {
 	Queue       string          `json:"queue"`
 	Payload     json.RawMessage `json:"payload"`
 	Priority    int             `json:"priority"`
 	DelayMS     int64           `json:"delay_ms"`
 	MaxAttempts int             `json:"max_attempts"`
+	CallbackURL string          `json:"callback_url"`
+	SignPayload *bool           `json:"sign_payload"`
+	AccountID   string          `json:"account_id"`
 }
 
 // CreateJob handles POST /v1/jobs.
@@ -48,13 +54,57 @@ func (h *Handlers) CreateJob(w http.ResponseWriter, r *http.Request) {
 
 	delay := time.Duration(req.DelayMS) * time.Millisecond
 
-	job, err := h.db.CreateJob(r.Context(), req.Queue, req.Payload, req.Priority, delay, req.MaxAttempts)
+	opts := CreateJobOpts{
+		CallbackURL: req.CallbackURL,
+		SignPayload: req.SignPayload,
+		AccountID:   req.AccountID,
+	}
+
+	job, err := h.db.CreateJob(r.Context(), req.Queue, req.Payload, req.Priority, delay, req.MaxAttempts, opts)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, job)
+}
+
+// ListDLQ handles GET /v1/dlq.
+func (h *Handlers) ListDLQ(w http.ResponseWriter, r *http.Request) {
+	limit := queryInt(r, "limit", 50)
+	offset := queryInt(r, "offset", 0)
+	if limit > 500 {
+		limit = 500
+	}
+	jobs, err := h.db.ListDLQ(r.Context(), limit, offset)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if jobs == nil {
+		jobs = []Job{}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"jobs":   jobs,
+		"count":  len(jobs),
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// ReviveDLQ handles POST /v1/dlq/{id}/revive.
+func (h *Handlers) ReviveDLQ(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	job, err := h.db.ReviveDLQ(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if job == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "job not in DLQ"})
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
 }
 
 // ListJobs handles GET /v1/jobs.
