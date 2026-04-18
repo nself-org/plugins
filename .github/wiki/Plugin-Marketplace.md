@@ -43,7 +43,7 @@ Filters combine with AND.
   "filters": {
     "tiers": ["free","pro"],
     "categories": ["ai","media","commerce"],
-    "bundles": ["nclaw","nchat","nmedia"]
+    "bundles": ["nclaw","nchat","ntv"]
   }
 }
 ```
@@ -76,7 +76,7 @@ Each plugin card includes:
 
 - `tier` — `free` or `pro`
 - `category` — one of the 13 canonical categories in the free registry + `ai`
-- `bundle` — one of `nclaw`, `clawde`, `nmedia`, `nfamily`, `nchat`
+- `bundle` — one of `nclaw`, `clawde`, `ntv`, `nfamily`, `nchat`
 - `q` — free-text search over name, description, display name, and tags
 
 Client-side code (Admin, web/cloud) may combine these with additional client-side filtering. The server always returns a consistent subset even when several filters are set.
@@ -139,7 +139,7 @@ Five bundles group plugins for a flat monthly price. Installing any plugin in a 
 |--------|-------|---------------------|
 | ɳClaw | $0.99/mo | ai, claw, claw-web, mux, voice, browser, google, notify, cron |
 | ClawDE+ | $1.99/mo | realtime, auth, cms, notify |
-| nMedia | $0.99/mo | media-processing, streaming, epg, tmdb, torrent-manager, content-acquisition |
+| nTV | $0.99/mo | media-processing, streaming, epg, tmdb, torrent-manager, content-acquisition |
 | nFamily | $0.99/mo | social, photos, activity-feed, moderation, realtime, cms, chat |
 | nChat | $0.99/mo | chat, livekit, recording, moderation, bots, realtime, auth |
 

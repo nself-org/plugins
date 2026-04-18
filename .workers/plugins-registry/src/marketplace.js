@@ -44,8 +44,8 @@ const BUNDLES = {
     price: '$1.99/mo',
     plugins: ['realtime', 'auth', 'cms', 'notify'],
   },
-  nmedia: {
-    name: 'nMedia Bundle',
+  ntv: {
+    name: 'nTV Bundle',
     price: '$0.99/mo',
     plugins: ['media-processing', 'streaming', 'epg', 'tmdb', 'torrent-manager', 'content-acquisition'],
   },

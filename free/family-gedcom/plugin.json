@@ -1,0 +1,40 @@
+{
+  "name": "family-gedcom",
+  "version": "0.0.1",
+  "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "minNselfVersion": "1.0.0",
+  "category": "social",
+  "tags": ["family", "genealogy", "gedcom", "migration", "importer"],
+  "tables": [],
+  "webhooks": {},
+  "actions": {},
+  "envVars": {
+    "required": ["DATABASE_URL"],
+    "optional": []
+  },
+  "config": {},
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": ["create", "read", "update", "delete"],
+    "network": [],
+    "filesystem": ["storage", "temp", "logs"]
+  },
+  "dependencies": {
+    "plugins": ["family", "object-storage", "photos"]
+  },
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "port": 3108,
+  "status": "planned",
+  "tier": "free",
+  "language": "go",
+  "entryPoint": "binary"
+}

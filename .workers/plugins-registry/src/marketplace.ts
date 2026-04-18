@@ -94,8 +94,8 @@ const BUNDLES: Record<string, BundleDefinition> = {
     plugins: ["realtime", "auth", "cms", "notify"],
     description: "Cloud sync, premium models, team features",
   },
-  nmedia: {
-    name: "nMedia Bundle",
+  ntv: {
+    name: "nTV Bundle",
     price: "$0.99/mo",
     plugins: ["media-processing", "streaming", "epg", "tmdb", "torrent-manager", "content-acquisition"],
     description: "Media downloading, encoding, streaming, metadata",
