@@ -5,7 +5,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -543,14 +545,49 @@ func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 
+// stripeAllowedOrigins returns the per-request origin-allowlist populated
+// from STRIPE_ALLOWED_ORIGINS (csv). An empty env var means no cross-origin
+// requests are allowed. Wildcard ("*") is never accepted since this plugin
+// emits Access-Control-Allow-Credentials: true.
+func stripeAllowedOrigins() map[string]bool {
+	set := make(map[string]bool)
+	for _, o := range strings.Split(os.Getenv("STRIPE_ALLOWED_ORIGINS"), ",") {
+		o = strings.TrimSpace(strings.ToLower(o))
+		if o == "" || o == "*" {
+			continue
+		}
+		set[o] = true
+	}
+	return set
+}
+
+// corsMiddleware enforces explicit per-origin CORS. If the request Origin
+// is not in the allowlist, CORS headers are NOT emitted and the browser
+// blocks the response. Credentials are only permitted alongside an echoed,
+// allowlisted origin — never with a wildcard.
+//
+// Webhook endpoints (invoked server-to-server by Stripe) must NOT be
+// mounted behind this middleware; Stripe calls them directly and no
+// Origin header is involved. See NewRouter for route grouping.
 func corsMiddleware(next http.Handler) http.Handler {
+	allowed := stripeAllowedOrigins()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Source-Account-ID, Stripe-Signature")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Vary", "Origin")
+		origin := r.Header.Get("Origin")
+		originAllowed := origin != "" && allowed[strings.ToLower(origin)]
+		if originAllowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Source-Account-ID, Stripe-Signature")
+			w.Header().Set("Access-Control-Max-Age", "600")
+		}
 
 		if r.Method == "OPTIONS" {
+			if !originAllowed {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

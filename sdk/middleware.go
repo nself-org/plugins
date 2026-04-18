@@ -3,20 +3,58 @@ package sdk
 import (
 	"log"
 	"net/http"
+	"os"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// CORS adds permissive CORS headers (Allow-Origin: *, standard methods and headers).
+// pluginAllowedOrigins returns the per-request origin allowlist populated
+// from PLUGIN_ALLOWED_ORIGINS (csv). An empty env var means no cross-origin
+// browser requests are allowed. Wildcard ("*") is rejected: CORS with
+// Allow-Origin: * cannot be combined with credentialed requests, and a
+// shared-library default of "*" is inherited by every downstream plugin.
+func pluginAllowedOrigins() map[string]bool {
+	set := make(map[string]bool)
+	for _, o := range strings.Split(os.Getenv("PLUGIN_ALLOWED_ORIGINS"), ",") {
+		o = strings.TrimSpace(strings.ToLower(o))
+		if o == "" || o == "*" {
+			continue
+		}
+		set[o] = true
+	}
+	return set
+}
+
+// CORS enforces explicit per-origin CORS for every plugin built on this
+// SDK. If the request Origin is not in the PLUGIN_ALLOWED_ORIGINS
+// allowlist, CORS response headers are NOT emitted and the browser blocks
+// the response. This default is safe for any plugin; consumers that need
+// a different policy should register their own middleware instead of
+// chaining this one.
+//
+// Server-to-server endpoints (webhooks, internal APIs) do not set an
+// Origin header; this middleware is a no-op for them.
 func CORS(next http.Handler) http.Handler {
+	allowed := pluginAllowedOrigins()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
+		w.Header().Set("Vary", "Origin")
+		origin := r.Header.Get("Origin")
+		originAllowed := origin != "" && allowed[strings.ToLower(origin)]
+		if originAllowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
+			w.Header().Set("Access-Control-Max-Age", "600")
+		}
 
 		if r.Method == http.MethodOptions {
+			if !originAllowed {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
