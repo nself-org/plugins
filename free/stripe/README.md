@@ -14,20 +14,11 @@ Sync Stripe billing data to PostgreSQL with real-time webhook support.
 
 ## Installation
 
-### TypeScript Implementation
-
 ```bash
-# Install shared utilities first
-cd shared
-pnpm install
-pnpm run build
-cd ..
-
-# Install the Stripe plugin
-cd plugins/stripe/ts
-pnpm install
-pnpm run build
+nself plugin install stripe
 ```
+
+No license key required. MIT-licensed. The CLI fetches the current binary, verifies its checksum, and registers the plugin with your nself stack.
 
 ## Configuration
 

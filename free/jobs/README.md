@@ -26,6 +26,14 @@ BullMQ-based background job queue with priorities, scheduling, retry logic, and 
 
 See "Job Types" section below for integration instructions.
 
+## Installation
+
+```bash
+nself plugin install jobs
+```
+
+No license key required. MIT-licensed.
+
 ## Current Features
 
 ### ✅ Job Queue Infrastructure
