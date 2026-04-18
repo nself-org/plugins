@@ -9,20 +9,15 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// CORS adds permissive CORS headers (Allow-Origin: *, standard methods and headers).
+// CORS is a legacy shim retained for backward source compatibility. It is a
+// no-op so callers cannot accidentally wire up wildcard CORS on endpoints
+// that carry credentials. New code must use the per-origin middleware at
+// github.com/nself-org/nself-sdk/middleware.CORS with an explicit
+// AllowedOrigins list.
+//
+// Deprecated: use middleware.CORS(middleware.CORSConfig{AllowedOrigins: ...}).
 func CORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+	return next
 }
 
 // RequestID adds an X-Request-ID header to each request using chi's
