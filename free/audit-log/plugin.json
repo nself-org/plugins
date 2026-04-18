@@ -1,0 +1,74 @@
+{
+  "name": "audit-log",
+  "version": "1.0.0",
+  "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.0.0",
+  "category": "compliance",
+  "language": "go",
+  "tags": [
+    "audit",
+    "security",
+    "compliance",
+    "logging",
+    "events"
+  ],
+  "tables": [
+    "np_auditlog_events"
+  ],
+  "dependencies": [],
+  "optionalDependencies": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "PLUGIN_INTERNAL_SECRET"
+    ],
+    "optional": [
+      "PORT",
+      "HASURA_GRAPHQL_ADMIN_SECRET"
+    ]
+  },
+  "config": {
+    "defaultPort": 3308
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "network": [
+      "inbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3308,
+  "status": "stable",
+  "binary_name": "audit-log",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "free"
+}
