@@ -64,6 +64,10 @@ func main() {
 		r.Delete("/jobs/{id}", h.DeleteJob)
 		r.Post("/jobs/{id}/retry", h.RetryJob)
 		r.Get("/queues", h.ListQueues)
+		// S18 DLQ surface — operators list dead-lettered jobs and revive them
+		// after a downstream outage is resolved.
+		r.Get("/dlq", h.ListDLQ)
+		r.Post("/dlq/{id}/revive", h.ReviveDLQ)
 	})
 
 	// Start background worker
