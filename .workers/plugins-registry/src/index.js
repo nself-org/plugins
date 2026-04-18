@@ -39,6 +39,7 @@
 
 import { signMessage, canonicalPluginString } from './sign.js';
 import { handleRevocations, isRevoked } from './revocations.js';
+import { handleMarketplace, readRatings, writeRating } from './marketplace.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -130,6 +131,60 @@ export default {
         return await handleSync(request, env, ctx);
       }
 
+      // Marketplace — GET /marketplace/ratings/:name (before /marketplace to avoid prefix clash)
+      if (method === 'GET' && path.startsWith('/marketplace/ratings/')) {
+        const pluginName = path.slice('/marketplace/ratings/'.length);
+        if (!pluginName) {
+          return jsonResponse({ error: 'plugin name required' }, 400);
+        }
+        const ratings = await readRatings(env);
+        const entry = ratings[pluginName] || { average: 0, count: 0, reviews: [] };
+        return jsonResponse(
+          { name: pluginName, rating: entry.average, ratingCount: entry.count, reviews: entry.reviews || [] },
+          200,
+          { 'Cache-Control': 'public, max-age=60' },
+        );
+      }
+
+      // Marketplace — POST /marketplace/ratings/:name
+      if (method === 'POST' && path.startsWith('/marketplace/ratings/')) {
+        const pluginName = path.slice('/marketplace/ratings/'.length);
+        if (!pluginName) {
+          return jsonResponse({ error: 'plugin name required' }, 400);
+        }
+        let body;
+        try {
+          body = await request.json();
+        } catch {
+          return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400);
+        }
+        const { stars, review } = body || {};
+        const result = await writeRating(env, pluginName, Number(stars), review);
+        return jsonResponse(
+          result.ok
+            ? { ok: true, rating: result.rating }
+            : { ok: false, error: result.error },
+          result.ok ? 200 : 400,
+        );
+      }
+
+      // Marketplace — GET /marketplace[?tier=free|pro][&category=X][&bundle=Y][&q=search]
+      if (method === 'GET' && path === '/marketplace') {
+        const cacheTtl = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+        const [freeResult, proResult] = await Promise.allSettled([
+          fetchFreeRegistry(env, ctx, cacheTtl),
+          fetchProRegistry(env, ctx, cacheTtl),
+        ]);
+        const allPlugins = [
+          ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+          ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
+        ];
+        const payload = await handleMarketplace(url, env, () => Promise.resolve(allPlugins));
+        return jsonResponse(payload, 200, {
+          'Cache-Control': `public, max-age=${cacheTtl}`,
+        });
+      }
+
       return jsonResponse({
         error: 'Not found',
         endpoints: [
@@ -144,6 +199,9 @@ export default {
           'GET /manifest.json',
           'GET /health',
           'GET /stats',
+          'GET /marketplace[?tier=free|pro][&category=X][&bundle=Y][&q=search]',
+          'GET /marketplace/ratings/:name',
+          'POST /marketplace/ratings/:name',
           'POST /api/sync',
         ],
       }, 404);
