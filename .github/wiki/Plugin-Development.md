@@ -4,7 +4,7 @@ This page walks through building a new nSelf plugin from empty directory to ship
 
 See also:
 - [[Home]]
-- [[CONTRIBUTING]]
+- [[Contributing]]
 - Compatibility matrix: `.claude/docs/plugins/compatibility.md` (ecosystem doc)
 - Scope doctrine: `.claude/docs/doctrines/plugin-scope.md`
 
@@ -318,5 +318,5 @@ The PR template requires:
 ## Bottom Navigation
 
 - Back to [[Home]]
-- [[CONTRIBUTING]]
+- [[Contributing]]
 - [[Plugin-Marketplace]]

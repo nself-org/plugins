@@ -421,7 +421,7 @@ If you have an existing plugin that doesn't follow these standards:
 
 If you have questions about these standards:
 
-1. Check [DEVELOPMENT.md](.wiki/DEVELOPMENT.md) for examples
+1. Check [Development](Development.md) for examples
 2. Review existing plugins for reference implementations
 3. Ask in the nself-plugins GitHub discussions
 4. Submit an issue for clarification requests

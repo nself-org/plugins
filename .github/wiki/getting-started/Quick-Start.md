@@ -988,9 +988,9 @@ Congratulations! You've successfully installed your first nself plugin, synced d
 - [Shopify Plugin Guide](../plugins/Shopify.md) - E-commerce data sync
 
 **Development:**
-- [Plugin Development Guide](../DEVELOPMENT.md) - Create your own plugins
-- [TypeScript Plugin Guide](../TYPESCRIPT_PLUGIN_GUIDE.md) - TypeScript best practices
-- [Contributing Guide](../CONTRIBUTING.md) - Contribute to nself plugins
+- [Plugin Development Guide](../Development.md) - Create your own plugins
+- [TypeScript Plugin Guide](../Typescript-Plugin-Guide.md) - TypeScript best practices
+- [Contributing Guide](../Contributing.md) - Contribute to nself plugins
 
 **Advanced Topics:**
 - [Architecture Overview](../architecture/Overview.md) - How plugins work internally

@@ -1311,7 +1311,7 @@ stringData:
 
 - [Plugin Documentation](../plugins/)
 - [Security Best Practices](../Security.md)
-- [Development Guide](../DEVELOPMENT.md)
+- [Development Guide](../Development.md)
 - [Troubleshooting](../troubleshooting/)
 
 ---

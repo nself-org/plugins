@@ -1672,7 +1672,7 @@ pg_dump $DATABASE_URL | gzip | aws s3 cp - s3://mybucket/backups/nself-$(date +%
 
 ### How do I contribute a new plugin?
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed guide.
+See [Contributing Guide](../../.github/wiki/Contributing.md) for detailed guide.
 
 **Quick Overview:**
 
@@ -1948,7 +1948,7 @@ describe('SyncService', () => {
 
 ### What's the release process?
 
-See the [Contributing Guide](../CONTRIBUTING.md) for the release process.
+See the [Contributing Guide](../../.github/wiki/Contributing.md) for the release process.
 
 **Summary:**
 

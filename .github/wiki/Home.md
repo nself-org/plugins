@@ -78,8 +78,7 @@ See [[All Plugins|#all-plugins-64-total]] below for the complete catalog of 64 p
 Root should remain intentionally minimal:
 
 - AI agent directories (private, gitignored)
-- `.github/`
-- `.wiki/`
+- `.github/` (includes `.github/wiki/` — canonical wiki source)
 - `plugins/`
 - `shared/`
 - `registry.json`
@@ -92,12 +91,12 @@ Allowed infrastructure exception:
 
 - `.workers/` for registry publishing.
 
-Legacy `docs/` is retired. Public docs belong in `/.wiki` only.
+Legacy `docs/` is retired. Public docs belong in `.github/wiki/` only.
 
 ## SPORT Rules
 
-1. If behavior changes, docs must be updated in `/.wiki` in the same change set.
-2. Commands in `COMMANDS.md` and `commands/*.md` must match action/CLI source files.
+1. If behavior changes, docs must be updated in `.github/wiki/` in the same change set.
+2. Commands in `Commands.md` and `commands/*.md` must match action/CLI source files.
 3. Any drift between code and docs is treated as a defect.
 
 ## All Plugins (64 Total)

@@ -766,7 +766,7 @@ Have a plugin you'd like to see? Open an issue on [GitHub](https://github.com/ac
 
 ## Contributing
 
-Want to build a plugin? See [DEVELOPMENT.md](DEVELOPMENT.md) for the plugin development guide.
+Want to build a plugin? See [Development](Development.md) for the plugin development guide.
 
 Plugin contributions are welcome for:
 - New service integrations

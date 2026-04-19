@@ -386,7 +386,7 @@ UPDATE stripe_customers SET source_account_id = 'admin'
 ## Reference
 
 - **Plugin List**: See [Home](../Home.md) for all plugins with multi-app support
-- **Development Guide**: See [TYPESCRIPT_PLUGIN_GUIDE.md](../TYPESCRIPT_PLUGIN_GUIDE.md) for building multi-app plugins
+- **Development Guide**: See [Typescript Plugin Guide](../Typescript-Plugin-Guide.md) for building multi-app plugins
 - **Source Code**: [GitHub Repository](https://github.com/acamarata/nself-plugins)
 
 ---

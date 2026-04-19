@@ -9,7 +9,7 @@ Root should contain only:
 - `.claude/` (private, gitignored)
 - `.codex/` (private, gitignored)
 - `.github/`
-- `.wiki/`
+- `.github/wiki/`
 - `plugins/`
 - `shared/`
 - `registry.json`
@@ -24,10 +24,10 @@ Allowed exception:
 ## Private vs Public
 
 - Private control-plane artifacts belong in `.claude/` or `.codex/`.
-- Public docs belong in `.wiki/` only.
+- Public docs belong in `.github/wiki/` only.
 - The legacy `docs/` directory is retired.
 - `LICENSE` remains at root for GitHub license detection.
-- Public discoverability mirrors are maintained in `.wiki/License.md` and `.wiki/CHANGELOG.md`.
+- Public discoverability mirrors are maintained in `.github/wiki/License.md` and `.github/wiki/Changelog.md`.
 
 ## Planning and Temp Files
 
@@ -37,6 +37,6 @@ Allowed exception:
 
 ## Documentation Policy
 
-- Wiki source of truth is `/.wiki`.
-- GitHub Wiki is generated/synced from `/.wiki` by workflow.
-- Changelog and license reference pages are maintained in `/.wiki` for public discoverability.
+- Wiki source of truth is `.github/wiki/`.
+- GitHub Wiki is generated/synced from `.github/wiki/` by workflow.
+- Changelog and license reference pages are maintained in `.github/wiki/` for public discoverability.

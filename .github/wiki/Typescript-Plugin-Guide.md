@@ -107,9 +107,9 @@ nself-plugins/
 │   ├── github/ts/
 │   └── shopify/ts/
 │
-├── .wiki/
-│   ├── DEVELOPMENT.md
-│   ├── TYPESCRIPT_PLUGIN_GUIDE.md  # This file
+├── .github/wiki/
+│   ├── Development.md
+│   ├── Typescript-Plugin-Guide.md  # This file
 │   └── plugins/
 │
 └── registry.json         # Plugin metadata

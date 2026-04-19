@@ -4,7 +4,7 @@ This guide covers how to create custom nself plugins.
 
 ## 🚨 READ FIRST: Mandatory Standards
 
-**BEFORE developing a plugin, you MUST read and follow [STANDARDS.md](STANDARDS.md).**
+**BEFORE developing a plugin, you MUST read and follow [Standards](Standards.md).**
 
 Key requirements:
 

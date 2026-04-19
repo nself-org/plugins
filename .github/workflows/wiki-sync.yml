@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - '.wiki/**'
+      - '.github/wiki/**'
   workflow_dispatch:
 
 permissions:
@@ -39,14 +39,14 @@ jobs:
           path: wiki
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync .wiki source to wiki
+      - name: Sync .github/wiki source to wiki
         if: steps.wiki-check.outputs.wiki_exists == 'true'
         run: |
           # Clear existing wiki content (except .git)
           find wiki -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
 
           # Copy tracked wiki source from repository
-          cp -R .wiki/. wiki/
+          cp -R .github/wiki/. wiki/
 
       - name: Push to wiki
         if: steps.wiki-check.outputs.wiki_exists == 'true'
@@ -58,6 +58,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Sync .wiki to wiki"
+            git commit -m "Sync .github/wiki to wiki"
             git push
           fi

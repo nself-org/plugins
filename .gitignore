@@ -12,6 +12,8 @@ Thumbs.db
 # Environment & credentials (never commit)
 .env
 .env.local
+.env.production
+.env.staging
 .env.*.local
 .secrets/
 *.key

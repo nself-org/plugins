@@ -175,5 +175,5 @@ Ensure `STRIPE_WEBHOOK_SECRET` matches the signing secret from Stripe Dashboard.
 ## Next Steps
 
 - [Stripe Plugin Guide](plugins/Stripe.md)
-- [Plugin Development](DEVELOPMENT.md)
-- [Planned Plugins](PLANNED.md)
+- [Plugin Development](Development.md)
+- [Planned Plugins](Planned.md)

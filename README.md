@@ -70,7 +70,7 @@ Install the bundle with `nself plugin install monitoring`. SLO definitions live 
 
 Have a plugin to share? Add it to the `community/` directory and open a PR.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+See [Contributing Guide](./.github/wiki/Contributing.md) for guidelines.
 
 ## Pro Plugins
 
