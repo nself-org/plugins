@@ -1,7 +1,7 @@
 {
   "$schema": "./registry-schema.json",
   "version": "1.0.0",
-  "lastUpdated": "2026-04-18T21:45:00Z",
+  "lastUpdated": "2026-04-19T00:00:00Z",
   "plugins": {
     "audit-log": {
       "name": "audit-log",
@@ -570,6 +570,53 @@
         "sha256": ""
       },
       "tier": "free"
+    },
+    "family-gedcom": {
+      "name": "family-gedcom",
+      "version": "0.0.1",
+      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
+      "author": "nself",
+      "license": "MIT",
+      "homepage": "https://github.com/nself-org/plugins/tree/main/free/family-gedcom",
+      "repository": "https://github.com/nself-org/plugins",
+      "path": "free/family-gedcom",
+      "minNselfVersion": "1.0.0",
+      "category": "social",
+      "tags": [
+        "family",
+        "genealogy",
+        "gedcom",
+        "migration",
+        "importer"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/family-gedcom",
+        "defaultPort": 3108
+      },
+      "tables": [],
+      "webhooks": [],
+      "cliCommands": [],
+      "apiEndpoints": [],
+      "envVars": [
+        {
+          "name": "DATABASE_URL",
+          "required": true,
+          "description": "PostgreSQL connection string"
+        }
+      ],
+      "multiApp": {
+        "supported": true,
+        "isolationColumn": "source_account_id",
+        "pkStrategy": "single",
+        "defaultValue": "primary"
+      },
+      "checksums": {
+        "sha256": ""
+      },
+      "tier": "free",
+      "status": "planned"
     },
     "feature-flags": {
       "name": "feature-flags",
@@ -3328,7 +3375,7 @@
   },
   "metadata": {
     "pluginCount": 64,
-    "lastUpdated": "2026-04-18T21:45:00Z",
+    "lastUpdated": "2026-04-19T00:00:00Z",
     "version": "1.0.0"
   }
 }
