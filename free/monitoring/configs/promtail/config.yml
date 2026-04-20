@@ -15,6 +15,7 @@ scrape_configs:
           - localhost
         labels:
           job: containerlogs
+          env: ${ENV:-dev}
           __path__: /var/lib/docker/containers/*/*log
     pipeline_stages:
       - json:
@@ -36,6 +37,7 @@ scrape_configs:
           stream:
           container_name:
           image_name:
+          env:
       - output:
           source: output
 

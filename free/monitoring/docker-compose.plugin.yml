@@ -11,7 +11,8 @@
 # Optional env vars:
 #   GRAFANA_ADMIN_USER       - Grafana admin username (default: admin)
 #   GRAFANA_ADMIN_PASSWORD   - Grafana admin password (default: admin)
-#   PROMETHEUS_RETENTION_TIME - Prometheus data retention (default: 15d)
+#   PROMETHEUS_TSDB_RETENTION_TIME - Prometheus data retention (default: 15d)
+#   LOKI_RETENTION_DAYS      - Loki log retention in days (informational — applied in loki config)
 #   REDIS_ENABLED            - Set to "true" to include redis-exporter
 
 services:
@@ -25,7 +26,7 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_TSDB_RETENTION_TIME:-15d}"
       - "--web.console.libraries=/usr/share/prometheus/console_libraries"
       - "--web.console.templates=/usr/share/prometheus/consoles"
       - "--web.enable-lifecycle"
