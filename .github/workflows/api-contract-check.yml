@@ -1,0 +1,58 @@
+name: API Contract Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.workers/plugins-registry/src/**'
+      - 'registry.json'
+      - 'registry-schema.json'
+      - '.github/workflows/api-contract-check.yml'
+
+jobs:
+  api-contract-check:
+    name: API Contract Check — Marketplace Worker (vs F19 baseline)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+
+      - name: Check Marketplace Worker endpoint surface vs F19 baseline
+        run: |
+          WORKER_SRC=".workers/plugins-registry/src/index.ts"
+
+          # Known stable endpoints from F19-API-CONTRACT-LOCK-v1.0.9.md Surface 5
+          KNOWN_PATHS="/health /plugins /plugins/ /revocations /registry.json /registry /categories /manifest.json /marketplace /stats /.well-known"
+          MISSING=""
+          for path in $KNOWN_PATHS; do
+            path_stripped=$(echo "$path" | tr -d '/')
+            if ! grep -q "$path_stripped" "$WORKER_SRC" 2>/dev/null; then
+              MISSING="$MISSING $path"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo "BREAKING: Marketplace Worker paths potentially missing: $MISSING"
+            echo "breaking_found=true" >> "$GITHUB_ENV"
+            echo "MISSING_PATHS=$MISSING" >> "$GITHUB_ENV"
+          else
+            echo "Marketplace Worker contract check passed."
+          fi
+
+      - name: Fail on breaking change without annotation
+        if: env.breaking_found == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if ! echo "$PR_BODY" | grep -q "BREAKING-CHANGE-OK:"; then
+            echo ""
+            echo "API CONTRACT VIOLATION — Marketplace Worker"
+            echo "Potentially missing paths: $MISSING_PATHS"
+            echo ""
+            echo "Add BREAKING-CHANGE-OK: <reason> to PR description and get maintainer label."
+            echo "See .claude/docs/operations/breaking-change-policy.md"
+            exit 1
+          else
+            echo "Breaking change annotated. Proceeding."
+          fi

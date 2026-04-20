@@ -71,6 +71,12 @@
           "type": "string",
           "description": "Minimum required nself version"
         },
+        "manifestVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Plugin manifest schema version. Default 1. Incremented when breaking manifest changes are introduced. Plugins at v1.0.9 all default to manifestVersion: 1 (S77-T07)."
+        },
         "category": {
           "type": "string",
           "description": "Plugin category identifier"
