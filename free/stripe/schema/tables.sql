@@ -851,3 +851,21 @@ FROM stripe_charges c
 LEFT JOIN stripe_customers cust ON c.customer_id = cust.id AND c.source_account_id = cust.source_account_id
 WHERE c.status = 'succeeded'
 ORDER BY c.created_at DESC;
+
+-- =============================================================================
+-- Webhook Idempotency (S76-T05)
+-- Tracks processed Stripe event IDs to prevent double-handling.
+-- Pattern mirrors ping_api's stripe_events table so both canonical paths
+-- share the same dedup guarantee (see decisions.md: Stripe webhook canonical path).
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS stripe_events (
+    stripe_event_id VARCHAR(255) PRIMARY KEY,
+    source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
+    event_type VARCHAR(128) NOT NULL,
+    processed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Fast dedup lookup — must be indexed for O(1) idempotency check.
+CREATE INDEX IF NOT EXISTS idx_stripe_events_source_account ON stripe_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_stripe_events_processed_at ON stripe_events(processed_at);

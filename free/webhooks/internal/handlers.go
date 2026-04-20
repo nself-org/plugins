@@ -269,8 +269,20 @@ func handleListDeliveries(pool *pgxpool.Pool) http.HandlerFunc {
 
 func handleDispatch(pool *pgxpool.Pool, dispatcher *Dispatcher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Payload size cap (T03): reject oversized bodies before decoding.
+		// Uses http.MaxBytesReader so the TCP connection is not left in a bad state.
+		cap := maxPayloadBytes()
+		r.Body = http.MaxBytesReader(w, r.Body, int64(cap))
+
 		var req DispatchRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			// MaxBytesReader wraps the error when the limit is exceeded.
+			if err.Error() == "http: request body too large" {
+				sdk.Respond(w, http.StatusRequestEntityTooLarge, map[string]string{
+					"error": "payload exceeds WEBHOOKS_MAX_PAYLOAD_BYTES",
+				})
+				return
+			}
 			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 			return
 		}

@@ -214,12 +214,47 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Process the event with the matched account's scoped DB
 	scopedDB := s.DB.ForSourceAccount(matchedAccount.ID)
+
+	// Idempotency check (S76-T05): have we already processed this Stripe event ID?
+	// Mirrors the pattern in ping_api/src/routes/webhooks.ts (line 156) so both
+	// canonical paths guarantee at-most-once processing. The stripe_events table
+	// is created by the plugin migration (schema/tables.sql) with IF NOT EXISTS.
+	if event.ID != "" {
+		var exists bool
+		_ = scopedDB.Pool.QueryRow(r.Context(),
+			`SELECT EXISTS(SELECT 1 FROM stripe_events WHERE stripe_event_id = $1 AND source_account_id = $2)`,
+			event.ID, scopedDB.SourceAccountID,
+		).Scan(&exists)
+		if exists {
+			log.Printf("[stripe:webhooks] Event already processed (idempotent): %s", event.ID)
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"received":   true,
+				"idempotent": true,
+			})
+			return
+		}
+	}
+
 	handler := NewWebhookHandler(scopedDB)
 
 	if err := handler.HandleEvent(r.Context(), &event); err != nil {
 		log.Printf("[stripe:webhooks] Processing failed: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Processing failed"})
 		return
+	}
+
+	// Record processed event for idempotency. Non-fatal if stripe_events table
+	// doesn't exist yet (e.g., plugin just installed, migration pending).
+	if event.ID != "" {
+		_, err := scopedDB.Pool.Exec(r.Context(),
+			`INSERT INTO stripe_events (stripe_event_id, source_account_id, event_type, processed_at)
+			 VALUES ($1, $2, $3, NOW())
+			 ON CONFLICT (stripe_event_id) DO NOTHING`,
+			event.ID, scopedDB.SourceAccountID, event.Type,
+		)
+		if err != nil {
+			log.Printf("[stripe:webhooks] Warning: could not record event %s for idempotency: %v", event.ID, err)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

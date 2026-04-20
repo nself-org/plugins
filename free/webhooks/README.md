@@ -40,7 +40,7 @@ npm run dev
 ### 3. Register an Endpoint
 
 ```bash
-curl -X POST http://localhost:3403/v1/endpoints \
+curl -X POST http://localhost:3403/v1/webhooks \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://example.com/webhook",
@@ -79,44 +79,25 @@ See `.env.example` for all configuration options.
 - `WEBHOOKS_CONCURRENT_DELIVERIES` - Concurrent delivery limit (default: 10)
 - `WEBHOOKS_RETRY_DELAYS` - Retry delays in milliseconds (default: 10s,30s,2m,15m,1h)
 - `WEBHOOKS_AUTO_DISABLE_THRESHOLD` - Auto-disable after N failures (default: 10)
+- `WEBHOOKS_MAX_PAYLOAD_BYTES` - Maximum outbound payload size in bytes (default: 1048576 = 1 MB). Requests exceeding this limit return `413 Payload Too Large`.
 
 ## API Endpoints
 
 ### Webhook Management
 
-- `POST /v1/endpoints` - Create endpoint
-- `GET /v1/endpoints` - List endpoints
-- `GET /v1/endpoints/:id` - Get endpoint details
-- `PUT /v1/endpoints/:id` - Update endpoint
-- `DELETE /v1/endpoints/:id` - Delete endpoint
-- `POST /v1/endpoints/:id/test` - Send test webhook
-- `POST /v1/endpoints/:id/rotate-secret` - Rotate signing secret
-- `POST /v1/endpoints/:id/enable` - Re-enable endpoint
+- `POST /v1/webhooks` - Create endpoint
+- `GET /v1/webhooks` - List endpoints
+- `PUT /v1/webhooks/{id}` - Update endpoint
+- `DELETE /v1/webhooks/{id}` - Delete endpoint
+- `POST /v1/webhooks/{id}/test` - Send test webhook
 
 ### Event Dispatch
 
-- `POST /v1/dispatch` - Dispatch event to matching endpoints
+- `POST /v1/dispatch` - Dispatch event to matching endpoints (max payload: `WEBHOOKS_MAX_PAYLOAD_BYTES`, default 1 MB; returns 413 if exceeded)
 
 ### Deliveries
 
-- `GET /v1/deliveries` - List deliveries (with filters)
-- `GET /v1/deliveries/:id` - Get delivery details
-- `POST /v1/deliveries/:id/retry` - Retry failed delivery
-
-### Event Types
-
-- `GET /v1/event-types` - List registered event types
-- `POST /v1/event-types` - Register event type
-
-### Dead Letter Queue
-
-- `GET /v1/dead-letter` - List dead letter items
-- `POST /v1/dead-letter/:id/retry` - Retry dead letter
-- `POST /v1/dead-letter/:id/resolve` - Mark as resolved
-
-### Statistics
-
-- `GET /v1/stats` - Delivery statistics
+- `GET /v1/deliveries` - List deliveries (filter by endpoint_id, event_type, status, limit, offset)
 
 ### Health
 
@@ -334,10 +315,12 @@ To re-enable:
 npm run endpoints enable <endpoint-id>
 ```
 
-Or via API:
+Or via API (set `enabled: true` in a PUT request):
 
 ```bash
-curl -X POST http://localhost:3403/v1/endpoints/<id>/enable
+curl -X PUT http://localhost:3403/v1/webhooks/<id> \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
 ```
 
 ## Multi-App Support
@@ -346,13 +329,13 @@ The webhooks plugin supports multi-app isolation using `source_account_id`:
 
 ```bash
 # Set via header
-curl -X POST http://localhost:3403/v1/endpoints \
+curl -X POST http://localhost:3403/v1/webhooks \
   -H "X-Source-Account-Id: production" \
   -H "Content-Type: application/json" \
   -d '{"url": "...", "events": [...]}'
 
 # Or via query parameter
-curl "http://localhost:3403/v1/endpoints?source_account_id=production"
+curl "http://localhost:3403/v1/webhooks?source_account_id=production"
 ```
 
 ## Production Deployment
@@ -456,6 +439,8 @@ Review recent deliveries:
 ```bash
 curl "http://localhost:3403/v1/deliveries?endpoint_id=<id>&status=failed"
 ```
+
+> **Note:** Dead-letter queue management and endpoint re-enabling require direct database access in this version. DLQ alerting is handled automatically via the notify plugin when configured (see `NOTIFY_DLQ_ALERTS` and `NOTIFY_ADMIN_CHANNEL_ID`).
 
 ### High Failure Rate
 
