@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://docs.nself.org
+    about: Check the docs first — most questions are answered there
+  - name: GitHub Discussions
+    url: https://github.com/nself-org/plugins/discussions
+    about: Ask questions in Discussions before opening an issue
+  - name: Security Report
+    url: https://github.com/nself-org/plugins/blob/main/.github/SECURITY.md
+    about: Report security vulnerabilities privately via SECURITY.md

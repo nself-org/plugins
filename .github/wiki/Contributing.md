@@ -166,3 +166,23 @@ Open an issue on GitHub with:
 - Plugin name and version
 - Steps to reproduce
 - Expected vs actual behavior
+
+## Security Disclosures
+
+Do not open a public issue for security vulnerabilities. Follow the process in [SECURITY.md](https://github.com/nself-org/plugins/blob/main/.github/SECURITY.md).
+
+## Community and Questions
+
+- [GitHub Discussions](https://github.com/nself-org/plugins/discussions) — preferred for questions about plugin development
+- Community: [nself.org](https://nself.org)
+
+## Related
+
+- [GOVERNANCE.md](https://github.com/nself-org/plugins/blob/main/.github/GOVERNANCE.md) — decision model
+- [ENFORCEMENT.md](https://github.com/nself-org/plugins/blob/main/.github/ENFORCEMENT.md) — code of conduct enforcement
+- [CODEOWNERS](https://github.com/nself-org/plugins/blob/main/.github/CODEOWNERS) — who reviews what
+- [[Plugin-Development]] — detailed plugin dev guide
+- [[Plugin-Overview]] — all 25 free plugins
+
+---
+← [[Home]] | [[_Sidebar]]
