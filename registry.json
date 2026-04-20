@@ -1611,7 +1611,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "free/mlflow",
       "minNselfVersion": "1.0.0",
-      "category": "infrastructure",
+      "category": "data",
       "tags": [
         "mlflow",
         "ml",

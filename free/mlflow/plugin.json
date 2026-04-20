@@ -8,7 +8,7 @@
   "repository": "https://github.com/nself-org/plugins",
   "language": "go",
   "minNselfVersion": "1.0.0",
-  "category": "infrastructure",
+  "category": "data",
   "tags": [
     "mlflow",
     "ml",
