@@ -114,6 +114,22 @@ Start the server and access endpoints at `http://localhost:3001`:
 
 ## Webhook Setup
 
+### Canonical webhook path (S76-T05)
+
+There are two Stripe webhook handlers in the nself ecosystem. Use the right one for your use case:
+
+| Path | Handler | Use case | Idempotency |
+|------|---------|----------|-------------|
+| `POST /webhooks/stripe` | **This plugin** (`plugins/free/stripe`) | Self-hosted Stripe bridge — your own Stripe account + multi-tenant accounts via `FindMatchingAccount` | `stripe_events` table (`IF NOT EXISTS`) |
+| `POST /webhooks/stripe` on `ping.nself.org` | `web/backend/services/ping_api` | nself.org first-party flows — subscription billing, license key activation/revocation | `stripe_events` table (managed by ping_api) |
+
+Both paths sign-verify using the Stripe SDK (`stripe.webhooks.constructEvent`).
+Both record processed event IDs in a `stripe_events` table for idempotency.
+They do NOT share the same table — each operates on its own database.
+
+**Use this plugin when:** you are self-hosting and want to sync your own Stripe account's billing data to PostgreSQL.
+**Use ping_api when:** you are operating the nself.org SaaS platform and need license lifecycle events (checkout, subscription cancel, refund).
+
 1. Go to [Stripe Dashboard > Webhooks](https://dashboard.stripe.com/webhooks)
 2. Click "Add endpoint"
 3. Enter your webhook URL: `https://your-domain.com/webhooks/stripe`
