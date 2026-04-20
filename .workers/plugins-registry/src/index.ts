@@ -18,6 +18,7 @@
  *   GET /manifest.json                   — Flat CLI manifest for nself plugin outdated
  *   GET /marketplace                     — Enriched marketplace view
  *   GET /stats                           — Cache statistics
+ *   GET /.well-known/revoked-authors.json — Author CRL (S58-T09, polled daily by CLI)
  *   POST /api/sync                       — Force-refresh KV cache (GitHub Actions)
  *
  * KV keys:
@@ -25,6 +26,7 @@
  *   registry:pro       — pro registry  (timestamp envelope)
  *   registry:combined  — merged output (timestamp envelope)
  *   revocations:list   — JSON array of RevocationEntry
+ *   revocations:authors — JSON array of RevokedAuthorEntry (S58-T09)
  *   stats:global       — request counters
  *
  * Secrets (set via `wrangler secret put`):
@@ -51,6 +53,8 @@ import type {
   PluginEntry,
   PluginListResponse,
   KVEnvelope,
+  RevokedAuthorEntry,
+  RevokedAuthorListResponse,
 } from "./registry.ts";
 import {
   handleMarketplace,
@@ -120,6 +124,13 @@ export default {
       // treated as a plugin name
       if (method === "GET" && path === "/plugins/revocations") {
         return handleRevocations(env);
+      }
+
+      // S58-T09: Author CRL endpoint.
+      // CLI checks this on every plugin install and via daily cron.
+      // Append-only: once revoked, entries are never removed.
+      if (method === "GET" && path === "/.well-known/revoked-authors.json") {
+        return handleRevokedAuthors(env);
       }
 
       // Single plugin (and sub-resources: /tarball, /signature, /:version)
@@ -484,6 +495,51 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
     "Cache-Control": `public, max-age=${ttl}`,
     "X-Cache": "MISS",
   });
+}
+
+// ---------------------------------------------------------------------------
+// GET /.well-known/revoked-authors.json — Author Certificate Revocation List
+// (S58-T09)
+//
+// CLI checks this endpoint on every `nself plugin install` and via daily cron
+// to detect plugins whose author keys have been revoked (abuse, security
+// breach, license fraud). Short max-age (60 s) because revocations are
+// security-critical and must propagate quickly.
+//
+// KV key: revocations:authors  — JSON array of RevokedAuthorEntry
+// The list is append-only: once revoked, entries must never be deleted.
+// ---------------------------------------------------------------------------
+
+const KV_REVOKED_AUTHORS = "revocations:authors";
+
+async function handleRevokedAuthors(env: Env): Promise<Response> {
+  const kv = env.REGISTRY ?? env.PLUGINS_KV;
+  let revokedAuthors: RevokedAuthorEntry[] = [];
+
+  if (kv) {
+    try {
+      const raw = await kv.get(KV_REVOKED_AUTHORS, "text");
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          revokedAuthors = parsed as RevokedAuthorEntry[];
+        }
+      }
+    } catch {
+      // KV read failure — return empty list so CLI is not falsely blocked.
+      // Errors are surfaced via the /health endpoint instead.
+      revokedAuthors = [];
+    }
+  }
+
+  const body: RevokedAuthorListResponse = {
+    revokedAuthors,
+    fetchedAt: new Date().toISOString(),
+    count: revokedAuthors.length,
+  };
+
+  // Short TTL: revocations are security-critical. CLI must see them promptly.
+  return jsonResponse(body, 200, { "Cache-Control": "public, max-age=60" });
 }
 
 // ---------------------------------------------------------------------------

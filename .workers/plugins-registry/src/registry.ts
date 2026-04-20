@@ -51,6 +51,24 @@ export interface RevocationListResponse {
   count: number;
 }
 
+// RevokedAuthorEntry — one entry in the author Certificate Revocation List. (S58-T09)
+// CLI checks this list on every plugin install and daily via cron.
+// Append-only: once an author is revoked, the entry must never be deleted.
+export interface RevokedAuthorEntry {
+  /** Plugin author identifier (matches plugin.json "author" field). */
+  authorKey: string;
+  /** ISO 8601 datetime of revocation. */
+  revokedAt: string;
+  /** Optional human-readable reason for revocation. */
+  reason?: string;
+}
+
+export interface RevokedAuthorListResponse {
+  revokedAuthors: RevokedAuthorEntry[];
+  fetchedAt: string;
+  count: number;
+}
+
 // ---------------------------------------------------------------------------
 // Worker environment bindings
 // ---------------------------------------------------------------------------
