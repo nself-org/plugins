@@ -124,6 +124,20 @@ BEGIN
         $policy$;
     END IF;
 END $$;
+
+-- Migration 002: inter-plugin tracing columns (S43-T18).
+-- ADD COLUMN IF NOT EXISTS is idempotent — safe to re-run on existing schemas.
+ALTER TABLE np_auditlog_events
+    ADD COLUMN IF NOT EXISTS source_plugin TEXT NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS target_plugin TEXT NOT NULL DEFAULT '';
+
+CREATE INDEX IF NOT EXISTS idx_np_auditlog_source_plugin
+    ON np_auditlog_events (source_plugin)
+    WHERE source_plugin != '';
+
+CREATE INDEX IF NOT EXISTS idx_np_auditlog_target_plugin
+    ON np_auditlog_events (target_plugin)
+    WHERE target_plugin != '';
 `
 
 // InsertEvent writes a new audit event to np_auditlog_events.
@@ -133,9 +147,9 @@ func InsertEvent(ctx context.Context, pool *pgxpool.Pool, e *AuditEvent) error {
 		INSERT INTO np_auditlog_events
 			(id, source_account_id, actor_user_id, actor_type, event_type,
 			 resource_type, resource_id, ip_address, user_agent, metadata,
-			 severity, created_at)
+			 severity, source_plugin, target_plugin, created_at)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`,
 		e.ID,
 		e.SourceAccountID,
@@ -148,6 +162,8 @@ func InsertEvent(ctx context.Context, pool *pgxpool.Pool, e *AuditEvent) error {
 		e.UserAgent,
 		e.Metadata,
 		e.Severity,
+		e.SourcePlugin,
+		e.TargetPlugin,
 		e.CreatedAt,
 	)
 	return err
@@ -213,7 +229,8 @@ func ListEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*Audi
 
 	// Fetch the requested page.
 	dataQuery := `SELECT id, source_account_id, actor_user_id, actor_type, event_type,
-		resource_type, resource_id, ip_address, user_agent, metadata, severity, created_at
+		resource_type, resource_id, ip_address, user_agent, metadata, severity,
+		source_plugin, target_plugin, created_at
 		FROM np_auditlog_events` +
 		where +
 		fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
@@ -240,6 +257,8 @@ func ListEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*Audi
 			&e.UserAgent,
 			&e.Metadata,
 			&e.Severity,
+			&e.SourcePlugin,
+			&e.TargetPlugin,
 			&e.CreatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan row: %w", err)
@@ -299,7 +318,8 @@ func ExportEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*Au
 	_ = argIdx
 
 	dataQuery := `SELECT id, source_account_id, actor_user_id, actor_type, event_type,
-		resource_type, resource_id, ip_address, user_agent, metadata, severity, created_at
+		resource_type, resource_id, ip_address, user_agent, metadata, severity,
+		source_plugin, target_plugin, created_at
 		FROM np_auditlog_events` +
 		where +
 		" ORDER BY created_at ASC"
@@ -325,6 +345,8 @@ func ExportEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*Au
 			&e.UserAgent,
 			&e.Metadata,
 			&e.Severity,
+			&e.SourcePlugin,
+			&e.TargetPlugin,
 			&e.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
@@ -344,7 +366,7 @@ func GetEvent(ctx context.Context, pool *pgxpool.Pool, id string) (*AuditEvent, 
 	err := pool.QueryRow(ctx, `
 		SELECT id, source_account_id, actor_user_id, actor_type, event_type,
 		       resource_type, resource_id, ip_address, user_agent, metadata,
-		       severity, created_at
+		       severity, source_plugin, target_plugin, created_at
 		FROM np_auditlog_events
 		WHERE id = $1
 		LIMIT 1
@@ -360,6 +382,8 @@ func GetEvent(ctx context.Context, pool *pgxpool.Pool, id string) (*AuditEvent, 
 		&e.UserAgent,
 		&e.Metadata,
 		&e.Severity,
+		&e.SourcePlugin,
+		&e.TargetPlugin,
 		&e.CreatedAt,
 	)
 	if err != nil {

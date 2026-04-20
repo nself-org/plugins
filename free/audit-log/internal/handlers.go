@@ -118,6 +118,13 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 			req.Metadata = map[string]any{}
 		}
 
+		// Auto-populate source_plugin from X-Source-Plugin header when the
+		// ingest request doesn't set it explicitly. S43-T18.
+		sourcePlugin := req.SourcePlugin
+		if sourcePlugin == "" {
+			sourcePlugin = strings.ToLower(strings.TrimSpace(r.Header.Get("X-Source-Plugin")))
+		}
+
 		event := &AuditEvent{
 			ID:              uuid.New().String(),
 			SourceAccountID: req.SourceAccountID,
@@ -130,6 +137,8 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 			UserAgent:       req.UserAgent,
 			Metadata:        req.Metadata,
 			Severity:        req.Severity,
+			SourcePlugin:    sourcePlugin,
+			TargetPlugin:    req.TargetPlugin,
 			CreatedAt:       time.Now().UTC(),
 		}
 
@@ -370,7 +379,8 @@ func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 		cw.Write([]string{
 			"id", "source_account_id", "actor_user_id", "actor_type",
 			"event_type", "resource_type", "resource_id",
-			"ip_address", "user_agent", "severity", "created_at",
+			"ip_address", "user_agent", "severity",
+			"source_plugin", "target_plugin", "created_at",
 		})
 
 		for _, e := range events {
@@ -385,6 +395,8 @@ func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 				e.IPAddress,
 				e.UserAgent,
 				e.Severity,
+				e.SourcePlugin,
+				e.TargetPlugin,
 				e.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}

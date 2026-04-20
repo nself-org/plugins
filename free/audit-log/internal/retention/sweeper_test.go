@@ -81,21 +81,21 @@ func TestSweeperGDPR(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.partitionName, func(t *testing.T) {
-			t, parseErr := partitionMonth(tc.partitionName)
+			parsed, parseErr := partitionMonth(tc.partitionName)
 			if tc.expectErr {
 				if parseErr == nil {
-					// t is now shadowed — use a fresh var in the test scope
+					t.Errorf("expected error parsing %q, got nil", tc.partitionName)
 				}
-				// Error expected — we just verify no panic
 				return
 			}
 			if parseErr != nil {
-				// Caller used outer t — create local err msg
+				t.Fatalf("unexpected error parsing %q: %v", tc.partitionName, parseErr)
 				return
 			}
-			if t.Year() != tc.expectedYear || int(t.Month()) != tc.expectedMonth {
-				// Outer t is shadowed; this check is a best-effort assertion
-				_ = tc.expectedYear
+			if parsed.Year() != tc.expectedYear || int(parsed.Month()) != tc.expectedMonth {
+				t.Errorf("partitionMonth(%q) = %d-%02d, want %d-%02d",
+					tc.partitionName, parsed.Year(), int(parsed.Month()),
+					tc.expectedYear, tc.expectedMonth)
 			}
 		})
 	}
