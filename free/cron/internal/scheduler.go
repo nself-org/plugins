@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,9 +19,14 @@ import (
 
 // App holds shared state for the cron scheduler and HTTP handlers.
 type App struct {
-	Pool   *pgxpool.Pool
-	Config *sdk.Config
-	Client *http.Client
+	Pool    *pgxpool.Pool
+	Config  *sdk.Config
+	Client  *http.Client
+	// LockMgr handles advisory-lock-based cron job overlap detection (T05).
+	// Initialized in NewApp. Never nil after construction.
+	LockMgr *LockManager
+	// OverlapCount tracks per-job skips for Prometheus metrics (T05).
+	OverlapCount *OverlapCounter
 }
 
 // NewApp creates a new App instance.
@@ -32,10 +38,13 @@ func NewApp(pool *pgxpool.Pool, cfg *sdk.Config) *App {
 		}
 	}
 
+	counter := NewOverlapCounter()
 	return &App{
-		Pool:   pool,
-		Config: cfg,
-		Client: &http.Client{Timeout: timeout},
+		Pool:         pool,
+		Config:       cfg,
+		Client:       &http.Client{Timeout: timeout},
+		OverlapCount: counter,
+		LockMgr:      NewLockManager(pool, counter),
 	}
 }
 
@@ -104,11 +113,28 @@ func (a *App) runDueJobs() {
 }
 
 // ExecuteJob runs a single job by ID with retry logic (exponential backoff).
+// Uses advisory lock (pg_try_advisory_lock) to prevent concurrent execution
+// of the same job. If the previous instance is still running, emits
+// cron_job_overlap_skipped metric and skips this tick. (S42-T05)
 func (a *App) ExecuteJob(jobID string) {
 	job, err := GetJob(a.Pool, jobID)
 	if err != nil || job == nil {
 		return
 	}
+
+	// Overlap detection: acquire advisory lock.
+	// Non-blocking — returns immediately if lock not available.
+	ctx := context.Background()
+	jobRunCtx := JobRunContext{
+		Lock:    a.LockMgr,
+		JobName: job.Name,
+	}
+	shouldRun, releaseLock := SkipIfOverlapping(ctx, jobRunCtx)
+	if !shouldRun {
+		// Previous instance still running — skip this tick.
+		return
+	}
+	defer releaseLock()
 
 	maxAttempts := job.MaxAttempts
 	if maxAttempts < 1 {

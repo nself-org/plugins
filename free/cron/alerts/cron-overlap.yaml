@@ -1,0 +1,20 @@
+groups:
+  - name: cron_overlap
+    rules:
+      - alert: CronJobOverlapHigh
+        expr: |
+          increase(cron_job_overlap_skipped_total[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          plugin: cron
+        annotations:
+          summary: "Cron job {{ $labels.job }} overlapping more than 3 times per hour"
+          description: |
+            Job {{ $labels.job }} has been skipped due to overlap
+            {{ $value | printf "%.0f" }} times in the last hour.
+            The previous instance is still running. Check for:
+            - Long-running job that exceeds its schedule interval
+            - Hung job (check pg_stat_activity for advisory locks)
+            - Network/endpoint slowness causing timeouts
+          runbook: "https://docs.nself.org/plugins/cron/overlap-runbook"
