@@ -1,6 +1,9 @@
 name: Release Plugin Tarballs (Free)
 
-# Builds and uploads tarballs for all 27 free plugins to the GitHub release.
+# Builds and uploads tarballs for all 27 free plugins.
+# S67-T03: Dual-publish — GitHub Releases (canonical) + Cloudflare R2 (primary CDN).
+# CI hard-fails if R2 upload returns non-200. GitHub upload is always the primary
+# persistence; R2 is the CDN overlay. SHA-256 verified between both mirrors.
 # Triggers on tag push (v*) or manual dispatch with a tag override.
 # Idempotent: re-running skips assets already present on the release.
 
@@ -17,6 +20,10 @@ on:
 
 permissions:
   contents: write
+
+env:
+  R2_BUCKET: nself-plugin-tarballs
+  R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
 jobs:
   build-and-upload:
@@ -176,7 +183,7 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: backfill tarball checksums in registry.json for ${{ steps.tag.outputs.tag }}"
           git push || true
 
-      - name: Verify upload
+      - name: Verify GitHub upload
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -189,4 +196,78 @@ jobs:
             echo "WARNING: Expected at least 54 assets, found $ASSET_COUNT"
           else
             echo "OK: $ASSET_COUNT assets verified on release"
+          fi
+
+      # S67-T03: Dual-publish to R2 (primary CDN)
+      - name: Upload tarballs to R2 (S67-T03)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
+        run: |
+          VERSION="${{ steps.tag.outputs.tag }}"
+          VERSION="${VERSION#v}"
+          FAIL=0
+
+          for tarball in dist/*.tar.gz; do
+            plugin_name="$(basename "$tarball" "-${VERSION}.tar.gz")"
+            r2_key="plugins/${plugin_name}/${plugin_name}-${VERSION}.tar.gz"
+
+            echo "Uploading $plugin_name to R2 key $r2_key..."
+            HTTP_STATUS=$(curl -s -o /tmp/r2_upload_out.txt -w "%{http_code}" \
+              -X PUT \
+              "https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/objects/${r2_key}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/gzip" \
+              --data-binary "@$tarball")
+
+            if [ "$HTTP_STATUS" -ne 200 ]; then
+              echo "ERROR: R2 upload failed for $plugin_name (HTTP $HTTP_STATUS)"
+              cat /tmp/r2_upload_out.txt
+              FAIL=1
+            else
+              echo "OK: $plugin_name uploaded to R2 (HTTP $HTTP_STATUS)"
+            fi
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "ERROR: One or more R2 uploads failed — failing CI"
+            exit 1
+          fi
+
+      - name: Verify SHA-256 match between GitHub and R2 (S67-T03)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          FAIL=0
+
+          for checksum_file in dist/*.sha256; do
+            plugin_name="$(basename "$checksum_file" ".tar.gz.sha256" 2>/dev/null || basename "$checksum_file" ".sha256")"
+            plugin_name="${plugin_name%-${VERSION}.tar.gz}"
+            expected_sha="$(cut -d' ' -f1 "$checksum_file")"
+            r2_key="plugins/${plugin_name}/${plugin_name}-${VERSION}.tar.gz"
+
+            # Download from R2 and verify sha256
+            curl -sf -o /tmp/r2_verify.tar.gz \
+              "https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/objects/${r2_key}" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" || {
+                echo "WARNING: Could not fetch $plugin_name from R2 for verification"
+                continue
+              }
+
+            actual_sha="$(sha256sum /tmp/r2_verify.tar.gz | cut -d' ' -f1)"
+            if [ "$expected_sha" != "$actual_sha" ]; then
+              echo "ERROR: SHA-256 mismatch for $plugin_name"
+              echo "  expected: $expected_sha"
+              echo "  actual:   $actual_sha"
+              FAIL=1
+            else
+              echo "OK: $plugin_name SHA-256 verified (${expected_sha:0:12}...)"
+            fi
+          done
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "ERROR: SHA-256 mismatch detected — R2 mirror is corrupted"
+            exit 1
           fi

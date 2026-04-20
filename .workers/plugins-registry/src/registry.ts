@@ -84,6 +84,9 @@ export interface Env {
   REGISTRY_VERSION?: string;
   GH_ACCESS_TOKEN?: string;
   GITHUB_SYNC_TOKEN?: string;
+  // S67-T03: R2 plugin tarball CDN (primary; GitHub Releases = fallback on 5xx)
+  PLUGIN_TARBALLS?: R2Bucket;
+  R2_PUBLIC_DOMAIN?: string; // e.g. "pub-abc123.r2.dev" or custom domain
 }
 
 // ---------------------------------------------------------------------------
