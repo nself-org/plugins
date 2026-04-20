@@ -23,26 +23,51 @@ jobs:
 
   commit-messages:
     runs-on: ubuntu-latest
+    # Scope: new commits only (since last tag or last push boundary).
+    # Older S38-era commits carried Co-Authored-By trailers from tooling; those
+    # commits are grandfathered — we cannot rewrite published history without
+    # disrupting all forks. New commits on main must be clean.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Enforce attribution policy in commit messages
+      - name: Enforce attribution policy in commit messages (new commits only)
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags --depth=200 origin "${{ github.base_ref }}"
             RANGE="origin/${{ github.base_ref }}..${{ github.sha }}"
+
           elif [ "${{ github.event_name }}" = "push" ]; then
             BEFORE="${{ github.event.before }}"
             if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              RANGE="${{ github.sha }}"
+              # New branch or initial push: scope to commits since the last tag on this branch.
+              # If no tag exists yet, scope to only the HEAD commit.
+              LAST_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
+              if [ -n "$LAST_TAG" ]; then
+                RANGE="${LAST_TAG}..${{ github.sha }}"
+              else
+                RANGE="${{ github.sha }}"
+              fi
             else
               RANGE="$BEFORE..${{ github.sha }}"
             fi
+
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual run: scope to commits since the previous tag so we don't
+            # scan all of history (which contains pre-policy grandfathered commits).
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+            if [ -n "$LAST_TAG" ]; then
+              RANGE="${LAST_TAG}..${{ github.sha }}"
+            else
+              RANGE="${{ github.sha }}"
+            fi
+
           else
+            # Tags and other events: scope since the commit before this tag.
             RANGE="${{ github.sha }}"
           fi
 
+          echo "Attribution guard scope: $RANGE"
           bash .github/scripts/no-attribution-check.sh --history-range "$RANGE"

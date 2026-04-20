@@ -62,9 +62,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:d78a4daa699fba8b07a8c97a2bcc1a00ce5345b98043cda1ba3d2b97f2dde646"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/audit-log-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "backup": {
       "name": "backup",
@@ -143,9 +146,12 @@
         "isolationColumn": "source_account_id"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:f411d6fabb9908c592c49f431e03c83c7046022343eea925a16dd3130b616927"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/backup-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "content-acquisition": {
       "name": "content-acquisition",
@@ -311,7 +317,13 @@
         "defaultValue": "primary"
       },
       "dependencies": [],
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-acquisition-1.0.0.tar.gz",
+      "checksums": {
+        "sha256": "sha256:e05aeb134e3a1de932d069ba69bd5e7876c0847c5045879052670fefdbbf9fd3"
+      },
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "content-progress": {
       "name": "content-progress",
@@ -407,9 +419,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:b7b28ee2fcce6bfc6aa125ffae2f7d424268082ebdb1ac0f92d16e1eb4c37ad5"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-progress-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "cron": {
       "name": "cron",
@@ -469,9 +484,12 @@
         "isolationColumn": "source_account_id"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:b1d93f0087bca7d5ed5460ffc6510fa226782ed503b7495ec83a2cb46f1fb301"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "donorbox": {
       "name": "donorbox",
@@ -567,9 +585,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:af82be735bc175331972a3af8e9926185f67ba212eb6c1cd89aafa5c80b5ea2c"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/donorbox-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "family-gedcom": {
       "name": "family-gedcom",
@@ -613,10 +634,13 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:84d1e19642cdacc020e3e55bec12715b3f39f1dc11f8a74c322ff02f6ef4e1d0"
       },
       "tier": "free",
-      "status": "planned"
+      "status": "planned",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/family-gedcom-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "feature-flags": {
       "name": "feature-flags",
@@ -704,9 +728,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:bc98659bf188292a13f53feadc7a160304d2c03bfe758d3853942a88fc9e78de"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/feature-flags-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "github": {
       "name": "github",
@@ -901,7 +928,7 @@
         "commander"
       ],
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:f9b795ba1d78e5b7c3966cb8211847001b1a34289b8335d5f40cc21914f1d8f8"
       },
       "multiApp": {
         "supported": true,
@@ -909,12 +936,15 @@
         "pkStrategy": "composite",
         "defaultValue": "primary"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "github-runner": {
       "name": "github-runner",
       "version": "1.0.0",
-      "description": "GitHub Actions self-hosted runner. Registers your server with a GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
+      "description": "GitHub Actions self-hosted runner. Registers your server with a GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
       "author": "nself",
       "license": "MIT",
       "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
@@ -1008,13 +1038,16 @@
       ],
       "dependencies": [],
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:2aa3a41c94c97b8a495013d2acbb31a9d97528e31233a1603111fdee3dbcf929"
       },
       "multiApp": {
         "supported": false,
         "isolationColumn": "source_account_id"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-runner-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "invitations": {
       "name": "invitations",
@@ -1119,9 +1152,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:bfbc4def1e9123f547a42a08443c551c2bfb80f943f563b85f71cc49aa5ca0a5"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/invitations-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "jobs": {
       "name": "jobs",
@@ -1295,7 +1331,7 @@
         "dotenv"
       ],
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:c8a3494a8763df32f7578e87e5dc327a83a711fa7ebcf217fb401fee457b1b91"
       },
       "multiApp": {
         "supported": true,
@@ -1303,7 +1339,10 @@
         "pkStrategy": "single",
         "defaultValue": "primary"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/jobs-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "link-preview": {
       "name": "link-preview",
@@ -1459,9 +1498,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:bcddfbe7718b8dbd397eacdd1c0e5dc8f70b8f5ca80be074811865b0b0c762b3"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/link-preview-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "mdns": {
       "name": "mdns",
@@ -1552,9 +1594,12 @@
       },
       "views": [],
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:57d2485e136a0e28f092f6dba839bb0dc351d36a5e70ca07075f57d266674206"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mdns-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "mlflow": {
       "name": "mlflow",
@@ -1634,9 +1679,12 @@
         "isolationColumn": "source_account_id"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:c94b451d9f5cfd4b2560d32425a0b640d002f1818f2440971341a35c8f55bda8"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mlflow-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "monitoring": {
       "name": "monitoring",
@@ -1732,9 +1780,12 @@
         }
       ],
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:d26c1814bacd7ad4bf8cdc30b78e87e9f37074c12fe9474cb31c9a465efacdff"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitoring-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "notifications": {
       "name": "notifications",
@@ -1955,7 +2006,7 @@
         "dotenv"
       ],
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:771bc9c4a029b61672b3691a10abdd0bb81191da975debe689bab761e3bef83e"
       },
       "multiApp": {
         "supported": true,
@@ -1963,7 +2014,10 @@
         "pkStrategy": "single",
         "defaultValue": "primary"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notifications-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "notify": {
       "name": "notify",
@@ -2047,9 +2101,12 @@
         "isolationColumn": "source_account_id"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:2db0fc0700a879b6adc412a7dc81098d43b583ae9a7042a705483f9911df4248"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notify-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "paypal": {
       "name": "paypal",
@@ -2196,9 +2253,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:1310f7129da364e6fbf3a2a405fccab8709cef4f39bb66afb6974605df530a2d"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/paypal-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "search": {
       "name": "search",
@@ -2319,9 +2379,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:27e858342415eba523506ca482dea84ee4d6b55d8967eaa8ad99cd850d114b9e"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "shopify": {
       "name": "shopify",
@@ -2439,9 +2502,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:3548150e7d5728c7caf547222e18c278493178028405adea3d856d457fb57bc1"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/shopify-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "stripe": {
       "name": "stripe",
@@ -2612,9 +2678,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:754622c2dea89763e0f078ffb0c50aad3ff6003cb0fe77eb1b4ca842a356c8be"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/stripe-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "subtitle-manager": {
       "name": "subtitle-manager",
@@ -2727,7 +2796,13 @@
         "defaultValue": "primary"
       },
       "dependencies": [],
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/subtitle-manager-1.0.0.tar.gz",
+      "checksums": {
+        "sha256": "sha256:0253eae7c9a2bc823966d19bf5a05d151d0b7c33f923918a95f383d11ffc1f00"
+      },
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "tokens": {
       "name": "tokens",
@@ -2812,9 +2887,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:0592c9d98397cb51700d0a0ba33b5d055f84c5f5bad9c6e80e4c9bb05aea3ec6"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/tokens-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "torrent-manager": {
       "name": "torrent-manager",
@@ -2967,7 +3045,13 @@
         "defaultValue": "primary"
       },
       "dependencies": [],
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/torrent-manager-1.0.0.tar.gz",
+      "checksums": {
+        "sha256": "sha256:cd25a5072e05de6ef293b7a67af49620dec4e35319a42c0e46225cb6e0ac1959"
+      },
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "vpn": {
       "name": "vpn",
@@ -3129,7 +3213,13 @@
         "defaultValue": "primary"
       },
       "dependencies": [],
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/vpn-1.0.0.tar.gz",
+      "checksums": {
+        "sha256": "sha256:58b5578be7b887396fd4c4aea18e19299f8dc335f905a9ceb64a50fc6992e8d4"
+      },
+      "releaseTag": "v1.0.0",
+      "signature": ""
     },
     "webhooks": {
       "name": "webhooks",
@@ -3231,9 +3321,12 @@
         "defaultValue": "primary"
       },
       "checksums": {
-        "sha256": ""
+        "sha256": "sha256:cd099a005f6c7c4507c5fb75ea5c2b68e282564e7ad795b28c08bd4aebf5ab8a"
       },
-      "tier": "free"
+      "tier": "free",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/webhooks-1.0.0.tar.gz",
+      "releaseTag": "v1.0.0",
+      "signature": ""
     }
   },
   "categories": {

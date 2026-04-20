@@ -187,6 +187,19 @@
           "properties": {
             "sha256": { "type": "string" }
           }
+        },
+        "tarballUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the plugin tarball on the GitHub release"
+        },
+        "releaseTag": {
+          "type": "string",
+          "description": "Git tag of the release containing this tarball"
+        },
+        "signature": {
+          "type": "string",
+          "description": "Detached signature of the tarball (empty until signing infrastructure ships in v1.1.0)"
         }
       }
     },
