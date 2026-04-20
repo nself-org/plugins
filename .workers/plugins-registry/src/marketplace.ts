@@ -141,6 +141,13 @@ const CATEGORY_ICONS: Record<string, string> = {
 const KV_MARKETPLACE_CACHE = "marketplace:enriched";
 const MARKETPLACE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// Install tracking KV prefix
+// Key format: installs:{pluginName} → { count: number, lastUpdated: string }
+// Dedup key format: dedup:{instanceId}:{pluginName}:{week} — no value, used for existence check
+// Week format: YYYY-Www (ISO week number) for consistent 7-day dedup windows
+const KV_INSTALL_PREFIX = "installs:";
+const KV_DEDUP_PREFIX = "dedup:";
+
 // ---------------------------------------------------------------------------
 // MarketplaceEnv — alias for Env (RATINGS_KV is defined there)
 // ---------------------------------------------------------------------------
@@ -315,14 +322,19 @@ async function buildFullMarketplace(
   plugins: PluginEntry[],
   env: MarketplaceEnv,
 ): Promise<MarketplaceResponse> {
-  // Fetch all rating aggregates in parallel (one per plugin)
-  const aggregates = await Promise.all(
-    plugins.map((p) => readRatingAggregate(env, p.name)),
-  );
+  // Fetch all rating aggregates + install counts in parallel (one per plugin)
+  const [aggregates, installCounts] = await Promise.all([
+    Promise.all(plugins.map((p) => readRatingAggregate(env, p.name))),
+    Promise.all(plugins.map((p) => readInstallCount(env, p.name))),
+  ]);
 
   const cards: MarketplacePlugin[] = plugins.map((p, i) => {
     const agg = aggregates[i] ?? { rating: 0, reviewCount: 0, reviews: [] };
-    return buildCard(p, agg);
+    const card = buildCard(p, agg);
+    // Override downloads with real KV count (registry field may be 0 or stale)
+    const kvCount = installCounts[i] ?? 0;
+    if (kvCount > 0) card.downloads = kvCount;
+    return card;
   });
 
   const freeCount = cards.filter((c) => c.tier === "free").length;
@@ -557,4 +569,129 @@ export async function handlePostRating(
     rating: updated.rating,
     reviewCount: updated.reviewCount,
   };
+}
+
+// ---------------------------------------------------------------------------
+// GET /plugins/:name — install count helper
+// Returns the current install count for a plugin from KV.
+// Called by buildFullMarketplace so downloads field reflects real counts.
+// ---------------------------------------------------------------------------
+
+async function readInstallCount(
+  env: MarketplaceEnv,
+  pluginName: string,
+): Promise<number> {
+  const key = `${KV_INSTALL_PREFIX}${sanitisePluginName(pluginName)}`;
+  try {
+    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    return raw?.count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ISO week number for dedup (YYYY-Www format)
+// ---------------------------------------------------------------------------
+
+function isoWeek(date: Date): string {
+  // Algorithm per ISO 8601: week starts on Monday
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7; // make Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+// ---------------------------------------------------------------------------
+// POST /plugins/:name/install-event
+// Body: { instanceId: string }
+// instanceId MUST be an opaque hash (SHA-256 hex, no PII).
+// Dedup: (instanceId, pluginName, week) — same install in same week is no-op.
+// ---------------------------------------------------------------------------
+
+export interface InstallEventResult {
+  ok: boolean;
+  status: number;
+  error?: string;
+  name?: string;
+  downloads?: number;
+  incremented?: boolean;
+}
+
+export async function handleInstallEvent(
+  pluginName: string,
+  request: Request,
+  env: MarketplaceEnv,
+): Promise<InstallEventResult> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return { ok: false, status: 400, error: "Invalid JSON body" };
+  }
+
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "Body must be a JSON object" };
+  }
+
+  const raw = body as Record<string, unknown>;
+  const instanceId = raw["instanceId"];
+
+  // instanceId must be a 64-char hex string (SHA-256, no PII)
+  if (typeof instanceId !== "string" || !/^[0-9a-f]{64}$/.test(instanceId)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "instanceId must be a 64-character lowercase hex string (SHA-256 hash, no PII)",
+    };
+  }
+
+  const safePlugin = sanitisePluginName(pluginName);
+  if (!safePlugin) {
+    return { ok: false, status: 400, error: "Invalid plugin name" };
+  }
+
+  const week = isoWeek(new Date());
+  const dedupKey = `${KV_DEDUP_PREFIX}${instanceId}:${safePlugin}:${week}`;
+
+  // Check dedup — KV free tier: ~1K writes/day. Using presence check (get returns null on miss).
+  try {
+    const existing = await env.RATINGS_KV.get(dedupKey, "text");
+    if (existing !== null) {
+      // Already counted this week — no-op
+      const count = await readInstallCount(env, safePlugin);
+      return { ok: true, status: 200, name: pluginName, downloads: count, incremented: false };
+    }
+  } catch {
+    // KV read failure — safe to proceed (worst case we count twice, not miss)
+  }
+
+  // Increment counter
+  const countKey = `${KV_INSTALL_PREFIX}${safePlugin}`;
+  let newCount = 1;
+  try {
+    const current = await env.RATINGS_KV.get<{ count: number }>(countKey, "json");
+    newCount = (current?.count ?? 0) + 1;
+    await env.RATINGS_KV.put(countKey, JSON.stringify({ count: newCount, lastUpdated: new Date().toISOString() }));
+  } catch {
+    return { ok: false, status: 500, error: "Failed to update install count" };
+  }
+
+  // Write dedup key with 8-day TTL (covers full week + buffer)
+  try {
+    await env.RATINGS_KV.put(dedupKey, "1", { expirationTtl: 8 * 24 * 60 * 60 });
+  } catch {
+    // Best-effort dedup — not fatal
+  }
+
+  // Invalidate marketplace cache so next fetch reflects updated count
+  try {
+    await env.PLUGINS_KV.delete(KV_MARKETPLACE_CACHE);
+  } catch {
+    // Best-effort
+  }
+
+  return { ok: true, status: 200, name: pluginName, downloads: newCount, incremented: true };
 }

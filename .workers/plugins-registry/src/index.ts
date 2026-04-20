@@ -60,6 +60,7 @@ import {
   handleMarketplace,
   handleGetRating,
   handlePostRating,
+  handleInstallEvent,
 } from "./marketplace.ts";
 import type { MarketplaceEnv } from "./marketplace.ts";
 import { resolveApiVersion, addApiVersionHeader } from "./middleware/api-version.ts";
@@ -184,6 +185,25 @@ export default {
         return jsonResponse(result, 200, { "Cache-Control": "public, max-age=60" });
       }
 
+      // Marketplace — POST /plugins/:name/install-event (S68-T02)
+      // Silent fire-and-forget from CLI after successful plugin install.
+      // Body: { instanceId: string } — opaque SHA-256 hash, no PII.
+      if (method === "POST" && resolvedPath.startsWith("/plugins/") && resolvedPath.endsWith("/install-event")) {
+        const parts = resolvedPath.split("/").filter(Boolean);
+        // /plugins/:name/install-event → parts = ["plugins", name, "install-event"]
+        const pluginName = parts[1];
+        if (!pluginName) {
+          return jsonResponse({ error: "plugin name required" }, 400);
+        }
+        const result = await handleInstallEvent(pluginName, request, env as MarketplaceEnv);
+        return jsonResponse(
+          result.ok
+            ? { name: result.name, downloads: result.downloads, incremented: result.incremented }
+            : { error: result.error },
+          result.status,
+        );
+      }
+
       // Marketplace — POST /marketplace/ratings/:name
       if (method === "POST" && resolvedPath.startsWith("/marketplace/ratings/")) {
         const pluginName = resolvedPath.slice("/marketplace/ratings/".length);
@@ -234,6 +254,7 @@ export default {
             "GET /marketplace",
             "GET /marketplace/ratings/:name",
             "POST /marketplace/ratings/:name",
+            "POST /plugins/:name/install-event",
             "GET /stats",
             "POST /api/sync",
           ],
