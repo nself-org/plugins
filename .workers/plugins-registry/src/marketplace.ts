@@ -196,6 +196,12 @@ const MARKETPLACE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const KV_INSTALL_PREFIX = "installs:";
 const KV_DEDUP_PREFIX = "dedup:";
 
+// T-RATE-01: GET rate limit prefix
+// Key format: rl:get:{ip}:{windowMinute} → { count: number }
+// Default: 60 req/min per IP. Configurable via MARKETPLACE_GET_RATE_LIMIT env var.
+const KV_GET_RL_PREFIX = "rl:get:";
+const DEFAULT_GET_RATE_LIMIT = 60;
+
 // ---------------------------------------------------------------------------
 // MarketplaceEnv — alias for Env (RATINGS_KV is defined there)
 // ---------------------------------------------------------------------------
@@ -426,7 +432,7 @@ function diversify(plugins: MarketplacePlugin[]): MarketplacePlugin[] {
     // Count trailing consecutive same-bundle in result
     let consecutive = 0;
     for (let i = result.length - 1; i >= 0; i--) {
-      if (result[i]?.bundle && result[i].bundle === p.bundle) {
+      if (result[i]?.bundle && result[i]?.bundle === p.bundle) {
         consecutive++;
       } else {
         break;
@@ -561,6 +567,19 @@ export async function handleMarketplace(
 }
 
 // ---------------------------------------------------------------------------
+// T-RATE-01: GET rate limit check — exported for use in index.ts route handlers
+// Returns { limited: false } or { limited: true, retryAfter: N }
+// ---------------------------------------------------------------------------
+
+export async function checkGetRateLimit(
+  request: Request,
+  env: MarketplaceEnv,
+): Promise<{ limited: boolean; retryAfter: number }> {
+  const ip = getConnectingIP(request);
+  return isGetRateLimited(env, ip);
+}
+
+// ---------------------------------------------------------------------------
 // GET /marketplace/ratings/:name
 // ---------------------------------------------------------------------------
 
@@ -602,9 +621,54 @@ function getConnectingIP(request: Request): string {
   return request.headers.get("CF-Connecting-IP") ?? "unknown";
 }
 
-/** Rate-limit key: ip:<ip>:<windowKey> */
+/** Rate-limit key: ip:<ip>:<windowKey> (POST ratings) */
 function ipRateLimitKey(ip: string, windowMinute: string): string {
   return `rl:ip:${ip}:${windowMinute}`;
+}
+
+/** Rate-limit key for GET marketplace endpoints: rl:get:<ip>:<windowMinute> */
+function getIpRateLimitKey(ip: string, windowMinute: string): string {
+  return `${KV_GET_RL_PREFIX}${ip}:${windowMinute}`;
+}
+
+/**
+ * T-RATE-01: Check + increment IP rate limit for marketplace GET endpoints.
+ * Limit: MARKETPLACE_GET_RATE_LIMIT (default 60) requests per 60s window per IP.
+ * Returns { limited: true, retryAfter: N } when limit exceeded.
+ * Uses RATINGS_KV with 90s TTL to cover current + next minute window overlap.
+ */
+async function isGetRateLimited(
+  env: MarketplaceEnv,
+  ip: string,
+): Promise<{ limited: boolean; retryAfter: number }> {
+  const maxRequests = parseInt(env.MARKETPLACE_GET_RATE_LIMIT ?? String(DEFAULT_GET_RATE_LIMIT), 10);
+  const window = currentMinuteWindow();
+  const key = getIpRateLimitKey(ip, window);
+
+  let count = 0;
+  try {
+    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    count = raw?.count ?? 0;
+  } catch {
+    return { limited: false, retryAfter: 60 }; // KV read failure — allow through
+  }
+
+  if (count >= maxRequests) {
+    const now = new Date();
+    const nextMinute = new Date(now);
+    nextMinute.setSeconds(60 - now.getSeconds(), 0);
+    const retryAfter = Math.max(1, Math.ceil((nextMinute.getTime() - now.getTime()) / 1000));
+    return { limited: true, retryAfter };
+  }
+
+  // Increment counter with 90s TTL (covers window overlap)
+  try {
+    await env.RATINGS_KV.put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
+  } catch {
+    // Best-effort counter increment — not fatal
+  }
+
+  return { limited: false, retryAfter: 0 };
 }
 
 /** Current minute window (YYYY-MM-DDTHH:MM) */

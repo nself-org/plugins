@@ -87,6 +87,9 @@ export interface Env {
   // S67-T03: R2 plugin tarball CDN (primary; GitHub Releases = fallback on 5xx)
   PLUGIN_TARBALLS?: R2Bucket;
   R2_PUBLIC_DOMAIN?: string; // e.g. "pub-abc123.r2.dev" or custom domain
+  // T-RATE-01: GET rate limit config for marketplace endpoints
+  MARKETPLACE_GET_RATE_LIMIT?: string;    // default "60" req/min
+  MARKETPLACE_GET_RATE_WINDOW_MS?: string; // default "60000" ms
 }
 
 // ---------------------------------------------------------------------------

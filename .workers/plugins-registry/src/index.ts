@@ -61,6 +61,7 @@ import {
   handleGetRating,
   handlePostRating,
   handleInstallEvent,
+  checkGetRateLimit,
 } from "./marketplace.ts";
 import type { MarketplaceEnv } from "./marketplace.ts";
 import { resolveApiVersion, addApiVersionHeader } from "./middleware/api-version.ts";
@@ -177,6 +178,15 @@ export default {
 
       // Marketplace — GET /marketplace/ratings/:name (must appear before /marketplace)
       if (method === "GET" && resolvedPath.startsWith("/marketplace/ratings/")) {
+        // T-RATE-01: GET rate limit — 60 req/min per IP
+        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        if (rlGet.limited) {
+          return jsonResponse(
+            { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
+            429,
+            { "Retry-After": String(rlGet.retryAfter) },
+          );
+        }
         const pluginName = resolvedPath.slice("/marketplace/ratings/".length);
         if (!pluginName) {
           return jsonResponse({ error: "plugin name required" }, 400);
@@ -217,7 +227,7 @@ export default {
         if (result.status === 429) {
           // Extract Retry-After seconds from error message if present
           const match = (result.error ?? "").match(/Retry-After:\s*(\d+)s/);
-          extraHeaders["Retry-After"] = match ? match[1] : "60";
+          extraHeaders["Retry-After"] = match?.[1] ?? "60";
         }
 
         return jsonResponse(
@@ -231,6 +241,15 @@ export default {
 
       // Marketplace — GET /marketplace
       if (method === "GET" && resolvedPath === "/marketplace") {
+        // T-RATE-01: GET rate limit — 60 req/min per IP
+        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        if (rlGet.limited) {
+          return jsonResponse(
+            { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
+            429,
+            { "Retry-After": String(rlGet.retryAfter) },
+          );
+        }
         const { all, free, pro } = await fetchAllPlugins(env, ctx);
         const payload = await handleMarketplace(url, env as MarketplaceEnv, all, ctx);
         // Override stats counts with fresh registry counts for accuracy
