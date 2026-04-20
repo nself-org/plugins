@@ -39,10 +39,9 @@ func TestValidateWebhookURL_ExternalAllowed(t *testing.T) {
 	os.Unsetenv("WEBHOOK_ALLOW_PRIVATE_URLS")
 
 	// These hostnames resolve to public IPs; validation should pass.
-	// Note: we do not use real service webhook paths here to avoid triggering
-	// secret-scanning heuristics on CI.
+	// Use generic public HTTPS URLs to avoid triggering push-protection heuristics.
 	allowed := []string{
-		"https://hooks.slack.com/trigger/test-path",
+		"https://example.com/webhook/test-path",
 		"https://api.github.com/repos/example/example/issues",
 	}
 
