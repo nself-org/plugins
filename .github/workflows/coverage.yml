@@ -1,0 +1,102 @@
+name: Coverage Gate (free plugins)
+
+# S88b.T05: Coverage gate for free plugins repo.
+# Floor: 50% total across all Go plugins with existing tests.
+# Security-critical: webhooks/internal SSRF guard must be at 100%.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  COVERAGE_FLOOR: 50
+
+jobs:
+  coverage:
+    name: Go coverage gate (plugins)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run coverage for each Go plugin
+        run: |
+          total_stmts=0
+          covered_stmts=0
+          failed=0
+
+          for d in free/*/; do
+            if [ ! -f "$d/go.mod" ]; then
+              continue
+            fi
+            plugin=$(basename "$d")
+            profile="/tmp/cover_${plugin}.out"
+            echo "==> coverage: ${plugin}"
+            if ! ( cd "$d" && go test -coverprofile="$profile" -covermode=atomic ./... ) 2>/dev/null; then
+              echo "WARN: tests failed for ${plugin}" >&2
+              failed=1
+              continue
+            fi
+            if [ -f "$profile" ]; then
+              # Sum statement counts from profile.
+              stmts=$(awk 'NR>1 { t += $2; if ($3 > 0) c += $2 } END { print t " " c }' "$profile")
+              t=$(echo "$stmts" | awk '{print $1}')
+              c=$(echo "$stmts" | awk '{print $2}')
+              total_stmts=$((total_stmts + t))
+              covered_stmts=$((covered_stmts + c))
+            fi
+          done
+
+          if [ "$total_stmts" -eq 0 ]; then
+            echo "WARN: no statements found across all plugins — skipping floor check"
+            exit 0
+          fi
+
+          pct=$(awk -v c="$covered_stmts" -v t="$total_stmts" 'BEGIN { printf "%.1f", (c/t)*100 }')
+          echo "Aggregate coverage: ${pct}% (${covered_stmts}/${total_stmts} statements)"
+
+          result=$(awk -v pct="$pct" -v floor="$COVERAGE_FLOOR" 'BEGIN { print (pct+0 >= floor+0) ? "pass" : "fail" }')
+          if [ "$result" = "fail" ]; then
+            echo "FAIL: Coverage ${pct}% is below floor ${COVERAGE_FLOOR}% (S88b.T05)" >&2
+            exit 1
+          fi
+          echo "PASS: Coverage ${pct}% >= floor ${COVERAGE_FLOOR}%"
+          [ "$failed" -eq 0 ] || exit 1
+
+      - name: Enforce SSRF guard at 100% (webhooks plugin)
+        run: |
+          webhooks_dir="free/webhooks"
+          if [ ! -f "${webhooks_dir}/go.mod" ]; then
+            echo "WARN: webhooks plugin not found — skipping SSRF guard coverage check"
+            exit 0
+          fi
+          profile="/tmp/cover_webhooks.out"
+          ( cd "$webhooks_dir" && go test -coverprofile="$profile" -covermode=atomic ./... ) || {
+            echo "FAIL: webhooks plugin tests failed" >&2
+            exit 1
+          }
+          if [ ! -f "$profile" ]; then
+            echo "WARN: no coverage profile for webhooks"
+            exit 0
+          fi
+          not_100=$(go tool cover -func="$profile" 2>/dev/null | grep -v '^total:' | awk '{print $3}' | grep -v '100.0%' | grep -v '^$' | wc -l | tr -d ' ')
+          if [ "$not_100" -gt 0 ]; then
+            echo "FAIL: webhooks SSRF guard has ${not_100} function(s) below 100% coverage" >&2
+            go tool cover -func="$profile" | grep -v '100.0%' | grep -v '^total:'
+            exit 1
+          fi
+          echo "PASS: webhooks SSRF guard at 100% coverage"
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "### Plugin Coverage Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Floor: ${COVERAGE_FLOOR}%" >> "$GITHUB_STEP_SUMMARY"
+          echo "Security-critical: webhooks SSRF guard at 100% required" >> "$GITHUB_STEP_SUMMARY"
