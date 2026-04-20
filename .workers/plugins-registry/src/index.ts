@@ -211,11 +211,21 @@ export default {
           return jsonResponse({ error: "plugin name required" }, 400);
         }
         const result = await handlePostRating(pluginName, request, env as MarketplaceEnv);
+
+        // T05: Emit Retry-After header on all 429 responses
+        const extraHeaders: Record<string, string> = {};
+        if (result.status === 429) {
+          // Extract Retry-After seconds from error message if present
+          const match = (result.error ?? "").match(/Retry-After:\s*(\d+)s/);
+          extraHeaders["Retry-After"] = match ? match[1] : "60";
+        }
+
         return jsonResponse(
           result.ok
             ? { name: result.name, rating: result.rating, reviewCount: result.reviewCount }
             : { error: result.error },
           result.status,
+          extraHeaders,
         );
       }
 

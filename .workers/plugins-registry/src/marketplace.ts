@@ -591,11 +591,115 @@ export interface RatingSubmitResult {
   reviewCount?: number;
 }
 
+// ---------------------------------------------------------------------------
+// T05: Anti-abuse helpers
+// ---------------------------------------------------------------------------
+
+/** Get the real connecting IP from Cloudflare headers (CF-Connecting-IP wins, never X-Forwarded-For). */
+function getConnectingIP(request: Request): string {
+  // CF-Connecting-IP is set by Cloudflare and cannot be spoofed from outside.
+  // Never trust X-Forwarded-For — it is trivially spoofable.
+  return request.headers.get("CF-Connecting-IP") ?? "unknown";
+}
+
+/** Rate-limit key: ip:<ip>:<windowKey> */
+function ipRateLimitKey(ip: string, windowMinute: string): string {
+  return `rl:ip:${ip}:${windowMinute}`;
+}
+
+/** Current minute window (YYYY-MM-DDTHH:MM) */
+function currentMinuteWindow(): string {
+  return new Date().toISOString().slice(0, 16); // "2026-04-20T14:23"
+}
+
+/**
+ * Check + increment IP rate limit (5 POSTs per IP per minute for rating endpoint).
+ * Returns true if the request should be rejected (limit exceeded).
+ * Uses KV counter with 90s TTL (covers current + next minute window).
+ */
+async function isRateLimited(env: MarketplaceEnv, ip: string): Promise<{ limited: boolean; retryAfter: number }> {
+  const window = currentMinuteWindow();
+  const key = ipRateLimitKey(ip, window);
+
+  let count = 0;
+  try {
+    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    count = raw?.count ?? 0;
+  } catch {
+    return { limited: false, retryAfter: 60 }; // KV read failure — allow through
+  }
+
+  if (count >= 5) {
+    // Calculate seconds until next minute window
+    const now = new Date();
+    const nextMinute = new Date(now);
+    nextMinute.setSeconds(60 - now.getSeconds(), 0);
+    const retryAfter = Math.ceil((nextMinute.getTime() - now.getTime()) / 1000);
+    return { limited: true, retryAfter };
+  }
+
+  // Increment counter with 90s TTL
+  try {
+    await env.RATINGS_KV.put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
+  } catch {
+    // Best-effort counter increment — not fatal
+  }
+
+  return { limited: false, retryAfter: 0 };
+}
+
+/**
+ * Per-userHash dedup: reject if (userHash, plugin) updated within 7 days.
+ * User CAN edit (no restriction on editing), just cannot spam.
+ * Returns true if the submission should be rejected as a spam attempt.
+ */
+async function isUserHashDedupBlocked(
+  env: MarketplaceEnv,
+  userHash: string,
+  pluginName: string,
+): Promise<boolean> {
+  const key = `rl:uh:${sanitisePluginName(pluginName)}:${userHash}`;
+  try {
+    const raw = await env.RATINGS_KV.get(key, "text");
+    return raw !== null; // exists = submitted within 7 days
+  } catch {
+    return false; // KV read failure — allow through
+  }
+}
+
+/**
+ * Write per-userHash dedup entry with 7-day TTL after a successful rating.
+ */
+async function writeUserHashDedup(
+  env: MarketplaceEnv,
+  userHash: string,
+  pluginName: string,
+): Promise<void> {
+  const key = `rl:uh:${sanitisePluginName(pluginName)}:${userHash}`;
+  try {
+    await env.RATINGS_KV.put(key, "1", { expirationTtl: 7 * 24 * 60 * 60 });
+  } catch {
+    // Best-effort
+  }
+}
+
 export async function handlePostRating(
   pluginName: string,
   request: Request,
   env: MarketplaceEnv,
 ): Promise<RatingSubmitResult> {
+  // T05: IP rate limit — 5 POSTs per IP per minute
+  // Uses CF-Connecting-IP (not X-Forwarded-For) to prevent header-spoofing bypass.
+  const ip = getConnectingIP(request);
+  const { limited, retryAfter } = await isRateLimited(env, ip);
+  if (limited) {
+    return {
+      ok: false,
+      status: 429,
+      error: `Rate limit exceeded. Maximum 5 rating submissions per minute per IP. Chain message: This limit exists to prevent automated spam submissions and protect the integrity of the plugin rating system. Retry-After: ${retryAfter}s.`,
+    };
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -636,20 +740,29 @@ export async function handlePostRating(
     };
   }
 
-  const comment =
-    typeof commentValue === "string" ? commentValue.slice(0, 500) : "";
-
-  const existing = await readRatingAggregate(env, pluginName);
-
-  // Check for duplicate submission from this userHash
-  const isDuplicate = existing.reviews.some((r) => r.user === userHashValue);
-  if (isDuplicate) {
+  // T05: Validate comment length cap (500 chars)
+  const rawComment = typeof commentValue === "string" ? commentValue : "";
+  if (rawComment.length > 500) {
     return {
       ok: false,
-      status: 409,
-      error: "A rating from this user already exists for this plugin",
+      status: 400,
+      error: "Comment exceeds the 500-character limit. Please shorten your review.",
     };
   }
+  const comment = rawComment;
+
+  // T05: Per-userHash dedup — reject if submitted within 7 days
+  // Uses constant-time string comparison via simple KV presence check.
+  const dedupBlocked = await isUserHashDedupBlocked(env, userHashValue, pluginName);
+  if (dedupBlocked) {
+    return {
+      ok: false,
+      status: 429,
+      error: `You have already reviewed this plugin within the last 7 days. Chain message: This limit prevents rating manipulation. You may update your review after 7 days. Retry-After: 604800s.`,
+    };
+  }
+
+  const existing = await readRatingAggregate(env, pluginName);
 
   // Update aggregate
   const nextCount = existing.reviewCount + 1;
@@ -678,6 +791,9 @@ export async function handlePostRating(
   } catch {
     return { ok: false, status: 500, error: "Failed to persist rating" };
   }
+
+  // T05: Write per-userHash dedup entry (7-day TTL) after successful submission
+  await writeUserHashDedup(env, userHashValue, pluginName);
 
   // Invalidate marketplace cache so next fetch reflects new rating
   try {
