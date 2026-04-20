@@ -1,0 +1,174 @@
+name: Release Plugin Tarballs (Free)
+
+# Builds and uploads tarballs for all 27 free plugins to the GitHub release.
+# Triggers on tag push (v*) or manual dispatch with a tag override.
+# Idempotent: re-running skips assets already present on the release.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload to (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    name: Build + Upload Free Plugin Tarballs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Build tarballs for all free plugins (max 10 parallel)
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          DIST_DIR="dist"
+          mkdir -p "$DIST_DIR"
+
+          build_plugin() {
+            local plugin_dir="$1"
+            local plugin_name
+            plugin_name="$(basename "$plugin_dir")"
+            local tarball="${DIST_DIR}/${plugin_name}-${VERSION}.tar.gz"
+            local checksum_file="${tarball}.sha256"
+
+            if [ ! -f "${plugin_dir}/plugin.json" ]; then
+              echo "SKIP $plugin_name (no plugin.json)"
+              return
+            fi
+
+            tar -czf "$tarball" "$plugin_dir"
+            sha256=$(sha256sum "$tarball" | cut -d' ' -f1)
+            printf "%s  %s\n" "$sha256" "${plugin_name}-${VERSION}.tar.gz" > "$checksum_file"
+            echo "BUILT $plugin_name sha256:${sha256}"
+          }
+
+          export -f build_plugin
+          export DIST_DIR VERSION
+
+          # Process in batches of 10 (parallel) per risk guidance
+          mapfile -t PLUGIN_DIRS < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
+          echo "Found ${#PLUGIN_DIRS[@]} plugin directories"
+
+          BATCH_SIZE=10
+          for ((i=0; i < ${#PLUGIN_DIRS[@]}; i += BATCH_SIZE)); do
+            BATCH=("${PLUGIN_DIRS[@]:i:BATCH_SIZE}")
+            pids=()
+            for dir in "${BATCH[@]}"; do
+              build_plugin "$dir" &
+              pids+=($!)
+            done
+            for pid in "${pids[@]}"; do
+              wait "$pid"
+            done
+          done
+
+          echo "Built artifacts:"
+          ls -lh "$DIST_DIR"/*.tar.gz | wc -l
+          echo "tarball_count=$(ls dist/*.tar.gz 2>/dev/null | wc -l)" >> "$GITHUB_ENV"
+
+      - name: Verify all 27 free plugins have tarballs
+        run: |
+          EXPECTED=$(find free -maxdepth 1 -mindepth 1 -type d | wc -l)
+          ACTUAL=$(ls dist/*.tar.gz 2>/dev/null | wc -l)
+          echo "Expected: $EXPECTED, Built: $ACTUAL"
+          if [ "$ACTUAL" -lt "$EXPECTED" ]; then
+            echo "ERROR: Only $ACTUAL of $EXPECTED tarballs were built"
+            exit 1
+          fi
+
+      - name: Upload tarballs to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+
+          # Verify release exists; create stub if needed (workflow_dispatch case)
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG not found — creating stub release"
+            gh release create "$TAG" \
+              --repo "${{ github.repository }}" \
+              --title "nself Plugins $TAG" \
+              --notes "Plugin tarballs for $TAG" \
+              --draft=false \
+              --prerelease=false
+          fi
+
+          # Upload all tarballs and checksums (clobber = idempotent)
+          gh release upload "$TAG" \
+            dist/*.tar.gz \
+            dist/*.sha256 \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+          echo "Upload complete"
+
+      - name: Backfill checksums in registry.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          REPO="${{ github.repository }}"
+
+          # For each plugin tarball, update registry.json with checksum + tarball URL
+          for checksum_file in dist/*.sha256; do
+            tarball_name="$(basename "$checksum_file" .sha256)"
+            plugin_name="${tarball_name%-${VERSION}.tar.gz}"
+            sha256="$(cut -d' ' -f1 "$checksum_file")"
+            tarball_url="https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}"
+
+            jq --arg name "$plugin_name" \
+               --arg sha "sha256:${sha256}" \
+               --arg url "$tarball_url" \
+               --arg tag "$TAG" \
+               '(.plugins[$name].checksums.sha256) = $sha |
+                (.plugins[$name].tarballUrl) = $url |
+                (.plugins[$name].releaseTag) = $tag' \
+               registry.json > registry.tmp.json && mv registry.tmp.json registry.json
+          done
+
+          echo "registry.json updated"
+
+      - name: Commit updated registry.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add registry.json
+          git diff --staged --quiet || git commit -m "chore: backfill tarball checksums in registry.json for ${{ steps.tag.outputs.tag }}"
+          git push || true
+
+      - name: Verify upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          ASSET_COUNT=$(gh release view "$TAG" --repo "${{ github.repository }}" \
+            --json assets --jq '.assets | length')
+          echo "Total assets on release $TAG: $ASSET_COUNT"
+          # Minimum: 27 tarballs + 27 checksums = 54
+          if [ "$ASSET_COUNT" -lt 54 ]; then
+            echo "WARNING: Expected at least 54 assets, found $ASSET_COUNT"
+          else
+            echo "OK: $ASSET_COUNT assets verified on release"
+          fi
