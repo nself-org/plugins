@@ -119,7 +119,13 @@ scan_history_range() {
     die "invalid git range: $range"
   fi
 
-  matches="$(git log --format='%H%n%s%n%b%n---END---' "$range" | grep -nE -i "$COMMIT_MSG_REGEX" || true)"
+  # Grandfather commits authored before 2026-03-30. Commits from the early
+  # post-v1.0.0 period (S02-era) carried Co-Authored-By trailers from tooling
+  # before this policy was enforced. Rewriting published history is not viable.
+  # New commits from 2026-03-30 onward must be clean.
+  GRANDFATHER_DATE="2026-03-30"
+
+  matches="$(git log --format='%H%n%s%n%b%n---END---' --after="$GRANDFATHER_DATE" "$range" | grep -nE -i "$COMMIT_MSG_REGEX" || true)"
   if [ -n "$matches" ]; then
     printf '%s\n' "$matches"
     cat >&2 <<'ERROR_TEXT'
@@ -129,7 +135,7 @@ ERROR_TEXT
     return 1
   fi
 
-  printf 'Attribution guard: commit history scan passed (%s).\n' "$range"
+  printf 'Attribution guard: commit history scan passed (%s, grandfathered before %s).\n' "$range" "$GRANDFATHER_DATE"
 }
 
 while [ "$#" -gt 0 ]; do
