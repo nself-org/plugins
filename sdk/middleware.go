@@ -99,3 +99,43 @@ func Recovery(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// AllowedCallers enforces the inter-plugin X-Source-Plugin allowlist. When
+// StrictPluginAuth is true (the default in production), every inbound request
+// must carry an X-Source-Plugin header whose value is listed in
+// cfg.AllowedCallers. Missing or unauthorised callers receive 403. The 403
+// response body is intentionally terse to avoid leaking allowlist contents.
+//
+// In dev environments set STRICT_PLUGIN_AUTH=false to disable the check and
+// allow unrestricted local testing. Never disable in production.
+//
+// Wire this middleware after Recovery and before application handlers:
+//
+//	r.Use(sdk.Recovery, sdk.AllowedCallers(cfg), sdk.CORS, sdk.Logger)
+//
+// S43-T02.
+func AllowedCallers(cfg *Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !cfg.StrictPluginAuth {
+				// Dev bypass — no check applied.
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			caller := strings.TrimSpace(strings.ToLower(r.Header.Get("X-Source-Plugin")))
+			if caller == "" {
+				log.Printf("plugin-sdk: AllowedCallers: missing X-Source-Plugin header from %s %s", r.Method, r.URL.Path)
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			if !cfg.AllowedCallers[caller] {
+				log.Printf("plugin-sdk: AllowedCallers: caller %q not in allowlist for %s %s", caller, r.Method, r.URL.Path)
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

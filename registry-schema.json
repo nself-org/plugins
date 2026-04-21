@@ -71,6 +71,12 @@
           "type": "string",
           "description": "Minimum required nself version"
         },
+        "manifestVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Plugin manifest schema version. Default 1. Incremented when breaking manifest changes are introduced. Plugins at v1.0.9 all default to manifestVersion: 1 (S77-T07)."
+        },
         "category": {
           "type": "string",
           "description": "Plugin category identifier"
@@ -200,6 +206,27 @@
         "signature": {
           "type": "string",
           "description": "Detached signature of the tarball (empty until signing infrastructure ships in v1.1.0)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["experimental", "planned", "beta", "stable", "deprecated", "eol"],
+          "description": "Plugin lifecycle status (S58-T01). Absent defaults to stable for backwards compatibility."
+        },
+        "maxNselfVersion": {
+          "type": "string",
+          "description": "Last CLI version this plugin is compatible with. Empty means no upper bound. (S58-T06)"
+        },
+        "deprecation": {
+          "type": "object",
+          "description": "Required when status=deprecated (S58-T02).",
+          "required": ["announcedDate", "eolDate", "migrationGuide"],
+          "properties": {
+            "announcedDate": { "type": "string", "description": "ISO 8601 date of deprecation announcement." },
+            "eolDate": { "type": "string", "description": "ISO 8601 date when the plugin reaches end-of-life." },
+            "replacedBy": { "type": "string", "description": "Name of the replacement plugin (optional)." },
+            "migrationGuide": { "type": "string", "format": "uri", "description": "URL to migration guide." },
+            "migrationScript": { "type": "string", "description": "Repo-relative path to automated migration script (optional)." }
+          }
         }
       }
     },

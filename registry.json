@@ -13,7 +13,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "free/audit-log",
       "minNselfVersion": "1.0.0",
-      "category": "security",
+      "category": "compliance",
       "tags": [
         "audit",
         "security",
@@ -602,7 +602,7 @@
       "repository": "https://github.com/nself-org/plugins",
       "path": "free/family-gedcom",
       "minNselfVersion": "1.0.0",
-      "category": "social",
+      "category": "content",
       "tags": [
         "family",
         "genealogy",

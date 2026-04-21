@@ -17,7 +17,10 @@ type AuditEvent struct {
 	UserAgent       string         `json:"user_agent"`
 	Metadata        map[string]any `json:"metadata"`
 	Severity        string         `json:"severity"` // info | warning | critical
-	CreatedAt       time.Time      `json:"created_at"`
+	// Inter-plugin tracing columns (S43-T18). Both are empty for non-plugin events.
+	SourcePlugin string    `json:"source_plugin"` // plugin that made the call (X-Source-Plugin)
+	TargetPlugin string    `json:"target_plugin"` // plugin that received the call
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // IngestRequest is the JSON body accepted by POST /events.
@@ -32,6 +35,10 @@ type IngestRequest struct {
 	UserAgent       string         `json:"user_agent"`
 	Metadata        map[string]any `json:"metadata"`
 	Severity        string         `json:"severity"`
+	// Inter-plugin call attribution. SourcePlugin is auto-populated from
+	// X-Source-Plugin header when not explicitly set. S43-T18.
+	SourcePlugin string `json:"source_plugin,omitempty"`
+	TargetPlugin string `json:"target_plugin,omitempty"`
 }
 
 // ListResponse is the JSON envelope returned by GET /events.

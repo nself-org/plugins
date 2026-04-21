@@ -1,0 +1,80 @@
+name: License Gate
+
+# Blocks AGPL/SSPL transitive dependencies from entering the codebase.
+# plugins/ is MIT licensed — no AGPL/SSPL deps permitted.
+# S59-T09: license CI gate.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+env:
+  LICENSE_GATE_MODE: warn  # Change to "fail" after 2026-05-20 triage window
+
+jobs:
+  go-license-gate:
+    name: Go Dependency License Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      - name: Check Go dependency licenses
+        run: |
+          echo "=== License Gate: plugins/ ==="
+          ALLOWED="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0,Unlicense,CC0-1.0,LGPL-2.1,LGPL-3.0"
+
+          # Check each Go plugin that has a go.mod
+          FAILED=0
+          for gomod in $(find . -name go.mod -not -path '*/vendor/*' | head -20); do
+            dir=$(dirname "$gomod")
+            echo "Checking: $dir"
+            if ! (cd "$dir" && go-licenses check ./... --allowed_licenses="$ALLOWED" 2>&1); then
+              echo "FAIL: Disallowed license in $dir"
+              FAILED=1
+            fi
+          done
+
+          if [ $FAILED -ne 0 ]; then
+            if [ "$LICENSE_GATE_MODE" = "fail" ]; then
+              exit 1
+            else
+              echo "WARN-ONLY MODE: not failing PR (triage window active until 2026-05-20)"
+            fi
+          else
+            echo "PASS: All Go plugins have allowed licenses"
+          fi
+
+      - name: Generate THIRD_PARTY_LICENSES.md
+        if: github.event_name == 'release'
+        run: |
+          echo "# Third-Party Licenses — plugins/" > THIRD_PARTY_LICENSES.md
+          echo "" >> THIRD_PARTY_LICENSES.md
+          echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> THIRD_PARTY_LICENSES.md
+          for gomod in $(find . -name go.mod -not -path '*/vendor/*' | head -20); do
+            dir=$(dirname "$gomod")
+            echo "" >> THIRD_PARTY_LICENSES.md
+            echo "## Plugin: $dir" >> THIRD_PARTY_LICENSES.md
+            (cd "$dir" && go-licenses report ./... 2>/dev/null) >> THIRD_PARTY_LICENSES.md || true
+          done
+          echo "Generated THIRD_PARTY_LICENSES.md"
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            THIRD_PARTY_LICENSES.md --clobber || true

@@ -18,6 +18,7 @@
  *   GET /manifest.json                   — Flat CLI manifest for nself plugin outdated
  *   GET /marketplace                     — Enriched marketplace view
  *   GET /stats                           — Cache statistics
+ *   GET /.well-known/revoked-authors.json — Author CRL (S58-T09, polled daily by CLI)
  *   POST /api/sync                       — Force-refresh KV cache (GitHub Actions)
  *
  * KV keys:
@@ -25,6 +26,7 @@
  *   registry:pro       — pro registry  (timestamp envelope)
  *   registry:combined  — merged output (timestamp envelope)
  *   revocations:list   — JSON array of RevocationEntry
+ *   revocations:authors — JSON array of RevokedAuthorEntry (S58-T09)
  *   stats:global       — request counters
  *
  * Secrets (set via `wrangler secret put`):
@@ -51,13 +53,18 @@ import type {
   PluginEntry,
   PluginListResponse,
   KVEnvelope,
+  RevokedAuthorEntry,
+  RevokedAuthorListResponse,
 } from "./registry.ts";
 import {
   handleMarketplace,
   handleGetRating,
   handlePostRating,
+  handleInstallEvent,
+  checkGetRateLimit,
 } from "./marketplace.ts";
 import type { MarketplaceEnv } from "./marketplace.ts";
+import { resolveApiVersion, addApiVersionHeader } from "./middleware/api-version.ts";
 
 // ---------------------------------------------------------------------------
 // CORS helpers
@@ -100,51 +107,87 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
+    // API versioning — X-API-Version header (S77-T04)
+    // Missing header defaults to v1 forever (LTS commitment through 2027-04-17)
+    const { version: apiVersion, errorResponse: versionError } = resolveApiVersion(request);
+    if (versionError) {
+      return versionError;
+    }
+
+    // URL versioning: /v1/* → same as /* (unversioned stays v1 forever)
+    const effectivePath = path.startsWith("/v1/") ? path.slice(3) : path;
+
+    // For response headers, we'll add X-API-Version via addApiVersionHeader when building responses.
+    // The variable apiVersion is available throughout the handler.
+    void apiVersion; // suppress unused-variable warning until used in a future version
+    void addApiVersionHeader; // imported for use in future version routing
+
+    // resolvedPath is the canonical path after stripping /v1 prefix
+    const resolvedPath = effectivePath;
+
     try {
+      // Route matching uses resolvedPath (strips /v1 prefix if present)
       // Health
-      if (method === "GET" && path === "/health") {
+      if (method === "GET" && resolvedPath === "/health") {
         return handleHealth(env);
       }
 
       // Registry (legacy compat)
-      if (method === "GET" && (path === "/registry.json" || path === "/registry" || path === "/")) {
+      if (method === "GET" && (resolvedPath === "/registry.json" || resolvedPath === "/registry" || resolvedPath === "/")) {
         return handleRegistry(url, env, ctx);
       }
 
       // Plugin list — must appear before /plugins/:name to prevent shadowing
-      if (method === "GET" && path === "/plugins") {
+      // S67-T02: /registry/list is an alias with explicit 60s CF edge cache header
+      if (method === "GET" && (resolvedPath === "/plugins" || resolvedPath === "/registry/list")) {
         return handlePluginList(url, env, ctx);
       }
 
       // Revocations — must appear before /plugins/:name to prevent "revocations" being
       // treated as a plugin name
-      if (method === "GET" && path === "/plugins/revocations") {
+      if (method === "GET" && resolvedPath === "/plugins/revocations") {
         return handleRevocations(env);
       }
 
+      // S58-T09: Author CRL endpoint.
+      // CLI checks this on every plugin install and via daily cron.
+      // Append-only: once revoked, entries are never removed.
+      if (method === "GET" && resolvedPath === "/.well-known/revoked-authors.json") {
+        return handleRevokedAuthors(env);
+      }
+
       // Single plugin (and sub-resources: /tarball, /signature, /:version)
-      if (method === "GET" && path.startsWith("/plugins/")) {
-        return handlePlugin(path, env, ctx);
+      if (method === "GET" && resolvedPath.startsWith("/plugins/")) {
+        return handlePlugin(resolvedPath, env, ctx);
       }
 
       // Categories
-      if (method === "GET" && path === "/categories") {
+      if (method === "GET" && resolvedPath === "/categories") {
         return handleCategories(env, ctx);
       }
 
       // Manifest (CLI compat)
-      if (method === "GET" && path === "/manifest.json") {
+      if (method === "GET" && resolvedPath === "/manifest.json") {
         return handleManifest(env, ctx);
       }
 
       // Stats
-      if (method === "GET" && path === "/stats") {
+      if (method === "GET" && resolvedPath === "/stats") {
         return handleStats(env);
       }
 
       // Marketplace — GET /marketplace/ratings/:name (must appear before /marketplace)
-      if (method === "GET" && path.startsWith("/marketplace/ratings/")) {
-        const pluginName = path.slice("/marketplace/ratings/".length);
+      if (method === "GET" && resolvedPath.startsWith("/marketplace/ratings/")) {
+        // T-RATE-01: GET rate limit — 60 req/min per IP
+        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        if (rlGet.limited) {
+          return jsonResponse(
+            { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
+            429,
+            { "Retry-After": String(rlGet.retryAfter) },
+          );
+        }
+        const pluginName = resolvedPath.slice("/marketplace/ratings/".length);
         if (!pluginName) {
           return jsonResponse({ error: "plugin name required" }, 400);
         }
@@ -152,23 +195,61 @@ export default {
         return jsonResponse(result, 200, { "Cache-Control": "public, max-age=60" });
       }
 
-      // Marketplace — POST /marketplace/ratings/:name
-      if (method === "POST" && path.startsWith("/marketplace/ratings/")) {
-        const pluginName = path.slice("/marketplace/ratings/".length);
+      // Marketplace — POST /plugins/:name/install-event (S68-T02)
+      // Silent fire-and-forget from CLI after successful plugin install.
+      // Body: { instanceId: string } — opaque SHA-256 hash, no PII.
+      if (method === "POST" && resolvedPath.startsWith("/plugins/") && resolvedPath.endsWith("/install-event")) {
+        const parts = resolvedPath.split("/").filter(Boolean);
+        // /plugins/:name/install-event → parts = ["plugins", name, "install-event"]
+        const pluginName = parts[1];
         if (!pluginName) {
           return jsonResponse({ error: "plugin name required" }, 400);
         }
-        const result = await handlePostRating(pluginName, request, env as MarketplaceEnv);
+        const result = await handleInstallEvent(pluginName, request, env as MarketplaceEnv);
         return jsonResponse(
           result.ok
-            ? { name: result.name, rating: result.rating, reviewCount: result.reviewCount }
+            ? { name: result.name, downloads: result.downloads, incremented: result.incremented }
             : { error: result.error },
           result.status,
         );
       }
 
+      // Marketplace — POST /marketplace/ratings/:name
+      if (method === "POST" && resolvedPath.startsWith("/marketplace/ratings/")) {
+        const pluginName = resolvedPath.slice("/marketplace/ratings/".length);
+        if (!pluginName) {
+          return jsonResponse({ error: "plugin name required" }, 400);
+        }
+        const result = await handlePostRating(pluginName, request, env as MarketplaceEnv);
+
+        // T05: Emit Retry-After header on all 429 responses
+        const extraHeaders: Record<string, string> = {};
+        if (result.status === 429) {
+          // Extract Retry-After seconds from error message if present
+          const match = (result.error ?? "").match(/Retry-After:\s*(\d+)s/);
+          extraHeaders["Retry-After"] = match?.[1] ?? "60";
+        }
+
+        return jsonResponse(
+          result.ok
+            ? { name: result.name, rating: result.rating, reviewCount: result.reviewCount }
+            : { error: result.error },
+          result.status,
+          extraHeaders,
+        );
+      }
+
       // Marketplace — GET /marketplace
-      if (method === "GET" && path === "/marketplace") {
+      if (method === "GET" && resolvedPath === "/marketplace") {
+        // T-RATE-01: GET rate limit — 60 req/min per IP
+        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        if (rlGet.limited) {
+          return jsonResponse(
+            { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
+            429,
+            { "Retry-After": String(rlGet.retryAfter) },
+          );
+        }
         const { all, free, pro } = await fetchAllPlugins(env, ctx);
         const payload = await handleMarketplace(url, env as MarketplaceEnv, all, ctx);
         // Override stats counts with fresh registry counts for accuracy
@@ -181,7 +262,7 @@ export default {
       }
 
       // Sync webhook
-      if (method === "POST" && path === "/api/sync") {
+      if (method === "POST" && resolvedPath === "/api/sync") {
         return handleSync(request, env, ctx);
       }
 
@@ -202,6 +283,7 @@ export default {
             "GET /marketplace",
             "GET /marketplace/ratings/:name",
             "POST /marketplace/ratings/:name",
+            "POST /plugins/:name/install-event",
             "GET /stats",
             "POST /api/sync",
           ],
@@ -260,8 +342,9 @@ async function handlePluginList(url: URL, env: Env, ctx: ExecutionContext): Prom
     generatedAt: new Date().toISOString(),
   };
 
+  // S67-T02: emit s-maxage for CF edge cache (60s TTL, 300s stale-while-revalidate)
   return jsonResponse(response, 200, {
-    "Cache-Control": `public, max-age=${ttl}`,
+    "Cache-Control": `public, s-maxage=60, stale-while-revalidate=300, max-age=${ttl}`,
   });
 }
 
@@ -316,7 +399,12 @@ async function handlePlugin(path: string, env: Env, ctx: ExecutionContext): Prom
 }
 
 // ---------------------------------------------------------------------------
-// GET /plugins/:name/tarball — 302 redirect with optional X-Signature header
+// GET /plugins/:name/tarball — 302 to R2 (primary) or GitHub Releases (fallback)
+//
+// S67-T03: R2 bucket `nself-plugin-tarballs` is the primary CDN (free egress).
+// Worker checks R2 object existence via HEAD before redirecting.
+// Falls back to GitHub Releases on R2 not-found or any R2 error.
+// Pro plugins always use the ping_api gated download — never this path.
 // ---------------------------------------------------------------------------
 
 async function handlePluginTarball(plugin: PluginEntry, env: Env): Promise<Response> {
@@ -328,13 +416,31 @@ async function handlePluginTarball(plugin: PluginEntry, env: Env): Promise<Respo
   }
 
   const repo = tier === "pro" ? "plugins-pro" : "plugins";
-  const tarballURL =
+  // GitHub Releases URL (canonical fallback, always valid)
+  const githubURL =
     `https://github.com/nself-org/${repo}/releases/download/v${version}/${name}-${version}.tar.gz`;
+
+  // S67-T03: R2 primary for free plugins only
+  let tarballURL = githubURL;
+  let tarballSource = "github";
+  if (tier !== "pro" && env.PLUGIN_TARBALLS && env.R2_PUBLIC_DOMAIN) {
+    const r2Key = `plugins/${name}/${name}-${version}.tar.gz`;
+    try {
+      const obj = await env.PLUGIN_TARBALLS.head(r2Key);
+      if (obj !== null) {
+        tarballURL = `https://${env.R2_PUBLIC_DOMAIN}/${r2Key}`;
+        tarballSource = "r2";
+      }
+    } catch {
+      // R2 unavailable or error — fall through to GitHub fallback
+    }
+  }
 
   const headers: Record<string, string> = {
     Location: tarballURL,
     "Access-Control-Allow-Origin": "*",
     "Cache-Control": "public, max-age=300",
+    "X-Tarball-Source": tarballSource,
   };
 
   if (env.SIGNING_PRIVATE_KEY) {
@@ -484,6 +590,51 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
     "Cache-Control": `public, max-age=${ttl}`,
     "X-Cache": "MISS",
   });
+}
+
+// ---------------------------------------------------------------------------
+// GET /.well-known/revoked-authors.json — Author Certificate Revocation List
+// (S58-T09)
+//
+// CLI checks this endpoint on every `nself plugin install` and via daily cron
+// to detect plugins whose author keys have been revoked (abuse, security
+// breach, license fraud). Short max-age (60 s) because revocations are
+// security-critical and must propagate quickly.
+//
+// KV key: revocations:authors  — JSON array of RevokedAuthorEntry
+// The list is append-only: once revoked, entries must never be deleted.
+// ---------------------------------------------------------------------------
+
+const KV_REVOKED_AUTHORS = "revocations:authors";
+
+async function handleRevokedAuthors(env: Env): Promise<Response> {
+  const kv = env.REGISTRY ?? env.PLUGINS_KV;
+  let revokedAuthors: RevokedAuthorEntry[] = [];
+
+  if (kv) {
+    try {
+      const raw = await kv.get(KV_REVOKED_AUTHORS, "text");
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          revokedAuthors = parsed as RevokedAuthorEntry[];
+        }
+      }
+    } catch {
+      // KV read failure — return empty list so CLI is not falsely blocked.
+      // Errors are surfaced via the /health endpoint instead.
+      revokedAuthors = [];
+    }
+  }
+
+  const body: RevokedAuthorListResponse = {
+    revokedAuthors,
+    fetchedAt: new Date().toISOString(),
+    count: revokedAuthors.length,
+  };
+
+  // Short TTL: revocations are security-critical. CLI must see them promptly.
+  return jsonResponse(body, 200, { "Cache-Control": "public, max-age=60" });
 }
 
 // ---------------------------------------------------------------------------

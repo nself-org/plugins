@@ -51,6 +51,24 @@ export interface RevocationListResponse {
   count: number;
 }
 
+// RevokedAuthorEntry — one entry in the author Certificate Revocation List. (S58-T09)
+// CLI checks this list on every plugin install and daily via cron.
+// Append-only: once an author is revoked, the entry must never be deleted.
+export interface RevokedAuthorEntry {
+  /** Plugin author identifier (matches plugin.json "author" field). */
+  authorKey: string;
+  /** ISO 8601 datetime of revocation. */
+  revokedAt: string;
+  /** Optional human-readable reason for revocation. */
+  reason?: string;
+}
+
+export interface RevokedAuthorListResponse {
+  revokedAuthors: RevokedAuthorEntry[];
+  fetchedAt: string;
+  count: number;
+}
+
 // ---------------------------------------------------------------------------
 // Worker environment bindings
 // ---------------------------------------------------------------------------
@@ -66,6 +84,12 @@ export interface Env {
   REGISTRY_VERSION?: string;
   GH_ACCESS_TOKEN?: string;
   GITHUB_SYNC_TOKEN?: string;
+  // S67-T03: R2 plugin tarball CDN (primary; GitHub Releases = fallback on 5xx)
+  PLUGIN_TARBALLS?: R2Bucket;
+  R2_PUBLIC_DOMAIN?: string; // e.g. "pub-abc123.r2.dev" or custom domain
+  // T-RATE-01: GET rate limit config for marketplace endpoints
+  MARKETPLACE_GET_RATE_LIMIT?: string;    // default "60" req/min
+  MARKETPLACE_GET_RATE_WINDOW_MS?: string; // default "60000" ms
 }
 
 // ---------------------------------------------------------------------------

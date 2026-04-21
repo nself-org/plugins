@@ -1,0 +1,59 @@
+name: Bug Report
+description: Something isn't working with a plugin
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, search [existing issues](https://github.com/nself-org/plugins/issues) and check [Discussions](https://github.com/nself-org/plugins/discussions).
+        For security issues, follow the process in [SECURITY.md](https://github.com/nself-org/plugins/blob/main/.github/SECURITY.md) — do not open a public issue.
+  - type: input
+    id: plugin_name
+    attributes:
+      label: Plugin name
+      placeholder: "e.g. stripe, notifications, webhooks"
+    validations:
+      required: true
+  - type: input
+    id: nself_version
+    attributes:
+      label: nSelf CLI version
+      placeholder: Run `nself version` and paste output
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux (Ubuntu/Debian)
+        - Linux (Other)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `nself plugin install ...`
+        2. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell

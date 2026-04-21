@@ -38,6 +38,15 @@ func main() {
 		log.Fatalf("feature-flags: schema init failed: %v", err)
 	}
 
+	// Wire up Redis pub/sub for <5s kill-switch propagation (optional).
+	// FF_REDIS_ADDR defaults to the nself Redis service address.
+	var pubsub *internal.PubSub
+	if redisAddr := os.Getenv("FF_REDIS_ADDR"); redisAddr != "" {
+		pubsub = internal.NewPubSub(redisAddr)
+	} else if redisAddr := os.Getenv("REDIS_URL"); redisAddr != "" {
+		pubsub = internal.NewPubSub(redisAddr)
+	}
+
 	srv := sdk.NewServer(port)
 	r := srv.Router()
 
@@ -46,7 +55,7 @@ func main() {
 	r.Use(sdk.Recovery)
 	r.Use(sdk.RequestID)
 
-	internal.RegisterRoutes(r, db)
+	internal.RegisterRoutes(r, db, pubsub)
 
 	log.Printf("feature-flags: starting on port %d", port)
 	if err := srv.ListenAndServe(); err != nil {

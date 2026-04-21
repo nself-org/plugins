@@ -10,10 +10,24 @@ compatibility_date = "2024-01-01"
 binding = "PLUGINS_KV"
 id = "fddaf7f451f54f82a7d3712ae92882ea"
 
+# S67-T03: R2 bucket for plugin tarballs (primary CDN, free egress)
+# Bucket name: nself-plugin-tarballs
+# Public domain set via R2_PUBLIC_DOMAIN var (e.g. pub-xxx.r2.dev or custom domain)
+[[r2_buckets]]
+binding = "PLUGIN_TARBALLS"
+bucket_name = "nself-plugin-tarballs"
+
 # Static environment variables
 [vars]
 CACHE_TTL        = "300"
 REGISTRY_VERSION = "2.0.0"
+# R2_PUBLIC_DOMAIN set per environment (override in production env below)
+# R2_PUBLIC_DOMAIN = "pub-xxx.r2.dev"  # placeholder — set real value in production
+
+# T-RATE-01: GET rate limits for marketplace endpoints (60 req/min per IP)
+# Raise via wrangler vars — no redeploy needed if using KV-based counter.
+MARKETPLACE_GET_RATE_LIMIT = "60"
+MARKETPLACE_GET_RATE_WINDOW_MS = "60000"
 
 # Secrets (set via wrangler secret put <NAME>):
 #   GH_ACCESS_TOKEN       — Fine-grained PAT with contents:read on nself-org/plugins-pro
@@ -29,9 +43,19 @@ route = { pattern = "plugins.nself.org/*", zone_id = "3b7a327cd8756c5c736f0bbdfa
 binding = "PLUGINS_KV"
 id      = "fddaf7f451f54f82a7d3712ae92882ea"
 
+[[env.production.r2_buckets]]
+binding     = "PLUGIN_TARBALLS"
+bucket_name = "nself-plugin-tarballs"
+
 [env.production.vars]
 CACHE_TTL        = "300"
 REGISTRY_VERSION = "2.0.0"
+# R2_PUBLIC_DOMAIN: set via `wrangler secret put R2_PUBLIC_DOMAIN --env production`
+# Use the Cloudflare R2 public bucket URL or a custom domain pointed at the bucket.
+
+# T-RATE-01: GET rate limits for marketplace endpoints (60 req/min per IP)
+MARKETPLACE_GET_RATE_LIMIT = "60"
+MARKETPLACE_GET_RATE_WINDOW_MS = "60000"
 
 # Development settings
 [dev]
