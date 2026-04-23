@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	sharedaudit "github.com/nself-org/nself-shared-audit"
 	"github.com/nself-org/plugins/free/audit-log/internal"
 	sdk "github.com/nself-org/plugin-sdk"
 )
@@ -59,7 +60,11 @@ func main() {
 	// We build the router directly (rather than via sdk.NewServer) so that
 	// our plugin-level /health handler — which checks DB connectivity — takes
 	// precedence over the SDK's generic one.
-	internal.RegisterRoutes(r, pool, secret, adminSecret)
+	//
+	// SP-38.Q02: construct the shared audit writer so POST /events also writes
+	// to np_audit_log (unified table).
+	sharedWriter := sharedaudit.NewPgxWriter(pool)
+	internal.RegisterRoutes(r, pool, secret, adminSecret, sharedWriter)
 
 	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

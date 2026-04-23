@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	sharedaudit "github.com/nself-org/nself-shared-audit"
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
@@ -23,10 +24,13 @@ import (
 //     /admin/events which accepts either X-Plugin-Secret or X-Hasura-Admin-Secret.
 //   - adminSecret is the value of HASURA_GRAPHQL_ADMIN_SECRET; when non-empty
 //     GET /admin/events also accepts requests carrying this header.
-func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, secret, adminSecret string) {
+//   - sharedWriter is the shared audit writer (SP-38.Q02). New writes go to
+//     np_audit_log in addition to the legacy np_auditlog_events table. Pass nil
+//     to write only to the legacy table (backward-compatible).
+func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, secret, adminSecret string, sharedWriter sharedaudit.AuditWriter) {
 	r.Get("/health", handleHealth(pool))
 
-	r.Post("/events", handleIngest(pool, secret))
+	r.Post("/events", handleIngest(pool, secret, sharedWriter))
 	r.Get("/events", handleList(pool, secret))
 	r.Get("/events/{id}", handleGet(pool, secret))
 	r.Get("/events/export", handleExport(pool, secret))
@@ -65,7 +69,11 @@ func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
 // handleIngest handles POST /events.
 // This endpoint is for internal use only (e.g. other plugins, the CLI, Admin).
 // All requests must include a matching X-Plugin-Secret header.
-func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
+//
+// SP-38.Q02: when sharedWriter is non-nil, each ingested event is also written
+// to np_audit_log via the shared writer (fire-and-forget; legacy write still
+// proceeds regardless of shared-write outcome).
+func handleIngest(pool *pgxpool.Pool, secret string, sharedWriter sharedaudit.AuditWriter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Always authenticate internal callers.
 		provided := r.Header.Get("X-Plugin-Secret")
@@ -118,13 +126,6 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 			req.Metadata = map[string]any{}
 		}
 
-		// Auto-populate source_plugin from X-Source-Plugin header when the
-		// ingest request doesn't set it explicitly. S43-T18.
-		sourcePlugin := req.SourcePlugin
-		if sourcePlugin == "" {
-			sourcePlugin = strings.ToLower(strings.TrimSpace(r.Header.Get("X-Source-Plugin")))
-		}
-
 		event := &AuditEvent{
 			ID:              uuid.New().String(),
 			SourceAccountID: req.SourceAccountID,
@@ -137,8 +138,6 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 			UserAgent:       req.UserAgent,
 			Metadata:        req.Metadata,
 			Severity:        req.Severity,
-			SourcePlugin:    sourcePlugin,
-			TargetPlugin:    req.TargetPlugin,
 			CreatedAt:       time.Now().UTC(),
 		}
 
@@ -157,6 +156,22 @@ func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 		if err := InsertEvent(ctx, pool, event); err != nil {
 			sdk.Respond(w, http.StatusInternalServerError, map[string]string{"error": "failed to store event: " + err.Error()})
 			return
+		}
+
+		// SP-38.Q02: dual-write to unified np_audit_log (fire-and-forget).
+		if sharedWriter != nil {
+			_ = sharedWriter.Emit(r.Context(), sharedaudit.Event{
+				EventType:     event.EventType,
+				ResourceType:  event.ResourceType,
+				ResourceID:    event.ResourceID,
+				ActorAccountID: event.ActorUserID,
+				ActorPlugin:   "audit-log",
+				EventData:     event.Metadata,
+				IP:            event.IPAddress,
+				UserAgent:     event.UserAgent,
+				OccurredAt:    event.CreatedAt,
+				Success:       true,
+			})
 		}
 
 		sdk.Respond(w, http.StatusCreated, event)
@@ -379,8 +394,7 @@ func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 		cw.Write([]string{
 			"id", "source_account_id", "actor_user_id", "actor_type",
 			"event_type", "resource_type", "resource_id",
-			"ip_address", "user_agent", "severity",
-			"source_plugin", "target_plugin", "created_at",
+			"ip_address", "user_agent", "severity", "created_at",
 		})
 
 		for _, e := range events {
@@ -395,8 +409,6 @@ func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 				e.IPAddress,
 				e.UserAgent,
 				e.Severity,
-				e.SourcePlugin,
-				e.TargetPlugin,
 				e.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
