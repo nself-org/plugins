@@ -1,0 +1,26 @@
+groups:
+  - name: disk
+    rules:
+      - alert: DiskUsageHigh
+        expr: |
+          (node_filesystem_size_bytes{fstype!="tmpfs",mountpoint="/"} - node_filesystem_free_bytes{fstype!="tmpfs",mountpoint="/"})
+          / node_filesystem_size_bytes{fstype!="tmpfs",mountpoint="/"}
+          * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 80% on {{ $labels.instance }}"
+          description: "Root filesystem is {{ printf \"%.1f\" $value }}% full. Free space is running low."
+
+      - alert: DiskUsageCritical
+        expr: |
+          (node_filesystem_size_bytes{fstype!="tmpfs",mountpoint="/"} - node_filesystem_free_bytes{fstype!="tmpfs",mountpoint="/"})
+          / node_filesystem_size_bytes{fstype!="tmpfs",mountpoint="/"}
+          * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage above 90% on {{ $labels.instance }}"
+          description: "Root filesystem is {{ printf \"%.1f\" $value }}% full. Immediate action required."
