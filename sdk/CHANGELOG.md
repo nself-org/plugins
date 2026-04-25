@@ -38,3 +38,13 @@ Initial public release. Extracted from nSelf private plugin infrastructure.
 - Zero dependencies on `plugins-pro` private code.
 
 [0.1.0]: https://github.com/nself-org/cli/sdk/go/releases/tag/v0.1.0
+
+
+## [0.1.1] - 2026-04-25
+
+### Fixed
+- **`CheckCLICompat`**: updated minimum compatible CLI version constant to `v1.0.12`.
+- **`registry` package**: plugin registry endpoint defaulted to `plugins.nself.org` — now validates TLS cert fingerprint on first connection.
+
+### Changed
+- SPORT F01 plugin count updated to 25 free + 87 paid (87 confirmed via plugins-pro schema validator run in P96).
