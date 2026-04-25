@@ -1,0 +1,83 @@
+{
+  "name": "rotation",
+  "version": "1.0.0",
+  "description": "Secret rotation scheduler. Cron-triggered rotation jobs with dual-key overlap windows, health verification, rollback on failure, and operator notification.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.0.9",
+  "category": "infrastructure",
+  "language": "go",
+  "tags": [
+    "secrets",
+    "rotation",
+    "security",
+    "scheduler",
+    "compliance"
+  ],
+  "tables": [
+    "np_secret_rotation_schedules",
+    "np_secret_rotation_events"
+  ],
+  "dependencies": ["cron"],
+  "optionalDependencies": ["notify"],
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "NSELF_SECRET_ROTATION"
+    ],
+    "optional": [
+      "PORT",
+      "NSELF_SECRET_ROTATION_NOTIFY_EMAIL",
+      "NSELF_SECRET_ROTATION_NOTIFY_WEBHOOK",
+      "NSELF_SECRET_ROTATION_DRY_RUN"
+    ]
+  },
+  "config": {
+    "defaultPort": 3061,
+    "enabled": true,
+    "dryRun": false
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": [
+      ".secrets/"
+    ]
+  },
+  "port": 3061,
+  "status": "stable",
+  "binary_name": "nself-rotation",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 32,
+  "systemd_after": "network.target",
+  "tier": "free",
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  }
+}

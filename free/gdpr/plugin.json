@@ -1,0 +1,83 @@
+{
+  "name": "gdpr",
+  "version": "1.0.0",
+  "description": "GDPR data portability (Art. 20) and right-to-erasure (Art. 17) for nSelf instances. Provides cascading export and delete across all plugin-registered tables with an append-only audit trail.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.0.9",
+  "category": "compliance",
+  "language": "go",
+  "tags": [
+    "gdpr",
+    "compliance",
+    "privacy",
+    "data-export",
+    "erasure",
+    "eu"
+  ],
+  "tables": [
+    "np_gdpr_requests",
+    "np_gdpr_plugin_registry"
+  ],
+  "dependencies": [],
+  "optionalDependencies": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "PLUGIN_INTERNAL_SECRET"
+    ],
+    "optional": [
+      "PORT",
+      "HASURA_GRAPHQL_ADMIN_SECRET",
+      "NSELF_GDPR_EXPORT_BUCKET",
+      "NSELF_GDPR_EXPORT_TTL",
+      "NSELF_GDPR_DEADLINE_DAYS",
+      "NSELF_GDPR_DEADLINE_ENFORCE",
+      "NSELF_GDPR_NOTIFY_EMAIL",
+      "NSELF_GDPR_TENANT_DELETE"
+    ]
+  },
+  "config": {
+    "defaultPort": 3319
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "network": [
+      "inbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3319,
+  "status": "stable",
+  "binary_name": "gdpr",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "free"
+}

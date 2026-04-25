@@ -10,13 +10,26 @@ route:
 
 receivers:
   - name: "default"
-    # Configure your alert receivers here. Examples:
-    #
-    # Webhook:
-    #   webhook_configs:
-    #     - url: "http://your-webhook-endpoint:5001/alerts"
-    #
-    # Email:
+    # H03 #179: Slack alerts for cost + runbook triggers.
+    # Set SLACK_WEBHOOK_URL in .env.prod to enable.
+    # Template variables are expanded by Alertmanager at runtime.
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"
+        channel: "${SLACK_ALERT_CHANNEL:-#nself-alerts}"
+        send_resolved: true
+        title: '[{{ "{{" }} .Status | toUpper {{ "}}" }}] {{ "{{" }} .CommonAnnotations.summary {{ "}}" }}'
+        text: >-
+          {{ "{{" }} range .Alerts {{ "}}" }}
+          *Alert:* {{ "{{" }} .Annotations.summary {{ "}}" }}
+          *Description:* {{ "{{" }} .Annotations.description {{ "}}" }}
+          {{ "{{" }} if .Annotations.runbook {{ "}}" }}*Runbook:* `{{ "{{" }} .Annotations.runbook {{ "}}" }}`{{ "{{" }} end {{ "}}" }}
+          {{ "{{" }} end {{ "}}" }}
+    # H03 #178: claw-ops runbook webhook - fires when alerts trigger.
+    # Set NSELF_CLAW_OPS_WEBHOOK_URL in .env.prod to enable auto-execution.
+    webhook_configs:
+      - url: "${NSELF_CLAW_OPS_WEBHOOK_URL:-http://127.0.0.1:8001/runbook/trigger}"
+        send_resolved: false
+    # Email (uncomment and configure to receive email alerts):
     #   email_configs:
     #     - to: "alerts@example.com"
     #       from: "alertmanager@example.com"

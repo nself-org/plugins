@@ -33,7 +33,10 @@ limits_config:
   allow_structured_metadata: false
   reject_old_samples: true
   reject_old_samples_max_age: 168h
-  retention_period: 168h
+  # H03 #174: 30-day log retention
+  retention_period: 720h
+  max_query_series: 10000
+  max_entries_limit_per_query: 50000
 
 compactor:
   working_directory: /loki/compactor
@@ -42,3 +45,16 @@ compactor:
   delete_request_cancel_period: 10m
   retention_delete_delay: 2h
   retention_delete_worker_count: 150
+  # H03 #174: shared_store required for retention
+  shared_store: filesystem
+
+# H03 #175: LogQL alert rules for error rate
+ruler:
+  alertmanager_url: http://alertmanager:9093
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  enable_api: true
+  enable_alertmanager_v2: true

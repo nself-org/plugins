@@ -3,7 +3,9 @@ package internal
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -25,13 +27,100 @@ type Metadata struct {
 	Type        string
 }
 
+// checkSSRF validates a URL against SSRF risks before fetching.
+// Blocks: non-http/https schemes, private/loopback/link-local IPs (RFC1918,
+// 169.254/16), internal hostnames (*.internal, *.local), and decimal IP notation.
+func checkSSRF(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	switch parsed.Scheme {
+	case "http", "https":
+		// ok
+	default:
+		return fmt.Errorf("scheme '%s' not allowed (only http/https)", parsed.Scheme)
+	}
+
+	host := parsed.Hostname()
+
+	// Block internal hostname suffixes
+	if strings.HasSuffix(host, ".internal") || strings.HasSuffix(host, ".local") {
+		return fmt.Errorf("host '%s' is an internal hostname", host)
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if isPrivateIP(ip) {
+			return fmt.Errorf("IP '%s' is in a private/loopback/link-local range", ip)
+		}
+	}
+
+	// DNS rebinding prevention: resolve and check all resulting IPs.
+	if net.ParseIP(host) == nil {
+		addrs, err := net.LookupHost(host)
+		if err == nil {
+			for _, addr := range addrs {
+				if ip := net.ParseIP(addr); ip != nil && isPrivateIP(ip) {
+					return fmt.Errorf("hostname '%s' resolves to blocked IP %s", host, addr)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// isPrivateIP returns true for loopback, private, link-local, and unspecified addresses.
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsUnspecified() || ip.IsLoopback() {
+		return true
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		// 10.0.0.0/8
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+		// 169.254.0.0/16 (link-local / cloud metadata)
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		return false
+	}
+	// IPv6 link-local fe80::/10
+	if ip[0] == 0xfe && (ip[1]&0xc0) == 0x80 {
+		return true
+	}
+	// IPv6 ULA fc00::/7
+	if (ip[0] & 0xfe) == 0xfc {
+		return true
+	}
+	return false
+}
+
 // ExtractMetadata fetches a URL and extracts metadata from the HTML.
+// Returns an error if the URL is blocked by SSRF protection.
 func ExtractMetadata(targetURL string) (*Metadata, error) {
+	if err := checkSSRF(targetURL); err != nil {
+		return nil, fmt.Errorf("SSRF check: %w", err)
+	}
+
 	client := &http.Client{
 		Timeout: fetchTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
+			}
+			// Validate redirect destinations too
+			if err := checkSSRF(req.URL.String()); err != nil {
+				return fmt.Errorf("redirect blocked: %w", err)
 			}
 			return nil
 		},

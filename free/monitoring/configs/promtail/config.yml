@@ -40,6 +40,18 @@ scrape_configs:
           env:
       - output:
           source: output
+      # H03 #174+#175: Extract structured JSON log fields into Loki labels
+      # Handles nSelf plugin JSON logs: {"level":"info","trace_id":"...","plugin":"ai",...}
+      - json:
+          expressions:
+            nself_level: level
+            nself_trace_id: trace_id
+            nself_plugin: plugin
+          source: output
+      - labels:
+          nself_level:
+          nself_trace_id:
+          nself_plugin:
 
   - job_name: system
     static_configs:

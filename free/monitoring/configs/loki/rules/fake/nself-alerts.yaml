@@ -1,0 +1,32 @@
+groups:
+  - name: nself_log_alerts
+    rules:
+      # H03 #175: Alert when error log rate > 10 errors/min across any plugin
+      - alert: HighErrorRate
+        expr: |
+          sum by (nself_plugin) (
+            rate({job="containerlogs", nself_level="error"}[1m])
+          ) * 60 > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate in plugin {{ $labels.nself_plugin }}"
+          description: >
+            Plugin {{ $labels.nself_plugin }} is logging {{ printf "%.0f" $value }}
+            errors/min (threshold: 10). Check Grafana Explore → Logs for trace details.
+          runbook: "nself runbook run high-error-rate"
+
+      # H03 #175: Alert when Loki disk usage is high
+      - alert: LokiDiskFull
+        expr: |
+          (
+            node_filesystem_size_bytes{mountpoint="/loki"} - node_filesystem_free_bytes{mountpoint="/loki"}
+          ) / node_filesystem_size_bytes{mountpoint="/loki"} > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki storage above 85%"
+          description: "Loki data directory is {{ printf \"%.0f\" $value }}% full. Retention or compaction may need tuning."
+          runbook: "nself runbook run loki-disk-full"

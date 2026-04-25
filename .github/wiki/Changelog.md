@@ -47,3 +47,10 @@ All MIT licensed. Install with `nself plugin install <name>`.
 - Added Codex/Claude GO-style private control-plane scaffolding for planning and QA governance.
 - Added plugin command reference matrices with explicit action/subcommand/option syntax in `/.wiki/commands/*`.
 - Clarified license/changelog placement policy (`LICENSE` at root, discoverability mirrors in wiki).
+
+## [1.0.10] - 2026-04-23 (Wave 5)
+
+### Changed
+
+- CI status badges added (R01-T06). All free plugin tests report status via `.github/workflows/badges.yml`.
+
