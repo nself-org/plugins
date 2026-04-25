@@ -1,19 +1,23 @@
 {
-  "$schema": "./registry-schema.json",
-  "version": "1.0.0",
-  "lastUpdated": "2026-04-19T00:00:00Z",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-04-25T18:04:18.501242Z",
+  "plugins_count": 27,
+  "last_updated": "2026-04-25",
+  "tier": "free",
+  "checksum_algorithm": "sha256",
+  "note": "nSelf Free Plugin Registry \u2014 27 MIT-licensed plugins.",
   "plugins": {
     "audit-log": {
-      "name": "audit-log",
       "version": "1.0.0",
       "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/audit-log",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/audit-log",
-      "minNselfVersion": "1.0.0",
       "category": "compliance",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/audit-log-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/audit-log/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "audit",
         "security",
@@ -21,65 +25,19 @@
         "logging",
         "events"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "cmd/audit-log",
-        "defaultPort": 3308
-      },
-      "tables": [
-        "np_auditlog_events"
-      ],
-      "webhooks": [],
-      "cliCommands": [],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PLUGIN_INTERNAL_SECRET",
-          "required": true,
-          "description": "Internal plugin secret"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "description": "Server port (default: 3308)"
-        },
-        {
-          "name": "HASURA_GRAPHQL_ADMIN_SECRET",
-          "required": false,
-          "description": "Hasura admin secret for metadata sync"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:d78a4daa699fba8b07a8c97a2bcc1a00ce5345b98043cda1ba3d2b97f2dde646"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/audit-log-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "backup": {
-      "name": "backup",
       "version": "1.0.0",
       "description": "PostgreSQL backup and restore automation with scheduling",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/backup",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/backup",
-      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/backup-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/backup/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "backup",
         "restore",
@@ -87,255 +45,56 @@
         "automation",
         "disaster-recovery"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "cmd/main",
-        "defaultPort": 3050
-      },
-      "tables": [
-        "np_backup_jobs",
-        "np_backup_schedules"
-      ],
-      "webhooks": [],
-      "cliCommands": [
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        },
-        {
-          "name": "server",
-          "description": "Start backup automation server"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "description": "Server port (default: 3050)"
-        },
-        {
-          "name": "BACKUP_STORAGE_PATH",
-          "required": false,
-          "description": "Path for storing backups"
-        },
-        {
-          "name": "BACKUP_PG_DUMP_PATH",
-          "required": false,
-          "description": "Path to pg_dump binary"
-        },
-        {
-          "name": "BACKUP_PG_RESTORE_PATH",
-          "required": false,
-          "description": "Path to pg_restore binary"
-        },
-        {
-          "name": "PLUGIN_INTERNAL_SECRET",
-          "required": false,
-          "description": "Internal plugin secret"
-        }
-      ],
-      "multiApp": {
-        "supported": false,
-        "isolationColumn": "source_account_id"
-      },
-      "checksums": {
-        "sha256": "sha256:f411d6fabb9908c592c49f431e03c83c7046022343eea925a16dd3130b616927"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/backup-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "content-acquisition": {
-      "name": "content-acquisition",
       "version": "1.0.0",
-      "description": "Automated content acquisition with RSS monitoring, release calendar, quality profiles, and download pipeline orchestration",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-acquisition",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/content-acquisition",
-      "minNselfVersion": "1.0.0",
+      "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
       "category": "media",
-      "tags": [
-        "content",
-        "acquisition",
-        "rss",
-        "automation",
-        "sonarr",
-        "radarr",
-        "pipeline"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-content-acquisition",
-        "defaultPort": 3202,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_contentacquisition_profiles",
-        "np_contentacquisition_acquisition_subscriptions",
-        "np_contentacquisition_rss_feeds",
-        "np_contentacquisition_rss_feed_items",
-        "np_contentacquisition_release_calendar",
-        "np_contentacquisition_acquisition_queue",
-        "np_contentacquisition_acquisition_history",
-        "np_contentacquisition_acquisition_rules",
-        "np_ca_pipeline_runs"
-      ],
-      "views": [],
-      "webhooks": [
-        "acquisition.subscribed",
-        "acquisition.new_release_detected",
-        "acquisition.queued",
-        "acquisition.started",
-        "acquisition.completed",
-        "acquisition.failed"
-      ],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "CONTENT_ACQUISITION_PORT",
-          "description": "Server port (default: 3202)"
-        },
-        {
-          "name": "VPN_URL",
-          "description": "VPN plugin URL (default: http://localhost:3200)"
-        },
-        {
-          "name": "TORRENT_MANAGER_URL",
-          "description": "Torrent manager URL (default: http://localhost:3201)"
-        },
-        {
-          "name": "METADATA_ENRICHMENT_URL",
-          "description": "Metadata enrichment URL (default: http://localhost:3203)"
-        },
-        {
-          "name": "SUBTITLE_MANAGER_URL",
-          "description": "Subtitle manager URL (default: http://localhost:3204)"
-        },
-        {
-          "name": "RSS_CHECK_INTERVAL",
-          "description": "RSS check interval in minutes (default: 30)"
-        }
-      ],
-      "cliCommands": [
-        {
-          "name": "server",
-          "description": "Start the content acquisition server"
-        },
-        {
-          "name": "subscribe",
-          "description": "Add content subscription"
-        },
-        {
-          "name": "queue",
-          "description": "View acquisition queue"
-        },
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "POST",
-          "path": "/v1/subscriptions",
-          "description": "Create subscription"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/subscriptions",
-          "description": "List subscriptions"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/feeds",
-          "description": "Add RSS feed"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/feeds",
-          "description": "List feeds"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/queue",
-          "description": "Add to queue"
-        },
-        {
-          "method": "GET",
-          "path": "/v1/queue",
-          "description": "View queue"
-        },
-        {
-          "method": "POST",
-          "path": "/v1/profiles",
-          "description": "Create quality profile"
-        },
-        {
-          "method": "GET",
-          "path": "/api/pipeline",
-          "description": "List pipeline runs"
-        },
-        {
-          "method": "GET",
-          "path": "/api/pipeline/:id",
-          "description": "Get pipeline run status"
-        },
-        {
-          "method": "POST",
-          "path": "/api/pipeline/trigger",
-          "description": "Manually trigger pipeline"
-        },
-        {
-          "method": "POST",
-          "path": "/api/pipeline/retry/:id",
-          "description": "Retry failed pipeline"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "dependencies": [],
       "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-acquisition-1.0.0.tar.gz",
-      "checksums": {
-        "sha256": "sha256:e05aeb134e3a1de932d069ba69bd5e7876c0847c5045879052670fefdbbf9fd3"
-      },
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-acquisition-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/content-acquisition/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [],
+      "dependencies": {
+        "npm": [
+          "@nself/plugin-utils",
+          "fastify",
+          "@fastify/cors",
+          "@fastify/rate-limit",
+          "commander",
+          "feedparser",
+          "axios",
+          "node-cron",
+          "bullmq",
+          "ioredis",
+          "json-logic-js",
+          "pg",
+          "dotenv",
+          "uuid",
+          "winston",
+          "chalk",
+          "ora"
+        ]
+      }
     },
     "content-progress": {
-      "name": "content-progress",
       "version": "1.0.0",
       "description": "Track video, audio, and content playback progress with continue watching, watchlists, and favorites",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-progress",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/content-progress",
-      "minNselfVersion": "1.0.0",
       "category": "media",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-progress-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/content-progress/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "media",
         "video",
@@ -344,99 +103,22 @@
         "watchlist",
         "favorites"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-content-progress",
-        "defaultPort": 3022,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_progress_positions",
-        "np_progress_history",
-        "np_progress_watchlists",
-        "np_progress_favorites",
-        "np_progress_webhook_events"
-      ],
-      "webhooks": [
-        "progress.updated",
-        "progress.completed",
-        "watchlist.added",
-        "watchlist.removed",
-        "favorite.added",
-        "favorite.removed"
-      ],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "PROGRESS_PLUGIN_PORT",
-          "required": false,
-          "description": "Progress Plugin Port"
-        },
-        {
-          "name": "PROGRESS_COMPLETE_THRESHOLD",
-          "required": false,
-          "description": "Progress Complete Threshold"
-        },
-        {
-          "name": "PROGRESS_HISTORY_SAMPLE_SECONDS",
-          "required": false,
-          "description": "Progress History Sample Seconds"
-        },
-        {
-          "name": "PROGRESS_HISTORY_RETENTION_DAYS",
-          "required": false,
-          "description": "Progress History Retention Days"
-        },
-        {
-          "name": "PROGRESS_API_KEY",
-          "required": false,
-          "description": "Progress Api Key"
-        },
-        {
-          "name": "PROGRESS_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Progress Rate Limit Max"
-        },
-        {
-          "name": "PROGRESS_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Progress Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:b7b28ee2fcce6bfc6aa125ffae2f7d424268082ebdb1ac0f92d16e1eb4c37ad5"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-progress-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "cron": {
-      "name": "cron",
       "version": "1.0.0",
       "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/cron",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/cron",
-      "minNselfVersion": "0.9.9",
       "category": "automation",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/cron/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "cron",
         "scheduler",
@@ -444,64 +126,19 @@
         "automation",
         "webhooks"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "nself-cron",
-        "defaultPort": 3051
-      },
-      "tables": [
-        "np_cron_jobs",
-        "np_cron_runs"
-      ],
-      "webhooks": [],
-      "cliCommands": [],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "description": "Server port (default: 3051)"
-        },
-        {
-          "name": "CRON_TIMEOUT_SECS",
-          "required": false,
-          "description": "Job timeout in seconds"
-        },
-        {
-          "name": "CRON_RETENTION_DAYS",
-          "required": false,
-          "description": "Run history retention in days"
-        }
-      ],
-      "multiApp": {
-        "supported": false,
-        "isolationColumn": "source_account_id"
-      },
-      "checksums": {
-        "sha256": "sha256:b1d93f0087bca7d5ed5460ffc6510fa226782ed503b7495ec83a2cb46f1fb301"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "donorbox": {
-      "name": "donorbox",
       "version": "1.0.0",
       "description": "Donorbox donation data sync with webhook handling",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/donorbox",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/donorbox",
-      "minNselfVersion": "0.9.9",
       "category": "commerce",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/donorbox-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/donorbox/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "donations",
         "fundraising",
@@ -509,100 +146,19 @@
         "donorbox",
         "webhooks"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "donorbox",
-        "defaultPort": 3074
-      },
-      "tables": [
-        "np_donorbox_campaigns",
-        "np_donorbox_donors",
-        "np_donorbox_donations",
-        "np_donorbox_plans",
-        "np_donorbox_events",
-        "np_donorbox_tickets",
-        "np_donorbox_webhook_events"
-      ],
-      "webhooks": [
-        "donation.created"
-      ],
-      "cliCommands": [
-        {
-          "name": "sync",
-          "description": "Sync all Donorbox data to database"
-        },
-        {
-          "name": "reconcile",
-          "description": "Re-sync recent data to catch gaps from missed webhooks"
-        },
-        {
-          "name": "server",
-          "description": "Start the Donorbox plugin server"
-        },
-        {
-          "name": "status",
-          "description": "Show sync status and statistics"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "DONORBOX_API_KEY",
-          "required": true,
-          "description": "Donorbox API key"
-        },
-        {
-          "name": "DONORBOX_EMAIL",
-          "required": true,
-          "description": "Donorbox account email"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "description": "Server port (default: 3074)"
-        },
-        {
-          "name": "DONORBOX_WEBHOOK_SECRET",
-          "required": false,
-          "description": "Webhook signature secret"
-        },
-        {
-          "name": "PLUGIN_INTERNAL_SECRET",
-          "required": false,
-          "description": "Internal plugin secret"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:af82be735bc175331972a3af8e9926185f67ba212eb6c1cd89aafa5c80b5ea2c"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/donorbox-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "family-gedcom": {
-      "name": "family-gedcom",
       "version": "0.0.1",
-      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
-      "author": "nself",
+      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin \u2014 showcases the core + helper-importer pattern.",
+      "category": "social",
+      "tier": "free",
       "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/family-gedcom",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/family-gedcom",
-      "minNselfVersion": "1.0.0",
-      "category": "content",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v0.0.1/family-gedcom-0.0.1.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/family-gedcom/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "family",
         "genealogy",
@@ -610,49 +166,25 @@
         "migration",
         "importer"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "cmd/family-gedcom",
-        "defaultPort": 3108
-      },
-      "tables": [],
-      "webhooks": [],
-      "cliCommands": [],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:84d1e19642cdacc020e3e55bec12715b3f39f1dc11f8a74c322ff02f6ef4e1d0"
-      },
-      "tier": "free",
-      "status": "planned",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/family-gedcom-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "plugins": [
+          "family",
+          "object-storage",
+          "photos"
+        ]
+      }
     },
     "feature-flags": {
-      "name": "feature-flags",
       "version": "1.0.0",
       "description": "Feature flags service with targeting rules, segments, and evaluation engine",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/feature-flags",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/feature-flags",
-      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/feature-flags-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/feature-flags/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "feature-flags",
         "feature-toggles",
@@ -660,92 +192,22 @@
         "configuration",
         "infrastructure"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-feature-flags",
-        "defaultPort": 3305,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_flags_flags",
-        "np_flags_rules",
-        "np_flags_segments",
-        "np_flags_evaluations",
-        "np_flags_webhook_events"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "FF_PLUGIN_PORT",
-          "required": false,
-          "description": "Ff Plugin Port"
-        },
-        {
-          "name": "FF_EVALUATION_LOG_ENABLED",
-          "required": false,
-          "description": "Ff Evaluation Log Enabled"
-        },
-        {
-          "name": "FF_EVALUATION_LOG_SAMPLE_RATE",
-          "required": false,
-          "description": "Ff Evaluation Log Sample Rate"
-        },
-        {
-          "name": "FF_CACHE_TTL_SECONDS",
-          "required": false,
-          "description": "Ff Cache Ttl Seconds"
-        },
-        {
-          "name": "FF_API_KEY",
-          "required": false,
-          "description": "Ff Api Key"
-        },
-        {
-          "name": "FF_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Ff Rate Limit Max"
-        },
-        {
-          "name": "FF_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Ff Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:bc98659bf188292a13f53feadc7a160304d2c03bfe758d3853942a88fc9e78de"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/feature-flags-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "github": {
-      "name": "github",
       "version": "1.0.0",
       "description": "GitHub repository, issue, and workflow integration",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/github",
-      "minNselfVersion": "1.0.0",
       "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/github/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "github",
         "git",
@@ -754,204 +216,22 @@
         "issues",
         "pull-requests"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-github",
-        "defaultPort": 3002,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_github_organizations",
-        "np_github_repositories",
-        "np_github_branches",
-        "np_github_issues",
-        "np_github_pull_requests",
-        "np_github_pr_reviews",
-        "np_github_issue_comments",
-        "np_github_pr_review_comments",
-        "np_github_commit_comments",
-        "np_github_commits",
-        "np_github_releases",
-        "np_github_tags",
-        "np_github_milestones",
-        "np_github_labels",
-        "np_github_workflows",
-        "np_github_workflow_runs",
-        "np_github_workflow_jobs",
-        "np_github_check_suites",
-        "np_github_check_runs",
-        "np_github_deployments",
-        "np_github_teams",
-        "np_github_collaborators",
-        "np_github_webhook_events"
-      ],
-      "views": [
-        "github_open_items",
-        "github_recent_activity",
-        "github_workflow_stats"
-      ],
-      "webhooks": [
-        "push",
-        "pull_request",
-        "pull_request_review",
-        "issues",
-        "issue_comment",
-        "workflow_run",
-        "release",
-        "deployment",
-        "deployment_status",
-        "create",
-        "delete",
-        "repository"
-      ],
-      "cliCommands": [
-        {
-          "name": "sync",
-          "description": "Sync all GitHub data to database"
-        },
-        {
-          "name": "server",
-          "description": "Start the webhook server"
-        },
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        },
-        {
-          "name": "status",
-          "description": "Show sync status and statistics"
-        },
-        {
-          "name": "repos",
-          "description": "List repositories"
-        },
-        {
-          "name": "issues",
-          "description": "List issues"
-        },
-        {
-          "name": "prs",
-          "description": "List pull requests"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "POST",
-          "path": "/webhook",
-          "description": "GitHub webhook receiver"
-        },
-        {
-          "method": "POST",
-          "path": "/api/sync",
-          "description": "Trigger data sync"
-        },
-        {
-          "method": "GET",
-          "path": "/api/status",
-          "description": "Get sync status"
-        },
-        {
-          "method": "GET",
-          "path": "/api/repositories",
-          "description": "List repositories"
-        },
-        {
-          "method": "GET",
-          "path": "/api/issues",
-          "description": "List issues"
-        },
-        {
-          "method": "GET",
-          "path": "/api/pull-requests",
-          "description": "List pull requests"
-        },
-        {
-          "method": "GET",
-          "path": "/api/commits",
-          "description": "List commits"
-        },
-        {
-          "method": "GET",
-          "path": "/api/releases",
-          "description": "List releases"
-        }
-      ],
-      "envVars": [
-        {
-          "name": "GITHUB_TOKEN",
-          "required": true,
-          "description": "GitHub personal access token"
-        },
-        {
-          "name": "GITHUB_WEBHOOK_SECRET",
-          "required": false,
-          "description": "Webhook signing secret"
-        },
-        {
-          "name": "GITHUB_ORG",
-          "required": false,
-          "description": "GitHub organization to sync"
-        },
-        {
-          "name": "GITHUB_REPOS",
-          "required": false,
-          "description": "Comma-separated list of repos"
-        },
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "default": "3002",
-          "description": "Server port"
-        },
-        {
-          "name": "HOST",
-          "required": false,
-          "default": "0.0.0.0",
-          "description": "Server host"
-        }
-      ],
-      "dependencies": [
-        "pg",
-        "@octokit/rest",
-        "@octokit/webhooks",
-        "fastify",
-        "commander"
-      ],
-      "checksums": {
-        "sha256": "sha256:f9b795ba1d78e5b7c3966cb8211847001b1a34289b8335d5f40cc21914f1d8f8"
-      },
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "composite",
-        "defaultValue": "primary"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "github-runner": {
-      "name": "github-runner",
       "version": "1.0.0",
-      "description": "GitHub Actions self-hosted runner. Registers your server with a GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/github-runner",
-      "minNselfVersion": "1.0.0",
+      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
       "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-runner-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/github-runner/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "github",
         "ci",
@@ -961,105 +241,19 @@
         "self-hosted",
         "devops"
       ],
-      "implementation": {
-        "language": "bash",
-        "runtime": "bash",
-        "entryPoint": "install.sh"
-      },
-      "tables": [],
-      "webhooks": [],
-      "cliCommands": [
-        {
-          "name": "start",
-          "description": "Start the runner"
-        },
-        {
-          "name": "stop",
-          "description": "Stop the runner"
-        },
-        {
-          "name": "status",
-          "description": "Show runner status"
-        },
-        {
-          "name": "logs",
-          "description": "Tail runner logs"
-        },
-        {
-          "name": "update",
-          "description": "Update to latest runner version"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "GITHUB_RUNNER_PAT",
-          "required": true,
-          "description": "GitHub PAT with 'admin:org' scope"
-        },
-        {
-          "name": "GITHUB_RUNNER_ORG",
-          "required": true,
-          "description": "GitHub organization name"
-        },
-        {
-          "name": "GITHUB_RUNNER_NAME",
-          "required": false,
-          "default": "<hostname>-nself",
-          "description": "Runner display name"
-        },
-        {
-          "name": "GITHUB_RUNNER_LABELS",
-          "required": false,
-          "default": "self-hosted,linux,x64,ubuntu-latest",
-          "description": "Runner labels (include ubuntu-latest for drop-in compatibility)"
-        },
-        {
-          "name": "GITHUB_RUNNER_SCOPE",
-          "required": false,
-          "default": "org",
-          "description": "org or repo"
-        },
-        {
-          "name": "GITHUB_RUNNER_REPO",
-          "required": false,
-          "description": "Repo name (scope=repo only)"
-        },
-        {
-          "name": "GITHUB_RUNNER_GROUP",
-          "required": false,
-          "description": "Runner group (default: Default)"
-        },
-        {
-          "name": "GITHUB_RUNNER_VERSION",
-          "required": false,
-          "description": "Pin runner version (default: latest)"
-        }
-      ],
-      "dependencies": [],
-      "checksums": {
-        "sha256": "sha256:2aa3a41c94c97b8a495013d2acbb31a9d97528e31233a1603111fdee3dbcf929"
-      },
-      "multiApp": {
-        "supported": false,
-        "isolationColumn": "source_account_id"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-runner-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "invitations": {
-      "name": "invitations",
       "version": "1.0.0",
       "description": "Invitation management system with email/SMS delivery and tracking",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/invitations",
-      "minNselfVersion": "1.0.0",
       "category": "communication",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/invitations-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/invitations/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "invitations",
         "invite",
@@ -1068,454 +262,70 @@
         "sms",
         "referrals"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-invitations",
-        "defaultPort": 3402,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_invites_invitations",
-        "np_invites_templates",
-        "np_invites_bulk_sends",
-        "np_invites_webhook_events"
-      ],
-      "webhooks": [
-        "invitation.created",
-        "invitation.sent",
-        "invitation.delivered",
-        "invitation.accepted",
-        "invitation.declined",
-        "invitation.expired",
-        "invitation.revoked",
-        "bulk.started",
-        "bulk.completed",
-        "template.created",
-        "template.updated"
-      ],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "INVITATIONS_PLUGIN_PORT",
-          "required": false,
-          "description": "Invitations Plugin Port"
-        },
-        {
-          "name": "INVITATIONS_DEFAULT_EXPIRY_HOURS",
-          "required": false,
-          "description": "Invitations Default Expiry Hours"
-        },
-        {
-          "name": "INVITATIONS_CODE_LENGTH",
-          "required": false,
-          "description": "Invitations Code Length"
-        },
-        {
-          "name": "INVITATIONS_MAX_BULK_SIZE",
-          "required": false,
-          "description": "Invitations Max Bulk Size"
-        },
-        {
-          "name": "INVITATIONS_ACCEPT_URL_TEMPLATE",
-          "required": false,
-          "description": "Invitations Accept Url Template"
-        },
-        {
-          "name": "INVITATIONS_API_KEY",
-          "required": false,
-          "description": "Invitations Api Key"
-        },
-        {
-          "name": "INVITATIONS_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Invitations Rate Limit Max"
-        },
-        {
-          "name": "INVITATIONS_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Invitations Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:bfbc4def1e9123f547a42a08443c551c2bfb80f943f563b85f71cc49aa5ca0a5"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/invitations-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "jobs": {
-      "name": "jobs",
       "version": "1.0.0",
-      "description": "BullMQ background job queue with priorities, scheduling, retries, and BullBoard dashboard",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/jobs",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/jobs",
-      "minNselfVersion": "1.0.0",
+      "description": "PostgreSQL-backed background job queue with priorities, scheduling, retries, and REST API. Simplified Go implementation using database polling instead of Redis/BullMQ.",
       "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/jobs-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/jobs/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "jobs",
         "queue",
         "background",
-        "bullmq",
-        "worker",
-        "cron"
+        "scheduling",
+        "workers",
+        "postgresql"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-jobs",
-        "defaultPort": 3105,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_jobs_tasks",
-        "np_jobs_job_results",
-        "np_jobs_job_schedules",
-        "np_jobs_job_failures"
-      ],
-      "views": [
-        "jobs_active",
-        "jobs_failed_details",
-        "queue_stats",
-        "job_type_stats",
-        "recent_failures",
-        "scheduled_jobs_overview"
-      ],
-      "webhooks": [],
-      "cliCommands": [
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        },
-        {
-          "name": "server",
-          "description": "Start API + BullBoard dashboard"
-        },
-        {
-          "name": "worker",
-          "description": "Start job worker"
-        },
-        {
-          "name": "schedule",
-          "description": "Manage cron schedules"
-        },
-        {
-          "name": "retry",
-          "description": "Retry failed job"
-        },
-        {
-          "name": "stats",
-          "description": "Show queue statistics"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "GET",
-          "path": "/health",
-          "description": "Health check"
-        },
-        {
-          "method": "GET",
-          "path": "/dashboard",
-          "description": "BullBoard dashboard"
-        },
-        {
-          "method": "POST",
-          "path": "/api/jobs",
-          "description": "Add job to queue"
-        },
-        {
-          "method": "GET",
-          "path": "/api/jobs/:id",
-          "description": "Get job status"
-        },
-        {
-          "method": "POST",
-          "path": "/api/jobs/:id/retry",
-          "description": "Retry failed job"
-        },
-        {
-          "method": "GET",
-          "path": "/api/schedules",
-          "description": "List schedules"
-        },
-        {
-          "method": "POST",
-          "path": "/api/schedules",
-          "description": "Create schedule"
-        },
-        {
-          "method": "GET",
-          "path": "/api/stats",
-          "description": "Queue statistics"
-        }
-      ],
-      "envVars": [
-        {
-          "name": "JOBS_REDIS_URL",
-          "required": true,
-          "description": "Redis connection URL"
-        },
-        {
-          "name": "JOBS_DASHBOARD_ENABLED",
-          "required": false,
-          "default": "true",
-          "description": "Enable BullBoard dashboard"
-        },
-        {
-          "name": "JOBS_DEFAULT_CONCURRENCY",
-          "required": false,
-          "default": "5",
-          "description": "Default worker concurrency"
-        },
-        {
-          "name": "JOBS_RETRY_ATTEMPTS",
-          "required": false,
-          "default": "3",
-          "description": "Default retry attempts"
-        },
-        {
-          "name": "JOBS_RETRY_DELAY",
-          "required": false,
-          "default": "5000",
-          "description": "Retry delay (ms)"
-        },
-        {
-          "name": "JOBS_JOB_TIMEOUT",
-          "required": false,
-          "default": "60000",
-          "description": "Job timeout (ms)"
-        },
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "default": "3105",
-          "description": "Server port"
-        }
-      ],
-      "dependencies": [
-        "pg",
-        "fastify",
-        "commander",
-        "bullmq",
-        "ioredis",
-        "@bull-board/api",
-        "@bull-board/fastify",
-        "dotenv"
-      ],
-      "checksums": {
-        "sha256": "sha256:c8a3494a8763df32f7578e87e5dc327a83a711fa7ebcf217fb401fee457b1b91"
-      },
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/jobs-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "link-preview": {
-      "name": "link-preview",
       "version": "1.0.0",
-      "description": "URL metadata extraction with Open Graph, Twitter Cards, oEmbed support, custom previews, and caching",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/link-preview",
-      "minNselfVersion": "1.0.0",
+      "description": "URL metadata extraction with Open Graph, Twitter Cards, and caching",
       "category": "content",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/link-preview-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/link-preview/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "link-preview",
-        "oembed",
         "open-graph",
+        "twitter-cards",
         "metadata",
         "caching",
         "url"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-link-preview",
-        "defaultPort": 3718,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_linkprev_link_previews",
-        "np_linkprev_link_preview_usage",
-        "np_linkprev_preview_templates",
-        "np_linkprev_oembed_providers",
-        "np_linkprev_url_blocklist",
-        "np_linkprev_preview_settings",
-        "np_linkprev_preview_analytics"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "LP_PLUGIN_PORT",
-          "required": false,
-          "description": "Lp Plugin Port"
-        },
-        {
-          "name": "LINK_PREVIEW_ENABLED",
-          "required": false,
-          "description": "Link Preview Enabled"
-        },
-        {
-          "name": "LINK_PREVIEW_CACHE_TTL_HOURS",
-          "required": false,
-          "description": "Link Preview Cache Ttl Hours"
-        },
-        {
-          "name": "LINK_PREVIEW_TIMEOUT_SECONDS",
-          "required": false,
-          "description": "Link Preview Timeout Seconds"
-        },
-        {
-          "name": "LINK_PREVIEW_USER_AGENT",
-          "required": false,
-          "description": "Link Preview User Agent"
-        },
-        {
-          "name": "LINK_PREVIEW_MAX_RESPONSE_SIZE_MB",
-          "required": false,
-          "description": "Link Preview Max Response Size Mb"
-        },
-        {
-          "name": "LINK_PREVIEW_FOLLOW_REDIRECTS",
-          "required": false,
-          "description": "Link Preview Follow Redirects"
-        },
-        {
-          "name": "LINK_PREVIEW_MAX_REDIRECTS",
-          "required": false,
-          "description": "Link Preview Max Redirects"
-        },
-        {
-          "name": "LINK_PREVIEW_RESPECT_ROBOTS_TXT",
-          "required": false,
-          "description": "Link Preview Respect Robots Txt"
-        },
-        {
-          "name": "OEMBED_ENABLED",
-          "required": false,
-          "description": "Oembed Enabled"
-        },
-        {
-          "name": "OEMBED_DISCOVERY",
-          "required": false,
-          "description": "Oembed Discovery"
-        },
-        {
-          "name": "OEMBED_MAX_WIDTH",
-          "required": false,
-          "description": "Oembed Max Width"
-        },
-        {
-          "name": "OEMBED_MAX_HEIGHT",
-          "required": false,
-          "description": "Oembed Max Height"
-        },
-        {
-          "name": "LINK_PREVIEW_SAFETY_CHECK",
-          "required": false,
-          "description": "Link Preview Safety Check"
-        },
-        {
-          "name": "LINK_PREVIEW_PHISHING_DETECTION",
-          "required": false,
-          "description": "Link Preview Phishing Detection"
-        },
-        {
-          "name": "LINK_PREVIEW_RATE_LIMIT_PER_MINUTE",
-          "required": false,
-          "description": "Link Preview Rate Limit Per Minute"
-        },
-        {
-          "name": "LINK_PREVIEW_RATE_LIMIT_PER_DOMAIN",
-          "required": false,
-          "description": "Link Preview Rate Limit Per Domain"
-        },
-        {
-          "name": "LP_API_KEY",
-          "required": false,
-          "description": "Lp Api Key"
-        },
-        {
-          "name": "LP_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Lp Rate Limit Max"
-        },
-        {
-          "name": "LP_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Lp Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:bcddfbe7718b8dbd397eacdd1c0e5dc8f70b8f5ca80be074811865b0b0c762b3"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/link-preview-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "mdns": {
-      "name": "mdns",
       "version": "1.0.0",
       "description": "mDNS/Bonjour service discovery for zero-config LAN advertising",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mdns",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/mdns",
-      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mdns-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/mdns/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "mdns",
         "bonjour",
@@ -1523,95 +333,22 @@
         "lan",
         "service-discovery"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-mdns",
-        "defaultPort": 3216,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_mdns_services",
-        "np_mdns_discovery_log"
-      ],
-      "webhooks": [],
-      "apiEndpoints": [],
-      "cliCommands": [
-        {
-          "name": "advertise",
-          "description": "Start advertising a service"
-        },
-        {
-          "name": "discover",
-          "description": "Discover services on the network"
-        },
-        {
-          "name": "services",
-          "description": "List advertised services"
-        },
-        {
-          "name": "stats",
-          "description": "Show mDNS statistics"
-        }
-      ],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection URL"
-        },
-        {
-          "name": "MDNS_PLUGIN_PORT",
-          "required": false,
-          "description": "Plugin HTTP port"
-        },
-        {
-          "name": "MDNS_SERVICE_TYPE",
-          "required": false,
-          "description": "mDNS service type"
-        },
-        {
-          "name": "MDNS_INSTANCE_NAME",
-          "required": false,
-          "description": "mDNS instance name"
-        },
-        {
-          "name": "MDNS_DOMAIN",
-          "required": false,
-          "description": "mDNS domain"
-        }
-      ],
-      "dependencies": [],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "views": [],
-      "checksums": {
-        "sha256": "sha256:57d2485e136a0e28f092f6dba839bb0dc351d36a5e70ca07075f57d266674206"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mdns-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "mlflow": {
-      "name": "mlflow",
       "version": "1.0.0",
       "description": "MLflow experiment tracking and model registry",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/mlflow",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/mlflow",
-      "minNselfVersion": "1.0.0",
       "category": "data",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mlflow-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/mlflow/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "mlflow",
         "ml",
@@ -1620,83 +357,19 @@
         "model-registry",
         "mlops"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "mlflow",
-        "defaultPort": 5000
-      },
-      "tables": [],
-      "webhooks": [],
-      "cliCommands": [
-        {
-          "name": "experiments",
-          "description": "List and manage MLflow experiments"
-        },
-        {
-          "name": "runs",
-          "description": "List and manage experiment runs"
-        },
-        {
-          "name": "models",
-          "description": "Browse the model registry"
-        },
-        {
-          "name": "artifacts",
-          "description": "View and download run artifacts"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "MLFLOW_DEFAULT_ARTIFACT_ROOT",
-          "required": false,
-          "description": "Default artifact storage root"
-        },
-        {
-          "name": "MLFLOW_BACKEND_STORE_URI",
-          "required": false,
-          "description": "Backend store URI"
-        },
-        {
-          "name": "MLFLOW_TRACKING_USERNAME",
-          "required": false,
-          "description": "MLflow tracking username"
-        },
-        {
-          "name": "MLFLOW_TRACKING_PASSWORD",
-          "required": false,
-          "description": "MLflow tracking password"
-        }
-      ],
-      "multiApp": {
-        "supported": false,
-        "isolationColumn": "source_account_id"
-      },
-      "checksums": {
-        "sha256": "sha256:c94b451d9f5cfd4b2560d32425a0b640d002f1818f2440971341a35c8f55bda8"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mlflow-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "monitoring": {
-      "name": "monitoring",
       "version": "1.0.0",
       "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/monitoring",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/monitoring",
-      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitoring-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/monitoring/tarball",
+      "requires_license": false,
+      "language": "config",
       "tags": [
         "monitoring",
         "observability",
@@ -1710,415 +383,59 @@
         "logging",
         "tracing"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "monitoring",
-        "defaultPort": 0
-      },
-      "tables": [],
-      "webhooks": [],
-      "cliCommands": [
-        {
-          "name": "status",
-          "description": "Show status of all monitoring services"
-        },
-        {
-          "name": "dashboards",
-          "description": "List available Grafana dashboards"
-        },
-        {
-          "name": "alerts",
-          "description": "Show active alerts from Alertmanager"
-        },
-        {
-          "name": "logs",
-          "description": "Tail logs from monitoring services"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "MONITORING_ENABLED",
-          "required": false,
-          "description": "Enable monitoring stack"
-        },
-        {
-          "name": "GRAFANA_ENABLED",
-          "required": false,
-          "description": "Enable Grafana"
-        },
-        {
-          "name": "PROMETHEUS_ENABLED",
-          "required": false,
-          "description": "Enable Prometheus"
-        },
-        {
-          "name": "LOKI_ENABLED",
-          "required": false,
-          "description": "Enable Loki"
-        },
-        {
-          "name": "TEMPO_ENABLED",
-          "required": false,
-          "description": "Enable Tempo"
-        },
-        {
-          "name": "ALERTMANAGER_ENABLED",
-          "required": false,
-          "description": "Enable Alertmanager"
-        },
-        {
-          "name": "GRAFANA_ADMIN_USER",
-          "required": false,
-          "description": "Grafana admin username"
-        },
-        {
-          "name": "GRAFANA_ADMIN_PASSWORD",
-          "required": false,
-          "description": "Grafana admin password"
-        }
-      ],
-      "checksums": {
-        "sha256": "sha256:d26c1814bacd7ad4bf8cdc30b78e87e9f37074c12fe9474cb31c9a465efacdff"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitoring-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "notifications": {
-      "name": "notifications",
       "version": "1.0.0",
-      "description": "Multi-channel notifications (email, push, SMS) with templates, preferences, and delivery tracking",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/notifications",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/notifications",
-      "minNselfVersion": "1.0.0",
+      "description": "Multi-channel notification service. Channels: Email (SMTP), Push (placeholder), SMS (placeholder). HTTP endpoints for sending notifications, managing templates, and user notification preferences.",
       "category": "communication",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notifications-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/notifications/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "notifications",
         "email",
         "push",
         "sms",
         "templates",
-        "messaging",
-        "fcm",
-        "apns",
-        "mobile"
+        "preferences"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-notifications",
-        "defaultPort": 3102,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_notifications_templates",
-        "np_notifications_preferences",
-        "np_notifications_messages",
-        "np_notifications_queue",
-        "np_notifications_providers",
-        "np_notifications_batches"
-      ],
-      "views": [
-        "notification_delivery_rates",
-        "notification_engagement",
-        "notification_provider_health",
-        "notification_user_summary",
-        "notification_queue_backlog"
-      ],
-      "webhooks": [
-        "delivery.succeeded",
-        "delivery.failed",
-        "bounce",
-        "complaint",
-        "open",
-        "click",
-        "unsubscribe"
-      ],
-      "cliCommands": [
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        },
-        {
-          "name": "server",
-          "description": "Start notification API server"
-        },
-        {
-          "name": "worker",
-          "description": "Start delivery worker"
-        },
-        {
-          "name": "template",
-          "description": "Manage templates"
-        },
-        {
-          "name": "test",
-          "description": "Send test notification"
-        },
-        {
-          "name": "stats",
-          "description": "Show delivery statistics"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "GET",
-          "path": "/health",
-          "description": "Health check"
-        },
-        {
-          "method": "POST",
-          "path": "/api/send",
-          "description": "Send notification"
-        },
-        {
-          "method": "POST",
-          "path": "/api/send-bulk",
-          "description": "Send bulk notifications"
-        },
-        {
-          "method": "GET",
-          "path": "/api/templates",
-          "description": "List templates"
-        },
-        {
-          "method": "POST",
-          "path": "/api/templates",
-          "description": "Create template"
-        },
-        {
-          "method": "GET",
-          "path": "/api/preferences/:userId",
-          "description": "Get user preferences"
-        },
-        {
-          "method": "PUT",
-          "path": "/api/preferences/:userId",
-          "description": "Update preferences"
-        },
-        {
-          "method": "GET",
-          "path": "/api/stats",
-          "description": "Delivery statistics"
-        }
-      ],
-      "envVars": [
-        {
-          "name": "NOTIFICATIONS_EMAIL_ENABLED",
-          "required": false,
-          "default": "true",
-          "description": "Enable email notifications"
-        },
-        {
-          "name": "NOTIFICATIONS_EMAIL_PROVIDER",
-          "required": false,
-          "default": "resend",
-          "description": "Email provider: resend, sendgrid, mailgun, ses, smtp"
-        },
-        {
-          "name": "NOTIFICATIONS_EMAIL_API_KEY",
-          "required": false,
-          "description": "Email provider API key"
-        },
-        {
-          "name": "NOTIFICATIONS_EMAIL_FROM",
-          "required": false,
-          "description": "Default from address"
-        },
-        {
-          "name": "NOTIFICATIONS_PUSH_PROVIDER",
-          "required": false,
-          "description": "Push provider: fcm, onesignal, webpush"
-        },
-        {
-          "name": "NOTIFICATIONS_PUSH_API_KEY",
-          "required": false,
-          "description": "Push provider API key"
-        },
-        {
-          "name": "NOTIFICATIONS_SMS_PROVIDER",
-          "required": false,
-          "description": "SMS provider: twilio, plivo, sns"
-        },
-        {
-          "name": "NOTIFICATIONS_SMS_ACCOUNT_SID",
-          "required": false,
-          "description": "Twilio account SID"
-        },
-        {
-          "name": "NOTIFICATIONS_SMS_AUTH_TOKEN",
-          "required": false,
-          "description": "Twilio auth token"
-        },
-        {
-          "name": "NOTIFICATIONS_SMS_FROM",
-          "required": false,
-          "description": "SMS from number"
-        },
-        {
-          "name": "NOTIFICATIONS_QUEUE_BACKEND",
-          "required": false,
-          "default": "redis",
-          "description": "Queue backend: redis, postgres"
-        },
-        {
-          "name": "NOTIFICATIONS_BATCH_INTERVAL",
-          "required": false,
-          "default": "86400",
-          "description": "Batch interval (seconds)"
-        },
-        {
-          "name": "REDIS_URL",
-          "required": false,
-          "description": "Redis URL for queue"
-        },
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "default": "3102",
-          "description": "Server port"
-        }
-      ],
-      "dependencies": [
-        "pg",
-        "fastify",
-        "commander",
-        "handlebars",
-        "resend",
-        "twilio",
-        "firebase-admin",
-        "ioredis",
-        "dotenv"
-      ],
-      "checksums": {
-        "sha256": "sha256:771bc9c4a029b61672b3691a10abdd0bb81191da975debe689bab761e3bef83e"
-      },
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notifications-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "notify": {
-      "name": "notify",
       "version": "1.0.0",
       "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/notify",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/notify",
-      "minNselfVersion": "0.9.9",
       "category": "communication",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notify-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/notify/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "notifications",
         "email",
         "webhooks",
         "templates"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "notify",
-        "defaultPort": 3052
-      },
-      "tables": [
-        "np_notify_notifications",
-        "np_notify_templates"
-      ],
-      "webhooks": [],
-      "cliCommands": [],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PORT",
-          "required": false,
-          "description": "Server port (default: 3052)"
-        },
-        {
-          "name": "PLUGIN_INTERNAL_SECRET",
-          "required": false,
-          "description": "Internal plugin secret"
-        },
-        {
-          "name": "SMTP_HOST",
-          "required": false,
-          "description": "SMTP server host"
-        },
-        {
-          "name": "SMTP_PORT",
-          "required": false,
-          "description": "SMTP server port"
-        },
-        {
-          "name": "SMTP_USER",
-          "required": false,
-          "description": "SMTP username"
-        },
-        {
-          "name": "SMTP_PASSWORD",
-          "required": false,
-          "description": "SMTP password"
-        },
-        {
-          "name": "SMTP_FROM",
-          "required": false,
-          "description": "Default from address"
-        },
-        {
-          "name": "WEBHOOK_HMAC_SECRET",
-          "required": false,
-          "description": "HMAC secret for webhook signing"
-        }
-      ],
-      "multiApp": {
-        "supported": false,
-        "isolationColumn": "source_account_id"
-      },
-      "checksums": {
-        "sha256": "sha256:2db0fc0700a879b6adc412a7dc81098d43b583ae9a7042a705483f9911df4248"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notify-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     },
     "paypal": {
-      "name": "paypal",
       "version": "1.0.0",
       "description": "PayPal payment data sync with webhook handling",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/paypal",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/paypal",
-      "minNselfVersion": "1.0.0",
       "category": "commerce",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/paypal-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/paypal/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "payments",
         "donations",
@@ -2126,151 +443,22 @@
         "paypal",
         "webhooks"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "nself-paypal",
-        "defaultPort": 3071
-      },
-      "tables": [
-        "np_paypal_transactions",
-        "np_paypal_orders",
-        "np_paypal_captures",
-        "np_paypal_authorizations",
-        "np_paypal_refunds",
-        "np_paypal_subscriptions",
-        "np_paypal_subscription_plans",
-        "np_paypal_products",
-        "np_paypal_disputes",
-        "np_paypal_payouts",
-        "np_paypal_invoices",
-        "np_paypal_payers",
-        "np_paypal_balances",
-        "np_paypal_webhook_events"
-      ],
-      "webhooks": [
-        "PAYMENT.CAPTURE.COMPLETED",
-        "PAYMENT.CAPTURE.DENIED",
-        "PAYMENT.CAPTURE.REFUNDED",
-        "PAYMENT.CAPTURE.REVERSED",
-        "PAYMENT.CAPTURE.PENDING",
-        "CHECKOUT.ORDER.COMPLETED",
-        "CHECKOUT.ORDER.APPROVED",
-        "CHECKOUT.ORDER.VOIDED",
-        "BILLING.SUBSCRIPTION.CREATED",
-        "BILLING.SUBSCRIPTION.ACTIVATED",
-        "BILLING.SUBSCRIPTION.UPDATED",
-        "BILLING.SUBSCRIPTION.CANCELLED",
-        "BILLING.SUBSCRIPTION.SUSPENDED",
-        "BILLING.SUBSCRIPTION.EXPIRED",
-        "CUSTOMER.DISPUTE.CREATED",
-        "CUSTOMER.DISPUTE.UPDATED",
-        "CUSTOMER.DISPUTE.RESOLVED",
-        "CUSTOMER.DISPUTE.OTHER",
-        "PAYMENT.PAYOUTSBATCH.SUCCESS",
-        "PAYMENT.PAYOUTSBATCH.DENIED",
-        "PAYMENT.PAYOUTSBATCH.PROCESSING",
-        "INVOICING.INVOICE.PAID",
-        "INVOICING.INVOICE.CANCELLED",
-        "PAYMENT.SALE.REFUNDED",
-        "PAYMENT.SALE.COMPLETED"
-      ],
-      "cliCommands": [
-        {
-          "name": "sync",
-          "description": "Sync all PayPal data to database"
-        },
-        {
-          "name": "reconcile",
-          "description": "Re-sync recent data to catch gaps from missed webhooks"
-        },
-        {
-          "name": "server",
-          "description": "Start the PayPal plugin server"
-        },
-        {
-          "name": "status",
-          "description": "Show sync status and statistics"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "PAYPAL_CLIENT_ID",
-          "required": true,
-          "description": "PayPal client ID"
-        },
-        {
-          "name": "PAYPAL_CLIENT_SECRET",
-          "required": true,
-          "description": "PayPal client secret"
-        },
-        {
-          "name": "PAYPAL_CLIENT_IDS",
-          "required": false,
-          "description": "Multi-account client IDs"
-        },
-        {
-          "name": "PAYPAL_CLIENT_SECRETS",
-          "required": false,
-          "description": "Multi-account client secrets"
-        },
-        {
-          "name": "PAYPAL_ACCOUNT_LABELS",
-          "required": false,
-          "description": "Multi-account labels"
-        },
-        {
-          "name": "PAYPAL_WEBHOOK_IDS",
-          "required": false,
-          "description": "Webhook IDs per account"
-        },
-        {
-          "name": "PAYPAL_WEBHOOK_SECRETS",
-          "required": false,
-          "description": "Webhook secrets per account"
-        },
-        {
-          "name": "PAYPAL_ENVIRONMENT",
-          "required": false,
-          "description": "sandbox or live"
-        },
-        {
-          "name": "PAYPAL_SYNC_INTERVAL",
-          "required": false,
-          "description": "Sync interval in seconds"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:1310f7129da364e6fbf3a2a405fccab8709cef4f39bb66afb6974605df530a2d"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/paypal-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "search": {
-      "name": "search",
       "version": "1.0.0",
       "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/search",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/search",
-      "minNselfVersion": "1.0.0",
       "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/search/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "search",
         "fts",
@@ -2279,124 +467,22 @@
         "meilisearch",
         "autocomplete"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-search",
-        "defaultPort": 3302,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_search_indexes",
-        "np_search_documents",
-        "np_search_synonyms",
-        "np_search_queries",
-        "np_search_webhook_events"
-      ],
-      "webhooks": [
-        "index.created",
-        "index.updated",
-        "index.deleted",
-        "document.indexed",
-        "document.updated",
-        "document.deleted"
-      ],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "SEARCH_PLUGIN_PORT",
-          "required": false,
-          "description": "Search Plugin Port"
-        },
-        {
-          "name": "SEARCH_ENGINE",
-          "required": false,
-          "description": "Search Engine"
-        },
-        {
-          "name": "SEARCH_MEILISEARCH_URL",
-          "required": false,
-          "description": "Search Meilisearch Url"
-        },
-        {
-          "name": "SEARCH_MEILISEARCH_API_KEY",
-          "required": false,
-          "description": "Search Meilisearch Api Key"
-        },
-        {
-          "name": "SEARCH_DEFAULT_LIMIT",
-          "required": false,
-          "description": "Search Default Limit"
-        },
-        {
-          "name": "SEARCH_MAX_RESULTS",
-          "required": false,
-          "description": "Search Max Results"
-        },
-        {
-          "name": "SEARCH_REINDEX_BATCH_SIZE",
-          "required": false,
-          "description": "Search Reindex Batch Size"
-        },
-        {
-          "name": "SEARCH_ANALYTICS_ENABLED",
-          "required": false,
-          "description": "Search Analytics Enabled"
-        },
-        {
-          "name": "SEARCH_ANALYTICS_RETENTION_DAYS",
-          "required": false,
-          "description": "Search Analytics Retention Days"
-        },
-        {
-          "name": "SEARCH_API_KEY",
-          "required": false,
-          "description": "Search Api Key"
-        },
-        {
-          "name": "SEARCH_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Search Rate Limit Max"
-        },
-        {
-          "name": "SEARCH_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Search Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:27e858342415eba523506ca482dea84ee4d6b55d8967eaa8ad99cd850d114b9e"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "shopify": {
-      "name": "shopify",
       "version": "1.0.0",
       "description": "Shopify store, orders, and product synchronization",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/shopify",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/shopify",
-      "minNselfVersion": "1.0.0",
       "category": "commerce",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/shopify-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/shopify/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "shopify",
         "ecommerce",
@@ -2404,122 +490,22 @@
         "products",
         "inventory"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "nself-shopify",
-        "defaultPort": 3072
-      },
-      "tables": [
-        "np_shopify_shops",
-        "np_shopify_products",
-        "np_shopify_variants",
-        "np_shopify_collections",
-        "np_shopify_customers",
-        "np_shopify_orders",
-        "np_shopify_order_items",
-        "np_shopify_inventory",
-        "np_shopify_webhook_events"
-      ],
-      "webhooks": [
-        "orders/create",
-        "orders/updated",
-        "orders/paid",
-        "orders/fulfilled",
-        "orders/cancelled",
-        "products/create",
-        "products/update",
-        "products/delete",
-        "customers/create",
-        "customers/update",
-        "inventory_levels/update",
-        "refunds/create",
-        "fulfillments/create"
-      ],
-      "cliCommands": [
-        {
-          "name": "sync",
-          "description": "Sync store data"
-        },
-        {
-          "name": "products",
-          "description": "List and manage products"
-        },
-        {
-          "name": "orders",
-          "description": "View and manage orders"
-        },
-        {
-          "name": "customers",
-          "description": "View customers"
-        },
-        {
-          "name": "inventory",
-          "description": "Check inventory levels"
-        },
-        {
-          "name": "webhook",
-          "description": "Manage webhook events"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "SHOPIFY_ACCESS_TOKEN",
-          "required": true,
-          "description": "Shopify access token"
-        },
-        {
-          "name": "SHOPIFY_SHOP_DOMAIN",
-          "required": true,
-          "description": "Shopify shop domain"
-        },
-        {
-          "name": "SHOPIFY_API_VERSION",
-          "required": false,
-          "description": "Shopify API version"
-        },
-        {
-          "name": "SHOPIFY_WEBHOOK_SECRET",
-          "required": false,
-          "description": "Webhook signature secret"
-        },
-        {
-          "name": "SHOPIFY_SYNC_INTERVAL",
-          "required": false,
-          "description": "Sync interval in seconds"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "composite",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:3548150e7d5728c7caf547222e18c278493178028405adea3d856d457fb57bc1"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/shopify-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "stripe": {
-      "name": "stripe",
       "version": "1.0.0",
       "description": "Stripe billing data sync with webhook handling",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/free/stripe",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "free/stripe",
-      "minNselfVersion": "1.0.0",
       "category": "commerce",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/stripe-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/stripe/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "payments",
         "billing",
@@ -2527,294 +513,51 @@
         "stripe",
         "webhooks"
       ],
-      "implementation": {
-        "language": "go",
-        "runtime": "go",
-        "entryPoint": "nself-stripe",
-        "defaultPort": 3070
-      },
-      "tables": [
-        "np_stripe_customers",
-        "np_stripe_products",
-        "np_stripe_prices",
-        "np_stripe_coupons",
-        "np_stripe_promotion_codes",
-        "np_stripe_subscriptions",
-        "np_stripe_subscription_items",
-        "np_stripe_subscription_schedules",
-        "np_stripe_invoices",
-        "np_stripe_invoice_items",
-        "np_stripe_credit_notes",
-        "np_stripe_charges",
-        "np_stripe_refunds",
-        "np_stripe_disputes",
-        "np_stripe_payment_intents",
-        "np_stripe_setup_intents",
-        "np_stripe_payment_methods",
-        "np_stripe_balance_transactions",
-        "np_stripe_payouts",
-        "np_stripe_discounts",
-        "np_stripe_checkout_sessions",
-        "np_stripe_tax_ids",
-        "np_stripe_tax_rates",
-        "np_stripe_webhook_events"
-      ],
-      "webhooks": [
-        "customer.created",
-        "customer.updated",
-        "customer.deleted",
-        "product.created",
-        "product.updated",
-        "product.deleted",
-        "price.created",
-        "price.updated",
-        "price.deleted",
-        "coupon.created",
-        "coupon.updated",
-        "coupon.deleted",
-        "customer.subscription.created",
-        "customer.subscription.updated",
-        "customer.subscription.deleted",
-        "invoice.created",
-        "invoice.updated",
-        "invoice.paid",
-        "invoice.payment_failed",
-        "invoice.payment_succeeded",
-        "charge.captured",
-        "charge.failed",
-        "charge.refunded",
-        "charge.succeeded",
-        "charge.dispute.created",
-        "charge.dispute.updated",
-        "charge.dispute.closed",
-        "payment_intent.created",
-        "payment_intent.succeeded",
-        "payment_intent.payment_failed",
-        "payment_intent.canceled",
-        "checkout.session.completed",
-        "checkout.session.expired",
-        "payout.created",
-        "payout.paid",
-        "payout.failed"
-      ],
-      "cliCommands": [
-        {
-          "name": "sync",
-          "description": "Sync all Stripe data to database"
-        },
-        {
-          "name": "reconcile",
-          "description": "Re-sync recent data to catch gaps from missed webhooks"
-        },
-        {
-          "name": "customers",
-          "description": "Manage customer data"
-        },
-        {
-          "name": "subscriptions",
-          "description": "View and manage subscriptions"
-        },
-        {
-          "name": "invoices",
-          "description": "View invoice history"
-        },
-        {
-          "name": "webhook",
-          "description": "Manage webhook endpoint"
-        }
-      ],
-      "apiEndpoints": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "STRIPE_API_KEY",
-          "required": true,
-          "description": "Stripe API key"
-        },
-        {
-          "name": "STRIPE_WEBHOOK_SECRET",
-          "required": false,
-          "description": "Webhook endpoint secret"
-        },
-        {
-          "name": "STRIPE_API_KEYS",
-          "required": false,
-          "description": "Multi-account API keys"
-        },
-        {
-          "name": "STRIPE_ACCOUNT_LABELS",
-          "required": false,
-          "description": "Multi-account labels"
-        },
-        {
-          "name": "STRIPE_WEBHOOK_SECRETS",
-          "required": false,
-          "description": "Multi-account webhook secrets"
-        },
-        {
-          "name": "STRIPE_ACCOUNT_ID",
-          "required": false,
-          "description": "Stripe Connect account ID"
-        },
-        {
-          "name": "STRIPE_SYNC_INTERVAL",
-          "required": false,
-          "description": "Sync interval in seconds"
-        },
-        {
-          "name": "STRIPE_API_VERSION",
-          "required": false,
-          "description": "Stripe API version"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:754622c2dea89763e0f078ffb0c50aad3ff6003cb0fe77eb1b4ca842a356c8be"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/stripe-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "subtitle-manager": {
-      "name": "subtitle-manager",
       "version": "1.0.0",
-      "description": "Subtitle search, download, and sync verification via OpenSubtitles and multi-source providers",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/subtitle-manager",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/subtitle-manager",
-      "minNselfVersion": "1.0.0",
+      "description": "Subtitle search, download, and sync verification via OpenSubtitles",
       "category": "media",
-      "tags": [
-        "subtitles",
-        "opensubtitles",
-        "sync",
-        "verification",
-        "srt",
-        "vtt"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-subtitle-manager",
-        "defaultPort": 3204,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_subtmgr_subtitles",
-        "np_subtmgr_downloads"
-      ],
-      "views": [],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "SUBTITLE_MANAGER_PORT",
-          "description": "Server port (default: 3204)"
-        },
-        {
-          "name": "OPENSUBTITLES_API_KEY",
-          "description": "OpenSubtitles API key"
-        },
-        {
-          "name": "SUBTITLE_STORAGE_PATH",
-          "description": "Path for storing downloaded subtitles"
-        }
-      ],
-      "cliCommands": [
-        {
-          "name": "server",
-          "description": "Start the subtitle manager server"
-        },
-        {
-          "name": "search",
-          "description": "Search for subtitles"
-        },
-        {
-          "name": "download",
-          "description": "Download subtitles"
-        },
-        {
-          "name": "status",
-          "description": "Show subtitle statistics"
-        },
-        {
-          "name": "init",
-          "description": "Initialize database schema"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "POST",
-          "path": "/api/search",
-          "description": "Search for subtitles"
-        },
-        {
-          "method": "POST",
-          "path": "/api/download",
-          "description": "Download subtitle"
-        },
-        {
-          "method": "GET",
-          "path": "/api/subtitles",
-          "description": "List stored subtitles"
-        },
-        {
-          "method": "GET",
-          "path": "/api/subtitles/:id",
-          "description": "Get subtitle details"
-        },
-        {
-          "method": "GET",
-          "path": "/api/stats",
-          "description": "Subtitle statistics"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "dependencies": [],
       "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/subtitle-manager-1.0.0.tar.gz",
-      "checksums": {
-        "sha256": "sha256:0253eae7c9a2bc823966d19bf5a05d151d0b7c33f923918a95f383d11ffc1f00"
-      },
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/subtitle-manager-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/subtitle-manager/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [],
+      "dependencies": {
+        "npm": [
+          "@nself/plugin-utils",
+          "fastify",
+          "@fastify/cors",
+          "@fastify/rate-limit",
+          "commander",
+          "axios",
+          "pg",
+          "dotenv",
+          "uuid",
+          "winston",
+          "chalk",
+          "ora"
+        ]
+      }
     },
     "tokens": {
-      "name": "tokens",
       "version": "1.0.0",
       "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/tokens",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/tokens",
-      "minNselfVersion": "1.0.0",
       "category": "media",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/tokens-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/tokens/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "tokens",
         "signed-urls",
@@ -2824,414 +567,73 @@
         "entitlement",
         "access-control"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-tokens",
-        "defaultPort": 3307,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_tokens_signing_keys",
-        "np_tokens_issued",
-        "np_tokens_encryption_keys",
-        "np_tokens_entitlements",
-        "np_tokens_webhook_events"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "TOKENS_ENCRYPTION_KEY",
-          "required": true,
-          "description": "Tokens Encryption Key"
-        },
-        {
-          "name": "TOKENS_PLUGIN_PORT",
-          "required": false,
-          "description": "Tokens Plugin Port"
-        },
-        {
-          "name": "TOKENS_APP_IDS",
-          "required": false,
-          "description": "Tokens App Ids"
-        },
-        {
-          "name": "TOKENS_DEFAULT_TTL_SECONDS",
-          "required": false,
-          "description": "Tokens Default Ttl Seconds"
-        },
-        {
-          "name": "TOKENS_HLS_ENCRYPTION_ENABLED",
-          "required": false,
-          "description": "Tokens Hls Encryption Enabled"
-        },
-        {
-          "name": "TOKENS_DEFAULT_ENTITLEMENT_CHECK",
-          "required": false,
-          "description": "Tokens Default Entitlement Check"
-        },
-        {
-          "name": "TOKENS_ALLOW_ALL_IF_NO_ENTITLEMENTS",
-          "required": false,
-          "description": "Tokens Allow All If No Entitlements"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:0592c9d98397cb51700d0a0ba33b5d055f84c5f5bad9c6e80e4c9bb05aea3ec6"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/tokens-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": {
+        "required": [],
+        "optional": []
+      }
     },
     "torrent-manager": {
-      "name": "torrent-manager",
       "version": "1.0.0",
-      "description": "Torrent downloading with Transmission/qBittorrent integration, multi-source search, and VPN enforcement",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/torrent-manager",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/torrent-manager",
-      "minNselfVersion": "1.0.0",
+      "description": "Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement",
       "category": "media",
-      "tags": [
-        "torrent",
-        "transmission",
-        "qbittorrent",
-        "p2p",
-        "download",
-        "vpn"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-torrent-manager",
-        "defaultPort": 3201,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_torrentmanager_clients",
-        "np_torrentmanager_sources",
-        "np_torrentmanager_downloads",
-        "np_torrentmanager_files",
-        "np_torrentmanager_trackers",
-        "np_torrentmanager_search_cache",
-        "np_torrentmanager_stats",
-        "np_torrentmanager_seeding_policy"
-      ],
-      "views": [
-        "np_torrentmanager_active_downloads",
-        "np_torrentmanager_completed_downloads",
-        "np_torrentmanager_seeding_torrents"
-      ],
-      "webhooks": [
-        "torrent.added",
-        "torrent.started",
-        "torrent.progress",
-        "torrent.completed",
-        "torrent.failed",
-        "torrent.removed",
-        "vpn.disconnected"
-      ],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "TORRENT_MANAGER_PORT",
-          "description": "Server port (default: 3201)"
-        },
-        {
-          "name": "TRANSMISSION_HOST",
-          "description": "Transmission RPC host"
-        },
-        {
-          "name": "TRANSMISSION_PORT",
-          "description": "Transmission RPC port"
-        },
-        {
-          "name": "TRANSMISSION_USERNAME",
-          "description": "Transmission RPC username"
-        },
-        {
-          "name": "TRANSMISSION_PASSWORD",
-          "description": "Transmission RPC password"
-        },
-        {
-          "name": "VPN_ENFORCEMENT_URL",
-          "description": "VPN plugin URL for enforcement checks"
-        }
-      ],
-      "cliCommands": [
-        {
-          "name": "server",
-          "description": "Start the torrent manager server"
-        },
-        {
-          "name": "add",
-          "description": "Add a torrent by magnet URI or URL"
-        },
-        {
-          "name": "list",
-          "description": "List all downloads"
-        },
-        {
-          "name": "status",
-          "description": "Show download status"
-        },
-        {
-          "name": "search",
-          "description": "Search for torrents"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "GET",
-          "path": "/api/downloads",
-          "description": "List all downloads"
-        },
-        {
-          "method": "POST",
-          "path": "/api/downloads",
-          "description": "Add new download"
-        },
-        {
-          "method": "GET",
-          "path": "/api/downloads/:id",
-          "description": "Get download status"
-        },
-        {
-          "method": "PUT",
-          "path": "/api/downloads/:id",
-          "description": "Update download"
-        },
-        {
-          "method": "DELETE",
-          "path": "/api/downloads/:id",
-          "description": "Remove download"
-        },
-        {
-          "method": "GET",
-          "path": "/api/clients",
-          "description": "List torrent clients"
-        },
-        {
-          "method": "GET",
-          "path": "/api/search",
-          "description": "Search torrents"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "dependencies": [],
       "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/torrent-manager-1.0.0.tar.gz",
-      "checksums": {
-        "sha256": "sha256:cd25a5072e05de6ef293b7a67af49620dec4e35319a42c0e46225cb6e0ac1959"
-      },
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/torrent-manager-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/torrent-manager/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [],
+      "dependencies": {
+        "npm": [
+          "@nself/plugin-utils",
+          "@ctrl/transmission",
+          "fastify",
+          "@fastify/cors",
+          "@fastify/rate-limit",
+          "commander",
+          "axios",
+          "cheerio",
+          "puppeteer",
+          "parse-torrent",
+          "webtorrent-health",
+          "node-cron",
+          "pg",
+          "dotenv",
+          "uuid",
+          "winston"
+        ],
+        "system": [
+          "transmission-daemon",
+          "qbittorrent-nox"
+        ]
+      }
     },
     "vpn": {
-      "name": "vpn",
       "version": "1.0.0",
-      "description": "Multi-provider VPN management with P2P optimization, server carousel, kill switch, and leak protection",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/vpn",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/vpn",
-      "minNselfVersion": "1.0.0",
+      "description": "Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin.",
       "category": "authentication",
-      "tags": [
-        "vpn",
-        "nordvpn",
-        "mullvad",
-        "pia",
-        "wireguard",
-        "openvpn",
-        "privacy",
-        "p2p",
-        "torrent"
-      ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-vpn",
-        "defaultPort": 3200,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_vpn_providers",
-        "np_vpn_credentials",
-        "np_vpn_servers",
-        "np_vpn_connections",
-        "np_vpn_downloads",
-        "np_vpn_connection_logs",
-        "np_vpn_server_performance",
-        "np_vpn_leak_tests"
-      ],
-      "views": [
-        "np_vpn_active_connections",
-        "np_vpn_server_stats",
-        "np_vpn_download_history",
-        "np_vpn_provider_uptime"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "PostgreSQL connection string"
-        },
-        {
-          "name": "VPN_PLUGIN_PORT",
-          "description": "Server port (default: 3200)"
-        },
-        {
-          "name": "NORDVPN_TOKEN",
-          "description": "NordVPN API token"
-        },
-        {
-          "name": "PIA_USERNAME",
-          "description": "PIA username"
-        },
-        {
-          "name": "PIA_PASSWORD",
-          "description": "PIA password"
-        },
-        {
-          "name": "MULLVAD_ACCOUNT",
-          "description": "Mullvad account number"
-        },
-        {
-          "name": "TRANSMISSION_HOST",
-          "description": "Transmission RPC host"
-        },
-        {
-          "name": "TRANSMISSION_PORT",
-          "description": "Transmission RPC port"
-        }
-      ],
-      "cliCommands": [
-        {
-          "name": "server",
-          "description": "Start the VPN management API server"
-        },
-        {
-          "name": "status",
-          "description": "Show VPN connection status"
-        },
-        {
-          "name": "connect",
-          "description": "Connect to VPN"
-        },
-        {
-          "name": "disconnect",
-          "description": "Disconnect VPN"
-        },
-        {
-          "name": "servers",
-          "description": "List available VPN servers"
-        },
-        {
-          "name": "leak-test",
-          "description": "Run DNS/IP leak test"
-        }
-      ],
-      "apiEndpoints": [
-        {
-          "method": "GET",
-          "path": "/api/status",
-          "description": "VPN connection status"
-        },
-        {
-          "method": "POST",
-          "path": "/api/connect",
-          "description": "Connect to VPN"
-        },
-        {
-          "method": "POST",
-          "path": "/api/disconnect",
-          "description": "Disconnect VPN"
-        },
-        {
-          "method": "GET",
-          "path": "/api/servers",
-          "description": "List available servers"
-        },
-        {
-          "method": "GET",
-          "path": "/api/providers",
-          "description": "List configured providers"
-        },
-        {
-          "method": "POST",
-          "path": "/api/leak-test",
-          "description": "Run leak test"
-        },
-        {
-          "method": "GET",
-          "path": "/api/downloads",
-          "description": "List torrent downloads"
-        },
-        {
-          "method": "POST",
-          "path": "/api/downloads",
-          "description": "Start torrent download via VPN"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "uuid",
-        "defaultValue": "primary"
-      },
-      "dependencies": [],
       "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/vpn-1.0.0.tar.gz",
-      "checksums": {
-        "sha256": "sha256:58b5578be7b887396fd4c4aea18e19299f8dc335f905a9ceb64a50fc6992e8d4"
-      },
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/vpn-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/vpn/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [],
+      "dependencies": []
     },
     "webhooks": {
-      "name": "webhooks",
       "version": "1.0.0",
       "description": "Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue",
-      "author": "nself",
-      "license": "MIT",
-      "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/webhooks",
-      "repository": "https://github.com/nself-org/plugins",
-      "path": "plugins/webhooks",
-      "minNselfVersion": "1.0.0",
       "category": "communication",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "0.9.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/webhooks-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/webhooks/tarball",
+      "requires_license": false,
+      "language": "go",
       "tags": [
         "webhooks",
         "events",
@@ -3239,236 +641,7 @@
         "delivery",
         "integration"
       ],
-      "implementation": {
-        "language": "typescript",
-        "runtime": "node",
-        "minNodeVersion": "18.0.0",
-        "entryPoint": "ts/dist/index.js",
-        "cli": "ts/dist/cli.js",
-        "cliName": "nself-webhooks",
-        "defaultPort": 3403,
-        "packageManager": "pnpm",
-        "framework": "fastify"
-      },
-      "tables": [
-        "np_webhooks_endpoints",
-        "np_webhooks_deliveries",
-        "np_webhooks_event_types",
-        "np_webhooks_dead_letters"
-      ],
-      "webhooks": [],
-      "envVars": [
-        {
-          "name": "DATABASE_URL",
-          "required": true,
-          "description": "Database Url"
-        },
-        {
-          "name": "WEBHOOKS_PLUGIN_PORT",
-          "required": false,
-          "description": "Webhooks Plugin Port"
-        },
-        {
-          "name": "WEBHOOKS_MAX_ATTEMPTS",
-          "required": false,
-          "description": "Webhooks Max Attempts"
-        },
-        {
-          "name": "WEBHOOKS_REQUEST_TIMEOUT_MS",
-          "required": false,
-          "description": "Webhooks Request Timeout Ms"
-        },
-        {
-          "name": "WEBHOOKS_MAX_PAYLOAD_SIZE",
-          "required": false,
-          "description": "Webhooks Max Payload Size"
-        },
-        {
-          "name": "WEBHOOKS_CONCURRENT_DELIVERIES",
-          "required": false,
-          "description": "Webhooks Concurrent Deliveries"
-        },
-        {
-          "name": "WEBHOOKS_RETRY_DELAYS",
-          "required": false,
-          "description": "Webhooks Retry Delays"
-        },
-        {
-          "name": "WEBHOOKS_AUTO_DISABLE_THRESHOLD",
-          "required": false,
-          "description": "Webhooks Auto Disable Threshold"
-        },
-        {
-          "name": "WEBHOOKS_API_KEY",
-          "required": false,
-          "description": "Webhooks Api Key"
-        },
-        {
-          "name": "WEBHOOKS_RATE_LIMIT_MAX",
-          "required": false,
-          "description": "Webhooks Rate Limit Max"
-        },
-        {
-          "name": "WEBHOOKS_RATE_LIMIT_WINDOW_MS",
-          "required": false,
-          "description": "Webhooks Rate Limit Window Ms"
-        }
-      ],
-      "multiApp": {
-        "supported": true,
-        "isolationColumn": "source_account_id",
-        "pkStrategy": "single",
-        "defaultValue": "primary"
-      },
-      "checksums": {
-        "sha256": "sha256:cd099a005f6c7c4507c5fb75ea5c2b68e282564e7ad795b28c08bd4aebf5ab8a"
-      },
-      "tier": "free",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.0.0/webhooks-1.0.0.tar.gz",
-      "releaseTag": "v1.0.0",
-      "signature": ""
+      "dependencies": []
     }
-  },
-  "categories": {
-    "billing": {
-      "name": "Billing & Payments",
-      "description": "Payment processing, subscriptions, and billing management",
-      "icon": "credit-card"
-    },
-    "ecommerce": {
-      "name": "E-Commerce",
-      "description": "Online store and product management integrations",
-      "icon": "shopping-cart"
-    },
-    "devops": {
-      "name": "DevOps & Development",
-      "description": "Development tools, CI/CD, and version control integrations",
-      "icon": "code"
-    },
-    "productivity": {
-      "name": "Productivity",
-      "description": "Project management, documentation, and team collaboration",
-      "icon": "clipboard"
-    },
-    "communication": {
-      "name": "Communication",
-      "description": "Email, chat, and customer support integrations",
-      "icon": "message"
-    },
-    "analytics": {
-      "name": "Analytics & Data",
-      "description": "Analytics, data warehouses, and business intelligence",
-      "icon": "chart"
-    },
-    "finance": {
-      "name": "Finance",
-      "description": "Banking, accounting, and financial data integrations",
-      "icon": "dollar"
-    },
-    "infrastructure": {
-      "name": "Infrastructure",
-      "description": "Core infrastructure services: real-time, storage, jobs, notifications",
-      "icon": "server"
-    },
-    "authentication": {
-      "name": "Authentication",
-      "description": "Identity verification and specialized authentication providers",
-      "icon": "lock"
-    },
-    "payments": {
-      "name": "Payments",
-      "description": "Payment processing, donations, and transaction management",
-      "icon": "credit-card"
-    },
-    "donations": {
-      "name": "Donations & Fundraising",
-      "description": "Donation platforms, campaign management, and fundraising tools",
-      "icon": "heart"
-    },
-    "security": {
-      "name": "Security",
-      "description": "Access control, authorization, and security management",
-      "icon": "shield"
-    },
-    "content": {
-      "name": "Content",
-      "description": "Content management, social features, and activity feeds",
-      "icon": "file-text"
-    },
-    "media": {
-      "name": "Media",
-      "description": "Media processing, streaming, and content delivery",
-      "icon": "video"
-    },
-    "external-data": {
-      "name": "External Data",
-      "description": "External data sources and API integrations",
-      "icon": "database"
-    },
-    "automation": {
-      "name": "Automation",
-      "description": "Workflow automation, bots, and scheduled tasks",
-      "icon": "zap"
-    },
-    "streaming": {
-      "name": "Streaming",
-      "description": "Live streaming, stream governance, and recording",
-      "icon": "radio"
-    },
-    "voice-video": {
-      "name": "Voice & Video",
-      "description": "Voice, video, and real-time communication infrastructure",
-      "icon": "phone"
-    },
-    "data-services": {
-      "name": "Data Services",
-      "description": "Location services, document management, and data processing",
-      "icon": "layers"
-    },
-    "monetization": {
-      "name": "Monetization",
-      "description": "Entitlements, subscriptions, and billing management",
-      "icon": "dollar"
-    },
-    "ai-ml": {
-      "name": "AI & Machine Learning",
-      "description": "AI models, embeddings, and machine learning services",
-      "icon": "cpu"
-    },
-    "data-management": {
-      "name": "Data Management",
-      "description": "Data export, import, migration, and backup",
-      "icon": "hard-drive"
-    },
-    "web3": {
-      "name": "Web3 & Blockchain",
-      "description": "Blockchain integration, NFTs, and decentralized services",
-      "icon": "link"
-    },
-    "content-enhancement": {
-      "name": "Content Enhancement",
-      "description": "Link previews, metadata extraction, and content enrichment",
-      "icon": "eye"
-    },
-    "privacy-legal": {
-      "name": "Privacy & Legal",
-      "description": "GDPR/CCPA compliance, consent management, and privacy tools",
-      "icon": "shield"
-    },
-    "customer-support": {
-      "name": "Customer Support",
-      "description": "Helpdesk, ticketing, SLA management, and knowledge base",
-      "icon": "headphones"
-    },
-    "content-safety": {
-      "name": "Content Safety",
-      "description": "Content moderation, toxicity detection, and safety tools",
-      "icon": "alert-triangle"
-    }
-  },
-  "metadata": {
-    "pluginCount": 64,
-    "lastUpdated": "2026-04-19T00:00:00Z",
-    "version": "1.0.0"
   }
 }
