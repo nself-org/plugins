@@ -2,16 +2,44 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "nself Plugin Registry Schema",
   "type": "object",
-  "required": ["version", "plugins"],
+  "required": ["plugins"],
   "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Registry schema version (snake_case canonical field)"
+    },
     "version": {
       "type": "string",
-      "description": "Registry schema version"
+      "description": "Registry schema version (camelCase alias — accepted for backwards compat)"
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when registry was generated"
+    },
+    "plugins_count": {
+      "type": "integer",
+      "description": "Total number of plugins in registry"
+    },
+    "last_updated": {
+      "type": "string",
+      "description": "Last update date (YYYY-MM-DD)"
+    },
+    "tier": {
+      "type": "string",
+      "description": "Plugin tier (free or pro)"
+    },
+    "checksum_algorithm": {
+      "type": "string",
+      "description": "Algorithm used for plugin checksums"
+    },
+    "note": {
+      "type": "string",
+      "description": "Human-readable note about this registry"
     },
     "lastUpdated": {
       "type": "string",
       "format": "date-time",
-      "description": "Last time the registry was updated"
+      "description": "Last time the registry was updated (camelCase alias)"
     },
     "plugins": {
       "type": "object",
@@ -29,7 +57,7 @@
   "definitions": {
     "plugin": {
       "type": "object",
-      "required": ["name", "version", "description", "path", "minNselfVersion"],
+      "required": ["version", "description"],
       "properties": {
         "name": {
           "type": "string",
@@ -65,11 +93,33 @@
         },
         "path": {
           "type": "string",
-          "description": "Path to plugin directory within repository"
+          "description": "Path to plugin directory within repository (optional)"
+        },
+        "min_nself_version": {
+          "type": "string",
+          "description": "Minimum required nself version (snake_case canonical field)"
         },
         "minNselfVersion": {
           "type": "string",
-          "description": "Minimum required nself version"
+          "description": "Minimum required nself version (camelCase alias — accepted for backwards compat)"
+        },
+        "tarball": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the plugin tarball on the GitHub release"
+        },
+        "download_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL via the plugins.nself.org registry API"
+        },
+        "requires_license": {
+          "type": "boolean",
+          "description": "Whether this plugin requires a paid license"
+        },
+        "language": {
+          "type": "string",
+          "description": "Implementation language (go, typescript, etc.)"
         },
         "manifestVersion": {
           "type": "integer",
