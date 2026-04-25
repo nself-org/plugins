@@ -149,7 +149,7 @@ Five bundles group plugins for a flat monthly price. Installing any plugin in a 
 | Bundle | Price | Plugins (canonical) |
 |--------|-------|---------------------|
 | ɳClaw | $0.99/mo | ai, claw, claw-web, mux, voice, browser, google, notify, cron |
-| ClawDE+ | $1.99/mo | realtime, auth, cms, notify |
+| ClawDE | $0.99/mo | claw, ai, realtime, auth, notify, cms, sync |
 | nTV | $0.99/mo | media-processing, streaming, epg, tmdb, torrent-manager, content-acquisition |
 | nFamily | $0.99/mo | social, photos, activity-feed, moderation, realtime, cms, chat |
 | nChat | $0.99/mo | chat, livekit, recording, moderation, bots, realtime, auth |
