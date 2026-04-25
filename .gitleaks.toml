@@ -69,6 +69,8 @@ paths = [
   '''\.github/workflows/gitleaks\.yml''',
   '''\.claude/archive/.*''',
   '''\.github/wiki/.*''',
+  '''README\.md$''',
+  '''\.workers/.*''',
 ]
 regexes = [
   '''sk_live_FAKE_TEST_FOR_CI_GATE''',
