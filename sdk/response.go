@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -16,6 +17,16 @@ func Respond(w http.ResponseWriter, status int, body interface{}) {
 }
 
 // Error writes a JSON error response with the given status code and message.
-func Error(w http.ResponseWriter, status int, message string) {
-	Respond(w, status, map[string]string{"error": message})
+// message may be a string, an error, or any value (formatted via fmt.Sprintf).
+func Error(w http.ResponseWriter, status int, message any) {
+	var msg string
+	switch m := message.(type) {
+	case error:
+		msg = m.Error()
+	case string:
+		msg = m
+	default:
+		msg = fmt.Sprintf("%v", m)
+	}
+	Respond(w, status, map[string]string{"error": msg})
 }

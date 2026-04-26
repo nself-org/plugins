@@ -11,12 +11,35 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	sdkdb "github.com/nself-org/plugin-sdk/db"
 	sdkmw "github.com/nself-org/plugin-sdk/middleware"
 )
+
+// Config holds common plugin configuration loaded from environment variables.
+type Config struct {
+	DatabaseURL string
+	Port        int
+}
+
+// LoadConfig reads DATABASE_URL and PORT from the environment.
+// Port defaults to 3000 when PORT is unset or unparseable.
+func LoadConfig() *Config {
+	port := 3000
+	if p := os.Getenv("PORT"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 {
+			port = n
+		}
+	}
+	return &Config{
+		DatabaseURL: os.Getenv("DATABASE_URL"),
+		Port:        port,
+	}
+}
 
 // ConnectDB opens a PostgreSQL connection pool using default nSelf settings.
 // dsn must be a postgres:// or postgresql:// URL.
