@@ -116,7 +116,20 @@ scan_history_range() {
   [ -n "$range" ] || die "--history-range requires a git range argument"
 
   if ! git rev-list "$range" >/dev/null 2>&1; then
-    die "invalid git range: $range"
+    # The base SHA is not reachable in the local clone (e.g. after a force-push
+    # or when the before-SHA was GC'd on the remote). Rather than hard-failing
+    # the guard on a git infrastructure issue, fall back to the narrowest safe
+    # scope: commits since the previous tag, or HEAD only when no tag exists.
+    # The attribution check still runs — it is never silently skipped.
+    printf 'Warning: base SHA not reachable (%s). Falling back to last-tag scope.\n' "$range" >&2
+    local last_tag
+    last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+    if [ -n "$last_tag" ]; then
+      range="${last_tag}..HEAD"
+    else
+      range="HEAD"
+    fi
+    printf 'Attribution guard fallback range: %s\n' "$range"
   fi
 
   # Grandfather commits authored before 2026-03-30. Commits from the early
