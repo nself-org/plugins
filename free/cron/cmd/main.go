@@ -27,6 +27,17 @@ func main() {
 		log.Fatalf("database migration failed: %v", err)
 	}
 
+	// Seed env-declared jobs (CRON_JOB_<N>_SCHEDULE + CRON_JOB_<N>_COMMAND).
+	// This upserts any CRON_JOB_* jobs declared in the environment into Postgres,
+	// so schedules declared as env vars survive nself rebuild and container restarts.
+	// Note: Redis auto-enable (G14-T03) brings up Redis alongside the cron container
+	// when REDIS_ENABLED is unset but the cron plugin is installed.
+	if n, err := internal.SeedEnvJobs(pool); err != nil {
+		log.Printf("WARNING: SeedEnvJobs encountered errors (continuing): %v", err)
+	} else if n > 0 {
+		log.Printf("nself-cron: seeded %d env-declared job(s)", n)
+	}
+
 	app := internal.NewApp(pool, cfg)
 
 	// Recover missed jobs on startup.

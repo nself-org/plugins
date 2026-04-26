@@ -17,6 +17,30 @@ services:
       - PORT=3051
       - CRON_TIMEOUT_SECS=${CRON_TIMEOUT_SECS:-30}
       - CRON_RETENTION_DAYS=${CRON_RETENTION_DAYS:-90}
+      # Env-driven schedule bootstrap: declare jobs as infrastructure-as-code.
+      # These are upserted into Postgres on startup and survive nself rebuild.
+      # Format: CRON_JOB_<N>_SCHEDULE (cron expr) + CRON_JOB_<N>_COMMAND (callback URL).
+      # Optional: CRON_JOB_<N>_NAME, CRON_JOB_<N>_PAYLOAD (JSON body).
+      - CRON_JOB_1_SCHEDULE=${CRON_JOB_1_SCHEDULE:-}
+      - CRON_JOB_1_COMMAND=${CRON_JOB_1_COMMAND:-}
+      - CRON_JOB_1_NAME=${CRON_JOB_1_NAME:-}
+      - CRON_JOB_1_PAYLOAD=${CRON_JOB_1_PAYLOAD:-}
+      - CRON_JOB_2_SCHEDULE=${CRON_JOB_2_SCHEDULE:-}
+      - CRON_JOB_2_COMMAND=${CRON_JOB_2_COMMAND:-}
+      - CRON_JOB_2_NAME=${CRON_JOB_2_NAME:-}
+      - CRON_JOB_2_PAYLOAD=${CRON_JOB_2_PAYLOAD:-}
+      - CRON_JOB_3_SCHEDULE=${CRON_JOB_3_SCHEDULE:-}
+      - CRON_JOB_3_COMMAND=${CRON_JOB_3_COMMAND:-}
+      - CRON_JOB_3_NAME=${CRON_JOB_3_NAME:-}
+      - CRON_JOB_3_PAYLOAD=${CRON_JOB_3_PAYLOAD:-}
+      - CRON_JOB_4_SCHEDULE=${CRON_JOB_4_SCHEDULE:-}
+      - CRON_JOB_4_COMMAND=${CRON_JOB_4_COMMAND:-}
+      - CRON_JOB_4_NAME=${CRON_JOB_4_NAME:-}
+      - CRON_JOB_4_PAYLOAD=${CRON_JOB_4_PAYLOAD:-}
+      - CRON_JOB_5_SCHEDULE=${CRON_JOB_5_SCHEDULE:-}
+      - CRON_JOB_5_COMMAND=${CRON_JOB_5_COMMAND:-}
+      - CRON_JOB_5_NAME=${CRON_JOB_5_NAME:-}
+      - CRON_JOB_5_PAYLOAD=${CRON_JOB_5_PAYLOAD:-}
     depends_on:
       postgres:
         condition: service_healthy
