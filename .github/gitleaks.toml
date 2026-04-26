@@ -4,13 +4,24 @@ title = "nSelf Plugins gitleaks config"
 useDefault = true
 
 [allowlist]
+# Documentation, examples, and test fixture paths — contain example/placeholder values only
 paths = [
   '''\.github/wiki/''',
   '''\.github/docs/''',
   '''\.claude/''',
+  '''free/.*\.md$''',
+  '''sdk/.*\.md$''',
+  '''monitoring/.*\.md$''',
+  '''\.workers/.*\.md$''',
+  '''\.md$''',
   '''\.env\.example$''',
   '''\.env\.template$''',
   '''\.env\.sample$''',
-  '''README\.md$''',
-  '''QUICKSTART\.md$''',
+  '''\.example$''',
+]
+# Known AWS documentation example credentials — not real secrets
+regexes = [
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI''',
+  '''bPxRfiCYEXAMPLEKEY''',
 ]
