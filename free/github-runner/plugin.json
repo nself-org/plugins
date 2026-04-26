@@ -13,7 +13,7 @@
   "minNselfVersion": "1.0.0",
   "language": "go",
   "entryPoint": "cmd/main.go",
-  "port": 3053,
+  "port": 3054,
   "category": "development",
   "status": "stable",
   "tier": "free",

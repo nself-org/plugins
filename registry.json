@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 27,
-  "last_updated": "2026-04-25",
+  "plugins_count": 28,
+  "last_updated": "2026-04-26",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 27 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 28 MIT-licensed plugins.",
   "plugins": {
     "audit-log": {
       "version": "1.0.0",
@@ -445,6 +445,31 @@
       ],
       "dependencies": {
         "required": [],
+        "optional": []
+      }
+    },
+    "push": {
+      "version": "1.0.0",
+      "description": "APNs + FCM push notification relay. Hasura event-trigger fan-out, delivery state tracking, exponential backoff retry. Handles iOS (Apple Push Notification service) and Android (Firebase Cloud Messaging v1 API).",
+      "category": "communication",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/push-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/push/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "push",
+        "apns",
+        "fcm",
+        "firebase",
+        "ios",
+        "android",
+        "notifications"
+      ],
+      "dependencies": {
+        "required": ["redis"],
         "optional": []
       }
     },
