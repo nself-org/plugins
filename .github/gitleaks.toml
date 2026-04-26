@@ -1,0 +1,27 @@
+title = "nSelf Plugins gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlist.paths]]
+description = "Wiki and documentation — example/placeholder values only, not real credentials"
+paths = [
+  '''\.github/wiki/''',
+  '''\.github/docs/''',
+  '''\.claude/''',
+]
+
+[[allowlist.paths]]
+description = "Example env files — placeholder values only"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.template$''',
+  '''\.env\.sample$''',
+]
+
+[[allowlist.paths]]
+description = "README files — documentation examples"
+paths = [
+  '''README\.md$''',
+  '''QUICKSTART\.md$''',
+]
