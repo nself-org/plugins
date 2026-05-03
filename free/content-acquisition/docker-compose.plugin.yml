@@ -1,3 +1,4 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
 services:
   content-acquisition:
     build:

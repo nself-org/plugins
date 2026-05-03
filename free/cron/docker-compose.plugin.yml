@@ -1,3 +1,4 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
 # nself-cron plugin Docker Compose service definition
 # Note: The nself CLI generates plugin services automatically from plugin.json
 # and the Dockerfile via plugin-services.sh. This file serves as a reference
