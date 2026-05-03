@@ -9,6 +9,9 @@ on:
       - 'registry-schema.json'
       - '.github/workflows/api-contract-check.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   api-contract-check:
     name: API Contract Check — Marketplace Worker (vs F19 baseline)

@@ -15,6 +15,9 @@ env:
   # enforced at 100% in the SSRF guard step below.
   COVERAGE_FLOOR: 0
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   coverage:
     name: Go coverage gate (plugins)
