@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Enforce attribution policy
         run: bash .github/scripts/no-attribution-check.sh --all
@@ -33,7 +33,7 @@ jobs:
 
       - name: Checkout wiki
         if: steps.wiki-check.outputs.wiki_exists == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.repository }}.wiki
           path: wiki
