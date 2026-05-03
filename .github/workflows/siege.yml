@@ -11,6 +11,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   siege-syntax:
     name: Lint SIEGE scripts (bash -n)

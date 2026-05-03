@@ -1,0 +1,74 @@
+# Prometheus disk pressure alert rules for nSelf monitoring stack
+# Source: plugins/monitoring/prometheus/rules/disk.yml
+# Managed by: nself-org/plugins — do not hand-edit
+#
+# Alert levels:
+#   DiskPressureWarn     > 70% for 5m  — early warning, schedule maintenance
+#   DiskPressureCritical > 85% for 1m  — immediate action required
+#
+# Historical context: staging at 83% on 2026-05-03, +1%/day trend.
+# nself maintenance disk-cleanup auto-scheduled on every nself deploy staging/prod (P98 S98-10).
+
+groups:
+  - name: nself.disk
+    rules:
+      - alert: DiskPressureWarn
+        expr: |
+          (
+            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+            - node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+          )
+          / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+          * 100 > 70
+        for: 5m
+        labels:
+          severity: warning
+          team: nself-infra
+          runbook: "https://github.com/nself-org/cli/wiki/operations/disk-hardening"
+        annotations:
+          summary: "Disk usage above 70% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: >
+            Disk usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} has been
+            above 70% for more than 5 minutes. Current value: {{ $value | printf "%.1f" }}%.
+            Run `nself maintenance disk-cleanup` or check for log accumulation.
+            See runbook: https://github.com/nself-org/cli/wiki/operations/disk-hardening
+
+      - alert: DiskPressureCritical
+        expr: |
+          (
+            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+            - node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+          )
+          / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+          * 100 > 85
+        for: 1m
+        labels:
+          severity: critical
+          team: nself-infra
+          runbook: "https://github.com/nself-org/cli/wiki/operations/disk-hardening"
+        annotations:
+          summary: "CRITICAL: Disk usage above 85% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: >
+            Disk usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} has been
+            CRITICAL (>85%) for more than 1 minute. Current value: {{ $value | printf "%.1f" }}%.
+            IMMEDIATE ACTION REQUIRED: Run `nself maintenance disk-cleanup --force` on the affected host.
+            If that is insufficient, consider upgrading the server volume or running `docker system prune -af`.
+            See runbook: https://github.com/nself-org/cli/wiki/operations/disk-hardening
+
+      - alert: DiskInodesPressure
+        expr: |
+          node_filesystem_files_free{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+          / node_filesystem_files{fstype!~"tmpfs|devtmpfs|overlay",mountpoint!~"/run.*|/sys.*|/dev.*"}
+          * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+          team: nself-infra
+          runbook: "https://github.com/nself-org/cli/wiki/operations/disk-hardening"
+        annotations:
+          summary: "Low inode count on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: >
+            Inode usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} is critically low
+            (less than 20% free). This can prevent new files from being created even when
+            disk space is available. Check for large numbers of small files in /tmp,
+            /var/log, or Docker overlay directories.
