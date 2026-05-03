@@ -54,10 +54,7 @@
         "automation",
         "disaster-recovery"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "backup",
       "author": "nSelf Team",
       "tables": [
