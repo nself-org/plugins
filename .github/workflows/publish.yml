@@ -25,7 +25,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Enforce attribution policy
         run: bash .github/scripts/no-attribution-check.sh --all
@@ -71,7 +71,7 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Update registry timestamp
         run: |
@@ -139,7 +139,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_worker == 'true') ||
       startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
