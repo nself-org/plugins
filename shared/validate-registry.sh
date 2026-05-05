@@ -413,23 +413,20 @@ else
 fi
 
 # =============================================================================
-# CHECK 13 — Dependencies use Shape B (object form) — no flat arrays
+# CHECK 13 — Dependencies use Shape A (array form, per registry-schema.json)
 # CHECK 7  — schema fields present
 # =============================================================================
-section "CHECK 13 — dependencies Shape B enforcement"
-SHAPE_B_VIOLATIONS=0
+section "CHECK 13 — dependencies type validation"
+DEPS_VIOLATIONS=0
 while IFS="$US" read -r name _tier _category _version _port _bundles deps_type _license; do
     [ -z "$name" ] && continue
-    if [ "$deps_type" = "array" ]; then
-        err "CHECK-13" "$name" "dependencies is an array (Shape A) — must be object {required:[],optional:[]}"
-        SHAPE_B_VIOLATIONS=$((SHAPE_B_VIOLATIONS + 1))
-    elif [ "$deps_type" = "string" ] || [ "$deps_type" = "number" ] || [ "$deps_type" = "boolean" ]; then
-        err "CHECK-13" "$name" "dependencies has invalid type '${deps_type}' — must be object {required:[],optional:[]}"
-        SHAPE_B_VIOLATIONS=$((SHAPE_B_VIOLATIONS + 1))
+    if [ "$deps_type" = "string" ] || [ "$deps_type" = "number" ] || [ "$deps_type" = "boolean" ] || [ "$deps_type" = "object" ]; then
+        err "CHECK-13" "$name" "dependencies has invalid type '${deps_type}' — must be array of strings"
+        DEPS_VIOLATIONS=$((DEPS_VIOLATIONS + 1))
     fi
 done < "$ENTRIES_TSV"
-if [ "$SHAPE_B_VIOLATIONS" -eq 0 ]; then
-    ok "CHECK-13" "all dependencies use Shape B (object form)"
+if [ "$DEPS_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-13" "all dependencies are properly typed arrays"
 fi
 
 # =============================================================================
