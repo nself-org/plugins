@@ -5,7 +5,7 @@
   "last_updated": "2026-05-03",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry — 28 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 28 MIT-licensed plugins.",
   "plugins": {
     "audit-log": {
       "version": "1.0.0",
@@ -25,10 +25,7 @@
         "logging",
         "events"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "audit-log",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -59,10 +56,7 @@
         "automation",
         "disaster-recovery"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "backup",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -94,27 +88,25 @@
         "media",
         "automation"
       ],
-      "dependencies": {
-        "npm": [
-          "@nself/plugin-utils",
-          "fastify",
-          "@fastify/cors",
-          "@fastify/rate-limit",
-          "commander",
-          "feedparser",
-          "axios",
-          "node-cron",
-          "bullmq",
-          "ioredis",
-          "json-logic-js",
-          "pg",
-          "dotenv",
-          "uuid",
-          "winston",
-          "chalk",
-          "ora"
-        ]
-      },
+      "dependencies": [
+        "@nself/plugin-utils",
+        "fastify",
+        "@fastify/cors",
+        "@fastify/rate-limit",
+        "commander",
+        "feedparser",
+        "axios",
+        "node-cron",
+        "bullmq",
+        "ioredis",
+        "json-logic-js",
+        "pg",
+        "dotenv",
+        "uuid",
+        "winston",
+        "chalk",
+        "ora"
+      ],
       "name": "content-acquisition",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -153,10 +145,7 @@
         "watchlist",
         "favorites"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "content-progress",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -191,10 +180,7 @@
         "automation",
         "webhooks"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "cron",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -226,10 +212,7 @@
         "donorbox",
         "webhooks"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "donorbox",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -250,7 +233,7 @@
     },
     "family-gedcom": {
       "version": "0.0.1",
-      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
+      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin \u2014 showcases the core + helper-importer pattern.",
       "category": "content",
       "tier": "free",
       "license": "MIT",
@@ -266,13 +249,11 @@
         "migration",
         "importer"
       ],
-      "dependencies": {
-        "plugins": [
-          "family",
-          "object-storage",
-          "photos"
-        ]
-      },
+      "dependencies": [
+        "family",
+        "object-storage",
+        "photos"
+      ],
       "name": "family-gedcom",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -301,10 +282,7 @@
         "configuration",
         "infrastructure"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "feature-flags",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -337,10 +315,7 @@
         "issues",
         "pull-requests"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "github",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -377,7 +352,7 @@
     },
     "github-runner": {
       "version": "1.0.0",
-      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
+      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
@@ -395,10 +370,7 @@
         "self-hosted",
         "devops"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "github-runner",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -428,10 +400,7 @@
         "sms",
         "referrals"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "invitations",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -463,10 +432,7 @@
         "workers",
         "postgresql"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "jobs",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -499,10 +465,7 @@
         "caching",
         "url"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "link-preview",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -533,10 +496,7 @@
         "lan",
         "service-discovery"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "mdns",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -569,10 +529,7 @@
         "model-registry",
         "mlops"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "mlflow",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -607,10 +564,7 @@
         "logging",
         "tracing"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "monitoring",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -640,10 +594,7 @@
         "templates",
         "preferences"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "notifications",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -675,10 +626,7 @@
         "webhooks",
         "templates"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "notify",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -712,10 +660,7 @@
         "gemma",
         "self-hosted"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "checksum": ""
     },
     "paypal": {
@@ -736,10 +681,7 @@
         "paypal",
         "webhooks"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "paypal",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -785,12 +727,9 @@
         "android",
         "notifications"
       ],
-      "dependencies": {
-        "required": [
-          "redis"
-        ],
-        "optional": []
-      },
+      "dependencies": [
+        "redis"
+      ],
       "name": "push",
       "author": "nself",
       "minNselfVersion": "1.0.9",
@@ -823,10 +762,7 @@
         "meilisearch",
         "autocomplete"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "search",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -861,10 +797,7 @@
         "products",
         "inventory"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "shopify",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -903,10 +836,7 @@
         "stripe",
         "webhooks"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "stripe",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -960,22 +890,20 @@
         "srt",
         "sync"
       ],
-      "dependencies": {
-        "npm": [
-          "@nself/plugin-utils",
-          "fastify",
-          "@fastify/cors",
-          "@fastify/rate-limit",
-          "commander",
-          "axios",
-          "pg",
-          "dotenv",
-          "uuid",
-          "winston",
-          "chalk",
-          "ora"
-        ]
-      },
+      "dependencies": [
+        "@nself/plugin-utils",
+        "fastify",
+        "@fastify/cors",
+        "@fastify/rate-limit",
+        "commander",
+        "axios",
+        "pg",
+        "dotenv",
+        "uuid",
+        "winston",
+        "chalk",
+        "ora"
+      ],
       "name": "subtitle-manager",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -1010,10 +938,7 @@
         "entitlement",
         "access-control"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "tokens",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -1048,30 +973,26 @@
         "p2p",
         "bittorrent"
       ],
-      "dependencies": {
-        "npm": [
-          "@nself/plugin-utils",
-          "@ctrl/transmission",
-          "fastify",
-          "@fastify/cors",
-          "@fastify/rate-limit",
-          "commander",
-          "axios",
-          "cheerio",
-          "puppeteer",
-          "parse-torrent",
-          "webtorrent-health",
-          "node-cron",
-          "pg",
-          "dotenv",
-          "uuid",
-          "winston"
-        ],
-        "system": [
-          "transmission-daemon",
-          "qbittorrent-nox"
-        ]
-      },
+      "dependencies": [
+        "@nself/plugin-utils",
+        "@ctrl/transmission",
+        "fastify",
+        "@fastify/cors",
+        "@fastify/rate-limit",
+        "commander",
+        "axios",
+        "cheerio",
+        "puppeteer",
+        "parse-torrent",
+        "webtorrent-health",
+        "node-cron",
+        "pg",
+        "dotenv",
+        "uuid",
+        "winston",
+        "transmission-daemon",
+        "qbittorrent-nox"
+      ],
       "name": "torrent-manager",
       "author": "nself",
       "minNselfVersion": "1.0.0",
@@ -1110,10 +1031,7 @@
         "networking",
         "tunnel"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "vpn",
       "author": "nself",
       "minNselfVersion": "0.9.9",
@@ -1151,10 +1069,7 @@
         "delivery",
         "integration"
       ],
-      "dependencies": {
-        "required": [],
-        "optional": []
-      },
+      "dependencies": [],
       "name": "webhooks",
       "author": "nself",
       "minNselfVersion": "0.9.9",
