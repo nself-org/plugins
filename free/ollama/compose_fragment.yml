@@ -1,0 +1,31 @@
+# Ollama compose fragment — injected by `nself build` when the ollama plugin is installed.
+# DO NOT hand-edit this file; it is read by the nself compose generator.
+# GPU passthrough is added by the generator when NSELF_OLLAMA_GPU=true.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-nself}-ollama
+    restart: unless-stopped
+    volumes:
+      - nself_ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/version || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # GPU passthrough block (inserted by nself build when NSELF_OLLAMA_GPU=true):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  nself_ollama_models:
+    name: ${COMPOSE_PROJECT_NAME:-nself}_ollama_models

@@ -53,5 +53,9 @@
   },
   "port": 3050,
   "status": "stable",
-  "tier": "free"
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  }
 }

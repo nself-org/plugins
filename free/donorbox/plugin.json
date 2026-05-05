@@ -25,7 +25,10 @@
     "np_donorbox_tickets",
     "np_donorbox_webhook_events"
   ],
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "optionalDependencies": [],
   "webhooks": {
     "donation.created": "Sync new donation to database"

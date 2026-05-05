@@ -26,7 +26,10 @@
     "np_notifications_templates",
     "np_notifications_preferences"
   ],
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "optionalDependencies": [],
   "envVars": {
     "required": [

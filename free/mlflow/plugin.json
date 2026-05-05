@@ -60,7 +60,10 @@
       "artifacts"
     ]
   },
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "port": 5000,
   "isCommercial": false,
   "licenseType": "free",

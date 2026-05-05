@@ -26,7 +26,7 @@
     "np_push_outbox",
     "np_push_devices"
   ],
-  "dependencies": ["redis"],
+  "dependencies": {"redis": ">=1.0.0"},
   "optionalDependencies": [],
   "envVars": {
     "required": [

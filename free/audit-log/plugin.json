@@ -23,7 +23,10 @@
   "tables": [
     "np_auditlog_events"
   ],
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "optionalDependencies": [],
   "envVars": {
     "required": [

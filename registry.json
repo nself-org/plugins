@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 28,
-  "last_updated": "2026-04-26",
+  "plugins_count": 29,
+  "last_updated": "2026-05-03",
   "tier": "free",
   "checksum_algorithm": "sha256",
   "note": "nSelf Free Plugin Registry — 28 MIT-licensed plugins.",
@@ -17,6 +17,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/audit-log-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/audit-log/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "audit",
         "security",
@@ -24,17 +25,20 @@
         "logging",
         "events"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "audit-log",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_audit_events"
+        "np_auditlog_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "backup": {
@@ -47,6 +51,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/backup-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/backup/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "backup",
         "restore",
@@ -54,18 +59,21 @@
         "automation",
         "disaster-recovery"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "backup",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
         "np_backup_jobs",
-        "np_backup_runs"
+        "np_backup_schedules"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main"
       }
     },
     "content-acquisition": {
@@ -78,11 +86,12 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-acquisition-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/content-acquisition/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "content",
-        "media",
+        "download",
         "rss",
-        "downloader",
+        "media",
         "automation"
       ],
       "dependencies": {
@@ -107,18 +116,22 @@
         ]
       },
       "name": "content-acquisition",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_ca_sources",
-        "np_ca_items",
-        "np_ca_download_rules",
-        "np_ca_download_runs"
+        "np_contentacquisition_profiles",
+        "np_contentacquisition_acquisition_subscriptions",
+        "np_contentacquisition_rss_feeds",
+        "np_contentacquisition_rss_feed_items",
+        "np_contentacquisition_release_calendar",
+        "np_contentacquisition_acquisition_queue",
+        "np_contentacquisition_acquisition_history",
+        "np_contentacquisition_acquisition_rules"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "content-progress": {
@@ -131,6 +144,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-progress-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/content-progress/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "media",
         "video",
@@ -144,17 +158,19 @@
         "optional": []
       },
       "name": "content-progress",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_cp_progress",
-        "np_cp_watchlists",
-        "np_cp_favorites"
+        "np_progress_positions",
+        "np_progress_history",
+        "np_progress_watchlists",
+        "np_progress_favorites",
+        "np_progress_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "cron": {
@@ -167,6 +183,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cron/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "cron",
         "scheduler",
@@ -174,9 +191,13 @@
         "automation",
         "webhooks"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "cron",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
         "np_cron_jobs",
         "np_cron_runs"
@@ -184,8 +205,7 @@
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "donorbox": {
@@ -198,6 +218,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/donorbox-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/donorbox/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "donations",
         "fundraising",
@@ -205,31 +226,39 @@
         "donorbox",
         "webhooks"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "donorbox",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
         "np_donorbox_campaigns",
+        "np_donorbox_donors",
         "np_donorbox_donations",
-        "np_donorbox_donors"
+        "np_donorbox_plans",
+        "np_donorbox_events",
+        "np_donorbox_tickets",
+        "np_donorbox_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "family-gedcom": {
       "version": "0.0.1",
       "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
-      "category": "communication",
+      "category": "content",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
       "tarball": "https://github.com/nself-org/plugins/releases/download/v0.0.1/family-gedcom-0.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/family-gedcom/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "family",
         "genealogy",
@@ -245,17 +274,13 @@
         ]
       },
       "name": "family-gedcom",
-      "author": "nSelf Team",
-      "tables": [
-        "np_fg_imports",
-        "np_fg_individuals",
-        "np_fg_families"
-      ],
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "binary"
       }
     },
     "feature-flags": {
@@ -268,6 +293,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/feature-flags-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/feature-flags/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "feature-flags",
         "feature-toggles",
@@ -280,17 +306,16 @@
         "optional": []
       },
       "name": "feature-flags",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_ff_flags",
-        "np_ff_segments",
-        "np_ff_evaluations"
+        "np_feature_flags_flags",
+        "np_feature_flags_segments"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "github": {
@@ -303,6 +328,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/github/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "github",
         "git",
@@ -316,17 +342,37 @@
         "optional": []
       },
       "name": "github",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_github_repos",
+        "np_github_organizations",
+        "np_github_repositories",
+        "np_github_branches",
         "np_github_issues",
-        "np_github_workflows"
+        "np_github_pull_requests",
+        "np_github_pr_reviews",
+        "np_github_issue_comments",
+        "np_github_pr_review_comments",
+        "np_github_commit_comments",
+        "np_github_commits",
+        "np_github_releases",
+        "np_github_tags",
+        "np_github_milestones",
+        "np_github_labels",
+        "np_github_workflows",
+        "np_github_workflow_runs",
+        "np_github_workflow_jobs",
+        "np_github_check_suites",
+        "np_github_check_runs",
+        "np_github_deployments",
+        "np_github_teams",
+        "np_github_collaborators",
+        "np_github_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "nself-github"
       }
     },
     "github-runner": {
@@ -339,6 +385,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/github-runner-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/github-runner/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "github",
         "ci",
@@ -348,18 +395,18 @@
         "self-hosted",
         "devops"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "github-runner",
-      "author": "nSelf Team",
-      "tables": [
-        "np_gr_runners",
-        "np_gr_jobs"
-      ],
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "invitations": {
@@ -372,6 +419,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/invitations-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/invitations/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "invitations",
         "invite",
@@ -385,16 +433,15 @@
         "optional": []
       },
       "name": "invitations",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_inv_invitations",
-        "np_inv_tokens"
+        "np_invitations_invitations"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "jobs": {
@@ -407,6 +454,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/jobs-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/jobs/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "jobs",
         "queue",
@@ -420,16 +468,16 @@
         "optional": []
       },
       "name": "jobs",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
-        "np_jobs_queue",
-        "np_jobs_runs"
+        "np_jobs_jobs",
+        "np_jobs_queues"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "link-preview": {
@@ -442,6 +490,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/link-preview-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/link-preview/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "link-preview",
         "open-graph",
@@ -455,15 +504,15 @@
         "optional": []
       },
       "name": "link-preview",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_lp_cache"
+        "np_link_preview_cache"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "mdns": {
@@ -476,6 +525,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mdns-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/mdns/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "mdns",
         "bonjour",
@@ -488,13 +538,16 @@
         "optional": []
       },
       "name": "mdns",
-      "author": "nSelf Team",
-      "tables": [],
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_mdns_services",
+        "np_mdns_discovery_log"
+      ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "mlflow": {
@@ -507,6 +560,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/mlflow-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/mlflow/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "mlflow",
         "ml",
@@ -515,19 +569,18 @@
         "model-registry",
         "mlops"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "mlflow",
-      "author": "nSelf Team",
-      "tables": [
-        "np_mlflow_experiments",
-        "np_mlflow_runs",
-        "np_mlflow_models"
-      ],
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "monitoring": {
@@ -540,6 +593,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitoring-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/monitoring/tarball",
       "requires_license": false,
+      "language": "config",
       "tags": [
         "monitoring",
         "observability",
@@ -553,14 +607,18 @@
         "logging",
         "tracing"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "monitoring",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [],
       "implementation": {
         "language": "config",
-        "runtime": "docker-compose",
-        "entryPoint": "docker-compose.yml"
+        "runtime": "compose",
+        "entryPoint": "docker-compose.plugin.yml"
       }
     },
     "notifications": {
@@ -573,6 +631,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notifications-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notifications/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "notifications",
         "email",
@@ -581,19 +640,22 @@
         "templates",
         "preferences"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "notifications",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
-        "np_notif_templates",
-        "np_notif_deliveries",
-        "np_notif_preferences"
+        "np_notifications_notifications",
+        "np_notifications_templates",
+        "np_notifications_preferences"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "notify": {
@@ -606,25 +668,55 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notify-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notify/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "notifications",
         "email",
         "webhooks",
         "templates"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "notify",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
-        "np_notify_templates",
-        "np_notify_deliveries"
+        "np_notify_notifications",
+        "np_notify_templates"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
+    },
+    "ollama": {
+      "version": "1.1.1",
+      "description": "One-click offline LLM stack. Stands up an Ollama container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install.",
+      "category": "integrations",
+      "tier": "free",
+      "license": "Source-Available",
+      "min_nself_version": "1.0.9",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.1/ollama-1.1.1.tar.gz",
+      "download_url": "https://ping.nself.org/plugins/ollama/download",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "ai",
+        "llm",
+        "ollama",
+        "local",
+        "offline",
+        "gemma",
+        "self-hosted"
+      ],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
+      "checksum": ""
     },
     "paypal": {
       "version": "1.0.0",
@@ -636,6 +728,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/paypal-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/paypal/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "payments",
         "donations",
@@ -648,17 +741,28 @@
         "optional": []
       },
       "name": "paypal",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
+        "np_paypal_transactions",
         "np_paypal_orders",
+        "np_paypal_captures",
+        "np_paypal_authorizations",
+        "np_paypal_refunds",
         "np_paypal_subscriptions",
-        "np_paypal_webhooks"
+        "np_paypal_subscription_plans",
+        "np_paypal_products",
+        "np_paypal_disputes",
+        "np_paypal_payouts",
+        "np_paypal_invoices",
+        "np_paypal_payers",
+        "np_paypal_balances",
+        "np_paypal_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "nself-paypal"
       }
     },
     "push": {
@@ -671,6 +775,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/push-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/push/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "push",
         "apns",
@@ -687,16 +792,16 @@
         "optional": []
       },
       "name": "push",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.9",
       "tables": [
-        "np_push_devices",
-        "np_push_deliveries"
+        "np_push_outbox",
+        "np_push_devices"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "search": {
@@ -709,6 +814,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/search/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "search",
         "fts",
@@ -722,16 +828,19 @@
         "optional": []
       },
       "name": "search",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
         "np_search_indexes",
-        "np_search_queries"
+        "np_search_documents",
+        "np_search_synonyms",
+        "np_search_queries",
+        "np_search_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "shopify": {
@@ -744,6 +853,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/shopify-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/shopify/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "shopify",
         "ecommerce",
@@ -756,17 +866,23 @@
         "optional": []
       },
       "name": "shopify",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_shopify_stores",
+        "np_shopify_shops",
+        "np_shopify_products",
+        "np_shopify_variants",
+        "np_shopify_collections",
+        "np_shopify_customers",
         "np_shopify_orders",
-        "np_shopify_products"
+        "np_shopify_order_items",
+        "np_shopify_inventory",
+        "np_shopify_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "nself-shopify"
       }
     },
     "stripe": {
@@ -779,6 +895,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/stripe-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/stripe/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "payments",
         "billing",
@@ -791,18 +908,38 @@
         "optional": []
       },
       "name": "stripe",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
         "np_stripe_customers",
+        "np_stripe_products",
+        "np_stripe_prices",
+        "np_stripe_coupons",
+        "np_stripe_promotion_codes",
         "np_stripe_subscriptions",
+        "np_stripe_subscription_items",
+        "np_stripe_subscription_schedules",
+        "np_stripe_invoices",
+        "np_stripe_invoice_items",
+        "np_stripe_credit_notes",
         "np_stripe_charges",
-        "np_stripe_webhooks"
+        "np_stripe_refunds",
+        "np_stripe_disputes",
+        "np_stripe_payment_intents",
+        "np_stripe_setup_intents",
+        "np_stripe_payment_methods",
+        "np_stripe_balance_transactions",
+        "np_stripe_payouts",
+        "np_stripe_discounts",
+        "np_stripe_checkout_sessions",
+        "np_stripe_tax_ids",
+        "np_stripe_tax_rates",
+        "np_stripe_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "nself-stripe"
       }
     },
     "subtitle-manager": {
@@ -815,11 +952,13 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/subtitle-manager-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/subtitle-manager/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
-        "media",
         "subtitles",
-        "opensubtitles",
-        "video"
+        "media",
+        "download",
+        "srt",
+        "sync"
       ],
       "dependencies": {
         "npm": [
@@ -838,16 +977,17 @@
         ]
       },
       "name": "subtitle-manager",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_sm_subtitles",
-        "np_sm_searches"
+        "np_subtmgr_subtitles",
+        "np_subtmgr_downloads",
+        "np_subtmgr_qc_results"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "tokens": {
@@ -860,6 +1000,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/tokens-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/tokens/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "tokens",
         "signed-urls",
@@ -874,16 +1015,19 @@
         "optional": []
       },
       "name": "tokens",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_tokens_entries",
-        "np_tokens_grants"
+        "np_tokens_signing_keys",
+        "np_tokens_issued",
+        "np_tokens_encryption_keys",
+        "np_tokens_entitlements",
+        "np_tokens_webhook_events"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "torrent-manager": {
@@ -896,12 +1040,13 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/torrent-manager-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/torrent-manager/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
-        "media",
         "torrent",
-        "transmission",
-        "qbittorrent",
-        "downloader"
+        "download",
+        "media",
+        "p2p",
+        "bittorrent"
       ],
       "dependencies": {
         "npm": [
@@ -928,17 +1073,23 @@
         ]
       },
       "name": "torrent-manager",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
       "tables": [
-        "np_tm_torrents",
-        "np_tm_sources",
-        "np_tm_downloads"
+        "np_torrentmanager_clients",
+        "np_torrentmanager_sources",
+        "np_torrentmanager_downloads",
+        "np_torrentmanager_files",
+        "np_torrentmanager_trackers",
+        "np_torrentmanager_search_cache",
+        "np_torrentmanager_stats",
+        "np_torrentmanager_seeding_policy",
+        "np_torrent_seeding_policies"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "vpn": {
@@ -951,25 +1102,35 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/vpn-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/vpn/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "vpn",
-        "privacy",
         "security",
-        "nordvpn",
-        "wireguard"
+        "privacy",
+        "networking",
+        "tunnel"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "vpn",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
+        "np_vpn_providers",
+        "np_vpn_credentials",
         "np_vpn_servers",
-        "np_vpn_connections"
+        "np_vpn_connections",
+        "np_vpn_downloads",
+        "np_vpn_connection_logs",
+        "np_vpn_server_performance",
+        "np_vpn_leak_tests"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     },
     "webhooks": {
@@ -982,6 +1143,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/webhooks-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/webhooks/tarball",
       "requires_license": false,
+      "language": "go",
       "tags": [
         "webhooks",
         "events",
@@ -989,19 +1151,21 @@
         "delivery",
         "integration"
       ],
-      "dependencies": [],
+      "dependencies": {
+        "required": [],
+        "optional": []
+      },
       "name": "webhooks",
-      "author": "nSelf Team",
+      "author": "nself",
+      "minNselfVersion": "0.9.9",
       "tables": [
         "np_webhooks_endpoints",
-        "np_webhooks_deliveries",
-        "np_webhooks_events"
+        "np_webhooks_deliveries"
       ],
       "implementation": {
         "language": "go",
         "runtime": "go",
-        "entryPoint": "dist/plugin",
-        "cli": "dist/cli"
+        "entryPoint": "cmd/main.go"
       }
     }
   }

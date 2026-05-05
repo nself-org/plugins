@@ -24,7 +24,10 @@
     "np_cron_jobs",
     "np_cron_runs"
   ],
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "optionalDependencies": [],
   "envVars": {
     "required": [

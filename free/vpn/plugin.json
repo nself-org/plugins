@@ -12,7 +12,10 @@
   "language": "go",
   "minNselfVersion": "0.9.9",
   "port": 3200,
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "optionalDependencies": [],
   "tables": [
     "np_vpn_providers",

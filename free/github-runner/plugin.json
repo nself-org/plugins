@@ -26,7 +26,10 @@
     "self-hosted",
     "devops"
   ],
-  "dependencies": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
   "optionalDependencies": [],
   "tables": [],
   "webhooks": {},

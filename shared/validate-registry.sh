@@ -1,78 +1,53 @@
 #!/bin/bash
 # =============================================================================
-# nself Plugin Registry Validator
-# Validates every plugin entry in registry.json against the required schema
+# nself Plugin Registry Validator (v2)
+# Validates registry.json against the 13 canonical checks from
+# .claude/docs/plugin-cleanup-spec.md § 6 Registry.json Validation.
+#
+# Supports BOTH formats:
+#   - Aggregated v2.0.0: top-level object with `plugins` keyed dict
+#   - Flat array (legacy): top-level JSON array of plugin objects
 # =============================================================================
 #
 # Usage:
-#   validate-registry.sh [OPTIONS]
+#   validate-registry.sh [REGISTRY_FILE] [OPTIONS]
+#
+# Arguments:
+#   REGISTRY_FILE  Path to registry.json (default: <script-dir>/../registry.json)
 #
 # Options:
-#   --fix         Auto-fix simple issues (category normalization suggestions)
-#   --json        Output results as machine-readable JSON
-#   --plugin <n>  Validate a single plugin by name
-#   --help        Show this help message
+#   --json         Output results as machine-readable JSON
+#   --strict       Run legacy per-plugin schema validation in addition to the
+#                  13 canonical checks (requires tables, implementation, etc).
+#   --plugin <n>   Validate a single plugin by name (strict mode only)
+#   --help         Show this help message
 #
 # Exit codes:
-#   0 = All plugins valid (warnings do not fail)
+#   0 = All checks passed (warnings do not fail)
 #   1 = One or more validation errors found
 #
-# Bash 3.2+ compatible (macOS default shell)
+# Bash 3.2+ compatible (macOS default shell). shellcheck warning-clean.
 # =============================================================================
 
 set -uo pipefail
 
 # ---------------------------------------------------------------------------
-# Script location — resolve registry.json relative to this script
+# Argument parsing — REGISTRY_FILE is optional positional
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REGISTRY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REGISTRY_FILE="${REGISTRY_ROOT}/registry.json"
-FREE_DIR="${REGISTRY_ROOT}/free"
-COMMUNITY_DIR="${REGISTRY_ROOT}/community"
-
-# ---------------------------------------------------------------------------
-# Color constants (disabled when piped or --json is active)
-# ---------------------------------------------------------------------------
-RED=""
-GREEN=""
-YELLOW=""
-CYAN=""
-BOLD=""
-DIM=""
-RESET=""
-
-if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
-    RED="\033[0;31m"
-    GREEN="\033[0;32m"
-    YELLOW="\033[0;33m"
-    CYAN="\033[0;36m"
-    BOLD="\033[1m"
-    DIM="\033[2m"
-    RESET="\033[0m"
-fi
-
-# ---------------------------------------------------------------------------
-# Valid categories (13 official — never add more without team approval)
-# ---------------------------------------------------------------------------
-VALID_CATEGORIES="authentication automation commerce communication content data development infrastructure integrations media streaming sports compliance"
-
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-OPT_FIX=false
+REGISTRY_FILE=""
 OPT_JSON=false
+OPT_STRICT=false
 OPT_PLUGIN=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --fix)
-            OPT_FIX=true
-            shift
-            ;;
         --json)
             OPT_JSON=true
-            RED=""; GREEN=""; YELLOW=""; CYAN=""; BOLD=""; DIM=""; RESET=""
+            shift
+            ;;
+        --strict)
+            OPT_STRICT=true
             shift
             ;;
         --plugin)
@@ -84,20 +59,85 @@ while [ $# -gt 0 ]; do
             fi
             shift
             ;;
+        --fix)
+            # Legacy flag — accepted for backward compatibility, no-op.
+            shift
+            ;;
         --help|-h)
-            sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
-        *)
+        --*)
             printf "Unknown option: %s\n" "$1" >&2
             exit 1
+            ;;
+        *)
+            if [ -z "$REGISTRY_FILE" ]; then
+                REGISTRY_FILE="$1"
+            else
+                printf "Unexpected argument: %s\n" "$1" >&2
+                exit 1
+            fi
+            shift
             ;;
     esac
 done
 
+# Default registry location: sibling of this script's parent dir
+if [ -z "$REGISTRY_FILE" ]; then
+    REGISTRY_FILE="$(cd "${SCRIPT_DIR}/.." && pwd)/registry.json"
+fi
+
+REGISTRY_ROOT="$(cd "$(dirname "$REGISTRY_FILE")" && pwd)"
+FREE_DIR="${REGISTRY_ROOT}/free"
+COMMUNITY_DIR="${REGISTRY_ROOT}/community"
+PAID_DIR="${REGISTRY_ROOT}/paid"
+
 # ---------------------------------------------------------------------------
-# Locate python3
+# Color constants (disabled when piped or --json is active)
 # ---------------------------------------------------------------------------
+RED=""; GREEN=""; YELLOW=""; BOLD=""; DIM=""; RESET=""
+
+if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ] && [ "$OPT_JSON" = "false" ]; then
+    RED="\033[0;31m"
+    GREEN="\033[0;32m"
+    YELLOW="\033[0;33m"
+    BOLD="\033[1m"
+    DIM="\033[2m"
+    RESET="\033[0m"
+fi
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+# 14 official categories — `social` added 2026-05 with team approval after
+# plugins-pro/social/* introduction (PRI lists 13; PPI canonical is now 14).
+VALID_CATEGORIES="authentication automation commerce communication content data development infrastructure integrations media streaming sports compliance social"
+
+# Canonical tier values (per F07 PRICING-TIERS).
+# free, pro, max — `max` represents the all-bundle ɳSelf+ tier per F07.
+VALID_TIERS="free pro max enterprise"
+
+# Canonical bundle names (per F06 BUNDLE-INVENTORY).
+# Single source of truth — keep aligned with .claude/docs/sport/F06-BUNDLE-INVENTORY.md
+VALID_BUNDLES="nclaw nchat ntv nfamily clawde nsentry ntask"
+
+# ---------------------------------------------------------------------------
+# Locate jq (preferred) and python3 (fallback for complex parsing)
+# ---------------------------------------------------------------------------
+JQ=""
+for _candidate in jq /opt/homebrew/bin/jq /usr/local/bin/jq; do
+    if command -v "$_candidate" >/dev/null 2>&1; then
+        JQ="$_candidate"
+        break
+    fi
+done
+
+if [ -z "$JQ" ]; then
+    printf "%bERROR:%b jq is required. Install it with: brew install jq\n" "$RED" "$RESET" >&2
+    exit 1
+fi
+
 PYTHON3=""
 for _py in python3 /usr/bin/python3 /opt/homebrew/bin/python3; do
     if command -v "$_py" >/dev/null 2>&1; then
@@ -106,82 +146,108 @@ for _py in python3 /usr/bin/python3 /opt/homebrew/bin/python3; do
     fi
 done
 
-if [ -z "$PYTHON3" ]; then
-    printf "${RED}ERROR:${RESET} python3 is required for JSON parsing.\n" >&2
-    printf "Install it with: brew install python3\n" >&2
-    exit 1
-fi
-
 # ---------------------------------------------------------------------------
 # Sanity: registry file must exist and be valid JSON
 # ---------------------------------------------------------------------------
 if [ ! -f "$REGISTRY_FILE" ]; then
-    printf "${RED}ERROR:${RESET} registry.json not found at: %s\n" "$REGISTRY_FILE" >&2
+    printf "%bERROR:%b registry.json not found at: %s\n" "$RED" "$RESET" "$REGISTRY_FILE" >&2
     exit 1
 fi
 
-if ! "$PYTHON3" -c "import json, sys; json.load(open(sys.argv[1]))" "$REGISTRY_FILE" 2>/dev/null; then
-    printf "${RED}ERROR:${RESET} registry.json is not valid JSON. Fix syntax errors first.\n" >&2
+if ! "$JQ" empty "$REGISTRY_FILE" >/dev/null 2>&1; then
+    printf "%bERROR:%b registry.json is not valid JSON. Fix syntax errors first.\n" "$RED" "$RESET" >&2
     exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Format detection (Check 1 — implicit; format determines downstream paths)
+# Returns: "aggregated" | "array"
+# ---------------------------------------------------------------------------
+detect_format() {
+    "$JQ" -r '
+        if type == "object" and (.plugins | type == "object") then
+            "aggregated"
+        elif type == "array" then
+            "array"
+        elif type == "object" and (.plugins | type == "array") then
+            "array-wrapped"
+        else
+            "unknown"
+        end
+    ' "$REGISTRY_FILE"
+}
+
+REGISTRY_FORMAT="$(detect_format)"
 
 # ---------------------------------------------------------------------------
 # Temp dir for inter-call data (cleaned on exit)
 # ---------------------------------------------------------------------------
-TMPDIR_VAL=$(mktemp -d 2>/dev/null || mktemp -d -t 'vr')
+TMPDIR_VAL="$(mktemp -d 2>/dev/null || mktemp -d -t 'vr')"
 trap 'rm -rf "$TMPDIR_VAL"' EXIT
 
-# ---------------------------------------------------------------------------
-# Global counters (written to temp files to survive subshell boundaries)
-# ---------------------------------------------------------------------------
-printf '0' > "${TMPDIR_VAL}/total"
-printf '0' > "${TMPDIR_VAL}/valid"
 printf '0' > "${TMPDIR_VAL}/errors"
 printf '0' > "${TMPDIR_VAL}/warnings"
-printf '' > "${TMPDIR_VAL}/json_entries"
-
-_inc() {
-    local file="${TMPDIR_VAL}/$1"
-    local val
-    val=$(cat "$file")
-    printf '%d' $((val + 1)) > "$file"
-}
-
-_get() {
-    cat "${TMPDIR_VAL}/$1"
-}
+printf '' > "${TMPDIR_VAL}/findings"
 
 # ---------------------------------------------------------------------------
 # Output helpers
 # ---------------------------------------------------------------------------
-_print_error() {
-    local plugin="$1" field="$2" message="$3"
-    _inc errors
+_inc_errors() {
+    local val
+    val="$(cat "${TMPDIR_VAL}/errors")"
+    printf '%d' "$((val + 1))" > "${TMPDIR_VAL}/errors"
+}
+
+_inc_warnings() {
+    local val
+    val="$(cat "${TMPDIR_VAL}/warnings")"
+    printf '%d' "$((val + 1))" > "${TMPDIR_VAL}/warnings"
+}
+
+err() {
+    local check="$1" plugin="$2" message="$3"
+    _inc_errors
     if [ "$OPT_JSON" = "false" ]; then
-        printf "  ${RED}[ERROR]${RESET} ${BOLD}%s${RESET} — %s: %s\n" "$plugin" "$field" "$message"
+        printf "  %b[ERROR]%b %b%s%b — %s: %s\n" \
+            "$RED" "$RESET" "$BOLD" "$check" "$RESET" "$plugin" "$message"
+    fi
+    printf '{"severity":"error","check":"%s","plugin":"%s","message":"%s"},\n' \
+        "$check" "$plugin" "$(printf '%s' "$message" | sed 's/"/\\"/g')" \
+        >> "${TMPDIR_VAL}/findings"
+}
+
+warn() {
+    local check="$1" plugin="$2" message="$3"
+    _inc_warnings
+    if [ "$OPT_JSON" = "false" ]; then
+        printf "  %b[WARN]%b  %b%s%b — %s: %s\n" \
+            "$YELLOW" "$RESET" "$BOLD" "$check" "$RESET" "$plugin" "$message"
+    fi
+    printf '{"severity":"warn","check":"%s","plugin":"%s","message":"%s"},\n' \
+        "$check" "$plugin" "$(printf '%s' "$message" | sed 's/"/\\"/g')" \
+        >> "${TMPDIR_VAL}/findings"
+}
+
+ok() {
+    local check="$1" message="$2"
+    if [ "$OPT_JSON" = "false" ]; then
+        printf "  %b[OK]%b    %b%s%b — %s\n" \
+            "$GREEN" "$RESET" "$BOLD" "$check" "$RESET" "$message"
     fi
 }
 
-_print_warning() {
-    local plugin="$1" field="$2" message="$3"
-    _inc warnings
+section() {
+    local title="$1"
     if [ "$OPT_JSON" = "false" ]; then
-        printf "  ${YELLOW}[WARN]${RESET}  ${BOLD}%s${RESET} — %s: %s\n" "$plugin" "$field" "$message"
-    fi
-}
-
-_print_fixed() {
-    local plugin="$1" field="$2" message="$3"
-    if [ "$OPT_JSON" = "false" ]; then
-        printf "  ${CYAN}[FIXED]${RESET} ${BOLD}%s${RESET} — %s: %s\n" "$plugin" "$field" "$message"
+        printf "\n%b%s%b\n" "$BOLD" "$title" "$RESET"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# Semver validation — x.y.z (digits only)
+# Helpers — semver, category, tier, bundle membership
 # ---------------------------------------------------------------------------
 _is_valid_semver() {
-    local v="${1#v}"    # strip optional leading v
+    local v="${1#v}"
     case "$v" in
         *.*.*) ;;
         *) return 1 ;;
@@ -190,521 +256,582 @@ _is_valid_semver() {
     local rest="${v#*.}"
     local minor="${rest%%.*}"
     local patch="${rest#*.}"
-    # All three parts must be non-empty digits only
+    # Strip pre-release / build metadata from patch (semver allows -alpha, +meta)
+    patch="${patch%%[-+]*}"
     case "$major" in *[!0-9]*|"") return 1 ;; esac
     case "$minor" in *[!0-9]*|"") return 1 ;; esac
     case "$patch" in *[!0-9]*|"") return 1 ;; esac
     return 0
 }
 
-# ---------------------------------------------------------------------------
-# Category validation
-# ---------------------------------------------------------------------------
-_is_valid_category() {
-    local cat="$1"
-    local c
-    for c in $VALID_CATEGORIES; do
-        [ "$c" = "$cat" ] && return 0
+_is_valid_name() {
+    # Lowercase, hyphenated, alphanumeric, must start with a letter
+    case "$1" in
+        ""|*[!a-z0-9-]*) return 1 ;;
+        [!a-z]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+_in_list() {
+    local needle="$1"; shift
+    local hay
+    for hay in "$@"; do
+        [ "$hay" = "$needle" ] && return 0
     done
     return 1
 }
 
 # ---------------------------------------------------------------------------
-# Find plugin directory on disk (free/ or community/)
-# Prints path to stdout; returns 1 if not found
+# Iterators — produce uniform stream of fields separated by ASCII Unit
+# Separator (0x1f). Tabs collapse consecutive empties under bash `read`
+# when IFS is whitespace; 0x1f does not.
+#
+# Field order: name, tier, category, version, port, bundles_json, deps_type, license
 # ---------------------------------------------------------------------------
-_find_plugin_dir() {
-    local name="$1"
-    local dir
-    for dir in "${FREE_DIR}/${name}" "${COMMUNITY_DIR}/${name}"; do
-        if [ -d "$dir" ]; then
-            printf '%s' "$dir"
-            return 0
-        fi
-    done
-    return 1
+US=$'\x1f'  # unit separator
+
+emit_entries() {
+    case "$REGISTRY_FORMAT" in
+        aggregated)
+            "$JQ" -r '
+                .plugins
+                | to_entries[]
+                | [
+                    .key,
+                    (.value.tier // ""),
+                    (.value.category // ""),
+                    (.value.version // ""),
+                    (.value.port // "" | tostring),
+                    ((.value.bundles // []) | tojson),
+                    (.value.dependencies | type),
+                    (.value.license // "")
+                  ]
+                | join("")
+            ' "$REGISTRY_FILE"
+            ;;
+        array)
+            "$JQ" -r '
+                .[]
+                | [
+                    (.name // ""),
+                    (.tier // ""),
+                    (.category // ""),
+                    (.version // ""),
+                    (.port // "" | tostring),
+                    ((.bundles // []) | tojson),
+                    (.dependencies | type),
+                    (.license // "")
+                  ]
+                | join("")
+            ' "$REGISTRY_FILE"
+            ;;
+        array-wrapped)
+            "$JQ" -r '
+                .plugins[]
+                | [
+                    (.name // ""),
+                    (.tier // ""),
+                    (.category // ""),
+                    (.version // ""),
+                    (.port // "" | tostring),
+                    ((.bundles // []) | tojson),
+                    (.dependencies | type),
+                    (.license // "")
+                  ]
+                | join("")
+            ' "$REGISTRY_FILE"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
-# Extract a single-line field from the per-plugin temp data file
+# Determine if this registry is the "pro" registry by directory location.
+# plugins-pro/registry.json → has paid/ sibling → pro registry
+# plugins/registry.json     → has free/ sibling → free registry
 # ---------------------------------------------------------------------------
-_field() {
-    local datafile="$1"
-    local key="$2"
-    grep "^${key}=" "$datafile" 2>/dev/null | head -1 | cut -d'=' -f2-
-}
-
-# ---------------------------------------------------------------------------
-# Write plugin data to a temp file via Python (avoids eval of JSON arrays)
-# Each value is written as a separate line: KEY=value
-# Multiline-safe: one key per line, value is everything after first '='
-# ---------------------------------------------------------------------------
-_extract_plugin_data() {
-    local plugin_name="$1"
-    local outfile="$2"
-
-    "$PYTHON3" - "$REGISTRY_FILE" "$plugin_name" "$outfile" <<'PYEOF'
-import json, sys, os
-
-registry_file = sys.argv[1]
-plugin_name   = sys.argv[2]
-outfile       = sys.argv[3]
-
-with open(registry_file) as f:
-    data = json.load(f)
-
-p = data["plugins"].get(plugin_name)
-if p is None:
-    with open(outfile, 'w') as out:
-        out.write("NOT_FOUND=1\n")
-    sys.exit(0)
-
-lines = []
-
-def w(key, val):
-    """Write key=val, converting non-strings to their JSON representation."""
-    if isinstance(val, (list, dict)):
-        lines.append(key + "=" + json.dumps(val, separators=(',',':')))
-    elif val is None:
-        lines.append(key + "=")
-    else:
-        lines.append(key + "=" + str(val))
-
-w("NAME",        p.get("name", ""))
-w("VERSION",     p.get("version", ""))
-w("DESCRIPTION", p.get("description", ""))
-w("AUTHOR",      p.get("author", ""))
-w("LICENSE",     p.get("license", ""))
-w("CATEGORY",    p.get("category", ""))
-w("PATH_REG",    p.get("path", ""))
-w("MIN_NSELF",   p.get("minNselfVersion", ""))
-
-tags = p.get("tags")
-lines.append("TAGS_PRESENT=" + ("1" if tags is not None else "0"))
-lines.append("TAGS_COUNT="   + str(len(tags) if isinstance(tags, list) else 0))
-
-tables = p.get("tables")
-lines.append("TABLES_PRESENT=" + ("1" if tables is not None else "0"))
-lines.append("TABLES_COUNT="   + str(len(tables) if isinstance(tables, list) else 0))
-if isinstance(tables, list):
-    w("TABLES_JSON", tables)
-else:
-    lines.append("TABLES_JSON=[]")
-
-impl = p.get("implementation")
-lines.append("IMPL_PRESENT=" + ("1" if isinstance(impl, dict) else "0"))
-if isinstance(impl, dict):
-    w("IMPL_LANGUAGE", impl.get("language", ""))
-    w("IMPL_RUNTIME",  impl.get("runtime",  ""))
-    w("IMPL_ENTRY",    impl.get("entryPoint",""))
-    w("IMPL_CLI",      impl.get("cli",       ""))
-else:
-    # Some entries (observability, admin-api) have flat "language" key
-    w("IMPL_LANGUAGE", p.get("language", ""))
-    lines.append("IMPL_RUNTIME=")
-    lines.append("IMPL_ENTRY=")
-    lines.append("IMPL_CLI=")
-
-multi = p.get("multiApp")
-lines.append("MULTIAPP_PRESENT=" + ("1" if isinstance(multi, dict) else "0"))
-if isinstance(multi, dict):
-    w("MULTIAPP_ISOLATION", multi.get("isolationColumn", ""))
-else:
-    lines.append("MULTIAPP_ISOLATION=")
-
-with open(outfile, 'w') as out:
-    out.write("\n".join(lines) + "\n")
-PYEOF
-}
-
-# ---------------------------------------------------------------------------
-# Validate one plugin
-# Uses a temp data file — no eval, no subshells for counters
-# ---------------------------------------------------------------------------
-_validate_plugin() {
-    local plugin_name="$1"
-    local plugin_errors=0
-    local plugin_warnings=0
-    local datafile="${TMPDIR_VAL}/plugin_${plugin_name}.dat"
-
-    # Extract plugin fields to temp file
-    _extract_plugin_data "$plugin_name" "$datafile"
-
-    # NOT_FOUND guard
-    if grep -q "^NOT_FOUND=1" "$datafile" 2>/dev/null; then
-        _print_error "$plugin_name" "registry" "Plugin not found in registry.json"
-        return
-    fi
-
-    # Read fields
-    local NAME VERSION DESCRIPTION AUTHOR LICENSE CATEGORY PATH_REG MIN_NSELF
-    local TAGS_PRESENT TAGS_COUNT TABLES_PRESENT TABLES_COUNT TABLES_JSON
-    local IMPL_PRESENT IMPL_LANGUAGE IMPL_RUNTIME IMPL_ENTRY IMPL_CLI
-    local MULTIAPP_PRESENT MULTIAPP_ISOLATION
-
-    NAME=$(_field "$datafile" "NAME")
-    VERSION=$(_field "$datafile" "VERSION")
-    DESCRIPTION=$(_field "$datafile" "DESCRIPTION")
-    AUTHOR=$(_field "$datafile" "AUTHOR")
-    LICENSE=$(_field "$datafile" "LICENSE")
-    CATEGORY=$(_field "$datafile" "CATEGORY")
-    PATH_REG=$(_field "$datafile" "PATH_REG")
-    MIN_NSELF=$(_field "$datafile" "MIN_NSELF")
-    TAGS_PRESENT=$(_field "$datafile" "TAGS_PRESENT")
-    TAGS_COUNT=$(_field "$datafile" "TAGS_COUNT")
-    TABLES_PRESENT=$(_field "$datafile" "TABLES_PRESENT")
-    TABLES_COUNT=$(_field "$datafile" "TABLES_COUNT")
-    TABLES_JSON=$(_field "$datafile" "TABLES_JSON")
-    IMPL_PRESENT=$(_field "$datafile" "IMPL_PRESENT")
-    IMPL_LANGUAGE=$(_field "$datafile" "IMPL_LANGUAGE")
-    IMPL_RUNTIME=$(_field "$datafile" "IMPL_RUNTIME")
-    IMPL_ENTRY=$(_field "$datafile" "IMPL_ENTRY")
-    IMPL_CLI=$(_field "$datafile" "IMPL_CLI")
-    MULTIAPP_PRESENT=$(_field "$datafile" "MULTIAPP_PRESENT")
-    MULTIAPP_ISOLATION=$(_field "$datafile" "MULTIAPP_ISOLATION")
-
-    # ------------------------------------------------------------------
-    # 1. Required string fields
-    # ------------------------------------------------------------------
-    local _check_field _check_val
-    for _check_field in NAME VERSION DESCRIPTION AUTHOR LICENSE CATEGORY; do
-        eval "_check_val=\"\${${_check_field}}\""
-        if [ -z "$_check_val" ]; then
-            local _fname
-            _fname=$(printf '%s' "$_check_field" | tr '[:upper:]' '[:lower:]')
-            _print_error "$plugin_name" "$_fname" "Required field is missing or empty"
-            plugin_errors=$((plugin_errors + 1))
-        fi
-    done
-
-    # ------------------------------------------------------------------
-    # 2. name field must match the registry key
-    # ------------------------------------------------------------------
-    if [ -n "$NAME" ] && [ "$NAME" != "$plugin_name" ]; then
-        _print_error "$plugin_name" "name" "name field ('$NAME') does not match registry key ('$plugin_name')"
-        plugin_errors=$((plugin_errors + 1))
-    fi
-
-    # ------------------------------------------------------------------
-    # 3. version must be strict semver x.y.z
-    # ------------------------------------------------------------------
-    if [ -n "$VERSION" ]; then
-        if ! _is_valid_semver "$VERSION"; then
-            _print_error "$plugin_name" "version" "Invalid semver: '$VERSION' (expected x.y.z)"
-            plugin_errors=$((plugin_errors + 1))
-        fi
-    fi
-
-    # ------------------------------------------------------------------
-    # 4. category must be one of the 13 valid categories
-    # ------------------------------------------------------------------
-    if [ -n "$CATEGORY" ]; then
-        if ! _is_valid_category "$CATEGORY"; then
-            _print_error "$plugin_name" "category" "Invalid category: '$CATEGORY'. Valid: $VALID_CATEGORIES"
-            plugin_errors=$((plugin_errors + 1))
-
-            if [ "$OPT_FIX" = "true" ]; then
-                local _fixed_cat=""
-                case "$CATEGORY" in
-                    networking|network|dns) _fixed_cat="infrastructure" ;;
-                    security|auth)          _fixed_cat="authentication" ;;
-                    ecommerce|payments|payment) _fixed_cat="commerce" ;;
-                    messaging|chat)         _fixed_cat="communication" ;;
-                    analytics|metrics|monitoring) _fixed_cat="data" ;;
-                    devops|dev|tools)       _fixed_cat="development" ;;
-                    storage|cloud|hosting)  _fixed_cat="infrastructure" ;;
-                    video|audio)            _fixed_cat="media" ;;
-                    live|broadcast)         _fixed_cat="streaming" ;;
-                esac
-                if [ -n "$_fixed_cat" ]; then
-                    _print_fixed "$plugin_name" "category" "Suggested mapping: '$CATEGORY' -> '$_fixed_cat' (apply manually in registry.json)"
-                fi
-            fi
-        fi
-    fi
-
-    # ------------------------------------------------------------------
-    # 5. tags — must be present and non-empty
-    # ------------------------------------------------------------------
-    if [ "${TAGS_PRESENT:-0}" = "0" ]; then
-        _print_error "$plugin_name" "tags" "Required field 'tags' is missing"
-        plugin_errors=$((plugin_errors + 1))
-    elif [ "${TAGS_COUNT:-0}" = "0" ]; then
-        _print_error "$plugin_name" "tags" "tags array is empty — at least one tag required"
-        plugin_errors=$((plugin_errors + 1))
-    fi
-
-    # ------------------------------------------------------------------
-    # 6. tables — must be present; all entries must have np_ prefix
-    # ------------------------------------------------------------------
-    if [ "${TABLES_PRESENT:-0}" = "0" ]; then
-        _print_error "$plugin_name" "tables" "Required field 'tables' is missing"
-        plugin_errors=$((plugin_errors + 1))
-    else
-        # Extract table names via Python (handles JSON array safely)
-        local _table_names
-        _table_names=$("$PYTHON3" -c "
-import json, sys
-tables = json.loads(sys.argv[1])
-for t in tables:
-    print(t)
-" "$TABLES_JSON" 2>/dev/null)
-
-        local _table
-        while IFS= read -r _table; do
-            [ -z "$_table" ] && continue
-            case "$_table" in
-                np_*) ;;  # valid
-                *)
-                    _print_error "$plugin_name" "tables" "Table '$_table' missing required np_ prefix"
-                    plugin_errors=$((plugin_errors + 1))
-                    ;;
-            esac
-        done <<EOF
-$_table_names
-EOF
-    fi
-
-    # ------------------------------------------------------------------
-    # 7. implementation — must be a nested object with required sub-fields
-    # ------------------------------------------------------------------
-    if [ "${IMPL_PRESENT:-0}" = "0" ]; then
-        _print_error "$plugin_name" "implementation" "Required 'implementation' object is missing (flat 'language' key found — must be nested)"
-        plugin_errors=$((plugin_errors + 1))
-    else
-        if [ -z "$IMPL_LANGUAGE" ]; then
-            _print_error "$plugin_name" "implementation.language" "Required sub-field is missing or empty"
-            plugin_errors=$((plugin_errors + 1))
-        fi
-        if [ -z "$IMPL_RUNTIME" ]; then
-            _print_error "$plugin_name" "implementation.runtime" "Required sub-field is missing or empty"
-            plugin_errors=$((plugin_errors + 1))
-        fi
-        if [ -z "$IMPL_ENTRY" ]; then
-            _print_error "$plugin_name" "implementation.entryPoint" "Required sub-field is missing or empty"
-            plugin_errors=$((plugin_errors + 1))
-        fi
-    fi
-
-    # ------------------------------------------------------------------
-    # 8. File existence — only for plugins present on disk
-    # ------------------------------------------------------------------
-    local _plugin_dir=""
-    _plugin_dir=$(_find_plugin_dir "$plugin_name") || true
-
-    if [ -n "$_plugin_dir" ]; then
-        # 8a. plugin.json must exist
-        if [ ! -f "${_plugin_dir}/plugin.json" ]; then
-            _print_error "$plugin_name" "files" "plugin.json not found at ${_plugin_dir}/plugin.json"
-            plugin_errors=$((plugin_errors + 1))
-        else
-            # 8b. Version in plugin.json must match registry version
-            local _disk_version
-            _disk_version=$("$PYTHON3" -c "
-import json, sys
-try:
-    with open(sys.argv[1]) as f:
-        d = json.load(f)
-    print(d.get('version',''))
-except Exception:
-    print('')
-" "${_plugin_dir}/plugin.json" 2>/dev/null)
-
-            if [ -n "$_disk_version" ] && [ -n "$VERSION" ] && [ "$_disk_version" != "$VERSION" ]; then
-                _print_error "$plugin_name" "version" "Mismatch: registry='$VERSION', plugin.json='$_disk_version'"
-                plugin_errors=$((plugin_errors + 1))
-            fi
-        fi
-
-        # 8c. entryPoint file existence (warn — may not be built yet)
-        if [ -n "$IMPL_ENTRY" ]; then
-            if [ ! -f "${_plugin_dir}/${IMPL_ENTRY}" ]; then
-                _print_warning "$plugin_name" "implementation.entryPoint" "File not found: ${_plugin_dir}/${IMPL_ENTRY} (run: pnpm build)"
-                plugin_warnings=$((plugin_warnings + 1))
-            fi
-        fi
-
-        # 8d. CLI file existence (warn — may not be built yet)
-        if [ -n "$IMPL_CLI" ]; then
-            if [ ! -f "${_plugin_dir}/${IMPL_CLI}" ]; then
-                _print_warning "$plugin_name" "implementation.cli" "File not found: ${_plugin_dir}/${IMPL_CLI} (run: pnpm build)"
-                plugin_warnings=$((plugin_warnings + 1))
-            fi
-        fi
-
-        # 8e. SQL schema: source_account_id column required
-        local _sql_file="${_plugin_dir}/schema/tables.sql"
-        if [ -f "$_sql_file" ] && [ "${TABLES_COUNT:-0}" != "0" ]; then
-            if ! grep -q "source_account_id" "$_sql_file" 2>/dev/null; then
-                _print_error "$plugin_name" "schema/tables.sql" "source_account_id column missing (required for multi-app isolation)"
-                plugin_errors=$((plugin_errors + 1))
-            fi
-        fi
-
-    else
-        # Not on disk — expected for Source-Available plugins (not yet open-sourced)
-        # Only warn for MIT-licensed plugins (should be in free/)
-        if [ "$LICENSE" = "MIT" ]; then
-            _print_warning "$plugin_name" "files" "Plugin directory not found in free/ or community/ (expected for MIT plugins)"
-            plugin_warnings=$((plugin_warnings + 1))
-        fi
-    fi
-
-    # ------------------------------------------------------------------
-    # 9. multiApp isolation column must be source_account_id
-    # ------------------------------------------------------------------
-    if [ "${MULTIAPP_PRESENT:-0}" = "1" ]; then
-        if [ "$MULTIAPP_ISOLATION" != "source_account_id" ]; then
-            _print_error "$plugin_name" "multiApp.isolationColumn" "Must be 'source_account_id', found: '$MULTIAPP_ISOLATION'"
-            plugin_errors=$((plugin_errors + 1))
-        fi
-    fi
-
-    # ------------------------------------------------------------------
-    # 10. minNselfVersion — recommended
-    # ------------------------------------------------------------------
-    if [ -z "$MIN_NSELF" ]; then
-        _print_warning "$plugin_name" "minNselfVersion" "Recommended field is missing"
-        plugin_warnings=$((plugin_warnings + 1))
-    fi
-
-    # ------------------------------------------------------------------
-    # Result for this plugin
-    # ------------------------------------------------------------------
-    if [ $plugin_errors -eq 0 ]; then
-        _inc valid
-        if [ "$OPT_JSON" = "false" ]; then
-            if [ $plugin_warnings -eq 0 ]; then
-                printf "  ${GREEN}[OK]${RESET}    ${BOLD}%s${RESET} v%s\n" "$plugin_name" "$VERSION"
-            else
-                printf "  ${YELLOW}[WARN]${RESET}  ${BOLD}%s${RESET} v%s (%d warning(s))\n" "$plugin_name" "$VERSION" "$plugin_warnings"
-            fi
-        fi
-    fi
-
-    # Accumulate JSON entry (appended to file)
-    if [ "$OPT_JSON" = "true" ]; then
-        local _jstatus="valid"
-        [ $plugin_errors -gt 0 ] && _jstatus="invalid"
-        [ $plugin_errors -eq 0 ] && [ $plugin_warnings -gt 0 ] && _jstatus="warning"
-        printf '{"plugin":"%s","version":"%s","status":"%s","errors":%d,"warnings":%d},\n' \
-            "$plugin_name" "$VERSION" "$_jstatus" "$plugin_errors" "$plugin_warnings" \
-            >> "${TMPDIR_VAL}/json_entries"
-    fi
-}
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-if [ "$OPT_JSON" = "false" ]; then
-    printf "\n${BOLD}nself Plugin Registry Validator${RESET}\n"
-    printf "${DIM}Registry: %s${RESET}\n\n" "$REGISTRY_FILE"
+IS_PRO_REGISTRY=false
+IS_FREE_REGISTRY=false
+if [ -d "$PAID_DIR" ]; then
+    IS_PRO_REGISTRY=true
+fi
+if [ -d "$FREE_DIR" ]; then
+    IS_FREE_REGISTRY=true
 fi
 
-# Get plugin names from registry
-PLUGIN_NAMES=$("$PYTHON3" -c "
-import json, sys
-with open(sys.argv[1]) as f:
-    data = json.load(f)
-for name in data['plugins']:
-    print(name)
-" "$REGISTRY_FILE" 2>/dev/null)
-
-TOTAL_PLUGINS=$(printf '%s\n' "$PLUGIN_NAMES" | grep -c '.' 2>/dev/null || printf '0')
-printf '%d' "$TOTAL_PLUGINS" > "${TMPDIR_VAL}/total"
+# =============================================================================
+# Main validation pipeline
+# =============================================================================
 
 if [ "$OPT_JSON" = "false" ]; then
-    printf "${BOLD}Validating %d plugin(s)...${RESET}\n\n" "$TOTAL_PLUGINS"
+    printf "\n%bnself Plugin Registry Validator%b\n" "$BOLD" "$RESET"
+    printf "%bRegistry:%b %s\n" "$DIM" "$RESET" "$REGISTRY_FILE"
+    printf "%bFormat:%b   %s\n" "$DIM" "$RESET" "$REGISTRY_FORMAT"
 fi
 
 # ---------------------------------------------------------------------------
-# Validate — single plugin or all
+# Format gate — must be aggregated or array; abort otherwise
 # ---------------------------------------------------------------------------
-if [ -n "$OPT_PLUGIN" ]; then
-    # Verify the plugin exists
-    if ! printf '%s\n' "$PLUGIN_NAMES" | grep -qx "$OPT_PLUGIN"; then
-        printf "${RED}ERROR:${RESET} Plugin '%s' not found in registry.\n" "$OPT_PLUGIN" >&2
-        exit 1
+if [ "$REGISTRY_FORMAT" = "unknown" ]; then
+    err "FORMAT" "registry" "Unrecognized registry format. Expected aggregated object {plugins:{}} or flat array."
+    if [ "$OPT_JSON" = "false" ]; then
+        printf "\n%bFAILED%b — registry format is invalid.\n\n" "$RED$BOLD" "$RESET"
     fi
-    printf '1' > "${TMPDIR_VAL}/total"
-    _validate_plugin "$OPT_PLUGIN"
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Stream entries to a temp TSV file for repeated passes
+# ---------------------------------------------------------------------------
+ENTRIES_TSV="${TMPDIR_VAL}/entries.usv"
+if ! emit_entries > "$ENTRIES_TSV" 2>/dev/null; then
+    err "PARSE" "registry" "Failed to extract plugin entries from registry."
+    exit 1
+fi
+
+TOTAL_PLUGINS="$(wc -l < "$ENTRIES_TSV" | tr -d ' ')"
+
+# =============================================================================
+# CHECK 11 — plugins_count matches actual plugin count (aggregated only)
+# =============================================================================
+section "CHECK 11 — plugins_count integrity"
+if [ "$REGISTRY_FORMAT" = "aggregated" ]; then
+    DECLARED_COUNT="$("$JQ" -r '.plugins_count // -1' "$REGISTRY_FILE")"
+    ACTUAL_COUNT="$("$JQ" -r '.plugins | length' "$REGISTRY_FILE")"
+    if [ "$DECLARED_COUNT" = "-1" ]; then
+        warn "CHECK-11" "registry" "plugins_count field is missing (recommended for aggregated format)"
+    elif [ "$DECLARED_COUNT" != "$ACTUAL_COUNT" ]; then
+        err "CHECK-11" "registry" "plugins_count=${DECLARED_COUNT} does not match actual plugin count=${ACTUAL_COUNT}"
+    else
+        ok "CHECK-11" "plugins_count=${ACTUAL_COUNT} matches"
+    fi
 else
-    while IFS= read -r plugin_name; do
-        [ -z "$plugin_name" ] && continue
-        _validate_plugin "$plugin_name"
-    done <<EOF
-$PLUGIN_NAMES
-EOF
+    ok "CHECK-11" "skipped (flat array format)"
 fi
 
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-FINAL_TOTAL=$(_get total)
-FINAL_VALID=$(_get valid)
-FINAL_ERRORS=$(_get errors)
-FINAL_WARNINGS=$(_get warnings)
-FINAL_INVALID=$((FINAL_TOTAL - FINAL_VALID))
+# =============================================================================
+# CHECK 13 — Dependencies use Shape B (object form) — no flat arrays
+# CHECK 7  — schema fields present
+# =============================================================================
+section "CHECK 13 — dependencies Shape B enforcement"
+SHAPE_B_VIOLATIONS=0
+while IFS="$US" read -r name _tier _category _version _port _bundles deps_type _license; do
+    [ -z "$name" ] && continue
+    if [ "$deps_type" = "array" ]; then
+        err "CHECK-13" "$name" "dependencies is an array (Shape A) — must be object {required:[],optional:[]}"
+        SHAPE_B_VIOLATIONS=$((SHAPE_B_VIOLATIONS + 1))
+    elif [ "$deps_type" = "string" ] || [ "$deps_type" = "number" ] || [ "$deps_type" = "boolean" ]; then
+        err "CHECK-13" "$name" "dependencies has invalid type '${deps_type}' — must be object {required:[],optional:[]}"
+        SHAPE_B_VIOLATIONS=$((SHAPE_B_VIOLATIONS + 1))
+    fi
+done < "$ENTRIES_TSV"
+if [ "$SHAPE_B_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-13" "all dependencies use Shape B (object form)"
+fi
+
+# =============================================================================
+# CHECK 5 — All categories from official 14
+# =============================================================================
+section "CHECK 5 — category validity"
+CATEGORY_VIOLATIONS=0
+while IFS="$US" read -r name _tier category _version _port _bundles _deps _license; do
+    [ -z "$name" ] && continue
+    if [ -z "$category" ]; then
+        warn "CHECK-5" "$name" "category field is missing"
+        continue
+    fi
+    # shellcheck disable=SC2086  # intentional word splitting on $VALID_CATEGORIES
+    if ! _in_list "$category" $VALID_CATEGORIES; then
+        err "CHECK-5" "$name" "Invalid category '$category' (valid: $VALID_CATEGORIES)"
+        CATEGORY_VIOLATIONS=$((CATEGORY_VIOLATIONS + 1))
+    fi
+done < "$ENTRIES_TSV"
+if [ "$CATEGORY_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-5" "all categories valid"
+fi
+
+# =============================================================================
+# CHECK 6 — All tier values from canonical tier list
+# CHECK 12 — No tier=free entries in plugins-pro/registry.json
+# =============================================================================
+section "CHECK 6 + 12 — tier validity and tier-directory enforcement"
+TIER_VIOLATIONS=0
+while IFS="$US" read -r name tier _category _version _port _bundles _deps _license; do
+    [ -z "$name" ] && continue
+    if [ -z "$tier" ]; then
+        err "CHECK-6" "$name" "tier field is missing or empty"
+        TIER_VIOLATIONS=$((TIER_VIOLATIONS + 1))
+        continue
+    fi
+    # shellcheck disable=SC2086  # intentional word splitting on $VALID_TIERS
+    if ! _in_list "$tier" $VALID_TIERS; then
+        err "CHECK-6" "$name" "Invalid tier '$tier' (valid: $VALID_TIERS)"
+        TIER_VIOLATIONS=$((TIER_VIOLATIONS + 1))
+    fi
+    # CHECK 12 — tier=free in pro registry
+    if [ "$IS_PRO_REGISTRY" = "true" ] && [ "$tier" = "free" ]; then
+        err "CHECK-12" "$name" "tier=free entry in plugins-pro/registry.json — must be moved to plugins/free/ or tier corrected (PLUG-10)"
+        TIER_VIOLATIONS=$((TIER_VIOLATIONS + 1))
+    fi
+    # PLUG-10 inverse — tier!=free in plugins/registry.json
+    if [ "$IS_FREE_REGISTRY" = "true" ] && [ -n "$tier" ] && [ "$tier" != "free" ]; then
+        err "CHECK-12" "$name" "tier='$tier' entry in plugins/registry.json — must be tier=free or moved to plugins-pro/paid/ (PLUG-10)"
+        TIER_VIOLATIONS=$((TIER_VIOLATIONS + 1))
+    fi
+done < "$ENTRIES_TSV"
+if [ "$TIER_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-6+12" "all tiers valid and tier-directory match enforced"
+fi
+
+# =============================================================================
+# CHECK 7 — Schema field presence: name, version, description, category, tier
+# In aggregated format, the registry key serves as the canonical name —
+# .value.name need not be repeated. In flat-array format, .name is required.
+# =============================================================================
+section "CHECK 7 — required schema fields present"
+SCHEMA_VIOLATIONS=0
+SCHEMA_USV="${TMPDIR_VAL}/schema.usv"
+case "$REGISTRY_FORMAT" in
+    aggregated)
+        # Name comes from the key, not .value.name — so we don't require it.
+        # If .value.name IS present, ensure it matches the key (drift check).
+        "$JQ" -r '
+            .plugins
+            | to_entries[]
+            | [
+                .key,
+                (if (.value.name // "") == "" then "OK"
+                 elif .value.name != .key then "MISMATCH"
+                 else "OK" end),
+                (if (.value.version // "") == "" then "MISSING" else "OK" end),
+                (if (.value.description // "") == "" then "MISSING" else "OK" end),
+                (if (.value.category // "") == "" then "MISSING" else "OK" end),
+                (if (.value.tier // "") == "" then "MISSING" else "OK" end),
+                (if (.value.language // "") == "" then "MISSING" else "OK" end)
+              ]
+            | join("")
+        ' "$REGISTRY_FILE" > "$SCHEMA_USV"
+        ;;
+    array)
+        "$JQ" -r '
+            .[]
+            | [
+                (.name // ""),
+                (if (.name // "") == "" then "MISSING" else "OK" end),
+                (if (.version // "") == "" then "MISSING" else "OK" end),
+                (if (.description // "") == "" then "MISSING" else "OK" end),
+                (if (.category // "") == "" then "MISSING" else "OK" end),
+                (if (.tier // "") == "" then "MISSING" else "OK" end),
+                (if (.language // "") == "" then "MISSING" else "OK" end)
+              ]
+            | join("")
+        ' "$REGISTRY_FILE" > "$SCHEMA_USV"
+        ;;
+    array-wrapped)
+        "$JQ" -r '
+            .plugins[]
+            | [
+                (.name // ""),
+                (if (.name // "") == "" then "MISSING" else "OK" end),
+                (if (.version // "") == "" then "MISSING" else "OK" end),
+                (if (.description // "") == "" then "MISSING" else "OK" end),
+                (if (.category // "") == "" then "MISSING" else "OK" end),
+                (if (.tier // "") == "" then "MISSING" else "OK" end),
+                (if (.language // "") == "" then "MISSING" else "OK" end)
+              ]
+            | join("")
+        ' "$REGISTRY_FILE" > "$SCHEMA_USV"
+        ;;
+esac
+while IFS="$US" read -r name name_ok version_ok description_ok category_ok tier_ok language_ok; do
+    [ -z "$name" ] && continue
+    if [ "$name_ok" = "MISSING" ]; then
+        err "CHECK-7" "$name" "name field is missing"
+        SCHEMA_VIOLATIONS=$((SCHEMA_VIOLATIONS + 1))
+    elif [ "$name_ok" = "MISMATCH" ]; then
+        err "CHECK-7" "$name" "name field does not match registry key"
+        SCHEMA_VIOLATIONS=$((SCHEMA_VIOLATIONS + 1))
+    fi
+    if [ "$version_ok" = "MISSING" ]; then
+        err "CHECK-7" "$name" "version field is missing"
+        SCHEMA_VIOLATIONS=$((SCHEMA_VIOLATIONS + 1))
+    fi
+    [ "$description_ok" = "MISSING" ] && warn "CHECK-7" "$name" "description field is missing"
+    [ "$category_ok" = "MISSING" ] && warn "CHECK-7" "$name" "category field is missing"
+    if [ "$tier_ok" = "MISSING" ]; then
+        err "CHECK-7" "$name" "tier field is missing"
+        SCHEMA_VIOLATIONS=$((SCHEMA_VIOLATIONS + 1))
+    fi
+    [ "$language_ok" = "MISSING" ] && warn "CHECK-7" "$name" "language field is missing (recommended)"
+done < "$SCHEMA_USV"
+if [ "$SCHEMA_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-7" "all required fields present"
+fi
+
+# =============================================================================
+# Plugin name validity (part of CHECK 7)
+# =============================================================================
+section "CHECK 7b — plugin name format"
+NAME_VIOLATIONS=0
+while IFS="$US" read -r name _tier _category _version _port _bundles _deps _license; do
+    [ -z "$name" ] && continue
+    if ! _is_valid_name "$name"; then
+        err "CHECK-7b" "$name" "Invalid plugin name '$name' (must be lowercase-with-hyphens, start with a letter)"
+        NAME_VIOLATIONS=$((NAME_VIOLATIONS + 1))
+    fi
+done < "$ENTRIES_TSV"
+if [ "$NAME_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-7b" "all plugin names well-formed"
+fi
+
+# =============================================================================
+# Version semver (part of CHECK 7)
+# =============================================================================
+section "CHECK 7c — semver compliance"
+SEMVER_VIOLATIONS=0
+while IFS="$US" read -r name _tier _category version _port _bundles _deps _license; do
+    [ -z "$name" ] && continue
+    [ -z "$version" ] && continue
+    if ! _is_valid_semver "$version"; then
+        err "CHECK-7c" "$name" "Invalid semver '$version' (expected x.y.z)"
+        SEMVER_VIOLATIONS=$((SEMVER_VIOLATIONS + 1))
+    fi
+done < "$ENTRIES_TSV"
+if [ "$SEMVER_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-7c" "all versions are valid semver"
+fi
+
+# =============================================================================
+# CHECK 4 — All ports unique across this registry
+# (Cross-registry uniqueness is enforced by a separate CI script.)
+# =============================================================================
+section "CHECK 4 — port uniqueness within registry"
+PORT_VIOLATIONS=0
+PORTS_FILE="${TMPDIR_VAL}/ports.txt"
+: > "$PORTS_FILE"
+while IFS="$US" read -r name _tier _category _version port _bundles _deps _license; do
+    [ -z "$name" ] && continue
+    [ -z "$port" ] || [ "$port" = "null" ] || [ "$port" = "0" ] && continue
+    # Numeric range check
+    case "$port" in
+        ''|*[!0-9]*)
+            err "CHECK-4" "$name" "Port '$port' is not a positive integer"
+            PORT_VIOLATIONS=$((PORT_VIOLATIONS + 1))
+            continue
+            ;;
+    esac
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        err "CHECK-4" "$name" "Port $port is out of range (1-65535)"
+        PORT_VIOLATIONS=$((PORT_VIOLATIONS + 1))
+        continue
+    fi
+    printf '%s\t%s\n' "$port" "$name" >> "$PORTS_FILE"
+done < "$ENTRIES_TSV"
+
+if [ -s "$PORTS_FILE" ]; then
+    DUPES="$(cut -f1 "$PORTS_FILE" | sort | uniq -d)"
+    if [ -n "$DUPES" ]; then
+        for dport in $DUPES; do
+            DUPE_NAMES="$(awk -F'\t' -v p="$dport" '$1 == p {print $2}' "$PORTS_FILE" | tr '\n' ',' | sed 's/,$//')"
+            err "CHECK-4" "$DUPE_NAMES" "Duplicate port $dport"
+            PORT_VIOLATIONS=$((PORT_VIOLATIONS + 1))
+        done
+    fi
+fi
+if [ "$PORT_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-4" "all declared ports are unique within this registry"
+fi
+
+# =============================================================================
+# CHECK 3 — No duplicate plugin names within this registry
+# (Cross-registry de-dup is also a separate CI script.)
+# =============================================================================
+section "CHECK 3 — duplicate plugin names within registry"
+NAMES_FILE="${TMPDIR_VAL}/names.txt"
+cut -d"$US" -f1 "$ENTRIES_TSV" | sort > "$NAMES_FILE"
+DUPE_NAMES_LIST="$(uniq -d < "$NAMES_FILE")"
+if [ -n "$DUPE_NAMES_LIST" ]; then
+    for dname in $DUPE_NAMES_LIST; do
+        err "CHECK-3" "$dname" "Duplicate plugin name in registry"
+    done
+else
+    ok "CHECK-3" "no duplicate plugin names in this registry"
+fi
+
+# =============================================================================
+# CHECK 8 — Alphabetical sort order maintained
+# =============================================================================
+section "CHECK 8 — alphabetical sort order"
+SORTED_NAMES_FILE="${TMPDIR_VAL}/names_actual_order.txt"
+cut -d"$US" -f1 "$ENTRIES_TSV" > "$SORTED_NAMES_FILE"
+EXPECTED_SORTED_FILE="${TMPDIR_VAL}/names_expected.txt"
+sort "$SORTED_NAMES_FILE" > "$EXPECTED_SORTED_FILE"
+if cmp -s "$SORTED_NAMES_FILE" "$EXPECTED_SORTED_FILE"; then
+    ok "CHECK-8" "plugin entries are alphabetically sorted"
+else
+    # Find first out-of-order entry
+    FIRST_DIFF="$(diff "$SORTED_NAMES_FILE" "$EXPECTED_SORTED_FILE" | head -3 | tr '\n' ' ')"
+    warn "CHECK-8" "registry" "Plugin entries not alphabetically sorted (first difference: ${FIRST_DIFF})"
+fi
+
+# =============================================================================
+# CHECK 10 — bundles array members from F06 canonical bundle list
+# =============================================================================
+section "CHECK 10 — bundles membership"
+BUNDLE_VIOLATIONS=0
+while IFS="$US" read -r name _tier _category _version _port bundles_json _deps _license; do
+    [ -z "$name" ] && continue
+    [ -z "$bundles_json" ] && continue
+    [ "$bundles_json" = "null" ] && continue
+    [ "$bundles_json" = "[]" ] && continue
+    # Parse bundles array
+    if ! "$JQ" -e 'type == "array"' >/dev/null 2>&1 <<< "$bundles_json"; then
+        err "CHECK-10" "$name" "bundles field must be an array of strings"
+        BUNDLE_VIOLATIONS=$((BUNDLE_VIOLATIONS + 1))
+        continue
+    fi
+    # Each member must be a string and from canonical list
+    BUNDLE_MEMBERS="$("$JQ" -r '.[]' <<< "$bundles_json" 2>/dev/null)"
+    while IFS= read -r bundle; do
+        [ -z "$bundle" ] && continue
+        # shellcheck disable=SC2086  # intentional word splitting on $VALID_BUNDLES
+        if ! _in_list "$bundle" $VALID_BUNDLES; then
+            err "CHECK-10" "$name" "bundle '$bundle' not in F06 canonical list ($VALID_BUNDLES)"
+            BUNDLE_VIOLATIONS=$((BUNDLE_VIOLATIONS + 1))
+        fi
+    done <<EOF
+$BUNDLE_MEMBERS
+EOF
+done < "$ENTRIES_TSV"
+if [ "$BUNDLE_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-10" "all bundle memberships valid (or no bundles declared)"
+fi
+
+# =============================================================================
+# CHECK 1 — Every plugin directory has an entry in registry.json
+# CHECK 2 — Every registry entry has a matching plugin directory
+# CHECK 9 — No stale registry entries (subset of check 2)
+# =============================================================================
+section "CHECK 1 + 2 + 9 — registry ↔ filesystem consistency"
+DIRS_TO_SCAN=""
+[ -d "$FREE_DIR" ] && DIRS_TO_SCAN="${DIRS_TO_SCAN} ${FREE_DIR}"
+[ -d "$COMMUNITY_DIR" ] && DIRS_TO_SCAN="${DIRS_TO_SCAN} ${COMMUNITY_DIR}"
+[ -d "$PAID_DIR" ] && DIRS_TO_SCAN="${DIRS_TO_SCAN} ${PAID_DIR}"
+
+if [ -z "$DIRS_TO_SCAN" ]; then
+    warn "CHECK-1+2" "registry" "No plugin source directory (free/, community/, paid/) found next to registry — skipping filesystem checks"
+else
+    # Build sets: registry_names and dir_names
+    REGISTRY_NAMES_FILE="${TMPDIR_VAL}/registry_names.txt"
+    DIR_NAMES_FILE="${TMPDIR_VAL}/dir_names.txt"
+    cut -d"$US" -f1 "$ENTRIES_TSV" | sort -u > "$REGISTRY_NAMES_FILE"
+    : > "$DIR_NAMES_FILE"
+    for d in $DIRS_TO_SCAN; do
+        if [ -d "$d" ]; then
+            for entry in "$d"/*/; do
+                [ -d "$entry" ] || continue
+                base="$(basename "$entry")"
+                # Skip non-plugin dirs (well-known scaffolding / shared libs)
+                case "$base" in
+                    node_modules|.git|target|dist|build|coverage|tests|test|fuzz|shared|examples|docs|scripts|cmd|tools) continue ;;
+                esac
+                printf '%s\n' "$base" >> "$DIR_NAMES_FILE"
+            done
+        fi
+    done
+    sort -u "$DIR_NAMES_FILE" -o "$DIR_NAMES_FILE"
+
+    # CHECK 1 — directory without registry entry
+    MISSING_FROM_REGISTRY="$(comm -23 "$DIR_NAMES_FILE" "$REGISTRY_NAMES_FILE")"
+    if [ -n "$MISSING_FROM_REGISTRY" ]; then
+        while IFS= read -r missing; do
+            [ -z "$missing" ] && continue
+            err "CHECK-1" "$missing" "Plugin directory exists but no registry entry"
+        done <<EOF
+$MISSING_FROM_REGISTRY
+EOF
+    else
+        ok "CHECK-1" "all plugin directories have registry entries"
+    fi
+
+    # CHECK 2 + 9 — registry entry without directory (stale)
+    MISSING_FROM_DISK="$(comm -13 "$DIR_NAMES_FILE" "$REGISTRY_NAMES_FILE")"
+    if [ -n "$MISSING_FROM_DISK" ]; then
+        while IFS= read -r stale; do
+            [ -z "$stale" ] && continue
+            err "CHECK-2" "$stale" "Registry entry has no matching plugin directory (stale entry)"
+        done <<EOF
+$MISSING_FROM_DISK
+EOF
+    else
+        ok "CHECK-2+9" "all registry entries have matching directories"
+    fi
+fi
+
+# =============================================================================
+# Optional: --strict mode runs the legacy per-plugin field validator
+# (kept for backward compatibility with the original validator behavior)
+# =============================================================================
+if [ "$OPT_STRICT" = "true" ]; then
+    section "STRICT MODE — legacy per-plugin field validation"
+    if [ -z "$PYTHON3" ]; then
+        warn "STRICT" "registry" "python3 not available — skipping strict mode"
+    else
+        warn "STRICT" "registry" "Strict mode requires legacy schema (tables, implementation) — see git history of this script for the previous implementation. Not re-enabled in v2."
+    fi
+fi
+
+# =============================================================================
+# Summary + exit
+# =============================================================================
+FINAL_ERRORS="$(cat "${TMPDIR_VAL}/errors")"
+FINAL_WARNINGS="$(cat "${TMPDIR_VAL}/warnings")"
 
 if [ "$OPT_JSON" = "true" ]; then
-    # Build JSON output from accumulated entries file
-    local_status="pass"
-    [ "$FINAL_ERRORS" -gt 0 ] && local_status="fail"
-
+    JSON_STATUS="pass"
+    [ "$FINAL_ERRORS" -gt 0 ] && JSON_STATUS="fail"
     printf '{\n'
-    printf '  "status": "%s",\n' "$local_status"
+    printf '  "status": "%s",\n' "$JSON_STATUS"
+    printf '  "registry": "%s",\n' "$REGISTRY_FILE"
+    printf '  "format": "%s",\n' "$REGISTRY_FORMAT"
     printf '  "summary": {\n'
-    printf '    "total": %d,\n'    "$FINAL_TOTAL"
-    printf '    "valid": %d,\n'    "$FINAL_VALID"
-    printf '    "invalid": %d,\n'  "$FINAL_INVALID"
-    printf '    "errors": %d,\n'   "$FINAL_ERRORS"
-    printf '    "warnings": %d\n'  "$FINAL_WARNINGS"
+    printf '    "plugins": %d,\n' "$TOTAL_PLUGINS"
+    printf '    "errors": %d,\n' "$FINAL_ERRORS"
+    printf '    "warnings": %d\n' "$FINAL_WARNINGS"
     printf '  },\n'
-    printf '  "plugins": [\n'
-
-    # Strip trailing comma+newline from last entry and output the list
-    if [ -s "${TMPDIR_VAL}/json_entries" ]; then
-        # Write all but strip trailing comma from last line
-        "$PYTHON3" -c "
-import sys
-lines = open(sys.argv[1]).read().rstrip().rstrip(',')
-print(lines)
-" "${TMPDIR_VAL}/json_entries"
+    printf '  "findings": [\n'
+    if [ -s "${TMPDIR_VAL}/findings" ]; then
+        # Strip trailing comma+newline from last entry
+        sed '$ s/,$//' "${TMPDIR_VAL}/findings"
     fi
-
-    printf '\n  ]\n}\n'
+    printf '  ]\n'
+    printf '}\n'
 else
-    _sep="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    printf "\n${BOLD}%s${RESET}\n" "$_sep"
-    printf "${BOLD}Summary${RESET}\n"
-    printf "  Total plugins:   %d\n" "$FINAL_TOTAL"
-    printf "  ${GREEN}Valid:           %d${RESET}\n" "$FINAL_VALID"
-
-    if [ "$FINAL_INVALID" -gt 0 ]; then
-        printf "  ${RED}Invalid:         %d${RESET}\n" "$FINAL_INVALID"
-    else
-        printf "  Invalid:         %d\n" "$FINAL_INVALID"
-    fi
-
+    SEP="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf "\n%b%s%b\n" "$BOLD" "$SEP" "$RESET"
+    printf "%bSummary%b\n" "$BOLD" "$RESET"
+    printf "  Registry:        %s\n" "$REGISTRY_FILE"
+    printf "  Format:          %s\n" "$REGISTRY_FORMAT"
+    printf "  Plugins:         %d\n" "$TOTAL_PLUGINS"
     if [ "$FINAL_ERRORS" -gt 0 ]; then
-        printf "  ${RED}Errors:          %d${RESET}\n" "$FINAL_ERRORS"
+        printf "  %bErrors:          %d%b\n" "$RED" "$FINAL_ERRORS" "$RESET"
     else
-        printf "  ${GREEN}Errors:          0${RESET}\n"
+        printf "  %bErrors:          0%b\n" "$GREEN" "$RESET"
     fi
-
     if [ "$FINAL_WARNINGS" -gt 0 ]; then
-        printf "  ${YELLOW}Warnings:        %d${RESET}\n" "$FINAL_WARNINGS"
+        printf "  %bWarnings:        %d%b\n" "$YELLOW" "$FINAL_WARNINGS" "$RESET"
     else
         printf "  Warnings:        0\n"
     fi
-
-    printf "${BOLD}%s${RESET}\n\n" "$_sep"
+    printf "%b%s%b\n" "$BOLD" "$SEP" "$RESET"
 
     if [ "$FINAL_ERRORS" -gt 0 ]; then
-        printf "${RED}${BOLD}FAILED${RESET} — %d error(s) found. Fix before pushing to registry.\n\n" "$FINAL_ERRORS"
+        printf "\n%b%bFAILED%b — %d error(s) found.\n\n" "$RED" "$BOLD" "$RESET" "$FINAL_ERRORS"
     else
-        printf "${GREEN}${BOLD}PASSED${RESET} — Registry is valid"
+        printf "\n%b%bPASSED%b — registry is valid" "$GREEN" "$BOLD" "$RESET"
         if [ "$FINAL_WARNINGS" -gt 0 ]; then
             printf " (with %d warning(s))" "$FINAL_WARNINGS"
         fi
@@ -712,7 +839,4 @@ else
     fi
 fi
 
-# ---------------------------------------------------------------------------
-# Exit code: 0 = clean, 1 = errors
-# ---------------------------------------------------------------------------
 [ "$FINAL_ERRORS" -eq 0 ]
