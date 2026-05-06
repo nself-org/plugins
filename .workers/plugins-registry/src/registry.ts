@@ -236,7 +236,10 @@ function normaliseToArray(data: RegistryWireFormat, expectedTier: PluginTier): P
   } else if ("plugins" in data && Array.isArray(data.plugins)) {
     raw = data.plugins;
   } else if ("plugins" in data && typeof data.plugins === "object" && data.plugins !== null) {
-    raw = Object.values(data.plugins as Record<string, Omit<PluginEntry, "tier"> & { tier?: PluginTier }>);
+    // Use Object.entries so the dict key becomes the fallback name when the entry
+    // omits the "name" field (plugins-pro/registry.json uses this dict format).
+    raw = Object.entries(data.plugins as Record<string, Omit<PluginEntry, "tier"> & { tier?: PluginTier }>)
+      .map(([key, entry]) => (entry.name ? entry : { ...entry, name: key }));
   } else {
     return [];
   }
