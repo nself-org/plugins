@@ -1,4 +1,30 @@
-# Notifications Plugin for nself
+# DEPRECATED — use `notify` instead
+
+> **This plugin is deprecated as of v1.1.0 and will be removed in v2.0.0.**
+> Replacement: `nself plugin install notify`
+>
+> See the [Migration](#migration) section below.
+
+---
+
+## Migration
+
+1. Install the replacement: `nself plugin install notify`
+2. Replace `NOTIFICATIONS_*` env vars with `NOTIFY_*` (see [notify README](../notify/README.md))
+3. Update API endpoints from `/notifications/*` to `/notify/*`
+4. Database migration: backfill from `np_notifications_*` tables to `np_notify_*` tables using the script below:
+
+```sql
+-- Backfill notification preferences (adjust column names to match notify schema)
+INSERT INTO np_notify_preferences (user_id, channel, enabled, source_account_id, created_at)
+SELECT user_id, channel, enabled, source_account_id, created_at
+FROM np_notifications_preferences
+ON CONFLICT DO NOTHING;
+```
+
+---
+
+# Notifications Plugin for nself (Legacy)
 
 Production-ready multi-channel notification system with email, push, and SMS support.
 

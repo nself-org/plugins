@@ -73,7 +73,11 @@
     "filesystem": []
   },
   "port": 3102,
-  "status": "stable",
+  "deprecated": true,
+  "deprecated_in": "v1.1.0",
+  "replacement": "notify",
+  "removal_target": "v2.0.0",
+  "status": "deprecated",
   "binary_name": "notifications",
   "health_endpoint": "/health",
   "arch_support": [
