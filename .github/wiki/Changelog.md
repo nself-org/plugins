@@ -7,6 +7,26 @@ documentation/structure changes.
 
 ## Plugin Releases
 
+### v1.2.0 — PENDING (v1.1.0 ecosystem release)
+
+Aligns free plugin library with nSelf CLI v1.1.0. 4 new free plugins added; total free plugins: 29.
+
+**New free plugins:**
+
+- **invitations** (communication): Invitation management with email/SMS delivery. MIT licensed.
+- **mdns** (networking): mDNS/Bonjour service discovery. MIT licensed.
+- **subtitle-manager** (media): Subtitle search, download, and sync. MIT licensed.
+- **tokens** (media): Secure content delivery tokens with expiry and scope. MIT licensed.
+
+**What changed:**
+
+- 25 → 29 free plugins. All MIT licensed. Install with `nself plugin install <name>`.
+- All 4 new plugins use `source_account_id` for multi-app isolation per plugin hard rules.
+- Table prefix: `np_<abbrev>_*` for each new plugin.
+- Registry schema: `registry.json` updated with 4 new entries; `registry-schema.json` unchanged (no new top-level fields).
+- Cloudflare Worker (`plugins.nself.org`) auto-deploys with updated registry on merge to main.
+- Plugin author notice: no breaking changes to existing free plugin API surface. All 25 existing plugins install unchanged on CLI v1.1.0.
+
 ### v1.1.1 — 2026-04-18
 
 **Plugin author notice: no action required.**
@@ -43,7 +63,7 @@ All MIT licensed. Install with `nself plugin install <name>`.
 - Migrated public documentation source from `docs/` to `/.wiki/`.
 - Updated GitHub Actions wiki sync to publish directly from `/.wiki`.
 - Added strict repository structure policy and public wiki navigation pages.
-- Moved planning-only content (`NCHAT-PLUGINS-PLAN.md`) out of public docs into private `.claude/plans/`.
-- Added Codex/Claude GO-style private control-plane scaffolding for planning and QA governance.
+- Moved planning-only content (`NCHAT-PLUGINS-PLAN.md`) out of public docs into private planning storage.
+- Added private control-plane scaffolding (GO-style) for planning and QA governance.
 - Added plugin command reference matrices with explicit action/subcommand/option syntax in `/.wiki/commands/*`.
 - Clarified license/changelog placement policy (`LICENSE` at root, discoverability mirrors in wiki).
