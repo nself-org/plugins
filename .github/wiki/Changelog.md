@@ -7,7 +7,7 @@ documentation/structure changes.
 
 ## Plugin Releases
 
-### v1.2.0 — PENDING (v1.1.0 ecosystem release)
+### v1.2.0 — 2026-05-15
 
 Aligns free plugin library with nSelf CLI v1.1.0. 4 new free plugins added; total free plugins: 29.
 
