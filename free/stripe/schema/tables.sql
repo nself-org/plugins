@@ -1,9 +1,14 @@
 -- =============================================================================
 -- Stripe Plugin Schema
 -- Tables for storing synced Stripe data
--- 23 tables, 6 views
+-- 24 tables, 6 views
 --
 -- All tables include source_account_id for multi-account sync support.
+--
+-- NOTE: Table names use stripe_* prefix here (initial schema definition).
+-- Migration 001_rename_stripe_to_np_stripe_up.sql renames all tables to
+-- np_stripe_* prefix at install/upgrade time per nself table naming convention.
+-- See migrations/ directory.
 -- =============================================================================
 
 -- Enable UUID extension if not already enabled
