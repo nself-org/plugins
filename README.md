@@ -47,6 +47,8 @@ Install any plugin with `nself plugin install <name>`. No license key required.
 
 > Note: `notifications` (older, 695-line implementation) and `notify` (newer, focused on Email + Webhook channels) are two separate plugins. New projects should prefer `notify`.
 
+**Building plugins for nClaw?** See the [nClaw plugin author guide](../nclaw/.github/wiki/plugin-author-guide.md).
+
 ## Monitoring Services (10)
 
 The `monitoring` plugin bundles 10 individual observability services (per F05 PLUGIN-INVENTORY-MONITORING). They are wired together by the parent plugin's docker-compose templates and ship as one install.
