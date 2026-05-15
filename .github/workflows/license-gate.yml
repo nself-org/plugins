@@ -41,10 +41,10 @@ jobs:
 
           # Check each Go plugin that has a go.mod
           FAILED=0
-          for gomod in $(find . -name go.mod -not -path '*/vendor/*' | head -20); do
+          for gomod in $(find . -name go.mod -not -path '*/vendor/*' | sort); do
             dir=$(dirname "$gomod")
             echo "Checking: $dir"
-            if ! (cd "$dir" && go-licenses check ./... --allowed_licenses="$ALLOWED" 2>&1); then
+            if ! (cd "$dir" && go-licenses check ./... --allowed_licenses="$ALLOWED" --ignore github.com/nself-org 2>&1); then
               echo "FAIL: Disallowed license in $dir"
               FAILED=1
             fi
@@ -66,11 +66,11 @@ jobs:
           echo "# Third-Party Licenses — plugins/" > THIRD_PARTY_LICENSES.md
           echo "" >> THIRD_PARTY_LICENSES.md
           echo "Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> THIRD_PARTY_LICENSES.md
-          for gomod in $(find . -name go.mod -not -path '*/vendor/*' | head -20); do
+          for gomod in $(find . -name go.mod -not -path '*/vendor/*' | sort); do
             dir=$(dirname "$gomod")
             echo "" >> THIRD_PARTY_LICENSES.md
             echo "## Plugin: $dir" >> THIRD_PARTY_LICENSES.md
-            (cd "$dir" && go-licenses report ./... 2>/dev/null) >> THIRD_PARTY_LICENSES.md || true
+            (cd "$dir" && go-licenses report ./... --ignore github.com/nself-org 2>/dev/null) >> THIRD_PARTY_LICENSES.md || true
           done
           echo "Generated THIRD_PARTY_LICENSES.md"
 
