@@ -2,9 +2,9 @@
   "name": "ollama",
   "version": "1.1.1",
   "api_version": "1.0.0",
-  "description": "One-click offline LLM stack. Stands up an Ollama container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install.",
+  "description": "One-click offline LLM stack. Stands up an Ollama Docker container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install. GPU passthrough is optional and localhost-only (port 11434 binds to 127.0.0.1 — never exposed externally).",
   "author": "nself",
-  "license": "Source-Available",
+  "license": "MIT",
   "isCommercial": false,
   "licenseType": "free",
   "requiredEntitlements": [],
@@ -13,6 +13,7 @@
   "repository": "https://github.com/nself-org/plugins",
   "minNselfVersion": "1.0.9",
   "category": "integrations",
+  "language": "config",
   "tags": [
     "ai",
     "llm",
@@ -20,7 +21,8 @@
     "local",
     "offline",
     "gemma",
-    "self-hosted"
+    "self-hosted",
+    "docker"
   ],
   "tables": [
     "np_ollama_model_registry"
@@ -68,8 +70,6 @@
   "composeFragment": "compose_fragment.yml",
   "port": 11434,
   "status": "stable",
-  "language": "go",
-  "health_endpoint": "/health",
   "arch_support": [
     "linux-x86_64",
     "linux-arm64",
@@ -78,6 +78,10 @@
   "min_memory_mb": 2048,
   "systemd_after": "network.target",
   "tier": "free",
+  "security": {
+    "portBinding": "127.0.0.1",
+    "gpuNote": "GPU passthrough is opt-in via NSELF_OLLAMA_GPU=true. The Ollama service always binds port 11434 to 127.0.0.1 only. GPU drivers (NVIDIA CUDA, ROCm) are the user's responsibility and are not managed by this plugin. GPU access does NOT expose additional network surface."
+  },
   "providerRegistration": {
     "pluginTarget": "ai",
     "providerName": "ollama",
@@ -91,7 +95,5 @@
   "dependencies": {
     "required": [],
     "optional": []
-  },
-  "health_status": "pending_implementation",
-  "entry": "cmd/main.go"
+  }
 }

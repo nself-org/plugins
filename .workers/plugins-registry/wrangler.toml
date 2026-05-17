@@ -52,6 +52,32 @@ CACHE_TTL        = "300"
 REGISTRY_VERSION = "2.0.0"
 # R2_PUBLIC_DOMAIN: set via `wrangler secret put R2_PUBLIC_DOMAIN --env production`
 # Use the Cloudflare R2 public bucket URL or a custom domain pointed at the bucket.
+#
+# [UA-11] — R2_PUBLIC_DOMAIN setup procedure (requires user action):
+#
+#   Step 1 — Enable R2 public access for the bucket:
+#     In Cloudflare dashboard: R2 → nself-plugin-tarballs → Settings → Public Access → Enable
+#     This generates a public URL like: pub-abc123def456.r2.dev
+#
+#   Step 2 — (Recommended) Add a custom domain:
+#     In Cloudflare dashboard: R2 → nself-plugin-tarballs → Settings → Custom Domains → Add
+#     Use: tarballs.nself.org (add CNAME tarballs → pub-xxx.r2.dev in DNS)
+#
+#   Step 3 — Set the secret:
+#     source ~/.claude/vault.env
+#     cd .workers/plugins-registry
+#     echo "pub-abc123def456.r2.dev" | wrangler secret put R2_PUBLIC_DOMAIN --env production
+#     # Or for custom domain: echo "tarballs.nself.org" | wrangler secret put R2_PUBLIC_DOMAIN --env production
+#
+#   Step 4 — Redeploy worker:
+#     ./deploy.sh --production
+#
+#   Step 5 — Verify:
+#     curl https://plugins.nself.org/health   # should return {"r2":"ok",...}
+#     curl https://plugins.nself.org/stats    # should show tarball_cdn_domain field
+#
+# Until UA-11 is complete, tarball CDN URLs in registry responses return null.
+# Plugin install still works via GitHub releases fallback.
 
 # T-RATE-01: GET rate limits for marketplace endpoints (60 req/min per IP)
 MARKETPLACE_GET_RATE_LIMIT = "60"

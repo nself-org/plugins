@@ -1,7 +1,7 @@
 {
   "name": "family-gedcom",
   "version": "0.0.1",
-  "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
+  "description": "Generic GEDCOM file importer for the family plugin. Accepts any GEDCOM 5.5.1 / 7.0 file from any provider with optional photo-folder upload. PLANNED: requires the 'family' plugin (ɳFamily bundle, planned v1.1.0) and 'object-storage' + 'photos' plugins. Not installable until the family plugin ships.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,
@@ -34,6 +34,8 @@
   "repository": "https://github.com/nself-org/plugins",
   "port": 3108,
   "status": "planned",
+  "plannedNote": "Blocked on 'family' plugin (plugins-pro/paid/family) which ships in the ɳFamily bundle at v1.1.0. This plugin is registered in the free registry to reserve the name and document the integration pattern, but nself plugin install will return a clear error until the dependency ships.",
+  "installable": false,
   "tier": "free",
   "language": "go",
   "entryPoint": "binary"

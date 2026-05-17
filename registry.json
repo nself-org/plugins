@@ -5,7 +5,7 @@
   "last_updated": "2026-05-03",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 28 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 29 MIT-licensed plugins.",
   "plugins": {
     "audit-log": {
       "version": "1.0.0",
