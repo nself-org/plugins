@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout PR HEAD
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check Marketplace Worker endpoint surface vs F19 baseline
         run: |
