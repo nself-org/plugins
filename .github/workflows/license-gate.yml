@@ -15,6 +15,7 @@ on:
 
 env:
   LICENSE_GATE_MODE: fail  # Flipped from warn → fail on 2026-05-03 (P98 S13-T03). Triage window complete — audit clean.
+  GOTOOLCHAIN: local  # Prevent auto-download of newer toolchain; all modules are go 1.23 compatible with the pinned runner
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,7 +29,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.23"
           cache: true
 
       - name: Install go-licenses
