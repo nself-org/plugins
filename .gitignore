@@ -106,3 +106,7 @@ NEEDED3.md
 .windsurf/
 .gemini/
 .codeium/
+
+# Build tool artifacts (Mega P1 T-E3-03 hardening)
+.turbo/
+*.tsbuildinfo
