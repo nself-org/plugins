@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -83,8 +82,8 @@ func handleLive(db *DB) http.HandlerFunc {
 func handleCreateService(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateServiceRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.ServiceName == "" {
@@ -177,8 +176,8 @@ func handleUpdateService(db *DB) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 
 		var req UpdateServiceRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -253,8 +252,8 @@ func handleStopAdvertise(db *DB) http.HandlerFunc {
 func handleDiscover(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req DiscoverRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 

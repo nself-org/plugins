@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -32,8 +31,8 @@ func RegisterRoutes(r chi.Router, db *DB) {
 func handleCreateFlag(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateFlagRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Key == "" {
@@ -88,8 +87,8 @@ func handleUpdateFlag(db *DB) http.HandlerFunc {
 		key := chi.URLParam(r, "key")
 
 		var req UpdateFlagRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -130,8 +129,8 @@ func handleDeleteFlag(db *DB) http.HandlerFunc {
 func handleEvaluate(eval *Evaluator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req EvaluateRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.FlagKey == "" {
@@ -150,8 +149,8 @@ func handleEvaluate(eval *Evaluator) http.HandlerFunc {
 func handleEvaluateBatch(eval *Evaluator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req BatchEvaluateRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if len(req.FlagKeys) == 0 {

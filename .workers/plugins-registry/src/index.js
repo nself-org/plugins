@@ -39,6 +39,11 @@
 
 import { signMessage, canonicalPluginString } from './sign.js';
 import { handleRevocations, isRevoked } from './revocations.js';
+import {
+  handleMarketplace as buildMarketplaceResponse,
+  handleRatingPost,
+  readRatings,
+} from './marketplace.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -115,6 +120,15 @@ export default {
       if (method === 'GET' && path === '/categories') {
         return await handleCategories(env, ctx);
       }
+      if (method === 'GET' && path === '/marketplace') {
+        return await handleMarketplaceEndpoint(url, env, ctx);
+      }
+      if (method === 'GET' && path === '/ratings') {
+        return await handleRatingsGet(env);
+      }
+      if (method === 'POST' && path === '/ratings') {
+        return await handleRatingsPost(request, env);
+      }
 
 
       if (method === 'GET' && path === '/manifest.json') {
@@ -141,6 +155,9 @@ export default {
           'GET /plugins/:name/tarball',
           'GET /plugins/:name/signature',
           'GET /categories',
+          'GET /marketplace[?tier=free|pro][&category=X][&bundle=Y][&q=search]',
+          'GET /ratings',
+          'POST /ratings  body: { plugin, stars, review? }',
           'GET /manifest.json',
           'GET /health',
           'GET /stats',
@@ -684,6 +701,50 @@ async function handleManifest(env, ctx) {
     'Cache-Control': `public, max-age=${cacheTtl}`,
     'X-Cache': 'MISS',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace endpoint — GET /marketplace
+//
+// Returns a categorized, enriched view of the plugin catalog for the Admin
+// UI, CLI marketplace command, and web/cloud marketplace mirror.
+// ---------------------------------------------------------------------------
+
+async function handleMarketplaceEndpoint(url, env, ctx) {
+  const cacheTtl = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+
+  const fetchAllPlugins = async () => {
+    const [freeResult, proResult] = await Promise.allSettled([
+      fetchFreeRegistry(env, ctx, cacheTtl),
+      fetchProRegistry(env, ctx, cacheTtl),
+    ]);
+    return [
+      ...(freeResult.status === 'fulfilled' ? (freeResult.value || []) : []),
+      ...(proResult.status  === 'fulfilled' ? (proResult.value  || []) : []),
+    ];
+  };
+
+  const payload = await buildMarketplaceResponse(url, env, fetchAllPlugins);
+
+  return jsonResponse(payload, 200, {
+    'Cache-Control': `public, max-age=${cacheTtl}`,
+    'X-Tier':        url.searchParams.get('tier') || 'all',
+  });
+}
+
+async function handleRatingsGet(env) {
+  const ratings = await readRatings(env);
+  return jsonResponse({ ratings }, 200, {
+    'Cache-Control': 'public, max-age=60',
+  });
+}
+
+async function handleRatingsPost(request, env) {
+  const result = await handleRatingPost(request, env);
+  if (!result.ok) {
+    return jsonResponse({ error: result.error }, result.status || 400);
+  }
+  return jsonResponse({ ok: true, rating: result.rating });
 }
 
 // ---------------------------------------------------------------------------

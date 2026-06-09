@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -45,8 +44,8 @@ type CreateTemplateRequest struct {
 func handleSend(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req SendRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -168,8 +167,8 @@ func handleGetNotification(pool *pgxpool.Pool) http.HandlerFunc {
 func handleCreateTemplate(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateTemplateRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 

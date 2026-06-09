@@ -2,23 +2,46 @@
 # nself Plugin Registry — dual-registry architecture (free + pro combining Worker)
 
 name = "nself-plugin-registry"
-main = "src/index.js"
+main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# Workers KV namespace for caching free, pro, and combined registries
+# Workers KV namespace for caching registries and revocations
+# "REGISTRY" is the primary binding used in TypeScript source.
+# "PLUGINS_KV" is retained as an alias for backwards compatibility with older deploy scripts.
+[[kv_namespaces]]
+binding = "REGISTRY"
+id = "fddaf7f451f54f82a7d3712ae92882ea"
+preview_id = "fddaf7f451f54f82a7d3712ae92882ea"
+
 [[kv_namespaces]]
 binding = "PLUGINS_KV"
 id = "fddaf7f451f54f82a7d3712ae92882ea"
+preview_id = "fddaf7f451f54f82a7d3712ae92882ea"
+
+# KV namespace for plugin marketplace ratings and reviews.
+# Production namespace ID must be set before deploying to production.
+# Create with: wrangler kv:namespace create RATINGS_KV
+[[kv_namespaces]]
+binding = "RATINGS_KV"
+id = "fddaf7f451f54f82a7d3712ae92882ea"
+preview_id = "fddaf7f451f54f82a7d3712ae92882ea"
 
 # Static environment variables
 [vars]
-CACHE_TTL        = "300"
-REGISTRY_VERSION = "2.0.0"
+CACHE_TTL                = "300"
+REGISTRY_VERSION         = "2.0.0"
+PLUGIN_REGISTRY_VERSION  = "1.0.0"
 
 # Secrets (set via wrangler secret put <NAME>):
 #   GH_ACCESS_TOKEN       — Fine-grained PAT with contents:read on nself-org/plugins-pro
-#                        Used to fetch the private pro registry from the GitHub Contents API.
-#   GITHUB_SYNC_TOKEN  — Bearer token for POST /api/sync (triggered by GitHub Actions)
+#                           Used to fetch the private pro registry from the GitHub Contents API.
+#   GITHUB_SYNC_TOKEN     — Bearer token for POST /api/sync (triggered by GitHub Actions)
+#   SIGNING_PRIVATE_KEY   — Ed25519 private key (32 bytes encoded as 64 lowercase hex chars)
+#                           Used to sign tarball download URLs and generate per-plugin signatures.
+#                           Generate: openssl genpkey -algorithm ed25519 | openssl pkey -outform DER | tail -c 32 | xxd -p -c 64
+#   PUBLIC_KEY_HEX        — Ed25519 public key  (32 bytes encoded as 64 lowercase hex chars)
+#                           Distributed to CLI clients for offline signature verification.
+#                           Generate: derive from private key or use openssl pkey -pubout -outform DER | tail -c 32 | xxd -p -c 64
 
 # Production environment (plugins.nself.org)
 [env.production]
@@ -26,12 +49,21 @@ name  = "nself-plugin-registry"
 route = { pattern = "plugins.nself.org/*", zone_id = "3b7a327cd8756c5c736f0bbdfa251719" }
 
 [[env.production.kv_namespaces]]
+binding = "REGISTRY"
+id      = "fddaf7f451f54f82a7d3712ae92882ea"
+
+[[env.production.kv_namespaces]]
 binding = "PLUGINS_KV"
 id      = "fddaf7f451f54f82a7d3712ae92882ea"
 
+[[env.production.kv_namespaces]]
+binding  = "RATINGS_KV"
+id       = "fddaf7f451f54f82a7d3712ae92882ea"
+
 [env.production.vars]
-CACHE_TTL        = "300"
-REGISTRY_VERSION = "2.0.0"
+CACHE_TTL               = "300"
+REGISTRY_VERSION        = "2.0.0"
+PLUGIN_REGISTRY_VERSION = "1.0.0"
 
 # Development settings
 [dev]

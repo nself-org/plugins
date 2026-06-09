@@ -93,8 +93,8 @@ func (h *handler) handleListClients(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 	var req AddDownloadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 	if req.MagnetURI == "" {
@@ -321,8 +321,8 @@ func (h *handler) handleResumeDownload(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	var req SearchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 	if req.Query == "" {
@@ -342,8 +342,8 @@ func (h *handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) handleBestMatch(w http.ResponseWriter, r *http.Request) {
 	var req SmartSearchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 	if req.Title == "" {
@@ -359,8 +359,8 @@ func (h *handler) handleBestMatch(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) handleFetchMagnet(w http.ResponseWriter, r *http.Request) {
 	var req FetchMagnetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 	if req.Source == "" || req.SourceURL == "" {
@@ -448,8 +448,8 @@ func (h *handler) handleUpdateSeedingPolicy(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req SeedingConfigRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -47,8 +46,8 @@ func generateToken() (string, error) {
 func handleCreateInvitation(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateInvitationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 

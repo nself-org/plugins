@@ -1,15 +1,26 @@
-# nself Plugin Registry - Cloudflare Worker
+# nself Plugin Registry — Cloudflare Worker
 
 Fast, globally distributed API for the nself plugin registry.
+
+## Language
+
+TypeScript (strict mode, `noImplicitAny`, `noImplicitReturns`). Source files live in `src/`.
+Wrangler compiles them at deploy/dev time — no separate build step required.
+
+Run the type-checker standalone:
+```bash
+pnpm typecheck
+```
 
 ## Overview
 
 This Cloudflare Worker serves the plugin registry at `plugins.nself.org`. It:
 
-- Caches `registry.json` in Workers KV for fast global access
-- Provides individual plugin lookup endpoints
-- Handles GitHub Actions webhook for cache invalidation
-- Tracks usage statistics
+- Combines free (public) and pro (private) plugin registries from GitHub
+- Generates Ed25519 tarball signatures so the CLI can verify downloads offline
+- Maintains a revocation list that the CLI polls hourly
+- Caches all registry data in Workers KV (5-minute TTL)
+- Handles GitHub Actions webhook for instant cache invalidation
 
 ## Architecture
 
@@ -42,13 +53,18 @@ This Cloudflare Worker serves the plugin registry at `plugins.nself.org`. It:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/registry.json` | GET | Full plugin registry (cached) |
-| `/plugins/:name` | GET | Plugin info (latest version) |
-| `/plugins/:name/:version` | GET | Plugin info (specific version) |
-| `/categories` | GET | List available categories |
-| `/stats` | GET | Registry statistics |
-| `/health` | GET | Health check |
-| `/api/sync` | POST | Webhook to sync from GitHub (requires auth) |
+| `/health` | GET | Health check — `{"status":"ok","ts":"..."}` |
+| `/plugins` | GET | All plugins (`PluginListResponse`) — query params: `tier`, `category` |
+| `/plugins/:name` | GET | Single plugin detail |
+| `/plugins/:name/tarball` | GET | 302 redirect to GitHub tarball; `X-Signature` header if key configured |
+| `/plugins/:name/signature` | GET | Ed25519 signature metadata — `{name, version, signature, publicKey, ...}` |
+| `/plugins/:name/:version` | GET | Plugin at a specific version |
+| `/plugins/revocations` | GET | Revocation list — polled hourly by CLI |
+| `/registry.json` | GET | Combined registry (legacy CLI compat) — query param: `tier` |
+| `/categories` | GET | Category list |
+| `/manifest.json` | GET | Flat array for `nself plugin outdated` |
+| `/stats` | GET | KV cache statistics |
+| `/api/sync` | POST | Force-refresh KV cache (requires `Authorization: Bearer <GITHUB_SYNC_TOKEN>`) |
 
 ## Quick Start
 
@@ -96,22 +112,47 @@ npm run deploy
 
 ## Configuration
 
-### Environment Variables (wrangler.toml)
+### Environment Variables (wrangler.toml `[vars]`)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GITHUB_REPO` | `nself-org/plugins` | Source repository |
-| `GITHUB_BRANCH` | `main` | Branch to fetch from |
-| `CACHE_TTL` | `300` | Cache TTL in seconds |
-| `REGISTRY_VERSION` | `1.0.0` | API version |
+| `CACHE_TTL` | `300` | KV cache TTL in seconds |
+| `PLUGIN_REGISTRY_VERSION` | `1.0.0` | Returned in `/health` response |
 
 ### Secrets
 
-Set via `wrangler secret put`:
+Set via `wrangler secret put <NAME>`:
 
 | Secret | Description |
 |--------|-------------|
-| `GITHUB_SYNC_TOKEN` | Token for webhook authentication from GitHub Actions |
+| `SIGNING_PRIVATE_KEY` | Ed25519 seed — 32 bytes as 64 lowercase hex chars. Signs tarball URLs. |
+| `PUBLIC_KEY_HEX` | Ed25519 public key — 32 bytes as 64 lowercase hex chars. Returned in `/signature` endpoint for CLI offline verification. |
+| `GH_ACCESS_TOKEN` | Fine-grained GitHub PAT with `contents:read` on `plugins` and `plugins-pro` repos. |
+| `GITHUB_SYNC_TOKEN` | Bearer token for `POST /api/sync` (triggered by GitHub Actions on release). |
+
+Generate an Ed25519 keypair:
+```bash
+# Private key seed (32 bytes → 64 hex chars)
+openssl genpkey -algorithm ed25519 | openssl pkey -outform DER | tail -c 32 | xxd -p -c 64
+
+# Public key (32 bytes → 64 hex chars)
+openssl pkey -pubout -outform DER | tail -c 32 | xxd -p -c 64
+```
+
+### KV Schema
+
+The `REGISTRY` KV namespace stores:
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `registry:free` | `{data: PluginEntry[], timestamp: ms}` | Cached free registry |
+| `registry:pro` | `{data: PluginEntry[], timestamp: ms}` | Cached pro registry |
+| `registry:combined` | `{data: CombinedRegistry, timestamp: ms}` | Cached merged output |
+| `registry:manifest` | `{data: ManifestEntry[], timestamp: ms}` | Cached CLI manifest |
+| `revocations:list` | `RevocationEntry[]` | Raw JSON array (no envelope) |
+| `stats:global` | `StatsRecord` | Request counters |
+
+All entries except `revocations:list` use a `{ data, timestamp }` envelope for TTL freshness checks.
 
 ## KV Namespace
 
@@ -211,9 +252,35 @@ Or use the route configuration in wrangler.toml with the zone ID.
 ```
 .workers/plugins-registry/
 ├── src/
-│   └── index.js      # Worker source code
-├── deploy.sh         # Deployment script
-├── package.json      # npm configuration
-├── wrangler.toml     # Cloudflare Worker config
-└── README.md         # This file
+│   ├── index.ts        # Worker entry point — router and all route handlers
+│   ├── registry.ts     # PluginEntry types, KV helpers, GitHub registry loaders
+│   ├── sign.ts         # Ed25519 sign/verify via Web Crypto API (crypto.subtle)
+│   ├── revocations.ts  # Revocation list module (KV-backed)
+│   ├── marketplace.js  # Marketplace endpoint (categorised plugin cards)
+│   └── sign.js         # Legacy JS signing (kept for reference, not imported by TS)
+├── deploy.sh           # Deployment and first-time setup script
+├── package.json        # pnpm config — includes TypeScript and @cloudflare/workers-types
+├── tsconfig.json       # TypeScript strict config (target ES2022, bundler resolution)
+├── wrangler.toml       # Cloudflare Worker config (main = src/index.ts)
+└── README.md           # This file
+```
+
+## Deployment
+
+```bash
+cd plugins/.workers/plugins-registry
+
+# First-time: install deps
+pnpm install
+
+# Type-check
+pnpm typecheck
+
+# Local dev at http://localhost:8787
+pnpm dev
+
+# Deploy to production
+pnpm deploy:production
+# or:
+./deploy.sh --production
 ```

@@ -100,8 +100,8 @@ func RegisterRoutes(r chi.Router, db *DB) {
 func handleCreateSubscription(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateSubscriptionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.ContentName == "" || req.ContentType == "" {
@@ -154,8 +154,8 @@ func handleUpdateSubscription(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var req UpdateSubscriptionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -210,8 +210,8 @@ func handleListFeeds(db *DB) http.HandlerFunc {
 func handleCreateFeed(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateFeedRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Name == "" || req.URL == "" || req.FeedType == "" {
@@ -232,8 +232,8 @@ func handleCreateFeed(db *DB) http.HandlerFunc {
 func handleValidateFeed() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ValidateFeedRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.URL == "" {
@@ -253,8 +253,8 @@ func handleUpdateFeed(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var req UpdateFeedRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -320,8 +320,8 @@ func handleGetQueue(db *DB) http.HandlerFunc {
 func handleAddToQueue(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req AddToQueueRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.ContentType == "" || req.ContentName == "" {
@@ -386,8 +386,8 @@ func handleListProfiles(db *DB) http.HandlerFunc {
 func handleCreateProfile(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateProfileRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Name == "" {
@@ -427,8 +427,8 @@ func handleGetPresets() http.HandlerFunc {
 func handleCreateMovie(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateMovieRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Title == "" {
@@ -478,8 +478,8 @@ func handleUpdateMovie(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var req UpdateMovieRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -519,8 +519,8 @@ func handleDeleteMovie(db *DB) http.HandlerFunc {
 func handleCreateDownload(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateDownloadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.ContentType == "" || req.Title == "" {
@@ -741,8 +741,8 @@ func handleGetDownloadHistory(db *DB) http.HandlerFunc {
 func handleCreateRule(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateRuleRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Name == "" || req.Action == "" || req.Conditions == nil {
@@ -788,8 +788,8 @@ func handleUpdateRule(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		var req UpdateRuleRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -836,8 +836,8 @@ func handleTestRule(db *DB) http.HandlerFunc {
 		}
 
 		var req TestRuleRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -974,8 +974,8 @@ func handleGetPipeline(db *DB) http.HandlerFunc {
 func handleTriggerPipeline(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req PipelineTriggerRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.ContentTitle == "" {
@@ -1042,8 +1042,8 @@ func handleRetryPipeline(db *DB) http.HandlerFunc {
 func handleRSSPoll() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RSSPollRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.URL == "" {
@@ -1066,8 +1066,8 @@ func handleRSSPoll() http.HandlerFunc {
 func handleRSSTest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RSSTestRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.URL == "" {

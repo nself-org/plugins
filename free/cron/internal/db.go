@@ -279,7 +279,7 @@ func GetDueJobIDs(pool *pgxpool.Pool) ([]string, error) {
 
 	rows, err := pool.Query(ctx,
 		`SELECT id FROM np_cron_jobs
-		 WHERE enabled = true AND next_run_at < NOW()`)
+		 WHERE enabled = true AND next_run_at IS NOT NULL AND next_run_at < NOW()`)
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +294,103 @@ func GetDueJobIDs(pool *pgxpool.Pool) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// ClaimDueJobIDs atomically selects due-job IDs and advances their
+// next_run_at by a 1-minute sentinel so the scheduler cannot re-pick them
+// before execution finishes. This is the free-tier mirror of the paid cron
+// ClaimDueJobs fix (p92 QF-S5).
+func ClaimDueJobIDs(pool *pgxpool.Pool, limit int) ([]string, error) {
+	if limit < 1 {
+		limit = 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx,
+		`SELECT id FROM np_cron_jobs
+		 WHERE enabled = true AND next_run_at IS NOT NULL AND next_run_at <= NOW()
+		 ORDER BY next_run_at ASC
+		 LIMIT $1
+		 FOR UPDATE SKIP LOCKED`, limit)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+
+	if len(ids) == 0 {
+		tx.Commit(ctx)
+		return nil, nil
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE np_cron_jobs SET next_run_at = NOW() + INTERVAL '1 minute' WHERE id = ANY($1)`,
+		ids); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// ResetStaleSchedules re-anchors next_run_at for enabled jobs whose schedule
+// has drifted (NULL or >1h in the past). Protects against the p92 QF-S5
+// "0 runs in 24h" regression when the scheduler was down long enough for the
+// schedule clock to fall behind.
+func ResetStaleSchedules(pool *pgxpool.Pool) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	rows, err := pool.Query(ctx,
+		`SELECT id, cron_expr FROM np_cron_jobs
+		 WHERE enabled = true
+		   AND (next_run_at IS NULL OR next_run_at < NOW() - INTERVAL '1 hour')`)
+	if err != nil {
+		return 0, err
+	}
+	type stale struct {
+		ID   string
+		Expr string
+	}
+	var jobs []stale
+	for rows.Next() {
+		var s stale
+		if err := rows.Scan(&s.ID, &s.Expr); err == nil {
+			jobs = append(jobs, s)
+		}
+	}
+	rows.Close()
+
+	var count int64
+	for _, s := range jobs {
+		next := NextRunTime(s.Expr)
+		if next == nil {
+			continue
+		}
+		if _, err := pool.Exec(ctx,
+			`UPDATE np_cron_jobs SET next_run_at = $1 WHERE id = $2`,
+			next, s.ID); err == nil {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // PruneOldRuns deletes run history older than the given number of days.

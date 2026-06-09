@@ -2543,10 +2543,48 @@ export function verifyShopifySignature(
 }
 ```
 
+### Cloudflare Worker Endpoints
+
+The Worker at `plugins.nself.org` is a TypeScript Cloudflare Worker. Full source:
+`.workers/plugins-registry/src/index.ts`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/plugins` | All plugins (`?tier=free\|pro`, `?category=X`) |
+| `GET` | `/plugins/:name` | Single plugin detail |
+| `GET` | `/plugins/:name/tarball` | 302 redirect to GitHub tarball |
+| `GET` | `/plugins/:name/signature` | Ed25519 signature metadata |
+| `GET` | `/plugins/revocations` | Revocation list |
+| `GET` | `/registry.json` | Combined registry (legacy CLI compat) |
+| `GET` | `/categories` | Category list |
+| `GET` | `/manifest.json` | Flat CLI manifest for `nself plugin outdated` |
+| `GET` | `/marketplace` | Enriched marketplace view (`?tier=`, `?bundle=`, `?category=`, `?q=`) |
+| `GET` | `/marketplace/ratings/:name` | Rating aggregate for a plugin |
+| `POST` | `/marketplace/ratings/:name` | Submit a rating (body: `{rating,comment?,userHash}`) |
+| `GET` | `/stats` | Cache statistics |
+| `POST` | `/api/sync` | Force-refresh KV cache (GitHub Actions) |
+
+**Marketplace response shape** (`GET /marketplace`):
+```typescript
+interface MarketplaceResponse {
+  plugins: MarketplacePlugin[];
+  bundles: BundleInfo[];
+  categories: string[];
+  stats: { total: number; free: number; pro: number; updatedAt: string };
+}
+```
+
+**Ratings submit** (`POST /marketplace/ratings/:name`):
+```json
+{ "rating": 5, "comment": "Great plugin", "userHash": "<64-char sha256 hex>" }
+```
+`userHash` must be a SHA-256 of the user's license key — anonymous but deduplicated per plugin.
+
 ### Cloudflare Worker Implementation
 
 ```javascript
-// .workers/plugins-registry/src/index.js
+// .workers/plugins-registry/src/index.js (simplified — actual source is TypeScript)
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);

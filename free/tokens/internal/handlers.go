@@ -63,8 +63,8 @@ func handleIssueToken(db *DB, cfg *Config) http.HandlerFunc {
 		scopedDB := db.ForSourceAccount(sourceAccountID)
 
 		var req IssueTokenRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.UserID == "" || req.ContentID == "" {
@@ -210,8 +210,8 @@ func handleValidateToken(db *DB, cfg *Config) http.HandlerFunc {
 		scopedDB := db.ForSourceAccount(sourceAccountID)
 
 		var req ValidateTokenRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Token == "" {
@@ -283,8 +283,8 @@ func handleRevokeToken(db *DB) http.HandlerFunc {
 
 		// Try to decode as a general revoke request that could contain tokenId, userId, or contentId
 		var raw map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &raw); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -362,8 +362,8 @@ func handleCreateKey(db *DB, cfg *Config) http.HandlerFunc {
 		scopedDB := db.ForSourceAccount(sourceAccountID)
 
 		var req CreateSigningKeyRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Name == "" {
@@ -451,8 +451,8 @@ func handleRotateKey(db *DB, cfg *Config) http.HandlerFunc {
 			KeyID               string `json:"keyId"`
 			ExpireOldAfterHours *int   `json:"expireOldAfterHours,omitempty"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.KeyID == "" {
@@ -527,8 +527,8 @@ func handleCheckEntitlement(db *DB, cfg *Config) http.HandlerFunc {
 		scopedDB := db.ForSourceAccount(sourceAccountID)
 
 		var req CheckEntitlementRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.UserID == "" || req.ContentID == "" || req.EntitlementType == "" {
@@ -595,8 +595,8 @@ func handleCreateEntitlement(db *DB) http.HandlerFunc {
 		scopedDB := db.ForSourceAccount(sourceAccountID)
 
 		var req GrantEntitlementRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.UserID == "" || req.ContentID == "" || req.EntitlementType == "" {
@@ -735,8 +735,8 @@ func handleCreateEncryptionKey(db *DB, cfg *Config) http.HandlerFunc {
 		scopedDB := db.ForSourceAccount(sourceAccountID)
 
 		var req CreateEncryptionKeyRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.ContentID == "" {
@@ -831,8 +831,8 @@ func handleRotateEncryptionKey(db *DB, cfg *Config) http.HandlerFunc {
 		contentID := chi.URLParam(r, "contentId")
 
 		var req RotateEncryptionKeyRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 

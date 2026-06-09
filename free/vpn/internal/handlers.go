@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"regexp"
@@ -198,8 +197,8 @@ func handleStoreCredentials(db *DB) http.HandlerFunc {
 		}
 
 		var req CredentialRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -293,8 +292,8 @@ func handleListP2PServers(db *DB) http.HandlerFunc {
 func handleSyncServers(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ServerSyncRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Provider == "" {
@@ -318,8 +317,8 @@ func handleSyncServers(db *DB) http.HandlerFunc {
 func handleConnect(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ConnectRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.Provider == "" {
@@ -498,8 +497,8 @@ var infoHashRegex = regexp.MustCompile(`urn:btih:([a-fA-F0-9]{40})`)
 func handleStartDownload(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req DownloadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 		if req.MagnetLink == "" {

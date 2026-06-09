@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -50,8 +49,8 @@ type createBackupRequest struct {
 
 func (h *Handler) CreateBackup(w http.ResponseWriter, r *http.Request) {
 	var req createBackupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 
@@ -293,8 +292,8 @@ type createRestoreRequest struct {
 
 func (h *Handler) CreateRestore(w http.ResponseWriter, r *http.Request) {
 	var req createRestoreRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 	if req.BackupID == "" {
@@ -384,8 +383,8 @@ type createScheduleRequest struct {
 
 func (h *Handler) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 	var req createScheduleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+	if err := sdk.ValidateJSON(r, &req); err != nil {
+		sdk.WriteValidationError(w, "", err.Error())
 		return
 	}
 	if req.CronExpr == "" {

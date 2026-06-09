@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -63,8 +62,8 @@ type DispatchRequest struct {
 func handleCreateEndpoint(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateEndpointRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -145,8 +144,8 @@ func handleUpdateEndpoint(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		var req UpdateEndpointRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -270,8 +269,8 @@ func handleListDeliveries(pool *pgxpool.Pool) http.HandlerFunc {
 func handleDispatch(pool *pgxpool.Pool, dispatcher *Dispatcher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req DispatchRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 

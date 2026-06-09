@@ -63,3 +63,10 @@ FEEDTV.md
 NEEDED.md
 NEEDED2.md
 NEEDED3.md
+.vscode/*
+.aider/
+.aider.chat.history.md
+.continue/
+.windsurf/
+.gemini/
+.codeium/

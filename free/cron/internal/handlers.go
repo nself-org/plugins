@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -55,8 +54,8 @@ type paginatedResponse struct {
 func handleCreateJob(app *App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createJobRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -158,8 +157,8 @@ func handleUpdateJob(app *App) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 
 		var req updateJobRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 

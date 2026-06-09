@@ -61,8 +61,15 @@ func ValidateCronExpr(expr string) error {
 	return nil
 }
 
-// RecoverMissed finds and executes jobs whose next_run_at is in the past.
+// RecoverMissed re-anchors stale schedules on boot (p92 QF-S5 safety) and
+// then executes any jobs whose next_run_at is already due.
 func (a *App) RecoverMissed() {
+	if n, err := ResetStaleSchedules(a.Pool); err != nil {
+		log.Printf("reset stale schedules: %v", err)
+	} else if n > 0 {
+		log.Printf("reset %d stale schedule(s) on boot", n)
+	}
+
 	ids, err := GetDueJobIDs(a.Pool)
 	if err != nil {
 		log.Printf("recover missed: %v", err)
@@ -78,22 +85,35 @@ func (a *App) RecoverMissed() {
 }
 
 // StartScheduler launches a background goroutine that polls for due jobs
-// every 30 seconds.
+// every 30 seconds plus a 15-minute stale-schedule sweep so the scheduler
+// self-heals if a job's next_run_at ever drifts out of range.
 func (a *App) StartScheduler() {
 	go func() {
 		log.Println("cron scheduler started (30s poll interval)")
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
+		staleTicker := time.NewTicker(15 * time.Minute)
+		defer staleTicker.Stop()
 
-		for range ticker.C {
-			a.runDueJobs()
+		for {
+			select {
+			case <-ticker.C:
+				a.runDueJobs()
+			case <-staleTicker.C:
+				if n, err := ResetStaleSchedules(a.Pool); err != nil {
+					log.Printf("periodic stale-reset: %v", err)
+				} else if n > 0 {
+					log.Printf("periodic stale-reset: fixed %d job(s)", n)
+				}
+			}
 		}
 	}()
 }
 
-// runDueJobs finds all enabled jobs whose next_run_at is past and executes them.
+// runDueJobs atomically claims due-job IDs (skip-locked) and advances
+// next_run_at so slow dispatches cannot be re-picked on the next tick.
 func (a *App) runDueJobs() {
-	ids, err := GetDueJobIDs(a.Pool)
+	ids, err := ClaimDueJobIDs(a.Pool, 100)
 	if err != nil {
 		log.Printf("scheduler error: %v", err)
 		return

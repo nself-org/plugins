@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -137,8 +136,8 @@ func handleStatus(db *DB, cfg Config) http.HandlerFunc {
 func handleUpdateProgress(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req UpdateProgressRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -298,8 +297,8 @@ func handleGetUserHistory(db *DB) http.HandlerFunc {
 func handleAddToWatchlist(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req AddToWatchlistRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -345,8 +344,8 @@ func handleUpdateWatchlistItem(db *DB) http.HandlerFunc {
 		contentID := chi.URLParam(r, "contentId")
 
 		var req UpdateWatchlistRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
@@ -391,8 +390,8 @@ func handleRemoveFromWatchlist(db *DB) http.HandlerFunc {
 func handleAddToFavorites(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req AddToFavoritesRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+		if err := sdk.ValidateJSON(r, &req); err != nil {
+			sdk.WriteValidationError(w, "", err.Error())
 			return
 		}
 
