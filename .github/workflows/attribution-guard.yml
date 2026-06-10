@@ -2,8 +2,8 @@ name: Attribution Guard
 
 on:
   push:
-    branches:
-      - '**'
+    branches-ignore:
+      - 'stash-archive/**'
     tags:
       - '*'
   pull_request:
