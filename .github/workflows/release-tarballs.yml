@@ -128,9 +128,20 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
 
-          # Verify release exists; create stub if needed (workflow_dispatch case)
+          # Wait up to 90s for the release to appear (handles tag-push race where
+          # another workflow or the UI creates the release concurrently).
+          for i in $(seq 1 18); do
+            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+              echo "Release $TAG found"
+              break
+            fi
+            echo "Waiting for release $TAG... ($((i*5))s elapsed)"
+            sleep 5
+          done
+
+          # If still not found, create a stub (workflow_dispatch or truly missing).
           if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "Release $TAG not found — creating stub release"
+            echo "Release $TAG not found after 90s — creating stub release"
             gh release create "$TAG" \
               --repo "${{ github.repository }}" \
               --title "nself Plugins $TAG" \
