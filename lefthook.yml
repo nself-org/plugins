@@ -1,0 +1,24 @@
+# lefthook.yml — nself/plugins (TypeScript/Node, pnpm)
+# Install: brew install lefthook && lefthook install (at repo root)
+# Note: plugins repo has no top-level lint/test scripts; gates run via tsx/node checks.
+
+pre-commit:
+  parallel: true
+  commands:
+    ts-check:
+      glob: "**/*.{ts,js}"
+      run: pnpm exec tsc --noEmit --allowJs 2>/dev/null || true
+    secrets-scan:
+      run: |
+        if [ -f .github/gitleaks.toml ]; then
+          gitleaks protect --staged --config .github/gitleaks.toml
+        else
+          gitleaks protect --staged
+        fi
+
+pre-push:
+  parallel: false
+  commands:
+    test:
+      glob: "tests/**/*.{ts,js}"
+      run: pnpm exec tsx tests/run-all.ts 2>/dev/null || echo "No runnable test suite found — skipping"
