@@ -3,10 +3,13 @@
 package logger
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Options controls logger construction.
@@ -50,6 +53,22 @@ func New(opts Options) *slog.Logger {
 		handler = handler.WithAttrs(attrs)
 	}
 	return slog.New(handler)
+}
+
+// WithTraceContext injects OpenTelemetry trace correlation (trace_id, span_id)
+// from the given context into the logger. If no active span is recording,
+// the logger is returned unchanged. Purpose: enable distributed tracing via
+// structured logs. Edge case: non-recording spans are skipped (no-op).
+// Depends: go.opentelemetry.io/otel/trace.
+func WithTraceContext(ctx context.Context, logger *slog.Logger) *slog.Logger {
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		sc := span.SpanContext()
+		return logger.With(
+			"trace_id", sc.TraceID().String(),
+			"span_id", sc.SpanID().String(),
+		)
+	}
+	return logger
 }
 
 // ParseLevel converts a string like "debug", "info", "warn", "error" to
