@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"os"
 	"strings"
 )
@@ -32,7 +33,8 @@ func (c *Config) BaseURL() string {
 }
 
 // LoadConfig reads PayPal configuration from environment variables.
-func LoadConfig() *Config {
+// It returns an error if PAYPAL_CLIENT_IDS and PAYPAL_CLIENT_SECRETS have mismatched counts.
+func LoadConfig() (*Config, error) {
 	env := os.Getenv("PAYPAL_ENVIRONMENT")
 	if env == "" {
 		env = "sandbox"
@@ -52,10 +54,15 @@ func LoadConfig() *Config {
 	secrets := splitCSV(os.Getenv("PAYPAL_CLIENT_SECRETS"))
 	labels := splitCSV(os.Getenv("PAYPAL_ACCOUNT_LABELS"))
 
-	count := len(ids)
-	if len(secrets) < count {
-		count = len(secrets)
+	// Validate that client IDs and secrets have matching counts.
+	if len(ids) > 0 && len(ids) != len(secrets) {
+		return nil, fmt.Errorf("PayPal config error: PAYPAL_CLIENT_IDS has %d entries but PAYPAL_CLIENT_SECRETS has %d entries — counts must match", len(ids), len(secrets))
 	}
+	if len(ids) == 0 && len(secrets) > 0 {
+		return nil, fmt.Errorf("PayPal config error: PAYPAL_CLIENT_SECRETS has %d entries but PAYPAL_CLIENT_IDS is empty", len(secrets))
+	}
+
+	count := len(ids)
 
 	for i := 0; i < count; i++ {
 		label := ""
@@ -79,7 +86,7 @@ func LoadConfig() *Config {
 		cfg.WebhookSecret = webhookSecrets[0]
 	}
 
-	return cfg
+	return cfg, nil
 }
 
 // splitCSV splits a comma-separated string into trimmed, non-empty parts.

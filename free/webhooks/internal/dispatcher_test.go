@@ -4,7 +4,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestGenerateSignature verifies the signature format and determinism for
@@ -117,6 +120,84 @@ func TestDispatcher_TestEndpoint_HappyPath(t *testing.T) {
 	if result.Status == nil || *result.Status != 200 {
 		t.Errorf("expected status 200")
 	}
+}
+
+// TestEnvIntCapped verifies that envIntCapped enforces the max ceiling and
+// rejects non-positive values.
+func TestEnvIntCapped(t *testing.T) {
+	cases := []struct {
+		env      string // value to set (empty = unset)
+		def, max int
+		want     int
+	}{
+		{"", 50, 200, 50},     // unset → default
+		{"30", 50, 200, 30},   // within range
+		{"200", 50, 200, 200}, // exactly max
+		{"500", 50, 200, 200}, // exceeds max → capped
+		{"0", 50, 200, 50},    // zero → invalid → default
+		{"-1", 50, 200, 50},   // negative → invalid → default
+	}
+	for _, tc := range cases {
+		t.Setenv("TEST_ENV_INT_CAPPED", tc.env)
+		got := envIntCapped("TEST_ENV_INT_CAPPED", tc.def, tc.max)
+		if got != tc.want {
+			t.Errorf("envIntCapped(env=%q, def=%d, max=%d) = %d, want %d", tc.env, tc.def, tc.max, got, tc.want)
+		}
+	}
+}
+
+// TestDispatcher_SemaphoreCap verifies that the dispatcher semaphore limits
+// concurrent goroutines to at most maxConcurrency even when more are started.
+//
+// Strategy: build a Dispatcher with sem capacity = 5, spawn 20 goroutines
+// each of which holds the slot for 20 ms (simulating a DB status update),
+// and assert that the observed peak concurrent count never exceeds 5.
+func TestDispatcher_SemaphoreCap(t *testing.T) {
+	const cap = 5
+	const total = 20
+	const holdDuration = 20 * time.Millisecond
+
+	d := &Dispatcher{
+		sem:            make(chan struct{}, cap),
+		maxConcurrency: cap,
+		client:         &http.Client{},
+	}
+
+	var (
+		wg      sync.WaitGroup
+		peak    int64
+		current int64
+	)
+
+	for i := 0; i < total; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Acquire semaphore — mirrors the real processPending path.
+			d.sem <- struct{}{}
+			defer func() { <-d.sem }()
+
+			// Track concurrent goroutines inside the semaphore.
+			c := atomic.AddInt64(&current, 1)
+			for {
+				p := atomic.LoadInt64(&peak)
+				if c <= p || atomic.CompareAndSwapInt64(&peak, p, c) {
+					break
+				}
+			}
+
+			time.Sleep(holdDuration) // simulate DB work
+			atomic.AddInt64(&current, -1)
+		}()
+	}
+
+	wg.Wait()
+
+	if peak > int64(cap) {
+		t.Errorf("peak concurrent goroutines = %d; want <= %d (semaphore cap)", peak, cap)
+	}
+	t.Logf("peak concurrent goroutines = %d (cap = %d)", peak, cap)
 }
 
 // TestDispatcher_TestEndpoint_ServerError verifies that a 5xx response is

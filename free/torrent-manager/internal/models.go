@@ -29,6 +29,7 @@ type Config struct {
 	SeedingRatioLimit    float64
 	SeedingTimeLimitHrs  int
 	MaxActiveDownloads   int
+	TorrentListLimit     int
 }
 
 // --- Torrent Clients ---
