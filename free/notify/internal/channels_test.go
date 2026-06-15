@@ -127,3 +127,34 @@ func TestSendWebhook_ServerError(t *testing.T) {
 		t.Error("expected failure for 500 response")
 	}
 }
+
+// TestSendWebhook_ErrorMessageDoesNotLeakBody verifies that error messages from
+// failed webhook delivery do not include the HTTP response body. This prevents
+// leaking internal service topology when webhook targets fail.
+func TestSendWebhook_ErrorMessageDoesNotLeakBody(t *testing.T) {
+	sensitiveContent := "secret database error: connection refused"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, sensitiveContent, http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	result := SendWebhook(srv.URL, `{}`)
+	if result.Success {
+		t.Error("expected failure for 500 response")
+	}
+	if result.Error == nil {
+		t.Fatal("expected error message to be present")
+	}
+
+	errMsg := *result.Error
+	if strings.Contains(errMsg, sensitiveContent) {
+		t.Errorf("error message leaked response body: %q", errMsg)
+	}
+	if strings.Contains(errMsg, "database") || strings.Contains(errMsg, "connection") {
+		t.Errorf("error message leaked sensitive content: %q", errMsg)
+	}
+	// Verify the error message format is as expected
+	if !strings.Contains(errMsg, "webhook returned 500") {
+		t.Errorf("expected error message format 'webhook returned 500', got: %q", errMsg)
+	}
+}

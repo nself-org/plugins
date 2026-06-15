@@ -42,7 +42,10 @@ func main() {
 		log.Fatalf("[nself-paypal] migration failed: %v", err)
 	}
 
-	cfg := internal.LoadConfig()
+	cfg, err := internal.LoadConfig()
+	if err != nil {
+		log.Fatalf("[nself-paypal] configuration error: %v", err)
+	}
 
 	srv := sdk.NewServer(port)
 	r := srv.Router()

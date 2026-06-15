@@ -29,6 +29,7 @@ func LoadConfig() *Config {
 		SeedingRatioLimit:    envFloat("SEEDING_RATIO_LIMIT", 2.0),
 		SeedingTimeLimitHrs:  envInt("SEEDING_TIME_LIMIT_HOURS", 168),
 		MaxActiveDownloads:   envInt("MAX_ACTIVE_DOWNLOADS", 5),
+		TorrentListLimit:     envInt("TORRENT_LIST_LIMIT", 200),
 	}
 }
 

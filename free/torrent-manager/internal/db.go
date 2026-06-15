@@ -12,12 +12,21 @@ import (
 
 // DB wraps a pgxpool.Pool with torrent-manager table operations.
 type DB struct {
-	pool *pgxpool.Pool
+	pool             *pgxpool.Pool
+	torrentListLimit int
 }
 
 // NewDB creates a new DB wrapper.
 func NewDB(pool *pgxpool.Pool) *DB {
-	return &DB{pool: pool}
+	return &DB{pool: pool, torrentListLimit: 200}
+}
+
+// NewDBWithLimit creates a new DB wrapper with a custom torrent list limit.
+func NewDBWithLimit(pool *pgxpool.Pool, limit int) *DB {
+	if limit <= 0 {
+		limit = 200
+	}
+	return &DB{pool: pool, torrentListLimit: limit}
 }
 
 // InitSchema creates all tables, indexes, and views if they do not exist.
@@ -331,9 +340,17 @@ func (d *DB) InitSchema() error {
 	}
 
 	// Views
+	// Note: LIMIT is applied at query time, not in the view definition
 	if _, err := tx.Exec(ctx, `
 		CREATE OR REPLACE VIEW torrent_active_downloads AS
-		SELECT * FROM np_torrentmanager_torrent_downloads
+		SELECT
+			id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
+			status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
+			ratio, download_speed_bytes, upload_speed_bytes, seeders, leechers, peers_connected,
+			download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
+			error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
+			stopped_at, created_at, updated_at
+		FROM np_torrentmanager_torrent_downloads
 		WHERE status IN ('downloading', 'paused')
 		ORDER BY added_at DESC
 	`); err != nil {
@@ -342,7 +359,14 @@ func (d *DB) InitSchema() error {
 
 	if _, err := tx.Exec(ctx, `
 		CREATE OR REPLACE VIEW torrent_completed_downloads AS
-		SELECT * FROM np_torrentmanager_torrent_downloads
+		SELECT
+			id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
+			status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
+			ratio, download_speed_bytes, upload_speed_bytes, seeders, leechers, peers_connected,
+			download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
+			error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
+			stopped_at, created_at, updated_at
+		FROM np_torrentmanager_torrent_downloads
 		WHERE status = 'completed'
 		ORDER BY completed_at DESC
 	`); err != nil {
@@ -351,7 +375,14 @@ func (d *DB) InitSchema() error {
 
 	if _, err := tx.Exec(ctx, `
 		CREATE OR REPLACE VIEW torrent_seeding_torrents AS
-		SELECT * FROM np_torrentmanager_torrent_downloads
+		SELECT
+			id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
+			status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
+			ratio, download_speed_bytes, upload_speed_bytes, seeders, leechers, peers_connected,
+			download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
+			error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
+			stopped_at, created_at, updated_at
+		FROM np_torrentmanager_torrent_downloads
 		WHERE status = 'seeding'
 		ORDER BY completed_at DESC
 	`); err != nil {
@@ -735,6 +766,96 @@ func (d *DB) GetStats() (*TorrentStats, error) {
 		return nil, fmt.Errorf("get stats: %w", err)
 	}
 	return &s, nil
+}
+
+// ============================================================================
+// View Queries with Limit
+// ============================================================================
+
+// GetActiveDownloads returns active downloads (downloading or paused) with LIMIT applied.
+func (d *DB) GetActiveDownloads() ([]TorrentDownload, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := d.pool.Query(ctx,
+		`SELECT
+			id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
+			status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
+			ratio, download_speed_bytes, upload_speed_bytes, seeders, leechers, peers_connected,
+			download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
+			error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
+			stopped_at, created_at, updated_at
+		FROM torrent_active_downloads LIMIT $1`, d.torrentListLimit)
+	if err != nil {
+		return nil, fmt.Errorf("get active downloads: %w", err)
+	}
+	defer rows.Close()
+
+	return scanDownloads(rows)
+}
+
+// GetCompletedDownloads returns completed downloads with LIMIT applied.
+func (d *DB) GetCompletedDownloads() ([]TorrentDownload, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := d.pool.Query(ctx,
+		`SELECT
+			id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
+			status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
+			ratio, download_speed_bytes, upload_speed_bytes, seeders, leechers, peers_connected,
+			download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
+			error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
+			stopped_at, created_at, updated_at
+		FROM torrent_completed_downloads LIMIT $1`, d.torrentListLimit)
+	if err != nil {
+		return nil, fmt.Errorf("get completed downloads: %w", err)
+	}
+	defer rows.Close()
+
+	return scanDownloads(rows)
+}
+
+// GetSeedingTorrents returns seeding torrents with LIMIT applied.
+func (d *DB) GetSeedingTorrents() ([]TorrentDownload, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := d.pool.Query(ctx,
+		`SELECT
+			id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
+			status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
+			ratio, download_speed_bytes, upload_speed_bytes, seeders, leechers, peers_connected,
+			download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
+			error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
+			stopped_at, created_at, updated_at
+		FROM torrent_seeding_torrents LIMIT $1`, d.torrentListLimit)
+	if err != nil {
+		return nil, fmt.Errorf("get seeding torrents: %w", err)
+	}
+	defer rows.Close()
+
+	return scanDownloads(rows)
+}
+
+// scanDownloads is a helper to scan download rows.
+func scanDownloads(rows pgx.Rows) ([]TorrentDownload, error) {
+	var downloads []TorrentDownload
+	for rows.Next() {
+		var dl TorrentDownload
+		if err := rows.Scan(
+			&dl.ID, &dl.SourceAccountID, &dl.ClientID, &dl.ClientTorrentID, &dl.Name, &dl.InfoHash, &dl.MagnetURI,
+			&dl.Status, &dl.Category, &dl.SizeBytes, &dl.DownloadedBytes, &dl.UploadedBytes, &dl.ProgressPercent,
+			&dl.Ratio, &dl.DownloadSpeed, &dl.UploadSpeed, &dl.Seeders, &dl.Leechers, &dl.PeersConnected,
+			&dl.DownloadPath, &dl.FilesCount, &dl.StopAtRatio, &dl.StopAtTimeHours, &dl.VPNIP, &dl.VPNInterface,
+			&dl.ErrorMessage, &dl.ContentID, &dl.RequestedBy, &dl.Metadata, &dl.AddedAt, &dl.StartedAt, &dl.CompletedAt,
+			&dl.StoppedAt, &dl.CreatedAt, &dl.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan download: %w", err)
+		}
+		downloads = append(downloads, dl)
+	}
+	return downloads, rows.Err()
 }
 
 // coalesce returns val if non-empty, otherwise fallback.

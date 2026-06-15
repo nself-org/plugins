@@ -33,21 +33,21 @@ var ssrfDenyNets []*net.IPNet
 func init() {
 	// Parse deny-list CIDRs at package init so ValidateWebhookURL is fast.
 	cidrs := []string{
-		"10.0.0.0/8",      // RFC1918 Class A
-		"172.16.0.0/12",   // RFC1918 Class B
-		"192.168.0.0/16",  // RFC1918 Class C
-		"169.254.0.0/16",  // Link-local / AWS EC2 metadata (169.254.169.254)
-		"127.0.0.0/8",     // Loopback
-		"::1/128",         // IPv6 loopback
-		"fc00::/7",        // IPv6 unique local
-		"fe80::/10",       // IPv6 link-local
-		"0.0.0.0/8",       // Unspecified / "this" network
-		"100.64.0.0/10",   // Shared address space (CGNAT)
-		"192.0.0.0/24",    // IETF Protocol Assignments
-		"198.18.0.0/15",   // Benchmarking
-		"198.51.100.0/24", // TEST-NET-2
-		"203.0.113.0/24",  // TEST-NET-3
-		"240.0.0.0/4",     // Reserved
+		"10.0.0.0/8",         // RFC1918 Class A
+		"172.16.0.0/12",      // RFC1918 Class B
+		"192.168.0.0/16",     // RFC1918 Class C
+		"169.254.0.0/16",     // Link-local / AWS EC2 metadata (169.254.169.254)
+		"127.0.0.0/8",        // Loopback
+		"::1/128",            // IPv6 loopback
+		"fc00::/7",           // IPv6 unique local
+		"fe80::/10",          // IPv6 link-local
+		"0.0.0.0/8",          // Unspecified / "this" network
+		"100.64.0.0/10",      // Shared address space (CGNAT)
+		"192.0.0.0/24",       // IETF Protocol Assignments
+		"198.18.0.0/15",      // Benchmarking
+		"198.51.100.0/24",    // TEST-NET-2
+		"203.0.113.0/24",     // TEST-NET-3
+		"240.0.0.0/4",        // Reserved
 		"255.255.255.255/32", // Broadcast
 	}
 	for _, cidr := range cidrs {
@@ -116,17 +116,21 @@ func ValidateWebhookURL(rawURL string) error {
 }
 
 // Dispatcher handles webhook delivery with retry logic, HMAC signing, and DLQ.
+//
+// Concurrency control: a semaphore channel (sem) caps the number of goroutines
+// that can hold a DB connection simultaneously. This prevents connection-pool
+// exhaustion under sustained traffic or post-downtime backlogs.
+// Configured via WEBHOOK_DISPATCHER_CONCURRENCY (default 50, max 200).
 type Dispatcher struct {
-	pool               *pgxpool.Pool
-	client             *http.Client
-	maxAttempts        int
-	requestTimeoutMs   int
-	concurrentLimit    int
-	retryDelays        []time.Duration
-	autoDisableThresh  int
-	activeDeliveries   int
-	mu                 sync.Mutex
-	stopCh             chan struct{}
+	pool              *pgxpool.Pool
+	client            *http.Client
+	maxAttempts       int
+	requestTimeoutMs  int
+	retryDelays       []time.Duration
+	autoDisableThresh int
+	sem               chan struct{} // semaphore: bounded concurrent deliveries
+	maxConcurrency    int           // cap used for warning threshold
+	stopCh            chan struct{}
 }
 
 // TestResult holds the outcome of a test webhook delivery.
@@ -144,11 +148,15 @@ type DispatchResult struct {
 }
 
 // NewDispatcher creates a new Dispatcher with configuration from environment.
+//
+// The semaphore (sem) is initialised here so it is guaranteed to be non-nil
+// before any Deliver() / processPending() call — avoids a nil-channel panic if
+// the dispatcher is shared across HTTP handlers.
 func NewDispatcher(pool *pgxpool.Pool) *Dispatcher {
 	maxAttempts := envInt("WEBHOOKS_MAX_ATTEMPTS", 5)
 	requestTimeout := envInt("WEBHOOKS_REQUEST_TIMEOUT_MS", 30000)
-	concurrent := envInt("WEBHOOKS_CONCURRENT_DELIVERIES", 10)
 	autoDisable := envInt("WEBHOOKS_AUTO_DISABLE_THRESHOLD", 10)
+	maxConcurrency := envIntCapped("WEBHOOK_DISPATCHER_CONCURRENCY", 50, 200)
 
 	retryDelays := []time.Duration{
 		10 * time.Second,
@@ -166,9 +174,10 @@ func NewDispatcher(pool *pgxpool.Pool) *Dispatcher {
 		client:            &http.Client{Timeout: time.Duration(requestTimeout) * time.Millisecond},
 		maxAttempts:       maxAttempts,
 		requestTimeoutMs:  requestTimeout,
-		concurrentLimit:   concurrent,
 		retryDelays:       retryDelays,
 		autoDisableThresh: autoDisable,
+		sem:               make(chan struct{}, maxConcurrency),
+		maxConcurrency:    maxConcurrency,
 		stopCh:            make(chan struct{}),
 	}
 }
@@ -315,7 +324,7 @@ func (d *Dispatcher) StartProcessing() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	log.Printf("[nself-webhooks] delivery processor started (concurrent=%d, maxAttempts=%d)", d.concurrentLimit, d.maxAttempts)
+	log.Printf("[nself-webhooks] delivery processor started (concurrent=%d, maxAttempts=%d)", d.maxConcurrency, d.maxAttempts)
 
 	for {
 		select {
@@ -334,10 +343,8 @@ func (d *Dispatcher) StopProcessing() {
 }
 
 func (d *Dispatcher) processPending() {
-	d.mu.Lock()
-	available := d.concurrentLimit - d.activeDeliveries
-	d.mu.Unlock()
-
+	// Determine how many slots are free in the semaphore so we don't over-fetch.
+	available := d.maxConcurrency - len(d.sem)
 	if available <= 0 {
 		return
 	}
@@ -358,18 +365,19 @@ func (d *Dispatcher) processPending() {
 
 	var wg sync.WaitGroup
 	for i := range deliveries {
-		d.mu.Lock()
-		d.activeDeliveries++
-		d.mu.Unlock()
+		// Acquire semaphore slot BEFORE launching the goroutine.
+		// This guarantees at most maxConcurrency goroutines hold DB connections.
+		d.sem <- struct{}{}
+
+		// Warn at 80% capacity (len*10 >= cap*8) to enable proactive scaling.
+		if len(d.sem)*10 >= d.maxConcurrency*8 {
+			log.Printf("[nself-webhooks] WARN webhook dispatcher semaphore at 80%% capacity (used=%d cap=%d)", len(d.sem), d.maxConcurrency)
+		}
 
 		wg.Add(1)
 		go func(del Delivery) {
 			defer wg.Done()
-			defer func() {
-				d.mu.Lock()
-				d.activeDeliveries--
-				d.mu.Unlock()
-			}()
+			defer func() { <-d.sem }() // release slot on completion
 			d.processDelivery(del)
 		}(deliveries[i])
 	}
@@ -494,6 +502,23 @@ func envInt(key string, defaultVal int) int {
 		}
 	}
 	return defaultVal
+}
+
+// envIntCapped reads an integer from the environment, falling back to
+// defaultVal, and capping at maxVal. This prevents misconfiguration to
+// extreme values (e.g. WEBHOOK_DISPATCHER_CONCURRENCY=10000) that would
+// re-introduce pool exhaustion.
+func envIntCapped(key string, defaultVal, maxVal int) int {
+	n := envInt(key, defaultVal)
+	if n > maxVal {
+		log.Printf("[nself-webhooks] WARN %s=%d exceeds maximum (%d); capping to %d", key, n, maxVal, maxVal)
+		return maxVal
+	}
+	if n <= 0 {
+		log.Printf("[nself-webhooks] WARN %s=%d is invalid (must be > 0); using default %d", key, n, defaultVal)
+		return defaultVal
+	}
+	return n
 }
 
 func parseRetryDelays(s string) []time.Duration {
