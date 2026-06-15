@@ -1,5 +1,5 @@
 {
-	"version": "1.1.2",
+	"version": "1.1.5",
 	"scripts": {
 		"ci:local": "pnpm exec tsc --noEmit --allowJs 2>/dev/null || echo 'No tsconfig — skipping typecheck'; echo 'ci:local gates passed'"
 	},
