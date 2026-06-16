@@ -80,6 +80,8 @@ jobs:
         if: steps.check-ts.outputs.has_ts == 'true'
         working-directory: free/${{ matrix.plugin }}/ts
         run: pnpm build
+        # ACCEPTED: not all plugins have a build script configured; missing build step is expected during incremental migration.
+        # Expiry: 2026-12-01 — remove once all plugins have pnpm build configured and passing.
         continue-on-error: true
 
   lint-typescript:
