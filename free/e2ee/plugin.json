@@ -1,0 +1,79 @@
+{
+  "name": "e2ee",
+  "version": "1.0.0",
+  "description": "End-to-end encryption key directory: X3DH prekey distribution + Kyber-1024 (ML-KEM-1024) post-quantum prekeys for nchat. Server stores PUBLIC keys only; private keys never leave the client.",
+  "author": "nself",
+  "license": "MIT",
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/free/e2ee",
+  "repository": "https://github.com/nself-org/plugins",
+  "language": "go",
+  "minNselfVersion": "1.0.0",
+  "runtime": "go",
+  "port": 3055,
+  "category": "authentication",
+  "tags": [
+    "e2ee",
+    "encryption",
+    "kyber",
+    "ml-kem",
+    "post-quantum",
+    "x3dh",
+    "prekeys",
+    "key-directory",
+    "security"
+  ],
+  "tables": [
+    "np_e2ee_identity_keys",
+    "np_e2ee_signed_prekeys",
+    "np_e2ee_one_time_prekeys",
+    "np_e2ee_kyber_prekeys",
+    "np_e2ee_prekey_bundles_served",
+    "np_e2ee_verification_states",
+    "np_e2ee_safety_numbers",
+    "np_e2ee_audit_log"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start the key-directory API server"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "E2EE_PLUGIN_PORT",
+      "E2EE_PLUGIN_HOST",
+      "E2EE_LOG_LEVEL",
+      "E2EE_MAX_ONE_TIME_PREKEYS",
+      "E2EE_MAX_KYBER_PREKEYS"
+    ]
+  },
+  "config": {},
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": []
+  },
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "tier": "free"
+}
