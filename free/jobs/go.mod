@@ -2,8 +2,10 @@ module github.com/nself-org/nself-jobs
 
 go 1.23
 
+toolchain go1.26.4
+
 require (
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/jackc/pgx/v5 v5.7.4
 )
 

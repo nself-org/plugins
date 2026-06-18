@@ -3,7 +3,7 @@ module github.com/nself-org/plugin-sdk
 go 1.26.4
 
 require (
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/prometheus/client_golang v1.20.5
 	go.opentelemetry.io/otel/trace v1.43.0
