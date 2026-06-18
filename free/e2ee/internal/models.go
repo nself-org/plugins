@@ -38,10 +38,12 @@ type KyberPreKey struct {
 }
 
 // UploadOneTimePreKeysRequest batch-publishes classic + Kyber one-time prekeys.
+// The identity key used to verify Kyber signatures is read from the STORED row
+// (np_e2ee_identity_keys), never from the request body — so there is no
+// client-supplied identity_key_public field here (CR-C MED fix).
 type UploadOneTimePreKeysRequest struct {
 	UserID       string          `json:"user_id"`
 	DeviceID     string          `json:"device_id"`
-	IdentityKey  string          `json:"identity_key_public"` // base64 Ed25519; used to verify Kyber signatures
 	OneTimeKeys  []OneTimePreKey `json:"one_time_keys"`
 	KyberPreKeys []KyberPreKey   `json:"kyber_prekeys"`
 }

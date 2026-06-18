@@ -48,19 +48,28 @@ func main() {
 	r.Get("/health", h.Health)
 	r.Get("/ready", h.Ready)
 
-	// Key directory
-	r.Post("/api/v1/e2ee/identity/register", h.RegisterIdentity)
-	r.Post("/api/v1/e2ee/signed-prekey", h.UploadSignedPreKey)
-	r.Post("/api/v1/e2ee/one-time-prekeys", h.UploadOneTimePreKeys)
-	r.Get("/api/v1/e2ee/bundle/{userId}", h.GetPreKeyBundle)
-	r.Get("/api/v1/e2ee/replenish/{userId}", h.CheckReplenish)
+	// All key-directory routes require the gateway-forwarded authenticated
+	// principal. internal.RequireAuth extracts X-Hasura-User-Id + the source
+	// account and FAILS CLOSED (401) on any request missing an authenticated
+	// user id. Hasura/nginx is the trust boundary; port 3055 must NOT be
+	// publicly routed (gateway-only ingress).
+	r.Group(func(pr chi.Router) {
+		pr.Use(internal.RequireAuth)
 
-	// Verification / safety numbers
-	r.Post("/api/v1/e2ee/safety-number", h.PostSafetyNumber)
-	r.Get("/api/v1/e2ee/verification/{userId}/{peerId}", h.GetVerificationState)
+		// Key directory
+		pr.Post("/api/v1/e2ee/identity/register", h.RegisterIdentity)
+		pr.Post("/api/v1/e2ee/signed-prekey", h.UploadSignedPreKey)
+		pr.Post("/api/v1/e2ee/one-time-prekeys", h.UploadOneTimePreKeys)
+		pr.Get("/api/v1/e2ee/bundle/{userId}", h.GetPreKeyBundle)
+		pr.Get("/api/v1/e2ee/replenish/{userId}", h.CheckReplenish)
 
-	// Audit
-	r.Get("/api/v1/e2ee/audit/{userId}", h.ListAudit)
+		// Verification / safety numbers
+		pr.Post("/api/v1/e2ee/safety-number", h.PostSafetyNumber)
+		pr.Get("/api/v1/e2ee/verification/{userId}/{peerId}", h.GetVerificationState)
+
+		// Audit
+		pr.Get("/api/v1/e2ee/audit/{userId}", h.ListAudit)
+	})
 
 	addr := ":" + cfg.Port
 	srv := &http.Server{

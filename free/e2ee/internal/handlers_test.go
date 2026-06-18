@@ -65,17 +65,11 @@ func TestDecodeB64(t *testing.T) {
 	}
 }
 
-func TestNullableAndOrUnknown(t *testing.T) {
+func TestNullable(t *testing.T) {
 	if nullable("") != nil {
 		t.Fatal("empty string should map to nil")
 	}
 	if nullable("x") != "x" {
-		t.Fatal("non-empty should pass through")
-	}
-	if orUnknown("") != "unknown" {
-		t.Fatal("empty should become 'unknown'")
-	}
-	if orUnknown("alice") != "alice" {
 		t.Fatal("non-empty should pass through")
 	}
 }
