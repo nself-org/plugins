@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 30,
-  "last_updated": "2026-06-14",
+  "plugins_count": 31,
+  "last_updated": "2026-06-18",
   "tier": "free",
   "checksum_algorithm": "sha256",
   "note": "nSelf Free Plugin Registry \u2014 30 MIT-licensed plugins.",
@@ -256,6 +256,49 @@
         "np_donorbox_events",
         "np_donorbox_tickets",
         "np_donorbox_webhook_events"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/main.go"
+      }
+    },
+    "e2ee": {
+      "version": "1.0.0",
+      "description": "End-to-end encryption key directory: X3DH prekey distribution + Kyber-1024 (ML-KEM-1024) post-quantum prekeys for nchat. Server stores PUBLIC keys only; private keys never leave the client.",
+      "category": "authentication",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/e2ee-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/e2ee/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "e2ee",
+        "encryption",
+        "kyber",
+        "ml-kem",
+        "post-quantum",
+        "x3dh",
+        "prekeys",
+        "key-directory",
+        "security"
+      ],
+      "dependencies": [],
+      "name": "e2ee",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "port": 3055,
+      "tables": [
+        "np_e2ee_identity_keys",
+        "np_e2ee_signed_prekeys",
+        "np_e2ee_one_time_prekeys",
+        "np_e2ee_kyber_prekeys",
+        "np_e2ee_prekey_bundles_served",
+        "np_e2ee_verification_states",
+        "np_e2ee_safety_numbers",
+        "np_e2ee_audit_log"
       ],
       "implementation": {
         "language": "go",
