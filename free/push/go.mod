@@ -1,6 +1,6 @@
 module github.com/nself-org/nself-push
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/go-chi/chi/v5 v5.2.2
