@@ -1,9 +1,9 @@
 module github.com/nself-org/nself-cron
 
-go 1.23.0
+go 1.26.2
 
 require (
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/nself-org/plugin-sdk v0.0.0

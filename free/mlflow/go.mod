@@ -1,9 +1,9 @@
 module github.com/nself-org/nself-mlflow
 
-go 1.23.0
+go 1.26.2
 
 require (
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/nself-org/plugin-sdk v0.0.0
 )
 
