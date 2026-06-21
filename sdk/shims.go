@@ -127,3 +127,20 @@ func CORS(next http.Handler) http.Handler {
 func RequestID(next http.Handler) http.Handler {
 	return sdkmw.RequestID(next)
 }
+
+// SourceAccountID extracts the multi-app isolation account ID from an HTTP
+// request's X-Hasura-Source-Account-Id header. Returns "primary" when the
+// header is absent, matching the default value used in all np_* table columns.
+//
+// Purpose: DRY helper used by all plugins that enforce source_account_id isolation.
+// Inputs:  r — the incoming HTTP request.
+// Outputs: account ID string, never empty.
+// Constraints: Must not be called on requests that bypass the Hasura proxy.
+// SPORT: F08-SERVICE-INVENTORY — multi-app isolation pattern.
+func SourceAccountID(r *http.Request) string {
+	id := r.Header.Get("X-Hasura-Source-Account-Id")
+	if id == "" {
+		id = "primary"
+	}
+	return id
+}
