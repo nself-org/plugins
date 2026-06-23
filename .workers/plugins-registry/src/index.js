@@ -401,7 +401,12 @@ function normalizeToArray(data, expectedTier) {
   } else if (data && Array.isArray(data.plugins)) {
     raw = data.plugins;
   } else if (data && data.plugins && typeof data.plugins === 'object') {
-    raw = Object.values(data.plugins);
+    // Object-keyed format: { "claw": { version, ... }, ... }
+    // Use entries() to preserve the key as the plugin name.
+    raw = Object.entries(data.plugins).map(([key, val]) => ({
+      name: key,
+      ...(val && typeof val === 'object' ? val : {}),
+    }));
   } else {
     return [];
   }
