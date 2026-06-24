@@ -94,6 +94,14 @@ func (d *Dispatcher) processDelivery(del Delivery) {
 		return
 	}
 
+	// SSRF guard (second layer, DNS-rebinding defense): re-validate the
+	// destination at delivery time before issuing the request.
+	if err := ValidateWebhookURL(endpoint.URL); err != nil {
+		errMsg := err.Error()
+		d.handleFailure(ctx, del, endpoint, nil, &errMsg)
+		return
+	}
+
 	// Mark as delivering (increment attempt).
 	_ = UpdateDeliveryStatus(ctx, d.pool, del.ID, "delivering", nil, nil, nil, nil, nil)
 
