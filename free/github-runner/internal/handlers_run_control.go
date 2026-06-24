@@ -28,7 +28,10 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 
 	cmd := exec.Command(runScript)
 	cmd.Dir = dir
-	cmd.Env = os.Environ()
+	// Pass a filtered env (no HASURA/DATABASE/NSELF_LICENSE/STRIPE/secrets) so
+	// untrusted workflow code on the runner cannot exfiltrate the plugin's
+	// credentials from the process environment.
+	cmd.Env = runnerEnv()
 
 	// Redirect stdout/stderr to the log file.
 	logPath := logFilePath()

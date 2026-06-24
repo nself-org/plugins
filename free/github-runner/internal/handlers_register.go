@@ -78,7 +78,9 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	cmd := exec.CommandContext(ctx, configScript, args...)
 	cmd.Dir = dir
-	cmd.Env = os.Environ()
+	// Pass a filtered env (no HASURA/DATABASE/NSELF_LICENSE/STRIPE/secrets) so
+	// the runner config step cannot read the plugin's credentials.
+	cmd.Env = runnerEnv()
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
