@@ -22,6 +22,12 @@ func handleCreateEndpoint(pool *pgxpool.Pool) http.HandlerFunc {
 			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
 			return
 		}
+		// SSRF guard (Security-Always-Free): reject destinations resolving to
+		// private/internal addresses before persisting the endpoint.
+		if err := ValidateWebhookURL(req.URL); err != nil {
+			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
 		if len(req.Events) == 0 {
 			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "events is required"})
 			return
@@ -98,6 +104,15 @@ func handleUpdateEndpoint(pool *pgxpool.Pool) http.HandlerFunc {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
 			return
+		}
+
+		// SSRF guard (Security-Always-Free): if the URL is being changed,
+		// re-validate it before persisting.
+		if req.URL != nil {
+			if err := ValidateWebhookURL(*req.URL); err != nil {
+				sdk.Respond(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+				return
+			}
 		}
 
 		var headersJSON *string

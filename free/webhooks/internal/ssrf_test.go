@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"net/http"
 	"os"
 	"testing"
 )
@@ -80,5 +81,21 @@ func TestValidateWebhookURL_InvalidURL(t *testing.T) {
 		if err == nil {
 			t.Errorf("ValidateWebhookURL(%q) should have returned an error, got nil", rawURL)
 		}
+	}
+}
+
+// TestTestEndpoint_SSRFBlocked verifies the SSRF guard is actually wired into
+// the delivery path: TestEndpoint must refuse an internal destination even
+// though the validator itself would also reject it in isolation.
+func TestTestEndpoint_SSRFBlocked(t *testing.T) {
+	os.Unsetenv("WEBHOOK_ALLOW_PRIVATE_URLS")
+	d := &Dispatcher{client: &http.Client{}}
+	endpoint := &Endpoint{URL: "http://169.254.169.254/latest/meta-data/", Secret: "s"}
+	result := d.TestEndpoint(endpoint)
+	if result.Success {
+		t.Error("TestEndpoint should refuse SSRF target (cloud metadata)")
+	}
+	if result.Error == "" {
+		t.Error("expected SSRF error message, got empty")
 	}
 }

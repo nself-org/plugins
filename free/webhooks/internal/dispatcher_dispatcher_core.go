@@ -148,6 +148,12 @@ func (d *Dispatcher) TestEndpoint(endpoint *Endpoint) TestResult {
 		"message":    "This is a test webhook from nself",
 	}
 
+	// SSRF guard (second layer, DNS-rebinding defense): re-validate the
+	// destination at delivery time, not just at registration.
+	if err := ValidateWebhookURL(endpoint.URL); err != nil {
+		return TestResult{Success: false, Error: err.Error()}
+	}
+
 	payloadBytes, _ := json.Marshal(testPayload)
 	sig := GenerateSignature(payloadBytes, endpoint.Secret)
 
