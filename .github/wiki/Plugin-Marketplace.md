@@ -60,25 +60,57 @@ Each plugin card includes:
 
 ```json
 {
-  "name": "ai",
-  "displayName": "Ai",
-  "version": "1.1.1",
-  "description": "Unified AI adapter",
+  "name": "nself-ai-gateway",
+  "displayName": "AI Gateway",
+  "version": "1.0.0",
+  "description": "Provider key vault, request routing, and quota enforcement for all AI providers",
   "tier": "pro",
   "category": "ai",
   "author": "nself",
-  "icon": "ai.svg",
-  "tags": ["openai","anthropic"],
-  "rating": 4.7,
-  "ratingCount": 42,
-  "downloads": 1234,
+  "icon": "ai-gateway.svg",
+  "port": 3761,
+  "tags": ["anthropic","openai","google","key-vault","quota"],
+  "rating": 0,
+  "ratingCount": 0,
+  "downloads": 0,
   "bundle": "nclaw",
   "bundleName": "ɳClaw Bundle",
   "price": "$0.99/mo",
-  "related": ["claw","claw-web","mux","voice"],
+  "related": ["nself-ai-cc","nself-ai-mcp","claw","claw-web","mux"],
   "licenseRequired": true
 }
 ```
+
+## Canonical AI Plugin Trio
+
+The three AI gateway plugins form the unified AI infrastructure in nSelf (P4-E1 Gateway
+Unification). They replace the retired `plugin-ai`, `plugin-pty`, and `plugin-llm-gateway`
+aliases.
+
+| Plugin | Port | Bundle | Role |
+|---|---|---|---|
+| `nself-ai-cc` | 3760 | ɳClaw | PTY session relay for AI CLI binaries (claude, codex) |
+| `nself-ai-gateway` | 3761 | ɳClaw | Provider key vault, request routing, quota enforcement |
+| `nself-ai-mcp` | 3762 | ClawDE | MCP tool server (reads gateway state via 3761) |
+
+Install all three:
+```bash
+nself plugin install nself-ai-cc
+nself plugin install nself-ai-gateway
+nself plugin install nself-ai-mcp
+```
+
+Or install via bundle (includes the relevant trio members plus other bundle plugins):
+```bash
+nself plugin install --bundle nclaw    # includes nself-ai-cc and nself-ai-gateway
+nself plugin install --bundle clawde   # includes nself-ai-gateway and nself-ai-mcp
+```
+
+**Note:** `plugin-ai`, `plugin-pty`, and `plugin-llm-gateway` are retired. They return `404`
+from this marketplace as of P4. See [[Deprecation-Policy]] § Plugin Rename Policy for
+migration steps.
+
+---
 
 ## Filters
 
@@ -148,8 +180,8 @@ Five bundles group plugins for a flat monthly price. Installing any plugin in a 
 
 | Bundle | Price | Plugins (canonical) |
 |--------|-------|---------------------|
-| ɳClaw | $0.99/mo | ai, claw, claw-web, mux, voice, browser, google, notify, cron |
-| ClawDE | $0.99/mo | claw, ai, realtime, auth, notify, cms, sync |
+| ɳClaw | $0.99/mo | nself-ai-cc, nself-ai-gateway, claw, claw-web, mux, voice, browser, google, notify, cron |
+| ClawDE | $0.99/mo | claw, nself-ai-gateway, nself-ai-mcp, realtime, auth, notify, cms, sync |
 | nTV | $0.99/mo | media-processing, streaming, epg, tmdb, torrent-manager, content-acquisition |
 | nFamily | $0.99/mo | social, photos, activity-feed, moderation, realtime, cms, chat |
 | nChat | $0.99/mo | chat, livekit, recording, moderation, bots, realtime, auth |
