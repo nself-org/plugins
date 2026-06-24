@@ -15,6 +15,7 @@ type Config struct {
 	Port             int
 	OpenSubtitlesKey string
 	StoragePath      string
+	MediaRoot        string // containment root for user-supplied media/subtitle paths
 	LogLevel         string
 	AlassPath        string
 	FfsubsyncPath    string

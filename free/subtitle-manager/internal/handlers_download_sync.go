@@ -156,6 +156,19 @@ func handleSync(cfg *Config, syncer *Synchronizer) http.HandlerFunc {
 			return
 		}
 
+		// Path-traversal guard: video and subtitle paths must stay within the
+		// configured media root before being passed to the sync subprocess.
+		videoPath, err := validateMediaPath(cfg.MediaRoot, req.VideoPath)
+		if err != nil {
+			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("video_path: %w", err))
+			return
+		}
+		subtitlePath, err := validateMediaPath(cfg.MediaRoot, req.SubtitlePath)
+		if err != nil {
+			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("subtitle_path: %w", err))
+			return
+		}
+
 		lang := req.Language
 		if lang == "" {
 			lang = "en"
@@ -163,10 +176,10 @@ func handleSync(cfg *Config, syncer *Synchronizer) http.HandlerFunc {
 		sourceAccountID := getSourceAccountID(r)
 
 		outputDir := filepath.Join(cfg.StoragePath, sourceAccountID, "synced")
-		baseName := strings.TrimSuffix(filepath.Base(req.SubtitlePath), filepath.Ext(req.SubtitlePath))
+		baseName := strings.TrimSuffix(filepath.Base(subtitlePath), filepath.Ext(subtitlePath))
 		outputPath := filepath.Join(outputDir, fmt.Sprintf("%s.synced.%s.srt", baseName, lang))
 
-		result, err := syncer.SyncSubtitle(req.VideoPath, req.SubtitlePath, outputPath, nil)
+		result, err := syncer.SyncSubtitle(videoPath, subtitlePath, outputPath, nil)
 		if err != nil {
 			sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("sync failed: %w", err))
 			return
@@ -182,7 +195,7 @@ func handleSync(cfg *Config, syncer *Synchronizer) http.HandlerFunc {
 // POST /v1/qc
 // ---------------------------------------------------------------------------
 
-func handleQC(db *DB, qc *SubtitleQC) http.HandlerFunc {
+func handleQC(db *DB, qc *SubtitleQC, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req QCRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -194,9 +207,16 @@ func handleQC(db *DB, qc *SubtitleQC) http.HandlerFunc {
 			return
 		}
 
+		// Path-traversal guard before reading the subtitle from disk.
+		subtitlePath, err := validateMediaPath(cfg.MediaRoot, req.SubtitlePath)
+		if err != nil {
+			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("subtitle_path: %w", err))
+			return
+		}
+
 		sourceAccountID := getSourceAccountID(r)
 
-		result, err := qc.ValidateSubtitle(req.SubtitlePath, req.VideoDurationMs)
+		result, err := qc.ValidateSubtitle(subtitlePath, req.VideoDurationMs)
 		if err != nil {
 			sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("QC validation failed: %w", err))
 			return
@@ -236,7 +256,7 @@ func handleQC(db *DB, qc *SubtitleQC) http.HandlerFunc {
 // POST /v1/normalize
 // ---------------------------------------------------------------------------
 
-func handleNormalize(norm *Normalizer) http.HandlerFunc {
+func handleNormalize(norm *Normalizer, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req NormalizeRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -248,7 +268,14 @@ func handleNormalize(norm *Normalizer) http.HandlerFunc {
 			return
 		}
 
-		outputPath, err := norm.NormalizeToWebVTT(req.InputPath, "")
+		// Path-traversal guard before reading the input subtitle from disk.
+		inputPath, err := validateMediaPath(cfg.MediaRoot, req.InputPath)
+		if err != nil {
+			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("input_path: %w", err))
+			return
+		}
+
+		outputPath, err := norm.NormalizeToWebVTT(inputPath, "")
 		if err != nil {
 			sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("normalization failed: %w", err))
 			return

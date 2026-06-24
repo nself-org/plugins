@@ -25,6 +25,13 @@ func handleFetchBest(db *DB, cfg *Config, osClient *OpenSubtitlesClient, syncer 
 			return
 		}
 
+		// Path-traversal guard: the video path is passed to the sync subprocess.
+		videoPath, err := validateMediaPath(cfg.MediaRoot, req.VideoPath)
+		if err != nil {
+			sdk.Error(w, http.StatusBadRequest, fmt.Errorf("video_path: %w", err))
+			return
+		}
+
 		sourceAccountID := getSourceAccountID(r)
 		maxAlts := req.MaxAlternatives
 		if maxAlts <= 0 {
@@ -49,7 +56,7 @@ func handleFetchBest(db *DB, cfg *Config, osClient *OpenSubtitlesClient, syncer 
 			go func(idx int, language string) {
 				defer wg.Done()
 				res := fetchBestForLanguage(fetchBestParams{
-					videoPath:       req.VideoPath,
+					videoPath:       videoPath,
 					language:        language,
 					maxAlternatives: maxAlts,
 					sourceAccountID: sourceAccountID,
