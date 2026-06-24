@@ -24,6 +24,11 @@ type Config struct {
 	SkipGitleaks bool
 	// Verbose prints each command before running it.
 	Verbose bool
+	// GatewayBase is the base URL for the gateway routing check stage.
+	// If non-empty, a gateway-routing-check stage is appended after all stack gates.
+	// Example: "http://167.235.233.65:3761"
+	// SPORT: PLUGINS-CI-005
+	GatewayBase string
 }
 
 // GateResult holds the outcome of a single gate step.
