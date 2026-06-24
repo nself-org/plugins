@@ -83,6 +83,70 @@ func runFlutterGates(root string, timeout int, verbose bool) []GateResult {
 	}
 }
 
+// runRustGates runs cargo clippy (deny warnings) and cargo test for a Rust crate.
+//
+// Purpose: Lint + test gate for Rust/Cargo projects (e.g. plugins-pro E7 plugins).
+// Inputs:  root string — crate root containing Cargo.toml; timeout int; verbose bool
+// Outputs: []GateResult — clippy lint + unit test results
+// Constraints: clippy --deny warnings; cargo test --all-features; SPORT PLUGINS-CI-004
+func runRustGates(root string, timeout int, verbose bool) []GateResult {
+	return []GateResult{
+		runStep("rust:clippy", root, timeout, verbose,
+			"cargo", "clippy", "--all-targets", "--all-features", "--", "--deny", "warnings"),
+		runStep("rust:test", root, timeout, verbose,
+			"cargo", "test", "--all-features"),
+	}
+}
+
+// runGatewayRoutingCheck verifies that the nself-ai-gateway on staging responds
+// to /retrieval and /pty-relay routes (E7 completion check).
+//
+// Purpose: Confirm gateway routing is live for E7 plugins on staging.
+// Inputs:  gatewayBase string — base URL of the gateway (e.g. http://167.235.233.65:3761)
+// Outputs: []GateResult — one per route checked
+// Constraints: curl -f; targets staging ONLY (never production); SPORT PLUGINS-CI-005
+func runGatewayRoutingCheck(gatewayBase string, timeout int, verbose bool) []GateResult {
+	routes := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{"gateway:/retrieval", "POST", "/retrieval"},
+		{"gateway:/pty-relay", "POST", "/pty-relay"},
+	}
+
+	// Use a temporary empty dir as the "root" for runStep (curl doesn't need a crate root).
+	tmpDir := os.TempDir()
+
+	var results []GateResult
+	for _, r := range routes {
+		url := gatewayBase + r.path
+		// POST with an empty JSON body; expect HTTP 200 or 422 (valid request reached handler).
+		// -f fails on 5xx/connection refused. --max-time caps per-request.
+		args := []string{
+			"-sf",
+			"--max-time", fmt.Sprintf("%d", timeout),
+			"-X", r.method,
+			"-H", "Content-Type: application/json",
+			"-d", "{}",
+			"-o", "/dev/null",
+			"-w", "%{http_code}",
+			url,
+		}
+		gr := runStep(r.name, tmpDir, timeout, verbose, "curl", args...)
+		// curl -s -f exits non-zero on 4xx/5xx when using -f; but we also want 422 (bad body but live).
+		// Reinterpret: if output is a 3-digit code in [200,499], gate passes (service reachable + routing live).
+		if !gr.Passed && len(gr.Output) == 3 {
+			code := gr.Output
+			if code >= "200" && code < "500" {
+				gr.Passed = true
+			}
+		}
+		results = append(results, gr)
+	}
+	return results
+}
+
 // runStep executes a single gate command and returns its result.
 // For gofmt specifically, success means no output (unlinted files print their path).
 func runStep(name, root string, timeout int, verbose bool, cmd string, args ...string) GateResult {

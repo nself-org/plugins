@@ -68,11 +68,20 @@ func Run(cfg Config) (*Result, error) {
 			gates = runNodeGates(root, timeout, cfg.Verbose)
 		case "flutter":
 			gates = runFlutterGates(root, timeout, cfg.Verbose)
+		case "rust":
+			gates = runRustGates(root, timeout, cfg.Verbose)
 		}
 		res.Gates = append(res.Gates, gates...)
 	}
 
-	// 4. Aggregate pass/fail.
+	// 4. Gateway routing check (E7 completion gate — runs after all stack gates).
+	// Targets staging only; never production. SPORT: PLUGINS-CI-005
+	if cfg.GatewayBase != "" {
+		gwGates := runGatewayRoutingCheck(cfg.GatewayBase, timeout, cfg.Verbose)
+		res.Gates = append(res.Gates, gwGates...)
+	}
+
+	// 5. Aggregate pass/fail.
 	res.Passed = true
 	for _, g := range res.Gates {
 		if !g.Passed {
@@ -86,6 +95,7 @@ func Run(cfg Config) (*Result, error) {
 }
 
 // detectStacks returns which stacks are present in the repo root.
+// Rust is detected by Cargo.toml presence.
 func detectStacks(root string) []string {
 	var stacks []string
 	if fileExists(filepath.Join(root, "go.mod")) {
@@ -96,6 +106,9 @@ func detectStacks(root string) []string {
 	}
 	if fileExists(filepath.Join(root, "pubspec.yaml")) {
 		stacks = append(stacks, "flutter")
+	}
+	if fileExists(filepath.Join(root, "Cargo.toml")) {
+		stacks = append(stacks, "rust")
 	}
 	return stacks
 }
