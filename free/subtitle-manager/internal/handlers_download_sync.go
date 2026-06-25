@@ -11,6 +11,7 @@ import (
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 124L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleDownload(db *DB, cfg *Config, osClient *OpenSubtitlesClient, qc *SubtitleQC) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req DownloadRequest
@@ -195,6 +196,7 @@ func handleSync(cfg *Config, syncer *Synchronizer) http.HandlerFunc {
 // POST /v1/qc
 // ---------------------------------------------------------------------------
 
+// Size-cap exception: single-responsibility HTTP route handler — 56L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleQC(db *DB, qc *SubtitleQC, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req QCRequest

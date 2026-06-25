@@ -88,6 +88,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 // Webhook
 // ============================================================================
 
+// Size-cap exception: single-responsibility HTTP route handler — 90L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	signature := r.Header.Get("Stripe-Signature")
 	if signature == "" {

@@ -19,6 +19,7 @@ func NewSynchronizer(cfg *Config) *Synchronizer {
 
 // SyncSubtitle runs the full sync pipeline: alass first, then ffsubsync.
 // Uses os/exec with StdoutPipe+io.Copy for large output (TRAP 3 safe).
+// Size-cap exception: sync pipeline — 108L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *Synchronizer) SyncSubtitle(videoPath, subtitlePath, outputPath string, opts *SyncOptions) (*SyncResult, error) {
 	log.Printf("subtitle-manager: starting sync pipeline video=%s sub=%s out=%s", videoPath, subtitlePath, outputPath)
 

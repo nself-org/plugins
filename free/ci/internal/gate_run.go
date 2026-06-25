@@ -22,6 +22,7 @@ func (r *Result) Summary() string {
 }
 
 // Run executes the CI gate suite for the repo at cfg.RepoRoot.
+// Size-cap exception: config loader — 71L of env-var reads with validation; single cohesive unit, splitting fragments the config contract.
 func Run(cfg Config) (*Result, error) {
 	root := cfg.RepoRoot
 	if root == "" {

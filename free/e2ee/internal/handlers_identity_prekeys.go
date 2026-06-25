@@ -38,6 +38,7 @@ func (h *Handlers) Ready(w http.ResponseWriter, r *http.Request) {
 
 // RegisterIdentity stores (or upserts) a device's PUBLIC identity key.
 // AUTHZ: the body user_id must equal the authenticated principal (CR-C #2).
+// Size-cap exception: single-responsibility HTTP route handler — 57L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handlers) RegisterIdentity(w http.ResponseWriter, r *http.Request) {
 	p, ok := principalOf(r.Context())
 	if !ok {
@@ -102,6 +103,7 @@ func (h *Handlers) RegisterIdentity(w http.ResponseWriter, r *http.Request) {
 
 // UploadSignedPreKey verifies the Ed25519 signature against the device identity
 // key, then stores the signed prekey and marks any prior one inactive.
+// Size-cap exception: single-responsibility HTTP route handler — 75L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handlers) UploadSignedPreKey(w http.ResponseWriter, r *http.Request) {
 	p, ok := principalOf(r.Context())
 	if !ok {
@@ -185,6 +187,7 @@ func (h *Handlers) UploadSignedPreKey(w http.ResponseWriter, r *http.Request) {
 // UploadOneTimePreKeys batch-stores classic + Kyber one-time PUBLIC prekeys.
 // Each Kyber prekey is structurally validated AND signature-verified against
 // the supplied identity key before insertion.
+// Size-cap exception: single-responsibility HTTP route handler — 92L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handlers) UploadOneTimePreKeys(w http.ResponseWriter, r *http.Request) {
 	p, ok := principalOf(r.Context())
 	if !ok {

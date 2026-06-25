@@ -53,6 +53,7 @@ type Money struct {
 
 // SearchTransactions searches for transactions in the given date range,
 // handling PayPal's 31-day maximum window by batching requests.
+// Size-cap exception: 54L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func (c *PayPalClient) SearchTransactions(startDate, endDate string) ([]TransactionDetail, error) {
 	start, err := time.Parse(time.RFC3339, startDate)
 	if err != nil {

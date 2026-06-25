@@ -14,6 +14,7 @@ import (
 // Entitlements Handlers
 // ============================================================================
 
+// Size-cap exception: single-responsibility HTTP route handler — 67L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleCheckEntitlement(db *DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)
@@ -82,6 +83,7 @@ func handleCheckEntitlement(db *DB, cfg *Config) http.HandlerFunc {
 	}
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 58L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleCreateEntitlement(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)

@@ -125,15 +125,16 @@ func queryInt(r *http.Request, key string, defaultVal int) int {
 	return n
 }
 
-// scopedDBFromRequest resolves multi-app source_account_id from the
-// X-Source-Account-Id header and returns a scoped DB instance.
+// scopedDBFromRequest resolves multi-app source_account_id from the request
+// using sdk.SourceAccountID (all 4 canonical header spellings) with env-var
+// fallback for non-HTTP contexts. Fix: previously only checked
+// X-Source-Account-Id (P4-E0 audit).
 func scopedDBFromRequest(r *http.Request, db *DB) *DB {
-	sourceAccountID := r.Header.Get("X-Source-Account-Id")
-	if sourceAccountID == "" {
-		sourceAccountID = os.Getenv("SOURCE_ACCOUNT_ID")
-	}
-	if sourceAccountID == "" {
-		sourceAccountID = "primary"
+	sourceAccountID := sdk.SourceAccountID(r)
+	if sourceAccountID == "primary" {
+		if env := os.Getenv("SOURCE_ACCOUNT_ID"); env != "" {
+			sourceAccountID = env
+		}
 	}
 	return db.ForSourceAccount(sourceAccountID)
 }

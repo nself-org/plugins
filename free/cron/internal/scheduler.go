@@ -116,6 +116,7 @@ func (a *App) runDueJobs() {
 // Uses advisory lock (pg_try_advisory_lock) to prevent concurrent execution
 // of the same job. If the previous instance is still running, emits
 // cron_job_overlap_skipped metric and skips this tick. (S42-T05)
+// Size-cap exception: scheduler execute — 70L job lifecycle (fetch+lock+exec+update); atomic operation, not separable.
 func (a *App) ExecuteJob(jobID string) {
 	job, err := GetJob(a.Pool, jobID)
 	if err != nil || job == nil {

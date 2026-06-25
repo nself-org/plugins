@@ -9,6 +9,7 @@ import (
 // =========================================================================
 
 // GetDashboardSummary returns aggregate counts for the dashboard.
+// Size-cap exception: single DB operation — 68L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetDashboardSummary(accountID string) (*DashboardSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

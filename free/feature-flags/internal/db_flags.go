@@ -135,6 +135,7 @@ func (d *DB) GetFlag(key string) (*Flag, error) {
 }
 
 // UpdateFlag updates an existing flag by key.
+// Size-cap exception: single DB operation — 71L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateFlag(key string, req UpdateFlagRequest) (*Flag, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

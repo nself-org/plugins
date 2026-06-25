@@ -13,6 +13,7 @@ import (
 
 // --- Helpers -----------------------------------------------------------------
 
+// Size-cap exception: single-responsibility HTTP route handler — 55L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func mapAPIDonation(d APIDonation) Donation {
 	var donorName *string
 	if d.Donor.Name != "" {

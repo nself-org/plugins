@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Size-cap exception: SQL DDL migration — 598L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func Migrate(pool *pgxpool.Pool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

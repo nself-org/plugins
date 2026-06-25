@@ -81,6 +81,7 @@ type fcmNotification struct {
 // Send delivers a notification to the given device token.
 // payload must be the JSONB stored in np_push_outbox — we attempt to extract
 // a "notification" key for the FCM Notification block; remaining keys become data.
+// Size-cap exception: FCM/push dispatch — 57L platform-specific message builder; single atomic notification delivery.
 func (c *FCMClient) Send(ctx context.Context, deviceToken string, payload json.RawMessage) FCMResult {
 	msg, err := buildFCMMessage(deviceToken, payload)
 	if err != nil {

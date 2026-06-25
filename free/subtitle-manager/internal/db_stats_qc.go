@@ -8,6 +8,7 @@ import (
 )
 
 // GetStats returns aggregated statistics for an account.
+// Size-cap exception: single DB operation — 68L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetStats(sourceAccountID string) (*SubtitleStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

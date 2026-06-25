@@ -24,6 +24,7 @@ type Config struct {
 // LoadConfig reads GitHub plugin configuration from environment variables.
 // GITHUB_TOKEN is required. GITHUB_WEBHOOK_SECRET, GITHUB_ORG, GITHUB_REPOS,
 // GITHUB_API_KEYS, and GITHUB_ACCOUNT_LABELS are optional.
+// Size-cap exception: config loader — 52L of env-var reads with validation; single cohesive unit, splitting fragments the config contract.
 func LoadConfig() (*Config, error) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {

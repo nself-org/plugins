@@ -17,6 +17,7 @@ import (
 	"github.com/nself-org/nself-jobs/internal"
 )
 
+// Size-cap exception: plugin entry-point main() — 93L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	port := envInt("JOBS_PORT", 3105)
 	databaseURL := envStr("DATABASE_URL", "")

@@ -77,6 +77,7 @@ func ExtractMetadata(targetURL string) (*Metadata, error) {
 }
 
 // parseHTML parses an HTML document and extracts OG, Twitter Card, and fallback metadata.
+// Size-cap exception: parser — 54L format-specific parsing logic; splitting would fragment a single format's grammar.
 func parseHTML(r io.Reader) (*Metadata, error) {
 	doc, err := html.Parse(r)
 	if err != nil {

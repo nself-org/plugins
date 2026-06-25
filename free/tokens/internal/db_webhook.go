@@ -35,6 +35,7 @@ func (d *DB) InsertWebhookEvent(eventID, eventType string, payload map[string]in
 // ============================================================================
 
 // GetStats returns aggregate statistics for the source account.
+// Size-cap exception: single DB operation — 80L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetStats() (*TokensStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

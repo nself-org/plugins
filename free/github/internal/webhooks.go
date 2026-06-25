@@ -83,6 +83,7 @@ func (wh *WebhookHandler) registerDefaults() {
 
 // Handle processes a webhook delivery. It stores the event, dispatches to the
 // appropriate handler, and marks the event processed.
+// Size-cap exception: single-responsibility HTTP route handler — 60L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (wh *WebhookHandler) Handle(ctx context.Context, deliveryID, event string, payload map[string]interface{}) error {
 	action, _ := payload["action"].(string)
 

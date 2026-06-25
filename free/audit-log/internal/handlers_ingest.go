@@ -11,6 +11,7 @@ import (
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 97L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleIngest(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Always authenticate internal callers.

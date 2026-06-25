@@ -16,6 +16,7 @@ func NewSubtitleQC() *SubtitleQC {
 }
 
 // ValidateSubtitle runs all QC checks against a subtitle file.
+// Size-cap exception: validation pipeline — 115L sequential validation checks; splitting would require passing partial-validation state.
 func (q *SubtitleQC) ValidateSubtitle(subtitlePath string, videoDurationMs *int64) (*QCResult, error) {
 	log.Printf("subtitle-manager: running QC validation path=%s", subtitlePath)
 

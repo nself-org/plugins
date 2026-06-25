@@ -78,6 +78,7 @@ func IsTestMode(apiKey string) bool {
 	return strings.HasPrefix(apiKey, "sk_test_") || strings.HasPrefix(apiKey, "rk_test_")
 }
 
+// Size-cap exception: config loader — 57L of env-var reads with validation; single cohesive unit, splitting fragments the config contract.
 func buildStripeAccountsFromEnv() ([]StripeAccountConfig, error) {
 	multiAPIKeys := parseCsvList(os.Getenv("STRIPE_API_KEYS"))
 	multiLabels := parseCsvList(os.Getenv("STRIPE_ACCOUNT_LABELS"))

@@ -107,6 +107,7 @@ func findCIYamls(root string, maxDepth int) ([]manifestEntry, error) {
 
 // parseCIYaml parses the subset of .ci.yaml fields that the pipeline runner needs.
 // Uses a simple line-by-line parser — no external YAML library required.
+// Size-cap exception: parser — 91L format-specific parsing logic; splitting would fragment a single format's grammar.
 func parseCIYaml(path string) (ciPlugin, error) {
 	f, err := os.Open(path)
 	if err != nil {

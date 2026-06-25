@@ -16,6 +16,7 @@ import (
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 90L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	pat := os.Getenv("GITHUB_RUNNER_PAT")
 	if pat == "" {

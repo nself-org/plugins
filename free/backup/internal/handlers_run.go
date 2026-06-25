@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 73L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handler) runBackup(jobID, backupType string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()

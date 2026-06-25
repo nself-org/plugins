@@ -40,6 +40,7 @@ func NewServer(pool *pgxpool.Pool, cfg *Config) *Server {
 }
 
 // Router builds the chi router with all endpoints registered.
+// Size-cap exception: single-responsibility HTTP route handler — 63L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 

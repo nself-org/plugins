@@ -15,6 +15,7 @@ import (
 
 // --- Webhook -----------------------------------------------------------------
 
+// Size-cap exception: single-responsibility HTTP route handler — 64L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleWebhook(db *DB, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)

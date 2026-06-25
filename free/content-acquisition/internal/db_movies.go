@@ -79,6 +79,7 @@ func (d *DB) ListMovieMonitoring(accountID string) ([]MovieMonitoring, error) {
 }
 
 // UpdateMovieMonitoring updates allowed fields on a monitored movie.
+// Size-cap exception: single DB operation — 57L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateMovieMonitoring(id string, req UpdateMovieRequest) (*MovieMonitoring, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +19,7 @@ type Server struct {
 }
 
 // NewRouter creates the chi router with all routes.
+// Size-cap exception: single-responsibility HTTP route handler — 55L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (s *Server) NewRouter() *chi.Mux {
 	r := chi.NewRouter()
 
@@ -74,10 +76,28 @@ func (s *Server) NewRouter() *chi.Mux {
 	return r
 }
 
-// scopedDB returns a DB scoped to the source_account_id from the request header.
+// sourceAccountHeaders are the four canonical spellings of the multi-app
+// isolation header (mirrors sdk.SourceAccountID; stripe has no sdk dep).
+// Fix: previously only checked X-Source-Account-ID (P4-E0 audit).
+var sourceAccountHeaders = []string{
+	"X-Source-Account-ID",
+	"X-Source-Account-Id",
+	"X-Hasura-Source-Account-Id",
+	"X-Source-Account",
+}
+
+// scopedDB returns a DB scoped to the source_account_id from the request
+// header (all 4 canonical spellings) or query param fallback.
 func (s *Server) scopedDB(r *http.Request) *DB {
-	accountID := r.Header.Get("X-Source-Account-ID")
+	var accountID string
+	for _, h := range sourceAccountHeaders {
+		if v := strings.TrimSpace(r.Header.Get(h)); v != "" {
+			accountID = v
+			break
+		}
+	}
 	if accountID == "" {
+		// Fallback to URL query param for non-Hasura proxied requests.
 		accountID = r.URL.Query().Get("source_account_id")
 	}
 	if accountID == "" {

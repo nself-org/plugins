@@ -13,6 +13,7 @@ import (
 // Download Handlers
 // ============================================================================
 
+// Size-cap exception: single-responsibility HTTP route handler — 84L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *handler) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 	var req AddDownloadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

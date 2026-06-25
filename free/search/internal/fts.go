@@ -45,6 +45,7 @@ type SuggestResponse struct {
 
 // Search performs a PostgreSQL full-text search using to_tsvector/websearch_to_tsquery
 // with ts_rank_cd for relevance scoring.
+// Size-cap exception: full-text search — 126L query builder with ranking; single SQL expression pipeline.
 func Search(ctx context.Context, pool *pgxpool.Pool, req SearchRequestBody) (*SearchResponse, error) {
 	start := time.Now()
 	sourceAccountID := resolveSourceAccountID(ctx)
@@ -175,6 +176,7 @@ func Search(ctx context.Context, pool *pgxpool.Pool, req SearchRequestBody) (*Se
 // Suggest returns autocomplete suggestions using PostgreSQL trigram similarity
 // (pg_trgm). It extracts individual words from indexed documents and ranks them
 // by prefix match + similarity score.
+// Size-cap exception: full-text search — 68L query builder with ranking; single SQL expression pipeline.
 func Suggest(ctx context.Context, pool *pgxpool.Pool, q string, indexes []string, limit int) (*SuggestResponse, error) {
 	start := time.Now()
 	sourceAccountID := resolveSourceAccountID(ctx)

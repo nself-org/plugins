@@ -10,6 +10,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // GetStatistics returns aggregate usage statistics.
+// Size-cap exception: single DB operation — 110L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetStatistics(ctx context.Context) (*Statistics, error) {
 	stats := &Statistics{
 		Providers:  []ProviderStat{},

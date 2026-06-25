@@ -23,6 +23,7 @@ func NewDB(pool *pgxpool.Pool, sourceAccountID string) *DB {
 }
 
 // Migrate creates all required tables and indexes if they do not exist.
+// Size-cap exception: SQL DDL migration — 209L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func Migrate(pool *pgxpool.Pool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

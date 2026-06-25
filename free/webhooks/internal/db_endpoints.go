@@ -97,6 +97,7 @@ func ListEndpoints(ctx context.Context, pool *pgxpool.Pool, enabledFilter *bool)
 
 // UpdateEndpoint updates fields on an existing endpoint. Only non-nil fields
 // are changed. Returns the updated endpoint or nil if not found.
+// Size-cap exception: single DB operation — 59L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func UpdateEndpoint(ctx context.Context, pool *pgxpool.Pool, id string, url *string, description *string, events []string, headersJSON *string, enabled *bool, metadataJSON *string) (*Endpoint, error) {
 	updates := []string{"updated_at = NOW()"}
 	args := []interface{}{}

@@ -59,6 +59,7 @@ func (h *Handlers) GetVerificationState(w http.ResponseWriter, r *http.Request) 
 
 // ListAudit returns recent append-only audit entries for a user.
 // AUTHZ: a caller may only read their OWN audit log.
+// Size-cap exception: single-responsibility HTTP route handler — 53L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handlers) ListAudit(w http.ResponseWriter, r *http.Request) {
 	p, ok := principalOf(r.Context())
 	if !ok {

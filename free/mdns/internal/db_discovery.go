@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// Size-cap exception: single DB operation — 55L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) ListDiscoveries(serviceType string, isAvailable *bool, limit, offset int) ([]DiscoveryLogRecord, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

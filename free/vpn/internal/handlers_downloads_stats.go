@@ -11,6 +11,7 @@ import (
 )
 
 
+// Size-cap exception: single-responsibility HTTP route handler — 72L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleStartDownload(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req DownloadRequest

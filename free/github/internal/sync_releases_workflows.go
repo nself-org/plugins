@@ -80,6 +80,7 @@ func (s *SyncService) syncWorkflows(ctx context.Context, owner, repo string, rep
 	result.Stats.Workflows += len(workflows)
 }
 
+// Size-cap exception: sync pipeline — 56L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) syncWorkflowRuns(ctx context.Context, owner, repo string, repoID int64, result *SyncResult) {
 	runs, err := s.client.ListWorkflowRuns(owner, repo)
 	if err != nil {

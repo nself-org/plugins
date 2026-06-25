@@ -61,6 +61,7 @@ func maxPayloadBytes() int {
 }
 
 // DispatchEvent finds matching endpoints and creates delivery records.
+// Size-cap exception: webhook router/dispatcher — 77L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.
 func (d *Dispatcher) DispatchEvent(ctx context.Context, eventType string, payload map[string]interface{}, targetEndpointIDs []string, idempotencyKey string) (*DispatchResult, error) {
 	enabledTrue := true
 	allEndpoints, err := ListEndpoints(ctx, d.pool, &enabledTrue)

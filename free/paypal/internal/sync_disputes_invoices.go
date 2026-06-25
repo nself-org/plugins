@@ -53,6 +53,7 @@ func syncDisputes(ctx context.Context, pool *pgxpool.Pool, client *PayPalClient,
 }
 
 // syncInvoices fetches all invoices from PayPal and upserts them.
+// Size-cap exception: sync pipeline — 61L sequential sync stages; splitting creates artificial state-passing overhead.
 func syncInvoices(ctx context.Context, pool *pgxpool.Pool, client *PayPalClient, accountID string) (int, error) {
 	invoices, err := client.ListInvoices()
 	if err != nil {

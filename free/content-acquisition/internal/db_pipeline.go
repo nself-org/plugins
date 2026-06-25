@@ -77,6 +77,7 @@ func (d *DB) GetPipelineRun(id int) (*PipelineRun, error) {
 }
 
 // ListPipelineRuns returns paginated pipeline runs with optional status filter.
+// Size-cap exception: single DB operation — 57L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) ListPipelineRuns(status *string, limit, offset int) ([]PipelineRun, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

@@ -110,6 +110,7 @@ func (d *DB) ListSubscriptions(accountID string) ([]Subscription, error) {
 }
 
 // UpdateSubscription updates allowed fields on a subscription.
+// Size-cap exception: single DB operation — 62L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateSubscription(id string, req UpdateSubscriptionRequest) (*Subscription, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

@@ -28,6 +28,7 @@ func NewDBWithLimit(pool *pgxpool.Pool, limit int) *DB {
 }
 
 // InitSchema creates all tables, indexes, and views if they do not exist.
+// Size-cap exception: SQL DDL migration — 361L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func (d *DB) InitSchema() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

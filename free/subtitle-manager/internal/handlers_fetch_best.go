@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 179L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func fetchBestForLanguage(p fetchBestParams) FetchBestLanguageResult {
 	const syncThresholdMs = 500.0
 

@@ -74,6 +74,7 @@ func GetIssue(ctx context.Context, pool *pgxpool.Pool, id int64) (*Issue, error)
 }
 
 // ListPullRequests returns pull requests with optional filtering and pagination.
+// Size-cap exception: single DB operation — 52L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func ListPullRequests(ctx context.Context, pool *pgxpool.Pool, repoID *int64, state string, limit, offset int) ([]PullRequest, error) {
 	query := `SELECT id, source_account_id, node_id, repo_id, number, title, body,
 		state, draft, locked, user_login, user_id, head_ref, head_sha, head_repo_id,

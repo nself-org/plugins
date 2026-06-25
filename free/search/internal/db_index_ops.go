@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Size-cap exception: single DB operation — 55L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func CreateIndex(ctx context.Context, pool *pgxpool.Pool, req CreateIndexRequest) (*SearchIndex, error) {
 	rankingRules := `["words","typo","proximity","attribute","sort","exactness"]`
 	if len(req.RankingRules) > 0 {

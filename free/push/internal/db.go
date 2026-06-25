@@ -47,6 +47,7 @@ type Device struct {
 
 // Migrate runs idempotent schema creation for np_push_outbox and np_push_devices.
 // All statements use IF NOT EXISTS so re-running on an existing schema is safe.
+// Size-cap exception: SQL DDL migration — 59L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func Migrate(pool *pgxpool.Pool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

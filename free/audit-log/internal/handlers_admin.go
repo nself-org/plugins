@@ -61,6 +61,7 @@ func handleAdminList(pool *pgxpool.Pool, secret, adminSecret string) http.Handle
 //	actor_user_id     — optional exact match
 //	severity          — optional exact match
 //	source_account_id — optional exact match
+// Size-cap exception: single-responsibility HTTP route handler — 108L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleExport(pool *pgxpool.Pool, secret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		provided := r.Header.Get("X-Plugin-Secret")

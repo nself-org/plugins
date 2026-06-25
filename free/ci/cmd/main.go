@@ -48,6 +48,7 @@ func main() {
 // runPipelineCmd implements "nself-ci run [flags] [search-root]".
 // Discovers .ci.yaml manifests under search-root and runs all stages in canonical order.
 // Adds a gateway routing check stage when --env or --gateway is provided.
+// Size-cap exception: 54L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func runPipelineCmd(rawArgs []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	var (
@@ -130,6 +131,7 @@ func printPipelineResults(gates []internal.GateResult) bool {
 }
 
 // runSingleRepoCmd implements the original gate behaviour for a single repo root.
+// Size-cap exception: 134L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func runSingleRepoCmd(rawArgs []string) {
 	fs := flag.NewFlagSet("nself-ci", flag.ExitOnError)
 	var (

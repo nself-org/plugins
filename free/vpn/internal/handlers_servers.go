@@ -86,6 +86,7 @@ func handleSyncServers(db *DB) http.HandlerFunc {
 // POST /api/connect
 // ---------------------------------------------------------------------------
 
+// Size-cap exception: single-responsibility HTTP route handler — 90L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleConnect(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ConnectRequest

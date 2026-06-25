@@ -14,6 +14,7 @@ import (
 	"github.com/nself-org/nself-stripe/internal"
 )
 
+// Size-cap exception: plugin entry-point main() — 97L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("[stripe] Starting nSelf Stripe plugin...")

@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Size-cap exception: single DB operation — 88L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func ListEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*AuditEvent, int64, error) {
 	args := []any{}
 	argIdx := 1
@@ -99,6 +100,7 @@ func ListEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*Audi
 // pagination limit. It is intended for compliance exports (CSV). The caller is
 // responsible for streaming the result; avoid calling this on very large
 // datasets without appropriate time bounds in the filter.
+// Size-cap exception: single DB operation — 83L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func ExportEvents(ctx context.Context, pool *pgxpool.Pool, f QueryFilter) ([]*AuditEvent, error) {
 	args := []any{}
 	argIdx := 1

@@ -12,6 +12,7 @@ import (
 // =========================================================================
 
 // UpdateProgress upserts a playback position and samples a history event.
+// Size-cap exception: single DB operation — 82L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateProgress(req UpdateProgressRequest) (*ProgressPosition, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
