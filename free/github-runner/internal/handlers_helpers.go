@@ -106,6 +106,14 @@ func runnerEnv() []string {
 		name := kv[:eq]
 		upper := strings.ToUpper(name)
 
+		// Exact-match allowlist wins unconditionally — even over deny substrings.
+		// This ensures well-known safe vars (PATH, HOME, USER) are never blocked
+		// by a deny substring that happens to match (e.g. "PAT" in "PATH").
+		if runnerEnvAllowExact[name] {
+			out = append(out, kv)
+			continue
+		}
+
 		denied := false
 		for _, d := range runnerEnvDenySubstrings {
 			if strings.Contains(upper, d) {
@@ -117,10 +125,6 @@ func runnerEnv() []string {
 			continue
 		}
 
-		if runnerEnvAllowExact[name] {
-			out = append(out, kv)
-			continue
-		}
 		for _, p := range runnerEnvAllowPrefixes {
 			if strings.HasPrefix(name, p) {
 				out = append(out, kv)
