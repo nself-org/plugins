@@ -88,6 +88,30 @@ func TestCORS_Passthrough(t *testing.T) {
 	}
 }
 
+func TestSourceAccountID_AllSpellings(t *testing.T) {
+	cases := []struct {
+		header string
+		value  string
+		want   string
+	}{
+		{"X-Source-Account-ID", "acct-1", "acct-1"},
+		{"X-Source-Account-Id", "acct-2", "acct-2"},
+		{"X-Hasura-Source-Account-Id", "acct-3", "acct-3"},
+		{"X-Source-Account", "acct-4", "acct-4"},
+		{"", "", "primary"}, // no header → default
+	}
+	for _, tc := range cases {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		if tc.header != "" {
+			r.Header.Set(tc.header, tc.value)
+		}
+		got := SourceAccountID(r)
+		if got != tc.want {
+			t.Errorf("SourceAccountID with header %q = %q, want %q", tc.header, got, tc.want)
+		}
+	}
+}
+
 func TestRequestID_Passthrough(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
