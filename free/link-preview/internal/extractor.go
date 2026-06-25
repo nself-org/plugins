@@ -27,11 +27,23 @@ type Metadata struct {
 
 // ExtractMetadata fetches a URL and extracts metadata from the HTML.
 func ExtractMetadata(targetURL string) (*Metadata, error) {
+	// SSRF guard (Security-Always-Free): the target URL is user-supplied and
+	// untrusted; reject any destination resolving to a private/internal address
+	// before issuing the request.
+	if err := validatePreviewURL(targetURL); err != nil {
+		return nil, err
+	}
+
 	client := &http.Client{
 		Timeout: fetchTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
+			}
+			// Re-validate each redirect target so a public host cannot bounce
+			// the request to an internal address.
+			if err := validatePreviewURL(req.URL.String()); err != nil {
+				return err
 			}
 			return nil
 		},
@@ -65,6 +77,7 @@ func ExtractMetadata(targetURL string) (*Metadata, error) {
 }
 
 // parseHTML parses an HTML document and extracts OG, Twitter Card, and fallback metadata.
+// Size-cap exception: parser — 54L format-specific parsing logic; splitting would fragment a single format's grammar.
 func parseHTML(r io.Reader) (*Metadata, error) {
 	doc, err := html.Parse(r)
 	if err != nil {

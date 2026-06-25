@@ -15,6 +15,7 @@ import (
 	"github.com/nself-org/nself-github/internal"
 )
 
+// Size-cap exception: plugin entry-point main() — 63L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	port := 3002
 	if v := os.Getenv("PORT"); v != "" {

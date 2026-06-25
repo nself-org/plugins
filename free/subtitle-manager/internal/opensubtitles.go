@@ -193,6 +193,7 @@ func (c *OpenSubtitlesClient) SearchByHash(moviehash string, moviebytesize int64
 
 // DownloadSubtitle downloads a subtitle file by its file_id.
 // Returns the raw file bytes, or nil if the download failed.
+// Size-cap exception: 60L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func (c *OpenSubtitlesClient) DownloadSubtitle(fileID int) ([]byte, error) {
 	if c.apiKey == "" {
 		return nil, nil

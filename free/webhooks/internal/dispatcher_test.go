@@ -94,6 +94,7 @@ func TestTruncate(t *testing.T) {
 // TestDispatcher_TestEndpoint_HappyPath verifies that TestEndpoint returns
 // a successful result for a test HTTP server that returns 200.
 func TestDispatcher_TestEndpoint_HappyPath(t *testing.T) {
+	t.Setenv("NSELF_ALLOW_PRIVATE_URLS", "true") // httptest binds to loopback
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify expected headers are present.
 		if r.Header.Get("X-Webhook-Test") != "true" {
@@ -203,6 +204,7 @@ func TestDispatcher_SemaphoreCap(t *testing.T) {
 // TestDispatcher_TestEndpoint_ServerError verifies that a 5xx response is
 // reported as failure.
 func TestDispatcher_TestEndpoint_ServerError(t *testing.T) {
+	t.Setenv("NSELF_ALLOW_PRIVATE_URLS", "true") // httptest binds to loopback
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}))

@@ -1,0 +1,102 @@
+# Purpose: Hasura metadata for the notify plugin.
+# Tables: np_notify_notifications, np_notify_templates
+# Permissions: user can read own notifications; admin CRUD on templates; admin full access
+# Event trigger: np_notify_notifications insert fires delivery handler
+# SPORT: REGISTRY-PLUGINS.md notify row — schema ✅, Hasura ✅
+- table:
+    schema: public
+    name: np_notify_notifications
+  configuration:
+    custom_root_fields: {}
+    custom_column_names: {}
+  event_triggers:
+    - name: notify_notification_inserted
+      definition:
+        enable_manual: false
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 3
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: "{{NSELF_PLUGIN_NOTIFY_WEBHOOK_URL}}/events/notification"
+      headers:
+        - name: X-Nself-Event-Secret
+          value_from_env: NSELF_PLUGIN_NOTIFY_EVENT_SECRET
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+        allow_aggregations: true
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - channel
+          - recipient
+          - subject
+          - body
+          - status
+          - sent_at
+          - error
+          - created_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: false
+
+- table:
+    schema: public
+    name: np_notify_templates
+  configuration:
+    custom_root_fields: {}
+    custom_column_names: {}
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+        allow_aggregations: true
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - name
+          - channel
+          - subject_template
+          - body_template
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: false
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - name
+          - channel
+          - subject_template
+          - body_template
+        check: {}
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - name
+          - channel
+          - subject_template
+          - body_template
+          - updated_at
+        filter: {}
+        check: {}
+  delete_permissions:
+    - role: admin
+      permission:
+        filter: {}

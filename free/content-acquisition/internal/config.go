@@ -8,6 +8,7 @@ import (
 )
 
 // LoadConfig reads and validates all environment variables.
+// Size-cap exception: config loader — 92L of env-var reads with validation; single cohesive unit, splitting fragments the config contract.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{}
 

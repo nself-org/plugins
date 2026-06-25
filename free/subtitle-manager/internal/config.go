@@ -20,6 +20,13 @@ func LoadConfig() *Config {
 		storagePath = "/tmp/subtitles"
 	}
 
+	// MediaRoot bounds every user-supplied video/subtitle/input path (path
+	// traversal guard). Defaults to the storage path when unset.
+	mediaRoot := os.Getenv("SUBTITLE_MEDIA_ROOT")
+	if mediaRoot == "" {
+		mediaRoot = storagePath
+	}
+
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
 		logLevel = "info"
@@ -40,6 +47,7 @@ func LoadConfig() *Config {
 		Port:             port,
 		OpenSubtitlesKey: os.Getenv("OPENSUBTITLES_API_KEY"),
 		StoragePath:      storagePath,
+		MediaRoot:        mediaRoot,
 		LogLevel:         logLevel,
 		AlassPath:        alassPath,
 		FfsubsyncPath:    ffsubsyncPath,

@@ -1,0 +1,5 @@
+# mlflow plugin Hasura metadata
+# mlflow manages its own SQLite/Postgres storage internally.
+# nSelf does not replicate the mlflow schema.
+# This plugin has 0 nSelf-owned np_* tables — stub only.
+# All MLflow data access goes through the plugin's REST proxy to the MLflow server.

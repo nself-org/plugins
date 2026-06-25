@@ -2,15 +2,16 @@
 -- Tracks which Ollama models have been pulled and their pull status.
 
 CREATE TABLE IF NOT EXISTS np_ollama_model_registry (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    model_name  TEXT NOT NULL UNIQUE,     -- e.g. gemma-3-4b, llama3.2:3b
-    pulled_at   TIMESTAMPTZ,
-    size_bytes  BIGINT,
-    is_default  BOOLEAN NOT NULL DEFAULT false,
-    status      TEXT NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending', 'pulling', 'ready', 'error')),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_account_id TEXT NOT NULL DEFAULT 'primary',
+    model_name        TEXT NOT NULL UNIQUE,     -- e.g. gemma-3-4b, llama3.2:3b
+    pulled_at         TIMESTAMPTZ,
+    size_bytes        BIGINT,
+    is_default        BOOLEAN NOT NULL DEFAULT false,
+    status            TEXT NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending', 'pulling', 'ready', 'error')),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_ollama_model_status

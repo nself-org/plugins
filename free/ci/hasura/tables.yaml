@@ -1,0 +1,4 @@
+# ci plugin has no DB tables.
+# The ci plugin is a stateless gate runner — it does not persist data to Postgres.
+# No Hasura tracking required.
+[]

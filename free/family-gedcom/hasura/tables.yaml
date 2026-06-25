@@ -1,0 +1,6 @@
+# family-gedcom plugin has no DB tables.
+# This is a stateless GEDCOM import converter — it outputs JSON to stdout
+# and does not persist data to Postgres directly.
+# Data is consumed by the 'family' plugin (planned v1.1.0).
+# No Hasura tracking required for this plugin.
+[]

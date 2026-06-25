@@ -1,0 +1,113 @@
+# subtitle-manager plugin Hasura metadata
+# CODE WINS: table names from internal/db.go (np_subtmgr_* prefix)
+# User select on downloads + qc_results (source_account_id filter)
+# User CRUD on subtitles (preferences-equivalent)
+# Event-trigger on np_subtmgr_downloads insert → fetch handler
+
+- table:
+    schema: public
+    name: np_subtmgr_subtitles
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - media_id
+          - media_type
+          - language
+          - file_path
+          - source
+          - sync_score
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - media_id
+          - media_type
+          - language
+          - file_path
+          - source
+          - sync_score
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_subtmgr_downloads
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - media_id
+          - media_type
+          - media_title
+          - language
+          - file_size_bytes
+          - sync_score
+          - source
+          - qc_status
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - media_id
+          - media_type
+          - media_title
+          - language
+          - file_path
+          - source
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  event_triggers:
+    - name: subtitle_download_inserted
+      definition:
+        enable_manual: false
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 3
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: "{{NSELF_PLUGIN_WEBHOOK_BASE}}/subtitle-manager/fetch"
+
+- table:
+    schema: public
+    name: np_subtmgr_qc_results
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - download_id
+          - status
+          - checks
+          - issues
+          - cue_count
+          - total_duration_ms
+          - created_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

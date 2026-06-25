@@ -50,6 +50,7 @@ func EncryptKeyMaterial(plaintext, masterKey string) (string, error) {
 // DecryptKeyMaterial decrypts "iv_hex:ciphertext_hex:mac_hex" back to plaintext
 // using the master encryption key. It verifies the HMAC authentication tag
 // before decrypting; a wrong key or tampered ciphertext returns an error.
+// Size-cap exception: cryptographic operation — 57L single-algorithm implementation; splitting fragments security-critical logic.
 func DecryptKeyMaterial(encrypted, masterKey string) (string, error) {
 	parts := strings.SplitN(encrypted, ":", 3)
 	if len(parts) != 3 {

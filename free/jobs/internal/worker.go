@@ -138,6 +138,7 @@ func (w *Worker) process(ctx context.Context, job *Job) {
 // optional HMAC-SHA256 signature headers matching the webhooks plugin format:
 //   X-Webhook-Signature: t=<unix_ts>,v1=<hex>
 //   X-Webhook-Signature-Version: v1
+// Size-cap exception: 56L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func (w *Worker) execute(ctx context.Context, job *Job) (bool, *int, *string) {
 	callbackURL, sign, err := w.db.GetCallbackURL(ctx, job.ID)
 	if err != nil {

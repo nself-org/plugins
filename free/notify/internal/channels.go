@@ -78,6 +78,12 @@ func SendWebhook(url, payload string) ChannelResult {
 		return ChannelResult{Channel: "webhook", Success: false, Error: errPtr("webhook url is empty")}
 	}
 
+	// SSRF guard: reject destinations that resolve to internal/private addresses
+	// (cloud metadata, RFC1918, loopback) before issuing the request.
+	if err := validateWebhookURL(url); err != nil {
+		return ChannelResult{Channel: "webhook", Success: false, Error: errPtr(err.Error())}
+	}
+
 	body := []byte(payload)
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
@@ -95,7 +101,7 @@ func SendWebhook(url, payload string) ChannelResult {
 		req.Header.Set("X-Signature-256", "sha256="+sig)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := ssrfSafeClient.Do(req)
 	if err != nil {
 		return ChannelResult{Channel: "webhook", Success: false, Error: errPtr(fmt.Sprintf("http post: %v", err))}
 	}

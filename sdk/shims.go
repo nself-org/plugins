@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -126,4 +127,36 @@ func CORS(next http.Handler) http.Handler {
 // Delegates to the sdk/middleware package.
 func RequestID(next http.Handler) http.Handler {
 	return sdkmw.RequestID(next)
+}
+
+// sourceAccountHeaders are the accepted spellings of the multi-app isolation
+// key header. Hasura forwards this under different casings depending on how the
+// Action is wired; accepting all four prevents silent tenant merging when only
+// one spelling is checked. Canonical pattern: free/e2ee/internal/auth.go.
+var sourceAccountHeaders = []string{
+	"X-Source-Account-ID",
+	"X-Source-Account-Id",
+	"X-Hasura-Source-Account-Id",
+	"X-Source-Account",
+}
+
+// SourceAccountID extracts the multi-app isolation account ID from an HTTP
+// request. It accepts all four canonical header spellings (X-Source-Account-ID,
+// X-Source-Account-Id, X-Hasura-Source-Account-Id, X-Source-Account) and returns
+// "primary" only when none are present — matching the default value used in all
+// np_* table columns. Checking a single spelling silently merged tenants whose
+// gateway forwarded a different casing (multi-tenant isolation bug, P4 E0).
+//
+// Purpose: DRY helper used by all plugins that enforce source_account_id isolation.
+// Inputs:  r — the incoming HTTP request.
+// Outputs: account ID string, never empty.
+// Constraints: Must not be called on requests that bypass the Hasura proxy.
+// SPORT: F08-SERVICE-INVENTORY — multi-app isolation pattern.
+func SourceAccountID(r *http.Request) string {
+	for _, name := range sourceAccountHeaders {
+		if v := strings.TrimSpace(r.Header.Get(name)); v != "" {
+			return v
+		}
+	}
+	return "primary"
 }

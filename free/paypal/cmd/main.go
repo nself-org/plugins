@@ -9,6 +9,7 @@ import (
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
+// Size-cap exception: plugin entry-point main() — 53L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	port := 3071
 	if v := os.Getenv("PORT"); v != "" {

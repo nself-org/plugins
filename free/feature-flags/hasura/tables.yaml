@@ -1,0 +1,120 @@
+# feature-flags plugin Hasura metadata
+# CODE WINS: table names from internal/db.go (np_feature_flags_flags, np_feature_flags_segments)
+# Note: Go schema does NOT include source_account_id; added via migrations/001_add_np_prefix.sql
+# Admin CRUD on both tables; user read-only on np_feature_flags_flags for client evaluation
+
+- table:
+    schema: public
+    name: np_feature_flags_flags
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - key
+          - name
+          - description
+          - type
+          - enabled
+          - rollout_pct
+          - default_value
+          - rules
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - key
+          - name
+          - description
+          - type
+          - enabled
+          - rollout_pct
+          - stale_after_days
+          - default_value
+          - rules
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - key
+          - name
+          - description
+          - type
+          - enabled
+          - rollout_pct
+          - stale_after_days
+          - default_value
+          - rules
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_feature_flags_audit
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_feature_flags_segments
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - name
+          - rules
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - name
+          - rules
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

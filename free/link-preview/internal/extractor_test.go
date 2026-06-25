@@ -121,6 +121,7 @@ func TestParseHTML_EmptyDocument(t *testing.T) {
 // TestExtractMetadata_HappyPath verifies that ExtractMetadata fetches a URL
 // served by a test HTTP server and returns the expected OG metadata.
 func TestExtractMetadata_HappyPath(t *testing.T) {
+	t.Setenv("LINK_PREVIEW_ALLOW_PRIVATE_URLS", "true") // httptest binds to loopback
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
@@ -145,6 +146,7 @@ func TestExtractMetadata_HappyPath(t *testing.T) {
 
 // TestExtractMetadata_HTTPError verifies that a 4xx response returns an error.
 func TestExtractMetadata_HTTPError(t *testing.T) {
+	t.Setenv("LINK_PREVIEW_ALLOW_PRIVATE_URLS", "true") // httptest binds to loopback
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}))
@@ -158,6 +160,7 @@ func TestExtractMetadata_HTTPError(t *testing.T) {
 
 // TestExtractMetadata_NonHTMLContentType verifies that non-HTML responses are rejected.
 func TestExtractMetadata_NonHTMLContentType(t *testing.T) {
+	t.Setenv("LINK_PREVIEW_ALLOW_PRIVATE_URLS", "true") // httptest binds to loopback
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -181,6 +184,7 @@ func TestExtractMetadata_InvalidURL(t *testing.T) {
 
 // TestExtractMetadata_XHTMLContentType verifies that application/xhtml+xml is accepted.
 func TestExtractMetadata_XHTMLContentType(t *testing.T) {
+	t.Setenv("LINK_PREVIEW_ALLOW_PRIVATE_URLS", "true") // httptest binds to loopback
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

@@ -1,0 +1,167 @@
+# e2ee plugin Hasura metadata
+# SECURITY — KEY MATERIAL NEVER TRACKED:
+#   NOT tracked: np_e2ee_identity_keys, np_e2ee_signed_prekeys,
+#                np_e2ee_one_time_prekeys, np_e2ee_kyber_prekeys
+#   All key access goes through the plugin's REST API only.
+#
+# TRACKED (non-key audit/state tables):
+#   np_e2ee_prekey_bundles_served — audit of bundle distributions
+#   np_e2ee_verification_states  — per-peer verification state
+#   np_e2ee_safety_numbers       — computed safety numbers (no key bytes)
+#   np_e2ee_audit_log            — append-only security event log
+
+- table:
+    schema: public
+    name: np_e2ee_prekey_bundles_served
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - target_user_id
+          - target_device_id
+          - requested_by
+          - served_at
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - requested_by:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_e2ee_verification_states
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - user_id
+          - peer_user_id
+          - state
+          - updated_at
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - state
+          - state_data
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_e2ee_safety_numbers
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - user_id
+          - peer_user_id
+          - safety_number
+          - is_verified
+          - verified_at
+          - created_at
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - is_verified
+          - verified_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_e2ee_audit_log
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - user_id
+          - event_type
+          - created_at
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id

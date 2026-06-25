@@ -1,0 +1,57 @@
+- table:
+    name: np_ollama_model_registry
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - model_name
+          - status
+          - is_default
+          - pulled_at
+          - size_bytes
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        columns:
+          - source_account_id
+          - model_name
+          - is_default
+          - status
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - status
+          - pulled_at
+          - size_bytes
+          - is_default
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

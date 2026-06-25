@@ -9,6 +9,7 @@ import (
 	"github.com/nself-org/nself-push/internal"
 )
 
+// Size-cap exception: plugin entry-point main() — 73L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	cfg := internal.LoadConfig()
 

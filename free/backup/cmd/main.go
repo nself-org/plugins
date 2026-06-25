@@ -9,6 +9,7 @@ import (
 	"github.com/nself-org/nself-backup/internal"
 )
 
+// Size-cap exception: plugin entry-point main() — 66L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	cfg := sdk.LoadConfig()
 	if cfg.DatabaseURL == "" {

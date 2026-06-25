@@ -67,6 +67,7 @@ func (wp *WebhookProcessor) ProcessEvent(ctx context.Context, shopifyEventID, to
 	return nil
 }
 
+// Size-cap exception: webhook router/dispatcher — 56L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.
 func (wp *WebhookProcessor) dispatch(ctx context.Context, topic string, payload map[string]interface{}) error {
 	switch topic {
 	// Orders
