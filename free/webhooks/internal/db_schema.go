@@ -15,21 +15,22 @@ func Migrate(pool *pgxpool.Pool) error {
 		CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 		CREATE TABLE IF NOT EXISTS np_webhooks_endpoints (
-			id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-			url             TEXT NOT NULL,
-			description     TEXT,
-			secret          VARCHAR(255) NOT NULL,
-			events          TEXT[] NOT NULL,
-			headers         JSONB DEFAULT '{}',
-			enabled         BOOLEAN DEFAULT TRUE,
-			failure_count   INTEGER DEFAULT 0,
-			last_success_at TIMESTAMPTZ,
-			last_failure_at TIMESTAMPTZ,
-			disabled_at     TIMESTAMPTZ,
-			disabled_reason TEXT,
-			metadata        JSONB DEFAULT '{}',
-			created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+			source_account_id TEXT NOT NULL DEFAULT 'primary',
+			url               TEXT NOT NULL,
+			description       TEXT,
+			secret            VARCHAR(255) NOT NULL,
+			events            TEXT[] NOT NULL,
+			headers           JSONB DEFAULT '{}',
+			enabled           BOOLEAN DEFAULT TRUE,
+			failure_count     INTEGER DEFAULT 0,
+			last_success_at   TIMESTAMPTZ,
+			last_failure_at   TIMESTAMPTZ,
+			disabled_at       TIMESTAMPTZ,
+			disabled_reason   TEXT,
+			metadata          JSONB DEFAULT '{}',
+			created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_np_webhooks_endpoints_enabled
@@ -40,21 +41,22 @@ func Migrate(pool *pgxpool.Pool) error {
 			ON np_webhooks_endpoints (created_at DESC);
 
 		CREATE TABLE IF NOT EXISTS np_webhooks_deliveries (
-			id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-			endpoint_id      UUID NOT NULL REFERENCES np_webhooks_endpoints(id) ON DELETE CASCADE,
-			event_type       VARCHAR(128) NOT NULL,
-			payload          JSONB NOT NULL,
-			status           VARCHAR(32) DEFAULT 'pending',
-			response_status  INTEGER,
-			response_body    TEXT,
-			response_time_ms INTEGER,
-			attempt_count    INTEGER DEFAULT 0,
-			max_attempts     INTEGER DEFAULT 5,
-			next_retry_at    TIMESTAMPTZ,
-			error_message    TEXT,
-			signature        VARCHAR(255),
-			delivered_at     TIMESTAMPTZ,
-			created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+			source_account_id TEXT NOT NULL DEFAULT 'primary',
+			endpoint_id       UUID NOT NULL REFERENCES np_webhooks_endpoints(id) ON DELETE CASCADE,
+			event_type        VARCHAR(128) NOT NULL,
+			payload           JSONB NOT NULL,
+			status            VARCHAR(32) DEFAULT 'pending',
+			response_status   INTEGER,
+			response_body     TEXT,
+			response_time_ms  INTEGER,
+			attempt_count     INTEGER DEFAULT 0,
+			max_attempts      INTEGER DEFAULT 5,
+			next_retry_at     TIMESTAMPTZ,
+			error_message     TEXT,
+			signature         VARCHAR(255),
+			delivered_at      TIMESTAMPTZ,
+			created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_endpoint

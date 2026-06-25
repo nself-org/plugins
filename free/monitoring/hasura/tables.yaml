@@ -1,0 +1,5 @@
+# monitoring plugin has no DB tables.
+# The monitoring plugin is config-only — it bundles Prometheus, Grafana, Loki,
+# Promtail, Tempo, Alertmanager, and node-exporter configs.
+# No Postgres tables, no Hasura tracking required.
+[]

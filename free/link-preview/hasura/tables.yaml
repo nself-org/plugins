@@ -1,0 +1,49 @@
+- table:
+    name: np_link_preview_cache
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - url
+          - title
+          - description
+          - image
+          - site_name
+          - type
+          - fetched_at
+          - expires_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        columns:
+          - id
+          - source_account_id
+          - url
+          - title
+          - description
+          - image
+          - site_name
+          - type
+          - fetched_at
+          - expires_at
+  delete_permissions:
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

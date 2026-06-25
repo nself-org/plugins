@@ -27,15 +27,16 @@ func Migrate(pool *pgxpool.Pool) error {
 
 	_, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS np_link_preview_cache (
-			id          TEXT PRIMARY KEY,
-			url         TEXT NOT NULL,
-			title       TEXT,
-			description TEXT,
-			image       TEXT,
-			site_name   TEXT,
-			type        TEXT,
-			fetched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			expires_at  TIMESTAMPTZ
+			id                TEXT PRIMARY KEY,
+			source_account_id TEXT NOT NULL DEFAULT 'primary',
+			url               TEXT NOT NULL,
+			title             TEXT,
+			description       TEXT,
+			image             TEXT,
+			site_name         TEXT,
+			type              TEXT,
+			fetched_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			expires_at        TIMESTAMPTZ
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_np_link_preview_cache_url

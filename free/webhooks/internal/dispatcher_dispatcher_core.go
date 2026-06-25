@@ -33,8 +33,21 @@ func NewDispatcher(pool *pgxpool.Pool) *Dispatcher {
 	}
 
 	return &Dispatcher{
-		pool:              pool,
-		client:            &http.Client{Timeout: time.Duration(requestTimeout) * time.Millisecond},
+		pool: pool,
+		client: &http.Client{
+			Timeout: time.Duration(requestTimeout) * time.Millisecond,
+			// SSRF guard: re-validate every redirect target so a public host
+			// cannot redirect to a private/internal address (Security-Always-Free).
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return fmt.Errorf("SSRF guard: too many redirects (max 3)")
+				}
+				if err := ValidateWebhookURL(req.URL.String()); err != nil {
+					return fmt.Errorf("SSRF guard: redirect target blocked: %w", err)
+				}
+				return nil
+			},
+		},
 		maxAttempts:       maxAttempts,
 		requestTimeoutMs:  requestTimeout,
 		retryDelays:       retryDelays,

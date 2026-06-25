@@ -1,0 +1,296 @@
+- table:
+    name: np_torrentmanager_torrent_clients
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - client_type
+          - status
+          - is_default
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        columns:
+          - source_account_id
+          - client_type
+          - host
+          - port
+          - username
+          - password_encrypted
+          - is_default
+  delete_permissions:
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_sources
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - source_name
+          - is_active
+          - priority
+          - created_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_torrent_downloads
+    schema: public
+  object_relationships:
+    - name: client
+      using:
+        foreign_key_constraint_on: client_id
+  array_relationships:
+    - name: files
+      using:
+        foreign_key_constraint_on:
+          column: download_id
+          table:
+            name: np_torrentmanager_torrent_files
+            schema: public
+    - name: trackers
+      using:
+        foreign_key_constraint_on:
+          column: download_id
+          table:
+            name: np_torrentmanager_torrent_trackers
+            schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - name
+          - status
+          - category
+          - progress_percent
+          - size_bytes
+          - downloaded_bytes
+          - added_at
+          - completed_at
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  event_triggers:
+    - name: torrent_download_status_change
+      definition:
+        enable_manual: false
+        update:
+          columns:
+            - status
+      retry_conf:
+        interval_sec: 10
+        num_retries: 3
+        timeout_sec: 60
+      webhook: "{{TORRENT_MANAGER_EVENT_TRIGGER_URL}}"
+      headers:
+        - name: X-Nself-Plugin
+          value: torrent-manager
+
+- table:
+    name: np_torrentmanager_torrent_files
+    schema: public
+  object_relationships:
+    - name: download
+      using:
+        foreign_key_constraint_on: download_id
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - download_id
+          - file_name
+          - file_path
+          - size_bytes
+          - progress_percent
+          - is_selected
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_torrent_trackers
+    schema: public
+  object_relationships:
+    - name: download
+      using:
+        foreign_key_constraint_on: download_id
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - download_id
+          - tracker_url
+          - tier
+          - status
+          - seeders
+          - leechers
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_search_cache
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - query
+          - results
+          - results_count
+          - cached_at
+          - expires_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_seeding_policy
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - policy_name
+          - ratio_limit
+          - time_limit_hours
+          - is_active
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_stats
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - total_downloads
+          - active_downloads
+          - completed_downloads
+          - seeding_torrents
+          - snapshot_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    name: np_torrentmanager_seeding_policies
+    schema: public
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - download_id
+          - ratio_limit
+          - time_limit_hours
+          - auto_remove
+          - favorite
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        columns:
+          - source_account_id
+          - download_id
+          - ratio_limit
+          - time_limit_hours
+          - auto_remove
+          - keep_files
+          - favorite
