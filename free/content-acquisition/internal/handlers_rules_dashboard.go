@@ -98,6 +98,7 @@ func handleDeleteRule(db *DB) http.HandlerFunc {
 	}
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 74L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleTestRule(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")

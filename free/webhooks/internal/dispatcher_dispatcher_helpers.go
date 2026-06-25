@@ -86,6 +86,7 @@ func parseRetryDelays(s string) []time.Duration {
 // Opt-out: set NOTIFY_DLQ_ALERTS=false to suppress these events entirely.
 // Dedup: the notify plugin is responsible for deduplicating per endpoint_id
 // (max one alert per endpoint per hour). See S76-T04 for the notify-side router.
+// Size-cap exception: webhook router/dispatcher — 60L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.
 func emitDLQEvent(del Delivery, attemptCount int, lastError *string) {
 	if os.Getenv("NOTIFY_DLQ_ALERTS") == "false" {
 		return

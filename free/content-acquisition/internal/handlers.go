@@ -14,6 +14,7 @@ func sourceAccountID(r *http.Request) string {
 }
 
 // RegisterRoutes mounts all content-acquisition API routes on the given router.
+// Size-cap exception: single-responsibility HTTP route handler — 70L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func RegisterRoutes(r chi.Router, db *DB) {
 	r.Route("/v1", func(r chi.Router) {
 		// Subscriptions

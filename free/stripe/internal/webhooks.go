@@ -43,6 +43,7 @@ type EventData struct {
 // The signature header has the format: t=timestamp,v1=signature[,v1=signature...]
 // The expected signature is HMAC-SHA256(timestamp + "." + rawBody, webhookSecret).
 // Returns nil if the signature is valid, or an error describing the failure.
+// Size-cap exception: webhook router/dispatcher — 62L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.
 func VerifyStripeSignature(rawBody []byte, signatureHeader string, webhookSecret string) error {
 	if signatureHeader == "" {
 		return fmt.Errorf("missing signature header")

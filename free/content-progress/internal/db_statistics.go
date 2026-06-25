@@ -11,6 +11,7 @@ import (
 // =========================================================================
 
 // GetUserStats returns aggregated statistics for a single user.
+// Size-cap exception: single DB operation — 76L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetUserStats(userID string) (*UserStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -89,6 +90,7 @@ func (d *DB) GetUserStats(userID string) (*UserStats, error) {
 }
 
 // GetPluginStats returns aggregated plugin-wide statistics.
+// Size-cap exception: single DB operation — 70L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetPluginStats() (*PluginStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

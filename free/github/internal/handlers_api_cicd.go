@@ -35,6 +35,7 @@ func (s *Server) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ListResponse{Data: workflows, Total: total, Limit: limit, Offset: offset})
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 51L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (s *Server) handleListWorkflowRuns(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	limit, offset := parsePagination(r)

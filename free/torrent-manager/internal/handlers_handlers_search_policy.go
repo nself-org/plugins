@@ -149,10 +149,9 @@ func (h *handler) handleUpdateSeedingPolicy(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sourceAccountID := r.Header.Get("X-Source-Account-ID")
-	if sourceAccountID == "" {
-		sourceAccountID = "primary"
-	}
+	// Use sdk.SourceAccountID to accept all 4 canonical header spellings.
+	// Fix: previously only checked X-Source-Account-ID (P4-E0 audit).
+	sourceAccountID := sdk.SourceAccountID(r)
 
 	policy, err := h.db.UpsertDownloadSeedingPolicy(id, req, sourceAccountID)
 	if err != nil {

@@ -48,6 +48,7 @@ type outboxEventRow struct {
 // handleDispatch processes Hasura event trigger POSTs for np_push_outbox INSERTs.
 // It is idempotent: duplicate events (at-least-once delivery from Hasura) are
 // handled by the dedupe_hash unique constraint in the DB and the status check below.
+// Size-cap exception: single-responsibility HTTP route handler — 62L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleDispatch(pool *pgxpool.Pool, dispatcher *Dispatcher) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()

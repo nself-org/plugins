@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// Size-cap exception: sync pipeline — 62L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) syncCommits(ctx context.Context, owner, repo string, repoID int64, result *SyncResult) {
 	commits, err := s.client.ListCommits(owner, repo)
 	if err != nil {

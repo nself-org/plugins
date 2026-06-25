@@ -80,6 +80,7 @@ func (d *DB) ListRSSFeeds(accountID string) ([]RSSFeed, error) {
 }
 
 // UpdateRSSFeed updates allowed fields on a feed.
+// Size-cap exception: single DB operation — 52L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateRSSFeed(id string, req UpdateFeedRequest) (*RSSFeed, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

@@ -22,6 +22,7 @@ func authorizeAdminRequest(r *http.Request, secret, adminSecret string) bool {
 
 // parseQueryFilter builds a QueryFilter from the request's URL query parameters.
 // Returns an error for any malformed parameter so the caller can return HTTP 400.
+// Size-cap exception: single-responsibility HTTP route handler — 58L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func parseQueryFilter(r *http.Request) (QueryFilter, error) {
 	q := r.URL.Query()
 

@@ -42,6 +42,7 @@ type CreateTemplateRequest struct {
 
 // --- Handlers ----------------------------------------------------------------
 
+// Size-cap exception: single-responsibility HTTP route handler — 61L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleSend(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req SendRequest

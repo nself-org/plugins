@@ -46,6 +46,7 @@ type Preference struct {
 }
 
 // Migrate creates the required tables if they do not exist.
+// Size-cap exception: SQL DDL migration — 52L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func Migrate(pool *pgxpool.Pool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

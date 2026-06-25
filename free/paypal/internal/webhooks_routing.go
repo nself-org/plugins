@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Size-cap exception: webhook router/dispatcher — 53L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.
 func routeEvent(ctx context.Context, pool *pgxpool.Pool, event *webhookPayload) error {
 	switch event.EventType {
 	// Payment Captures

@@ -50,6 +50,7 @@ func UpsertOrganization(ctx context.Context, pool *pgxpool.Pool, o *Organization
 }
 
 // UpsertRepository inserts or updates a repository record.
+// Size-cap exception: single DB operation — 63L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func UpsertRepository(ctx context.Context, pool *pgxpool.Pool, r *Repository) error {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO np_github_repositories (

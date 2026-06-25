@@ -12,6 +12,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // GetServers returns servers matching the given filters, scoped to the current account.
+// Size-cap exception: single DB operation — 55L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) GetServers(ctx context.Context, f ServerFilter) ([]Server, error) {
 	conditions := []string{"source_account_id = $1"}
 	args := []interface{}{d.sourceAccountID}

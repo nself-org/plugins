@@ -10,6 +10,7 @@ func NewEvaluator(db *DB) *Evaluator {
 }
 
 // Evaluate evaluates a single flag for the given user context.
+// Size-cap exception: 74L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func (e *Evaluator) Evaluate(flagKey, userID string, ctx map[string]interface{}) EvaluationResult {
 	flag, err := e.db.GetFlag(flagKey)
 	if err != nil {

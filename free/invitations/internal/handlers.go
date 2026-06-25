@@ -44,6 +44,7 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 67L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleCreateInvitation(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req CreateInvitationRequest

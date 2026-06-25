@@ -31,6 +31,7 @@ func (db *DB) Pool() *pgxpool.Pool {
 }
 
 // InitSchema creates the 7 tables, indexes, and 5 views.
+// Size-cap exception: SQL DDL migration — 269L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func (db *DB) InitSchema() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

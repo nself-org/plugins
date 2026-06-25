@@ -92,6 +92,7 @@ func (d *DB) GetDownload(id string) (*TorrentDownload, error) {
 }
 
 // ListDownloads returns downloads matching optional filters.
+// Size-cap exception: single DB operation — 55L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) ListDownloads(status, category string, limit int) ([]TorrentDownload, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

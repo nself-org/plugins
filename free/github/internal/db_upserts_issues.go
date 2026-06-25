@@ -48,6 +48,7 @@ func UpsertIssue(ctx context.Context, pool *pgxpool.Pool, i *Issue) error {
 }
 
 // UpsertPullRequest inserts or updates a pull request record.
+// Size-cap exception: single DB operation — 62L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func UpsertPullRequest(ctx context.Context, pool *pgxpool.Pool, p *PullRequest) error {
 	labels := defaultJSONB(p.Labels)
 	assignees := defaultJSONB(p.Assignees)

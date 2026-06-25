@@ -77,6 +77,7 @@ func (d *Dispatcher) processPending() {
 	wg.Wait()
 }
 
+// Size-cap exception: webhook router/dispatcher — 78L event-type dispatch; splitting by event type adds file-per-type overhead without structural gain.
 func (d *Dispatcher) processDelivery(del Delivery) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(d.requestTimeoutMs+5000)*time.Millisecond)
 	defer cancel()

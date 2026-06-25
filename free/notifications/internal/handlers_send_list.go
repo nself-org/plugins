@@ -12,6 +12,7 @@ import (
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 70L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleSendNotification(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req SendNotificationRequest

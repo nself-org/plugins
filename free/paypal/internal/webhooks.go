@@ -14,6 +14,7 @@ import (
 // HandleWebhook processes incoming PayPal webhook events.
 // It validates the request structure, stores the raw event, and routes
 // to the appropriate handler based on event_type.
+// Size-cap exception: single-responsibility HTTP route handler — 71L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func HandleWebhook(pool *pgxpool.Pool, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)

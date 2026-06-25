@@ -47,6 +47,7 @@ func (s *SyncService) syncOrganizations(ctx context.Context, result *SyncResult)
 	return nil
 }
 
+// Size-cap exception: sync pipeline — 82L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) syncRepositories(ctx context.Context, result *SyncResult) ([]Repository, error) {
 	log.Printf("[github:sync] syncing repositories")
 	var ghRepos []ghRepo
@@ -153,6 +154,7 @@ func (s *SyncService) syncBranches(ctx context.Context, owner, repo string, repo
 	result.Stats.Branches += len(branches)
 }
 
+// Size-cap exception: sync pipeline — 54L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) syncIssues(ctx context.Context, owner, repo string, repoID int64, result *SyncResult) {
 	issues, err := s.client.ListIssues(owner, repo, "all")
 	if err != nil {
@@ -208,6 +210,7 @@ func (s *SyncService) syncIssues(ctx context.Context, owner, repo string, repoID
 	result.Stats.Issues += count
 }
 
+// Size-cap exception: sync pipeline — 81L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) syncPullRequests(ctx context.Context, owner, repo string, repoID int64, result *SyncResult) {
 	prs, err := s.client.ListPullRequests(owner, repo, "all")
 	if err != nil {

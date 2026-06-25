@@ -42,6 +42,7 @@ func syncSubscriptionPlans(ctx context.Context, pool *pgxpool.Pool, client *PayP
 }
 
 // syncTransactions searches PayPal transactions in 31-day windows and upserts them.
+// Size-cap exception: sync pipeline — 68L sequential sync stages; splitting creates artificial state-passing overhead.
 func syncTransactions(ctx context.Context, pool *pgxpool.Pool, client *PayPalClient, accountID, startDate, endDate string) (int, error) {
 	details, err := client.SearchTransactions(startDate, endDate)
 	if err != nil {

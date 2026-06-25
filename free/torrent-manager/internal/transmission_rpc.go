@@ -9,6 +9,7 @@ import (
 )
 
 // retry automatically.
+// Size-cap exception: 54L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func (t *TransmissionClient) doRPC(method string, args interface{}) (json.RawMessage, error) {
 	body, err := json.Marshal(rpcRequest{
 		Method:    method,

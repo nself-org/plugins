@@ -54,6 +54,7 @@ func (db *DB) countTable(ctx context.Context, table string, extraWhere string) (
 }
 
 // GetStats returns aggregate counts for all tables scoped by source_account_id.
+// Size-cap exception: sync operation — 97L sequential sync stages with shared context; splitting creates artificial state-passing overhead.
 func (db *DB) GetStats(ctx context.Context) (*SyncStats, error) {
 	stats := &SyncStats{}
 	var err error

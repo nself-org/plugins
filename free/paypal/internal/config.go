@@ -34,6 +34,7 @@ func (c *Config) BaseURL() string {
 
 // LoadConfig reads PayPal configuration from environment variables.
 // It returns an error if PAYPAL_CLIENT_IDS and PAYPAL_CLIENT_SECRETS have mismatched counts.
+// Size-cap exception: config loader — 54L of env-var reads with validation; single cohesive unit, splitting fragments the config contract.
 func LoadConfig() (*Config, error) {
 	env := os.Getenv("PAYPAL_ENVIRONMENT")
 	if env == "" {

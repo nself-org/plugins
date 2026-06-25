@@ -13,6 +13,7 @@ import (
 var reSRTTimestamp = regexp.MustCompile(
 	`(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})`)
 
+// Size-cap exception: validation pipeline — 57L sequential validation checks; splitting would require passing partial-validation state.
 func parseSRTCues(content string) []SubtitleCue {
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")
 	normalized = strings.ReplaceAll(normalized, "\r", "\n")
@@ -78,6 +79,7 @@ func parseSRTCues(content string) []SubtitleCue {
 var reVTTTimestamp = regexp.MustCompile(
 	`(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})\.(\d{3})`)
 
+// Size-cap exception: validation pipeline — 66L sequential validation checks; splitting would require passing partial-validation state.
 func parseVTTCues(content string) []SubtitleCue {
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")
 	normalized = strings.ReplaceAll(normalized, "\r", "\n")

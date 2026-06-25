@@ -71,6 +71,7 @@ func (d *DB) GetService(id string) (*ServiceRecord, error) {
 }
 
 // ListServices returns services with optional filtering and pagination.
+// Size-cap exception: single DB operation — 63L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) ListServices(serviceType string, isAdvertised, isActive *bool, limit, offset int) ([]ServiceRecord, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -136,6 +137,7 @@ func (d *DB) ListServices(serviceType string, isAdvertised, isActive *bool, limi
 }
 
 // UpdateService updates an existing service by ID using dynamic SET clauses.
+// Size-cap exception: single DB operation — 70L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateService(id string, req UpdateServiceRequest) (*ServiceRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

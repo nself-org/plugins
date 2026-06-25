@@ -89,6 +89,7 @@ func (d *DB) ListDownloadRules(accountID string) ([]DownloadRule, error) {
 }
 
 // UpdateDownloadRule updates allowed fields on a download rule.
+// Size-cap exception: single DB operation — 52L scan loop with struct mapping; splitting would fragment a single SQL query across files.
 func (d *DB) UpdateDownloadRule(id string, req UpdateRuleRequest) (*DownloadRule, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()

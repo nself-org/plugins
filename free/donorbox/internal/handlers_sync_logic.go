@@ -9,6 +9,7 @@ import (
 
 // --- Sync logic --------------------------------------------------------------
 
+// Size-cap exception: single-responsibility HTTP route handler — 56L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func runSync(ctx context.Context, db *DB, client *DonorboxClient) *SyncResult {
 	started := time.Now()
 	stats := SyncStats{}

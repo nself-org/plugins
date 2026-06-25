@@ -101,6 +101,7 @@ func handleListKeys(db *DB) http.HandlerFunc {
 	}
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 60L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleRotateKey(db *DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)

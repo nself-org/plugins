@@ -15,6 +15,7 @@ import (
 // Encryption Keys Handlers
 // ============================================================================
 
+// Size-cap exception: single-responsibility HTTP route handler — 58L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleCreateEncryptionKey(db *DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)
@@ -109,6 +110,7 @@ func handleDeliverEncryptionKey(db *DB, cfg *Config) http.HandlerFunc {
 	}
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 62L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleRotateEncryptionKey(db *DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)

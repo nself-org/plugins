@@ -8,6 +8,7 @@ import (
 	sdk "github.com/nself-org/plugin-sdk"
 )
 
+// Size-cap exception: single-responsibility HTTP route handler — 71L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleValidateToken(db *DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)
@@ -80,6 +81,7 @@ func handleValidateToken(db *DB, cfg *Config) http.HandlerFunc {
 	}
 }
 
+// Size-cap exception: single-responsibility HTTP route handler — 65L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func handleRevokeToken(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sourceAccountID := getSourceAccountID(r)

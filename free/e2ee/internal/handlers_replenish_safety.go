@@ -54,6 +54,7 @@ func (h *Handlers) CheckReplenish(w http.ResponseWriter, r *http.Request) {
 
 // PostSafetyNumber upserts a computed safety number + verification flag.
 // AUTHZ: the body user_id must equal the authenticated principal.
+// Size-cap exception: single-responsibility HTTP route handler — 63L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handlers) PostSafetyNumber(w http.ResponseWriter, r *http.Request) {
 	p, ok := principalOf(r.Context())
 	if !ok {

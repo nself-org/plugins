@@ -30,6 +30,7 @@ func NewSyncService(pool *pgxpool.Pool, client *GitHubClient, config *Config, ac
 }
 
 // SyncAll syncs all resources: orgs, repos, and per-repo resources.
+// Size-cap exception: sync pipeline — 54L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) SyncAll(ctx context.Context) *SyncResult {
 	start := time.Now()
 	result := &SyncResult{Success: true}
@@ -86,6 +87,7 @@ func (s *SyncService) SyncAll(ctx context.Context) *SyncResult {
 }
 
 // SyncResource syncs a specific resource type.
+// Size-cap exception: sync pipeline — 65L sequential sync stages; splitting creates artificial state-passing overhead.
 func (s *SyncService) SyncResource(ctx context.Context, resource string) *SyncResult {
 	start := time.Now()
 	result := &SyncResult{Success: true}

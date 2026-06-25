@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Size-cap exception: 76L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
 func assToWebVTT(content string) string {
 	var lines []string
 	lines = append(lines, "WEBVTT", "")

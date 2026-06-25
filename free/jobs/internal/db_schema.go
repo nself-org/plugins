@@ -15,6 +15,7 @@ func NewDB(pool *pgxpool.Pool) *DB {
 // ships a real HTTP-callback dispatcher (replacing the prior no-op worker).
 // Existing rows get the new columns via ADD COLUMN IF NOT EXISTS so the
 // migration is safe on warm installs.
+// Size-cap exception: SQL DDL migration — 53L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
 func (d *DB) EnsureTables(ctx context.Context) error {
 	ddl := `
 CREATE TABLE IF NOT EXISTS np_jobs_queues (

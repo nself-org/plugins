@@ -17,6 +17,7 @@ import (
 // one classic one-time prekey and one Kyber prekey ATOMICALLY. If either is
 // exhausted, the bundle is still returned (signed prekey only) — graceful
 // degradation per the Signal protocol.
+// Size-cap exception: single-responsibility HTTP route handler — 133L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handlers) GetPreKeyBundle(w http.ResponseWriter, r *http.Request) {
 	p, ok := principalOf(r.Context())
 	if !ok {
