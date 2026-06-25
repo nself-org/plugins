@@ -1,0 +1,581 @@
+# content-acquisition plugin Hasura metadata
+# CODE WINS: 14 tables from internal/db.go (np_contentacquisition_* prefix)
+# Spec said 8 tables with np_ca_* prefix — actual code uses 14 with np_contentacquisition_* prefix.
+# Tables: quality_profiles, acquisition_subscriptions, rss_feeds, rss_feed_items,
+#         release_calendar, acquisition_queue, acquisition_history, acquisition_rules,
+#         pipeline_runs, downloads, download_state_history, movie_monitoring,
+#         download_rules, download_queue
+# np_contentacquisition_downloads has user_id — dual row filter applied.
+# Event-trigger on np_contentacquisition_download_queue insert → download worker.
+
+- table:
+    schema: public
+    name: np_contentacquisition_quality_profiles
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_acquisition_subscriptions
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_rss_feeds
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_rss_feed_items
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_release_calendar
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_acquisition_queue
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_acquisition_history
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_acquisition_rules
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_pipeline_runs
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_downloads
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_download_state_history
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_movie_monitoring
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_download_rules
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_contentacquisition_download_queue
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  event_triggers:
+    - name: content_acquisition_download_queued
+      definition:
+        enable_manual: false
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 3
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: "{{NSELF_PLUGIN_WEBHOOK_BASE}}/content-acquisition/download"

@@ -1,0 +1,243 @@
+# content-progress plugin Hasura metadata
+# CODE WINS: table names from internal/db.go (np_progress_* prefix)
+# Tables: np_progress_positions (with subscription), np_progress_history,
+#         np_progress_watchlists, np_progress_favorites, np_progress_webhook_events
+# Row filter: source_account_id + user_id (dual filter — prevents cross-user leaks)
+
+- table:
+    schema: public
+    name: np_progress_positions
+  select_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+        allow_aggregations: false
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - user_id
+          - content_type
+          - content_id
+          - position_seconds
+          - duration_seconds
+          - progress_percent
+          - completed
+          - completed_at
+          - device_id
+          - audio_track
+          - subtitle_track
+          - quality
+          - metadata
+        check:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns:
+          - position_seconds
+          - duration_seconds
+          - progress_percent
+          - completed
+          - completed_at
+          - device_id
+          - audio_track
+          - subtitle_track
+          - quality
+          - metadata
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  configuration:
+    custom_root_fields:
+      select: progress_positions
+      select_by_pk: progress_position
+      insert: insert_progress_position
+      update: update_progress_position
+      delete: delete_progress_position
+
+- table:
+    schema: public
+    name: np_progress_history
+  select_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+        allow_aggregations: false
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - user_id
+          - content_type
+          - content_id
+          - action
+          - position_seconds
+          - device_id
+          - session_id
+        check:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_progress_watchlists
+  select_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - user_id
+          - content_type
+          - content_id
+          - priority
+          - added_from
+          - notes
+        check:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns:
+          - priority
+          - notes
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+
+- table:
+    schema: public
+    name: np_progress_favorites
+  select_permissions:
+    - role: user
+      permission:
+        columns: "*"
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - user_id
+          - content_type
+          - content_id
+        check:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+
+- table:
+    schema: public
+    name: np_progress_webhook_events
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - event_type
+          - payload
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  event_triggers:
+    - name: progress_positions_updated
+      definition:
+        enable_manual: false
+        insert:
+          columns: "*"
+        update:
+          columns:
+            - position_seconds
+            - completed
+      retry_conf:
+        num_retries: 3
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: "{{NSELF_PLUGIN_WEBHOOK_BASE}}/content-progress/hasura-event"

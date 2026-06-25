@@ -1,0 +1,111 @@
+# Purpose: Hasura metadata for the backup plugin.
+# Tables: np_backup_jobs, np_backup_schedules
+# Permissions: admin CRUD on both; user read own jobs/schedules
+# Constraints: source_account_id row filter on all roles
+# SPORT: REGISTRY-PLUGINS.md backup row — schema ✅, Hasura ✅
+- table:
+    schema: public
+    name: np_backup_jobs
+  configuration:
+    custom_root_fields: {}
+    custom_column_names: {}
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+        allow_aggregations: true
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - status
+          - type
+          - path
+          - size
+          - started_at
+          - completed_at
+          - error
+          - created_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - source_account_id
+          - status
+          - type
+          - path
+          - size
+          - started_at
+          - completed_at
+          - error
+        check: {}
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - status
+          - path
+          - size
+          - completed_at
+          - error
+        filter: {}
+        check: {}
+  delete_permissions:
+    - role: admin
+      permission:
+        filter: {}
+
+- table:
+    schema: public
+    name: np_backup_schedules
+  configuration:
+    custom_root_fields: {}
+    custom_column_names: {}
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+        allow_aggregations: true
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - cron_expr
+          - enabled
+          - last_run
+          - next_run
+          - created_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - source_account_id
+          - cron_expr
+          - enabled
+          - last_run
+          - next_run
+        check: {}
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - cron_expr
+          - enabled
+          - last_run
+          - next_run
+        filter: {}
+        check: {}
+  delete_permissions:
+    - role: admin
+      permission:
+        filter: {}

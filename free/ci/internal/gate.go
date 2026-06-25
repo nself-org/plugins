@@ -29,6 +29,15 @@ type Config struct {
 	// Example: "http://167.235.233.65:3761"
 	// SPORT: PLUGINS-CI-005
 	GatewayBase string
+	// EvalGateURL is the nself-eval-gate plugin base URL.
+	// If non-empty, an eval step is appended: `nself ci eval --all --output json`.
+	// On CI, reads NSELF_EVAL_GATE_URL env var; omit to skip eval gate.
+	// Example: "http://localhost:3770"
+	// SPORT: PLUGINS-CI-EVAL-001
+	EvalGateURL string
+	// EvalTierPromotion signals that a tier promotion is in-flight for this CI run.
+	// When true and eval passed=false, CI exits non-zero regardless of other gates.
+	EvalTierPromotion bool
 }
 
 // GateResult holds the outcome of a single gate step.

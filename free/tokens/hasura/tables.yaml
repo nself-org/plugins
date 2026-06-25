@@ -1,0 +1,159 @@
+# tokens plugin Hasura metadata
+# CODE WINS: table names from internal/db.go (np_tokens_* prefix)
+# SECURITY: np_tokens_signing_keys and np_tokens_encryption_keys intentionally NOT tracked
+#           (key_material_encrypted never accessible via GraphQL — REST API only)
+# Tracked: np_tokens_issued (user select own), np_tokens_entitlements (admin CRUD),
+#          np_tokens_webhook_events (admin)
+
+- table:
+    schema: public
+    name: np_tokens_issued
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - token_type
+          - content_id
+          - content_type
+          - issued_at
+          - expires_at
+          - revoked
+          - last_used_at
+          - use_count
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - token_hash
+          - token_type
+          - signing_key_id
+          - user_id
+          - device_id
+          - content_id
+          - content_type
+          - permissions
+          - ip_address
+          - expires_at
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - revoked
+          - revoked_at
+          - revoked_reason
+          - last_used_at
+          - use_count
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_tokens_entitlements
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: user
+      permission:
+        columns:
+          - id
+          - content_id
+          - content_type
+          - entitlement_type
+          - granted_at
+          - expires_at
+          - revoked
+        filter:
+          _and:
+            - source_account_id:
+                _eq: X-Hasura-Source-Account-Id
+            - user_id:
+                _eq: X-Hasura-User-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - user_id
+          - content_id
+          - content_type
+          - entitlement_type
+          - granted_by
+          - expires_at
+          - metadata
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - expires_at
+          - revoked
+          - metadata
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: admin
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+
+- table:
+    schema: public
+    name: np_tokens_webhook_events
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - id
+          - event_type
+          - payload
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        set:
+          source_account_id: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - processed
+          - processed_at
+          - error
+          - retry_count
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

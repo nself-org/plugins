@@ -82,7 +82,16 @@ func Run(cfg Config) (*Result, error) {
 		res.Gates = append(res.Gates, gwGates...)
 	}
 
-	// 5. Aggregate pass/fail.
+	// 5. Eval gate step — calls `nself ci eval --all --output json` when EvalGateURL is set.
+	// Writes eval-results.json to {root}/.nself-ci/artifacts/. Fails CI when:
+	//   - eval passed=false AND EvalTierPromotion is true (tier promotion in-flight)
+	// SPORT: PLUGINS-CI-EVAL-001
+	if cfg.EvalGateURL != "" {
+		evalGate := runEvalGateStep(root, cfg.EvalGateURL, cfg.EvalTierPromotion, timeout, cfg.Verbose)
+		res.Gates = append(res.Gates, evalGate)
+	}
+
+	// 7. Aggregate pass/fail.
 	res.Passed = true
 	for _, g := range res.Gates {
 		if !g.Passed {

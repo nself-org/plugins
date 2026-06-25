@@ -1,0 +1,4 @@
+# github-runner has no DB tables — stateless runner.
+# Registration and job state live in GitHub's systems, not in nSelf DB.
+# SPORT: REGISTRY-PLUGINS.md github-runner row — Hasura stub ✅
+[]

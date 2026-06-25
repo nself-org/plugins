@@ -1,0 +1,105 @@
+# Purpose: Hasura metadata for the mdns plugin.
+# Tables: np_mdns_services, np_mdns_discovery_log
+# Permissions: admin CRUD on services; user read-only on both (own rows)
+# SPORT: REGISTRY-PLUGINS.md mdns row — schema ✅, Hasura ✅
+- table:
+    schema: public
+    name: np_mdns_services
+  configuration:
+    custom_root_fields: {}
+    custom_column_names: {}
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+        allow_aggregations: true
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - service_name
+          - service_type
+          - port
+          - host
+          - domain
+          - txt_records
+          - is_advertised
+          - is_active
+          - last_seen_at
+          - metadata
+          - created_at
+          - updated_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: false
+  insert_permissions:
+    - role: admin
+      permission:
+        columns:
+          - source_account_id
+          - service_name
+          - service_type
+          - port
+          - host
+          - domain
+          - txt_records
+          - is_advertised
+          - is_active
+          - metadata
+        check: {}
+  update_permissions:
+    - role: admin
+      permission:
+        columns:
+          - service_name
+          - service_type
+          - port
+          - host
+          - domain
+          - txt_records
+          - is_advertised
+          - is_active
+          - last_seen_at
+          - metadata
+          - updated_at
+        filter: {}
+        check: {}
+  delete_permissions:
+    - role: admin
+      permission:
+        filter: {}
+
+- table:
+    schema: public
+    name: np_mdns_discovery_log
+  configuration:
+    custom_root_fields: {}
+    custom_column_names: {}
+  select_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+        allow_aggregations: true
+    - role: user
+      permission:
+        columns:
+          - id
+          - source_account_id
+          - service_type
+          - service_name
+          - host
+          - port
+          - addresses
+          - txt_records
+          - discovered_at
+          - last_seen_at
+          - is_available
+          - metadata
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: false
