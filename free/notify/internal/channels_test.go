@@ -94,7 +94,7 @@ func TestSendWebhook_EmptyURL(t *testing.T) {
 // returns a success result.
 func TestSendWebhook_HappyPath(t *testing.T) {
 	// httptest binds to loopback; allow private destinations for this test.
-	t.Setenv("NOTIFY_ALLOW_PRIVATE_URLS", "true")
+	t.Setenv("NSELF_ALLOW_PRIVATE_URLS", "true")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %q", r.Method)
@@ -119,7 +119,7 @@ func TestSendWebhook_HappyPath(t *testing.T) {
 // TestSendWebhook_ServerError verifies that a non-2xx response returns a
 // failure.
 func TestSendWebhook_ServerError(t *testing.T) {
-	t.Setenv("NOTIFY_ALLOW_PRIVATE_URLS", "true")
+	t.Setenv("NSELF_ALLOW_PRIVATE_URLS", "true")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}))
@@ -135,7 +135,7 @@ func TestSendWebhook_ServerError(t *testing.T) {
 // failed webhook delivery do not include the HTTP response body. This prevents
 // leaking internal service topology when webhook targets fail.
 func TestSendWebhook_ErrorMessageDoesNotLeakBody(t *testing.T) {
-	t.Setenv("NOTIFY_ALLOW_PRIVATE_URLS", "true")
+	t.Setenv("NSELF_ALLOW_PRIVATE_URLS", "true")
 	sensitiveContent := "secret database error: connection refused"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, sensitiveContent, http.StatusInternalServerError)
