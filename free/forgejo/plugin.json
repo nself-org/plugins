@@ -1,0 +1,84 @@
+{
+  "name": "forgejo",
+  "version": "1.0.0",
+  "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.1.1",
+  "language": "go",
+  "entryPoint": "cmd/main.go",
+  "port": 3844,
+  "category": "development",
+  "status": "stable",
+  "tier": "free",
+  "profile": "ops",
+  "tags": [
+    "ci",
+    "cd",
+    "forgejo",
+    "gitea",
+    "actions",
+    "runner",
+    "self-hosted",
+    "devops",
+    "offline-ci"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "optionalDependencies": [],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "status": "Show Forgejo server + runner health"
+  },
+  "envVars": {
+    "required": [
+      "NSELF_FORGEJO_ADMIN_USER",
+      "NSELF_FORGEJO_ADMIN_PASSWORD",
+      "NSELF_FORGEJO_ADMIN_EMAIL",
+      "FORGEJO_RUNNER_REGISTRATION_TOKEN"
+    ],
+    "optional": [
+      "FORGEJO_HTTP_PORT",
+      "FORGEJO_SSH_PORT",
+      "FORGEJO_DOMAIN",
+      "FORGEJO_RUNNER_NAME",
+      "FORGEJO_RUNNER_LABELS",
+      "FORGEJO_RUNNER_CAPACITY",
+      "FORGEJO_RUNNER_MEMORY",
+      "FORGEJO_RUNNER_CPU"
+    ]
+  },
+  "config": {
+    "httpPort": 3844,
+    "sshPort": 3222,
+    "runnerIdleMemoryMB": 180,
+    "network": "forgejo_runner_net"
+  },
+  "permissions": {
+    "database": [],
+    "network": [
+      "codeberg.org",
+      "code.forgejo.org",
+      "docker.io",
+      "ghcr.io"
+    ],
+    "filesystem": [
+      "data/forgejo"
+    ]
+  },
+  "multiApp": {
+    "supported": false,
+    "isolationColumn": null,
+    "pkStrategy": null,
+    "defaultValue": null
+  }
+}
