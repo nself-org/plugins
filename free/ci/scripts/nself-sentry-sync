@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# nself-sentry-sync — pull nSentry MD bug reports from the ops server into a
+# local inbox (default .claude/inbox), exactly once per dev (local manifest dedup).
+#
+# Usage: nself-sentry-sync [--server user@host] [--remote-dir DIR] [--inbox DIR] [--dry-run]
+# Env:   NSENTRY_SERVER, NSENTRY_REMOTE_DIR, NSENTRY_INBOX, NSENTRY_DEV_ID, NSENTRY_STATE
+#
+# Per-dev dedup: each dev has a consumed.list manifest; a report is copied into
+# the inbox at most once per dev. N devs each receive every report exactly once.
+set -euo pipefail
+
+SERVER="${NSENTRY_SERVER:-root@168.119.238.3}"
+REMOTE_DIR="${NSENTRY_REMOTE_DIR:-/opt/nself-ops/errors}"
+INBOX="${NSENTRY_INBOX:-.claude/inbox}"
+DRY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --server) SERVER="$2"; shift 2;;
+    --remote-dir) REMOTE_DIR="$2"; shift 2;;
+    --inbox) INBOX="$2"; shift 2;;
+    --dry-run) DRY=1; shift;;
+    *) shift;;
+  esac
+done
+
+DEV_ID="${NSENTRY_DEV_ID:-$(printf '%s' "$(hostname)-$(whoami)" | shasum | cut -c1-12)}"
+STATE="${NSENTRY_STATE:-$HOME/.nself-sentry/$DEV_ID}"
+CACHE="$STATE/cache"
+MANIFEST="$STATE/consumed.list"
+mkdir -p "$CACHE" "$INBOX"
+touch "$MANIFEST"
+
+# 1) Pull all reports from the server (rsync; idempotent, transfers only changes).
+rsync -az --include='*.md' --exclude='*' -e "ssh -o StrictHostKeyChecking=accept-new" \
+  "$SERVER:$REMOTE_DIR/" "$CACHE/" >/dev/null
+
+# 2) Copy NEW (not-yet-consumed) reports into the inbox; record per-dev.
+new=0
+for f in "$CACHE"/*.md; do
+  [ -e "$f" ] || continue
+  base=$(basename "$f")
+  if grep -qxF "$base" "$MANIFEST"; then continue; fi
+  if [ "$DRY" = 1 ]; then
+    echo "WOULD SYNC $base"
+  else
+    cp "$f" "$INBOX/$base"
+    echo "$base" >> "$MANIFEST"
+    echo "SYNCED $base"
+  fi
+  new=$((new+1))
+done
+
+echo "dev=$DEV_ID new=$new cache=$(ls -1 "$CACHE"/*.md 2>/dev/null | wc -l | tr -d ' ') inbox=$INBOX"
