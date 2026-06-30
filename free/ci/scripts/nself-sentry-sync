@@ -9,7 +9,7 @@
 # the inbox at most once per dev. N devs each receive every report exactly once.
 set -euo pipefail
 
-SERVER="${NSENTRY_SERVER:-root@168.119.238.3}"
+SERVER="${NSENTRY_SERVER:-root@sentry-errors.nself.org}"
 REMOTE_DIR="${NSENTRY_REMOTE_DIR:-/opt/nself-ops/errors}"
 INBOX="${NSENTRY_INBOX:-.claude/inbox}"
 DRY=0
