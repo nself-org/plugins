@@ -12,6 +12,8 @@ package main
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/nself-org/plugins/free/family-gedcom/internal/gedcom"
 )
 
 // TestParseGEDCOM_TwoIndividuals verifies that sample.ged yields exactly
@@ -19,7 +21,7 @@ import (
 func TestParseGEDCOM_TwoIndividuals(t *testing.T) {
 	path := filepath.Join("testdata", "sample.ged")
 
-	result, err := ParseGEDCOM(path)
+	result, err := gedcom.ParseGEDCOM(path)
 	if err != nil {
 		t.Fatalf("ParseGEDCOM() error: %v", err)
 	}
@@ -33,7 +35,7 @@ func TestParseGEDCOM_TwoIndividuals(t *testing.T) {
 func TestParseGEDCOM_FamilyCount(t *testing.T) {
 	path := filepath.Join("testdata", "sample.ged")
 
-	result, err := ParseGEDCOM(path)
+	result, err := gedcom.ParseGEDCOM(path)
 	if err != nil {
 		t.Fatalf("ParseGEDCOM() error: %v", err)
 	}
@@ -47,7 +49,7 @@ func TestParseGEDCOM_FamilyCount(t *testing.T) {
 func TestParseGEDCOM_IndividualFields(t *testing.T) {
 	path := filepath.Join("testdata", "sample.ged")
 
-	result, err := ParseGEDCOM(path)
+	result, err := gedcom.ParseGEDCOM(path)
 	if err != nil {
 		t.Fatalf("ParseGEDCOM() error: %v", err)
 	}
@@ -70,7 +72,7 @@ func TestParseGEDCOM_IndividualFields(t *testing.T) {
 
 // TestParseGEDCOM_MissingFile verifies that a missing file returns an error.
 func TestParseGEDCOM_MissingFile(t *testing.T) {
-	_, err := ParseGEDCOM("/nonexistent-file-xyz987.ged")
+	_, err := gedcom.ParseGEDCOM("/nonexistent-file-xyz987.ged")
 	if err == nil {
 		t.Error("expected error for missing file, got nil")
 	}

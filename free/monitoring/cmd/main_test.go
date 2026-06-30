@@ -2,7 +2,7 @@ package main
 
 // main_test.go — tests for the monitoring config-render entrypoint.
 //
-// Purpose: Verify that renderConfigs copies source configs to the output
+// Purpose: Verify that render.RenderConfigs copies source configs to the output
 //          directory and that prometheus.yml is present with the correct
 //          scrape_interval, matching the known config template.
 //
@@ -15,10 +15,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nself-org/plugins/free/monitoring/internal/render"
 )
 
-// TestRenderConfigs_CopiesFiles verifies that renderConfigs copies all files
-// from the source directory tree to the output directory.
+// TestRenderConfigs_CopiesFiles verifies that render.RenderConfigs copies all
+// files from the source directory tree to the output directory.
 func TestRenderConfigs_CopiesFiles(t *testing.T) {
 	// Build a minimal source tree with a prometheus.yml
 	src := t.TempDir()
@@ -33,8 +35,8 @@ func TestRenderConfigs_CopiesFiles(t *testing.T) {
 
 	out := t.TempDir()
 
-	if err := renderConfigs(src, out); err != nil {
-		t.Fatalf("renderConfigs() error: %v", err)
+	if err := render.RenderConfigs(src, out); err != nil {
+		t.Fatalf("render.RenderConfigs() error: %v", err)
 	}
 
 	// prometheus.yml must exist in the output dir
@@ -49,11 +51,11 @@ func TestRenderConfigs_CopiesFiles(t *testing.T) {
 	}
 }
 
-// TestRenderConfigs_MissingSource verifies that renderConfigs fails gracefully
-// when the source directory does not exist.
+// TestRenderConfigs_MissingSource verifies that render.RenderConfigs fails
+// gracefully when the source directory does not exist.
 func TestRenderConfigs_MissingSource(t *testing.T) {
 	out := t.TempDir()
-	err := renderConfigs("/nonexistent-monitoring-src-xyz987", out)
+	err := render.RenderConfigs("/nonexistent-monitoring-src-xyz987", out)
 	if err == nil {
 		t.Error("expected error for missing source dir, got nil")
 	}

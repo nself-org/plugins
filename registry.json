@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 31,
-  "last_updated": "2026-06-18",
+  "plugins_count": 32,
+  "last_updated": "2026-06-30",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 31 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 32 MIT-licensed plugins.",
   "plugins": {
     "audit-log": {
       "version": "1.0.0",
@@ -369,6 +369,39 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "forgejo": {
+      "version": "1.0.0",
+      "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute \u2014 zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.1.1",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/forgejo-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/forgejo/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "ci",
+        "cd",
+        "forgejo",
+        "gitea",
+        "actions",
+        "runner",
+        "self-hosted",
+        "devops",
+        "offline-ci"
+      ],
+      "dependencies": [],
+      "name": "forgejo",
+      "author": "nself",
+      "minNselfVersion": "1.1.1",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "docker",
+        "entryPoint": "docker-compose.plugin.yml"
       }
     },
     "github": {
