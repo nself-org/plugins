@@ -35,4 +35,26 @@ while IFS=$'\t' read -r repo ghsa sev pkg summary url; do
     echo "Routed by nSentry (Dependabot bridge) → your .claude/inbox. Review + bump or dismiss the alert."; } > "$f"
   echo "$key" >> "$SEEN"; echo "WROTE $f"
 done
+
+# --- Dependabot VERSION-UPDATE PRs (a separate stream from security alerts) ---
+# These generate PR/watch emails, not alert emails, and are NOT in /dependabot/alerts.
+# Capture open dependabot PRs org-wide so they land in the inbox too.
+gh search prs --owner "$ORG" --author app/dependabot --state open --limit 200 \
+  --json repository,number,title,url,createdAt \
+  -q '.[] | [.repository.name, (.number|tostring), .title, .url, .createdAt] | @tsv' 2>/dev/null | \
+while IFS=$'\t' read -r repo num title url created; do
+  [ -z "$repo" ] && continue
+  key="dependabot-pr:$repo:$num"
+  grep -qxF "$key" "$SEEN" && continue
+  h=$(printf '%s' "$key" | md5sum 2>/dev/null | cut -c1-6 || printf '%s' "$key" | md5 | cut -c1-6)
+  f="$OUT/$(ts)-$h-dependabot-pr-$repo.md"
+  { echo "---"; echo "id: $key"; echo "created_at: $(date -u +%FT%TZ)";
+    echo "title: \"Dependabot PR: $ORG/$repo #$num\""; echo "severity: low"; echo "source: dependabot-pr";
+    echo "repo: $ORG/$repo"; echo "pr: $num"; echo "---"; echo;
+    echo "# Dependabot PR: $ORG/$repo #$num"; echo;
+    echo "- **$title**"; echo "- **PR:** $url · **Opened:** $created"; echo;
+    echo "Routed by nSentry (Dependabot PR bridge) → your .claude/inbox. Review + merge or close. Patch/minor with green CI is usually safe to merge."; } > "$f"
+  echo "$key" >> "$SEEN"; echo "WROTE $f"
+done
+
 echo "dependabot bridge done → $OUT (deduped via .dependabot-seen)"
