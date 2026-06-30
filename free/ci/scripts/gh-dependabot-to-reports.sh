@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# gh-dependabot-to-reports — bridge GitHub Dependabot security alerts into nSentry MD reports.
+# Lists OPEN dependabot alerts across an org, dedups to one report per (repo, ghsa_id),
+# and writes timestamped MD reports to --out (default /opt/nself-ops/errors). Run on the
+# sentry box or locally on a cron. Idempotent via a seen-manifest. Complements
+# gh-ci-failures-to-reports.sh (which covers Actions runs; this covers Dependabot alerts).
+#
+# Usage: gh-dependabot-to-reports.sh [--org nself-org] [--out DIR]
+# Needs: a gh token with security_events (read) scope.
+set -euo pipefail
+ORG="${GH_ORG:-nself-org}"
+OUT="${NSENTRY_REMOTE_DIR:-/opt/nself-ops/errors}"
+while [ $# -gt 0 ]; do case "$1" in
+  --org) ORG="$2"; shift 2;; --out) OUT="$2"; shift 2;; *) shift;; esac; done
+mkdir -p "$OUT"; SEEN="$OUT/.dependabot-seen"; touch "$SEEN"
+ts(){ date -u +%Y%m%d-%H%M%S; }
+
+# Pull every open alert org-wide; emit one TSV line per alert.
+gh api "/orgs/$ORG/dependabot/alerts" -X GET -f state=open --paginate \
+  -q '.[] | [.repository.name, .security_advisory.ghsa_id, .security_advisory.severity, .dependency.package.name, (.security_advisory.summary | gsub("[\t\n]";" ")), .html_url] | @tsv' 2>/dev/null | \
+while IFS=$'\t' read -r repo ghsa sev pkg summary url; do
+  [ -z "$repo" ] && continue
+  key="dependabot:$repo:$ghsa"
+  grep -qxF "$key" "$SEEN" && continue
+  h=$(printf '%s' "$key" | md5sum 2>/dev/null | cut -c1-6 || printf '%s' "$key" | md5 | cut -c1-6)
+  # map severity → report severity
+  case "$sev" in critical) rs=critical;; high) rs=high;; medium) rs=medium;; *) rs=low;; esac
+  f="$OUT/$(ts)-$h-dependabot-$repo.md"
+  { echo "---"; echo "id: $key"; echo "created_at: $(date -u +%FT%TZ)";
+    echo "title: \"Dependabot $sev: $ORG/$repo — $pkg\""; echo "severity: $rs"; echo "source: dependabot";
+    echo "repo: $ORG/$repo"; echo "package: \"$pkg\""; echo "ghsa: $ghsa"; echo "---"; echo;
+    echo "# Dependabot $sev: $ORG/$repo — $pkg"; echo;
+    echo "- **Package:** \`$pkg\` · **Severity:** $sev · **Advisory:** $ghsa";
+    echo "- **Summary:** $summary"; echo "- **Alert:** $url"; echo;
+    echo "Routed by nSentry (Dependabot bridge) → your .claude/inbox. Review + bump or dismiss the alert."; } > "$f"
+  echo "$key" >> "$SEEN"; echo "WROTE $f"
+done
+echo "dependabot bridge done → $OUT (deduped via .dependabot-seen)"
