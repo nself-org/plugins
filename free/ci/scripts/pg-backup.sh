@@ -5,7 +5,9 @@
 #          backup layer at all. This dumps it nightly with rotation. Pair with a
 #          weekly provider snapshot (e.g. Hetzner) as the second layer.
 # Inputs:  env — POSTGRES_CONTAINER (default ops-postgres), PG_USER (postgres),
-#          BACKUP_DIR (/opt/nself-ops/backups), KEEP (7), REPORT_DIR
+#          PG_DB (postgres — set to the real data DB, e.g. nself, on boxes with
+#          a non-default POSTGRES_DB; dumping the maintenance DB backs up
+#          nothing), BACKUP_DIR (/opt/nself-ops/backups), KEEP (7), REPORT_DIR
 #          (/opt/nself-ops/errors — failure reports only).
 # Outputs: ${BACKUP_DIR}/opsdb-<UTC ts>.dump.gz (pg_dump custom format, gzipped);
 #          an MD report to REPORT_DIR ONLY on failure.
@@ -16,6 +18,7 @@ set -euo pipefail
 
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-ops-postgres}"
 PG_USER="${PG_USER:-postgres}"
+PG_DB="${PG_DB:-postgres}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/nself-ops/backups}"
 KEEP="${KEEP:-7}"
 REPORT_DIR="${REPORT_DIR:-/opt/nself-ops/errors}"
@@ -52,7 +55,7 @@ emit_failure() {
 main() {
   mkdir -p "$BACKUP_DIR"
   local out="${BACKUP_DIR}/opsdb-$(ts_file).dump"
-  if ! docker exec "$POSTGRES_CONTAINER" pg_dump -U "$PG_USER" --format=custom postgres > "$out" 2>/tmp/pg-backup.err; then
+  if ! docker exec "$POSTGRES_CONTAINER" pg_dump -U "$PG_USER" --format=custom "$PG_DB" > "$out" 2>/tmp/pg-backup.err; then
     emit_failure "$(cat /tmp/pg-backup.err 2>/dev/null || echo 'pg_dump failed with no stderr')"
     rm -f "$out"
     exit 1
