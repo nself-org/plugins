@@ -105,9 +105,35 @@ check_disk() {
 prune_docker() {
   echo "[disk-prune] running docker system prune..."
   local result
-  result=$(docker system prune -af --volumes 2>&1) || true
+  # NOTE: deliberately NO --volumes — §12 bans volume-destructive pruning
+  # (a stopped runner's config volume or a data volume must never be reaped
+  # by a cleanup cron). Images, stopped containers, networks, build cache only.
+  result=$(docker system prune -af 2>&1) || true
   echo "[disk-prune] docker prune result:"
   echo "$result"
+}
+
+# prune_containerized_runners cleans _work INSIDE runner containers (named
+# volumes like gh-runner-*-data that host-path cleanup can't reach — the
+# cam-sentry Rust-build disk-fill failure mode). A runner with a live job
+# (Runner.Worker process) is skipped.
+prune_containerized_runners() {
+  local runners
+  runners=$(docker ps --format '{{.Names}}\t{{.Image}}' 2>/dev/null | \
+    awk -F'\t' 'tolower($0) ~ /actions-runner|github-runner|gh-runner|myoung34/ {print $1}') || true
+  [ -z "$runners" ] && { echo "[disk-prune] no containerized runners found, skipping"; return 0; }
+
+  for c in $runners; do
+    if docker exec "$c" sh -c 'ps -ef 2>/dev/null || ps aux' 2>/dev/null | grep -q 'Runner.Worker'; then
+      echo "[disk-prune] skipping $c (job running)"
+      continue
+    fi
+    echo "[disk-prune] cleaning _work inside $c"
+    docker exec "$c" sh -c \
+      'for d in /actions-runner/_work /runner/_work /home/runner/_work; do
+         [ -d "$d" ] && rm -rf "$d"/* 2>/dev/null
+       done; true' 2>/dev/null || echo "[disk-prune] warn: cleanup failed inside $c" >&2
+  done
 }
 
 prune_runner_work() {
@@ -143,4 +169,5 @@ prune_runner_work() {
 check_disk
 prune_docker
 prune_runner_work
+prune_containerized_runners
 echo "[disk-prune] done at $(ts_iso)"
