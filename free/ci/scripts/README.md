@@ -42,3 +42,86 @@ received the same report set; re-runs sync nothing new; new reports sync increme
 When a project is marked CI=nsentry, Cascade runs `nself-sentry-sync` into the
 project's `.claude/inbox` on a short interval, so CI/error reports appear in the
 local AI tools automatically. A launchd agent (macOS) or cron entry drives it.
+
+## Runner on a sentry box — ephemeral workspace teardown
+
+### Problem
+Self-hosted runners accumulate `node_modules`, Docker layer caches, and build artifacts in `_work/`. On a 4 GB sentry box this fills the disk — kills ops-postgres — status page 500s. This recurred on 160 GB and 80 GB boxes; hourly prune cannot reclaim fast enough once CI backlog is large.
+
+### Canonical fix: `--ephemeral` runners + per-job cleanup
+
+Configure the runner with `--ephemeral` so each job gets a fresh registration and the `_work` directory is wiped after each run. Combine with a post-job cleanup hook.
+
+**Docker Compose snippet (recommended — matches unity-sentry reference impl):**
+
+```yaml
+# docker-compose.runner.yml
+# Add to your sentry-box compose stack.
+services:
+  actions-runner:
+    image: myoung34/github-runner:latest
+    restart: unless-stopped
+    environment:
+      RUNNER_SCOPE: org                        # or 'repo' for single-repo
+      ORG_NAME: nself-org                      # change per project
+      LABELS: self-hosted,linux,x64
+      EPHEMERAL: "true"                        # wipes _work after each job
+      RUNNER_WORKDIR: /tmp/runner-work         # use /tmp, not persistent storage
+      ACCESS_TOKEN: ${GITHUB_RUNNER_TOKEN}     # short-lived token via GitHub App
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner-config:/home/runner             # persists registration config only
+    mem_limit: 2g                              # never starve the nSentry stack
+    cpus: "1.5"
+    tmpfs:
+      - /tmp/runner-work:size=4g               # ephemeral build space in RAM/tmpfs
+volumes:
+  runner-config:
+```
+
+**systemd unit snippet (alternative to compose):**
+
+```ini
+# /etc/systemd/system/github-runner.service
+[Unit]
+Description=GitHub Actions Runner (ephemeral)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=runner
+ExecStartPre=/opt/actions-runner/config.sh \
+  --url https://github.com/nself-org \
+  --token $(cat /opt/actions-runner/.runner-token) \
+  --ephemeral --unattended --replace
+ExecStart=/opt/actions-runner/run.sh
+ExecStopPost=/bin/rm -rf /opt/actions-runner/_work/*
+Restart=on-success
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Disk safeguards (both required alongside ephemeral)
+
+| Script | Cron | What it does |
+|---|---|---|
+| `disk-guard.sh` | `*/5 * * * *` | Alert at >80%; aggressive prune + pause runner at >90% |
+| `disk-prune.sh` | `0 * * * *` | Hourly Docker prune + `_work` cleanup |
+| `db-watchdog.sh` | `*/2 * * * *` | Restart postgres/redis on failure; emits alert |
+
+All three MUST be installed on any sentry box running CI. Install to `/opt/nself-ops/bin/` (symlink from the checked-out `free/ci/scripts/`).
+
+### Status page — disk health visibility
+
+`disk-guard.sh` writes `/opt/nself-ops/status/disk.json` on every run:
+```json
+{"disk_pct": 73, "updated_at": "2026-07-01T12:00:00Z", "threshold_warn": 80, "threshold_crit": 90}
+```
+Mount this file into the nself-status container (or serve it via a tiny nginx `location /internal/disk` block) so the "Infrastructure" group component can poll it. Add a `disk` component to the `STATUS_PAGE_LAYOUT` Infrastructure group with `check_url: http://localhost/internal/disk` and a custom health-check that returns degraded when `disk_pct >= 80` and down when `disk_pct >= 90`.
+
+### Hard rule: monitoring-only vs CI boxes
+
+A minimal 4 GB sentry box running heavy CI (Rust, Tauri, macOS signing, Windows cross-compile) WILL fill its disk. See `~/Sites/.claude/nsentry-server-standard.md` §11 for the canonical ruling on CI box sizing and when to use GitHub-hosted runners instead.
