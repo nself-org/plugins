@@ -138,7 +138,15 @@ scan_history_range() {
   # New commits from 2026-03-30 onward must be clean.
   GRANDFATHER_DATE="2026-03-30"
 
-  matches="$(git log --format='%H%n%s%n%b%n---END---' --after="$GRANDFATHER_DATE" "$range" | grep -nE -i "$COMMIT_MSG_REGEX" || true)"
+  # Platform bots (dependabot, github-actions) add a Co-authored-by trailer to
+  # squash merges automatically. That is standard GitHub behaviour, not AI
+  # authorship, and blocking it makes dependabot PRs impossible to squash-merge.
+  # Strip those trailers before applying the AI-attribution regex; genuine AI
+  # co-author trailers (claude/openai/copilot/...) are still caught.
+  BOT_COAUTHOR_REGEX='co-authored-by:[[:space:]]*(dependabot|github-actions|renovate)\[bot\]'
+  matches="$(git log --format='%H%n%s%n%b%n---END---' --after="$GRANDFATHER_DATE" "$range" \
+    | grep -viE "$BOT_COAUTHOR_REGEX" \
+    | grep -nE -i "$COMMIT_MSG_REGEX" || true)"
   if [ -n "$matches" ]; then
     printf '%s\n' "$matches"
     cat >&2 <<'ERROR_TEXT'
