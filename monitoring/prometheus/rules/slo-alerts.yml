@@ -18,7 +18,7 @@ groups:
           window: fast
         annotations:
           summary: "Platform uptime SLO fast-burn: error budget consumed at 14.4x rate"
-          runbook_url: "https://docs.nself.org/runbooks/slo-uptime"
+          runbook_url: "https://nself.org/docs/runbooks/slo-uptime"
 
       - alert: SLO_PlatformUptime_SlowBurn
         expr: |
@@ -32,7 +32,7 @@ groups:
           window: slow
         annotations:
           summary: "Platform uptime SLO slow-burn: error budget consumed at 6x rate"
-          runbook_url: "https://docs.nself.org/runbooks/slo-uptime"
+          runbook_url: "https://nself.org/docs/runbooks/slo-uptime"
 
       # --- SLO 2: Chat P95 Latency < 2s (28d) ---
       - alert: SLO_ChatLatencyP95_FastBurn
@@ -47,7 +47,7 @@ groups:
           window: fast
         annotations:
           summary: "Chat P95 latency SLO fast-burn: latency exceeds 2s target"
-          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+          runbook_url: "https://nself.org/docs/runbooks/slo-latency"
 
       - alert: SLO_ChatLatencyP95_SlowBurn
         expr: |
@@ -61,7 +61,7 @@ groups:
           window: slow
         annotations:
           summary: "Chat P95 latency SLO slow-burn: latency exceeds 2s target"
-          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+          runbook_url: "https://nself.org/docs/runbooks/slo-latency"
 
       # --- SLO 3: API P99 Latency < 500ms (28d, excluding AI) ---
       - alert: SLO_APILatencyP99_FastBurn
@@ -76,7 +76,7 @@ groups:
           window: fast
         annotations:
           summary: "API P99 latency SLO fast-burn: latency exceeds 500ms target"
-          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+          runbook_url: "https://nself.org/docs/runbooks/slo-latency"
 
       - alert: SLO_APILatencyP99_SlowBurn
         expr: |
@@ -90,7 +90,7 @@ groups:
           window: slow
         annotations:
           summary: "API P99 latency SLO slow-burn: latency exceeds 500ms target"
-          runbook_url: "https://docs.nself.org/runbooks/slo-latency"
+          runbook_url: "https://nself.org/docs/runbooks/slo-latency"
 
       # --- SLO 4: Mux Classification F1 > 0.85 (7d) ---
       - alert: SLO_MuxF1_FastBurn
@@ -105,7 +105,7 @@ groups:
           window: fast
         annotations:
           summary: "Mux F1 SLO fast-burn: classification quality degrading"
-          runbook_url: "https://docs.nself.org/runbooks/slo-mux"
+          runbook_url: "https://nself.org/docs/runbooks/slo-mux"
 
       - alert: SLO_MuxF1_SlowBurn
         expr: |
@@ -119,7 +119,7 @@ groups:
           window: slow
         annotations:
           summary: "Mux F1 SLO slow-burn: classification quality degrading"
-          runbook_url: "https://docs.nself.org/runbooks/slo-mux"
+          runbook_url: "https://nself.org/docs/runbooks/slo-mux"
 
       # --- SLO 5: Backup Success Rate 100% (30d) ---
       - alert: SLO_BackupSuccess_FastBurn
@@ -134,7 +134,7 @@ groups:
           window: fast
         annotations:
           summary: "Backup SLO fast-burn: backup failures detected"
-          runbook_url: "https://docs.nself.org/runbooks/slo-backup"
+          runbook_url: "https://nself.org/docs/runbooks/slo-backup"
 
       - alert: SLO_BackupSuccess_SlowBurn
         expr: |
@@ -148,7 +148,7 @@ groups:
           window: slow
         annotations:
           summary: "Backup SLO slow-burn: recurring backup failures"
-          runbook_url: "https://docs.nself.org/runbooks/slo-backup"
+          runbook_url: "https://nself.org/docs/runbooks/slo-backup"
 
       # --- SLO 6: AI Call Success > 99% (7d) ---
       - alert: SLO_AISuccess_FastBurn
@@ -163,7 +163,7 @@ groups:
           window: fast
         annotations:
           summary: "AI call SLO fast-burn: error rate consuming budget at 14.4x"
-          runbook_url: "https://docs.nself.org/runbooks/slo-ai"
+          runbook_url: "https://nself.org/docs/runbooks/slo-ai"
 
       - alert: SLO_AISuccess_SlowBurn
         expr: |
@@ -177,7 +177,7 @@ groups:
           window: slow
         annotations:
           summary: "AI call SLO slow-burn: error rate consuming budget at 6x"
-          runbook_url: "https://docs.nself.org/runbooks/slo-ai"
+          runbook_url: "https://nself.org/docs/runbooks/slo-ai"
 
       # --- SLO 7: Auth Success > 99.5% (28d) ---
       - alert: SLO_AuthSuccess_FastBurn
@@ -192,7 +192,7 @@ groups:
           window: fast
         annotations:
           summary: "Auth SLO fast-burn: error rate consuming budget at 14.4x"
-          runbook_url: "https://docs.nself.org/runbooks/slo-auth"
+          runbook_url: "https://nself.org/docs/runbooks/slo-auth"
 
       - alert: SLO_AuthSuccess_SlowBurn
         expr: |
@@ -206,4 +206,4 @@ groups:
           window: slow
         annotations:
           summary: "Auth SLO slow-burn: error rate consuming budget at 6x"
-          runbook_url: "https://docs.nself.org/runbooks/slo-auth"
+          runbook_url: "https://nself.org/docs/runbooks/slo-auth"

@@ -94,7 +94,7 @@ export function resolveApiVersion(request: Request): ApiVersionResult {
         JSON.stringify({
           error: `Unsupported API version: ${version}`,
           detail: `Supported versions: ${[...SUPPORTED_VERSIONS].join(', ')}`,
-          docs: 'https://docs.nself.org/api/v1/marketplace-worker',
+          docs: 'https://nself.org/docs/api/v1/marketplace-worker',
         }),
         {
           status: 400,

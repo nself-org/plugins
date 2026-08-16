@@ -229,9 +229,34 @@ prune_runner_work() {
 
   echo "[disk-prune] scanning runner work dir: $RUNNER_WORK_DIR"
 
+  # If this runner has a live job, do not touch its work dir at all. Per-dir lsof
+  # is not sufficient: a job sitting between steps holds no open files, so its
+  # caches look idle and get deleted underneath it.
+  if pgrep -f "Runner.Worker" >/dev/null 2>&1; then
+    echo "[disk-prune] live Runner.Worker present - skipping $RUNNER_WORK_DIR entirely"
+    return 0
+  fi
+
   # Iterate top-level dirs (repo workspace dirs) and clean if not in use
   while IFS= read -r -d '' dir; do
     [ -d "$dir" ] || continue
+
+    # NEVER prune runner-internal state. These are not repo checkouts:
+    #   _actions  - resolved action code (actions/checkout@vN). Deleting it mid-run
+    #               causes "Can't find 'action.yml' ... under _work/_actions/...".
+    #   _temp     - includes _runner_file_commands (GITHUB_PATH/GITHUB_ENV writes);
+    #               deleting it causes "Missing file at path: .../add_path_<uuid>".
+    #   _tool     - hosted tool cache (Go/Node installs) the job resolves once.
+    #   _PipelineMapping / _diag - runner bookkeeping.
+    # Observed 2026-08-16 on nself-sentry: pruning these broke in-flight jobs
+    # across the org (plugins-pro govulncheck failed with both errors above), and
+    # was a likely cause of other intermittent CI failures the same day.
+    case "$(basename "$dir")" in
+      _actions|_temp|_tool|_PipelineMapping|_diag)
+        echo "[disk-prune] protected (runner internal): $dir"
+        continue
+        ;;
+    esac
 
     # Check if any process has open files in this dir (safe to clean if none)
     local in_use=0

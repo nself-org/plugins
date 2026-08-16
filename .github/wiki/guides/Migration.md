@@ -451,7 +451,7 @@ app.get('/api/subscriptions', async (req, reply) => {
   return reply.code(410).send({
     error: 'Gone',
     message: 'This endpoint has been removed in v2.0.0. Use /api/billing/subscriptions instead.',
-    migration_guide: 'https://docs.nself.org/plugins/stripe/migration-v2'
+    migration_guide: 'https://nself.org/docs/plugins/stripe/migration-v2'
   });
 });
 ```
