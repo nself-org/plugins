@@ -326,7 +326,7 @@ Score Breakdown:
   Group: 10/10
 ```
 
-When `--download` is specified, the command additionally:
+When `--download` is specified, the command :
 1. Fetches the magnet link (if not already available)
 2. Checks VPN status (if `VPN_REQUIRED=true`)
 3. Adds the torrent to the configured client

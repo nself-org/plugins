@@ -1,6 +1,6 @@
 # Compliance Plugin
 
-Comprehensive compliance and audit platform for GDPR, CCPA, HIPAA, SOC2, and PCI compliance management. Includes Data Subject Access Requests (DSARs), consent tracking, privacy policies, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting.
+ compliance and audit platform for GDPR, CCPA, HIPAA, SOC2, and PCI compliance management. Includes Data Subject Access Requests (DSARs), consent tracking, privacy policies, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting.
 
 ---
 
@@ -372,7 +372,7 @@ COMPLIANCE_APP_IDS=app1,app2,app3
 
 ## Database Schema
 
-The plugin creates **15 tables** for comprehensive compliance and audit tracking.
+The plugin creates **15 tables** for compliance and audit tracking.
 
 ### Compliance Tables (12 tables)
 
@@ -833,7 +833,7 @@ Webhook events sent from the audit system.
 
 ## CLI Commands
 
-The plugin provides comprehensive CLI commands for all compliance operations.
+The plugin provides CLI commands for all compliance operations.
 
 ### Plugin Management
 
@@ -844,7 +844,7 @@ nself plugin compliance init
 # Check plugin status
 nself plugin compliance status
 
-# View comprehensive statistics
+# View statistics
 nself plugin compliance stats
 ```
 
@@ -1264,7 +1264,7 @@ nself plugin compliance compliance report \
 
 ## REST API
 
-The plugin exposes a comprehensive REST API on port **3706** (configurable).
+The plugin exposes a REST API on port **3706** (configurable).
 
 ### Health & Status
 

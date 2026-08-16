@@ -1,6 +1,6 @@
 # Debugging Guide
 
-Comprehensive guide to debugging nself plugins, including logging, tracing, network debugging, and performance profiling.
+ guide to debugging nself plugins, including logging, tracing, network debugging, and performance profiling.
 
 ---
 
@@ -1281,7 +1281,7 @@ sdk.start();
 ### Health Checks
 
 ```typescript
-// Add comprehensive health endpoint
+// Add health endpoint
 fastify.get('/health', async (request, reply) => {
   const health = {
     status: 'ok',

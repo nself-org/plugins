@@ -1570,7 +1570,7 @@ vi.mock('@nself/plugin-utils', () => ({
 
 ### 8.6 Test Coverage
 
-**Aim for comprehensive coverage:**
+**Aim for coverage:**
 
 ```json
 {
@@ -1737,7 +1737,7 @@ async syncCustomers(): Promise<void> {
 
 ### 9.4 Health Checks
 
-**Implement comprehensive health checks:**
+**Implement health checks:**
 
 ```typescript
 // Basic liveness (is the app running?)
@@ -1930,7 +1930,7 @@ async syncCustomers(options?: {
 
 ### 10.2 README Files
 
-**Include comprehensive README for each plugin:**
+**Include README for each plugin:**
 
 ```markdown
 # Stripe Plugin
@@ -2399,7 +2399,7 @@ npm install stripe --workspace=@nself/stripe-plugin
 This Best Practices Guide covers the essential practices for developing nself plugins:
 
 1. **Code Organization**: Follow standardized structure and naming conventions
-2. **Error Handling**: Implement comprehensive error handling with proper logging
+2. **Error Handling**: Implement error handling with proper logging
 3. **Database Practices**: Use proper schema design, indexing, and transactions
 4. **API Integration**: Implement rate limiting, retry logic, and pagination
 5. **Webhook Handling**: Verify signatures, handle idempotency, and store events

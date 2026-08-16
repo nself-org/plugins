@@ -15,7 +15,7 @@ Real-time location sharing, history tracking, geofencing, and proximity queries
 
 ## Overview
 
-The Geolocation plugin provides comprehensive location tracking and geofencing capabilities for the nself platform. It enables real-time location sharing, historical location tracking, geofence management with enter/exit notifications, proximity-based queries, and emergency SOS triggers.
+The Geolocation plugin provides location tracking and geofencing capabilities for the nself platform. It enables real-time location sharing, historical location tracking, geofence management with enter/exit notifications, proximity-based queries, and emergency SOS triggers.
 
 This plugin is ideal for applications that need to track user locations, implement geofencing for attendance or delivery tracking, build proximity-based features, or provide safety monitoring with emergency alerts.
 

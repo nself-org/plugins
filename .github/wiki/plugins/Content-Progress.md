@@ -4,7 +4,7 @@ Track video, audio, and content playback progress with continue watching, watchl
 
 ## Overview
 
-The Content Progress plugin provides comprehensive tracking of user interactions with media content. It tracks playback positions, completion status, viewing history, watchlists, and favorites, enabling features like "Continue Watching" and personalized recommendations.
+The Content Progress plugin provides tracking of user interactions with media content. It tracks playback positions, completion status, viewing history, watchlists, and favorites, enabling features like "Continue Watching" and personalized recommendations.
 
 ### Key Features
 

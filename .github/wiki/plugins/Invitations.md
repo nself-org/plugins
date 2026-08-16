@@ -4,7 +4,7 @@ Invitation management system with email/SMS delivery, tracking, bulk sends, temp
 
 ## Overview
 
-The Invitations plugin provides a comprehensive invitation system for onboarding users, referrals, and access management. It supports customizable templates, bulk sending, expiration management, and detailed tracking of invitation lifecycle.
+The Invitations plugin provides a invitation system for onboarding users, referrals, and access management. It supports customizable templates, bulk sending, expiration management, and detailed tracking of invitation lifecycle.
 
 ### Key Features
 
@@ -700,7 +700,7 @@ Delete template.
 ### Statistics
 
 #### `GET /v1/stats`
-Get comprehensive statistics.
+Get statistics.
 
 **Response:**
 ```json

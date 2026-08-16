@@ -15,7 +15,7 @@ Document management and generation service with templates, versioning, and shari
 
 ## Overview
 
-The Documents plugin provides comprehensive document management capabilities including template-based document generation, versioning, sharing with expiration, and PDF rendering. It supports multiple template engines and storage providers for flexible deployment scenarios.
+The Documents plugin provides document management capabilities including template-based document generation, versioning, sharing with expiration, and PDF rendering. It supports multiple template engines and storage providers for flexible deployment scenarios.
 
 ### Key Features
 

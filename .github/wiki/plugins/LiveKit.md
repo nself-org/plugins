@@ -15,7 +15,7 @@ LiveKit voice/video infrastructure - room management, participant tracking, reco
 
 ## Overview
 
-The LiveKit plugin provides comprehensive voice and video infrastructure for nself applications through integration with LiveKit Server. It manages rooms, participants, recordings, egress jobs, access tokens, and quality metrics, offering a complete WebRTC-based communication platform.
+The LiveKit plugin provides voice and video infrastructure for nself applications through integration with LiveKit Server. It manages rooms, participants, recordings, egress jobs, access tokens, and quality metrics, offering a complete WebRTC-based communication platform.
 
 This plugin is essential for applications requiring real-time voice and video communication, enabling features like video conferencing, live streaming, webinars, and online collaboration.
 

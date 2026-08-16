@@ -20,7 +20,7 @@ The VPN Plugin enables secure VPN connections across 10 major providers with spe
 - ✅ **Leak Protection**: DNS, IP, IPv6, WebRTC leak detection
 - ✅ **Database-Backed**: Complete PostgreSQL schema with analytics
 - ✅ **REST API**: Full HTTP API for inter-plugin communication
-- ✅ **CLI**: Comprehensive command-line interface
+- ✅ **CLI**: command-line interface
 - ✅ **Torrent Integration**: WebTorrent with VPN interface binding
 
 ---
@@ -537,7 +537,7 @@ Automatically blocks all internet traffic if VPN drops:
 
 ### Leak Protection
 
-Comprehensive testing for:
+ testing for:
 - **DNS Leaks**: ISP DNS vs VPN DNS
 - **IP Leaks**: Real IP vs VPN IP
 - **IPv6 Leaks**: IPv6 should be blocked

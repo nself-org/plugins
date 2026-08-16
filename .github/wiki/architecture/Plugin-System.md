@@ -36,7 +36,7 @@ The nself plugin system is a modular, extensible architecture designed to sync e
 2. **Real-time Sync**: Webhooks update data within seconds of changes
 3. **Idempotent Operations**: All database operations use upsert patterns
 4. **Type Safety**: Full TypeScript coverage with strict mode enabled
-5. **Observability**: Comprehensive logging and statistics tracking
+5. **Observability**: logging and statistics tracking
 6. **Modularity**: Shared utilities minimize duplication across plugins
 
 ### Key Features
@@ -3175,7 +3175,7 @@ The nself plugin system is a production-ready, scalable architecture for syncing
 1. **Type Safety**: Full TypeScript coverage prevents runtime errors
 2. **Idempotency**: Upsert patterns allow safe re-runs
 3. **Real-time**: Webhooks keep data current within seconds
-4. **Observability**: Comprehensive logging and statistics
+4. **Observability**: logging and statistics
 5. **Security**: Signature verification, rate limiting, authentication
 6. **Modularity**: Shared utilities reduce duplication
 7. **Registry**: Centralized discovery and versioning

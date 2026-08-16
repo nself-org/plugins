@@ -1,6 +1,6 @@
 # Chat Plugin
 
-Complete chat and messaging system with conversations (direct, group, channel), threaded messages, reactions, read receipts, pinned messages, attachments, mentions, typing indicators, full-text search, and comprehensive moderation tools.
+Complete chat and messaging system with conversations (direct, group, channel), threaded messages, reactions, read receipts, pinned messages, attachments, mentions, typing indicators, full-text search, and moderation tools.
 
 | Property | Value |
 |----------|-------|

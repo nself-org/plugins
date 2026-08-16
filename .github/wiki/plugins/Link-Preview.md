@@ -23,7 +23,7 @@
 
 ## Overview
 
-The **Link Preview Plugin** provides URL metadata extraction with Open Graph, Twitter Cards, and oEmbed support. It enables automatic link preview generation, custom preview templates, URL blocklist management, and comprehensive analytics tracking.
+The **Link Preview Plugin** provides URL metadata extraction with Open Graph, Twitter Cards, and oEmbed support. It enables automatic link preview generation, custom preview templates, URL blocklist management, and analytics tracking.
 
 ### Key Features
 
@@ -201,7 +201,7 @@ LOG_LEVEL=info
 
 ## CLI Commands
 
-The `nself-link-preview` CLI provides comprehensive link preview management.
+The `nself-link-preview` CLI provides link preview management.
 
 ### Core Commands
 
@@ -546,7 +546,7 @@ Cleaned up 14 expired previews
 
 ## REST API
 
-The Link Preview Plugin exposes a comprehensive REST API on port `3718`.
+The Link Preview Plugin exposes a REST API on port `3718`.
 
 ### Base URL
 

@@ -1,6 +1,6 @@
 # TypeScript Plugin Development Guide
 
-A comprehensive guide for building nself plugins in TypeScript with 100% data sync capabilities.
+A guide for building nself plugins in TypeScript with 100% data sync capabilities.
 
 ## Table of Contents
 

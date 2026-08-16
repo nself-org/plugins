@@ -19,7 +19,7 @@ Media metadata enrichment from TMDB/IMDb with auto-matching and manual review qu
 
 ## Overview
 
-The TMDB plugin provides comprehensive media metadata enrichment by syncing with The Movie Database (TMDB) and optionally OMDb. It features intelligent filename parsing, confidence-based auto-matching, and a manual review queue for ambiguous matches.
+The TMDB plugin provides media metadata enrichment by syncing with The Movie Database (TMDB) and optionally OMDb. It features intelligent filename parsing, confidence-based auto-matching, and a manual review queue for ambiguous matches.
 
 ### Key Features
 - **Intelligent Matching**: Automatic filename parsing with confidence scoring (85% threshold for auto-accept)

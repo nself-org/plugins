@@ -25,7 +25,7 @@ Complete Stripe billing and payments integration for nself. Syncs all Stripe dat
 
 The Stripe plugin provides complete synchronization of your Stripe account data to a local PostgreSQL database. It supports:
 
-- **21 Database Tables** - Comprehensive coverage of Stripe objects
+- **21 Database Tables** - coverage of Stripe objects
 - **70+ Webhook Events** - Real-time updates for all Stripe events
 - **6 Analytics Views** - Pre-built SQL views for common metrics
 - **Full REST API** - Query synced data via HTTP endpoints

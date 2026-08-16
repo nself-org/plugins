@@ -15,7 +15,7 @@ Photo album management with EXIF extraction, tagging, face grouping, and thumbna
 
 ## Overview
 
-The Photos plugin provides a comprehensive photo management system for the nself platform. It enables users to organize photos into albums, extract and store EXIF metadata, create and manage tags (including keywords, people, locations, and events), detect and group faces, generate responsive thumbnails, and perform full-text search across photo metadata.
+The Photos plugin provides a photo management system for the nself platform. It enables users to organize photos into albums, extract and store EXIF metadata, create and manage tags (including keywords, people, locations, and events), detect and group faces, generate responsive thumbnails, and perform full-text search across photo metadata.
 
 This plugin is ideal for applications that need to manage user photo libraries, build photo galleries, implement facial recognition features, or provide advanced photo organization and search capabilities.
 
