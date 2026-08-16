@@ -108,11 +108,20 @@ WantedBy=multi-user.target
 
 | Script | Cron | What it does |
 |---|---|---|
-| `disk-guard.sh` | `*/5 * * * *` | Alert at >80%; aggressive prune + pause runner at >90% |
-| `disk-prune.sh` | `0 * * * *` | Hourly Docker prune + `_work` cleanup |
+| `disk-guard.sh` | `*/5 * * * *` | Alert + proactive `deep_reclaim` (delegates to disk-prune.sh) at >80%; same reclaim + critical alert at >90%. **Never pauses the runner.** |
+| `disk-prune.sh` | `*/10 * * * *` | Docker + builder prune, runner `_work`/tool-cache cleanup, Go/cargo build-cache sweep, regenerable-artifact sweep under `OPS_REPOS_DIR` |
 | `db-watchdog.sh` | `*/2 * * * *` | Restart postgres/redis on failure; emits alert |
 
 All three MUST be installed on any sentry box running CI. Install to `/opt/nself-ops/bin/` (symlink from the checked-out `free/ci/scripts/`).
+
+**Hard rule: disk-guard.sh MUST NEVER stop, pause, or otherwise touch the runner
+service.** A prior version paused the GitHub Actions runner at the critical
+threshold — this deadlocked ALL org CI for ~15 hours (2026-08-15/16, nself-sentry).
+A full disk fails the in-flight job, which retries automatically; a paused
+runner fails every job, forever, until a human notices and manually restarts
+it. Reclaim harder instead: disk-prune.sh's cadence was tightened from hourly
+to every 10 minutes, and disk-guard.sh now runs the same deep reclaim
+proactively at the 80% WARN threshold rather than waiting for 90% CRIT.
 
 ### Status page — disk health visibility
 
