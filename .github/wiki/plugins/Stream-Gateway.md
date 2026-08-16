@@ -28,7 +28,7 @@ The Stream Gateway plugin provides intelligent stream admission control and view
 - **Admission Rules** - Configurable access control rules
 - **Concurrency Limits** - Global and per-user stream limits
 - **Session Management** - Active session tracking with heartbeats
-- **Viewer Analytics** - Comprehensive viewing statistics
+- **Viewer Analytics** - viewing statistics
 - **Device Tracking** - Multi-device concurrency limits
 - **Real-time Monitoring** - Live viewer counts and analytics
 - **Full REST API** - Complete gateway operations

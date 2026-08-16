@@ -21,7 +21,7 @@ Unified observability platform for nself with Prometheus metrics, structured log
 
 ## Overview
 
-The Observability plugin provides a complete observability stack for nself applications with metrics, logs, and traces. It integrates with the Grafana stack for comprehensive monitoring and debugging.
+The Observability plugin provides a complete observability stack for nself applications with metrics, logs, and traces. It integrates with the Grafana stack for monitoring and debugging.
 
 ### Key Features
 

@@ -27,7 +27,7 @@
 
 ## Executive Summary
 
-This document presents the findings from a comprehensive security audit of the nself-plugins repository. The audit covered all three production plugins (Stripe, GitHub, Shopify), shared utilities, the Cloudflare Worker registry, and all GitHub Actions workflows.
+This document presents the findings from a security audit of the nself-plugins repository. The audit covered all three production plugins (Stripe, GitHub, Shopify), shared utilities, the Cloudflare Worker registry, and all GitHub Actions workflows.
 
 ### Overall Assessment
 

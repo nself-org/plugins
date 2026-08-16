@@ -27,7 +27,7 @@ Unified content moderation platform with profanity filtering, toxicity detection
 
 ## Overview
 
-The Moderation plugin provides a comprehensive, production-ready content moderation solution that combines multiple detection methods, automated decision-making, and manual review workflows. It syncs all moderation data to PostgreSQL and provides real-time webhook notifications.
+The Moderation plugin provides a , production-ready content moderation solution that combines multiple detection methods, automated decision-making, and manual review workflows. It syncs all moderation data to PostgreSQL and provides real-time webhook notifications.
 
 This is a **unified moderation platform** that consolidates:
 - **Profanity filtering** and toxicity detection
@@ -56,7 +56,7 @@ This is a **unified moderation platform** that consolidates:
 
 ### Moderation Tables
 
-The plugin creates **17 comprehensive tables**:
+The plugin creates **17 tables**:
 
 | Table | Purpose |
 |-------|---------|
@@ -131,7 +131,7 @@ The plugin creates **17 comprehensive tables**:
 - **Policy Priority**: Policies evaluated in priority order
 - **Override Support**: Manual overrides for specific content or users
 
-### 7. Comprehensive Reporting
+### 7. Reporting
 
 - **User Statistics**: Per-user violation counts, strikes, and actions
 - **Content Statistics**: Aggregate statistics by content type, severity, and outcome
@@ -361,7 +361,7 @@ MODERATION_APP_IDS=app1,app2,app3
 
 ### Complete Table Overview
 
-The Moderation plugin creates 17 tables for comprehensive content moderation:
+The Moderation plugin creates 17 tables for content moderation:
 
 1. **np_moderation_rules** - Custom rules with conditions and actions
 2. **np_moderation_wordlists** - Profanity and allowed word lists
@@ -605,7 +605,7 @@ nself plugin moderation user-status user_123 --actions
 
 ## REST API
 
-The moderation server exposes a comprehensive REST API on port 3704 (configurable).
+The moderation server exposes a REST API on port 3704 (configurable).
 
 ### Base URL
 

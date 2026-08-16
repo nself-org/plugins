@@ -118,7 +118,7 @@ Organized across 16 categories: **Admin**, **Authentication**, **Automation**, *
 | [chat](plugins/Chat) | 3401 | communication | Chat and messaging data management with conversation, messages, participants, and moderation |
 | [cloudflare](plugins/Cloudflare) | 3024 | infrastructure | Cloudflare zone, DNS, R2, cache, and analytics management |
 | [cms](plugins/Cms) | 3501 | content | Headless CMS plugin with content types, posts, categories, tags, and versioning |
-| [compliance](plugins/Compliance) | 3211 | compliance | Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting |
+| [compliance](plugins/Compliance) | 3211 | compliance | compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting |
 | [content-acquisition](plugins/Content-Acquisition) | 3202 | media | Automated content acquisition with RSS monitoring, release calendar, and download rules engine |
 | [content-progress](plugins/Content-Progress) | 3022 | media | Track video, audio, and content playback progress with continue watching, watchlists, and favorites |
 | [ddns](plugins/Ddns) | 3217 | networking | Dynamic DNS updater with multi-provider support and external IP monitoring |
@@ -156,13 +156,13 @@ Organized across 16 categories: **Admin**, **Authentication**, **Automation**, *
 | [search](plugins/Search) | 3110 | infrastructure | Full-text search engine with PostgreSQL FTS and MeiliSearch support |
 | [shopify](plugins/Shopify) | 3003 | commerce | Shopify store, orders, and product synchronization |
 | [social](plugins/Social) | 3502 | content | Universal social features plugin with posts, comments, reactions, follows, and bookmarks |
-| [sports](plugins/Sports) | 3035 | sports | Comprehensive sports data plugin with live scores, schedules, standings, team rosters, player stats, and real-time game updates |
+| [sports](plugins/Sports) | 3035 | sports | sports data plugin with live scores, schedules, standings, team rosters, player stats, and real-time game updates |
 | [stream-gateway](plugins/Stream-Gateway) | 3601 | streaming | Stream admission and governance service |
 | [streaming](plugins/Streaming) | 3711 | communication | Live streaming and broadcasting with RTMP/HLS, viewer analytics, chat integration, multi-quality streams, DVR playback, and moderation |
 | [stripe](plugins/Stripe) | 3001 | commerce | Stripe billing data sync with webhook handling |
 | [subtitle-manager](plugins/Subtitle-Manager) | 3204 | media | Subtitle search, download, and sync verification via OpenSubtitles |
 | [support](plugins/Support) | 3111 | content | Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses, knowledge base, analytics |
-| [tmdb](plugins/Tmdb) | 3032 | media | Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support |
+| [tmdb](plugins/Tmdb) | 3032 | media | media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support |
 | [tokens](plugins/Tokens) | 3107 | media | Secure content delivery tokens, HLS encryption key management, and entitlement checks |
 | [torrent-manager](plugins/Torrent-Manager) | 3201 | media | Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement |
 | [vpn](plugins/Vpn) | 3200 | authentication | Multi-provider VPN management (3 VPN providers) and torrent downloads with P2P optimization, server carousel, kill switch, and leak protection |

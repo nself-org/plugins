@@ -2212,7 +2212,7 @@ groups:
 
 ### Health Check Endpoint
 
-Comprehensive health check for monitoring:
+ health check for monitoring:
 
 ```typescript
 server.get('/health', async (request, reply) => {

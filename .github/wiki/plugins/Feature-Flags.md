@@ -4,7 +4,7 @@ Feature flags service with targeting rules, user segments, percentage rollouts, 
 
 ## Overview
 
-The Feature Flags plugin provides a comprehensive feature flag management system for controlling feature releases, A/B testing, and gradual rollouts. It supports complex targeting rules, user segmentation, percentage-based rollouts, and real-time flag evaluation with caching.
+The Feature Flags plugin provides a feature flag management system for controlling feature releases, A/B testing, and gradual rollouts. It supports complex targeting rules, user segmentation, percentage-based rollouts, and real-time flag evaluation with caching.
 
 ### Key Features
 
@@ -655,7 +655,7 @@ List evaluation history.
 ### Statistics
 
 #### `GET /v1/stats`
-Get comprehensive statistics.
+Get statistics.
 
 **Response:**
 ```json

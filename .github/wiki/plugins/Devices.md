@@ -4,7 +4,7 @@ IoT device enrollment, trust management, command dispatch, and ingest session tr
 
 ## Overview
 
-The Devices plugin provides comprehensive device management for IoT deployments, streaming infrastructure, and device-based services. It handles secure device enrollment, certificate-based trust, command dispatch, telemetry tracking, and ingest session management.
+The Devices plugin provides device management for IoT deployments, streaming infrastructure, and device-based services. It handles secure device enrollment, certificate-based trust, command dispatch, telemetry tracking, and ingest session management.
 
 ### Key Features
 

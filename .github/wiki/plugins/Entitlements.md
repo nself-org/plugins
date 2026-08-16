@@ -36,7 +36,7 @@ The Entitlements plugin provides a complete subscription management, feature gat
 - **Custom Pricing**: per-subscription price overrides and custom quotas
 - **Feature Grants**: time-bound manual feature grants that override subscription features
 - **Quota Management**: track usage with automatic resets (daily, weekly, monthly, yearly, billing period)
-- **Event Logging**: comprehensive audit trail of all subscription and entitlement changes
+- **Event Logging**: audit trail of all subscription and entitlement changes
 - **MRR Calculation**: automatic Monthly Recurring Revenue tracking
 - **Multi-Account Support**: full isolation with `source_account_id` column across all tables
 

@@ -1,6 +1,6 @@
 # Frequently Asked Questions (FAQ)
 
-Comprehensive answers to common questions about nself plugins.
+ answers to common questions about nself plugins.
 
 ---
 

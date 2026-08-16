@@ -15,7 +15,7 @@ Cloudflare zone, DNS, R2, cache, and analytics management
 
 ## Overview
 
-The Cloudflare plugin provides comprehensive management and monitoring capabilities for Cloudflare zones, DNS records, R2 object storage, CDN cache purging, and analytics. It syncs Cloudflare configuration and metrics to your local PostgreSQL database, enabling offline queries, historical analytics, and automation workflows.
+The Cloudflare plugin provides management and monitoring capabilities for Cloudflare zones, DNS records, R2 object storage, CDN cache purging, and analytics. It syncs Cloudflare configuration and metrics to your local PostgreSQL database, enabling offline queries, historical analytics, and automation workflows.
 
 This plugin is essential for applications that need to manage Cloudflare infrastructure programmatically, automate DNS management, monitor CDN performance, or integrate Cloudflare analytics into custom dashboards.
 

@@ -1,6 +1,6 @@
 # Sports Plugin
 
-Comprehensive sports data integration for nself. Syncs sports schedules, live scores, team rosters, player stats, and league standings from multiple providers with real-time webhook support.
+ sports data integration for nself. Syncs sports schedules, live scores, team rosters, player stats, and league standings from multiple providers with real-time webhook support.
 
 ---
 
@@ -37,7 +37,7 @@ The Sports plugin provides unified synchronization of sports data from multiple 
 - **Schedule Locking** - Prevent duplicate recordings with automatic lock management
 - **Flexible Sync Options** - Full sync or incremental updates by provider/sport/league
 - **REST API** - Query all sports data via HTTP endpoints
-- **CLI Interface** - Comprehensive command-line management
+- **CLI Interface** - command-line management
 
 ### Supported Leagues
 
@@ -487,7 +487,7 @@ nself plugin sports server --debug
 
 ## REST API
 
-The plugin exposes a comprehensive REST API when running the server.
+The plugin exposes a REST API when running the server.
 
 ### Base URL
 

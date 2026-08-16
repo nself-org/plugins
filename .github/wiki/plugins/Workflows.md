@@ -15,7 +15,7 @@ Automation engine providing trigger-action workflow chains, conditional logic, s
 
 ## Overview
 
-The Workflows plugin provides a powerful automation engine for nself applications. It enables users to create trigger-action workflows with conditional logic, scheduled execution, approval gates, cross-plugin integrations, and webhook delivery for comprehensive process automation.
+The Workflows plugin provides a automation engine for nself applications. It enables users to create trigger-action workflows with conditional logic, scheduled execution, approval gates, cross-plugin integrations, and webhook delivery for process automation.
 
 This plugin is essential for applications requiring business process automation, notification systems, data synchronization, and complex multi-step operations.
 

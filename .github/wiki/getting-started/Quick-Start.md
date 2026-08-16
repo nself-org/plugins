@@ -591,7 +591,7 @@ Now that your data is synced, let's explore different ways to query it.
 
 ### Method 1: Direct SQL
 
-The most powerful way to query your data:
+The most way to query your data:
 
 ```bash
 # Connect to database
