@@ -105,7 +105,6 @@ jobs:
           delete-branch: true
           add-paths: |
             **/*.md
-            **/*.mdx
             .claude/qa/findings/*.json
 
       - name: Upload JSON report
