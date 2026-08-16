@@ -19,7 +19,7 @@ Geocoding and location services plugin - forward/reverse geocoding, place search
 
 ## Overview
 
-The Geocoding plugin provides comprehensive location services for the nself platform. It enables forward and reverse geocoding, place search, geofencing capabilities, and maintains a high-performance cache to minimize external API costs.
+The Geocoding plugin provides location services for the nself platform. It enables forward and reverse geocoding, place search, geofencing capabilities, and maintains a high-performance cache to minimize external API costs.
 
 ### Key Features
 

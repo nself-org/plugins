@@ -15,7 +15,7 @@ Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses,
 
 ## Overview
 
-The Support plugin provides a complete helpdesk and customer support system for nself-chat applications. It includes ticketing, SLA management, team routing, canned responses, knowledge base articles, satisfaction surveys, and comprehensive analytics for support operations.
+The Support plugin provides a complete helpdesk and customer support system for nself-chat applications. It includes ticketing, SLA management, team routing, canned responses, knowledge base articles, satisfaction surveys, and analytics for support operations.
 
 This plugin is essential for applications requiring structured customer support with SLA tracking, agent performance monitoring, and knowledge management.
 

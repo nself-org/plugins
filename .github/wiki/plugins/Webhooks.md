@@ -1,6 +1,6 @@
 # Webhooks Plugin
 
-Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue for nself. Reliably deliver events from your application to external endpoints with automatic retries and comprehensive delivery tracking.
+Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue for nself. Reliably deliver events from your application to external endpoints with automatic retries and delivery tracking.
 
 ---
 
@@ -22,7 +22,7 @@ Outbound webhook delivery service with retry logic, HMAC signing, and dead-lette
 
 ## Overview
 
-The Webhooks plugin provides a robust outbound webhook delivery system for sending events from your nself application to external HTTP endpoints. It handles the complexity of webhook delivery including retries, HMAC signature verification, concurrent delivery management, and dead-letter queuing for failed deliveries.
+The Webhooks plugin provides a outbound webhook delivery system for sending events from your nself application to external HTTP endpoints. It handles the complexity of webhook delivery including retries, HMAC signature verification, concurrent delivery management, and dead-letter queuing for failed deliveries.
 
 ### Key Features
 

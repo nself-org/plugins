@@ -1,6 +1,6 @@
 # File Processing Plugin
 
-Comprehensive file processing with thumbnail generation, image optimization, video thumbnails, and virus scanning for nself.
+ file processing with thumbnail generation, image optimization, video thumbnails, and virus scanning for nself.
 
 ---
 
@@ -641,7 +641,7 @@ ffmpeg -i input.mp4 -threads 8 -c:v libx264 output.mp4
 
 ### Storage Backends Comparison
 
-Comprehensive comparison of supported storage providers:
+ comparison of supported storage providers:
 
 | Provider | Egress Cost | Storage Cost | Read Latency | Write Latency | Best For |
 |----------|-------------|--------------|--------------|---------------|----------|
@@ -849,7 +849,7 @@ await storage.uploadLarge({
 
 ### File Validation
 
-Comprehensive file validation prevents malicious uploads and processing errors.
+ file validation prevents malicious uploads and processing errors.
 
 #### MIME Type Validation
 

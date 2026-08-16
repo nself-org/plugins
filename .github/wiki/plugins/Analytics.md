@@ -304,7 +304,7 @@ Standard webhook event tracking table with `id`, `source_account_id`, `event_typ
 
 ## Dashboard
 
-The `GET /v1/dashboard` endpoint returns a comprehensive view:
+The `GET /v1/dashboard` endpoint returns a view:
 
 | Field | Description |
 |-------|-------------|

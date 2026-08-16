@@ -20,7 +20,7 @@ Blockchain integration, NFT support, token-gated access, DAO governance, and dec
 
 ## Overview
 
-The Web3 plugin provides comprehensive blockchain integration for the nself platform. It enables wallet management, NFT tracking, token-gated access control, DAO governance, and blockchain event monitoring across multiple chains.
+The Web3 plugin provides blockchain integration for the nself platform. It enables wallet management, NFT tracking, token-gated access control, DAO governance, and blockchain event monitoring across multiple chains.
 
 ### Key Features
 

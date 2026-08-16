@@ -23,7 +23,7 @@ Complete PayPal payment data integration for nself. Syncs all PayPal data to Pos
 
 The PayPal plugin provides complete synchronization of your PayPal account data to a local PostgreSQL database. It supports:
 
-- **14 Database Tables** - Comprehensive coverage of PayPal objects
+- **14 Database Tables** - coverage of PayPal objects
 - **24 Webhook Events** - Real-time updates via PayPal postback verification
 - **6 Analytics Views** - Pre-built SQL views for common metrics
 - **Full REST API** - Query synced data via HTTP endpoints

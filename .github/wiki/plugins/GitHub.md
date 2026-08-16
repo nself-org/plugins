@@ -1,6 +1,6 @@
 # GitHub Plugin for nself
 
-Comprehensive GitHub integration that syncs repositories, issues, pull requests, commits, releases, and workflow data to your local PostgreSQL database with real-time webhook support.
+ GitHub integration that syncs repositories, issues, pull requests, commits, releases, and workflow data to your local PostgreSQL database with real-time webhook support.
 
 ## Table of Contents
 

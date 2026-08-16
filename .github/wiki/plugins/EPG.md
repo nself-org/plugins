@@ -15,7 +15,7 @@ Electronic program guide with XMLTV import, channel management, and schedule que
 
 ## Overview
 
-The EPG (Electronic Program Guide) plugin provides comprehensive TV guide functionality with support for XMLTV feeds, Schedules Direct, channel management, and program schedule queries. It's ideal for IPTV applications, streaming services, or any platform that needs to display TV listings.
+The EPG (Electronic Program Guide) plugin provides TV guide functionality with support for XMLTV feeds, Schedules Direct, channel management, and program schedule queries. It's ideal for IPTV applications, streaming services, or any platform that needs to display TV listings.
 
 ### Key Features
 

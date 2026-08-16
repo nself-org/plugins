@@ -1,6 +1,6 @@
 # Admin API Plugin
 
-Comprehensive admin dashboard backend for nself applications with system health monitoring, user management, metrics, and audit logging.
+ admin dashboard backend for nself applications with system health monitoring, user management, metrics, and audit logging.
 
 ---
 

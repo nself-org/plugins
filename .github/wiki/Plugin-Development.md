@@ -273,7 +273,7 @@ Minimum fields:
 }
 ```
 
-Pro plugins additionally set:
+Pro plugins set:
 
 ```json
 {

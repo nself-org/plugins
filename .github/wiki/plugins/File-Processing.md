@@ -1,6 +1,6 @@
 # File Processing Plugin
 
-Comprehensive file processing with thumbnail generation, image optimization, video thumbnails, and virus scanning. Works with any storage provider (MinIO, S3, GCS, R2, Azure, B2).
+ file processing with thumbnail generation, image optimization, video thumbnails, and virus scanning. Works with any storage provider (MinIO, S3, GCS, R2, Azure, B2).
 
 ---
 
@@ -21,7 +21,7 @@ Comprehensive file processing with thumbnail generation, image optimization, vid
 
 ## Overview
 
-The File Processing plugin provides background processing for uploaded files with comprehensive support for images, videos, and documents. It supports:
+The File Processing plugin provides background processing for uploaded files with support for images, videos, and documents. It supports:
 
 - **Thumbnail Generation** - Multiple sizes (100x100, 400x400, 1200x1200 by default)
 - **Image Optimization** - Compress and optimize images with Sharp

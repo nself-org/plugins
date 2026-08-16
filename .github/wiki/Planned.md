@@ -445,7 +445,7 @@ These plugins share common patterns for email event tracking.
 
 **Why SendGrid?**
 - Industry standard for transactional email
-- Comprehensive event tracking
+- event tracking
 - High volume support
 
 **Data to Sync**:
@@ -470,7 +470,7 @@ These plugins share common patterns for email event tracking.
 
 **Why Postmark?**
 - Focused on transactional email
-- Best-in-class deliverability
+- deliverability
 - Simple, reliable webhooks
 
 **Data to Sync**:

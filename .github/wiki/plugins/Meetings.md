@@ -15,7 +15,7 @@ Calendar integration and meeting management with room booking, Google/Outlook sy
 
 ## Overview
 
-The Meetings plugin provides comprehensive calendar and meeting management for nself applications. It supports room booking, external calendar synchronization (Google Calendar, Outlook), recurring meetings, waitlists, availability tracking, and meeting reminders.
+The Meetings plugin provides calendar and meeting management for nself applications. It supports room booking, external calendar synchronization (Google Calendar, Outlook), recurring meetings, waitlists, availability tracking, and meeting reminders.
 
 This plugin is essential for applications requiring coordinated scheduling, resource management, and calendar integrations.
 

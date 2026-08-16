@@ -299,7 +299,7 @@ Before submitting a plugin or PR, verify:
 - [ ] plugin.json is valid JSON
 - [ ] Environment variables follow naming convention
 - [ ] README.md exists with setup instructions
-- [ ] Wiki documentation is comprehensive
+- [ ] Wiki documentation is 
 
 ### Automated Validation
 

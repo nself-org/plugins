@@ -15,7 +15,7 @@ Knowledge base with documentation, FAQ, semantic search, versioning, translation
 
 ## Overview
 
-The Knowledge Base plugin provides a comprehensive documentation and knowledge management system for nself applications. It supports rich content creation, versioning, translations, semantic search, categories, comments, review workflows, and detailed analytics.
+The Knowledge Base plugin provides a documentation and knowledge management system for nself applications. It supports rich content creation, versioning, translations, semantic search, categories, comments, review workflows, and detailed analytics.
 
 This plugin is essential for applications requiring structured documentation, FAQs, help centers, wikis, or internal knowledge repositories.
 
