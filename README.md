@@ -179,9 +179,9 @@ With nself Pro Plugins, you self-host everything. The Basic tier ($0.99/mo or $9
 
 ## Documentation
 
-- [Plugin development guide](https://docs.nself.org/plugins)
+- [Plugin development guide](https://nself.org/docs/plugins)
 - [Full plugin catalog](https://nself.org/plugins)
-- [nself CLI docs](https://docs.nself.org)
+- [nself CLI docs](https://nself.org/docs)
 
 ## License
 

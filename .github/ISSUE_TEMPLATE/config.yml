@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://docs.nself.org
+    url: https://nself.org/docs
     about: Check the docs first — most questions are answered there
   - name: GitHub Discussions
     url: https://github.com/nself-org/plugins/discussions

@@ -14,4 +14,4 @@ groups:
           category: synthetic
         annotations:
           summary: "Synthetic flow '{{ $labels.flow }}' failed 3+ consecutive times"
-          runbook_url: "https://docs.nself.org/runbooks/synthetic-check"
+          runbook_url: "https://nself.org/docs/runbooks/synthetic-check"

@@ -17,4 +17,4 @@ groups:
             - Long-running job that exceeds its schedule interval
             - Hung job (check pg_stat_activity for advisory locks)
             - Network/endpoint slowness causing timeouts
-          runbook: "https://docs.nself.org/plugins/cron/overlap-runbook"
+          runbook: "https://nself.org/docs/plugins/cron/overlap-runbook"

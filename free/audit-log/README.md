@@ -46,5 +46,5 @@ The `user` role `select` permission uses an `_or` clause:
 
 ## See also
 
-- [nSelf audit-log plugin page](https://docs.nself.org/plugins/audit-log)
-- [Multi-tenant conventions](https://docs.nself.org/multi-tenancy/conventions)
+- [nSelf audit-log plugin page](https://nself.org/docs/plugins/audit-log)
+- [Multi-tenant conventions](https://nself.org/docs/multi-tenancy/conventions)

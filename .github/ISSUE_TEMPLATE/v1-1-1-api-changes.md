@@ -38,7 +38,7 @@ assignees: []
 
 - [CHANGELOG.md](../blob/main/CHANGELOG.md) — full v1.1.1 diff
 - [nSelf v1.0.9 LTS release notes](https://nself.org/blog/v1-0-9-lts)
-- [Plugin development guide](https://docs.nself.org/plugins/development)
+- [Plugin development guide](https://nself.org/docs/plugins/development)
 
 ---
 
