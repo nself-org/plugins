@@ -171,6 +171,28 @@ prune_build_caches() {
     go clean -cache -modcache 2>/dev/null || true
   fi
 
+  # Per-runner GOPATHs. Each self-hosted runner sets its own GOPATH inside its
+  # runner directory, so neither the /home/*/.cache/go-build glob above nor
+  # `go clean -modcache` (which only touches the invoking user's GOPATH) ever
+  # reclaims them. On nself-sentry that was 4 runners x ~4.8G = ~19G of the
+  # 150G disk, never freed, and the single largest contributor to the box
+  # sitting at 86-88% while the alerts kept firing.
+  #
+  # Guarded on live workers for the same reason prune_runner_work is: deleting
+  # a module cache under a running Go job fails it mid-build. Skipping here
+  # only defers the reclaim to the next idle run.
+  if pgrep -f "Runner.Worker" >/dev/null 2>&1; then
+    echo "[disk-prune] live Runner.Worker present - skipping per-runner GOPATHs"
+  else
+    local rg
+    for rg in /home/*/actions-runner*/go /home/*/actions-runner*/.cache/go-build; do
+      if [ -d "$rg" ]; then
+        echo "[disk-prune] cleaning per-runner Go cache: $rg"
+        rm -rf "${rg:?}"/* 2>/dev/null || true
+      fi
+    done
+  fi
+
   local cc
   for cc in /root/.cargo /home/*/.cargo; do
     if [ -d "$cc/registry/cache" ]; then
