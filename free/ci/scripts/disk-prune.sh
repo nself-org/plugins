@@ -191,8 +191,14 @@ prune_build_caches() {
   # A Runner.Worker's argv contains its own runner directory
   # (/home/<user>/actions-runner-N/bin.<ver>/Runner.Worker ...), so busy
   # runners can be identified precisely rather than inferred.
+  # Match Runner.Worker ONLY. Runner.Listener runs continuously on every runner
+  # whether idle or busy, and its argv also contains the runner directory, so a
+  # bare directory match reports every runner as busy on every pass and the sweep
+  # never runs at all. Measured on nself-sentry: 9 argv matches per runner, of
+  # which exactly 1 was a real Runner.Worker. That bug let 41-day-old caches reach
+  # ~10G per runner and held the box at 94-95% while alerting every 5 minutes.
   local busy_dirs
-  busy_dirs=$(ps -eo args 2>/dev/null | grep -oE '/home/[^/]+/actions-runner[^/]*/' | sort -u)
+  busy_dirs=$(ps -eo args 2>/dev/null | grep 'Runner\.Worker' | grep -oE '/home/[^/]+/actions-runner[^/]*/' | sort -u)
 
   local rd
   for rd in /home/*/actions-runner*/; do
@@ -203,7 +209,7 @@ prune_build_caches() {
       continue
     fi
     local sub
-    for sub in "${rd}go" "${rd}.cache/go-build"; do
+    for sub in "${rd}go" "${rd}.cache/go-build" "${rd}.cache/grype"; do
       if [ -d "$sub" ]; then
         echo "[disk-prune] cleaning per-runner Go cache: $sub"
         rm -rf "${sub:?}"/* 2>/dev/null || true
