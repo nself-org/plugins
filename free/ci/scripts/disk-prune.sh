@@ -181,17 +181,35 @@ prune_build_caches() {
   # Guarded on live workers for the same reason prune_runner_work is: deleting
   # a module cache under a running Go job fails it mid-build. Skipping here
   # only defers the reclaim to the next idle run.
-  if pgrep -f "Runner.Worker" >/dev/null 2>&1; then
-    echo "[disk-prune] live Runner.Worker present - skipping per-runner GOPATHs"
-  else
-    local rg
-    for rg in /home/*/actions-runner*/go /home/*/actions-runner*/.cache/go-build; do
-      if [ -d "$rg" ]; then
-        echo "[disk-prune] cleaning per-runner Go cache: $rg"
-        rm -rf "${rg:?}"/* 2>/dev/null || true
+  # Per-RUNNER granularity, deliberately NOT a single global "any worker live"
+  # guard. On a continuously busy box the global form never fires even once:
+  # observed on nself-sentry at 94% disk with all 4 runners busy, where the
+  # sweep skipped every pass while ~19G of GOPATH sat unreclaimed. Skipping
+  # only the runners that are actually executing a job still frees the idle
+  # ones, which is what keeps the box off the disk-full alert.
+  #
+  # A Runner.Worker's argv contains its own runner directory
+  # (/home/<user>/actions-runner-N/bin.<ver>/Runner.Worker ...), so busy
+  # runners can be identified precisely rather than inferred.
+  local busy_dirs
+  busy_dirs=$(ps -eo args 2>/dev/null | grep -oE '/home/[^/]+/actions-runner[^/]*/' | sort -u)
+
+  local rd
+  for rd in /home/*/actions-runner*/; do
+    [ -d "$rd" ] || continue
+    case "$rd" in */actions-runner*/) ;; *) continue ;; esac
+    if [ -n "$busy_dirs" ] && printf '%s\n' "$busy_dirs" | grep -qxF "$rd"; then
+      echo "[disk-prune] skip (job running): ${rd}go"
+      continue
+    fi
+    local sub
+    for sub in "${rd}go" "${rd}.cache/go-build"; do
+      if [ -d "$sub" ]; then
+        echo "[disk-prune] cleaning per-runner Go cache: $sub"
+        rm -rf "${sub:?}"/* 2>/dev/null || true
       fi
     done
-  fi
+  done
 
   local cc
   for cc in /root/.cargo /home/*/.cargo; do
