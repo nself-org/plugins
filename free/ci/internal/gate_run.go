@@ -92,6 +92,26 @@ func Run(cfg Config) (*Result, error) {
 	}
 
 	// 7. Aggregate pass/fail.
+	//
+	// A run that executed no gates must NOT pass. The loop below is vacuously
+	// true on an empty slice, so a repo whose scripts the detector could not
+	// find reported "Overall: PASSED (0s)" having verified nothing. As a
+	// required status check that silently green-lights every commit, which is
+	// strictly worse than failing.
+	if len(res.Gates) == 0 {
+		res.Passed = false
+		res.Gates = append(res.Gates, GateResult{
+			Name:   "gate:none-detected",
+			Passed: false,
+			Output: "No gates ran for this repository.\n" +
+				"The stack was detected but no lint/test/build steps were found.\n" +
+				"For a pnpm/npm workspace, check that member packages declare scripts.\n" +
+				"Passing with zero gates would report success without verifying anything.",
+		})
+		res.Elapsed = time.Since(start)
+		return res, nil
+	}
+
 	res.Passed = true
 	for _, g := range res.Gates {
 		if !g.Passed {

@@ -24,7 +24,16 @@ func runGitleaks(root string, timeout int, verbose bool) GateResult {
 		}
 	}
 
-	args := []string{"detect", "--source", root, "--no-git", "--exit-code", "1"}
+	// Scan the git working tree, not the raw filesystem. --no-git made gitleaks
+	// walk node_modules and every gitignored directory: measured 2.27 GB and 47
+	// findings on one Node repo, all dependency false positives, and 80s of an
+	// 81s run. Without it gitleaks respects .gitignore and scans tracked content.
+	args := []string{"detect", "--source", root, "--exit-code", "1"}
+	if !isGitRepo(root) {
+		// Not a checkout (rare — e.g. an exported tarball). Fall back to a
+		// filesystem scan so the gate still runs, and exclude the usual noise.
+		args = append(args, "--no-git")
+	}
 	if configFlag != "" {
 		args = append(args, "--config", configFlag)
 	}
@@ -50,6 +59,29 @@ func runNodeGates(root string, timeout int, verbose bool) []GateResult {
 	}
 
 	pkg := loadPackageJSON(root)
+
+	// A pnpm/npm workspace keeps its real scripts in member packages, not the
+	// root package.json. Reading only the root made whole repos run ZERO gates
+	// and still report PASSED. Recurse when the root has no script of its own
+	// but a member does.
+	if members := workspaceMembers(root); len(members) > 0 {
+		var gates []GateResult
+		for _, script := range []string{"lint", "typecheck", "test", "build"} {
+			if hasScript(pkg, script) {
+				gates = append(gates, runStep("node:"+script, root, timeout, verbose, pm, "run", script))
+				continue
+			}
+			if anyMemberHasScript(members, script) {
+				// --if-present so members without the script are skipped rather
+				// than failing the whole recursive run.
+				gates = append(gates, runStep("node:"+script+" (workspace)", root, timeout, verbose,
+					pm, "-r", "--if-present", "run", script))
+			}
+		}
+		if len(gates) > 0 {
+			return gates
+		}
+	}
 
 	var gates []GateResult
 	if hasScript(pkg, "lint") {
