@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 32,
-  "last_updated": "2026-06-30",
+  "plugins_count": 33,
+  "last_updated": "2026-08-23",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 32 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 33 MIT-licensed plugins.",
   "plugins": {
     "audit-log": {
       "version": "1.0.0",
@@ -224,6 +224,37 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "dogfood": {
+      "version": "1.0.0",
+      "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
+      "category": "operations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/dogfood-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/dogfood/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "dogfood",
+        "audit",
+        "ops",
+        "production",
+        "health"
+      ],
+      "dependencies": [],
+      "name": "dogfood",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-dogfood"
       }
     },
     "donorbox": {
