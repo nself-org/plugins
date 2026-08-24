@@ -1,0 +1,54 @@
+{
+  "name": "federation",
+  "version": "1.0.0",
+  "description": "Manage GraphQL Federation: compose an Apollo Router supergraph from installed plugin subgraphs, check subgraph health, and introspect the composed schema.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-federation",
+  "category": "infrastructure",
+  "tags": [
+    "federation",
+    "graphql",
+    "apollo",
+    "supergraph",
+    "hasura"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "compose": "Re-compose the supergraph schema from installed plugin subgraphs",
+    "status": "Show subgraph health and schema composition state",
+    "introspect": "Print the full supergraph schema to stdout"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_FEDERATION",
+      "NSELF_PLUGIN_DIR",
+      "HASURA_PORT",
+      "NSELF_LEGACY_ENV_ORDER"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables of its own. `nself plugin install federation` must place the built nself-federation binary at ~/.nself/plugins/bin/nself-federation, where internal/plugin/router.go's ProxyCommand execs it for `nself federation <args>` with stdio inherited. Extracted from cli/cmd/commands/federation.go under CLI-R11. Federation is opt-in (NSELF_FEDERATION=true) and not license-gated, so this is a free plugin."
+}

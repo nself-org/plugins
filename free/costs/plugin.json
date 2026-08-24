@@ -1,0 +1,48 @@
+{
+  "name": "costs",
+  "version": "1.0.0",
+  "description": "Show estimated per-install operational costs: Hetzner VPS, Cloudflare, Vercel, Stripe fees, and installed paid plugin licenses.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-costs",
+  "category": "operations",
+  "tags": [
+    "costs",
+    "billing",
+    "ops"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "costs": "Show an itemized breakdown of estimated monthly costs"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "HETZNER_SERVER_TYPE",
+      "NSELF_PLUGIN_DIR"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install costs` must place the built nself-costs binary at ~/.nself/plugins/bin/nself-costs, where internal/plugin/router.go's ProxyCommand execs it for `nself costs <args>` with stdio inherited. Extracted from cli/cmd/commands/costs.go under CLI-R11. The core CLI's internal/plugin.ListInstalled() is unreachable across the module boundary, so this plugin's internal/plugininfo package reimplements only the narrow read it needs (plugin.json's tier/requires_license/licenseType fields) rather than the full manifest validation internal/plugin performs at install time — see that package's doc comment for the exact scope of the simplification."
+}

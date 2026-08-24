@@ -13,6 +13,11 @@
 // Constraints: no dependency on any github.com/nself-org/cli/internal/*
 // package — those are unreachable from outside the cli module, and the
 // PATH-hijack defence in router.go means this binary must stand on its own.
+// SilenceUsage/SilenceErrors mirror core's RootCmd (cmd/commands/root.go):
+// without them cobra prints its own "Error: ..." plus a usage block on every
+// RunE error, then main() prints "Error: ..." again — a fidelity bug found
+// during the CLI-R11 mail/waf/encryption/federation slices and backfilled
+// here since every later extraction copies this file as its template.
 package main
 
 import (
@@ -25,6 +30,8 @@ var rootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func init() {
