@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 49,
+  "plugins_count": 50,
   "last_updated": "2026-08-24",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 49 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 50 MIT-licensed plugins.",
   "plugins": {
     "ai-studio": {
       "version": "1.0.0",
@@ -823,6 +823,40 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "infra": {
+      "version": "1.0.0",
+      "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
+      "category": "deploy",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/infra-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/infra/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "infra",
+        "terraform",
+        "provisioning",
+        "deploy",
+        "hetzner",
+        "aws",
+        "gcp",
+        "azure"
+      ],
+      "dependencies": [],
+      "name": "infra",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-infra"
       }
     },
     "invitations": {
