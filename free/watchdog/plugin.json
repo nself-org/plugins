@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-watchdog",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "watchdog",
     "self-healing",
@@ -58,5 +58,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install watchdog` must place the built nself-watchdog binary at ~/.nself/plugins/bin/nself-watchdog, where internal/plugin/router.go's ProxyCommand execs it for `nself watchdog <args>` with stdio inherited. Extracted from cli/cmd/commands/watchdog.go and cli/internal/watchdog/ under CLI-R11. internal/watchdog depended on internal/health.DockerClient (a Docker-CLI shell-exec adapter), which lives in a file cli/cmd/commands/start.go also uses and therefore could not move — so this plugin reimplements that narrow adapter (docker ps/inspect/restart) locally in internal/watchdog/docker.go rather than forking internal/health's health-check engine. internal/watchdog's escalation.go also used internal/httptimeout, replaced with an inline *http.Client at the same 30s default."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install watchdog` must place the built nself-watchdog binary at ~/.nself/plugins/bin/nself-watchdog, where internal/plugin/router.go's ProxyCommand execs it for `nself watchdog <args>` with stdio inherited. Extracted from cli/cmd/commands/watchdog.go and cli/internal/watchdog/ under CLI-R11. internal/watchdog depended on internal/health.DockerClient (a Docker-CLI shell-exec adapter), which lives in a file cli/cmd/commands/start.go also uses and therefore could not move \u2014 so this plugin reimplements that narrow adapter (docker ps/inspect/restart) locally in internal/watchdog/docker.go rather than forking internal/health's health-check engine. internal/watchdog's escalation.go also used internal/httptimeout, replaced with an inline *http.Client at the same 30s default."
 }

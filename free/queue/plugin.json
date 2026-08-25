@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-queue",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "queue",
     "jobs",

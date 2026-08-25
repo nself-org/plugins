@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-alerts",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "alerts",
     "prometheus",
@@ -45,5 +45,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install alerts` must place the built nself-alerts binary at ~/.nself/plugins/bin/nself-alerts, where internal/plugin/router.go's ProxyCommand execs it for `nself alerts <args>` with stdio inherited. Extracted from cli/cmd/commands/alerts.go and cli/internal/alerts/ under CLI-R11 — internal/alerts was self-contained (stdlib only, plus exec of amtool/curl) and moved wholesale unchanged. The only core-side change was decoupling internal/admin/alerts.go, which used the same package purely to describe two static admin alert rules — it now defines its own minimal type."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install alerts` must place the built nself-alerts binary at ~/.nself/plugins/bin/nself-alerts, where internal/plugin/router.go's ProxyCommand execs it for `nself alerts <args>` with stdio inherited. Extracted from cli/cmd/commands/alerts.go and cli/internal/alerts/ under CLI-R11 \u2014 internal/alerts was self-contained (stdlib only, plus exec of amtool/curl) and moved wholesale unchanged. The only core-side change was decoupling internal/admin/alerts.go, which used the same package purely to describe two static admin alert rules \u2014 it now defines its own minimal type."
 }

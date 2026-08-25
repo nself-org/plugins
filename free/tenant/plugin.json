@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-tenant",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "tenant",
     "multi-tenancy",

@@ -26,7 +26,12 @@ jobs:
           for d in free/*/; do
             if [ -f "$d/go.mod" ]; then
               echo "=== $d ==="
-              ( cd "$d" && go build ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
+              # -o /dev/null because a plugin whose main package sits at cmd/
+              # cannot be built with a bare `go build ./...`: go names the
+              # output after the package directory and refuses to overwrite the
+              # cmd/ directory itself ("build output \"cmd\" already exists and
+              # is a directory"). CI only needs to know it compiles.
+              ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
             fi
           done
           exit $failed

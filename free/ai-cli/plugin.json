@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-ai",
-  "category": "ai",
+  "category": "automation",
   "tags": [
     "ai",
     "ollama",

@@ -10,7 +10,7 @@
     "ai-cli": {
       "version": "1.0.0",
       "description": "AI operations for nSelf: chat, local Ollama model management, and Gemini API key pool provisioning and rotation.",
-      "category": "ai",
+      "category": "automation",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -72,7 +72,7 @@
     "alerts": {
       "version": "1.0.0",
       "description": "Manage Prometheus alert rules and Alertmanager silences: list, silence, and send synthetic test alerts.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -133,7 +133,7 @@
     "audit": {
       "version": "1.0.0",
       "description": "Ecosystem documentation audit: banned words, dead links, and missing anchors across READMEs, wiki, docs, SPORT, PPI, and PRI.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -381,7 +381,7 @@
     "costs": {
       "version": "1.0.0",
       "description": "Show estimated per-install operational costs: Hetzner VPS, Cloudflare, Vercel, Stripe fees, and installed paid plugin licenses.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -442,7 +442,7 @@
     "dlq": {
       "version": "1.0.0",
       "description": "Manage dead-letter queues for nSelf plugins: re-enqueue rows that failed processing back to the work queue, with safe row limits and dry-run preview.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -473,7 +473,7 @@
     "dogfood": {
       "version": "1.0.0",
       "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -541,7 +541,7 @@
     "dr": {
       "version": "1.0.0",
       "description": "Disaster recovery: promote a standby, fence the old primary, run drills, and install the systemd units DR needs.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -921,7 +921,7 @@
     "infra": {
       "version": "1.0.0",
       "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
-      "category": "deploy",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1020,7 +1020,7 @@
     "k8s": {
       "version": "1.0.0",
       "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.",
-      "category": "deploy",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1175,7 +1175,7 @@
     "monitor": {
       "version": "1.0.0",
       "description": "Monitoring stack management: upgrade the bundled Grafana dashboards.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1409,7 +1409,7 @@
     "queue": {
       "version": "1.0.0",
       "description": "Inspect and manage nSelf background job queues: depth, stuck jobs, retries and purges.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1439,7 +1439,7 @@
     "region": {
       "version": "1.0.0",
       "description": "Multi-region management: add replica regions, list and inspect their status, and promote a region to primary.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1506,7 +1506,7 @@
     "sentry": {
       "version": "1.0.0",
       "description": "\u0273Sentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
-      "category": "observability",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1587,7 +1587,7 @@
     "soak": {
       "version": "1.0.0",
       "description": "Manage soak testing lifecycle: abort an active soak and roll back to a prior version.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1717,7 +1717,7 @@
     "tenant": {
       "version": "1.0.0",
       "description": "Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1891,7 +1891,7 @@
     "waf": {
       "version": "1.0.0",
       "description": "Web Application Firewall management: enable Coraza with the OWASP Core Rule Set, switch between detection and blocking mode, and review recent WAF events.",
-      "category": "security",
+      "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
@@ -1922,7 +1922,7 @@
     "watchdog": {
       "version": "1.0.0",
       "description": "Self-healing container watchdog with circuit breaker: status, resets, event history, and TG/email escalation alerts.",
-      "category": "operations",
+      "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",

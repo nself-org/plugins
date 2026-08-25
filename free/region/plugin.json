@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-region",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "region",
     "multi-region",

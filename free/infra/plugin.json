@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-infra",
-  "category": "deploy",
+  "category": "infrastructure",
   "tags": [
     "infra",
     "terraform",

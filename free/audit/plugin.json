@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-audit",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "audit",
     "docs",

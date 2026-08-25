@@ -15,7 +15,7 @@
   "pluginType": "cli",
   "entryPoint": "cmd/",
   "binaryName": "nself-dlq",
-  "category": "operations",
+  "category": "infrastructure",
   "tags": [
     "dlq",
     "dead-letter-queue",
@@ -46,5 +46,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables of its own — it calls the running stack's REST API (default http://localhost:8080) to fetch and replay a named plugin's DLQ rows. `nself plugin install dlq` must place the built nself-dlq binary at ~/.nself/plugins/bin/nself-dlq, where internal/plugin/router.go's ProxyCommand execs it for `nself dlq <args>` with stdio inherited. Extracted from cli/cmd/commands/dlq_replay.go under CLI-R11 — a straight file move, since the command had zero github.com/nself-org/cli/internal/* dependencies beyond internal/dlq itself."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables of its own \u2014 it calls the running stack's REST API (default http://localhost:8080) to fetch and replay a named plugin's DLQ rows. `nself plugin install dlq` must place the built nself-dlq binary at ~/.nself/plugins/bin/nself-dlq, where internal/plugin/router.go's ProxyCommand execs it for `nself dlq <args>` with stdio inherited. Extracted from cli/cmd/commands/dlq_replay.go under CLI-R11 \u2014 a straight file move, since the command had zero github.com/nself-org/cli/internal/* dependencies beyond internal/dlq itself."
 }
