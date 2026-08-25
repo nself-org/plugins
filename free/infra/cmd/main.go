@@ -222,6 +222,13 @@ func main() {
 	// Cobra adds `completion` and `help` to any root command. Inside the CLI
 	// these lived on nself's root, not under `nself infra`, so advertising them
 	// here would show the user two subcommands that did not exist before.
+	// Cobra's default Args validator rejects an unrecognised first argument
+	// only for a ROOT command with subcommands; for a child it passes them to
+	// RunE. Inside the CLI this was a child, so `nself infra nosuch` printed
+	// help. As a root it would error instead, naming a binary the user never
+	// typed. ArbitraryArgs restores the child behaviour.
+	infraCmd.Args = cobra.ArbitraryArgs
+
 	infraCmd.CompletionOptions.DisableDefaultCmd = true
 	infraCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 

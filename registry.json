@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 50,
+  "plugins_count": 51,
   "last_updated": "2026-08-24",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 50 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 51 MIT-licensed plugins.",
   "plugins": {
     "ai-studio": {
       "version": "1.0.0",
@@ -1311,6 +1311,37 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "region": {
+      "version": "1.0.0",
+      "description": "Multi-region management: add replica regions, list and inspect their status, and promote a region to primary.",
+      "category": "operations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/region-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/region/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "region",
+        "multi-region",
+        "replica",
+        "failover",
+        "ha"
+      ],
+      "dependencies": [],
+      "name": "region",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-region"
       }
     },
     "search": {
