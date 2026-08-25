@@ -1,0 +1,54 @@
+{
+  "name": "gdpr",
+  "version": "1.0.0",
+  "description": "GDPR data portability (Art. 20) and right-to-erasure (Art. 17) tools for self-hosted nSelf instances.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-gdpr",
+  "category": "compliance",
+  "tags": [
+    "gdpr",
+    "privacy",
+    "compliance",
+    "dsar"
+  ],
+  "tables": [
+    "np_gdpr_requests"
+  ],
+  "webhooks": {},
+  "actions": {
+    "export": "Export all data for a user (Art. 20 portability)",
+    "delete": "Delete or anonymize all data for a user (Art. 17 erasure)",
+    "forget": "Alias for delete",
+    "status": "Show the status of a GDPR request",
+    "list-requests": "List all GDPR requests"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": []
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port and no HTTP server, but it reads/writes np_gdpr_requests directly via DATABASE_URL. `nself plugin install gdpr` must place the built nself-gdpr binary at ~/.nself/plugins/bin/nself-gdpr, where internal/plugin/router.go's ProxyCommand execs it for `nself gdpr <args>` with stdio inherited. Extracted from cli/cmd/commands/gdpr*.go and cli/internal/gdpr/ under CLI-R11. internal/database.SanitizeIdentifier (one function) was copied verbatim into this plugin's own internal/database package since the CLI's internal/database is unreachable across the module boundary."
+}

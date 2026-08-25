@@ -1,12 +1,165 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 32,
-  "last_updated": "2026-06-30",
+  "plugins_count": 57,
+  "last_updated": "2026-08-24",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 32 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 57 MIT-licensed plugins.",
   "plugins": {
+    "ai-cli": {
+      "version": "1.0.0",
+      "description": "AI operations for nSelf: chat, local Ollama model management, and Gemini API key pool provisioning and rotation.",
+      "category": "automation",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/ai-cli-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/ai-cli/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "ai",
+        "ollama",
+        "gemini",
+        "llm",
+        "models",
+        "pool"
+      ],
+      "dependencies": [],
+      "name": "ai-cli",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-ai"
+      }
+    },
+    "ai-studio": {
+      "version": "1.0.0",
+      "description": "Google AI Studio integration for local nSelf instances via a secure Cloudflare Tunnel.",
+      "category": "integrations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/ai-studio-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/ai-studio/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "ai-studio",
+        "gemini",
+        "cloudflare",
+        "tunnel"
+      ],
+      "dependencies": [],
+      "name": "ai-studio",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-ai-studio"
+      }
+    },
+    "alerts": {
+      "version": "1.0.0",
+      "description": "Manage Prometheus alert rules and Alertmanager silences: list, silence, and send synthetic test alerts.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/alerts-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/alerts/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "alerts",
+        "prometheus",
+        "alertmanager",
+        "observability",
+        "ops"
+      ],
+      "dependencies": [],
+      "name": "alerts",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-alerts"
+      }
+    },
+    "api": {
+      "version": "1.0.0",
+      "description": "Inspect the nSelf plugin API surface: endpoint probes, deprecation calendar, and the API changelog.",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/api-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/api/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "api",
+        "endpoints",
+        "deprecation",
+        "changelog"
+      ],
+      "dependencies": [],
+      "name": "api",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-api"
+      }
+    },
+    "audit": {
+      "version": "1.0.0",
+      "description": "Ecosystem documentation audit: banned words, dead links, and missing anchors across READMEs, wiki, docs, SPORT, PPI, and PRI.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/audit-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/audit/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "audit",
+        "docs",
+        "lint",
+        "ops"
+      ],
+      "dependencies": [],
+      "name": "audit",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-audit"
+      }
+    },
     "audit-log": {
       "version": "1.0.0",
       "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
@@ -102,6 +255,37 @@
         "entryPoint": "cmd/main.go"
       }
     },
+    "claw-cli": {
+      "version": "1.0.0",
+      "description": "CLI client for the nClaw AI assistant: prompt, chat, pairing, keys, memories, topics, sessions, MCP server, OpenAI-compatible proxy, and schema migrations.",
+      "category": "integrations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/claw-cli-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/claw-cli/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "claw",
+        "nclaw",
+        "ai",
+        "assistant",
+        "mcp"
+      ],
+      "dependencies": [],
+      "name": "claw-cli",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-claw"
+      }
+    },
     "content-acquisition": {
       "version": "1.0.0",
       "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
@@ -194,6 +378,35 @@
         "entryPoint": "cmd/main.go"
       }
     },
+    "costs": {
+      "version": "1.0.0",
+      "description": "Show estimated per-install operational costs: Hetzner VPS, Cloudflare, Vercel, Stripe fees, and installed paid plugin licenses.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/costs-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/costs/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "costs",
+        "billing",
+        "ops"
+      ],
+      "dependencies": [],
+      "name": "costs",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-costs"
+      }
+    },
     "cron": {
       "version": "1.0.0",
       "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
@@ -224,6 +437,68 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "dlq": {
+      "version": "1.0.0",
+      "description": "Manage dead-letter queues for nSelf plugins: re-enqueue rows that failed processing back to the work queue, with safe row limits and dry-run preview.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/dlq-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/dlq/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "dlq",
+        "dead-letter-queue",
+        "queue",
+        "ops",
+        "reliability"
+      ],
+      "dependencies": [],
+      "name": "dlq",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-dlq"
+      }
+    },
+    "dogfood": {
+      "version": "1.0.0",
+      "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/dogfood-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/dogfood/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "dogfood",
+        "audit",
+        "ops",
+        "production",
+        "health"
+      ],
+      "dependencies": [],
+      "name": "dogfood",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-dogfood"
       }
     },
     "donorbox": {
@@ -261,6 +536,37 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "dr": {
+      "version": "1.0.0",
+      "description": "Disaster recovery: promote a standby, fence the old primary, run drills, and install the systemd units DR needs.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/dr-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/dr/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "dr",
+        "disaster-recovery",
+        "failover",
+        "standby",
+        "drill"
+      ],
+      "dependencies": [],
+      "name": "dr",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-dr"
       }
     },
     "e2ee": {
@@ -371,6 +677,37 @@
         "entryPoint": "cmd/main.go"
       }
     },
+    "federation": {
+      "version": "1.0.0",
+      "description": "Manage GraphQL Federation: compose an Apollo Router supergraph from installed plugin subgraphs, check subgraph health, and introspect the composed schema.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/federation-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/federation/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "federation",
+        "graphql",
+        "apollo",
+        "supergraph",
+        "hasura"
+      ],
+      "dependencies": [],
+      "name": "federation",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-federation"
+      }
+    },
     "forgejo": {
       "version": "1.0.0",
       "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute \u2014 zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
@@ -402,6 +739,98 @@
         "language": "go",
         "runtime": "docker",
         "entryPoint": "docker-compose.plugin.yml"
+      }
+    },
+    "gateway": {
+      "version": "1.0.0",
+      "description": "Manage the nSelf AI gateway (nself-ai-gateway, port 3761): service health, provider key vault, quota usage, and routing rules.",
+      "category": "integrations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/gateway-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/gateway/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "gateway",
+        "ai",
+        "keys",
+        "quota"
+      ],
+      "dependencies": [],
+      "name": "gateway",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-gateway"
+      }
+    },
+    "gauth": {
+      "version": "1.0.0",
+      "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
+      "category": "integrations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/gauth-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/gauth/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "gauth",
+        "oauth",
+        "google",
+        "ai"
+      ],
+      "dependencies": [],
+      "name": "gauth",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-gauth"
+      }
+    },
+    "gdpr": {
+      "version": "1.0.0",
+      "description": "GDPR data portability (Art. 20) and right-to-erasure (Art. 17) tools for self-hosted nSelf instances.",
+      "category": "compliance",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/gdpr-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/gdpr/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "gdpr",
+        "privacy",
+        "compliance",
+        "dsar"
+      ],
+      "dependencies": [],
+      "name": "gdpr",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [
+        "np_gdpr_requests"
+      ],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-gdpr"
       }
     },
     "github": {
@@ -489,6 +918,40 @@
         "entryPoint": "cmd/main.go"
       }
     },
+    "infra": {
+      "version": "1.0.0",
+      "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/infra-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/infra/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "infra",
+        "terraform",
+        "provisioning",
+        "deploy",
+        "hetzner",
+        "aws",
+        "gcp",
+        "azure"
+      ],
+      "dependencies": [],
+      "name": "infra",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-infra"
+      }
+    },
     "invitations": {
       "version": "1.0.0",
       "description": "Invitation management system with email/SMS delivery and tracking",
@@ -552,6 +1015,37 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "k8s": {
+      "version": "1.0.0",
+      "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/k8s-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/k8s/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "kubernetes",
+        "k8s",
+        "helm",
+        "deploy",
+        "cluster"
+      ],
+      "dependencies": [],
+      "name": "k8s",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-k8s"
       }
     },
     "link-preview": {
@@ -646,6 +1140,67 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "model": {
+      "version": "1.0.0",
+      "description": "Manage local AI models via Ollama: list, pull, remove, update, benchmark, plus the legacy ollama command tree.",
+      "category": "integrations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/model-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/model/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "model",
+        "ollama",
+        "ai",
+        "llm"
+      ],
+      "dependencies": [],
+      "name": "model",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-model"
+      }
+    },
+    "monitor": {
+      "version": "1.0.0",
+      "description": "Monitoring stack management: upgrade the bundled Grafana dashboards.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitor-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/monitor/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "monitor",
+        "grafana",
+        "dashboards",
+        "observability",
+        "ops"
+      ],
+      "dependencies": [],
+      "name": "monitor",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-monitor"
       }
     },
     "monitoring": {
@@ -851,6 +1406,67 @@
         "entryPoint": "cmd/main.go"
       }
     },
+    "queue": {
+      "version": "1.0.0",
+      "description": "Inspect and manage nSelf background job queues: depth, stuck jobs, retries and purges.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/queue-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/queue/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "queue",
+        "jobs",
+        "workers",
+        "background"
+      ],
+      "dependencies": [],
+      "name": "queue",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-queue"
+      }
+    },
+    "region": {
+      "version": "1.0.0",
+      "description": "Multi-region management: add replica regions, list and inspect their status, and promote a region to primary.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/region-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/region/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "region",
+        "multi-region",
+        "replica",
+        "failover",
+        "ha"
+      ],
+      "dependencies": [],
+      "name": "region",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-region"
+      }
+    },
     "search": {
       "version": "1.0.0",
       "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
@@ -886,6 +1502,48 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       }
+    },
+    "sentry": {
+      "version": "1.0.0",
+      "description": "\u0273Sentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/sentry-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/sentry/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "sentry",
+        "observability",
+        "monitoring",
+        "incidents",
+        "status-page",
+        "alerts"
+      ],
+      "dependencies": [],
+      "name": "sentry",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-sentry"
+      },
+      "cliCommands": [
+        {
+          "name": "sentry",
+          "description": "Manage \u0273Sentry monitors, incidents, status pages and alerts"
+        },
+        {
+          "name": "sentry-server",
+          "description": "Provision and manage a self-hosted \u0273Sentry server"
+        }
+      ]
     },
     "shopify": {
       "version": "1.0.0",
@@ -924,6 +1582,36 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "nself-shopify"
+      }
+    },
+    "soak": {
+      "version": "1.0.0",
+      "description": "Manage soak testing lifecycle: abort an active soak and roll back to a prior version.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/soak-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/soak/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "soak",
+        "rollback",
+        "deploy",
+        "ops"
+      ],
+      "dependencies": [],
+      "name": "soak",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-soak"
       }
     },
     "stripe": {
@@ -1025,6 +1713,47 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       }
+    },
+    "tenant": {
+      "version": "1.0.0",
+      "description": "Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/tenant-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/tenant/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "tenant",
+        "multi-tenancy",
+        "billing",
+        "metering",
+        "saas"
+      ],
+      "dependencies": [],
+      "name": "tenant",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-tenant"
+      },
+      "cliCommands": [
+        {
+          "name": "tenant",
+          "description": "Create, list, suspend, upgrade and destroy tenants"
+        },
+        {
+          "name": "billing",
+          "description": "Per-tenant usage metering, invoices and billing reports"
+        }
+      ]
     },
     "tokens": {
       "version": "1.0.0",
@@ -1157,6 +1886,68 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "waf": {
+      "version": "1.0.0",
+      "description": "Web Application Firewall management: enable Coraza with the OWASP Core Rule Set, switch between detection and blocking mode, and review recent WAF events.",
+      "category": "compliance",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/waf-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/waf/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "waf",
+        "security",
+        "coraza",
+        "owasp",
+        "firewall"
+      ],
+      "dependencies": [],
+      "name": "waf",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-waf"
+      }
+    },
+    "watchdog": {
+      "version": "1.0.0",
+      "description": "Self-healing container watchdog with circuit breaker: status, resets, event history, and TG/email escalation alerts.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/watchdog-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/watchdog/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "watchdog",
+        "self-healing",
+        "circuit-breaker",
+        "docker",
+        "ops"
+      ],
+      "dependencies": [],
+      "name": "watchdog",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-watchdog"
       }
     },
     "webhooks": {

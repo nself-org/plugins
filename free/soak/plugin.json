@@ -1,0 +1,48 @@
+{
+  "name": "soak",
+  "version": "1.0.0",
+  "description": "Manage soak testing lifecycle: abort an active soak and roll back to a prior version.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-soak",
+  "category": "infrastructure",
+  "tags": [
+    "soak",
+    "rollback",
+    "deploy",
+    "ops"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "abort": "Abort a running soak and roll back to a prior version"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_CURRENT_VERSION"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install soak` must place the built nself-soak binary at ~/.nself/plugins/bin/nself-soak, where internal/plugin/router.go's ProxyCommand execs it for `nself soak <args>` with stdio inherited. It shells out to `nself deploy rollback <env>` for the actual rollback. Extracted from cli/cmd/commands/soak_abort.go and cli/internal/soak/ under CLI-R11."
+}

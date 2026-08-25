@@ -24,4 +24,21 @@ regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',
   '''wJalrXUtnFEMI''',
   '''bPxRfiCYEXAMPLEKEY''',
+
+  # Test fixtures that arrived with the CLI-R11 command extractions. Each was
+  # allowlisted in the cli repo; the allowlist did not travel with the code, so
+  # they surfaced here as new findings the moment the plugins landed.
+  #
+  # Deliberately narrow — the exact literals, not a blanket rule over _test.go.
+  # A real credential pasted into a test file must still be caught.
+
+  # sentry: the fake API key isolateSentryEnv sets so the cloud tests never
+  # touch a real instance. `nsk_` is the ɳSentry key prefix; "cmdtest" is the
+  # tell.
+  '''nsk_cmdtest12345''',
+
+  # ai-studio: two tokens in the redactor's table test, proving it prints
+  # "a1b2c3d4****" normally and the full value under --debug. Both are the
+  # digits 1-9 repeating, not keys. One regex covers both lengths.
+  '''a1b2c3d4e5f6789012345678901234567890[0-9]*''',
 ]

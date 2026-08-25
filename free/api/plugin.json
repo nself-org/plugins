@@ -1,0 +1,50 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "description": "Inspect the nSelf plugin API surface: endpoint probes, deprecation calendar, and the API changelog.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-api",
+  "category": "development",
+  "tags": [
+    "api",
+    "endpoints",
+    "deprecation",
+    "changelog"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "probe": "Probe plugin API endpoints",
+    "deprecations": "Show the API deprecation calendar",
+    "changelog": "Show the API changelog"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_PLUGIN_DIR"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install api` must place the built nself-api binary at ~/.nself/plugins/bin/nself-api, where internal/plugin/router.go's ProxyCommand execs it for `nself api <args>` with stdio inherited. Extracted from the CLI core under CLI-R11."
+}

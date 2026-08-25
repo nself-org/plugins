@@ -1,0 +1,50 @@
+{
+  "name": "dlq",
+  "version": "1.0.0",
+  "description": "Manage dead-letter queues for nSelf plugins: re-enqueue rows that failed processing back to the work queue, with safe row limits and dry-run preview.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-dlq",
+  "category": "infrastructure",
+  "tags": [
+    "dlq",
+    "dead-letter-queue",
+    "queue",
+    "ops",
+    "reliability"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "replay": "Re-enqueue DLQ rows for a plugin back to the work queue"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_API_TOKEN",
+      "NSELF_API_URL"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables of its own \u2014 it calls the running stack's REST API (default http://localhost:8080) to fetch and replay a named plugin's DLQ rows. `nself plugin install dlq` must place the built nself-dlq binary at ~/.nself/plugins/bin/nself-dlq, where internal/plugin/router.go's ProxyCommand execs it for `nself dlq <args>` with stdio inherited. Extracted from cli/cmd/commands/dlq_replay.go under CLI-R11 \u2014 a straight file move, since the command had zero github.com/nself-org/cli/internal/* dependencies beyond internal/dlq itself."
+}

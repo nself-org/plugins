@@ -28,8 +28,17 @@ func runGitleaks(root string, timeout int, verbose bool) GateResult {
 	// walk node_modules and every gitignored directory: measured 2.27 GB and 47
 	// findings on one Node repo, all dependency false positives, and 80s of an
 	// 81s run. Without it gitleaks respects .gitignore and scans tracked content.
+	return runStep("secrets:gitleaks", root, timeout, verbose, "gitleaks",
+		gitleaksArgs(root, configFlag, isGitRepo(root))...)
+}
+
+// gitleaksArgs builds the gitleaks argv. Split out from runGitleaks purely so the
+// --no-git decision is unit-testable: this package previously had no tests at all,
+// which is how an unconditional --no-git shipped in the 1.2.0 binary and made the
+// gate fail on every repo with a build bundle, vendored deps or a local .env.
+func gitleaksArgs(root, configFlag string, isRepo bool) []string {
 	args := []string{"detect", "--source", root, "--exit-code", "1"}
-	if !isGitRepo(root) {
+	if !isRepo {
 		// Not a checkout (rare — e.g. an exported tarball). Fall back to a
 		// filesystem scan so the gate still runs, and exclude the usual noise.
 		args = append(args, "--no-git")
@@ -37,8 +46,7 @@ func runGitleaks(root string, timeout int, verbose bool) GateResult {
 	if configFlag != "" {
 		args = append(args, "--config", configFlag)
 	}
-
-	return runStep("secrets:gitleaks", root, timeout, verbose, "gitleaks", args...)
+	return args
 }
 
 // runGoGates runs gofmt, go vet, and go test for a Go repo.

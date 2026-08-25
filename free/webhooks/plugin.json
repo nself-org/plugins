@@ -88,5 +88,13 @@
   ],
   "min_memory_mb": 64,
   "systemd_after": "network.target",
-  "tier": "free"
+  "tier": "free",
+  "binaryName": "nself-webhooks",
+  "cliCommands": [
+    {
+      "name": "webhooks",
+      "description": "Inspect the durable webhook outbox queue"
+    }
+  ],
+  "notes": "This plugin is a hybrid: a webhook delivery service AND the `nself webhooks` command, which moved out of the CLI core under CLI-R11. pluginType stays unset because the service half is the primary artifact; binaryName and cliCommands are what make the installer publish nself-webhooks into ~/.nself/plugins/bin/. The command inspects the same durable outbox directory the service writes to, which is why it belongs here rather than in a plugin of its own."
 }
