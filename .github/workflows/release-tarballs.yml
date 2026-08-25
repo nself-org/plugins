@@ -45,6 +45,14 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
+      # Needed since this job started compiling: a cli plugin's package has to
+      # contain a binary, and one per platform. Version matches the other
+      # workflows in this repo.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.4'
+          cache: false
+
       - name: Build tarballs for all free plugins (max 10 parallel)
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
@@ -68,6 +76,56 @@ jobs:
             sha256=$(sha256sum "$tarball" | cut -d' ' -f1)
             printf "%s  %s\n" "$sha256" "${plugin_name}-${VERSION}.tar.gz" > "$checksum_file"
             echo "BUILT $plugin_name sha256:${sha256}"
+
+            # A CLI plugin's package has to contain a compiled binary, and one
+            # built for the user's platform. This step used to produce only the
+            # source tarball above, which meant `nself install <cmd>` extracted
+            # source, found no binary, and left the command dead — silently,
+            # until the CLI was changed to fail on it. Every command extracted
+            # under CLI-R11 was affected.
+            local plugin_type
+            plugin_type="$(jq -r '.pluginType // .implementation.pluginType // ""' "${plugin_dir}/plugin.json")"
+            if [ "$plugin_type" != "cli" ]; then
+              return
+            fi
+
+            local bin_name
+            bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${plugin_dir}/plugin.json")"
+            if [ -z "$bin_name" ]; then
+              echo "ERROR $plugin_name declares pluginType cli with no binaryName"
+              return 1
+            fi
+
+            # The platform strings must match internal/plugin/arch.go's
+            # PlatformArch(), and the asset filename must match
+            # binaryPluginDownloadURL(): <name>-<version>-<platform>.tar.gz.
+            # The CLI derives both; a mismatch here is an install failure there.
+            for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
+              local goos="${platform%%-*}"
+              local goarch="${platform##*-}"
+              local stage="${DIST_DIR}/stage-${plugin_name}-${platform}"
+              local exe=""
+              [ "$goos" = "windows" ] && exe=".exe"
+
+              rm -rf "$stage"
+              mkdir -p "$stage/${plugin_name}"
+              cp -R "${plugin_dir}/." "$stage/${plugin_name}/"
+
+              if ! (cd "${plugin_dir}" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+                    go build -trimpath -ldflags="-s -w" \
+                    -o "${GITHUB_WORKSPACE}/${stage}/${plugin_name}/${bin_name}${exe}" ./cmd/); then
+                echo "ERROR $plugin_name failed to build for $platform"
+                rm -rf "$stage"
+                return 1
+              fi
+
+              local ptar="${DIST_DIR}/${plugin_name}-${VERSION}-${platform}.tar.gz"
+              tar -czf "$ptar" -C "$stage" "${plugin_name}"
+              psha=$(sha256sum "$ptar" | cut -d' ' -f1)
+              printf "%s  %s\n" "$psha" "$(basename "$ptar")" > "${ptar}.sha256"
+              rm -rf "$stage"
+              echo "BUILT $plugin_name $platform sha256:${psha}"
+            done
           }
 
           export -f build_plugin
@@ -94,15 +152,35 @@ jobs:
           ls -lh "$DIST_DIR"/*.tar.gz | wc -l
           echo "tarball_count=$(ls dist/*.tar.gz 2>/dev/null | wc -l)" >> "$GITHUB_ENV"
 
-      - name: Verify all 27 free plugins have tarballs
+      - name: Verify every free plugin has its tarballs
         run: |
-          EXPECTED=$(find free -maxdepth 1 -mindepth 1 -type d | wc -l)
-          ACTUAL=$(ls dist/*.tar.gz 2>/dev/null | wc -l)
-          echo "Expected: $EXPECTED, Built: $ACTUAL"
-          if [ "$ACTUAL" -lt "$EXPECTED" ]; then
-            echo "ERROR: Only $ACTUAL of $EXPECTED tarballs were built"
+          # Each plugin produces one source tarball. A cli plugin produces five
+          # more, one per platform, and the CLI cannot install it without the
+          # one matching the user's machine — so those are checked by name
+          # rather than by counting.
+          fail=0
+          while read -r dir; do
+            name="$(basename "$dir")"
+            if [ ! -f "dist/${name}-${VERSION}.tar.gz" ]; then
+              echo "MISSING source tarball for $name"
+              fail=1
+              continue
+            fi
+            ptype="$(jq -r '.pluginType // .implementation.pluginType // ""' "${dir}/plugin.json" 2>/dev/null)"
+            [ "$ptype" = "cli" ] || continue
+            for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
+              if [ ! -f "dist/${name}-${VERSION}-${platform}.tar.gz" ]; then
+                echo "MISSING $platform build for cli plugin $name"
+                fail=1
+              fi
+            done
+          done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
+
+          if [ "$fail" -ne 0 ]; then
+            echo "ERROR: release is incomplete; a cli plugin without a build for a platform cannot be installed on it"
             exit 1
           fi
+          echo "All plugin tarballs present ($(ls dist/*.tar.gz | wc -l) archives)"
 
       # S49-T05: verify each tarball's embedded binary arch matches tarball filename.
       # Catches cross-compile errors where wrong GOOS/GOARCH slips into a release asset.
