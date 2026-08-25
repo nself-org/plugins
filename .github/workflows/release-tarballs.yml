@@ -83,18 +83,27 @@ jobs:
             # source, found no binary, and left the command dead — silently,
             # until the CLI was changed to fail on it. Every command extracted
             # under CLI-R11 was affected.
-            local plugin_type
-            plugin_type="$(jq -r '.pluginType // .implementation.pluginType // ""' "${plugin_dir}/plugin.json")"
-            if [ "$plugin_type" != "cli" ]; then
-              return
-            fi
-
+            # Which plugins need compiling: any that ships a command binary.
+            # Keying on pluginType == "cli" missed the hybrids — webhooks is
+            # both a delivery service and the `nself webhooks` command, so its
+            # pluginType is unset while it still has a binary to build.
+            # binaryName is the honest question: does this plugin provide a
+            # command?
             local bin_name
             bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${plugin_dir}/plugin.json")"
             if [ -z "$bin_name" ]; then
-              echo "ERROR $plugin_name declares pluginType cli with no binaryName"
-              return 1
+              return
             fi
+
+            # A plugin may provide more than one command; cliCommands lists them
+            # and the CLI publishes one binary per entry, so every one has to be
+            # built or the command it names is dead on arrival.
+            local commands
+            commands="$(jq -r 'if (.cliCommands // []) | length > 0 then (.cliCommands[].name) else "" end' "${plugin_dir}/plugin.json")"
+            if [ -z "$commands" ]; then
+              commands="${bin_name#nself-}"
+            fi
+            commands="$(echo "$commands" | tr '\n' ' ')"
 
             # The platform strings must match internal/plugin/arch.go's
             # PlatformArch(), and the asset filename must match
@@ -111,10 +120,27 @@ jobs:
               mkdir -p "$stage/${plugin_name}"
               cp -R "${plugin_dir}/." "$stage/${plugin_name}/"
 
-              if ! (cd "${plugin_dir}" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-                    go build -trimpath -ldflags="-s -w" \
-                    -o "${GITHUB_WORKSPACE}/${stage}/${plugin_name}/${bin_name}${exe}" ./cmd/); then
-                echo "ERROR $plugin_name failed to build for $platform"
+              local failed=0
+              # Word-split rather than a heredoc: this whole step is a YAML
+              # block scalar, and a heredoc terminator has to sit at column 0,
+              # which ends the block.
+              for command in $commands; do
+                # A plugin providing several commands keeps each under
+                # cmd/<command>/; one providing a single command may put it at
+                # cmd/ directly.
+                local pkg="./cmd/${command}/"
+                [ -d "${plugin_dir}/cmd/${command}" ] || pkg="./cmd/"
+
+                if ! (cd "${plugin_dir}" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+                      go build -trimpath -ldflags="-s -w" \
+                      -o "${GITHUB_WORKSPACE}/${stage}/${plugin_name}/nself-${command}${exe}" "$pkg"); then
+                  echo "ERROR $plugin_name failed to build nself-${command} for $platform"
+                  failed=1
+                  break
+                fi
+              done
+
+              if [ "$failed" -ne 0 ]; then
                 rm -rf "$stage"
                 return 1
               fi
@@ -166,8 +192,8 @@ jobs:
               fail=1
               continue
             fi
-            ptype="$(jq -r '.pluginType // .implementation.pluginType // ""' "${dir}/plugin.json" 2>/dev/null)"
-            [ "$ptype" = "cli" ] || continue
+            bname="$(jq -r '.binaryName // .implementation.binaryName // ""' "${dir}/plugin.json" 2>/dev/null)"
+            [ -n "$bname" ] || continue
             for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
               if [ ! -f "dist/${name}-${VERSION}-${platform}.tar.gz" ]; then
                 echo "MISSING $platform build for cli plugin $name"

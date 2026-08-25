@@ -1,0 +1,56 @@
+{
+  "name": "dr",
+  "version": "1.0.0",
+  "description": "Disaster recovery: promote a standby, fence the old primary, run drills, and install the systemd units DR needs.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-dr",
+  "category": "operations",
+  "tags": [
+    "dr",
+    "disaster-recovery",
+    "failover",
+    "standby",
+    "drill"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "promote": "Promote a standby to primary",
+    "fence": "Fence the old primary so it cannot accept writes",
+    "drill": "Run a disaster-recovery drill",
+    "install-units": "Install the systemd units DR uses"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "PROJECT_NAME",
+      "BASE_DOMAIN",
+      "BACKUP_DIR",
+      "DR_STANDBY_HOST",
+      "REDIS_ENABLED"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install dr` must place the built nself-dr binary at ~/.nself/plugins/bin/nself-dr, where internal/plugin/router.go's ProxyCommand execs it for `nself dr <args>` with stdio inherited. Extracted from the CLI core under CLI-R11."
+}

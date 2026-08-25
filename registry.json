@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 52,
+  "plugins_count": 57,
   "last_updated": "2026-08-24",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 52 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 57 MIT-licensed plugins.",
   "plugins": {
     "ai-cli": {
       "version": "1.0.0",
@@ -98,6 +98,36 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-alerts"
+      }
+    },
+    "api": {
+      "version": "1.0.0",
+      "description": "Inspect the nSelf plugin API surface: endpoint probes, deprecation calendar, and the API changelog.",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/api-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/api/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "api",
+        "endpoints",
+        "deprecation",
+        "changelog"
+      ],
+      "dependencies": [],
+      "name": "api",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-api"
       }
     },
     "audit": {
@@ -506,6 +536,37 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "dr": {
+      "version": "1.0.0",
+      "description": "Disaster recovery: promote a standby, fence the old primary, run drills, and install the systemd units DR needs.",
+      "category": "operations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/dr-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/dr/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "dr",
+        "disaster-recovery",
+        "failover",
+        "standby",
+        "drill"
+      ],
+      "dependencies": [],
+      "name": "dr",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-dr"
       }
     },
     "e2ee": {
@@ -1345,6 +1406,36 @@
         "entryPoint": "cmd/main.go"
       }
     },
+    "queue": {
+      "version": "1.0.0",
+      "description": "Inspect and manage nSelf background job queues: depth, stuck jobs, retries and purges.",
+      "category": "operations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/queue-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/queue/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "queue",
+        "jobs",
+        "workers",
+        "background"
+      ],
+      "dependencies": [],
+      "name": "queue",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-queue"
+      }
+    },
     "region": {
       "version": "1.0.0",
       "description": "Multi-region management: add replica regions, list and inspect their status, and promote a region to primary.",
@@ -1411,6 +1502,48 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       }
+    },
+    "sentry": {
+      "version": "1.0.0",
+      "description": "\u0273Sentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
+      "category": "observability",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/sentry-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/sentry/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "sentry",
+        "observability",
+        "monitoring",
+        "incidents",
+        "status-page",
+        "alerts"
+      ],
+      "dependencies": [],
+      "name": "sentry",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-sentry"
+      },
+      "cliCommands": [
+        {
+          "name": "sentry",
+          "description": "Manage \u0273Sentry monitors, incidents, status pages and alerts"
+        },
+        {
+          "name": "sentry-server",
+          "description": "Provision and manage a self-hosted \u0273Sentry server"
+        }
+      ]
     },
     "shopify": {
       "version": "1.0.0",
@@ -1580,6 +1713,47 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       }
+    },
+    "tenant": {
+      "version": "1.0.0",
+      "description": "Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports.",
+      "category": "operations",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/tenant-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/tenant/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "tenant",
+        "multi-tenancy",
+        "billing",
+        "metering",
+        "saas"
+      ],
+      "dependencies": [],
+      "name": "tenant",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-tenant"
+      },
+      "cliCommands": [
+        {
+          "name": "tenant",
+          "description": "Create, list, suspend, upgrade and destroy tenants"
+        },
+        {
+          "name": "billing",
+          "description": "Per-tenant usage metering, invoices and billing reports"
+        }
+      ]
     },
     "tokens": {
       "version": "1.0.0",
