@@ -17,8 +17,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/nself-org/nself-sentry/internal/deploy/bluegreen"
-	"github.com/nself-org/nself-sentry/internal/ui"
+	"github.com/nself-org/nself-sentry-cli/internal/deploy/bluegreen"
+	"github.com/nself-org/nself-sentry-cli/internal/ui"
 )
 
 // CanaryConfig holds the parameters for a canary deploy.

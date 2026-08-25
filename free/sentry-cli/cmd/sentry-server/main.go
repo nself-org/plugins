@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/nself-sentry/internal/deploy"
-	"github.com/nself-org/nself-sentry/internal/infra"
-	"github.com/nself-org/nself-sentry/internal/ui"
+	"github.com/nself-org/nself-sentry-cli/internal/deploy"
+	"github.com/nself-org/nself-sentry-cli/internal/infra"
+	"github.com/nself-org/nself-sentry-cli/internal/ui"
 
 	"github.com/spf13/cobra"
 )

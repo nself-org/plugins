@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nself-org/nself-sentry/internal/sentryapi"
+	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
 	"github.com/spf13/cobra"
 )
 

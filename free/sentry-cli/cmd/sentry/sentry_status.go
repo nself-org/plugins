@@ -20,9 +20,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/nself-org/nself-sentry/internal/errs"
-	"github.com/nself-org/nself-sentry/internal/httptimeout"
-	"github.com/nself-org/nself-sentry/internal/ui"
+	"github.com/nself-org/nself-sentry-cli/internal/errs"
+	"github.com/nself-org/nself-sentry-cli/internal/httptimeout"
+	"github.com/nself-org/nself-sentry-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

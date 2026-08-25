@@ -7,7 +7,7 @@ This plugin provides two commands: `nself sentry` and `nself sentry-server`.
 ## Install
 
 ```bash
-nself install sentry
+nself install sentry-cli
 ```
 
 Both commands then work exactly as before — the CLI proxies each to its own
