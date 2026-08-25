@@ -1,4 +1,4 @@
-module github.com/nself-org/nself-sentry
+module github.com/nself-org/nself-sentry-cli
 
 go 1.22
 

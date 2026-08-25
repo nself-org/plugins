@@ -13,8 +13,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/nself-org/nself-sentry/internal/sentryapi"
-	"github.com/nself-org/nself-sentry/internal/ui"
+	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
+	"github.com/nself-org/nself-sentry-cli/internal/ui"
 	"github.com/spf13/cobra"
 )
 

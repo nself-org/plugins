@@ -1,5 +1,5 @@
 {
-  "name": "sentry",
+  "name": "sentry-cli",
   "version": "1.0.0",
   "description": "\u0273Sentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
   "author": "nself",
@@ -52,7 +52,7 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin. It provides TWO commands, `nself sentry` and `nself sentry-server`, declared in cliCommands; the installer publishes nself-sentry and nself-sentry-server into ~/.nself/plugins/bin/ where ProxyCommand execs them. Extracted from the CLI core under CLI-R11. `nself mcp` keeps its \u0273Sentry MCP tools and its own copy of the API client, because mcp is a core command and plugin-contributed MCP tools do not exist yet. `nself sentry-server provision` chains into `nself build` and `nself start`, so it needs the nself CLI on PATH.",
+  "notes": "This is a CLI-proxy plugin, not a service plugin. It provides TWO commands, `nself sentry` and `nself sentry-server`, declared in cliCommands; the installer publishes nself-sentry and nself-sentry-server into ~/.nself/plugins/bin/ where ProxyCommand execs them. Extracted from the CLI core under CLI-R11. `nself mcp` keeps its \u0273Sentry MCP tools and its own copy of the API client, because mcp is a core command and plugin-contributed MCP tools do not exist yet. `nself sentry-server provision` chains into `nself build` and `nself start`, so it needs the nself CLI on PATH. The plugin is named sentry-cli rather than sentry because the paid \u0273Sentry bundle already answers to `nself install sentry`, and a bundle wins that lookup. binaryName and cliCommands keep the commands working as `nself sentry` and `nself sentry-server`.",
   "cliCommands": [
     {
       "name": "sentry",
