@@ -1,0 +1,49 @@
+{
+  "name": "flags",
+  "version": "1.0.0",
+  "description": "Manage feature flags served by the feature-flags plugin: list, get, set, history, canary rollouts and kill switches.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-flags",
+  "category": "development",
+  "tags": [
+    "flags",
+    "feature-flags",
+    "canary",
+    "kill-switch"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "list": "List feature flags",
+    "get": "Show one flag",
+    "set": "Set a flag",
+    "history": "Show a flag history"
+  },
+  "envVars": {
+    "required": [],
+    "optional": []
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: no port, no HTTP server, no database tables. `nself plugin install flags` places the built nself-flags binary at ~/.nself/plugins/bin/, where ProxyCommand execs it for `nself flags <args>` with stdio inherited. Extracted from the CLI core under CLI-R11. This is a client for the feature-flags plugin and does nothing without it, so it ships alongside rather than in the core binary."
+}

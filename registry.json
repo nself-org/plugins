@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
-  "plugins_count": 57,
+  "plugins_count": 60,
   "last_updated": "2026-08-24",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 57 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry \u2014 60 MIT-licensed plugins.",
   "plugins": {
     "ai-cli": {
       "version": "1.0.0",
@@ -708,6 +708,36 @@
         "binaryName": "nself-federation"
       }
     },
+    "flags": {
+      "version": "1.0.0",
+      "description": "Manage feature flags served by the feature-flags plugin: list, get, set, history, canary rollouts and kill switches.",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/flags-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/flags/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "flags",
+        "feature-flags",
+        "canary",
+        "kill-switch"
+      ],
+      "dependencies": [],
+      "name": "flags",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-flags"
+      }
+    },
     "forgejo": {
       "version": "1.0.0",
       "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute \u2014 zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
@@ -1078,6 +1108,36 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
+      }
+    },
+    "maintenance": {
+      "version": "1.0.0",
+      "description": "Maintenance utilities: disk cleanup, log rotation and the maintenance scheduler.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/maintenance-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/maintenance/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "maintenance",
+        "cleanup",
+        "disk",
+        "scheduler"
+      ],
+      "dependencies": [],
+      "name": "maintenance",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-maintenance"
       }
     },
     "mdns": {
@@ -1465,6 +1525,37 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-region"
+      }
+    },
+    "release": {
+      "version": "1.0.0",
+      "description": "Orchestrate the nSelf project's own 12-step release cascade: tag and release cli and plugins-pro, build and push the admin image, and open the Homebrew formula PR.",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.2.8",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/release-1.0.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/release/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "release",
+        "ci",
+        "tagging",
+        "cascade",
+        "maintainer"
+      ],
+      "dependencies": [],
+      "name": "release",
+      "author": "nself",
+      "minNselfVersion": "1.2.8",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/",
+        "pluginType": "cli",
+        "binaryName": "nself-release"
       }
     },
     "search": {
