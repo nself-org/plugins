@@ -90,7 +90,11 @@ jobs:
           errors=0
           REQUIRED_FIELDS="name version description category"
 
-          find free -name "plugin.json" | sort | while read -r file; do
+          # `find ... | while read` runs the loop in a SUBSHELL, so every
+          # errors=$((errors+1)) below was discarded and this gate could never
+          # fail. Redirecting from a process substitution keeps the loop in this
+          # shell so the counter survives.
+          while read -r file; do
             plugin=$(dirname "$file" | xargs basename)
 
             # Validate JSON syntax first
@@ -128,7 +132,7 @@ jobs:
             if [ -z "$entrypoint" ]; then
               echo "WARNING: '$plugin/plugin.json' has no entrypoint defined (implementation.entryPoint)"
             fi
-          done
+          done < <(find free -name "plugin.json" | sort)
 
           if [ "$errors" -gt 0 ]; then
             echo ""
@@ -147,8 +151,10 @@ jobs:
         run: |
           errors=0
 
-          # For each free plugin, compare version in plugin.json vs registry.json
-          find free -name "plugin.json" | sort | while read -r file; do
+          # For each free plugin, compare version in plugin.json vs registry.json.
+          # Same subshell trap as the field check above: read from a process
+          # substitution, not a pipe, or the mismatch counter is thrown away.
+          while read -r file; do
             plugin=$(dirname "$file" | xargs basename)
 
             disk_version=$(python3 -c "
@@ -179,7 +185,7 @@ jobs:
               echo "ERROR: Version mismatch for '$plugin': plugin.json=$disk_version, registry.json=$registry_version"
               errors=$((errors + 1))
             fi
-          done
+          done < <(find free -name "plugin.json" | sort)
 
           if [ "$errors" -gt 0 ]; then
             echo ""

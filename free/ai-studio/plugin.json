@@ -1,0 +1,50 @@
+{
+  "name": "ai-studio",
+  "version": "1.0.0",
+  "description": "Google AI Studio integration for local nSelf instances: secure Cloudflare Tunnel bridge with schema-context injection and read-only enforcement.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-ai-studio",
+  "category": "integrations",
+  "tags": [
+    "ai-studio",
+    "gemini",
+    "cloudflare",
+    "tunnel"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "bridge": "Start a secure AI Studio bridge via Cloudflare Tunnel"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_AISTUDIO_AUTH_TOKEN",
+      "NSELF_DEBUG",
+      "PROJECT_NAME"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin managed by nself build/start: it has no port declared in the port registry, no database tables, and runs a self-managed local HTTP proxy plus a Cloudflare Tunnel subprocess only while `nself ai-studio bridge` is running in the foreground. Extracted from cli/cmd/aistudio/* under CLI-R11; the original package had zero internal/* imports (fully self-contained: Cloudflare Tunnel management, a read-only GraphQL proxy, and Postgres schema snapshotting all implemented locally), so this is a verbatim move — only the package name (aistudio -> main) and the root command's Use/Silence fields changed."
+}

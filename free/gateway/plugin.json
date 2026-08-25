@@ -1,0 +1,49 @@
+{
+  "name": "gateway",
+  "version": "1.0.0",
+  "description": "Manage the nSelf AI gateway (nself-ai-gateway, port 3761): service health, provider key vault, quota usage, and routing rules.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-gateway",
+  "category": "integrations",
+  "tags": [
+    "gateway",
+    "ai",
+    "keys",
+    "quota"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "status": "Health-check nself-ai-cc, nself-ai-gateway, nself-ai-mcp",
+    "keys": "Manage provider API keys (list/add/remove)",
+    "quota": "Show quota usage by provider and model",
+    "routes": "List registered routing rules"
+  },
+  "envVars": {
+    "required": [],
+    "optional": []
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port of its own, no HTTP server, and no database tables. It is a thin JWT-authenticated HTTP client to the nself-ai-gateway backend service (port 3761). The CLI surface itself has zero license checks, matching the Three-Surface Model (App/client tier is always free). Extracted from cli/cmd/commands/gateway_cmd*.go and cli/internal/gateway/* under CLI-R11. internal/gateway was only ever imported by these files (no other core command used it), so it moved wholesale; its own internal/ports dependency was narrowed to a 3-constant local copy, and the gatewayToken() helper's internal/auth.ReadAuthFile() call was narrowed to a local read-only copy of that one function, since cli/internal/auth (3666 lines: login/OAuth/device-code flows) is unreachable from this module and not something this plugin needs."
+}

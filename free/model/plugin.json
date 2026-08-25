@@ -1,0 +1,56 @@
+{
+  "name": "model",
+  "version": "1.0.0",
+  "description": "Manage local AI models via Ollama: list, pull, remove, update, benchmark, plus the legacy `ollama` command tree.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-model",
+  "category": "integrations",
+  "tags": [
+    "model",
+    "ollama",
+    "ai",
+    "llm"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "list": "Show all pulled Ollama models",
+    "pull": "Pull (download) a model from the Ollama registry",
+    "remove": "Delete a pulled model to free disk space",
+    "update": "Re-pull a model to pick up the latest tag",
+    "benchmark": "Run a standard prompt and report tokens/s + p99 latency",
+    "ollama": "Legacy `nself ollama` command tree (models/status)"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_OLLAMA_HOST",
+      "PLUGIN_AI_OLLAMA_URL",
+      "NSELF_OLLAMA_TIMEOUT_SECONDS",
+      "NSELF_OLLAMA_DEFAULT_MODEL"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. It is a thin HTTP client to whatever Ollama-compatible endpoint NSELF_OLLAMA_HOST/PLUGIN_AI_OLLAMA_URL resolve to. Includes the `ollama` subcommand tree (cli/cmd/commands/ollama.go), which was already a child of `model`, not a separate top-level command, since CLI-R09's legacy-spelling rewrite (cmd/commands/legacy_spellings.go: \"ollama\" -> [\"model\",\"ollama\"]) turned bare `nself ollama` into `nself model ollama` before this extraction. That rewrite is unaffected by this move: it fires in core before the plugin-proxy check, producing argv [\"model\",\"ollama\",...], which core now proxies to nself-model since \"model\" is no longer a registered core command. Extracted from cli/cmd/commands/model*.go and ollama*.go under CLI-R11; zero internal/* imports in the originals, so this is a verbatim move, not an adaptation."
+}

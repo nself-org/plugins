@@ -1,0 +1,68 @@
+{
+  "name": "claw-cli",
+  "version": "1.0.0",
+  "description": "CLI client for the nClaw AI assistant: prompt, chat, pairing, keys, memories, topics, sessions, MCP server, OpenAI-compatible proxy, and schema migrations.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-claw",
+  "category": "integrations",
+  "tags": [
+    "claw",
+    "nclaw",
+    "ai",
+    "assistant",
+    "mcp"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "prompt": "Send a single prompt and get a response",
+    "chat": "Start an interactive chat session",
+    "config": "View or modify CLI configuration",
+    "pair": "Generate a pairing code for nClaw clients",
+    "unlock": "Temporarily unlock the web UI for setup",
+    "topics": "List or search topics",
+    "memories": "List or search memories",
+    "keys": "Manage API keys",
+    "status": "Show server status and health",
+    "proxy": "Start a local OpenAI-compatible proxy",
+    "mcp": "Start an MCP server for AI tools",
+    "export": "Export all data (JSON or CSV)",
+    "migrate": "Apply pending claw schema migrations",
+    "session": "Manage Claude Code PTY sessions"
+  },
+  "envVars": {
+    "required": [],
+    "optional": [
+      "NSELF_CLAW_API_KEY",
+      "NSELF_CLAW_SERVER",
+      "NSELF_EXTERNAL_URL",
+      "NSELF_AICC_URL",
+      "PLUGIN_CLAW_INTERNAL_URL",
+      "CLAW_PROXY_ALLOWED_ORIGINS",
+      "NSELF_HTTP_TIMEOUT_DEFAULT"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "Named 'claw-cli' (not 'claw') to avoid colliding with the existing paid backend service plugin registered as 'claw' in plugins-pro/registry.json (plugins-pro/paid/claw, the ɳClaw bundle). binaryName is explicitly overridden to 'nself-claw' since internal/plugin.ProxyCommand resolves nself-<cmdName>, keyed on the top-level command word the user types ('claw'), not the plugin's registry name. This IS the Three-Surface Model in action: this plugin is the thin, unlicensed CLI client (App tier, always free per doctrine) for the paid ɳClaw backend (Backend tier) — the CLI commands have zero license checks in the moved source, matching the ai-studio/gateway/gauth/model precedent from the same extraction batch. Extracted from cli/cmd/commands/claw*.go and cli/internal/claw/* under CLI-R11. cli/internal/config (7239 lines, the full .env cascade + schema + defaults) is unreachable from this module; claw_migrate.go and claw_pair.go only ever read six specific env vars off it, so those six fields were reimplemented directly as internal/projectenv (see its doc comment) rather than duplicating the whole package. internal/claw/migrations/ (SQL files) was carried over verbatim for parity, though in practice clawMigrationsDir() reaches this plugin's own copy only via the relative dev-mode fallback paths — the primary 'installed plugin' path it checks (~/.nself/plugins/claw/migrations) is the PAID backend's own installation directory, unchanged by this extraction."
+}
