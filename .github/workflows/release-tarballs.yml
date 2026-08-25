@@ -180,6 +180,13 @@ jobs:
 
       - name: Verify every free plugin has its tarballs
         run: |
+          # Recomputed here rather than inherited: each `run:` block is its own
+          # shell, so VERSION set in the build step above is empty in this one.
+          # Without this the check looked for "dist/<name>-.tar.gz" and reported
+          # every plugin as missing.
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+
           # Each plugin produces one source tarball. A cli plugin produces five
           # more, one per platform, and the CLI cannot install it without the
           # one matching the user's machine — so those are checked by name
