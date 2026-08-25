@@ -1,0 +1,48 @@
+{
+  "name": "maintenance",
+  "version": "1.0.0",
+  "description": "Maintenance utilities: disk cleanup, log rotation and the maintenance scheduler.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.2.8",
+  "language": "go",
+  "pluginType": "cli",
+  "entryPoint": "cmd/",
+  "binaryName": "nself-maintenance",
+  "category": "infrastructure",
+  "tags": [
+    "maintenance",
+    "cleanup",
+    "disk",
+    "scheduler"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {
+    "clean": "Reclaim disk space",
+    "schedule": "Manage the maintenance schedule",
+    "status": "Show maintenance status"
+  },
+  "envVars": {
+    "required": [],
+    "optional": []
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "status": "stable",
+  "tier": "free",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "notes": "This is a CLI-proxy plugin, not a service plugin: no port, no HTTP server, no database tables. `nself plugin install maintenance` places the built nself-maintenance binary at ~/.nself/plugins/bin/, where ProxyCommand execs it for `nself maintenance <args>` with stdio inherited. Extracted from the CLI core under CLI-R11. internal/maintenance stays in the CLI too, because doctor and deploy use it."
+}
