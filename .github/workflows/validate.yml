@@ -35,9 +35,18 @@ jobs:
           errors=0
 
           # Required top-level fields in every plugin.json
-          REQUIRED_FIELDS="name version description author license port category"
+          # `port` is deliberately not in this list. A CLI plugin provides a
+          # command and runs no HTTP server, so it has no port — this repo's
+          # own duplicate-port check already treats "port": 0 as "no server".
+          # It is checked separately below, only for plugins that are servers.
+          REQUIRED_FIELDS="name version description author license category"
 
-          find free -name "plugin.json" | sort | while read -r file; do
+          # `find ... | while read` runs the loop in a SUBSHELL, so every
+          # errors=$((errors + 1)) below was discarded and the check at the end
+          # always compared 0. This gate has been reporting success without the
+          # ability to report anything else. Reading from a process
+          # substitution keeps the loop in this shell so the counter survives.
+          while read -r file; do
             plugin=$(dirname "$file")
             printf "Checking %s...\n" "$plugin"
 
@@ -57,8 +66,18 @@ jobs:
               fi
             done
 
-            # Port must be numeric and in valid range (3100-3999)
-            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('port',0))" 2>/dev/null)
+            # Port: required for a service plugin, absent for a CLI plugin.
+            provides_command=$(python3 -c "import json,sys; d=json.load(open('$file')); print('yes' if d.get('pluginType')=='cli' or d.get('binaryName') else 'no')" 2>/dev/null)
+            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('port',''))" 2>/dev/null)
+
+            if [ "$provides_command" = "yes" ] && [ -z "$port" ]; then
+              port=0   # a command plugin has no HTTP server
+            fi
+            if [ -z "$port" ]; then
+              printf "  ERROR: Missing required field 'port' in %s (a service plugin must declare one; use 0 for no HTTP server)\n" "$file"
+              errors=$((errors + 1))
+              port=0
+            fi
             if ! echo "$port" | grep -qE '^[0-9]+$'; then
               printf "  ERROR: Port must be numeric in %s (got: %s)\n" "$file" "$port"
               errors=$((errors + 1))
@@ -73,7 +92,7 @@ jobs:
             fi
 
             printf "  OK\n"
-          done
+          done < <(find free -name "plugin.json" | sort)
 
           if [ $errors -gt 0 ]; then
             printf "\n%d validation error(s) found\n" "$errors"
@@ -115,7 +134,8 @@ jobs:
       - name: Verify README and plugin.json exist for each plugin
         run: |
           errors=0
-          find free -maxdepth 1 -mindepth 1 -type d | sort | while read -r dir; do
+          # Same subshell trap as the field check above.
+          while read -r dir; do
             if [ ! -f "$dir/README.md" ]; then
               printf "ERROR: Missing README.md in %s\n" "$dir"
               errors=$((errors + 1))
@@ -124,7 +144,7 @@ jobs:
               printf "ERROR: Missing plugin.json in %s\n" "$dir"
               errors=$((errors + 1))
             fi
-          done
+          done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
 
           if [ $errors -gt 0 ]; then
             printf "\n%d missing file(s) found\n" "$errors"
