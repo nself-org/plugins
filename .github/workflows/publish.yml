@@ -10,6 +10,7 @@ on:
       - 'registry.json'
       - 'free/*/plugin.json'
       - '.workers/**'
+      - '.github/workflows/publish.yml'
   workflow_dispatch:
     inputs:
       force_sync:

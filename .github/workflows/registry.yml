@@ -6,11 +6,13 @@ on:
     paths:
       - 'free/**/plugin.json'
       - 'registry.json'
+      - '.github/workflows/registry.yml'
   pull_request:
     branches: [main]
     paths:
       - 'free/**/plugin.json'
       - 'registry.json'
+      - '.github/workflows/registry.yml'
   workflow_dispatch:
 
 concurrency:
