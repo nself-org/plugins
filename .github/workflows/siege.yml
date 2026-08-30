@@ -2,7 +2,7 @@ name: SIEGE Security Regression (Syntax Check)
 
 # S10 seed: validates all siege scripts are syntactically valid on every PR and push.
 # Full live runs (against a running nself stack) are enabled in S44.
-# See: /Volumes/X9/Sites/nself/.claude/siege/README.md
+# See: /Volumes/UG/Sites/nself/.claude/siege/README.md
 
 on:
   push:
