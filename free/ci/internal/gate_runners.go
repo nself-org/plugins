@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func runGitleaks(root string, timeout int, verbose bool) GateResult {
+func runGitleaks(root string, timeout int, verbose bool, forceFilesystem bool) GateResult {
 	// Prefer a repo-local gitleaks.toml if present.
 	configFlag := ""
 	for _, candidate := range []string{
@@ -28,8 +28,15 @@ func runGitleaks(root string, timeout int, verbose bool) GateResult {
 	// walk node_modules and every gitignored directory: measured 2.27 GB and 47
 	// findings on one Node repo, all dependency false positives, and 80s of an
 	// 81s run. Without it gitleaks respects .gitignore and scans tracked content.
+	//
+	// forceFilesystem is the --filesystem opt-in escape hatch for the case the
+	// isGitRepo() auto-detection cannot cover: a non-checkout source tree (e.g.
+	// an exported tarball) that a user explicitly wants scanned via --no-git
+	// rather than relying on the automatic non-repo fallback. Never the
+	// default — see Config.ForceFilesystem.
+	isRepo := isGitRepo(root) && !forceFilesystem
 	return runStep("secrets:gitleaks", root, timeout, verbose, "gitleaks",
-		gitleaksArgs(root, configFlag, isGitRepo(root))...)
+		gitleaksArgs(root, configFlag, isRepo)...)
 }
 
 // gitleaksArgs builds the gitleaks argv. Split out from runGitleaks purely so the
@@ -39,7 +46,8 @@ func runGitleaks(root string, timeout int, verbose bool) GateResult {
 func gitleaksArgs(root, configFlag string, isRepo bool) []string {
 	args := []string{"detect", "--source", root, "--exit-code", "1"}
 	if !isRepo {
-		// Not a checkout (rare — e.g. an exported tarball). Fall back to a
+		// Not a checkout (rare — e.g. an exported tarball), or the caller
+		// explicitly forced filesystem mode via --filesystem. Fall back to a
 		// filesystem scan so the gate still runs, and exclude the usual noise.
 		args = append(args, "--no-git")
 	}

@@ -1,6 +1,6 @@
 {
   "name": "ci",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
   "author": "nself",
   "license": "MIT",

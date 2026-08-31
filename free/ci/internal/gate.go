@@ -22,6 +22,13 @@ type Config struct {
 	StepTimeout int
 	// SkipGitleaks skips the secret scan (useful in local dev without gitleaks binary).
 	SkipGitleaks bool
+	// ForceFilesystem forces gitleaks into filesystem-scan mode (--no-git) even
+	// inside a real git checkout. Opt-in only: for a non-checkout source tree
+	// that nonetheless contains a .git directory somewhere on its path (or any
+	// case where the caller explicitly wants the old --no-git behavior), e.g.
+	// an exported tarball extracted under a parent that happens to be a repo.
+	// Never the default — see runGitleaks/gitleaksArgs. SPORT: PLUGINS-CI-001
+	ForceFilesystem bool
 	// Verbose prints each command before running it.
 	Verbose bool
 	// GatewayBase is the base URL for the gateway routing check stage.

@@ -9,7 +9,7 @@ Local CI gate runner for nSelf repositories. Detects the repo stack and runs lin
    - **Go:** `gofmt -l .` + `go vet ./...` + `go test ./...`
    - **Node:** `pnpm run lint` + `pnpm run typecheck` + `pnpm run test` + `pnpm run build` (skips missing scripts)
    - **Flutter:** `flutter analyze` + `flutter test`
-3. Scans for secrets with `gitleaks` (uses repo `.github/gitleaks.toml` if present)
+3. Scans for secrets with `gitleaks` (uses repo `.github/gitleaks.toml` if present). Defaults to git-mode (respects `.gitignore`, scans tracked content); pass `--filesystem` to force the old `--no-git` filesystem-scan behavior for a non-checkout source tree.
 4. Posts a `nself-ci` commit status to GitHub so it appears in PR checks
 
 ## Usage
@@ -27,8 +27,14 @@ nself-ci --owner nself-org --repo plugins --sha abc1234 .
 # Skip gitleaks (if not installed)
 nself-ci --no-gitleaks .
 
+# Force a filesystem-mode gitleaks scan (--no-git) even inside a git checkout.
+# Opt-in only, for a non-checkout source tree (e.g. an exported tarball) where
+# the automatic non-repo fallback doesn't apply.
+nself-ci --filesystem .
+
 # Via nself CLI proxy (once registered)
 nself ci [repo-root]
+nself ci --filesystem [repo-root]
 ```
 
 ## Environment variables

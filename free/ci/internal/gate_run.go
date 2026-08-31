@@ -55,7 +55,7 @@ func Run(cfg Config) (*Result, error) {
 
 	// 2. Run gitleaks scan first (fast, fail-fast on secrets).
 	if !cfg.SkipGitleaks {
-		gr := runGitleaks(root, timeout, cfg.Verbose)
+		gr := runGitleaks(root, timeout, cfg.Verbose, cfg.ForceFilesystem)
 		res.Gates = append(res.Gates, gr)
 	}
 

@@ -144,6 +144,7 @@ func runSingleRepoCmd(rawArgs []string) {
 		checkOnly    = fs.Bool("check", false, "Check mode: run gates, print result, exit 0/1. No status posted.")
 		env          = fs.String("env", "", "Target environment for gateway routing check: staging|local (SPORT: PLUGINS-CI-005)")
 		gatewayURL   = fs.String("gateway", "", "Explicit gateway base URL override (e.g. http://host:3761)")
+		filesystem   = fs.Bool("filesystem", false, "Force gitleaks filesystem scan (--no-git) even inside a git checkout; opt-in for non-checkout source trees such as an exported tarball")
 	)
 	_ = fs.Parse(rawArgs)
 
@@ -174,10 +175,11 @@ func runSingleRepoCmd(rawArgs []string) {
 	}
 
 	cfg := internal.Config{
-		RepoRoot:     repoRoot,
-		SkipGitleaks: *skipGitleaks,
-		Verbose:      *verbose,
-		GatewayBase:  gatewayBase,
+		RepoRoot:        repoRoot,
+		SkipGitleaks:    *skipGitleaks,
+		Verbose:         *verbose,
+		GatewayBase:     gatewayBase,
+		ForceFilesystem: *filesystem,
 	}
 
 	// Determine SHA and remote before running gates (fail early on config errors).
