@@ -1,0 +1,27 @@
+services:
+  tmdb:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/tmdb
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_tmdb
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3122:3122"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: "3122"
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      TMDB_API_READ_ACCESS_TOKEN: ${TMDB_API_READ_ACCESS_TOKEN:-}
+      OMDB_API_KEY: ${OMDB_API_KEY:-}
+      TVDB_API_KEY: ${TVDB_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3122/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

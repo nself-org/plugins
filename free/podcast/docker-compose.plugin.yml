@@ -1,0 +1,23 @@
+services:
+  podcast:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/podcast
+      dockerfile: Dockerfile.golang
+    container_name: ${COMPOSE_PROJECT_NAME}_podcast
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3210:3210"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: "3210"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3210/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

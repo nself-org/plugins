@@ -1,0 +1,244 @@
+{
+  "name": "geocoding",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Geocoding plugin with geofence storage. Planned: Google Maps API integration for forward/reverse geocoding and place search",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3856,
+  "category": "infrastructure",
+  "tags": [
+    "geocoding",
+    "maps",
+    "location",
+    "geofencing",
+    "places"
+  ],
+  "tables": [
+    "np_geoc_cache",
+    "np_geoc_geofences",
+    "np_geoc_geofence_events",
+    "np_geoc_places"
+  ],
+  "views": [
+    "np_geoc_cache_hit_rate",
+    "np_geoc_volume_daily",
+    "np_geoc_geofence_activity"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start the API server",
+    "geocode": "Forward geocode an address",
+    "reverse": "Reverse geocode coordinates",
+    "search": "Search for places",
+    "batch": "Batch geocode from CSV",
+    "geofences": "Manage geofences",
+    "cache": "Manage geocoding cache",
+    "status": "Show overall statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "GEOCODING_PLUGIN_PORT",
+      "GEOCODING_PROVIDERS",
+      "GEOCODING_GOOGLE_API_KEY",
+      "GEOCODING_MAPBOX_ACCESS_TOKEN",
+      "GEOCODING_NOMINATIM_URL",
+      "GEOCODING_NOMINATIM_EMAIL",
+      "GEOCODING_CACHE_TTL_DAYS",
+      "GEOCODING_CACHE_ENABLED",
+      "GEOCODING_MAX_BATCH_SIZE",
+      "GEOCODING_RATE_LIMIT_PROVIDER",
+      "GEOCODING_GEOFENCE_CHECK_TOLERANCE_METERS",
+      "GEOCODING_NOTIFY_URL",
+      "GEOCODING_API_KEY",
+      "GEOCODING_RATE_LIMIT_MAX",
+      "GEOCODING_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "webhookPath": "/webhooks/geocoding",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/cache",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/cache/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/geocode",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/geofences",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/geofences",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/geofences/check",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/geofences/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/geofences/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/geofences/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/places",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/places",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/places/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/places/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/quota",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/reverse",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/geocode/autocomplete",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/geocode/batch-forward",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/geocode/batch-reverse",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/geocode/forward",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/geocode/reverse",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/geocode/tz",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/live",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "ac414141afc36d9355c8fd263d3f9df12cfde17fa2fa841f49766cc70aed4153",
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

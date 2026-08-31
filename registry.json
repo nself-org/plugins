@@ -5,7 +5,7 @@
   "last_updated": "2026-08-31",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 60 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry — 60 MIT-licensed plugins.",
   "plugins": {
     "ai-cli": {
       "version": "1.0.0",
@@ -614,7 +614,7 @@
     },
     "family-gedcom": {
       "version": "0.0.1",
-      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin \u2014 showcases the core + helper-importer pattern.",
+      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
       "category": "content",
       "tier": "free",
       "license": "MIT",
@@ -740,7 +740,7 @@
     },
     "forgejo": {
       "version": "1.0.0",
-      "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute \u2014 zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+      "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
       "category": "development",
       "tier": "free",
       "license": "MIT",
@@ -919,7 +919,7 @@
     },
     "github-runner": {
       "version": "1.0.0",
-      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
+      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
@@ -2230,7 +2230,7 @@
     },
     "cdc": {
       "version": "1.0.0",
-      "description": "Change Data Capture \u2014 streams Postgres WAL events to downstream consumers via webhooks or message queues.",
+      "description": "Change Data Capture — streams Postgres WAL events to downstream consumers via webhooks or message queues.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -2554,7 +2554,7 @@
     },
     "family-ancestry": {
       "version": "1.1.2",
-      "description": "Ancestry.com \u2192 nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
+      "description": "Ancestry.com → nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -2579,7 +2579,7 @@
     },
     "family-familysearch": {
       "version": "1.1.2",
-      "description": "FamilySearch \u2192 nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
+      "description": "FamilySearch → nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -2605,7 +2605,7 @@
     },
     "family-myheritage": {
       "version": "1.1.2",
-      "description": "MyHeritage \u2192 nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company \u2014 lowest legal risk, potential partnership path.",
+      "description": "MyHeritage → nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company — lowest legal risk, potential partnership path.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -2630,7 +2630,7 @@
     },
     "family-wikitree": {
       "version": "1.1.2",
-      "description": "WikiTree \u2192 nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
+      "description": "WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -2855,7 +2855,7 @@
     },
     "nself-cloud": {
       "version": "0.1.0",
-      "description": "Internal ɳCloud managed hosting infrastructure plugin \u2014 provisions isolated nSelf instances for Cloud customers",
+      "description": "Internal ɳCloud managed hosting infrastructure plugin — provisions isolated nSelf instances for Cloud customers",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -2984,7 +2984,7 @@
     },
     "nself-scan": {
       "version": "0.1.0",
-      "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
+      "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred — requires partner agreement)",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
@@ -3514,7 +3514,7 @@
     },
     "warehouse": {
       "version": "1.0.0",
-      "description": "Data warehouse sync \u2014 exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
+      "description": "Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -3609,6 +3609,270 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "installable": false
+    },
+    "nself-saas-gateway": {
+      "version": "0.1.0",
+      "description": "Unified tenant-scoped REST facade for the nSentry SaaS (api.sentry.nself.org): /v1 monitors, incidents, status pages, and alert channels over the bundle plugins, plus tenant signup and billing tier updates.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v0.1.0/nself-saas-gateway-0.1.0.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/nself-saas-gateway/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "saas",
+        "gateway",
+        "api",
+        "multi-tenant",
+        "nsentry"
+      ],
+      "dependencies": [
+        "nself-uptime-monitor",
+        "nself-incident-mgmt",
+        "nself-alert-router"
+      ],
+      "name": "nself-saas-gateway",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": []
+    },
+    "tmdb": {
+      "version": "1.1.2",
+      "description": "Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support",
+      "category": "media",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/tmdb-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/tmdb/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "tmdb",
+        "metadata",
+        "movies",
+        "tv-shows",
+        "imdb",
+        "tvdb",
+        "musicbrainz",
+        "media",
+        "matching",
+        "enrichment"
+      ],
+      "dependencies": [],
+      "name": "tmdb",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_tmdb_movies",
+        "np_tmdb_tv_shows",
+        "np_tmdb_tv_seasons",
+        "np_tmdb_tv_episodes",
+        "np_tmdb_genres",
+        "np_tmdb_match_queue",
+        "np_tmdb_webhook_events"
+      ]
+    },
+    "game-metadata": {
+      "version": "1.1.2",
+      "description": "Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management",
+      "category": "media",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/game-metadata-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/game-metadata/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "games",
+        "igdb",
+        "metadata",
+        "rom",
+        "retro-gaming",
+        "artwork"
+      ],
+      "dependencies": [],
+      "name": "game-metadata",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_game_catalog",
+        "np_game_metadata",
+        "np_game_artwork",
+        "np_game_platforms",
+        "np_game_genres"
+      ]
+    },
+    "sports": {
+      "version": "1.1.2",
+      "description": "Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats",
+      "category": "sports",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/sports-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/sports/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "sports",
+        "nfl",
+        "nba",
+        "mlb",
+        "scores",
+        "schedules",
+        "standings",
+        "live-data",
+        "espn",
+        "players",
+        "teams"
+      ],
+      "dependencies": [],
+      "name": "sports",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_sports_leagues",
+        "np_sports_teams",
+        "np_sports_events",
+        "np_sports_games",
+        "np_sports_standings",
+        "np_sports_players",
+        "np_sports_favorites",
+        "np_sports_provider_syncs",
+        "np_sports_schedule_cache",
+        "np_sports_sync_state",
+        "np_sports_webhook_events"
+      ]
+    },
+    "podcast": {
+      "version": "1.1.2",
+      "description": "Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management",
+      "category": "media",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/podcast-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/podcast/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "podcast",
+        "rss",
+        "audio",
+        "episodes",
+        "subscriptions",
+        "playback"
+      ],
+      "dependencies": [],
+      "name": "podcast",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_podcast_podcasts",
+        "np_podcast_episodes",
+        "np_podcast_subscriptions",
+        "np_podcast_playback_positions",
+        "np_podcast_categories"
+      ]
+    },
+    "file-processing": {
+      "version": "1.1.2",
+      "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure. Planned: Inbound webhook support for storage provider notifications",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/file-processing-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/file-processing/tarball",
+      "requires_license": false,
+      "language": "rust",
+      "tags": [
+        "files",
+        "storage",
+        "processing",
+        "thumbnails",
+        "optimization"
+      ],
+      "dependencies": [],
+      "name": "file-processing",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_fileproc_jobs",
+        "np_fileproc_thumbnails",
+        "np_fileproc_metadata"
+      ]
+    },
+    "media-processing": {
+      "version": "1.1.2",
+      "description": "FFmpeg-based media encoding and processing with HLS streaming support",
+      "category": "media",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/media-processing-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/media-processing/tarball",
+      "requires_license": false,
+      "language": "rust",
+      "tags": [
+        "media",
+        "video",
+        "encoding",
+        "ffmpeg",
+        "hls",
+        "dash",
+        "cmaf",
+        "streaming",
+        "transcoding"
+      ],
+      "dependencies": [],
+      "name": "media-processing",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_mediap_encoding_profiles",
+        "np_mediap_jobs",
+        "np_mediap_job_outputs",
+        "np_mediap_hls_manifests",
+        "np_mediap_subtitles",
+        "np_mediap_trickplay",
+        "np_mediap_webhook_events",
+        "np_mediap_watcher_events",
+        "np_mediap_uploads"
+      ]
+    },
+    "geocoding": {
+      "version": "1.1.2",
+      "description": "Geocoding plugin with geofence storage. Planned: Google Maps API integration for forward/reverse geocoding and place search",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.1.2/geocoding-1.1.2.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/geocoding/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "geocoding",
+        "maps",
+        "location",
+        "geofencing",
+        "places"
+      ],
+      "dependencies": [],
+      "name": "geocoding",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [
+        "np_geoc_cache",
+        "np_geoc_geofences",
+        "np_geoc_geofence_events",
+        "np_geoc_places"
+      ]
     }
   }
 }

@@ -1,0 +1,40 @@
+- table:
+    schema: public
+    name: np_podcast_podcasts
+np_podcast_episodes
+np_podcast_subscriptions
+np_podcast_playback_positions
+np_podcast_categories
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: nself_admin
+      permission:
+        columns: '*'
+        check: {}
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: nself_admin
+      permission:
+        filter: {}

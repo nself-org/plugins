@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  media-processing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nself/nself-media-processing:latest
+    ports:
+      - "3088:3088"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=3088
+      - MP_FFMPEG_PATH=/usr/bin/ffmpeg
+      - MP_FFPROBE_PATH=/usr/bin/ffprobe
+      - MP_OUTPUT_BASE_PATH=/data/media-processing
+    volumes:
+      - media_data:/data/media-processing
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  media_data:
