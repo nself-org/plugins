@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins-pro/paid/shared/httpclient"
+	"github.com/nself-org/plugins/free/shared/httpclient"
 )
 
 // wordpressFallbackClient is the default HTTP client used when

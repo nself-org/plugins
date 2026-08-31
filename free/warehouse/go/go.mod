@@ -8,12 +8,12 @@ require (
 	cloud.google.com/go/bigquery v1.75.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.45.0
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/nself-org/plugins-pro/paid/shared v0.0.0-00010101000000-000000000000
+	github.com/nself-org/plugins/free/shared v0.0.0-00010101000000-000000000000
 	github.com/snowflakedb/gosnowflake v1.19.1
 	google.golang.org/api v0.274.0
 )
 
-replace github.com/nself-org/plugins-pro/paid/shared => ../../shared
+replace github.com/nself-org/plugins/free/shared => ../../shared
 
 require (
 	cloud.google.com/go v0.123.0 // indirect

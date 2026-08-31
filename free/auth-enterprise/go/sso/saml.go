@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins-pro/paid/shared/httpclient"
+	"github.com/nself-org/plugins/free/shared/httpclient"
 )
 
 // samlClient is the package-level HTTP client used for SAML metadata fetches.
