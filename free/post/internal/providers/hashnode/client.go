@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins/free/shared/httpclient"
+	"github.com/nself-org/plugins/free/shared-utils/httpclient"
 )
 
 const hashnodeGraphQLURL = "https://gql.hashnode.com"

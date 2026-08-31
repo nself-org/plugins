@@ -1,4 +1,4 @@
-module github.com/nself-org/plugins/free/shared
+module github.com/nself-org/plugins/free/shared-utils
 
 go 1.25.0
 

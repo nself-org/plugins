@@ -3589,7 +3589,7 @@
       "minNselfVersion": "1.0.0",
       "tables": []
     },
-    "shared": {
+    "shared-utils": {
       "version": "1.0.0",
       "description": "Shared Go utilities (request-ID tracing middleware, HTTP client propagation, server lifecycle helpers) used internally by multiple free nself plugins. Not installable directly.",
       "category": "infrastructure",
@@ -3604,7 +3604,7 @@
         "library"
       ],
       "dependencies": [],
-      "name": "shared",
+      "name": "shared-utils",
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],

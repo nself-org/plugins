@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nself-org/plugins/free/shared/httpmid"
+	"github.com/nself-org/plugins/free/shared-utils/httpmid"
 )
 
 // DefaultTimeout is used when Options.Timeout is zero.

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins/free/shared/httpclient"
+	"github.com/nself-org/plugins/free/shared-utils/httpclient"
 )
 
 const telegramAPIBase = "https://api.telegram.org/bot"
