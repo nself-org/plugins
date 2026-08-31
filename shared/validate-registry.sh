@@ -690,8 +690,15 @@ while IFS="$US" read -r name _tier _category _version _port bundles_json _deps _
         BUNDLE_VIOLATIONS=$((BUNDLE_VIOLATIONS + 1))
         continue
     fi
-    # Each member must be a string and from canonical list
-    BUNDLE_MEMBERS="$("$JQ" -r '.[]' <<< "$bundles_json" 2>/dev/null)"
+    # Shape check (mirrors registry-check.yml's "Validate bundles[] field shape"
+    # CI step): every member must be a string before checking canonical membership.
+    NON_STRING_COUNT="$("$JQ" -r '[.[] | select(type != "string")] | length' <<< "$bundles_json" 2>/dev/null)"
+    if [ -n "$NON_STRING_COUNT" ] && [ "$NON_STRING_COUNT" != "0" ]; then
+        err "CHECK-10" "$name" "bundles array contains $NON_STRING_COUNT non-string item(s) — must be array of strings"
+        BUNDLE_VIOLATIONS=$((BUNDLE_VIOLATIONS + NON_STRING_COUNT))
+    fi
+    # Each string member must be from the canonical list
+    BUNDLE_MEMBERS="$("$JQ" -r '.[] | select(type == "string")' <<< "$bundles_json" 2>/dev/null)"
     while IFS= read -r bundle; do
         [ -z "$bundle" ] && continue
         # shellcheck disable=SC2086  # intentional word splitting on $VALID_BUNDLES

@@ -194,3 +194,42 @@ jobs:
           fi
 
           echo "All plugin versions are consistent between plugin.json and registry.json"
+
+      - name: Validate bundles[] field shape
+        run: |
+          python3 -c "
+          import json, sys
+
+          with open('registry.json') as f:
+            data = json.load(f)
+
+          plugins = data.get('plugins', {})
+          errors = 0
+
+          def check_entry(name, entry):
+            global errors
+            if 'bundles' not in entry:
+              return
+            bundles = entry['bundles']
+            if not isinstance(bundles, list):
+              print(f\"ERROR: '{name}' has non-array bundles field: {bundles!r}\")
+              errors += 1
+              return
+            for item in bundles:
+              if not isinstance(item, str):
+                print(f\"ERROR: '{name}' bundles array contains non-string item: {item!r}\")
+                errors += 1
+
+          if isinstance(plugins, dict):
+            for name, entry in plugins.items():
+              check_entry(name, entry)
+          elif isinstance(plugins, list):
+            for entry in plugins:
+              check_entry(entry.get('name', '<unknown>'), entry)
+
+          if errors:
+            print(f'FAILED: {errors} bundles[] shape violation(s) found')
+            sys.exit(1)
+
+          print('All bundles[] fields (where present) are arrays of strings')
+          "

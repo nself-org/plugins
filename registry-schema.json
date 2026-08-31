@@ -215,6 +215,11 @@
           "items": { "type": "string" },
           "description": "Other plugins this plugin depends on"
         },
+        "bundles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional free-bundle membership tags (e.g. 'task'). Empty or absent means general-purpose, not tied to any bundle."
+        },
         "multiApp": {
           "type": "object",
           "properties": {

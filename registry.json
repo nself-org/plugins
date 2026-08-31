@@ -1,8 +1,8 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "generated_at": "2026-04-25T18:04:18.501242Z",
   "plugins_count": 60,
-  "last_updated": "2026-08-24",
+  "last_updated": "2026-08-31",
   "tier": "free",
   "checksum_algorithm": "sha256",
   "note": "nSelf Free Plugin Registry \u2014 60 MIT-licensed plugins.",
@@ -748,7 +748,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/forgejo-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/forgejo/tarball",
       "requires_license": false,
-      "language": "go",
+      "language": "config",
       "tags": [
         "ci",
         "cd",
@@ -766,7 +766,7 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "implementation": {
-        "language": "go",
+        "language": "shell",
         "runtime": "docker",
         "entryPoint": "docker-compose.plugin.yml"
       }
