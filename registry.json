@@ -3610,34 +3610,6 @@
       "tables": [],
       "installable": false
     },
-    "nself-saas-gateway": {
-      "version": "0.1.0",
-      "description": "Unified tenant-scoped REST facade for the nSentry SaaS (api.sentry.nself.org): /v1 monitors, incidents, status pages, and alert channels over the bundle plugins, plus tenant signup and billing tier updates.",
-      "category": "infrastructure",
-      "tier": "free",
-      "license": "MIT",
-      "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v0.1.0/nself-saas-gateway-0.1.0.tar.gz",
-      "download_url": "https://plugins.nself.org/plugins/nself-saas-gateway/tarball",
-      "requires_license": false,
-      "language": "go",
-      "tags": [
-        "saas",
-        "gateway",
-        "api",
-        "multi-tenant",
-        "nsentry"
-      ],
-      "dependencies": [
-        "nself-uptime-monitor",
-        "nself-incident-mgmt",
-        "nself-alert-router"
-      ],
-      "name": "nself-saas-gateway",
-      "author": "nself",
-      "minNselfVersion": "1.0.0",
-      "tables": []
-    },
     "tmdb": {
       "version": "1.1.2",
       "description": "Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support",
