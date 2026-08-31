@@ -15,6 +15,17 @@ jobs:
     name: Build & test all Go plugins
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # This loop matches any free/*/ directory with a go.mod, which as of P6
+    # is 59 of the 60 free plugins. The one exclusion is `forgejo` (docker
+    # compose + shell, genuinely no Go code) — that is the correct, expected
+    # gap, not a bug in the glob.
+    #
+    # `monitoring` DOES have a go.mod, cmd/main.go and internal/render/, and
+    # IS built/tested here despite registry.json's `language` field saying
+    # "config" for it — that field is stale/wrong, not a signal to skip it.
+    # registry-check.yml separately validates monitoring's non-Go config
+    # assets (docker-compose.plugin.yml, hasura/, nginx/), so it gets both
+    # kinds of coverage. Do not "fix" this loop by excluding monitoring.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
