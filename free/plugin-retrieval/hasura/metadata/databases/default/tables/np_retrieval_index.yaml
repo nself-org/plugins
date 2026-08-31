@@ -1,0 +1,40 @@
+# np_retrieval_index — RRF metadata + tsvector for hybrid search (plugin-retrieval E7)
+#
+# Multi-App Isolation Convention: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id":{"_eq":"X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_retrieval_index
+  object_relationships:
+    - name: embedding
+      using:
+        foreign_key_constraint_on: embedding_id
+  select_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+    - role: nself_operator
+      permission:
+        columns: [id, source_account_id, embedding_id, rrf_score, query_hash, created_at]
+        filter: {}
+    - role: nself_user
+      permission:
+        columns: [id, source_account_id, embedding_id, rrf_score, query_hash, created_at]
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: nself_operator
+      permission:
+        columns: [source_account_id, embedding_id, rrf_score, tsvector_content, query_hash]
+        check: {}
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}
+    - role: nself_operator
+      permission:
+        filter: {}

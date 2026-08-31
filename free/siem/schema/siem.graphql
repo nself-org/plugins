@@ -1,0 +1,43 @@
+# SIEM plugin — Hasura GraphQL schema additions.
+# Tables are tracked via Hasura metadata. This file documents the exposed surface.
+
+# np_siem_destinations — Hasura tracked table
+# Row-level security: tenant_id = X-Hasura-Tenant-Id
+# Permissions: siem:read (select), siem:admin (select/insert/update/delete)
+
+# np_siem_ship_log — Hasura tracked table
+# Permissions: siem:read (select), siem:admin (select/insert)
+
+type SiemDestination {
+  id: uuid!
+  tenant_id: uuid
+  name: String!
+  type: String!
+  endpoint_url: String!
+  batch_size: Int!
+  flush_interval_s: Int!
+  schema: String!
+  enabled: Boolean!
+  last_shipped_at: timestamptz
+  error_count: Int!
+  created_at: timestamptz!
+  ship_logs(limit: Int, order_by: [SiemShipLogOrderBy]): [SiemShipLog!]!
+}
+
+type SiemShipLog {
+  id: uuid!
+  destination_id: uuid!
+  batch_size: Int
+  shipped_at: timestamptz!
+  status: String!
+  error_detail: String
+}
+
+input SiemShipLogOrderBy {
+  shipped_at: OrderBy
+}
+
+enum OrderBy {
+  asc
+  desc
+}

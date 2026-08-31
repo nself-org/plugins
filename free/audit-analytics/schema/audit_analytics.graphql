@@ -1,0 +1,110 @@
+# audit_analytics.graphql — Hasura schema for the audit-analytics plugin.
+# Tables: np_audit_anomalies, np_audit_privileged_reviews
+# View:   np_audit_heatmap (read-only)
+# All tables require Hasura row filter: {"tenant_id": {"_eq": "X-Hasura-Tenant-Id"}}
+
+type Query {
+  """
+  List audit anomalies for the current tenant.
+  Filter by severity (low|medium|high|critical), date range, and review status.
+  """
+  np_audit_anomalies(
+    where: np_audit_anomalies_bool_exp
+    order_by: [np_audit_anomalies_order_by!]
+    limit: Int
+    offset: Int
+  ): [np_audit_anomalies!]!
+
+  np_audit_anomalies_by_pk(id: uuid!): np_audit_anomalies
+
+  """
+  Materialized heatmap: action counts by (user, day_of_week, hour_of_day) over 30 days.
+  """
+  np_audit_heatmap(
+    where: np_audit_heatmap_bool_exp
+    order_by: [np_audit_heatmap_order_by!]
+    limit: Int
+    offset: Int
+  ): [np_audit_heatmap!]!
+
+  """
+  Privileged action review queue: role_grant, plugin_install, schema_alter, gdpr_delete.
+  Overdue items have due_at < NOW() and reviewed_at IS NULL.
+  """
+  np_audit_privileged_reviews(
+    where: np_audit_privileged_reviews_bool_exp
+    order_by: [np_audit_privileged_reviews_order_by!]
+    limit: Int
+    offset: Int
+  ): [np_audit_privileged_reviews!]!
+
+  np_audit_privileged_reviews_by_pk(id: uuid!): np_audit_privileged_reviews
+}
+
+type Mutation {
+  """
+  Set the disposition and reviewer for an anomaly.
+  Requires audit:review permission.
+  """
+  update_np_audit_anomalies_by_pk(
+    pk_columns: np_audit_anomalies_pk_columns_input!
+    _set: np_audit_anomalies_set_input!
+  ): np_audit_anomalies
+
+  """
+  Mark a privileged action review as completed.
+  Requires audit:review permission.
+  """
+  update_np_audit_privileged_reviews_by_pk(
+    pk_columns: np_audit_privileged_reviews_pk_columns_input!
+    _set: np_audit_privileged_reviews_set_input!
+  ): np_audit_privileged_reviews
+}
+
+"""
+np_audit_anomalies stores scored anomaly events.
+Each row represents one detected anomaly: a deviation from the 7-day rolling baseline.
+"""
+type np_audit_anomalies {
+  id: uuid!
+  tenant_id: uuid
+  user_id: uuid!
+  anomaly_type: String!   # bulk_delete|new_ip|impossible_travel|after_hours_admin|freq_spike
+  severity: String!       # low|medium|high|critical
+  z_score: numeric
+  detected_at: timestamptz!
+  context: jsonb!         # {action, count, baseline, ip, location}
+  reviewed_by: uuid
+  reviewed_at: timestamptz
+  disposition: String     # false_positive|true_positive|escalated
+}
+
+"""
+np_audit_heatmap is a materialized view of action counts per
+(tenant, user, day_of_week, hour_of_day) over the last 30 days.
+Refreshed periodically by the audit-analytics cron job.
+"""
+type np_audit_heatmap {
+  tenant_id: uuid
+  user_id: uuid!
+  day_of_week: numeric!   # 0=Sunday, 6=Saturday
+  hour_of_day: numeric!   # 0-23 UTC
+  action_count: bigint!
+}
+
+"""
+np_audit_privileged_reviews is the review queue for high-risk actions.
+Each action in (role_grant, plugin_install, schema_alter, gdpr_delete)
+creates one review record that must be annotated within due_at.
+"""
+type np_audit_privileged_reviews {
+  id: uuid!
+  tenant_id: uuid
+  audit_log_id: uuid!
+  action: String!
+  actor_id: uuid!
+  due_at: timestamptz!
+  reviewer_id: uuid
+  reviewed_at: timestamptz
+  notes: String
+}

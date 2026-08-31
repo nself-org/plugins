@@ -1,0 +1,41 @@
+{
+  "name": "storage",
+  "version": "1.0.0",
+  "api_version": "1.0",
+  "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.1.0",
+  "port": 9007,
+  "category": "infrastructure",
+  "tier": "pro",
+  "language": "go",
+  "tags": [
+    "storage",
+    "s3",
+    "minio",
+    "files",
+    "uploads"
+  ],
+  "tables": [
+    "np_storage_buckets",
+    "np_storage_objects",
+    "np_storage_metadata"
+  ],
+  "bundles": [
+    "clawde",
+    "ntv",
+    "nfamily"
+  ],
+  "ssrf_guard": true,
+  "dependencies": {
+    "required": [],
+    "optional": []
+  }
+}

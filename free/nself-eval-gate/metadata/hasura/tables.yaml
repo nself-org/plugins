@@ -1,0 +1,177 @@
+# Hasura table registration for nself-eval-gate plugin
+#
+# Permission matrix (per spec §8):
+#   np_eval_suites, np_eval_tasks, np_eval_runs — multi-app isolation via source_account_id.
+#     service role: CRUD unrestricted (plugin HTTP API calls use service role).
+#     admin role: unrestricted.
+#     No user/tenant_user/public roles — eval infra is admin-only (§4 no public GraphQL).
+#   np_eval_thresholds — global config, intentionally NO source_account_id column.
+#     service role: SELECT only (thresholds are read by the gate check logic).
+#     admin role: full CRUD (operators configure thresholds via admin tooling).
+#     No user/tenant_user/public roles.
+#
+# Row filter convention (PPI Multi-Tenant Convention Wall):
+#   source_account_id tables → filter: { source_account_id: { _eq: X-Hasura-Source-Account-Id } }
+#   np_eval_thresholds → filter: {} (global, no isolation)
+
+- table:
+    schema: public
+    name: np_eval_suites
+  select_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  insert_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check: {}
+  update_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  delete_permissions:
+    - role: service
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter: {}
+
+- table:
+    schema: public
+    name: np_eval_tasks
+  select_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter:
+          suite:
+            source_account_id:
+              _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  insert_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        check: {}
+    - role: admin
+      permission:
+        columns: "*"
+        check: {}
+  update_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter: {}
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  delete_permissions:
+    - role: service
+      permission:
+        filter: {}
+    - role: admin
+      permission:
+        filter: {}
+
+- table:
+    schema: public
+    name: np_eval_runs
+  select_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  insert_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        check: {}
+  update_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  delete_permissions:
+    - role: service
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+    - role: admin
+      permission:
+        filter: {}
+
+- table:
+    schema: public
+    name: np_eval_thresholds
+  # No source_account_id — thresholds are global config (intentional by design per PPI §4).
+  # Only admin and service roles; no user-facing access.
+  select_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter: {}
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  insert_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        check: {}
+  update_permissions:
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  delete_permissions:
+    - role: admin
+      permission:
+        filter: {}

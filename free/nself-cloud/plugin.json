@@ -1,0 +1,246 @@
+{
+  "name": "nself-cloud",
+  "version": "0.1.0",
+  "api_version": "1.0.0",
+  "description": "\u0273Cloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.",
+  "author": "nSelf Team",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "visibility": "internal",
+  "homepage": "https://nself.org/cloud",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.1.0",
+  "targetVersion": "1.1.0",
+  "category": "infrastructure",
+  "tags": [
+    "cloud",
+    "hosting",
+    "provisioning",
+    "hetzner",
+    "billing",
+    "stripe",
+    "multi-tenant",
+    "saas"
+  ],
+  "tables": [
+    "np_cloud_tenants",
+    "np_cloud_instances",
+    "np_cloud_billing_events",
+    "np_cloud_domains",
+    "np_cloud_invitations",
+    "np_cloud_team_memberships"
+  ],
+  "status": "planned",
+  "tier": "max",
+  "language": "go",
+  "entryPoint": "nself-cloud",
+  "entry": "main.go",
+  "port": 3855,
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "HETZNER_API_TOKEN",
+      "STRIPE_PLATFORM_SECRET_KEY",
+      "STRIPE_PLATFORM_WEBHOOK_SECRET",
+      "NSELF_CLOUD_BASE_URL",
+      "NSELF_DB_ENCRYPTION_KEY"
+    ],
+    "optional": [
+      "PORT",
+      "NCLOUD_PROVISIONING_ENABLED",
+      "BILLING_PROVIDER",
+      "NCLOUD_TRIAL_DAYS",
+      "NCLOUD_MANAGEMENT_FEE_CENTS",
+      "NCLOUD_BYOH_FEE_CENTS",
+      "HETZNER_SSH_KEY_ID",
+      "NCLOUD_PROVISION_TIMEOUT_MINUTES",
+      "LS_API_KEY",
+      "LS_WEBHOOK_SECRET"
+    ]
+  },
+  "config": {
+    "port": 3845,
+    "provisionTimeoutMinutes": 10,
+    "provisionPollIntervalSeconds": 10,
+    "trialDays": 14,
+    "managementFeeCents": 499,
+    "byohFeeCents": 199,
+    "billingProvider": "stripe",
+    "provisioningEnabled": false
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null
+  },
+  "multiApp": {
+    "supported": false,
+    "isolationColumn": null,
+    "isolationMechanism": "tenant_id",
+    "note": "\u0273Cloud only. Tenant isolation via tenant_id UUID + Hasura row filter. source_account_id not applicable (Multi-Tenant Convention Wall: nself-cloud uses tenant_id isolation, not multi-app isolation)."
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "api.hetzner.cloud",
+      "api.stripe.com",
+      "api.lemonsqueezy.com"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/cloud/signup",
+      "auth": "none",
+      "description": "Create tenant + start trial. Rate: 5/IP/hour."
+    },
+    {
+      "method": "POST",
+      "path": "/api/cloud/login",
+      "auth": "none",
+      "description": "Email+password or magic link \u2014 returns JWT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/me",
+      "auth": "bearer",
+      "description": "Current tenant + billing status."
+    },
+    {
+      "method": "POST",
+      "path": "/api/cloud/waitlist",
+      "auth": "none",
+      "description": "Join waitlist when kill-switch on."
+    },
+    {
+      "method": "POST",
+      "path": "/api/cloud/instances",
+      "auth": "bearer",
+      "description": "Trigger provisioning saga for a new instance."
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/instances",
+      "auth": "bearer",
+      "description": "List tenant instances."
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/instances/{id}",
+      "auth": "bearer",
+      "description": "Get instance detail + health status."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/cloud/instances/{id}",
+      "auth": "bearer",
+      "description": "Initiate instance teardown."
+    },
+    {
+      "method": "POST",
+      "path": "/api/cloud/instances/{id}/domain",
+      "auth": "bearer",
+      "description": "Bind a custom domain to an instance."
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/instances/{id}/domain/verify",
+      "auth": "bearer",
+      "description": "Check CNAME propagation for custom domain."
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/instances/{id}/logs",
+      "auth": "bearer",
+      "description": "Last 100 log lines from the instance."
+    },
+    {
+      "method": "POST",
+      "path": "/api/cloud/invitations",
+      "auth": "bearer",
+      "description": "Invite a team member to an instance."
+    },
+    {
+      "method": "GET",
+      "path": "/api/cloud/invitations/accept",
+      "auth": "none",
+      "description": "Accept an invitation via token."
+    },
+    {
+      "method": "POST",
+      "path": "/webhooks/stripe",
+      "auth": "none",
+      "hmac": "STRIPE_PLATFORM_WEBHOOK_SECRET",
+      "description": "Stripe platform webhook \u2014 HMAC verified, raw body required."
+    },
+    {
+      "method": "POST",
+      "path": "/webhooks/lemonsqueezy",
+      "auth": "none",
+      "hmac": "LS_WEBHOOK_SECRET",
+      "description": "Lemon Squeezy backup billing webhook."
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none",
+      "description": "Liveness check."
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "none",
+      "description": "Readiness check (DB connection)."
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "auth": "none",
+      "description": "Prometheus metrics."
+    }
+  ],
+  "security": {
+    "tenantIsolation": {
+      "mechanism": "rls",
+      "column": "tenant_id",
+      "hasuraHeader": "X-Hasura-Tenant-Id",
+      "policy": "tenant_isolation"
+    },
+    "byohTokenStorage": {
+      "encrypted": true,
+      "method": "AES-256-GCM",
+      "keyEnvVar": "NSELF_DB_ENCRYPTION_KEY"
+    },
+    "webhookHmac": {
+      "algorithm": "SHA-256",
+      "rawBodyRequired": true,
+      "timingSafeComparison": true,
+      "timestampToleranceSeconds": 300
+    }
+  },
+  "dependencies": {
+    "required": [],
+    "optional": [
+      "nself-stripe",
+      "transactional-email"
+    ]
+  },
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

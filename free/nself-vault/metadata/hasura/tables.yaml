@@ -1,0 +1,160 @@
+# Hasura table registration for nself-vault plugin
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column. Row filter enforced on all read roles.
+#   R3-PATTERN (cont.15 fix, S40-fix): pure _eq filter — no _or, no _is_null arm.
+#   Self-host: user role uses pure user_id _eq (owns only their own vault records).
+#   Cloud: tenant_user role uses pure tenant_id _eq — strict per-tenant isolation.
+#   Prior _or:[user_id _eq, tenant_id _eq] on user role was R3-non-compliant.
+#   Fixed per CR-C gate 2026-05-17.
+#
+# Two-role split (R3-T0):
+#   user        — self-host; sees own records (user_id _eq X-Hasura-User-Id)
+#   tenant_user — Cloud; sees all records for tenant (tenant_id _eq X-Hasura-Tenant-Id)
+#
+# The _or pattern was removed from all user role filters. Cloud principals cannot
+# assume the user role (JWT structure prevents it), so the tenant_id arm in the
+# old _or filter was dead code on self-host and missing in Cloud. Now explicit.
+
+- table:
+    schema: public
+    name: np_vault_records
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - user_id
+          - tenant_id
+          - credential_kind
+          - label
+          - created_at
+          - updated_at
+          - revoked_at
+        filter:
+          user_id:
+            _eq: X-Hasura-User-Id
+
+    - role: tenant_user
+      permission:
+        columns:
+          - id
+          - user_id
+          - tenant_id
+          - credential_kind
+          - label
+          - created_at
+          - updated_at
+          - revoked_at
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+    - role: service
+      permission:
+        columns: "*"
+        filter: {}
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+
+- table:
+    schema: public
+    name: np_vault_devices
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - user_id
+          - tenant_id
+          - device_label
+          - platform
+          - last_seen_at
+          - revoked_at
+        filter:
+          user_id:
+            _eq: X-Hasura-User-Id
+
+    - role: tenant_user
+      permission:
+        columns:
+          - id
+          - user_id
+          - tenant_id
+          - device_label
+          - platform
+          - last_seen_at
+          - revoked_at
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+    - role: service
+      permission:
+        columns: "*"
+        filter: {}
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+
+- table:
+    schema: public
+    name: np_vault_envelopes
+  # Envelopes are accessed only through the Go service, not directly via Hasura GraphQL.
+  # Service role has full access; users do not have direct table access.
+  select_permissions:
+    - role: service
+      permission:
+        columns: "*"
+        filter: {}
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+
+- table:
+    schema: public
+    name: np_vault_audit
+  select_permissions:
+    - role: user
+      permission:
+        columns:
+          - id
+          - record_id
+          - device_id
+          - user_id
+          - tenant_id
+          - action
+          - occurred_at
+          - metadata
+        filter:
+          user_id:
+            _eq: X-Hasura-User-Id
+
+    - role: tenant_user
+      permission:
+        columns:
+          - id
+          - record_id
+          - device_id
+          - user_id
+          - tenant_id
+          - action
+          - occurred_at
+          - metadata
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+    - role: service
+      permission:
+        columns: "*"
+        filter: {}
+    - role: admin
+      permission:
+        columns: "*"
+        filter: {}
+  # Audit log is INSERT-only; no update_permissions or delete_permissions for any role.

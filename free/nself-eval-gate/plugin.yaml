@@ -1,0 +1,115 @@
+name: nself-eval-gate
+displayName: "ɳSelf Eval Gate"
+version: "1.0.0"
+author: nSelf Team
+description: >
+  Eval harness and autonomy-tier gate for nSelf. Provides three-mode scoring
+  (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality
+  precision/recall/fact_f1 metrics, CI integration via nself ci eval, and
+  autonomy-tier threshold enforcement. All eval features are free — gating
+  autonomous behavior requires no license tier.
+tier: pro
+category: ci
+license: Source-Available
+requires_license: false
+isCommercial: false
+licenseType: free
+
+bundles:
+  - nclaw
+  - clawde
+  - shared
+
+port: 3770
+language: go
+bind: "127.0.0.1"
+
+tables:
+  - np_eval_suites
+  - np_eval_tasks
+  - np_eval_runs
+  - np_eval_thresholds
+
+migrations:
+  - migrations/001_create_np_eval_suites.sql
+  - migrations/002_create_np_eval_tasks.sql
+  - migrations/003_create_np_eval_runs.sql
+  - migrations/004_create_np_eval_thresholds.sql
+  - migrations/005_seed_autonomy_thresholds.sql
+  - migrations/006_nclaw_memory_facts_golden_col.sql
+
+routes:
+  - method: POST
+    path: /eval/run
+    description: "Run an eval suite; returns run ID"
+    auth: plugin-jwt
+  - method: GET
+    path: /eval/runs/{id}
+    description: "Fetch run result by ID"
+    auth: plugin-jwt
+  - method: GET
+    path: /eval/suites
+    description: "List registered suites"
+    auth: plugin-jwt
+  - method: POST
+    path: /eval/validate
+    description: "Validate a YAML eval-set file against eval-set-v1.json schema"
+    auth: plugin-jwt
+  - method: GET
+    path: /eval/thresholds
+    description: "Current autonomy-tier threshold configuration"
+    auth: plugin-jwt
+  - method: GET
+    path: /eval/gate/{tier}
+    description: "Boolean: is this autonomy tier cleared?"
+    auth: plugin-jwt
+
+health_endpoint: /health
+
+# Discovery: Path A (filesystem scan) — confirmed by spike P4-E8-W2-S03-T03 / DD-6
+# Plugin scans {repo_root}/.claude/evals/**/*.yaml at startup for each configured repo root.
+# Requires plugin process to have filesystem access to sibling repo directories (same machine, same user UID).
+# See design-decisions.md DD-6 for full evidence and rationale.
+discovery:
+  mode: filesystem_scan
+  scan_glob: ".claude/evals/**/*.yaml"
+  # repo_roots: paths relative to plugin working directory (overridden at runtime by nSelf CLI)
+  # Default scan looks for sibling repo directories on same machine.
+  validation: strict          # invalid YAML logs warning but does not block startup
+  cross_repo_access: required # plugin must have read access to sibling .claude/evals/ dirs
+
+env:
+  required:
+    - NSELF_EVAL_GATE_DB_URL
+  optional:
+    NSELF_EVAL_GATE_PORT: "3770"
+    NSELF_EVAL_GATE_REDIS_URL: ""
+    NSELF_EVAL_GATE_JUDGE_MODEL: "claude-3-5-haiku-20241022"
+    NSELF_EVAL_GATE_JUDGE_TIMEOUT_S: "30"
+    NSELF_EVAL_GATE_EMBED_TIMEOUT_S: "10"
+    NSELF_EVAL_GATE_MAX_CONCURRENCY: "4"
+    NSELF_EVAL_GATE_CACHE_EMBED_TTL_H: "24"
+    NSELF_EVAL_GATE_CACHE_JUDGE_TTL_H: "1"
+    NSELF_EVAL_RECALL_K: "3"
+    NSELF_EVAL_SCHEMA_VERSION: "1"
+
+multiApp:
+  supported: true
+  isolationColumn: source_account_id
+  pkStrategy: uuid
+  defaultValue: primary
+
+rateLimit:
+  default:
+    requestsPerMinute: 60
+    per: source_account_id
+  "/eval/run":
+    maxConcurrent: 10
+
+depends:
+  optional:
+    - plugin-retrieval
+    - nself-ai-gateway
+
+minNselfVersion: 1.1.1
+visibility: public

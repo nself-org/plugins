@@ -1,0 +1,64 @@
+{
+  "name": "warehouse",
+  "version": "1.0.0",
+  "api_version": "1.0.0",
+  "description": "Data warehouse sync \u2014 exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tier": "pro",
+  "tags": [
+    "warehouse",
+    "bigquery",
+    "snowflake",
+    "analytics",
+    "etl"
+  ],
+  "tables": [
+    "np_warehouse_sync_jobs",
+    "np_warehouse_tables"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": [
+      "cron"
+    ]
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "WAREHOUSE_PORT",
+      "WAREHOUSE_DESTINATION",
+      "WAREHOUSE_BQ_PROJECT"
+    ]
+  },
+  "entry": "go/cmd/main.go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    }
+  ],
+  "health_endpoint": "/health",
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "checksum": "4d230e6428e6f00566f03a29c1c25c8cf6ae8180670a06c17de6cbc7e41d6d97",
+  "bundles": [
+    "clawde"
+  ]
+}

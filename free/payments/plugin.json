@@ -1,0 +1,65 @@
+{
+  "name": "payments",
+  "version": "1.0.0",
+  "api_version": "1.0.0",
+  "description": "Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with webhook normalization.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "commerce",
+  "language": "go",
+  "tier": "pro",
+  "tags": [
+    "payments",
+    "stripe",
+    "paypal",
+    "billing",
+    "commerce"
+  ],
+  "tables": [
+    "np_payments_orders",
+    "np_payments_transactions"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": [
+      "stripe",
+      "paypal"
+    ]
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PAYMENTS_PORT",
+      "STRIPE_SECRET_KEY",
+      "PAYPAL_CLIENT_ID"
+    ]
+  },
+  "entry": "cmd/main.go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    }
+  ],
+  "health_endpoint": "/health",
+  "checksum": "abead3a55226aced9ff7c1db1f95535771aff2d30db17fe7cd9292324989e549",
+  "port": 3086,
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

@@ -1,0 +1,38 @@
+# np_stripe_idempotency — Stripe CreateCheckout deduplication map (payments plugin)
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column. Row filter enforced on all read roles.
+#   R3-PATTERN (cont.15 fix, S40-fix): pure _eq filter — no _or, no _is_null arm.
+#   Self-host: tenant_id IS NULL rows are unreachable via this filter (fail-closed, no leak).
+#   Cloud: tenant_id = X-Hasura-Tenant-Id — strict per-tenant isolation.
+#
+# SECURITY: a client retry with the same X-Request-Id must only receive the session
+# it originally created. Without tenant_id isolation, a malicious cross-tenant retry
+# could observe another tenant's checkout session URL. The row filter closes this gap.
+# The prior _is_null:true arm leaked ALL null-tenant rows to any nself_admin caller
+# regardless of their tenant. Removed per CR-C gate 2026-05-17.
+#
+# This is an internal system table. No direct user-facing GraphQL mutations.
+# TTL cleanup (24h expiry) is handled by the payments service daily cron.
+#
+# Roles:
+#   anonymous    — no access (not listed = deny-all by default)
+#   nself_admin  — internal admin; full access (not via public GraphQL)
+# Note: nself_user is NOT listed — idempotency records contain session_url which
+#       MUST NOT be accessible via GraphQL (session URLs are single-use secrets).
+
+- table:
+    schema: public
+    name: np_stripe_idempotency
+  select_permissions:
+    - role: nself_admin
+      permission:
+        columns:
+          - request_uuid
+          - session_id
+          - created_at
+          - expires_at
+          - tenant_id
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id

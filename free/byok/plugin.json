@@ -1,0 +1,191 @@
+{
+  "name": "byok",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Bring Your Own Key (BYOK) per-tenant encryption. Envelope encryption with customer-managed keys (CMK) via AWS KMS, GCP Cloud KMS, or HashiCorp Vault Transit. DEK wrapped by CMK. Satisfies HIPAA, FedRAMP High, FFIEC, and DORA key-control requirements. Enterprise-only.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.9",
+  "category": "compliance",
+  "tags": [
+    "encryption",
+    "byok",
+    "kms",
+    "aws-kms",
+    "gcp-kms",
+    "vault",
+    "hipaa",
+    "fedramp",
+    "enterprise",
+    "security"
+  ],
+  "tables": [
+    "np_kms_configs",
+    "np_encrypted_values",
+    "np_encryption_key_events"
+  ],
+  "capabilities": [
+    "envelope_encryption",
+    "aws_kms",
+    "gcp_kms",
+    "vault_transit",
+    "key_rotation",
+    "audit_trail"
+  ],
+  "featureFlags": {
+    "NSELF_BYOK": {
+      "description": "Enable BYOK customer-managed key encryption (Enterprise).",
+      "default": "false",
+      "type": "bool"
+    },
+    "NSELF_BYOK_DEK_CACHE": {
+      "description": "Cache decrypted DEKs in memory to reduce KMS API calls (Enterprise).",
+      "default": "false",
+      "type": "bool"
+    },
+    "NSELF_BYOK_MULTI_REGION": {
+      "description": "Enable multi-region KMS replication support (Enterprise).",
+      "default": "false",
+      "type": "bool"
+    }
+  },
+  "webhooks": {
+    "kms.configured": "KMS provider configured for tenant",
+    "kms.verified": "KMS connectivity verified",
+    "key.rotated": "Key rotation job completed",
+    "key.revoked": "CMK revoked \u2014 data access blocked",
+    "rotation.started": "Key rotation job started",
+    "rotation.failed": "Key rotation job failed"
+  },
+  "actions": {
+    "kms": "Manage KMS configuration",
+    "verify": "Verify KMS connectivity",
+    "rotate": "Initiate key rotation",
+    "events": "View key event audit trail",
+    "status": "BYOK status for tenant"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "BYOK_PLUGIN_PORT",
+      "NSELF_BYOK",
+      "NSELF_BYOK_DEK_CACHE",
+      "NSELF_BYOK_DEK_CACHE_TTL",
+      "NSELF_BYOK_ROTATE_BATCH_SIZE",
+      "NSELF_BYOK_ROTATE_RATE_LIMIT",
+      "NSELF_BYOK_MULTI_REGION",
+      "NSELF_LICENSE_KEY",
+      "LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3743,
+    "dekCacheTTLSeconds": 0,
+    "rotateBatchSize": 1000,
+    "rotateRateLimitPerSecond": 100
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false,
+    "isolationColumn": "tenant_id",
+    "pkStrategy": "single",
+    "defaultValue": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "kms.amazonaws.com",
+      "cloudkms.googleapis.com",
+      "vault"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "port": 3743,
+  "status": "alpha",
+  "language": "go",
+  "binary_name": "byok",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "max",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/encryption/key-events",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/encryption/kms",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/encryption/kms",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/encryption/kms",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/encryption/kms/verify",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/encryption/rotate",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/encryption/rotate/{job_id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/cmd/main.go",
+  "checksum": "83a49fbfa51a4a89e06c9656b4cff870c46733d6a42ed4bcad7c583dbbef8036",
+  "bundles": [
+    "nsentry"
+  ]
+}

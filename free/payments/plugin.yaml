@@ -1,0 +1,99 @@
+name: payments
+version: 1.0.0
+description: >
+  Unified payments plugin covering Stripe, Lemon Squeezy, and Paddle behind a
+  single nSelf API. Syncs subscription state to np_subscriptions, surfaces usage
+  metering, and handles dunning (failed payment retry + grace period).
+author: nself
+license: Source-Available
+isCommercial: true
+licenseType: pro
+requiredEntitlements:
+  - pro
+requires_license: true
+category: commerce
+language: go
+status: stable
+binary_name: payments
+health_endpoint: /health
+port: 3086
+arch_support:
+  - linux-x86_64
+  - linux-arm64
+  - darwin-arm64
+min_memory_mb: 128
+systemd_after: network.target
+tier: pro
+minNselfVersion: "1.0.9"
+homepage: https://nself.org/plugins
+repository: https://github.com/nself-org/plugins-pro
+
+tables:
+  - np_subscriptions
+  - np_usage_records
+  - np_payment_events
+
+dependencies: []
+optionalDependencies: []
+
+envVars:
+  required:
+    - DATABASE_URL
+    - PAYMENTS_DEFAULT_PROVIDER
+  optional:
+    - PAYMENTS_PORT
+    - PAYMENTS_ENABLED
+    - STRIPE_SECRET_KEY
+    - STRIPE_WEBHOOK_SECRET
+    - STRIPE_PRICE_IDS
+    - LEMONSQUEEZY_API_KEY
+    - LEMONSQUEEZY_STORE_ID
+    - LEMONSQUEEZY_WEBHOOK_SECRET
+    - PADDLE_API_KEY
+    - PADDLE_WEBHOOK_SECRET
+    - PADDLE_PUBLIC_KEY
+    - PAYMENTS_DUNNING_GRACE_DAYS
+    - PAYMENTS_DUNNING_RETRY_INTERVALS
+    - PLUGIN_INTERNAL_SECRET
+    - LOG_LEVEL
+
+config:
+  defaultPort: 3086
+  defaultProvider: stripe
+  dunningGraceDays: 7
+  dunningRetryIntervals: "1,3,7"
+
+multiApp:
+  supported: true
+  isolationColumn: source_account_id
+  pkStrategy: single
+  defaultValue: primary
+
+permissions:
+  database:
+    - create
+    - read
+    - update
+    - delete
+  network:
+    - stripe-api
+    - lemonsqueezy-api
+    - paddle-api
+    - outbound
+  filesystem: []
+
+hooks:
+  postInstall: null
+  preUninstall: null
+  postSync: null
+
+tags:
+  - payments
+  - stripe
+  - lemonsqueezy
+  - paddle
+  - subscriptions
+  - billing
+  - dunning
+  - metering
+  - commerce

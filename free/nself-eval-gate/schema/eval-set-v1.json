@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nself.org/schemas/eval-set-v1.json",
+  "title": "nSelf Eval Set v1",
+  "description": "Schema for nself-eval-gate YAML eval suite files. Validates task definitions, scoring modes, and golden data.",
+  "type": "object",
+  "required": ["version", "suite", "repo", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version, must be '1'",
+      "const": "1"
+    },
+    "suite": {
+      "type": "string",
+      "description": "Unique suite slug, e.g. recall-quality-v1",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the eval suite"
+    },
+    "repo": {
+      "type": "string",
+      "description": "Owning repo slug (nclaw, clawde, etc.)",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Array of eval task definitions",
+      "items": {
+        "$ref": "#/definitions/EvalTask"
+      }
+    }
+  },
+  "definitions": {
+    "EvalTask": {
+      "type": "object",
+      "required": ["id", "query", "scoring_mode", "metrics", "threshold"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique task ID within suite, e.g. t001",
+          "pattern": "^[a-z][a-z0-9-_]*$"
+        },
+        "query": {
+          "type": "string",
+          "description": "Input query or prompt to evaluate",
+          "minLength": 1
+        },
+        "scoring_mode": {
+          "type": "string",
+          "enum": ["exact", "semantic", "rubric"],
+          "description": "Scoring mode: exact (string match), semantic (cosine similarity), rubric (LLM-as-judge)"
+        },
+        "expected_output": {
+          "type": "string",
+          "description": "Expected model output for exact/semantic modes"
+        },
+        "rubric": {
+          "$ref": "#/definitions/Rubric"
+        },
+        "golden_memories": {
+          "type": "array",
+          "description": "Golden triple set for recall-quality tasks",
+          "items": {
+            "$ref": "#/definitions/GoldenMemory"
+          }
+        },
+        "expected_output_contains": {
+          "type": "array",
+          "description": "Strings that must appear in model output",
+          "items": { "type": "string" }
+        },
+        "metrics": {
+          "type": "array",
+          "description": "Metric names to compute for this task",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Per-task gate threshold [0,1]",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "tier": {
+          "type": "string",
+          "description": "Autonomy tier this task gates (optional)",
+          "enum": ["supervised", "semi-auto", "full-auto"]
+        },
+        "partial": {
+          "type": "boolean",
+          "description": "If true, use Levenshtein similarity instead of exact match (exact mode only)",
+          "default": false
+        }
+      },
+      "if": {
+        "properties": { "scoring_mode": { "enum": ["exact", "semantic"] } }
+      },
+      "then": {
+        "required": ["expected_output"]
+      },
+      "else": {
+        "if": {
+          "properties": { "scoring_mode": { "const": "rubric" } }
+        },
+        "then": {
+          "required": ["rubric"]
+        }
+      }
+    },
+    "Rubric": {
+      "type": "object",
+      "required": ["criteria"],
+      "additionalProperties": false,
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Scoring criteria for LLM-as-judge evaluation",
+          "items": {
+            "$ref": "#/definitions/RubricCriteria"
+          }
+        }
+      }
+    },
+    "RubricCriteria": {
+      "type": "object",
+      "required": ["name", "weight", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Criterion name, e.g. accuracy"
+        },
+        "weight": {
+          "type": "number",
+          "description": "Relative weight for weighted mean scoring",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string",
+          "description": "Human description of what this criterion measures"
+        }
+      }
+    },
+    "GoldenMemory": {
+      "type": "object",
+      "required": ["subject", "predicate", "object"],
+      "additionalProperties": false,
+      "properties": {
+        "subject": {
+          "type": "string",
+          "description": "Triple subject"
+        },
+        "predicate": {
+          "type": "string",
+          "description": "Triple predicate/relationship"
+        },
+        "object": {
+          "type": "string",
+          "description": "Triple object/value"
+        }
+      }
+    }
+  }
+}

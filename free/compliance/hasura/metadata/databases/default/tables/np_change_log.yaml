@@ -1,0 +1,75 @@
+# np_change_log — SOC 2 change management log (CC7) — S1.T11
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column. Row filter enforced on all read roles.
+#   R3-PATTERN (cont.15 fix, S40-fix): pure _eq filter — no _or, no _is_null arm.
+#   Self-host: tenant_id IS NULL rows are unreachable via this filter (fail-closed, no leak).
+#   Cloud: tenant_id = X-Hasura-Tenant-Id — strict per-tenant isolation.
+#   Fixed per CR-C gate 2026-05-17.
+#
+# Multi-tenancy: Convention B (Cloud multi-tenancy) — tenant_id UUID.
+#
+# Roles:
+#   user             — self-host user; read-only access to own tenant change log
+#   tenant_user      — Cloud user; same read scope as user role (R3-PATTERN, added S40-fix)
+#   compliance_admin — full CRUD
+#
+# R3-T0 note: Cloud principals use tenant_user role; user role is self-host only.
+
+- table:
+    schema: public
+    name: np_change_log
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+    - role: tenant_user
+      permission:
+        columns: '*'
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+    - role: compliance_admin
+      permission:
+        columns: '*'
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+  insert_permissions:
+    - role: compliance_admin
+      permission:
+        columns:
+          - id
+          - tenant_id
+          - changed_by
+          - change_type
+          - description
+          - ticket_ref
+          - approved_by
+          - applied_at
+          - rollback_at
+        check:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+  update_permissions:
+    - role: compliance_admin
+      permission:
+        columns:
+          - description
+          - ticket_ref
+          - approved_by
+          - rollback_at
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+  delete_permissions:
+    - role: compliance_admin
+      permission:
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id

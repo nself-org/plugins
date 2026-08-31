@@ -1,0 +1,187 @@
+{
+  "name": "hipaa",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow. Requires \u0273Self+ license.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "compliance",
+  "tags": [
+    "hipaa",
+    "phi",
+    "compliance",
+    "healthcare",
+    "audit",
+    "baa",
+    "encryption",
+    "deidentify"
+  ],
+  "tables": [
+    "np_phi_columns",
+    "np_phi_audit_log",
+    "np_baa_records"
+  ],
+  "webhooks": {
+    "phi.accessed": "PHI column accessed \u2014 row written to np_phi_audit_log",
+    "phi.column.registered": "PHI column registered in registry",
+    "phi.column.unregistered": "PHI column unregistered",
+    "baa.requested": "BAA signing workflow initiated",
+    "baa.signed": "BAA marked active after signing",
+    "baa.terminated": "BAA terminated"
+  },
+  "actions": {
+    "init": "Initialize HIPAA database schema",
+    "server": "Start HIPAA HTTP server",
+    "phi-columns": "Manage PHI column registry",
+    "audit-log": "Query PHI access audit log",
+    "deidentify": "De-identify a dataset using registered PHI column rules",
+    "tokenize": "Tokenize or detokenize a PHI value",
+    "baa": "Manage BAA workflow and status",
+    "encryption-audit": "Verify pgcrypto and TLS-in-transit status"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "NSELF_HIPAA",
+      "NSELF_HIPAA_BAA",
+      "NSELF_HIPAA_VAULT",
+      "NSELF_HIPAA_VAULT_ADDR",
+      "NSELF_HIPAA_VAULT_TOKEN",
+      "NSELF_HIPAA_RETENTION_YEARS",
+      "NSELF_HIPAA_BAA_BUCKET",
+      "HIPAA_PLUGIN_PORT",
+      "HIPAA_PLUGIN_HOST",
+      "HIPAA_API_KEY",
+      "HIPAA_LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3212,
+    "hipaaEnabled": true,
+    "baaEnabled": false,
+    "vaultEnabled": false,
+    "retentionYears": 6
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "port": 3214,
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/audit-log",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/audit-log/export",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/baa",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/baa/activate",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/baa/request",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/baa/terminate",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/deidentify",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/encryption-audit",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/phi-columns",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/phi-columns",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/phi-columns/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/tokenize",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/tokenize/{token}",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/main.go",
+  "checksum": "59661970623dca8c4274044e7e7d5cdd736c45802de4fd15a2052bec7b9b9127",
+  "bundles": [
+    "nsentry"
+  ]
+}

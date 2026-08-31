@@ -1,0 +1,54 @@
+{
+  "name": "job-queue",
+  "version": "1.0.0",
+  "api_version": "1.0.0",
+  "description": "Durable background job queue with priorities, retries, scheduled execution, and per-job progress tracking.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tier": "pro",
+  "tags": [
+    "jobs",
+    "queue",
+    "background",
+    "workers"
+  ],
+  "tables": [
+    "np_jobqueue_jobs",
+    "np_jobqueue_runs"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "JOB_QUEUE_PORT",
+      "JOB_QUEUE_WORKERS"
+    ]
+  },
+  "entry": "go/main.go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    }
+  ],
+  "health_endpoint": "/health",
+  "checksum": "52629b22df591b87e4029748d0f4e8071069ab53c6f3d4080429c0aef330888e",
+  "bundles": [
+    "clawde"
+  ]
+}

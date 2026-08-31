@@ -1,0 +1,155 @@
+{
+  "name": "nself-geo",
+  "version": "1.1.0",
+  "api_version": "1.0.0",
+  "description": "Forward and reverse geocoding with provider-agnostic caching layer. Nominatim (free, OSM) is the default; Google Places and Mapbox are premium fallbacks. Exposes geocodeAddress, reverseGeocode, geocodeBatch, clearGeoCache via Hasura Remote Schema.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.1.0",
+  "port": 3203,
+  "category": "location",
+  "tags": [
+    "geocoding",
+    "maps",
+    "location",
+    "nominatim",
+    "reverse-geocoding",
+    "caching"
+  ],
+  "tables": [
+    "np_geo.forward_cache",
+    "np_geo.reverse_cache"
+  ],
+  "views": [],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize np_geo schema and tables",
+    "server": "Start the geocoding API server on port 3203",
+    "forward": "Forward geocode an address to lat/lng",
+    "reverse": "Reverse geocode lat/lng to city/state/country",
+    "batch": "Batch forward geocode up to 100 addresses",
+    "cache-clear": "Clear expired or scoped cache entries",
+    "status": "Show cache hit rate and provider statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": {
+      "GEOCODING_PROVIDERS": "nominatim",
+      "GEOCODING_GOOGLE_API_KEY": "",
+      "GEOCODING_MAPBOX_ACCESS_TOKEN": "",
+      "GEOCODING_NOMINATIM_URL": "https://nominatim.openstreetmap.org",
+      "GEOCODING_NOMINATIM_EMAIL": "",
+      "GEOCODING_CACHE_TTL_DAYS": "365",
+      "GEOCODING_CACHE_ENABLED": "true",
+      "GEOCODING_MAX_BATCH_SIZE": "100",
+      "GEOCODING_REDIS_URL": "",
+      "GEO_CACHE_TTL_SECONDS": "86400",
+      "GEO_RATE_LIMIT_RPM": "500"
+    }
+  },
+  "config": {
+    "webhookPath": "/webhooks/geo",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "multiTenant": {
+    "supported": true,
+    "isolationColumn": "tenant_id",
+    "hasuraFilter": "{\"tenant_id\": {\"_eq\": \"X-Hasura-Tenant-Id\"}}",
+    "nullable": true
+  },
+  "hasuraRemoteSchema": true,
+  "hasuraActions": [
+    "geocodeAddress",
+    "reverseGeocode",
+    "geocodeBatch",
+    "clearGeoCache"
+  ],
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/geo/forward",
+      "auth": "bearer",
+      "description": "Forward geocode: address to lat/lng"
+    },
+    {
+      "method": "POST",
+      "path": "/geo/reverse",
+      "auth": "bearer",
+      "description": "Reverse geocode: lat/lng to city/state/country"
+    },
+    {
+      "method": "POST",
+      "path": "/geo/batch",
+      "auth": "bearer",
+      "description": "Batch geocode up to 100 addresses"
+    },
+    {
+      "method": "DELETE",
+      "path": "/geo/cache",
+      "auth": "admin",
+      "description": "Clear stale cache entries (admin only)"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none",
+      "description": "Liveness probe"
+    }
+  ],
+  "rateLimits": {
+    "requestsPerMinute": 500,
+    "batchMaxItems": 100,
+    "nominatimRps": 1
+  },
+  "status": "planned",
+  "tier": "pro",
+  "language": "go",
+  "entry": "cmd/main.go",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "checksum": "a3b627c061127dc49ff48b193bfd1e95aa2a7d5328e1ce94fafe2de75a27a334",
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

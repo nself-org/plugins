@@ -1,0 +1,201 @@
+{
+  "name": "functions-edge",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Edge Functions V8 Runtime. Deploy short-lived TypeScript functions with a Deno V8 isolate pool. HTTP-trigger, <50ms cold-start, allowlist-only env injection, Prometheus metrics, SSE log streaming.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.9",
+  "category": "infrastructure",
+  "tags": [
+    "functions",
+    "serverless",
+    "edge",
+    "deno",
+    "typescript",
+    "v8",
+    "isolate"
+  ],
+  "tables": [
+    "np_edge_functions",
+    "np_edge_function_versions",
+    "np_edge_function_env",
+    "np_function_logs"
+  ],
+  "capabilities": [
+    "deno_isolate_pool",
+    "sse_log_stream",
+    "env_allowlist",
+    "prometheus_metrics",
+    "version_history",
+    "version_rollback"
+  ],
+  "webhooks": {
+    "function.deployed": "New function version deployed",
+    "function.invoked": "Function invoked",
+    "function.error": "Function invocation error",
+    "function.timeout": "Function exceeded wall-clock timeout",
+    "function.deleted": "Function deleted"
+  },
+  "actions": {
+    "deploy": "Deploy a TypeScript edge function",
+    "invoke": "Invoke a deployed function",
+    "list": "List all deployed functions",
+    "delete": "Delete a function",
+    "activate": "Activate a specific version",
+    "logs": "Stream or paginate function logs",
+    "env": "Manage per-function env vars"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "FUNCTIONS_EDGE_ENABLED",
+      "FUNCTIONS_EDGE_PORT",
+      "FUNCTIONS_EDGE_MAX_DURATION_MS",
+      "FUNCTIONS_EDGE_POOL_SIZE",
+      "FUNCTIONS_EDGE_MAX_MEMORY_MB",
+      "FUNCTIONS_EDGE_LOG_RETENTION_DAYS",
+      "DENO_BINARY_PATH",
+      "PLUGIN_INTERNAL_SECRET"
+    ]
+  },
+  "config": {
+    "defaultPort": 3088,
+    "defaultPoolSize": 5,
+    "defaultMaxDurationMs": 30000,
+    "defaultMaxMemoryMb": 128,
+    "defaultLogRetentionDays": 7
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": [
+      "tmp",
+      "logs"
+    ]
+  },
+  "port": 3088,
+  "status": "stable",
+  "language": "go",
+  "binary_name": "functions-v8",
+  "health_endpoint": "/health",
+  "metrics_endpoint": "/metrics",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 128,
+  "systemd_after": "network.target",
+  "tier": "pro",
+  "service_type": "custom_service",
+  "entryPoint": "binary",
+  "nginx_locations": [
+    {
+      "path": "/functions/v1/",
+      "proxy_pass": "http://127.0.0.1:3088"
+    }
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/functions/v1/{name}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/functions/v1/{name}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{name}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{name}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PATCH",
+      "path": "/{name}/activate",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{name}/env",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{name}/env",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{name}/env/{key}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{name}/logs",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{name}/logs/stream",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/cmd/main.go",
+  "checksum": "8b002b21ffcfd1616d5f7a3fbac59897d697edb8e311745c48bdd1b4d6ff9f67",
+  "bundles": [
+    "clawde"
+  ]
+}

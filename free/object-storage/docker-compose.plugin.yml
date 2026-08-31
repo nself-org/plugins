@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  object-storage:
+    build: .
+    image: nself/nself-object-storage:latest
+    container_name: nself_object_storage
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3301:3301"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - OS_PLUGIN_PORT=3301
+      - OS_STORAGE_BASE_PATH=${OS_STORAGE_BASE_PATH:-/data/object-storage}
+      - OS_DEFAULT_PROVIDER=${OS_DEFAULT_PROVIDER:-local}
+      - OS_S3_ENDPOINT=${OS_S3_ENDPOINT:-}
+      - OS_S3_ACCESS_KEY=${OS_S3_ACCESS_KEY:-}
+      - OS_S3_SECRET_KEY=${OS_S3_SECRET_KEY:-}
+      - OS_API_KEY=${OS_API_KEY:-}
+      - OS_MAX_UPLOAD_SIZE=${OS_MAX_UPLOAD_SIZE:-1073741824}
+    volumes:
+      - object_storage_data:/data/object-storage
+    networks:
+      - nself_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3301/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  object_storage_data:
+
+networks:
+  nself_network:
+    external: true

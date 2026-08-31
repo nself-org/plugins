@@ -1,0 +1,52 @@
+# np_cloud_billing_events — Stripe / Lemon Squeezy metered records
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column.
+#   Row filter enforced on nself_user role: {"tenant_id":{"_eq":"X-Hasura-Tenant-Id"}}
+#   RLS: ENABLE + FORCE ROW LEVEL SECURITY applied in migration 001.
+#
+# Roles:
+#   anonymous   — no access
+#   nself_user  — read own billing events (tenant_id filter); no write (webhook handler only)
+#   nself_admin — full access (no filter)
+
+- table:
+    schema: public
+    name: np_cloud_billing_events
+  select_permissions:
+    - role: nself_user
+      permission:
+        columns:
+          - id
+          - tenant_id
+          - instance_id
+          - event_type
+          - provider
+          - amount_cents
+          - currency
+          - status
+          - created_at
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+  insert_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        check: {}
+  update_permissions:
+    - role: nself_admin
+      permission:
+        columns:
+          - status
+          - error_message
+          - metadata
+        filter: {}
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

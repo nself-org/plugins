@@ -1,0 +1,37 @@
+name: event-bus
+version: 1.0.0
+type: go-service
+port: 8212
+cs_slot: CS_9
+description: >
+  NATS JetStream-backed event bus for nSelf plugins and custom services.
+  Embedded NATS (default, <50 MB RAM) or external NATS / Redpanda / Kafka.
+  Plugins publish and subscribe via the plugin SDK helper — no direct broker
+  configuration required. Used by the CDC plugin (nself.cdc.*) and the
+  warehouse plugin (consumer of nself.cdc.*).
+isCommercial: true
+licenseType: pro
+requiredEntitlements:
+  - pro
+requires_license: true
+minNselfVersion: 1.0.9
+category: data
+tags:
+  - nats
+  - kafka
+  - redpanda
+  - event-bus
+  - pub-sub
+  - jetstream
+  - messaging
+health_endpoint: /event-bus/status
+env:
+  - EVENT_BUS              # nats (default) | redpanda | kafka
+  - NATS_EMBEDDED          # true | false; default true when EVENT_BUS=nats
+  - NATS_URL               # external NATS URL if NATS_EMBEDDED=false
+  - REDPANDA_BROKERS        # host:port,host:port
+  - KAFKA_BROKERS           # host:port,host:port
+  - KAFKA_SASL_USERNAME
+  - KAFKA_SASL_PASSWORD
+  - EVENT_BUS_RETENTION_MS  # JetStream stream retention ms; default 86400000 (24 h)
+  - EVENT_BUS_MAX_BYTES     # max stream storage bytes; default 1073741824 (1 GB)

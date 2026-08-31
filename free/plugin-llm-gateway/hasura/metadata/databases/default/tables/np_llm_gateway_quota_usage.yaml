@@ -1,0 +1,23 @@
+# np_llm_gateway_quota_usage — daily token quota per tenant (plugin-llm-gateway port 8090)
+#
+# Multi-App Isolation Convention: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id":{"_eq":"X-Hasura-Source-Account-Id"}}
+- table:
+    schema: public
+    name: np_llm_gateway_quota_usage
+  select_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+    - role: nself_user
+      permission:
+        columns: [source_account_id, quota_date, tokens_used, updated_at]
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

@@ -1,0 +1,50 @@
+plugin: monitoring
+description: |
+  Monitoring is the observability plugin: service uptime checks, alert rules, silences,
+  and a watchdog loop. Use it to track services, define alert thresholds, and route
+  incidents to notification channels.
+capabilities:
+  - service_uptime_checks
+  - alert_rules
+  - silences
+  - incident_history
+  - watchdog_loop
+  - health_summary
+setup_flow:
+  - step: choose_targets
+    prompt: "What services or URLs should I monitor?"
+    action: register_services
+  - step: define_alerts
+    prompt: "When should I alert? (e.g. 'response time > 500ms for 1 min', 'service down for 30s')"
+    action: create_alert_rules
+  - step: choose_channels
+    prompt: "Where should alerts go? (telegram, slack, email, discord)"
+    action: set_alert_channels
+  - step: confirm
+    prompt: "Saving monitoring config. Confirm?"
+    action: put_config
+examples:
+  - user: "Monitor my server and alert me on Telegram if it goes down"
+    actions:
+      - tool: plugin_update_config
+        args:
+          plugin: monitoring
+          config:
+            alert_rules:
+              - name: server_down
+                metric: up
+                condition: "=="
+                threshold: 0
+                for_secs: 30
+                channels: [telegram]
+                severity: critical
+  - user: "Silence alerts during maintenance window tonight"
+    actions:
+      - tool: plugin_update_config
+        args:
+          plugin: monitoring
+          config:
+            silences:
+              - match: "*"
+                until: "2026-04-08T06:00:00Z"
+                reason: "scheduled maintenance"

@@ -1,0 +1,36 @@
+# np_sms_opt_outs — SMS opt-out list (plugin-sms port 9009)
+#
+# Convention Wall: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id": {"_eq": "X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_sms_opt_outs
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - source_account_id
+          - phone_number
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

@@ -1,0 +1,78 @@
+{
+  "name": "family-wikitree",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "WikiTree \u2192 nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "minNselfVersion": "1.0.0",
+  "category": "social",
+  "tags": [
+    "family",
+    "genealogy",
+    "wikitree",
+    "migration",
+    "importer",
+    "gedcom"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {},
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": []
+  },
+  "config": {},
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "wikitree.com",
+      "api.wikitree.com"
+    ],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
+  },
+  "dependencies": {
+    "required": [
+      "family",
+      "object-storage",
+      "photos"
+    ],
+    "optional": []
+  },
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "port": 3512,
+  "status": "planned",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [],
+  "health_endpoint": "/health",
+  "health_status": "pending_implementation",
+  "entry": "cmd/main.go",
+  "checksum": "6621099efb5c89949dc24f88ccc742a94ba2741fbea45ef9ba380e7c359f2267",
+  "bundles": [
+    "nfamily"
+  ]
+}

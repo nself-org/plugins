@@ -1,0 +1,62 @@
+{
+  "name": "plugin-pty",
+  "display_name": "\u0273Self PTY Bridge",
+  "version": "1.0.0",
+  "description": "Pseudo-terminal bridge for ClawDE AI sessions. Spawns, manages, and relays PTY processes with per-tenant resource limits and WebSocket I/O.",
+  "author": "nself-org",
+  "license": "MIT",
+  "licenseType": "free",
+  "tier": "pro",
+  "language": "go",
+  "minNselfVersion": "1.1.1",
+  "isCommercial": false,
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "port": 9100,
+  "bundle": [
+    "clawde"
+  ],
+  "category": "ai",
+  "health": "/health",
+  "tables": [
+    "np_pty_sessions",
+    "np_pty_audit_log"
+  ],
+  "env": [
+    {
+      "key": "NSELF_DB_URL",
+      "required": true,
+      "description": "PostgreSQL connection string"
+    },
+    {
+      "key": "NSELF_LICENSE_KEY",
+      "required": true,
+      "description": "nSelf license key"
+    },
+    {
+      "key": "PTY_MAX_PER_TENANT",
+      "required": false,
+      "default": "5",
+      "description": "Max concurrent PTY sessions per tenant"
+    },
+    {
+      "key": "PTY_SESSION_TIMEOUT_SECS",
+      "required": false,
+      "default": "3600",
+      "description": "PTY session idle timeout in seconds"
+    },
+    {
+      "key": "PTY_PORT",
+      "required": false,
+      "default": "9100",
+      "description": "HTTP server port"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "bundles": [
+    "clawde"
+  ]
+}

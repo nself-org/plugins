@@ -1,0 +1,153 @@
+{
+  "name": "crdt",
+  "version": "1.1.2",
+  "api_version": "1.3.0",
+  "description": "CRDT offline-first primitives. Self-hosted Yjs (y-websocket protocol) and automerge sync server with Postgres persistence. Drop-in replacement for Liveblocks/PartyKit with zero extra infra.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "tags": [
+    "crdt",
+    "offline-first",
+    "yjs",
+    "automerge",
+    "collaboration",
+    "sync",
+    "websocket",
+    "realtime"
+  ],
+  "tables": [
+    "np_crdt_documents",
+    "np_crdt_updates"
+  ],
+  "capabilities": [
+    "yjs_websocket",
+    "automerge_http_sync",
+    "offline_first",
+    "awareness",
+    "history_compaction"
+  ],
+  "webhooks": {
+    "document.created": "New CRDT document created",
+    "document.updated": "CRDT document state updated",
+    "document.deleted": "CRDT document deleted",
+    "document.compacted": "Document history compacted"
+  },
+  "actions": {
+    "sync": "Sync Yjs or automerge document state",
+    "docs": "List and manage documents",
+    "compact": "Compact document history"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "CRDT_ENGINE",
+      "CRDT_MAX_DOC_SIZE_MB",
+      "CRDT_RETENTION_DAYS",
+      "CRDT_REDIS_URL",
+      "CRDT_PORT",
+      "DATABASE_URL",
+      "LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 8211,
+    "defaultEngine": "both",
+    "defaultMaxDocSizeMB": 10,
+    "defaultRetentionDays": 90
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "internal"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "port": 8211,
+  "cs_slot": "CS_8",
+  "status": "stable",
+  "language": "go",
+  "binary_name": "crdt",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "pro",
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/crdt/compact/{docID}",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/crdt/doc/{docID}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/crdt/doc/{docID}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/crdt/docs",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/crdt/sync/{docID}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/crdt/yjs/{docID}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/cmd/main.go",
+  "checksum": "067eb347368f54103f2961286160c5eede6fed5b6483f7902ca0878949b7a0fe",
+  "bundles": [
+    "clawde"
+  ]
+}

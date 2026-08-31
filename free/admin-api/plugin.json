@@ -1,0 +1,176 @@
+{
+  "name": "admin-api",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Admin API service providing aggregated metrics, system health, session counts, storage breakdown, and real-time dashboard endpoints",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3212,
+  "category": "infrastructure",
+  "tags": [
+    "admin",
+    "dashboard",
+    "metrics",
+    "monitoring",
+    "system-health"
+  ],
+  "tables": [
+    "np_admin_metrics_snapshots",
+    "np_admin_dashboard_config"
+  ],
+  "webhooks": {},
+  "actions": {
+    "metrics": "Show system metrics",
+    "sessions": "Active sessions",
+    "storage": "Storage breakdown",
+    "health": "System health overview",
+    "stats": "Dashboard statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "ADMIN_API_PLUGIN_PORT",
+      "PROMETHEUS_URL",
+      "ADMIN_API_CACHE_TTL",
+      "ADMIN_API_WS_ENABLED",
+      "ADMIN_API_KEY",
+      "CORS_ALLOWED_ORIGIN"
+    ]
+  },
+  "config": {
+    "defaultPort": 3212,
+    "cacheTtlSeconds": 30,
+    "metricsRetentionDays": 90,
+    "snapshotIntervalMinutes": 5,
+    "wsEnabled": false
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  },
+  "env_vars": [
+    {
+      "name": "DB_POOL_MIN",
+      "required": false,
+      "description": "Minimum database pool connections to keep alive (default: 2)"
+    },
+    {
+      "name": "DB_POOL_MAX",
+      "required": false,
+      "description": "Maximum database pool size (default: 10)"
+    },
+    {
+      "name": "DB_POOL_IDLE_TIMEOUT",
+      "required": false,
+      "description": "Idle connection timeout in milliseconds (default: 30000)"
+    }
+  ],
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/audit",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/audit",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/dashboard",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health/services",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/logs",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/metrics/history",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/metrics/snapshot",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/stats",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "85f2fa2b195f03229e4d27d845bc1053883d36eb88dd91a28a51132a9b43677b",
+  "bundles": [
+    "clawde",
+    "nsentry"
+  ]
+}

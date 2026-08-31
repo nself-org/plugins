@@ -1,0 +1,88 @@
+{
+  "name": "nself-scan",
+  "author": "nSelf Team",
+  "minNselfVersion": "1.0.0",
+  "display_name": "File Virus & Content Scanning",
+  "version": "0.1.0",
+  "language": "go",
+  "bundle": [
+    "nFamily",
+    "nChat"
+  ],
+  "visibility": "public",
+  "tier": "free",
+  "port": 3829,
+  "service_type": "custom_service",
+  "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
+  "category": "security",
+  "license": "MIT",
+  "min_nself_version": "1.1.0",
+  "tarball": "nself-scan-v0.1.0-linux-amd64.tar.gz",
+  "download_url": "https://ping.nself.org/plugins/nself-scan/download",
+  "requires_license": false,
+  "security_always_free": true,
+  "tags": [
+    "security",
+    "virus-scanning",
+    "malware",
+    "clamav",
+    "minio",
+    "content-moderation",
+    "file-upload",
+    "mime-validation",
+    "csam",
+    "always-free"
+  ],
+  "env_vars": [
+    "DATABASE_URL",
+    "SCAN_PORT",
+    "SCAN_CLAMD_ADDR",
+    "SCAN_CLAMD_TIMEOUT_SECONDS",
+    "SCAN_CSAM_ENABLED",
+    "SCAN_CSAM_HASH_DB_PATH",
+    "SCAN_CSAM_PROVIDER",
+    "SCAN_MAX_SYNC_SIZE_MB",
+    "SCAN_MINIO_WEBHOOK_SECRET",
+    "SCAN_BLOCKED_MIME_TYPES",
+    "SCAN_FRESHCLAM_INTERVAL_HOURS"
+  ],
+  "dependencies": {
+    "required": [
+      "object-storage"
+    ],
+    "optional": [
+      "database"
+    ]
+  },
+  "hasura_remote_schema": true,
+  "hasura_actions": [
+    {
+      "name": "scanFile",
+      "endpoint": "http://127.0.0.1:3829/scan/file"
+    },
+    {
+      "name": "getScanResult",
+      "endpoint": "http://127.0.0.1:3829/scan/result"
+    }
+  ],
+  "system_packages": [
+    "clamav",
+    "clamav-daemon"
+  ],
+  "doctor_checks": [
+    "SCAN-DEPS-01",
+    "SCAN-DEPS-02",
+    "SCAN-DEPS-03",
+    "SCAN-CSAM-01",
+    "SCAN-CSAM-02",
+    "SCAN-PERF-01"
+  ],
+  "csam_note": "CSAM hash detection disabled by default. Requires operator partner agreement (Microsoft PhotoDNA or NCMEC). Not a bundle add-on. See SPEC.md \u00a714.",
+  "checksum": "2a8943610ddd543293f398437a371290485e6d27c3d8feb034d5f813f0670018",
+  "bundles": [
+    "nsentry"
+  ],
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": []
+}

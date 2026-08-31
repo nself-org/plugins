@@ -1,0 +1,77 @@
+{
+  "name": "family-ancestry",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Ancestry.com \u2192 nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "minNselfVersion": "1.0.0",
+  "category": "social",
+  "tags": [
+    "family",
+    "genealogy",
+    "ancestry",
+    "migration",
+    "importer",
+    "gedcom"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {},
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": []
+  },
+  "config": {},
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "ancestry.com"
+    ],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
+  },
+  "dependencies": {
+    "required": [
+      "family",
+      "object-storage",
+      "photos"
+    ],
+    "optional": []
+  },
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "port": 3513,
+  "status": "planned",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [],
+  "health_endpoint": "/health",
+  "health_status": "pending_implementation",
+  "entry": "cmd/main.go",
+  "checksum": "75b9a777d11e9ef264c80753ba3f00614df6abd30c0d75d4a30f440d491b42e1",
+  "bundles": [
+    "nfamily"
+  ]
+}

@@ -1,0 +1,38 @@
+name: cdc
+version: 1.0.0
+type: go-service
+port: 8209
+cs_slot: CS_5
+description: >
+  Postgres Change Data Capture via WAL logical replication. Streams INSERT/UPDATE/DELETE
+  events to Kafka, Redpanda, or RabbitMQ in Debezium envelope format.
+  Embedded mode (default, no JVM) or external Debezium Kafka Connect mode.
+  Required peer dependency for the warehouse plugin.
+isCommercial: true
+licenseType: pro
+requiredEntitlements:
+  - pro
+requires_license: true
+minNselfVersion: 1.0.9
+category: data
+tags:
+  - cdc
+  - kafka
+  - redpanda
+  - rabbitmq
+  - postgres
+  - replication
+  - event-streaming
+  - debezium
+health_endpoint: /cdc/status
+env:
+  - CDC_BROKER           # kafka | redpanda | rabbitmq
+  - CDC_BROKER_URLS      # comma-separated broker endpoints
+  - CDC_TOPIC_PREFIX     # default: nself
+  - CDC_TABLES           # comma-separated table names; default ALL np_*
+  - CDC_MODE             # embedded (default) | debezium-connect
+  - CDC_DEBEZIUM_URL     # only for debezium-connect mode
+  - CDC_SLOT_NAME        # default: nself_cdc
+  - CDC_PUBLICATION_NAME # default: nself_pub
+  - CDC_BATCH_SIZE       # default 100
+  - CDC_FLUSH_MS         # default 50

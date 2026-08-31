@@ -1,0 +1,81 @@
+# auth_enterprise.graphql
+#
+# Hasura Remote Schema / type definitions for the auth-enterprise plugin.
+# These types expose MFA status, policy, and SSO provider information via
+# the Hasura GraphQL layer. Mutation endpoints are HTTP-only (REST handlers)
+# to enforce throttle and CSRF logic that cannot be expressed in pure GraphQL.
+#
+# Apply by tracking the np_* tables in Hasura console or via metadata YAML.
+# Row Level Security is enforced at the Postgres layer; Hasura roles map to:
+#   - user        → sees own rows only (mfa_enrollments, recovery_codes, sso_sessions)
+#   - tenant_admin → sees own tenant rows only (mfa_policies, sso_providers)
+#   - service     → unrestricted (for internal service-role calls)
+
+type NpMfaEnrollment {
+  id: ID!
+  userId: String!
+  tenantId: ID
+  totpSecret: String       # null until enrollment is confirmed
+  webauthnCredentials: JSON!
+  enrolledAt: Timestamptz!
+  lastUsedAt: Timestamptz
+}
+
+type NpMfaPolicy {
+  tenantId: ID!
+  required: Boolean!
+  gracePeriodD: Int!
+  methodsAllowed: [String!]!
+  updatedAt: Timestamptz!
+}
+
+type NpMfaRecoveryCode {
+  id: ID!
+  userId: String!
+  # Raw code is never returned; masked form only.
+  masked: String!
+  usedAt: Timestamptz      # null = available
+  createdAt: Timestamptz!
+}
+
+type NpSsoProvider {
+  id: ID!
+  tenantId: ID
+  protocol: String!        # saml | oidc
+  idpName: String!         # google | okta | entra | custom
+  # metadata JSONB is excluded from the schema: contains secrets.
+  attributeMap: JSON!
+  enabled: Boolean!
+  createdAt: Timestamptz!
+  updatedAt: Timestamptz!
+}
+
+type NpSsoSession {
+  id: ID!
+  userId: String!
+  providerId: ID
+  idpSubject: String!
+  signedInAt: Timestamptz!
+}
+
+# ─── Query roots (Hasura tracks these via table relationships) ────────────────
+
+# Hasura auto-generates query fields when tables are tracked. Explicit type
+# definitions here serve as the authoritative schema reference.
+
+# np_mfa_enrollments → one row per user.
+# SELECT allowed for user role where user_id = current user.
+# Not tracked via Remote Schema; tracked directly as a Hasura table.
+
+# np_mfa_policies → one row per tenant.
+# SELECT allowed for tenant_admin role.
+
+# np_sso_providers → many rows per tenant.
+# SELECT allowed for tenant_admin role.
+
+# np_sso_sessions → audit log; user can SELECT own rows.
+
+# ─── Custom scalar types ──────────────────────────────────────────────────────
+
+scalar Timestamptz
+scalar JSON

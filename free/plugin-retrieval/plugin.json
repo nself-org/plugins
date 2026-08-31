@@ -1,0 +1,32 @@
+{
+  "name": "plugin-retrieval",
+  "version": "0.1.0",
+  "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for \u0273Claw memory and nself-ai-mcp search/recall tools.",
+  "author": "nSelf",
+  "license": "MIT",
+  "licenseType": "free",
+  "tier": "pro",
+  "language": "go",
+  "minNselfVersion": "1.1.1",
+  "installable": true,
+  "isCommercial": false,
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "category": "ai",
+  "port": 3825,
+  "bundle": [
+    "nclaw"
+  ],
+  "tables": [
+    "np_retrieval_documents",
+    "np_retrieval_embeddings"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "bundles": [
+    "nclaw",
+    "clawde"
+  ]
+}

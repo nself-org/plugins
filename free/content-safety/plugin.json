@@ -1,0 +1,42 @@
+{
+  "name": "content-safety",
+  "displayName": "\u0273Self Content Safety",
+  "version": "1.0.0",
+  "description": "Trust-safety evidence, legal holds, spam detection, raid protection, and abuse scoring",
+  "author": "nSelf",
+  "license": "MIT",
+  "licenseType": "free",
+  "tier": "pro",
+  "language": "go",
+  "minNselfVersion": "1.0.0",
+  "isCommercial": false,
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "category": "security",
+  "port": 3213,
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "env": {
+    "CONTENT_SAFETY_PLUGIN_PORT": "3213",
+    "CONTENT_SAFETY_PLUGIN_HOST": "0.0.0.0",
+    "DATABASE_URL": "",
+    "CONTENT_SAFETY_API_KEY": ""
+  },
+  "tables": [
+    "np_cs_evidence",
+    "np_cs_legal_holds",
+    "np_cs_evidence_exports",
+    "np_cs_spam_rules",
+    "np_cs_spam_configs",
+    "np_cs_rate_limit_violations",
+    "np_cs_raid_events",
+    "np_cs_lockdowns",
+    "np_cs_abuse_scores"
+  ],
+  "bundles": [
+    "nchat",
+    "ntv"
+  ]
+}

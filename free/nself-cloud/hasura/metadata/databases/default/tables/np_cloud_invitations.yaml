@@ -1,0 +1,53 @@
+# np_cloud_invitations — team member invitations
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column.
+#   Row filter enforced on nself_user role: {"tenant_id":{"_eq":"X-Hasura-Tenant-Id"}}
+#   RLS: ENABLE + FORCE ROW LEVEL SECURITY applied in migration 001.
+#
+# Note: invitation tokens are NOT exposed to nself_user reads — acceptance
+#   is handled via a dedicated API endpoint that validates the token server-side.
+#
+# Roles:
+#   anonymous   — no access
+#   nself_user  — read own tenant invitations (tenant_id filter); no token column exposed
+#   nself_admin — full access (no filter)
+
+- table:
+    schema: public
+    name: np_cloud_invitations
+  select_permissions:
+    - role: nself_user
+      permission:
+        columns:
+          - id
+          - tenant_id
+          - instance_id
+          - invited_email
+          - role
+          - invited_by_user_id
+          - expires_at
+          - accepted_at
+          - created_at
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+  insert_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        check: {}
+  update_permissions:
+    - role: nself_admin
+      permission:
+        columns:
+          - accepted_at
+        filter: {}
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

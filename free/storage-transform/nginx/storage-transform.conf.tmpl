@@ -1,0 +1,80 @@
+# storage-transform.conf.tmpl
+# Generated section injected by nself build when storage-transform plugin is active.
+# Intercepts /storage/v1/object/public/** requests that include transform params
+# and routes them through the storage-transform service at port 3085, with an
+# aggressive Nginx proxy cache (7-day TTL, keyed on full URI).
+
+# Declare the proxy cache zone once at the http{} level.
+# nself build appends this to nginx.conf http{} block automatically.
+# proxy_cache_path /var/cache/nginx/storage-transform
+#     levels=1:2
+#     keys_zone=storage_img_cache:10m
+#     max_size=5g
+#     inactive=7d
+#     use_temp_path=off;
+
+upstream storage_transform_backend {
+    server 127.0.0.1:${STORAGE_TRANSFORM_PORT};
+    keepalive 16;
+}
+
+# Transform location — only activates when at least one transform param is present.
+# Standard storage URLs without params are proxied directly by the storage plugin.
+location ~ ^/storage/v1/object/public/(.+)$ {
+    # Only route to transform service when transform params are present.
+    set $do_transform 0;
+    if ($arg_w != "") { set $do_transform 1; }
+    if ($arg_h != "") { set $do_transform 1; }
+    if ($arg_fmt != "") { set $do_transform 1; }
+    if ($arg_q != "") { set $do_transform 1; }
+    if ($arg_fit != "") { set $do_transform 1; }
+    if ($arg_dpr != "") { set $do_transform 1; }
+
+    if ($do_transform = 0) {
+        # Pass through to the storage plugin directly.
+        proxy_pass http://127.0.0.1:${STORAGE_PLUGIN_PORT};
+        break;
+    }
+
+    # Route to transform service.
+    proxy_pass         http://storage_transform_backend;
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_set_header   Connection        "";
+
+    # Nginx proxy cache — keyed on full URI including query params.
+    proxy_cache        storage_img_cache;
+    proxy_cache_key    "$scheme$request_method$host$request_uri";
+    proxy_cache_valid  200 7d;
+    proxy_cache_valid  404 1m;
+    proxy_cache_use_stale  error timeout invalid_header updating
+                           http_500 http_502 http_503 http_504;
+    proxy_cache_lock   on;
+    proxy_cache_lock_timeout 10s;
+    add_header         X-Cache $upstream_cache_status;
+    add_header         Cache-Control "public, max-age=604800, immutable";
+
+    # Timeout settings for potentially slow transform operations.
+    proxy_connect_timeout 5s;
+    proxy_read_timeout    60s;
+    proxy_send_timeout    10s;
+
+    # Large image uploads/downloads.
+    client_max_body_size 50m;
+}
+
+# Management API — not cached, not rate-limited by Nginx (handled in Go).
+location /api/storage-transform/ {
+    proxy_pass         http://storage_transform_backend;
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_set_header   Connection        "";
+    proxy_read_timeout 30s;
+    access_log         off;
+}

@@ -1,0 +1,56 @@
+type KMSConfig {
+  id: ID!
+  tenantId: ID!
+  provider: String!       # "aws" | "gcp" | "vault"
+  keyRef: String!
+  region: String
+  endpointUrl: String
+  enabled: Boolean!
+  createdAt: String!
+  lastVerifiedAt: String
+}
+
+type KeyEvent {
+  id: ID!
+  tenantId: ID!
+  eventType: String!      # key_configured | key_rotated | key_revoked | verify_ok | verify_fail
+  keyRef: String!
+  triggeredBy: ID
+  occurredAt: String!
+  details: String         # JSON blob
+}
+
+type RotationJob {
+  jobId: ID!
+  status: String!
+  details: String
+  updatedAt: String
+}
+
+type Query {
+  encryptionKMSConfig: KMSConfig
+  encryptionKeyEvents(limit: Int): [KeyEvent!]!
+  encryptionRotationStatus(jobId: ID!): RotationJob
+}
+
+type Mutation {
+  encryptionConfigureKMS(
+    provider: String!
+    keyRef: String!
+    region: String
+    endpointUrl: String
+    credentialsRef: String
+  ): KMSConfig!
+
+  encryptionUpdateKMS(
+    provider: String
+    keyRef: String
+    region: String
+    endpointUrl: String
+    credentialsRef: String
+  ): KMSConfig!
+
+  encryptionVerifyKMS: Boolean!
+
+  encryptionRotate(dryRun: Boolean): RotationJob!
+}

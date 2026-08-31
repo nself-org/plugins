@@ -1,0 +1,140 @@
+{
+  "name": "nself-image",
+  "version": "0.1.0",
+  "api_version": "1.1.0",
+  "description": "Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization.",
+  "author": "nSelf Team",
+  "minNselfVersion": "1.2.0",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins/nself-image",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "category": "media",
+  "tags": [
+    "image",
+    "resize",
+    "webp",
+    "avif",
+    "format-conversion",
+    "minio",
+    "rust",
+    "simd",
+    "nfamily",
+    "avatar",
+    "photo"
+  ],
+  "capabilities": [
+    "resize",
+    "crop",
+    "format_convert_webp",
+    "format_convert_avif",
+    "format_convert_jpeg",
+    "format_convert_png",
+    "strip_exif",
+    "minio_roundtrip"
+  ],
+  "tables": [
+    "np_image.jobs"
+  ],
+  "webhooks": {},
+  "actions": {
+    "processImage": "Resize, crop, and convert a MinIO-stored image (POST /process)"
+  },
+  "envVars": {
+    "required": [
+      "IMAGE_PROCESSING_MINIO_ENDPOINT",
+      "IMAGE_PROCESSING_MINIO_ACCESS_KEY",
+      "IMAGE_PROCESSING_MINIO_SECRET_KEY",
+      "IMAGE_PROCESSING_SHARED_SECRET"
+    ],
+    "optional": [
+      "IMAGE_PROCESSING_PORT",
+      "IMAGE_PROCESSING_MAX_INPUT_BYTES",
+      "IMAGE_PROCESSING_MAX_CONCURRENT",
+      "IMAGE_AUDIT_ENABLED"
+    ]
+  },
+  "config": {
+    "defaultPort": 3827,
+    "defaultMaxInputBytes": 52428800,
+    "defaultMaxConcurrent": 8,
+    "defaultAuditEnabled": false
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "network": [
+      "minio"
+    ],
+    "filesystem": [
+      "temp"
+    ]
+  },
+  "port": 3852,
+  "status": "planned",
+  "language": "rust",
+  "binary_name": "nself_image",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64",
+    "darwin-x86_64",
+    "windows-x86_64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "pro",
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/process",
+      "auth": "hmac"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "auth": "none"
+    }
+  ],
+  "dependencies": {
+    "required": [
+      "minio"
+    ],
+    "optional": []
+  },
+  "hasura_actions": [
+    {
+      "name": "processImage",
+      "endpoint": "http://127.0.0.1:3827/process"
+    }
+  ],
+  "rust_msrv": "1.75.0",
+  "entry": "src/main.rs",
+  "checksum": "cd38d30a664deb801a69409d73cdb902d918bb39a772ea4581e5eac69a6c68a6",
+  "bundles": [
+    "ntv",
+    "nfamily",
+    "nchat",
+    "clawde"
+  ]
+}

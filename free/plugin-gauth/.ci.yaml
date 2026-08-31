@@ -1,0 +1,28 @@
+# nself-ci configuration for plugin-gauth (E7)
+#
+# Purpose: Declare CI gate profile for the headless Google OAuth refresh plugin.
+#   Registers this crate in the nself-ci pipeline so merges are blocked until
+#   clippy + tests pass. Google OAuth credentials not required for unit tests.
+# Epic: P4-E7 (E7 completion gate — T13)
+# SPORT: PLUGINS-CI-E7-GAUTH
+
+plugin: plugin-gauth
+epic: E7
+stack: rust
+
+stages:
+  - name: rust:clippy
+    cmd: ["cargo", "clippy", "--all-targets", "--all-features", "--", "--deny", "warnings"]
+    timeout: 180
+
+  - name: rust:test
+    cmd: ["cargo", "test", "--all-features"]
+    timeout: 300
+
+  - name: rust:integration
+    cmd: ["cargo", "test", "--test", "integration_refresh", "--all-features"]
+    timeout: 300
+    env_required:
+      - NSELF_DB_URL
+      - GAUTH_ENCRYPTION_KEY
+    skip_if_env_missing: true

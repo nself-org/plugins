@@ -1,0 +1,47 @@
+# np_pty_sessions — PTY session registry (plugin-pty port 9100)
+#
+# Multi-App Isolation Convention: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id": {"_eq": "X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_pty_sessions
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - source_account_id
+          - client_id
+          - status
+          - cols
+          - rows
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns:
+          - status
+          - ended_at
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        check: {}
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

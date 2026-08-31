@@ -1,0 +1,181 @@
+{
+  "name": "cdn",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "CDN management and integration plugin - cache purging, signed URLs. Planned: analytics sync from Cloudflare/BunnyCDN",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3036,
+  "category": "infrastructure",
+  "tags": [
+    "cdn",
+    "cache",
+    "cloudflare",
+    "bunnycdn",
+    "edge"
+  ],
+  "tables": [
+    "np_cdn_zones",
+    "np_cdn_purge_requests",
+    "np_cdn_analytics",
+    "np_cdn_signed_urls"
+  ],
+  "views": [
+    "np_cdn_bandwidth_by_zone",
+    "np_cdn_cache_hit_rate",
+    "np_cdn_top_paths"
+  ],
+  "webhooks": {},
+  "actions": {
+    "init": "Initialize database schema",
+    "server": "Start the API server",
+    "status": "Show CDN plugin statistics",
+    "zones": "Manage CDN zones",
+    "purge": "Purge CDN cache",
+    "sign": "Generate signed URLs",
+    "analytics": "View and sync analytics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "CDN_PLUGIN_PORT",
+      "CDN_PROVIDER",
+      "CDN_CLOUDFLARE_API_TOKEN",
+      "CDN_CLOUDFLARE_ZONE_IDS",
+      "CDN_BUNNYCDN_API_KEY",
+      "CDN_BUNNYCDN_PULL_ZONE_IDS",
+      "CDN_SIGNING_KEY",
+      "CDN_SIGNED_URL_TTL",
+      "CDN_ANALYTICS_SYNC_INTERVAL",
+      "CDN_PURGE_BATCH_SIZE",
+      "CDN_API_KEY",
+      "CDN_RATE_LIMIT_MAX",
+      "CDN_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "webhookPath": "/webhooks/cdn",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/analytics",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/purge",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/purge-requests",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/signed-urls",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/signed-urls",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/signed-urls/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/zones",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/zones",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/zones/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/zones/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/zones/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "ab9421ae39fdcfe4edd504b10f56eb88f53317ad1a20c0b70e81b311ad125236",
+  "bundles": [
+    "clawde",
+    "ntv"
+  ]
+}

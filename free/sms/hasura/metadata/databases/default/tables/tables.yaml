@@ -1,0 +1,2 @@
+- "!include np_sms_messages.yaml"
+- "!include np_sms_opt_outs.yaml"
