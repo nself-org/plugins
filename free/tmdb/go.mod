@@ -7,11 +7,11 @@ toolchain go1.26.6
 require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/nself-org/plugins-pro/paid/shared v0.0.0
+	github.com/nself-org/plugins/free/shared v0.0.0
 	github.com/pashagolub/pgxmock/v4 v4.9.0
 )
 
-replace github.com/nself-org/plugins-pro/paid/shared => ../shared
+replace github.com/nself-org/plugins/free/shared => ../shared
 
 require (
 	github.com/google/uuid v1.6.0 // indirect
