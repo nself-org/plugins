@@ -6,12 +6,12 @@ toolchain go1.26.6
 
 require (
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/nself-org/plugins-pro/paid/shared v0.0.0
+	github.com/nself-org/plugins/free/shared-utils v0.0.0
 	github.com/pquerna/otp v1.4.0
 	golang.org/x/crypto v0.52.0
 )
 
-replace github.com/nself-org/plugins-pro/paid/shared => ../shared
+replace github.com/nself-org/plugins/free/shared-utils => ../shared-utils
 
 require (
 	github.com/boombuler/barcode v1.0.2 // indirect

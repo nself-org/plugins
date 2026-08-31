@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins-pro/paid/shared/httpclient"
+	"github.com/nself-org/plugins/free/shared-utils/httpclient"
 )
 
 const devtoArticlesURL = "https://dev.to/api/articles"

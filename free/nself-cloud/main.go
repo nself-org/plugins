@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
-	server "github.com/nself-org/plugins-pro/paid/shared/go/server"
+	server "github.com/nself-org/plugins/free/shared-utils/go/server"
 )
 
 // dbPool holds the optional pgxpool used by the readiness check.

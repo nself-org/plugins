@@ -2982,34 +2982,6 @@
       "minNselfVersion": "1.1.0",
       "tables": []
     },
-    "nself-saas-gateway": {
-      "version": "0.1.0",
-      "description": "Unified tenant-scoped REST facade for the nSentry SaaS (api.sentry.nself.org): /v1 monitors, incidents, status pages, and alert channels over the bundle plugins, plus tenant signup and billing tier updates.",
-      "category": "infrastructure",
-      "tier": "free",
-      "license": "MIT",
-      "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v0.1.0/nself-saas-gateway-0.1.0.tar.gz",
-      "download_url": "https://plugins.nself.org/plugins/nself-saas-gateway/tarball",
-      "requires_license": false,
-      "language": "go",
-      "tags": [
-        "saas",
-        "gateway",
-        "api",
-        "multi-tenant",
-        "nsentry"
-      ],
-      "dependencies": [
-        "nself-uptime-monitor",
-        "nself-incident-mgmt",
-        "nself-alert-router"
-      ],
-      "name": "nself-saas-gateway",
-      "author": "nself",
-      "minNselfVersion": "1.0.0",
-      "tables": []
-    },
     "nself-scan": {
       "version": "0.1.0",
       "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
@@ -3616,6 +3588,27 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": []
+    },
+    "shared-utils": {
+      "version": "1.0.0",
+      "description": "Shared Go utilities (request-ID tracing middleware, HTTP client propagation, server lifecycle helpers) used internally by multiple free nself plugins. Not installable directly.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "shared",
+        "internal",
+        "library"
+      ],
+      "dependencies": [],
+      "name": "shared-utils",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [],
+      "installable": false
     }
   }
 }

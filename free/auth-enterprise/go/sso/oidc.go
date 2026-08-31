@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins-pro/paid/shared/httpclient"
+	"github.com/nself-org/plugins/free/shared-utils/httpclient"
 )
 
 // oidcClient is the package-level HTTP client used for OIDC discovery,

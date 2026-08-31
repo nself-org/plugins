@@ -1,0 +1,18 @@
+{
+  "name": "shared-utils",
+  "version": "1.0.0",
+  "description": "Shared Go utilities (request-ID tracing middleware, HTTP client propagation, server lifecycle helpers) used internally by multiple free nself plugins. Not installable directly.",
+  "author": "nself",
+  "license": "MIT",
+  "category": "infrastructure",
+  "language": "go",
+  "tier": "free",
+  "requires_license": false,
+  "installable": false,
+  "port": 0,
+  "tags": ["shared", "internal", "library"],
+  "multiApp": { "supported": false },
+  "tables": [],
+  "dependencies": { "required": [], "optional": [] },
+  "envVars": { "required": [], "optional": [] }
+}

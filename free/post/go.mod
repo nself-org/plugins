@@ -7,11 +7,11 @@ toolchain go1.26.6
 require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/nself-org/plugins-pro/paid/shared v0.0.0
+	github.com/nself-org/plugins/free/shared-utils v0.0.0
 	github.com/prometheus/client_golang v1.23.2
 )
 
-replace github.com/nself-org/plugins-pro/paid/shared => ../shared
+replace github.com/nself-org/plugins/free/shared-utils => ../shared-utils
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
