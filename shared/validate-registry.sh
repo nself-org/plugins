@@ -118,9 +118,14 @@ VALID_CATEGORIES="authentication automation commerce communication content data 
 # free, pro, max — `max` represents the all-bundle ɳSelf+ tier per F07.
 VALID_TIERS="free pro max enterprise"
 
-# Canonical bundle names (per F06 BUNDLE-INVENTORY).
-# Single source of truth — keep aligned with .claude/docs/sport/F06-BUNDLE-INVENTORY.md
-VALID_BUNDLES="nclaw nchat ntv nfamily clawde nsentry ntask"
+# Canonical bundle slugs per ADR-P6-03 (supersedes the old F06 BUNDLE-INVENTORY
+# names — nclaw/nchat/ntv/nfamily/nsentry/ntask were the ɳ-prefixed product
+# names, not the bundle-membership slugs plugin.json/registry.json actually
+# carry in `bundles[]`). Pre-existing bug found + fixed 2026-08-31 during the
+# P6 free-by-default migration CI triage: this list predated ADR-P6-03 and
+# had never been updated, so every plugin correctly tagged with the current
+# slugs (e.g. "task") failed CHECK-10 as if the slug were invalid.
+VALID_BUNDLES="task chat claw family sentry tv clawde"
 
 # ---------------------------------------------------------------------------
 # Locate jq (preferred) and python3 (fallback for complex parsing)

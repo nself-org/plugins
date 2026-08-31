@@ -12,6 +12,7 @@
   "homepage": "https://nself.org/plugins",
   "repository": "https://github.com/nself-org/plugins-pro",
   "minNselfVersion": "1.0.0",
+  "port": 8210,
   "category": "infrastructure",
   "language": "go",
   "tier": "pro",

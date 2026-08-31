@@ -12,7 +12,7 @@
   "isCommercial": false,
   "requiredEntitlements": [],
   "requires_license": false,
-  "category": "ai",
+  "category": "infrastructure",
   "port": 8090,
   "bundle": [
     "clawde"

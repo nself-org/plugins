@@ -16,7 +16,7 @@
   "bundle": [
     "clawde"
   ],
-  "category": "ai",
+  "category": "development",
   "health": "/health",
   "tables": [
     "np_pty_sessions",

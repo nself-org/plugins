@@ -12,7 +12,7 @@
   "isCommercial": false,
   "requiredEntitlements": [],
   "requires_license": false,
-  "category": "ai",
+  "category": "data",
   "port": 3825,
   "bundle": [
     "nclaw"

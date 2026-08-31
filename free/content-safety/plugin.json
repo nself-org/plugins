@@ -12,7 +12,7 @@
   "isCommercial": false,
   "requiredEntitlements": [],
   "requires_license": false,
-  "category": "security",
+  "category": "compliance",
   "port": 3213,
   "dependencies": {
     "required": [],

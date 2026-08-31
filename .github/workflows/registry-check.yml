@@ -198,22 +198,42 @@ jobs:
       - name: Validate non-Go plugin config shape
         run: |
           # build-test.yml's Go matrix covers every free/*/ dir with a
-          # go.mod. As of P6 that is 59 of 60 — the one exclusion is
-          # `forgejo` (docker-compose + shell, no Go code). `monitoring`
-          # DOES have a go.mod despite registry.json's stale "language":
-          # "config" label, so it is already Go-tested and is not a plugin
-          # this step needs to cover.
+          # go.mod. `monitoring` DOES have a go.mod despite registry.json's
+          # stale "language": "config" label, so it is already Go-tested and
+          # is not a plugin this step needs to cover. As of the P6
+          # free-by-default migration (62 plugins, PR #57) several Go
+          # plugins nest their module one level down (free/<name>/go/go.mod)
+          # rather than at the plugin root, so the go.mod search below is
+          # recursive (bounded depth) rather than a single top-level stat.
           #
           # This step is the config-tier equivalent for whatever plugins
           # genuinely have no go.mod: it validates their docker-compose
-          # file(s) parse as valid YAML, so a non-Go plugin is never
+          # file(s) parse as valid YAML (or, for a Rust plugin, that
+          # Cargo.toml parses as valid TOML), so a non-Go plugin is never
           # silently untested. It targets any go.mod-less free/ plugin, not
           # a hardcoded name, so it keeps working if the split changes.
+          #
+          # A plugin.json marked "status": "planned" is a specced-but-not-yet
+          # -built stub (SPEC.md + plugin.json only, e.g. the family-* import
+          # helpers) — there is no implementation of any kind to validate
+          # yet, so it is skipped rather than failed.
           python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+          python3 -c "import tomllib" 2>/dev/null || pip install --quiet tomli
           errors=0
           for d in free/*/; do
             name=$(basename "$d")
-            if [ -f "$d/go.mod" ]; then
+            if [ -n "$(find "$d" -maxdepth 3 -name go.mod -print -quit 2>/dev/null)" ]; then
+              continue
+            fi
+            status=$(python3 -c "
+          import json, sys
+          try:
+            print(json.load(open(sys.argv[1])).get('status', ''))
+          except Exception:
+            print('')
+            " "$d/plugin.json" 2>/dev/null)
+            if [ "$status" = "planned" ]; then
+              echo "SKIP: $name is status=planned (spec only, nothing to validate yet)"
               continue
             fi
             found_config=0
@@ -227,8 +247,25 @@ jobs:
                 echo "OK: $name/$(basename "$f") is valid YAML"
               fi
             done
+            if [ -f "$d/Cargo.toml" ]; then
+              found_config=1
+              if ! python3 -c "
+          import sys
+          try:
+            import tomllib
+          except ModuleNotFoundError:
+            import tomli as tomllib
+          with open(sys.argv[1], 'rb') as f:
+            tomllib.load(f)
+              " "$d/Cargo.toml" 2>/dev/null; then
+                echo "ERROR: '$name/Cargo.toml' is not valid TOML"
+                errors=$((errors + 1))
+              else
+                echo "OK: $name/Cargo.toml is valid TOML"
+              fi
+            fi
             if [ "$found_config" -eq 0 ]; then
-              echo "ERROR: '$name' has no go.mod and no top-level *.yml/*.yaml config to validate"
+              echo "ERROR: '$name' has no go.mod, no Cargo.toml, and no top-level *.yml/*.yaml config to validate"
               errors=$((errors + 1))
             fi
           done

@@ -13,7 +13,7 @@
   "repository": "https://github.com/nself-org/plugins-pro",
   "minNselfVersion": "1.0.0",
   "port": 3848,
-  "category": "monitoring",
+  "category": "infrastructure",
   "tags": [
     "saas",
     "gateway",

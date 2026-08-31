@@ -17,7 +17,7 @@
   "entry": "main.go",
   "status": "stable",
   "tier": "pro",
-  "category": "ci",
+  "category": "development",
   "port": 3770,
   "tags": [
     "eval",

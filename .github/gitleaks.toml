@@ -41,4 +41,25 @@ regexes = [
   # "a1b2c3d4****" normally and the full value under --debug. Both are the
   # digits 1-9 repeating, not keys. One regex covers both lengths.
   '''a1b2c3d4e5f6789012345678901234567890[0-9]*''',
+
+  # Test fixtures that arrived with the P6-E4-W2-S1-T3 free-by-default
+  # migration (62 plugins moved plugins-pro -> plugins/free). Each allowlist
+  # entry below was verified against source: a synthetic value with no
+  # corresponding real credential, used only to exercise rejection/mock paths.
+
+  # nself-saas-gateway/spoof_test.go: a deliberately invalid JWT (payload
+  # signature is the literal string "bogussignature") used to assert that a
+  # garbage token is rejected with 401 even alongside a spoofed tenant header.
+  '''eyJhbGciOiJIUzI1NiJ9\.eyJ0ZW5hbnRfaWQiOiJ4In0\.bogussignature''',
+
+  # plugin-gauth/tests/integration_refresh.rs: mockito intercepts the Google
+  # OAuth endpoint in-process (see file header comment) and returns this
+  # literal string as the mocked access_token — never a real Google token.
+  '''ya29\.integration-test''',
+
+  # post/internal/providers/ghost/client_test.go: hexSecret is a 32-byte hex
+  # string built from the sequential byte pattern aabbccdd...8899 repeated,
+  # documented in-file as matching the SHAPE of a real Ghost Admin API key
+  # without being one.
+  '''aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899''',
 ]

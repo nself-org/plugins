@@ -10,6 +10,7 @@
     "nChat"
   ],
   "visibility": "public",
+  "status": "planned",
   "tier": "free",
   "port": 3829,
   "service_type": "custom_service",

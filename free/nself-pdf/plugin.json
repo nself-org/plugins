@@ -7,6 +7,7 @@
   "language": "go",
   "bundle": "shared",
   "visibility": "public",
+  "status": "planned",
   "tier": "pro",
   "port": 3851,
   "service_type": "custom_service",

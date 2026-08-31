@@ -31,8 +31,13 @@ build/
 logs/
 
 # Cache & temp
-.cache/
-cache/
+# Anchored to repo root — an unanchored `cache/` matched at any depth and
+# silently untracked two real Go packages named `cache` (free/byok/go/cache/,
+# free/nself-eval-gate/internal/cache/) when they arrived in the P6
+# free-by-default migration. Root is still covered for actual build-cache
+# output; source directories legitimately named `cache/` are no longer hit.
+/.cache/
+/cache/
 *.tmp
 *.temp
 tmp/
