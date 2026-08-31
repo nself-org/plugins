@@ -1,0 +1,39 @@
+# np_sms_messages — SMS message history (plugin-sms port 9009)
+#
+# Convention Wall: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id": {"_eq": "X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_sms_messages
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - source_account_id
+          - to_number
+          - from_number
+          - body
+          - status
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

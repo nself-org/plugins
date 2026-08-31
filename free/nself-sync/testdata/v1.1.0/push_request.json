@@ -1,0 +1,16 @@
+{
+  "device_id": "00000000-0000-0000-0000-000000000001",
+  "events": [
+    {
+      "event_id": "10000000-0000-0000-0000-000000000001",
+      "hlc": {
+        "wall_ms": 1715644800000,
+        "lamport": 1,
+        "device_id": "00000000-0000-0000-0000-000000000001"
+      },
+      "payload": {"type": "message.created", "body": "hello"},
+      "schema_version": 1
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,71 @@
+{
+  "name": "nself-pdf",
+  "author": "nSelf Team",
+  "minNselfVersion": "1.0.0",
+  "display_name": "PDF Generation",
+  "version": "0.1.0",
+  "language": "go",
+  "bundle": "shared",
+  "visibility": "public",
+  "tier": "pro",
+  "port": 3851,
+  "service_type": "custom_service",
+  "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
+  "category": "documents",
+  "license": "MIT",
+  "min_nself_version": "1.1.0",
+  "tarball": "nself-pdf-v0.1.0-linux-amd64.tar.gz",
+  "download_url": "https://ping.nself.org/plugins/nself-pdf/download",
+  "requires_license": false,
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "tags": [
+    "pdf",
+    "document-generation",
+    "html-to-pdf",
+    "templates",
+    "chromium",
+    "minio",
+    "receipts",
+    "reports"
+  ],
+  "env_vars": [
+    "PDF_GENERATION_PORT",
+    "PDF_GENERATION_MINIO_ENDPOINT",
+    "PDF_GENERATION_MINIO_ACCESS_KEY",
+    "PDF_GENERATION_MINIO_SECRET_KEY",
+    "PDF_GENERATION_TEMPLATES_BUCKET",
+    "PDF_GENERATION_OUTPUT_BUCKET",
+    "PDF_GENERATION_SHARED_SECRET",
+    "PDF_GENERATION_MAX_CONCURRENT",
+    "PDF_GENERATION_TIMEOUT_SECONDS",
+    "PDF_AUDIT_ENABLED"
+  ],
+  "dependencies": {
+    "required": [
+      "minio"
+    ],
+    "optional": [
+      "database"
+    ]
+  },
+  "hasura_actions": [
+    {
+      "name": "generatePdf",
+      "endpoint": "http://127.0.0.1:3828/pdf/generate"
+    }
+  ],
+  "system_packages": [
+    "chromium-browser"
+  ],
+  "doctor_checks": [
+    "PDF-DEPS-01"
+  ],
+  "checksum": "d50a8437dff079718faf63fd395c27836f9f58d92f33a197cd88b1c35734bcab",
+  "bundles": [
+    "nclaw",
+    "clawde",
+    "nfamily"
+  ]
+}

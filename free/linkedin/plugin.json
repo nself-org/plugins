@@ -1,0 +1,134 @@
+{
+  "name": "linkedin",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "LinkedIn publishing integration. OAuth 2.0 connection, post to LinkedIn feed with optional image attachments, post history, and Claw tool descriptor.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "content",
+  "language": "go",
+  "entryPoint": "binary",
+  "tags": [
+    "linkedin",
+    "social",
+    "publishing",
+    "oauth",
+    "content"
+  ],
+  "tables": [
+    "np_linkedin_tokens",
+    "np_linkedin_posts"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "optionalDependencies": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "LINKEDIN_CLIENT_ID",
+      "LINKEDIN_CLIENT_SECRET",
+      "LINKEDIN_REDIRECT_URI",
+      "LINKEDIN_INTERNAL_SECRET"
+    ],
+    "optional": [
+      "PORT",
+      "BIND_ADDRESS",
+      "NSELF_PLUGIN_LICENSE_KEY"
+    ]
+  },
+  "config": {
+    "defaultPort": 3722
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "default"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3722,
+  "status": "beta",
+  "binary_name": "linkedin",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "pro",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/internal/tools",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/linkedin/auth",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/linkedin/auth/callback",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/linkedin/auth/start",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/linkedin/posts",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/linkedin/publish",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/linkedin/status",
+      "auth": "bearer"
+    }
+  ],
+  "entry": "cmd/main.go",
+  "checksum": "6cea475f414dc89f0f5852f7fd90013ddebb48312e47f46cf13557e54c63fba6",
+  "bundles": [
+    "nclaw",
+    "nchat"
+  ]
+}

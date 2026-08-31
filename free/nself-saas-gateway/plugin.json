@@ -1,0 +1,194 @@
+{
+  "name": "nself-saas-gateway",
+  "version": "0.1.0",
+  "api_version": "1.0.0",
+  "description": "Unified tenant-scoped REST facade for the nSentry SaaS (api.sentry.nself.org): /v1 monitors, incidents, status pages, and alert channels over the bundle plugins, plus tenant signup and billing tier updates.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3848,
+  "category": "monitoring",
+  "tags": [
+    "saas",
+    "gateway",
+    "api",
+    "multi-tenant",
+    "nsentry"
+  ],
+  "tables": [
+    "np_saas_tenants",
+    "np_saas_api_keys",
+    "np_saas_usage",
+    "np_saas_status_pages"
+  ],
+  "status": "alpha",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "entry": "main.go",
+  "requiredServices": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PORT",
+      "SAAS_GATEWAY_MODE",
+      "SAAS_GATEWAY_UPTIME_URL",
+      "SAAS_GATEWAY_INCIDENT_URL",
+      "SAAS_GATEWAY_ALERT_URL",
+      "SAAS_GATEWAY_STATUS_PAGE_BASE",
+      "NSENTRY_INTERNAL_API_KEY",
+      "ALERT_ROUTER_INBOUND_HMAC_SECRET",
+      "SAAS_JWT_HS256_SECRET",
+      "SAAS_TRUST_TENANT_HEADER"
+    ]
+  },
+  "config": {
+    "webhookPath": "/webhooks/nself-saas-gateway",
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false,
+    "isolationColumn": "tenant_id",
+    "pkStrategy": "uuid",
+    "defaultValue": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "loopback"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/signup",
+      "auth": "none"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/login",
+      "auth": "none"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/session",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/monitors",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/monitors",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/monitors/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/monitors/{id}/pause",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/monitors/{id}/resume",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/incidents",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/incidents/{id}/ack",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/incidents/{id}/resolve",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/status-pages",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/status-pages",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/alerts/channels",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/alerts/channels/{id}/test",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/internal/billing/tenant-tier",
+      "auth": "shared-secret"
+    }
+  ],
+  "dependencies": {
+    "required": [
+      "nself-uptime-monitor",
+      "nself-incident-mgmt",
+      "nself-alert-router"
+    ],
+    "optional": [
+      "nself-cron-monitor",
+      "nself-errors",
+      "nself-rum",
+      "nself-status-page"
+    ]
+  },
+  "service_type": "custom_service",
+  "display_name": "SaaS Gateway",
+  "hasura_remote_schema": false,
+  "bundles": [
+    "nsentry"
+  ]
+}

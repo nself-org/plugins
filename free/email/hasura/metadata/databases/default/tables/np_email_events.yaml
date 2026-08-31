@@ -1,0 +1,37 @@
+# np_email_events — Email delivery events (plugin-email port 9008)
+#
+# Convention Wall: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id": {"_eq": "X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_email_events
+  object_relationships:
+    - name: message
+      using:
+        foreign_key_constraint_on: message_id
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - source_account_id
+          - message_id
+          - event_type
+          - occurred_at
+          - metadata
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

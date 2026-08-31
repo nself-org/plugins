@@ -1,0 +1,101 @@
+# np_kms_configs — BYOK KMS provider configuration per tenant (S1.T12)
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column. Row filter enforced on all read roles.
+#   R3-PATTERN (cont.15 fix, S40-fix): pure _eq filter — no _or, no _is_null arm.
+#   Self-host: tenant_id IS NULL rows are unreachable via this filter (fail-closed, no leak).
+#   Cloud: tenant_id = X-Hasura-Tenant-Id — strict per-tenant isolation.
+#   Fixed per CR-C gate 2026-05-17.
+#
+# Multi-tenancy: Convention B (Cloud multi-tenancy) — tenant_id UUID.
+# This plugin uses tenant_id, not source_account_id, per plugin.json multiApp.isolationColumn.
+# Row filter enforced on all role reads/writes.
+#
+# Roles:
+#   user         — self-host authenticated user; reads own tenant KMS config (no write)
+#   tenant_user  — Cloud authenticated user; same read scope as user (R3-PATTERN, added S40-fix)
+#   nself_admin  — full CRUD access
+#
+# Security: key_ref, credentials_ref, endpoint_url are excluded from user/tenant_user roles;
+#   these reference KMS key ARNs and Vault paths that must remain admin-visible only.
+#   R3-T0 note: Cloud principals use tenant_user role; user role is self-host only.
+
+table:
+  schema: public
+  name: np_kms_configs
+
+configuration:
+  custom_root_fields:
+    select: byok_kms_configs
+    select_by_pk: byok_kms_config
+    select_aggregate: byok_kms_configs_aggregate
+  column_config: {}
+
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - tenant_id
+        - provider
+        - region
+        - enabled
+        - created_at
+        - last_verified_at
+      filter:
+        tenant_id:
+          _eq: X-Hasura-Tenant-Id
+      allow_aggregations: false
+
+  - role: tenant_user
+    permission:
+      columns:
+        - id
+        - tenant_id
+        - provider
+        - region
+        - enabled
+        - created_at
+        - last_verified_at
+      filter:
+        tenant_id:
+          _eq: X-Hasura-Tenant-Id
+      allow_aggregations: false
+
+  - role: nself_admin
+    permission:
+      columns: '*'
+      filter: {}
+      allow_aggregations: true
+
+insert_permissions:
+  - role: nself_admin
+    permission:
+      check: {}
+      columns:
+        - tenant_id
+        - provider
+        - key_ref
+        - region
+        - endpoint_url
+        - credentials_ref
+        - enabled
+
+update_permissions:
+  - role: nself_admin
+    permission:
+      columns:
+        - provider
+        - key_ref
+        - region
+        - endpoint_url
+        - credentials_ref
+        - enabled
+        - last_verified_at
+      filter: {}
+      check: {}
+
+delete_permissions:
+  - role: nself_admin
+    permission:
+      filter: {}

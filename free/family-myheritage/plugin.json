@@ -1,0 +1,78 @@
+{
+  "name": "family-myheritage",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "MyHeritage \u2192 nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company \u2014 lowest legal risk, potential partnership path.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "minNselfVersion": "1.0.0",
+  "category": "social",
+  "tags": [
+    "family",
+    "genealogy",
+    "myheritage",
+    "migration",
+    "importer",
+    "gedcom"
+  ],
+  "tables": [],
+  "webhooks": {},
+  "actions": {},
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": []
+  },
+  "config": {},
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "myheritage.com",
+      "api.myheritage.com"
+    ],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
+  },
+  "dependencies": {
+    "required": [
+      "family",
+      "object-storage",
+      "photos"
+    ],
+    "optional": []
+  },
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "port": 3511,
+  "status": "planned",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [],
+  "health_endpoint": "/health",
+  "health_status": "pending_implementation",
+  "entry": "cmd/main.go",
+  "checksum": "9637215721c0f02906caa51951c82ea50f232bd482a06bcaa361ce5003c73aed",
+  "bundles": [
+    "nfamily"
+  ]
+}

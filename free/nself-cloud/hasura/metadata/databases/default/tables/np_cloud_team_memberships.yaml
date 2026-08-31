@@ -1,0 +1,47 @@
+# np_cloud_team_memberships — active team members per instance
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column.
+#   Row filter enforced on nself_user role: {"tenant_id":{"_eq":"X-Hasura-Tenant-Id"}}
+#   RLS: ENABLE + FORCE ROW LEVEL SECURITY applied in migration 001.
+#
+# Roles:
+#   anonymous   — no access
+#   nself_user  — read own tenant memberships (tenant_id filter); no direct write (API layer)
+#   nself_admin — full access (no filter)
+
+- table:
+    schema: public
+    name: np_cloud_team_memberships
+  select_permissions:
+    - role: nself_user
+      permission:
+        columns:
+          - id
+          - tenant_id
+          - instance_id
+          - user_id
+          - role
+          - joined_at
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+  insert_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        check: {}
+  update_permissions:
+    - role: nself_admin
+      permission:
+        columns:
+          - role
+        filter: {}
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

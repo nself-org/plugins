@@ -1,0 +1,168 @@
+{
+  "name": "ddns",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Dynamic DNS plugin with external IP monitoring. Planned: DNS provider API integration (Cloudflare, Route53) for automated record updates",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3217,
+  "category": "infrastructure",
+  "tags": [
+    "ddns",
+    "dns",
+    "dynamic-dns",
+    "duckdns",
+    "cloudflare",
+    "remote-access"
+  ],
+  "tables": [
+    "np_ddns_config",
+    "np_ddns_update_log"
+  ],
+  "webhooks": {},
+  "actions": {
+    "status": "Show current IP and domain status",
+    "update": "Force a DNS update",
+    "providers": "List available DNS providers",
+    "history": "Show update history",
+    "stats": "Show DDNS statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "DDNS_PLUGIN_PORT",
+      "DDNS_PROVIDER",
+      "DDNS_DOMAIN",
+      "DDNS_TOKEN",
+      "DDNS_CHECK_INTERVAL",
+      "DDNS_CLOUDFLARE_API_KEY",
+      "DDNS_CLOUDFLARE_ZONE_ID"
+    ]
+  },
+  "config": {
+    "defaultPort": 3217,
+    "checkInterval": 300,
+    "providers": [
+      "duckdns",
+      "cloudflare",
+      "noip",
+      "dynu"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/configs",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/configs",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/configs/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/configs/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/configs/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/configs/{id}/update",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ip",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/update",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/update-log",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/update-log/{config_id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "8d2ca4ff5edb525ecdb72a11ad88365aa473547ecee34cd9212edeacf0f4edcc",
+  "bundles": [
+    "clawde",
+    "nsentry"
+  ]
+}

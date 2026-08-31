@@ -1,0 +1,30 @@
+# np_llm_gateway_requests — per-request audit log (plugin-llm-gateway port 8090)
+#
+# Multi-App Isolation Convention: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id":{"_eq":"X-Hasura-Source-Account-Id"}}
+- table:
+    schema: public
+    name: np_llm_gateway_requests
+  select_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+    - role: nself_user
+      permission:
+        columns: [id, source_account_id, session_id, model, tokens_in, tokens_out, cached, created_at]
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: nself_user
+      permission:
+        columns: [source_account_id, session_id, model, tokens_in, tokens_out, cached, context]
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

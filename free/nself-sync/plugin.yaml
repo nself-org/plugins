@@ -1,0 +1,54 @@
+name: nself-sync
+displayName: "Event-Log Sync Engine for ɳClaw"
+version: "1.1.2"
+author: nSelf Team
+description: >
+  Event-log sync engine for ɳClaw. Multi-device state synchronization via
+  hybrid logical clocks (HLC) and last-write-wins (LWW) conflict resolution.
+  JWT-authenticated push/pull/snapshot/subscribe with Ed25519-signed events.
+tier: pro
+category: infrastructure
+license: Source-Available
+requires_license: true
+isCommercial: true
+licenseType: pro
+requiredEntitlements:
+  - pro
+
+bundles:
+  - nclaw
+  - shared
+
+port: 3844
+language: go
+bind: "127.0.0.1"
+
+env:
+  required:
+    - DATABASE_URL
+    - NSELF_SYNC_JWT_SECRET
+  optional:
+    NSELF_SYNC_BIND: "127.0.0.1"
+    NSELF_SYNC_PORT: "3844"
+    NSELF_SYNC_RATE_PUSH_PER_MIN: "100"
+    NSELF_SYNC_PULL_PAGE_SIZE: "500"
+    NSELF_SYNC_WS_AUTH_TIMEOUT_SEC: "5"
+    NSELF_SYNC_PLUGIN_ENABLED: "false"
+
+featureFlag: NSELF_SYNC_PLUGIN_ENABLED
+
+hasuraRemoteSchema: false
+
+multiApp:
+  supported: true
+  isolationColumn: source_account_id
+  pkStrategy: uuid
+  defaultValue: primary
+
+versionTarget: v1.1.2
+visibility: public
+
+tables:
+  - np_sync_events
+  - np_devices
+  - np_sync_cursors

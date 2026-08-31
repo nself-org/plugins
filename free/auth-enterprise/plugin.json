@@ -1,0 +1,263 @@
+{
+  "name": "auth-enterprise",
+  "version": "1.1.2",
+  "description": "MFA enforcement (TOTP + WebAuthn policy) and SSO via SAML 2.0 and OIDC for Google Workspace, Okta, and Microsoft Entra ID.",
+  "category": "authentication",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requires_license": false,
+  "requiredEntitlements": [],
+  "author": "nself-org",
+  "license": "MIT",
+  "language": "go",
+  "minCliVersion": "1.0.9",
+  "featureFlags": {
+    "NSELF_SSO": {
+      "description": "Enable SSO endpoints (SAML 2.0 + OIDC). Set to 'true' to activate. MFA is always enabled regardless of this flag per the Security-Always-Free doctrine.",
+      "default": "false",
+      "type": "bool"
+    }
+  },
+  "envVars": [
+    {
+      "name": "NSELF_SSO",
+      "description": "Enable SSO (SAML 2.0 + OIDC). Set to 'true' to activate.",
+      "required": false,
+      "default": "false"
+    },
+    {
+      "name": "AUTH_ENTERPRISE_TOTP_ISSUER",
+      "description": "TOTP issuer name shown in authenticator apps (e.g. 'My Company'). Defaults to 'nSelf'.",
+      "required": false,
+      "default": "nSelf"
+    },
+    {
+      "name": "AUTH_ENTERPRISE_SSO_SP_ENTITY_ID",
+      "description": "SAML SP entity ID (URI). Required when NSELF_SSO=true and SAML providers are configured.",
+      "required": false
+    },
+    {
+      "name": "AUTH_ENTERPRISE_SSO_ACS_URL",
+      "description": "SAML Assertion Consumer Service (ACS) URL. Required when NSELF_SSO=true and SAML providers are configured.",
+      "required": false
+    },
+    {
+      "name": "AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL",
+      "description": "OIDC redirect URI registered with your IdP. Required when NSELF_SSO=true and OIDC providers are configured.",
+      "required": false
+    }
+  ],
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/auth/mfa/status",
+      "description": "MFA enrollment status for the authenticated user"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/totp/setup",
+      "description": "Begin TOTP enrollment"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/totp/verify",
+      "description": "Confirm TOTP enrollment with a live code"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/totp/challenge",
+      "description": "Verify TOTP code during login"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/recovery",
+      "description": "Consume a single-use recovery code"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/mfa/recovery/codes",
+      "description": "List masked recovery codes"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/recovery/regenerate",
+      "description": "Replace all recovery codes"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/mfa/policy",
+      "description": "Get tenant MFA policy"
+    },
+    {
+      "method": "PUT",
+      "path": "/auth/mfa/policy",
+      "description": "Set tenant MFA policy (requires mfa:admin scope)"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/providers",
+      "description": "List SSO providers for the tenant (SSO-gated)"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sso/providers",
+      "description": "Create an SSO provider (SSO-gated)"
+    },
+    {
+      "method": "DELETE",
+      "path": "/auth/sso/providers/{id}",
+      "description": "Delete an SSO provider (SSO-gated)"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/providers/{id}/saml/metadata",
+      "description": "SP SAML metadata XML (SSO-gated)"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/oidc/{id}/begin",
+      "description": "Start OIDC authorization code flow (SSO-gated)"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/oidc/callback",
+      "description": "OIDC authorization code callback (SSO-gated)"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sso/saml/{id}/acs",
+      "description": "SAML Assertion Consumer Service endpoint (SSO-gated)"
+    }
+  ],
+  "migrations": [
+    "migrations/001_mfa_tables.sql",
+    "migrations/002_sso_tables.sql"
+  ],
+  "tables": [
+    "np_mfa_enrollments",
+    "np_mfa_recovery_codes",
+    "np_mfa_policies",
+    "np_sso_providers",
+    "np_sso_sessions",
+    "np_sso_state_cache"
+  ],
+  "securityNotes": [
+    "TOTP secrets are stored as plaintext base32; operators should enable pgcrypto column-level encryption for at-rest encryption.",
+    "Recovery codes are bcrypt-hashed (cost 10); raw codes are never stored.",
+    "SSO client_secret values in np_sso_providers.metadata should be encrypted by the application before persistence.",
+    "SAML response signature verification uses structural XML checks only; integrate crewjam/saml for full XMLDSig in production.",
+    "MFA is free for all users per the Security-Always-Free doctrine; SSO is gated by NSELF_SSO=true and a \u0273Self+ license."
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/mfa/policy",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/auth/mfa/policy",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/recovery",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/mfa/recovery/codes",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/recovery/regenerate",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/mfa/status",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/totp/challenge",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/totp/setup",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/mfa/totp/verify",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/metadata",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/oidc/callback",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/providers",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sso/providers",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/auth/sso/providers/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PATCH",
+      "path": "/auth/sso/providers/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sso/providers/{id}/test",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/auth/sso/saml/callback",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/auth/sso/{provider}/begin",
+      "auth": "bearer"
+    }
+  ],
+  "tier": "max",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "minNselfVersion": "1.0.0",
+  "entry": "cmd/main.go",
+  "health_endpoint": "/health",
+  "checksum": "14ee7f71544d0a4709b71599a182ead1b7992ec26fa2a363aa10f62ccb205015",
+  "port": 3826,
+  "bundles": [
+    "nsentry",
+    "clawde",
+    "nchat"
+  ]
+}

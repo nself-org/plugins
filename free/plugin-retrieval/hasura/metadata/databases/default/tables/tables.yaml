@@ -1,0 +1,4 @@
+- "!include np_retrieval_documents.yaml"
+- "!include np_retrieval_embeddings.yaml"
+- "!include np_embeddings.yaml"
+- "!include np_retrieval_index.yaml"

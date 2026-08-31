@@ -1,0 +1,220 @@
+{
+  "name": "access-controls",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Role-based and attribute-based access control (RBAC + ABAC) with policy engine",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3027,
+  "category": "authentication",
+  "tags": [
+    "access-control",
+    "rbac",
+    "abac",
+    "authorization",
+    "policies",
+    "permissions"
+  ],
+  "tables": [
+    "np_acl_roles",
+    "np_acl_permissions",
+    "np_acl_role_permissions",
+    "np_acl_user_roles",
+    "np_acl_policies",
+    "np_acl_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "server": "Start the access control API server",
+    "authorize": "Check if user has permission for resource/action",
+    "roles": "Manage roles and role hierarchy",
+    "permissions": "Manage permissions",
+    "policies": "Manage ABAC policies"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "ACL_PLUGIN_PORT",
+      "ACL_CACHE_TTL_SECONDS",
+      "ACL_MAX_ROLE_DEPTH",
+      "ACL_DEFAULT_DENY",
+      "ACL_API_KEY",
+      "ACL_RATE_LIMIT_MAX",
+      "ACL_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "cacheTtlSeconds": 300,
+    "maxRoleDepth": 10,
+    "defaultDeny": true
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/check",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/permissions",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/permissions",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/permissions/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/permissions/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/permissions/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/policies",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/policies",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/policies/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/policies/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/policies/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/roles",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/roles",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/roles/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/roles/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/roles/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/roles/{id}/permissions",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/roles/{id}/permissions",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/roles/{id}/permissions/{permission_id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/users/{user_id}/roles",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/users/{user_id}/roles",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/users/{user_id}/roles/{role_id}",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "0dfff484880085c354363de4263af0533b810d30eb76ecbcff2f2232bed41706",
+  "bundles": [
+    "nsentry",
+    "clawde"
+  ]
+}

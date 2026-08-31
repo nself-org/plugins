@@ -1,0 +1,60 @@
+# plugin-pty staging deploy config — nself-first, DO NOT hand-edit
+# Applied by: nself plugin install plugin-pty --env staging
+# Target:     167.235.233.65 (nSelf staging server)
+# Ticket:     P4-E7-W3-S21-T09
+
+service:
+  name: nself-ai-cc
+  plugin: plugin-pty
+  env: staging
+  port: 3760
+  # Note: plugin.json declares default port 9100; staging uses 3760 per F10-PORT-REGISTRY.md.
+  # CLAWDE_PTY_PORT overrides PTY_PORT at deploy time (see env block below).
+  health_path: /health
+  health_interval: 30s
+  health_timeout: 5s
+  restart_policy: on-failure
+
+env:
+  # Required
+  NSELF_DB_URL: "${NSELF_STAGING_DB_URL}"
+  NSELF_LICENSE_KEY: "${NSELF_PLUGIN_LICENSE_KEY_OWNER}"
+  # Port override — staging uses 3760 (F10-PORT-REGISTRY.md)
+  PTY_PORT: "3760"
+  CLAWDE_PTY_PORT: "3760"
+  # Pool limits — conservative for staging
+  PTY_MAX_PER_TENANT: "5"
+  PTY_SESSION_TIMEOUT_SECS: "300"
+
+resources:
+  cpu_shares: 512
+  memory_limit: "256m"
+  pids_limit: 64
+
+# nself-first: no direct docker-compose. nself CLI applies this config.
+# To deploy:
+#   nself env set CLAWDE_PTY_PORT=3760 --env staging
+#   nself plugin install plugin-pty --env staging
+#
+# Smoke tests after deploy:
+#   curl http://167.235.233.65:3760/health
+#   # Expected: 200 {"status":"ok"}
+#
+#   SESSION=$(curl -s -X POST http://167.235.233.65:3760/sessions \
+#     -H "Content-Type: application/json" \
+#     -H "X-Hasura-Source-Account-Id: staging-smoke" \
+#     -d '{"client_id":"smoke-test","cols":80,"rows":24}' | jq -r .session_id)
+#   # Expected: session_id UUID, ws_url /sessions/<id>/ws, status "active"
+#
+#   # WebSocket relay test (requires wscat or websocat):
+#   websocat "ws://167.235.233.65:3760/sessions/$SESSION/ws" \
+#     --header "X-Hasura-Source-Account-Id: staging-smoke"
+#   # Type: echo staging-ok<Enter> — expect "staging-ok" echoed back via PTY
+#
+#   # Close session:
+#   curl -X DELETE http://167.235.233.65:3760/sessions/$SESSION \
+#     -H "X-Hasura-Source-Account-Id: staging-smoke"
+#   # Expected: 204 No Content
+#
+# F08-SERVICE-INVENTORY.md update:
+#   nself-ai-cc :3760  staging=deployed  pool-verified=pending

@@ -1,0 +1,123 @@
+{
+  "name": "storage-transform",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "On-the-fly image transformation CDN: resize, crop, format convert (WebP/AVIF/JPEG/PNG), quality, and device-pixel-ratio support. URL-param driven, Redis LRU cache, Nginx cache headers, rate limiting.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.9",
+  "port": 3085,
+  "category": "infrastructure",
+  "tags": [
+    "images",
+    "cdn",
+    "transform",
+    "resize",
+    "webp",
+    "avif",
+    "storage"
+  ],
+  "tables": [],
+  "envVars": {
+    "required": [],
+    "optional": [
+      "STORAGE_TRANSFORM_ENABLED",
+      "STORAGE_TRANSFORM_PORT",
+      "STORAGE_TRANSFORM_MAX_WIDTH",
+      "STORAGE_TRANSFORM_MAX_HEIGHT",
+      "STORAGE_TRANSFORM_CACHE_TTL_DAYS",
+      "STORAGE_TRANSFORM_RATE_LIMIT",
+      "STORAGE_TRANSFORM_SOURCE_STORAGE_URL",
+      "STORAGE_TRANSFORM_DISK_CACHE_DIR",
+      "STORAGE_TRANSFORM_SIGNING_SECRET",
+      "REDIS_URL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3085,
+    "maxWidth": 4000,
+    "maxHeight": 4000,
+    "cacheTTLDays": 7,
+    "rateLimit": 100
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": false
+  },
+  "permissions": {
+    "database": [],
+    "network": [],
+    "filesystem": [
+      "cache"
+    ]
+  },
+  "status": "beta",
+  "language": "go",
+  "binary_name": "storage-transform",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 128,
+  "systemd_after": "network.target redis.service",
+  "tier": "pro",
+  "nginx": {
+    "template": "nginx/storage-transform.conf.tmpl",
+    "cache_zone": "storage_img_cache",
+    "cache_path": "/var/cache/nginx/storage-transform"
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/storage-transform/cache/purge",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/storage-transform/cache/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/storage-transform/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/storage/v1/object/public/*",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/transform/*",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/cmd/main.go",
+  "checksum": "8cd58a94f1bf9a4f51eebe4b5d7c88c3eabd3078de531228741f29403d160537",
+  "bundles": [
+    "clawde",
+    "ntv"
+  ]
+}

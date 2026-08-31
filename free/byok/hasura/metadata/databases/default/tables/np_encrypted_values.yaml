@@ -1,0 +1,111 @@
+# np_encrypted_values — Generic encrypted value store (S1.T12)
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column. Row filter enforced on all read roles.
+#   R3-PATTERN (cont.15 fix, S40-fix): pure _eq filter — no _or, no _is_null arm.
+#   Self-host: tenant_id IS NULL rows are unreachable via this filter (fail-closed, no leak).
+#   Cloud: tenant_id = X-Hasura-Tenant-Id — strict per-tenant isolation.
+#   Fixed per CR-C gate 2026-05-17.
+#
+# Multi-tenancy: Convention B (Cloud multi-tenancy) — tenant_id UUID.
+# Row filter enforced on all role reads.
+#
+# SECURITY — CRITICAL: encrypted_data, encrypted_dek, iv are raw ciphertext and wrapped key
+# material. These columns MUST be excluded from the user/tenant_user roles. Only nself_admin
+# (server-side Go service) may read raw ciphertext for decryption. Users must never receive
+# raw encrypted key material through GraphQL — this satisfies S1.T12 acceptance criterion
+# (key_ciphertext / encrypted material exclusion from user role).
+#
+# Roles:
+#   user         — self-host user; reads metadata (not ciphertext/DEK)
+#   tenant_user  — Cloud user; same read scope as user role (R3-PATTERN, added S40-fix)
+#   nself_admin  — full CRUD (Go byok service uses this role for envelope operations)
+#
+#   R3-T0 note: Cloud principals use tenant_user role; user role is self-host only.
+
+table:
+  schema: public
+  name: np_encrypted_values
+
+configuration:
+  custom_root_fields:
+    select: byok_encrypted_values
+    select_by_pk: byok_encrypted_value
+    select_aggregate: byok_encrypted_values_aggregate
+  column_config: {}
+
+select_permissions:
+  - role: user
+    permission:
+      columns:
+        - id
+        - tenant_id
+        - record_group
+        - field_name
+        - kms_key_ref
+        - algorithm
+        - created_at
+      filter:
+        tenant_id:
+          _eq: X-Hasura-Tenant-Id
+      allow_aggregations: false
+      # EXCLUDED from user role (raw ciphertext / key material):
+      #   encrypted_data  — AES-256-GCM ciphertext bytes
+      #   encrypted_dek   — DEK wrapped by CMK
+      #   iv              — 12-byte GCM nonce
+
+  - role: tenant_user
+    permission:
+      columns:
+        - id
+        - tenant_id
+        - record_group
+        - field_name
+        - kms_key_ref
+        - algorithm
+        - created_at
+      filter:
+        tenant_id:
+          _eq: X-Hasura-Tenant-Id
+      allow_aggregations: false
+      # EXCLUDED from tenant_user role (raw ciphertext / key material — same as user role):
+      #   encrypted_data  — AES-256-GCM ciphertext bytes
+      #   encrypted_dek   — DEK wrapped by CMK
+      #   iv              — 12-byte GCM nonce
+
+  - role: nself_admin
+    permission:
+      columns: '*'
+      filter: {}
+      allow_aggregations: true
+
+insert_permissions:
+  - role: nself_admin
+    permission:
+      check: {}
+      columns:
+        - tenant_id
+        - record_group
+        - field_name
+        - encrypted_data
+        - encrypted_dek
+        - kms_key_ref
+        - iv
+        - algorithm
+
+update_permissions:
+  - role: nself_admin
+    permission:
+      columns:
+        - encrypted_data
+        - encrypted_dek
+        - kms_key_ref
+        - iv
+        - algorithm
+      filter: {}
+      check: {}
+
+delete_permissions:
+  - role: nself_admin
+    permission:
+      filter: {}

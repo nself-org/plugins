@@ -1,0 +1,32 @@
+# np_pty_audit_log — PTY session audit events (plugin-pty port 9100)
+#
+# Multi-App Isolation Convention: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id": {"_eq": "X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_pty_audit_log
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - source_account_id
+          - session_id
+          - event_type
+          - detail
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

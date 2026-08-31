@@ -1,0 +1,32 @@
+services:
+  admin-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nself/nself-admin-api:latest
+    container_name: nself_admin_api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3212:3212"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - ADMIN_API_PLUGIN_PORT=3212
+      - PROMETHEUS_URL=${PROMETHEUS_URL:-}
+      - ADMIN_API_CACHE_TTL=${ADMIN_API_CACHE_TTL:-30}
+      - ADMIN_API_WS_ENABLED=${ADMIN_API_WS_ENABLED:-false}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - CORS_ALLOWED_ORIGIN=${CORS_ALLOWED_ORIGIN:-http://localhost:3021}
+      - DB_POOL_MIN=${DB_POOL_MIN:-2}
+      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3212/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - nself_network
+
+networks:
+  nself_network:
+    external: true

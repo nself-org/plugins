@@ -1,0 +1,54 @@
+{
+  "name": "cdc",
+  "version": "1.0.0",
+  "api_version": "1.0.0",
+  "description": "Change Data Capture \u2014 streams Postgres WAL events to downstream consumers via webhooks or message queues.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tier": "pro",
+  "tags": [
+    "cdc",
+    "postgres",
+    "wal",
+    "streaming",
+    "events"
+  ],
+  "tables": [
+    "np_cdc_streams",
+    "np_cdc_events"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "CDC_PORT"
+    ]
+  },
+  "entry": "go/cmd/main.go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    }
+  ],
+  "health_endpoint": "/health",
+  "checksum": "f04a1e1b53b31ae57c8a8fe77890c13e88cd40ac98f4c66aeeb92ca3d085f5e0",
+  "bundles": [
+    "clawde"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "name": "nself-vault",
+  "author": "nSelf Team",
+  "displayName": "Per-Row Encryption (Vault)",
+  "version": "1.0.0",
+  "tier": "pro",
+  "category": "security",
+  "minNselfVersion": "1.0.0",
+  "bundle": [
+    "shared",
+    "nclaw",
+    "clawde"
+  ],
+  "port": 3823,
+  "language": "go",
+  "systemDependencies": [
+    "libsodium"
+  ],
+  "env": {
+    "required": [
+      "DATABASE_URL",
+      "VAULT_KEK_V1"
+    ],
+    "optional": {
+      "VAULT_KEK_V2": "",
+      "VAULT_CURRENT_KEK_VERSION": "1",
+      "VAULT_ENCRYPT_RATE_RPM": "500",
+      "VAULT_DECRYPT_RATE_RPM": "1000",
+      "VAULT_AUDIT_RETENTION_DAYS": "365",
+      "VAULT_PLUGIN_ENABLED": "false"
+    }
+  },
+  "hasuraRemoteSchema": true,
+  "featureFlag": "VAULT_PLUGIN_ENABLED",
+  "versionTarget": "v1.1.0",
+  "visibility": "public",
+  "license": "MIT",
+  "requires_license": false,
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "description": "nSelf-managed envelope encryption KMS. Provides per-row/column selective encryption with key rotation, audit logging, and Hasura Action surface. Eliminates ad-hoc per-team AES wrappers.",
+  "cloudExtension": "vault-cloud",
+  "checksum": "8e79e4144f15a7b354de4781af6e03425e91ca769b0f6b82fcd3e8e014072296",
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

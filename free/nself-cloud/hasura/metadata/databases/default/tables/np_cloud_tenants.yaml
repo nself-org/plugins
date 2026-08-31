@@ -1,0 +1,53 @@
+# np_cloud_tenants — master tenant table
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   np_cloud_tenants IS the tenant boundary. No tenant_id column on itself.
+#   No RLS — it is the root isolation table.
+#   Access: nself_admin only (internal API layer). Users never access this directly.
+#
+# Roles:
+#   anonymous   — no access (deny-all by default)
+#   nself_admin — full internal access; no public GraphQL exposure
+
+- table:
+    schema: public
+    name: np_cloud_tenants
+  select_permissions:
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+  insert_permissions:
+    - role: nself_admin
+      permission:
+        columns:
+          - id
+          - owner_user_id
+          - name
+          - slug
+          - plan_tier
+          - stripe_customer_id
+          - ls_customer_id
+          - trial_ends_at
+          - provisioning_enabled
+          - created_at
+          - updated_at
+          - deleted_at
+        check: {}
+  update_permissions:
+    - role: nself_admin
+      permission:
+        columns:
+          - name
+          - plan_tier
+          - stripe_customer_id
+          - ls_customer_id
+          - trial_ends_at
+          - provisioning_enabled
+          - updated_at
+          - deleted_at
+        filter: {}
+  delete_permissions:
+    - role: nself_admin
+      permission:
+        filter: {}

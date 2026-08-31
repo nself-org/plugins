@@ -1,0 +1,34 @@
+# np_retrieval_embeddings — pgvector ANN index (plugin-retrieval port 3825)
+#
+# Multi-App Isolation Convention: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id":{"_eq":"X-Hasura-Source-Account-Id"}}
+# Note: embedding column (vector type) is excluded from GraphQL — queried directly via SQL.
+
+- table:
+    schema: public
+    name: np_retrieval_embeddings
+  select_permissions:
+    - role: nself_admin
+      permission:
+        columns: [document_id, source_account_id, created_at, updated_at]
+        filter: {}
+        allow_aggregations: true
+    - role: nself_user
+      permission:
+        columns: [document_id, source_account_id, created_at, updated_at]
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  insert_permissions:
+    - role: nself_user
+      permission:
+        columns: [document_id, source_account_id]
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: nself_user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

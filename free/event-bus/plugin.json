@@ -1,0 +1,64 @@
+{
+  "name": "event-bus",
+  "version": "1.0.0",
+  "api_version": "1.0.0",
+  "description": "Internal event bus with pub/sub, fan-out delivery, dead-letter queue, and replay for inter-plugin messaging.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tier": "pro",
+  "tags": [
+    "events",
+    "pubsub",
+    "messaging",
+    "bus"
+  ],
+  "tables": [
+    "np_event_bus_stats"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "EVENT_BUS_PORT"
+    ]
+  },
+  "entry": "go/cmd/main.go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none"
+    }
+  ],
+  "port": 8212,
+  "health_endpoint": "/health",
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "checksum": "0a71fcc6ee31a873371ed2abc8d537d8cff3f43f3ddcb89761152ae81b7a499f",
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

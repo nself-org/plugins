@@ -1,0 +1,199 @@
+{
+  "name": "workflows",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Automation engine providing trigger-action workflow chains, conditional logic, scheduled tasks, webhook integrations, and cross-plugin orchestration",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "language": "go",
+  "port": 3733,
+  "category": "automation",
+  "tags": [
+    "workflows",
+    "automation",
+    "triggers",
+    "actions",
+    "scheduling",
+    "webhooks",
+    "orchestration"
+  ],
+  "tables": [
+    "np_workflows_workflows",
+    "np_workflows_executions",
+    "np_workflows_execution_steps",
+    "np_workflows_triggers",
+    "np_workflows_actions",
+    "np_workflows_templates",
+    "np_workflows_variables",
+    "np_workflows_webhook_logs",
+    "np_workflows_approvals"
+  ],
+  "webhooks": {
+    "workflow.created": "A workflow was created",
+    "workflow.published": "A workflow was published",
+    "workflow.archived": "A workflow was archived",
+    "execution.started": "A workflow execution started",
+    "execution.completed": "A workflow execution completed successfully",
+    "execution.failed": "A workflow execution failed",
+    "execution.timeout": "A workflow execution timed out",
+    "approval.required": "An approval gate requires attention",
+    "approval.responded": "An approval was approved or rejected",
+    "trigger.fired": "A trigger was fired"
+  },
+  "actions": {
+    "init": "Initialize workflows system",
+    "server": "Start workflows server",
+    "status": "View system status",
+    "workflows": "Manage workflows",
+    "executions": "Manage executions",
+    "triggers": "Manage triggers",
+    "templates": "Manage templates",
+    "variables": "Manage variables"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "WORKFLOWS_PLUGIN_PORT",
+      "WORKFLOWS_DEFAULT_TIMEOUT",
+      "WORKFLOWS_MAX_CONCURRENT",
+      "WORKFLOWS_WORKER_POOL_SIZE"
+    ]
+  },
+  "config": {
+    "webhookPath": "/webhooks/workflows",
+    "defaultTimeoutSeconds": 300,
+    "maxConcurrentExecutions": 10,
+    "historyRetentionDays": 90,
+    "workerPoolSize": 20,
+    "scheduleCheckInterval": 60,
+    "maxWebhooksPerWorkflow": 5
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "primary"
+  },
+  "hooks": {
+    "postInstall": "install.sh",
+    "preUninstall": "uninstall.sh",
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/webhooks/{token}",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/cancel",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/duplicate",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/execute",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}/executions",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/publish",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}/steps",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/test",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/unpublish",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "850a73c513d92e3877908021e8e47bf5b5722b0b44ae71efe8b5ec41d60da86f",
+  "bundles": [
+    "clawde"
+  ]
+}

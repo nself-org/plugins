@@ -1,0 +1,158 @@
+{
+  "name": "siem",
+  "version": "1.1.2",
+  "api_version": "1.3.0",
+  "description": "Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization. \u0273Self+ required for external destinations.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.9",
+  "category": "infrastructure",
+  "tags": [
+    "siem",
+    "security",
+    "audit",
+    "datadog",
+    "splunk",
+    "elastic",
+    "loki",
+    "ocsf",
+    "compliance"
+  ],
+  "tables": [
+    "np_siem_destinations",
+    "np_siem_ship_log"
+  ],
+  "capabilities": [
+    "ocsf_normalization",
+    "multi_destination",
+    "buffered_shipping",
+    "resilient_retry"
+  ],
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "NSELF_SIEM",
+      "NSELF_SIEM_HF",
+      "NSELF_SIEM_DEFAULT_SCHEMA",
+      "NSELF_SIEM_BATCH_SIZE",
+      "NSELF_SIEM_FLUSH_INTERVAL",
+      "NSELF_SIEM_LOKI_URL",
+      "SIEM_PORT",
+      "LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 8002,
+    "defaultSchema": "ocsf",
+    "defaultBatchSize": 500,
+    "defaultFlushIntervalS": 30,
+    "lokiURL": "http://loki:3100"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "datadog",
+      "splunk",
+      "elastic",
+      "loki",
+      "webhook"
+    ],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "port": 8002,
+  "status": "stable",
+  "language": "go",
+  "binary_name": "siem",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "pro",
+  "custom_service_slot": "CS_2",
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "tenant_id",
+    "pkStrategy": "uuid",
+    "defaultValue": null
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/siem/destinations",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/siem/destinations",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/siem/destinations/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PATCH",
+      "path": "/siem/destinations/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/siem/destinations/{id}/ship-log",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/siem/destinations/{id}/test",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/siem/flush",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/siem/status",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/cmd/main.go",
+  "checksum": "3d2ffb45444d25e7e835124d844e228bce77ad4b271c455bd1428b264b8eec7d",
+  "bundles": [
+    "nsentry"
+  ]
+}

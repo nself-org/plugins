@@ -1,0 +1,157 @@
+{
+  "name": "tenant-controller",
+  "version": "1.1.2",
+  "api_version": "1.3.0",
+  "description": "Multi-tenant master controller for nCloud. Manages N isolated nSelf project instances behind a single deploy: per-project Postgres schema, Hasura metadata namespace, Nginx vhost, JWT secret, Redis key prefix, and MinIO bucket. Enables 50 projects on one Hetzner CX21.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.9",
+  "category": "infrastructure",
+  "tags": [
+    "multi-tenant",
+    "cloud",
+    "controller",
+    "ncloud",
+    "isolation",
+    "hosting"
+  ],
+  "tables": [
+    "nself_controller.projects",
+    "nself_controller.project_audit_log",
+    "nself_controller.port_map"
+  ],
+  "capabilities": [
+    "multi_project",
+    "schema_isolation",
+    "hasura_source_per_project",
+    "nginx_vhost",
+    "jwt_per_project",
+    "redis_prefix_isolation",
+    "minio_bucket_per_project",
+    "prometheus_metrics",
+    "otel_tracing",
+    "audit_log_q02"
+  ],
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "NSELF_CONTROLLER_ADMIN_TOKEN",
+      "NSELF_CONTROLLER_BASE_DOMAIN",
+      "HASURA_GRAPHQL_ADMIN_SECRET",
+      "HASURA_GRAPHQL_ENDPOINT"
+    ],
+    "optional": [
+      "NSELF_CONTROLLER_ENABLED",
+      "NSELF_CONTROLLER_MAX_PROJECTS",
+      "NSELF_CONTROLLER_DB",
+      "NSELF_PROJECT_SCHEMA_PREFIX",
+      "NSELF_PROJECT_REDIS_PREFIX",
+      "NSELF_PROJECT_HASURA_PORT_START",
+      "NSELF_CONTROLLER_PORT",
+      "NSELF_CONTROLLER_HOST",
+      "REDIS_URL",
+      "MINIO_ENDPOINT",
+      "MINIO_ACCESS_KEY",
+      "MINIO_SECRET_KEY",
+      "NGINX_CONF_PATH",
+      "NSELF_AUDIT_RETENTION_DAYS",
+      "OTEL_EXPORTER_OTLP_ENDPOINT",
+      "LOG_LEVEL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3750,
+    "maxProjects": 50,
+    "schemaPrefix": "project_",
+    "redisPrefix": "proj:",
+    "hasuraPortStart": 8080,
+    "nginxConfPath": "/etc/nginx/conf.d/nself-projects.conf"
+  },
+  "hooks": {
+    "postInstall": "scripts/post-install.sh",
+    "preUninstall": "scripts/pre-uninstall.sh",
+    "postSync": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete",
+      "ddl"
+    ],
+    "network": [
+      "hasura-metadata-api",
+      "minio",
+      "redis"
+    ],
+    "filesystem": [
+      "logs",
+      "nginx-conf",
+      "controller-db"
+    ]
+  },
+  "port": 3750,
+  "status": "stable",
+  "language": "go",
+  "binary_name": "tenant-controller",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target postgresql.service",
+  "tier": "max",
+  "feature_flag": "multi_tenant_controller",
+  "feature_flag_env_override": "NSELF_FLAG_MULTI_TENANT_CONTROLLER",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/controller/status",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/projects",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/projects/create",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/projects/{slug}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{slug}/status",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "go/cmd/main.go",
+  "checksum": "ebf073d49f865cadb5d24f27ca77f7f4caf82920477f28ef459427b984cb1cd8",
+  "bundles": [
+    "clawde",
+    "nsentry"
+  ]
+}

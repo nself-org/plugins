@@ -1,0 +1,177 @@
+{
+  "name": "documents",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Document management and generation service with templates, versioning, and sharing",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "data",
+  "tags": [
+    "documents",
+    "pdf",
+    "templates",
+    "generation",
+    "versioning",
+    "sharing"
+  ],
+  "tables": [
+    "np_documents_documents",
+    "np_documents_templates",
+    "np_documents_versions",
+    "np_documents_shares",
+    "np_documents_webhook_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "list": "List documents",
+    "generate": "Generate document from template",
+    "templates": "Manage templates",
+    "search": "Search documents",
+    "stats": "Show document statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "DOCS_PLUGIN_PORT",
+      "DOCS_APP_IDS",
+      "DOCS_PDF_ENGINE",
+      "DOCS_DEFAULT_TEMPLATE_ENGINE",
+      "DOCS_STORAGE_PROVIDER",
+      "DOCS_MAX_DOCUMENT_SIZE_MB"
+    ]
+  },
+  "config": {
+    "defaultPort": 3029,
+    "pdfEngine": "puppeteer",
+    "defaultTemplateEngine": "handlebars",
+    "storageProvider": "local",
+    "maxDocumentSizeMb": 50,
+    "shareDefaultExpiryDays": 30,
+    "versionRetention": 10
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
+  },
+  "port": 3106,
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/shares/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/archive",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/publish",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}/shares",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/shares",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}/versions",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/versions",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "b867db73eaef5cfd34c2b4466c41d8ea441b3b0e01eb03811dd8e041e035ca32",
+  "bundles": [
+    "nclaw",
+    "clawde"
+  ]
+}

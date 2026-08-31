@@ -1,0 +1,31 @@
+{
+  "name": "plugin-clawde",
+  "version": "0.1.0",
+  "description": "ClawDE daemon integration backend. Manages session lifecycle, tracks daemon health, and streams events via SSE for the ClawDE AI development environment.",
+  "author": "nSelf",
+  "license": "MIT",
+  "licenseType": "free",
+  "tier": "pro",
+  "language": "go",
+  "minNselfVersion": "1.1.1",
+  "installable": true,
+  "isCommercial": false,
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "category": "ai",
+  "port": 3847,
+  "bundle": [
+    "clawde"
+  ],
+  "tables": [
+    "np_clawde_sessions",
+    "np_clawde_events"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "bundles": [
+    "clawde"
+  ]
+}

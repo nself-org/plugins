@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  idme:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nself/nself-idme:latest
+    container_name: nself-idme
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:3010"
+    environment:
+      - PORT=3010
+      - DATABASE_URL=${DATABASE_URL}
+      - IDME_CLIENT_ID=${IDME_CLIENT_ID}
+      - IDME_CLIENT_SECRET=${IDME_CLIENT_SECRET}
+      - IDME_REDIRECT_URI=${IDME_REDIRECT_URI}
+      - IDME_SCOPES=${IDME_SCOPES:-openid,email,profile}
+      - IDME_SANDBOX=${IDME_SANDBOX:-false}
+      - IDME_WEBHOOK_SECRET=${IDME_WEBHOOK_SECRET:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

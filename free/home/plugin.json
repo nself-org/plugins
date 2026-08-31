@@ -1,0 +1,134 @@
+{
+  "name": "home",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Home automation bridge. Connects Home Assistant and MQTT to \u0273Self, enabling smart device control, state monitoring, scene activation, and command logging.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "integrations",
+  "language": "go",
+  "entryPoint": "binary",
+  "tags": [
+    "home-assistant",
+    "mqtt",
+    "smart-home",
+    "iot",
+    "automation"
+  ],
+  "tables": [
+    "np_home_connections",
+    "np_home_devices",
+    "np_home_command_log"
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "optionalDependencies": [
+    "claw"
+  ],
+  "envVars": {
+    "required": [
+      "DATABASE_URL",
+      "PLUGIN_INTERNAL_SECRET"
+    ],
+    "optional": [
+      "HOME_PORT",
+      "HOME_ASSISTANT_URL",
+      "HOME_ASSISTANT_TOKEN",
+      "MQTT_BROKER_URL"
+    ]
+  },
+  "config": {
+    "defaultPort": 3127
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "defaultValue": "default"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3127,
+  "status": "beta",
+  "binary_name": "home",
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
+  "min_memory_mb": 64,
+  "systemd_after": "network.target",
+  "tier": "pro",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/home/automations",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/home/automations/{id}/toggle",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/home/command",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/home/devices",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/home/scene/{scene_id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/home/state/{entity_id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    }
+  ],
+  "entry": "cmd/main.go",
+  "checksum": "2881cbd616fe3376bfc2d7377b80003121ea0809dfd2186b42992823b49aa941",
+  "bundles": [
+    "nfamily"
+  ]
+}

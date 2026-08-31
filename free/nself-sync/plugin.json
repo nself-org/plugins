@@ -1,0 +1,56 @@
+{
+  "name": "nself-sync",
+  "author": "nSelf Team",
+  "displayName": "Event-Log Sync Engine for \u0273Claw",
+  "version": "1.1.2",
+  "tier": "pro",
+  "category": "infrastructure",
+  "minNselfVersion": "1.1.1",
+  "bundle": [
+    "nclaw",
+    "shared"
+  ],
+  "port": 3853,
+  "language": "go",
+  "env": {
+    "required": [
+      "DATABASE_URL",
+      "NSELF_SYNC_JWT_SECRET"
+    ],
+    "optional": {
+      "NSELF_SYNC_BIND": "127.0.0.1",
+      "NSELF_SYNC_PORT": "3844",
+      "NSELF_SYNC_RATE_PUSH_PER_MIN": "100",
+      "NSELF_SYNC_PULL_PAGE_SIZE": "500",
+      "NSELF_SYNC_WS_AUTH_TIMEOUT_SEC": "5",
+      "NSELF_SYNC_PLUGIN_ENABLED": "false"
+    }
+  },
+  "hasuraRemoteSchema": false,
+  "featureFlag": "NSELF_SYNC_PLUGIN_ENABLED",
+  "versionTarget": "v1.1.2",
+  "visibility": "public",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "tables": [
+    "np_sync_events",
+    "np_devices",
+    "np_sync_cursors"
+  ],
+  "description": "Event-log sync engine for \u0273Claw. Multi-device state sync via HLC + LWW; JWT-authenticated push/pull/snapshot/subscribe with Ed25519-signed events.",
+  "bundles": [
+    "nclaw",
+    "nchat",
+    "ntv",
+    "nfamily",
+    "clawde",
+    "nsentry"
+  ]
+}

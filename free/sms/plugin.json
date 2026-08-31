@@ -1,0 +1,72 @@
+{
+  "name": "sms",
+  "version": "1.0.0",
+  "displayName": "plugin-sms",
+  "description": "SMS messaging via Twilio. Send, track, and manage opt-outs.",
+  "port": 9009,
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "bundle": [
+    "nchat"
+  ],
+  "category": "communication",
+  "tables": [
+    "np_sms_messages",
+    "np_sms_opt_outs"
+  ],
+  "env": [
+    {
+      "key": "TWILIO_ACCOUNT_SID",
+      "required": true,
+      "description": "Twilio Account SID"
+    },
+    {
+      "key": "TWILIO_AUTH_TOKEN",
+      "required": true,
+      "description": "Twilio Auth Token"
+    },
+    {
+      "key": "TWILIO_FROM_NUMBER",
+      "required": true,
+      "description": "Twilio sending number (E.164)"
+    },
+    {
+      "key": "NSELF_DB_URL",
+      "required": true,
+      "description": "PostgreSQL connection string"
+    },
+    {
+      "key": "SMS_PLUGIN_PORT",
+      "required": false,
+      "default": "9009",
+      "description": "HTTP server port"
+    },
+    {
+      "key": "SMS_RATE_LIMIT_PER_MIN",
+      "required": false,
+      "default": "10",
+      "description": "Max SMS per source_account per minute"
+    },
+    {
+      "key": "NSELF_LICENSE_KEY",
+      "required": true,
+      "description": "License key"
+    }
+  ],
+  "health": "/health",
+  "author": "nself-org",
+  "license": "MIT",
+  "tier": "pro",
+  "language": "go",
+  "minNselfVersion": "1.0.0",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "bundles": [
+    "nchat",
+    "nfamily"
+  ]
+}

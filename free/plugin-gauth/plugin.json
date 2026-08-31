@@ -1,0 +1,41 @@
+{
+  "name": "plugin-gauth",
+  "version": "0.1.0",
+  "description": "Headless server-side Google OAuth token refresh for nSelf AI services",
+  "author": "nSelf",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "tier": "pro",
+  "category": "ai",
+  "language": "rust",
+  "minNselfVersion": "1.1.1",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "epic": "E7",
+  "port": 3827,
+  "binary": "plugin-gauth",
+  "health_endpoint": "/health",
+  "env_required": [
+    "NSELF_DB_URL",
+    "GAUTH_ENCRYPTION_KEY",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
+  ],
+  "env_optional": [
+    "GAUTH_PORT",
+    "GOOGLE_TOKEN_URL"
+  ],
+  "bundles": [
+    "nclaw",
+    "clawde",
+    "nchat",
+    "nfamily",
+    "ntv",
+    "nsentry"
+  ]
+}

@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  nself-devices:
+    build: .
+    image: nself/nself-devices:latest
+    container_name: nself-devices
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3603:3603"
+    environment:
+      PORT: "3603"
+      DATABASE_URL: "${DATABASE_URL}"
+      DEV_ENROLLMENT_TOKEN_TTL: "${DEV_ENROLLMENT_TOKEN_TTL:-3600}"
+      DEV_CHALLENGE_TTL: "${DEV_CHALLENGE_TTL:-300}"
+      DEV_HEARTBEAT_INTERVAL: "${DEV_HEARTBEAT_INTERVAL:-30}"
+      DEV_HEARTBEAT_TIMEOUT: "${DEV_HEARTBEAT_TIMEOUT:-90}"
+      DEV_COMMAND_DEFAULT_TIMEOUT: "${DEV_COMMAND_DEFAULT_TIMEOUT:-60}"
+      DEV_COMMAND_MAX_RETRIES: "${DEV_COMMAND_MAX_RETRIES:-3}"
+      DEV_TELEMETRY_RETENTION_DAYS: "${DEV_TELEMETRY_RETENTION_DAYS:-30}"
+      DEV_INGEST_HEARTBEAT_INTERVAL: "${DEV_INGEST_HEARTBEAT_INTERVAL:-15}"
+      DEV_INGEST_HEARTBEAT_TIMEOUT: "${DEV_INGEST_HEARTBEAT_TIMEOUT:-45}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3603/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - nself_network
+
+networks:
+  nself_network:
+    external: true

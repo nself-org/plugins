@@ -1,0 +1,37 @@
+name: warehouse
+version: 1.0.0
+type: go-service
+port: 8210
+cs_slot: CS_6
+depends:
+  - cdc
+env:
+  - WAREHOUSE_DRIVER         # clickhouse | bigquery | snowflake
+  - WAREHOUSE_CLICKHOUSE_DSN
+  - WAREHOUSE_BQ_PROJECT
+  - WAREHOUSE_BQ_DATASET
+  - WAREHOUSE_BQ_CREDENTIALS_JSON
+  - WAREHOUSE_SNOWFLAKE_DSN
+  - WAREHOUSE_BATCH_SIZE     # default 1000
+  - WAREHOUSE_FLUSH_INTERVAL # default 30s
+  - WAREHOUSE_TABLES         # comma-separated np_* table names; default ALL
+description: >
+  Streams nSelf Postgres data to ClickHouse, BigQuery, or Snowflake.
+  Uses CDC replication slot for incremental export; full backfill supported.
+  Requires the cdc plugin as a peer dependency.
+isCommercial: true
+licenseType: pro
+requiredEntitlements:
+  - pro
+requires_license: true
+minNselfVersion: 1.0.9
+category: data
+tags:
+  - warehouse
+  - analytics
+  - clickhouse
+  - bigquery
+  - snowflake
+  - etl
+  - cdc
+health_endpoint: /warehouse/status

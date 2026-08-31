@@ -1,0 +1,36 @@
+name: job-queue
+version: 1.0.0
+title: Job Queue
+description: >
+  Redis-backed persistent job queue with at-least-once delivery, worker pools,
+  exponential backoff retry, dead-letter queue, and Postgres visibility snapshots.
+type: go-service
+port: 8213
+cs_slot: CS_10
+license: pro
+bundle: null  # Available to all bundles (infrastructure plugin)
+depends:
+  - redis
+  - postgres
+
+env:
+  - name: JOBQUEUE_CONCURRENCY
+    description: Workers per queue type
+    default: "5"
+  - name: JOBQUEUE_MAX_ATTEMPTS
+    description: Maximum delivery attempts before moving to DLQ
+    default: "8"
+  - name: JOBQUEUE_QUEUES
+    description: Comma-separated queue names to create worker pools for
+    default: "default,email,ai,media"
+  - name: JOBQUEUE_PORT
+    description: HTTP API port
+    default: "8213"
+
+healthcheck:
+  path: /health
+  interval: 30s
+  timeout: 5s
+
+migrations:
+  - migrations/001_jobs.sql

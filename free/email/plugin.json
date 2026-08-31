@@ -1,0 +1,60 @@
+{
+  "name": "email",
+  "version": "1.0.0",
+  "displayName": "plugin-email",
+  "description": "Transactional email via Elastic Email. Send, template, and track emails.",
+  "port": 9008,
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "category": "communication",
+  "tables": [
+    "np_email_messages",
+    "np_email_templates",
+    "np_email_events"
+  ],
+  "env": [
+    {
+      "key": "ELASTIC_EMAIL_API_KEY",
+      "required": true,
+      "description": "Elastic Email API key"
+    },
+    {
+      "key": "ELASTIC_EMAIL_FROM",
+      "required": true,
+      "description": "Default From address"
+    },
+    {
+      "key": "NSELF_DB_URL",
+      "required": true,
+      "description": "PostgreSQL connection string"
+    },
+    {
+      "key": "EMAIL_PLUGIN_PORT",
+      "required": false,
+      "default": "9008",
+      "description": "HTTP server port"
+    },
+    {
+      "key": "NSELF_LICENSE_KEY",
+      "required": true,
+      "description": "License key"
+    }
+  ],
+  "health": "/health",
+  "author": "nself-org",
+  "license": "MIT",
+  "tier": "pro",
+  "language": "go",
+  "minNselfVersion": "1.0.0",
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "bundles": [
+    "nchat",
+    "nclaw",
+    "nfamily"
+  ]
+}

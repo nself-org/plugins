@@ -1,0 +1,216 @@
+{
+  "name": "entitlements",
+  "version": "1.2.0",
+  "api_version": "1.0.0",
+  "description": "Feature gating, subscription plan management, usage quota tracking, and metered billing",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3735,
+  "category": "commerce",
+  "tags": [
+    "entitlements",
+    "subscriptions",
+    "plans",
+    "quotas",
+    "billing",
+    "feature-gating"
+  ],
+  "tables": [
+    "np_entitlements_plans",
+    "np_entitlements_subscriptions",
+    "np_entitlements_features",
+    "np_entitlements_quotas",
+    "np_entitlements_usage",
+    "np_entitlements_addons",
+    "np_entitlements_grants",
+    "np_entitlements_events"
+  ],
+  "webhooks": {
+    "subscription.created": "Subscription created",
+    "subscription.updated": "Subscription updated",
+    "subscription.canceled": "Subscription canceled",
+    "subscription.renewed": "Subscription renewed",
+    "trial.started": "Trial started",
+    "trial.ended": "Trial ended",
+    "quota.exceeded": "Quota exceeded",
+    "quota.reset": "Quota reset",
+    "grant.created": "Feature grant created",
+    "grant.revoked": "Feature grant revoked",
+    "addon.added": "Addon added",
+    "addon.removed": "Addon removed",
+    "plan.upgraded": "Plan upgraded",
+    "plan.downgraded": "Plan downgraded"
+  },
+  "actions": {
+    "plans": "Manage entitlement plans",
+    "subscriptions": "Manage subscriptions",
+    "features": "Check feature access",
+    "quotas": "Track and check quotas",
+    "grants": "Manage feature grants",
+    "usage": "Track usage"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "ENTITLEMENTS_PLUGIN_PORT",
+      "ENTITLEMENTS_DEFAULT_CURRENCY",
+      "ENTITLEMENTS_DEFAULT_TRIAL_DAYS",
+      "ENTITLEMENTS_API_KEY",
+      "ENTITLEMENTS_RATE_LIMIT_MAX",
+      "ENTITLEMENTS_RATE_LIMIT_WINDOW_MS"
+    ]
+  },
+  "config": {
+    "defaultCurrency": "USD",
+    "defaultTrialDays": 14,
+    "quotaWarningThreshold": 80
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [],
+    "filesystem": [
+      "logs"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "entryPoint": "binary",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/check",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/usage",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/usage/track",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/status",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/cancel",
+      "auth": "bearer"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/subscriptions/{id}/pause",
+      "auth": "bearer"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/subscriptions/{id}/resume",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/subscriptions/{id}/proration",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/subscriptions/{id}/upgrade",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/grants",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grants",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/grants/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/check/batch",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "2e1e648ad3403b0cc7a55888d25f6db2db7da9c8b8381b026db955928f4cea55",
+  "bundles": [
+    "nsentry",
+    "clawde"
+  ]
+}

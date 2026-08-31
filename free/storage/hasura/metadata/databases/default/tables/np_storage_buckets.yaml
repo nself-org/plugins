@@ -1,0 +1,50 @@
+# np_storage_buckets — Storage buckets per account (plugin-storage port 9007)
+#
+# Convention Wall: source_account_id TEXT NOT NULL DEFAULT 'primary'
+# Row filter: {"source_account_id": {"_eq": "X-Hasura-Source-Account-Id"}}
+
+- table:
+    schema: public
+    name: np_storage_buckets
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        allow_aggregations: true
+    - role: nself_admin
+      permission:
+        columns: '*'
+        filter: {}
+        allow_aggregations: true
+  insert_permissions:
+    - role: user
+      permission:
+        columns:
+          - source_account_id
+          - name
+          - region
+          - versioning
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  update_permissions:
+    - role: user
+      permission:
+        columns:
+          - region
+          - versioning
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+        check:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id
+  delete_permissions:
+    - role: user
+      permission:
+        filter:
+          source_account_id:
+            _eq: X-Hasura-Source-Account-Id

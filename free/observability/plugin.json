@@ -1,0 +1,177 @@
+{
+  "name": "observability",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "port": 3215,
+  "category": "infrastructure",
+  "tags": [
+    "observability",
+    "health-checks",
+    "watchdog",
+    "service-discovery",
+    "monitoring"
+  ],
+  "tables": [
+    "np_observability_services",
+    "np_observability_health_history",
+    "np_observability_watchdog_events"
+  ],
+  "webhooks": {},
+  "actions": {
+    "services": "List discovered services",
+    "health": "Check all services",
+    "watchdog": "Watchdog status",
+    "events": "Recent events",
+    "stats": "Show statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "OBSERVABILITY_PLUGIN_PORT",
+      "OBSERVABILITY_CHECK_INTERVAL",
+      "OBSERVABILITY_DOCKER_SOCKET",
+      "OBSERVABILITY_WATCHDOG_ENABLED"
+    ]
+  },
+  "config": {
+    "defaultPort": 3215,
+    "checkIntervalSeconds": 30,
+    "watchdogTimeoutSeconds": 120,
+    "healthHistoryRetainDays": 30,
+    "dockerSocket": "/var/run/docker.sock"
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "language": "go",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ai/instructions",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/incidents",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/config",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/config",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/config/schema",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/{id}/check",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}/history",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "590de884a71de24654b3e744f28f9ec53666d75740a35a3979bbc3b0b647f412",
+  "bundles": [
+    "nsentry",
+    "clawde"
+  ]
+}

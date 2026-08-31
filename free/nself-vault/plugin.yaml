@@ -1,0 +1,57 @@
+name: nself-vault
+displayName: "Per-Device Envelope Encryption (Vault)"
+version: "1.0.0"
+author: nSelf Team
+description: >
+  nSelf-managed per-device envelope encryption. Stores per-device encrypted
+  envelopes so each registered device can independently decrypt its own keys.
+  Provides device management, audit logging, and Hasura row-filtered access.
+tier: pro
+category: security
+license: Source-Available
+requires_license: true
+isCommercial: true
+licenseType: pro
+requiredEntitlements:
+  - pro
+
+bundles:
+  - nclaw
+  - clawde
+  - shared
+
+port: 3823
+language: go
+bind: "127.0.0.1"
+
+systemDependencies:
+  - libsodium
+
+featureFlag: VAULT_PLUGIN_ENABLED
+
+hasuraRemoteSchema: true
+
+env:
+  required:
+    - DATABASE_URL
+    - VAULT_KEK_V1
+  optional:
+    VAULT_KEK_V2: ""
+    VAULT_CURRENT_KEK_VERSION: "1"
+    VAULT_ENCRYPT_RATE_RPM: "500"
+    VAULT_DECRYPT_RATE_RPM: "1000"
+    VAULT_AUDIT_RETENTION_DAYS: "365"
+    VAULT_PLUGIN_ENABLED: "false"
+    VAULT_BIND: "127.0.0.1"
+    VAULT_PORT: "3823"
+
+multiApp:
+  supported: true
+  isolationColumn: source_account_id
+  pkStrategy: uuid
+  defaultValue: primary
+
+versionTarget: v1.1.0
+visibility: public
+
+cloudExtension: vault-cloud

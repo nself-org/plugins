@@ -1,0 +1,28 @@
+services:
+  home:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/home
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_home
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3127:3127"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: "3127"
+      PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+      HOME_PORT: "3127"
+      HOME_ASSISTANT_URL: ${HOME_ASSISTANT_URL:-http://homeassistant.local:8123}
+      HOME_ASSISTANT_TOKEN: ${HOME_ASSISTANT_TOKEN:-}
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3127/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,11 @@
+BEGIN;
+DROP TABLE IF EXISTS np_cs_abuse_scores;
+DROP TABLE IF EXISTS np_cs_lockdowns;
+DROP TABLE IF EXISTS np_cs_raid_events;
+DROP TABLE IF EXISTS np_cs_rate_limit_violations;
+DROP TABLE IF EXISTS np_cs_spam_configs;
+DROP TABLE IF EXISTS np_cs_spam_rules;
+DROP TABLE IF EXISTS np_cs_evidence_exports;
+DROP TABLE IF EXISTS np_cs_legal_holds;
+DROP TABLE IF EXISTS np_cs_evidence;
+COMMIT;

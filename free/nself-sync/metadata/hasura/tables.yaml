@@ -1,0 +1,67 @@
+# Hasura table registration for nself-sync plugin
+#
+# Convention Wall (PPI Hard Rule 2026-04-20):
+#   tenant_id UUID — Cloud multi-tenancy column. Row filter enforced on all read roles.
+#   R3-PATTERN (cont.15 fix, S40-fix): pure _eq filter — no _or, no _is_null arm.
+#   Self-host: user role uses pure user_id _eq (owns only their own sync data).
+#   Cloud: tenant_user role uses pure tenant_id _eq — strict per-tenant isolation.
+#   Prior _or:[user_id _eq, tenant_id _eq] on user role was R3-non-compliant.
+#   Fixed per CR-C gate 2026-05-17.
+#
+# Two-role split (R3-T0):
+#   user        — self-host; sees own records (user_id _eq X-Hasura-User-Id)
+#   tenant_user — Cloud; sees all records for tenant (tenant_id _eq X-Hasura-Tenant-Id)
+#
+# np_sync_cursors edge case:
+#   Cursors are device-scoped (device_id claim). No tenant_user block here — Cloud
+#   tenant admins access cursors through the Go service layer (service/admin role),
+#   not directly via GraphQL. Adding tenant_user would expose ALL cursors for a
+#   tenant without device-level scoping (over-broad). Intentionally omitted.
+
+- table:
+    schema: public
+    name: np_sync_events
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          user_id:
+            _eq: X-Hasura-User-Id
+
+    - role: tenant_user
+      permission:
+        columns: '*'
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+- table:
+    schema: public
+    name: np_devices
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          user_id:
+            _eq: X-Hasura-User-Id
+
+    - role: tenant_user
+      permission:
+        columns: '*'
+        filter:
+          tenant_id:
+            _eq: X-Hasura-Tenant-Id
+
+- table:
+    schema: public
+    name: np_sync_cursors
+  # No tenant_user block — device-scoped table. See header comment above.
+  select_permissions:
+    - role: user
+      permission:
+        columns: '*'
+        filter:
+          device_id:
+            _eq: X-Hasura-Device-Id
