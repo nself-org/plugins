@@ -195,6 +195,52 @@ jobs:
 
           echo "All plugin versions are consistent between plugin.json and registry.json"
 
+      - name: Validate non-Go plugin config shape
+        run: |
+          # build-test.yml's Go matrix covers every free/*/ dir with a
+          # go.mod. As of P6 that is 59 of 60 — the one exclusion is
+          # `forgejo` (docker-compose + shell, no Go code). `monitoring`
+          # DOES have a go.mod despite registry.json's stale "language":
+          # "config" label, so it is already Go-tested and is not a plugin
+          # this step needs to cover.
+          #
+          # This step is the config-tier equivalent for whatever plugins
+          # genuinely have no go.mod: it validates their docker-compose
+          # file(s) parse as valid YAML, so a non-Go plugin is never
+          # silently untested. It targets any go.mod-less free/ plugin, not
+          # a hardcoded name, so it keeps working if the split changes.
+          python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+          errors=0
+          for d in free/*/; do
+            name=$(basename "$d")
+            if [ -f "$d/go.mod" ]; then
+              continue
+            fi
+            found_config=0
+            for f in "$d"*.yml "$d"*.yaml; do
+              [ -f "$f" ] || continue
+              found_config=1
+              if ! python3 -c "import yaml, sys; yaml.safe_load(open(sys.argv[1]))" "$f" 2>/dev/null; then
+                echo "ERROR: '$name/$(basename "$f")' is not valid YAML"
+                errors=$((errors + 1))
+              else
+                echo "OK: $name/$(basename "$f") is valid YAML"
+              fi
+            done
+            if [ "$found_config" -eq 0 ]; then
+              echo "ERROR: '$name' has no go.mod and no top-level *.yml/*.yaml config to validate"
+              errors=$((errors + 1))
+            fi
+          done
+
+          if [ "$errors" -gt 0 ]; then
+            echo ""
+            echo "FAILED: $errors non-Go plugin config validation error(s)"
+            exit 1
+          fi
+
+          echo "All non-Go free plugins have valid config"
+
       - name: Validate bundles[] field shape
         run: |
           python3 -c "
@@ -233,3 +279,60 @@ jobs:
 
           print('All bundles[] fields (where present) are arrays of strings')
           "
+
+      - name: Check for PLUGINS_PRO_CHECKOUT_TOKEN
+        # `secrets.X` cannot be referenced directly in a step/job `if:` —
+        # GitHub's workflow_dispatch validator rejects it ("Unrecognized
+        # named-value: 'secrets'"), confirmed 2026-08-31 dispatching this
+        # workflow. The proven pattern already used elsewhere in this org
+        # (nchat/.github/workflows/deploy-k8s.yml's check-secrets job) is to
+        # resolve the secret into an env var here, write it to
+        # $GITHUB_OUTPUT, and gate later steps on steps.*.outputs.* instead.
+        id: check-token
+        env:
+          HAS_TOKEN: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        run: echo "has-token=${HAS_TOKEN}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout plugins-pro (cross-repo counts, Mode A only)
+        if: steps.check-token.outputs.has-token == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: nself-org/plugins-pro
+          path: ../plugins-pro
+          token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
+
+      - name: Checkout cli (plugin-counts.sh source, Mode A only)
+        if: steps.check-token.outputs.has-token == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: nself-org/cli
+          path: ../cli
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify plugin counts pipeline (Mode A — cross-repo, free+pro)
+        if: steps.check-token.outputs.has-token == 'true'
+        run: |
+          # Full cross-repo drift gate: checks free registry.json (this repo,
+          # already validated above) plus pro registry.json against the
+          # plugins-pro disk layout, via the shared generator script. Requires
+          # a PLUGINS_PRO_CHECKOUT_TOKEN secret (PAT or deploy key scoped to
+          # nself-org/plugins-pro, which is private) — GITHUB_TOKEN cannot
+          # check out a different private repo. No such secret exists in this
+          # org as of P6; this step is inert until an owner provisions one.
+          bash ../cli/scripts/plugin-counts.sh
+
+      - name: Verify plugin counts pipeline (Mode B — free-side only, no cross-repo secret)
+        if: steps.check-token.outputs.has-token == 'false'
+        run: |
+          # No PLUGINS_PRO_CHECKOUT_TOKEN secret exists, so plugins-pro cannot
+          # be checked out here (GITHUB_TOKEN is scoped to this repo only).
+          # The free-side half of the same guarantee is already enforced by
+          # this workflow's "Check all free/ plugins have registry.json
+          # entries" step above (disk == registry.json, zero drift). This step
+          # exists so the job log always states, explicitly, which mode ran
+          # and why — never a silent skip.
+          free_n=$(python3 -c "import json; print(len(json.load(open('registry.json'))['plugins']))")
+          echo "Mode B: PLUGINS_PRO_CHECKOUT_TOKEN not set — cross-repo (free+pro) count"
+          echo "verification skipped. Free-side registry has $free_n entries and is"
+          echo "already disk-verified by the step above. Provision"
+          echo "PLUGINS_PRO_CHECKOUT_TOKEN to enable the full cross-repo gate."
