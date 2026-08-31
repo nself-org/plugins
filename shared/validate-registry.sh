@@ -485,22 +485,29 @@ fi
 
 # =============================================================================
 # CHECK 7 — Schema field presence: name, version, description, category, tier
-# In aggregated format, the registry key serves as the canonical name —
-# .value.name need not be repeated. In flat-array format, .name is required.
+# In aggregated format, the registry key is the canonical identifier, but
+# every entry's .value.name is ALSO required and must equal the key — this
+# repo's convention (100% of free/registry.json entries) always duplicates
+# the name inside the value object, and a missing/null .value.name is data
+# corruption (2026-08-31 incident: the "ollama" entry's .value.name was
+# absent/null while every other of the 60 entries had it set). A bare
+# `// ""` default coercion treats JSON `null` and a missing key identically
+# (both become "OK"), which is exactly how that corruption slipped past this
+# validator — so `has("name")` and an explicit `== null` check are used here
+# instead of `//` to tell "missing", "null", and "present" apart.
 # =============================================================================
 section "CHECK 7 — required schema fields present"
 SCHEMA_VIOLATIONS=0
 SCHEMA_USV="${TMPDIR_VAL}/schema.usv"
 case "$REGISTRY_FORMAT" in
     aggregated)
-        # Name comes from the key, not .value.name — so we don't require it.
-        # If .value.name IS present, ensure it matches the key (drift check).
         "$JQ" -r '
             .plugins
             | to_entries[]
             | [
                 .key,
-                (if (.value.name // "") == "" then "OK"
+                (if (.value | has("name") | not) then "MISSING"
+                 elif .value.name == null then "NULL"
                  elif .value.name != .key then "MISMATCH"
                  else "OK" end),
                 (if (.value.version // "") == "" then "MISSING" else "OK" end),
@@ -509,7 +516,7 @@ case "$REGISTRY_FORMAT" in
                 (if (.value.tier // "") == "" then "MISSING" else "OK" end),
                 (if (.value.language // "") == "" then "MISSING" else "OK" end)
               ]
-            | join("")
+            | join("")
         ' "$REGISTRY_FILE" > "$SCHEMA_USV"
         ;;
     array)
@@ -524,7 +531,7 @@ case "$REGISTRY_FORMAT" in
                 (if (.tier // "") == "" then "MISSING" else "OK" end),
                 (if (.language // "") == "" then "MISSING" else "OK" end)
               ]
-            | join("")
+            | join("")
         ' "$REGISTRY_FILE" > "$SCHEMA_USV"
         ;;
     array-wrapped)
@@ -539,7 +546,7 @@ case "$REGISTRY_FORMAT" in
                 (if (.tier // "") == "" then "MISSING" else "OK" end),
                 (if (.language // "") == "" then "MISSING" else "OK" end)
               ]
-            | join("")
+            | join("")
         ' "$REGISTRY_FILE" > "$SCHEMA_USV"
         ;;
 esac
@@ -547,6 +554,9 @@ while IFS="$US" read -r name name_ok version_ok description_ok category_ok tier_
     [ -z "$name" ] && continue
     if [ "$name_ok" = "MISSING" ]; then
         err "CHECK-7" "$name" "name field is missing"
+        SCHEMA_VIOLATIONS=$((SCHEMA_VIOLATIONS + 1))
+    elif [ "$name_ok" = "NULL" ]; then
+        err "CHECK-7" "$name" "name field is JSON null (must be the string '$name')"
         SCHEMA_VIOLATIONS=$((SCHEMA_VIOLATIONS + 1))
     elif [ "$name_ok" = "MISMATCH" ]; then
         err "CHECK-7" "$name" "name field does not match registry key"
