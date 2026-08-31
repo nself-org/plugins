@@ -5,7 +5,7 @@ mDNS (Multicast DNS) and Bonjour service discovery plugin for zero-configuration
 | Property | Value |
 |----------|-------|
 | **Port** | `3216` |
-| **Category** | `networking` |
+| **Category** | `infrastructure` |
 | **Multi-App** | `source_account_id` (UUID) |
 | **Min nself** | `0.4.8` |
 

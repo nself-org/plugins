@@ -1,6 +1,6 @@
 # VPN Plugin
 
-**Version**: 1.0.0 | **Status**: ✅ Production Ready | **Port**: 3010
+**Version**: 1.0.0 | **Category**: authentication | **Port**: 3200
 
 Multi-provider VPN management with P2P optimization, torrent downloads, kill switch, and leak protection.
 
@@ -56,7 +56,7 @@ ENCRYPTION_KEY=generate-with-openssl-rand-base64-32
 VPN_PROVIDER=nordvpn
 DOWNLOAD_PATH=/tmp/vpn-downloads
 ENABLE_KILL_SWITCH=true
-PORT=3010
+PORT=3200
 ```
 
 ### Add Provider Credentials
@@ -161,7 +161,7 @@ npx tsx src/cli.ts sync <provider>
 
 ```bash
 # Download via torrent over VPN (requires server running)
-curl -X POST http://localhost:3010/api/download \
+curl -X POST http://localhost:3200/api/download \
   -H "Content-Type: application/json" \
   -d '{
     "magnet_link": "magnet:?xt=urn:btih:...",
@@ -195,25 +195,25 @@ npx tsx src/cli.ts stats
 
 ## REST API
 
-All endpoints are available at `http://localhost:3010`.
+All endpoints are available at `http://localhost:3200`.
 
 ### Provider Endpoints
 
 **GET `/api/providers`**
 ```bash
-curl http://localhost:3010/api/providers
+curl http://localhost:3200/api/providers
 ```
 Returns list of all supported providers with metadata.
 
 **GET `/api/providers/:id`**
 ```bash
-curl http://localhost:3010/api/providers/nordvpn
+curl http://localhost:3200/api/providers/nordvpn
 ```
 Get specific provider details.
 
 **POST `/api/providers/:id/credentials`**
 ```bash
-curl -X POST http://localhost:3010/api/providers/nordvpn/credentials \
+curl -X POST http://localhost:3200/api/providers/nordvpn/credentials \
   -H "Content-Type: application/json" \
   -d '{"token": "YOUR_TOKEN"}'
 ```
@@ -224,20 +224,20 @@ Store provider credentials (encrypted).
 **GET `/api/servers`**
 ```bash
 # All servers
-curl http://localhost:3010/api/servers
+curl http://localhost:3200/api/servers
 
 # P2P only
-curl http://localhost:3010/api/servers?p2p_only=true&country=nl&limit=10
+curl http://localhost:3200/api/servers?p2p_only=true&country=nl&limit=10
 ```
 
 **GET `/api/servers/p2p`**
 ```bash
-curl http://localhost:3010/api/servers/p2p?provider=nordvpn
+curl http://localhost:3200/api/servers/p2p?provider=nordvpn
 ```
 
 **POST `/api/servers/sync`**
 ```bash
-curl -X POST http://localhost:3010/api/servers/sync \
+curl -X POST http://localhost:3200/api/servers/sync \
   -H "Content-Type: application/json" \
   -d '{"provider": "nordvpn"}'
 ```
@@ -246,7 +246,7 @@ curl -X POST http://localhost:3010/api/servers/sync \
 
 **POST `/api/connect`**
 ```bash
-curl -X POST http://localhost:3010/api/connect \
+curl -X POST http://localhost:3200/api/connect \
   -H "Content-Type: application/json" \
   -d '{
     "provider": "nordvpn",
@@ -259,19 +259,19 @@ curl -X POST http://localhost:3010/api/connect \
 
 **POST `/api/disconnect`**
 ```bash
-curl -X POST http://localhost:3010/api/disconnect
+curl -X POST http://localhost:3200/api/disconnect
 ```
 
 **GET `/api/status`**
 ```bash
-curl http://localhost:3010/api/status
+curl http://localhost:3200/api/status
 ```
 
 ### Download Endpoints
 
 **POST `/api/download`**
 ```bash
-curl -X POST http://localhost:3010/api/download \
+curl -X POST http://localhost:3200/api/download \
   -H "Content-Type: application/json" \
   -d '{
     "magnet_link": "magnet:?xt=urn:btih:...",
@@ -284,31 +284,31 @@ curl -X POST http://localhost:3010/api/download \
 
 **GET `/api/downloads`**
 ```bash
-curl http://localhost:3010/api/downloads?limit=10
+curl http://localhost:3200/api/downloads?limit=10
 ```
 
 **GET `/api/downloads/:id`**
 ```bash
-curl http://localhost:3010/api/downloads/download-id
+curl http://localhost:3200/api/downloads/download-id
 ```
 
 **DELETE `/api/downloads/:id`**
 ```bash
-curl -X DELETE http://localhost:3010/api/downloads/download-id
+curl -X DELETE http://localhost:3200/api/downloads/download-id
 ```
 
 ### Security Endpoints
 
 **POST `/api/test-leak`**
 ```bash
-curl -X POST http://localhost:3010/api/test-leak
+curl -X POST http://localhost:3200/api/test-leak
 ```
 
 ### Statistics Endpoints
 
 **GET `/api/stats`**
 ```bash
-curl http://localhost:3010/api/stats
+curl http://localhost:3200/api/stats
 ```
 
 ---
@@ -469,7 +469,7 @@ async downloadUbuntuISO(version: string) {
   const magnetLink = await this.findTorrent('ubuntu', version);
 
   // 2. Request VPN download
-  const response = await fetch('http://localhost:3010/api/download', {
+  const response = await fetch('http://localhost:3200/api/download', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -485,7 +485,7 @@ async downloadUbuntuISO(version: string) {
 
   // 3. Poll for completion
   while (true) {
-    const status = await fetch(`http://localhost:3010/api/downloads/${download_id}`)
+    const status = await fetch(`http://localhost:3200/api/downloads/${download_id}`)
       .then(r => r.json());
 
     if (status.status === 'completed') {
@@ -675,4 +675,4 @@ npm run dev
 
 ---
 
-**Version**: 1.0.0 | **Last Updated**: February 11, 2026 | **Status**: Production Ready ✅
+**Version**: 1.0.0 | **Last Updated**: February 11, 2026 | **Status**: Production Ready

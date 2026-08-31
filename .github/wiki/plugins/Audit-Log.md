@@ -112,5 +112,5 @@ Events are append-only — no updates or deletes via the API. Retention cleanup 
 ## Related
 
 - [[Security]] — nself security overview
-- [[cmd-backup]] — back up audit logs along with your Postgres data
+- [[Backup|plugins/Backup]] — back up audit logs along with your Postgres data
 - [Plugin Development](Plugin-Development) — write your own plugins
