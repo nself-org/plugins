@@ -1,0 +1,160 @@
+{
+  "name": "game-metadata",
+  "version": "1.1.2",
+  "api_version": "1.0.0",
+  "description": "Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "language": "go",
+  "entryPoint": "binary",
+  "port": 3123,
+  "category": "media",
+  "tags": [
+    "games",
+    "igdb",
+    "metadata",
+    "rom",
+    "retro-gaming",
+    "artwork"
+  ],
+  "tables": [
+    "np_game_catalog",
+    "np_game_metadata",
+    "np_game_artwork",
+    "np_game_platforms",
+    "np_game_genres"
+  ],
+  "webhooks": {},
+  "actions": {
+    "lookup": "Lookup game by name or hash",
+    "enrich": "Enrich metadata from IGDB",
+    "tiers": "Show tier requirements",
+    "platforms": "List platforms",
+    "stats": "Show statistics"
+  },
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "GAME_METADATA_PLUGIN_PORT",
+      "IGDB_CLIENT_ID",
+      "IGDB_CLIENT_SECRET",
+      "GAME_METADATA_ARTWORK_PATH"
+    ]
+  },
+  "config": {
+    "defaultPort": 3211,
+    "defaultArtworkPath": "./artwork",
+    "maxArtworkSizeMb": 50,
+    "igdbRateLimitPerSecond": 4,
+    "hashAlgorithms": [
+      "md5",
+      "sha1",
+      "sha256",
+      "crc32"
+    ]
+  },
+  "hooks": {
+    "postInstall": null,
+    "preUninstall": null,
+    "postSync": null
+  },
+  "multiApp": {
+    "supported": true,
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "defaultValue": "primary"
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "network": [
+      "*"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ]
+  },
+  "status": "stable",
+  "tier": "pro",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "PUT",
+      "path": "/",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/artwork/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/stats",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/lookup",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/search",
+      "auth": "bearer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/{id}",
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/{id}",
+      "auth": "bearer"
+    }
+  ],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "entry": "cmd/main.go",
+  "checksum": "27558aaa616ce4fc847abe362cf3c71cb54583f3979e1f25fba54e732a0d9b95",
+  "bundles": [
+    "ntv"
+  ]
+}

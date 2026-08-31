@@ -1,0 +1,5 @@
+- "!include np_podcast_podcasts
+np_podcast_episodes
+np_podcast_subscriptions
+np_podcast_playback_positions
+np_podcast_categories.yaml"
