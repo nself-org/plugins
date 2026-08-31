@@ -62,4 +62,16 @@ regexes = [
   # documented in-file as matching the SHAPE of a real Ghost Admin API key
   # without being one.
   '''aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899''',
+
+  # pentest-kit/cmd/pentest_test.go: tier-detection fixtures for the license
+  # gate unit tests — each is a real prefix (nself_max_/nself_ent_/
+  # nself_owner_) followed by the literal alphabet run
+  # "abcdefghijklmnopqrstuvwxyz1234", not a generated key. Flagged only under
+  # gitleaks 8.21.2 (the version this repo's CI pins); 8.30.0's default
+  # generic-api-key heuristic does not match it, which is why the first pass
+  # of this triage missed it locally — always verify against the CI-pinned
+  # gitleaks version, not whatever is on PATH.
+  '''nself_max_abcdefghijklmnopqrstuvwxyz1234''',
+  '''nself_ent_abcdefghijklmnopqrstuvwxyz1234''',
+  '''nself_owner_abcdefghijklmnopqrstuvwxyz1234''',
 ]
