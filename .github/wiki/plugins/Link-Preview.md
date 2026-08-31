@@ -1,7 +1,7 @@
 # Link Preview Plugin
 
 **Version:** 1.0.0
-**Category:** Content Enhancement
+**Category:** content
 **Port:** 3718
 **Multi-App Support:** Yes (isolated by `source_account_id`)
 

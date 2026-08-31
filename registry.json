@@ -1384,6 +1384,7 @@
         "self-hosted"
       ],
       "dependencies": [],
+      "name": "ollama",
       "checksum": ""
     },
     "paypal": {
