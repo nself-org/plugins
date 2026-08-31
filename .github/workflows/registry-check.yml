@@ -280,8 +280,21 @@ jobs:
           print('All bundles[] fields (where present) are arrays of strings')
           "
 
+      - name: Check for PLUGINS_PRO_CHECKOUT_TOKEN
+        # `secrets.X` cannot be referenced directly in a step/job `if:` —
+        # GitHub's workflow_dispatch validator rejects it ("Unrecognized
+        # named-value: 'secrets'"), confirmed 2026-08-31 dispatching this
+        # workflow. The proven pattern already used elsewhere in this org
+        # (nchat/.github/workflows/deploy-k8s.yml's check-secrets job) is to
+        # resolve the secret into an env var here, write it to
+        # $GITHUB_OUTPUT, and gate later steps on steps.*.outputs.* instead.
+        id: check-token
+        env:
+          HAS_TOKEN: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        run: echo "has-token=${HAS_TOKEN}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout plugins-pro (cross-repo counts, Mode A only)
-        if: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        if: steps.check-token.outputs.has-token == 'true'
         uses: actions/checkout@v7
         with:
           repository: nself-org/plugins-pro
@@ -289,7 +302,7 @@ jobs:
           token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
 
       - name: Checkout cli (plugin-counts.sh source, Mode A only)
-        if: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        if: steps.check-token.outputs.has-token == 'true'
         uses: actions/checkout@v7
         with:
           repository: nself-org/cli
@@ -297,7 +310,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify plugin counts pipeline (Mode A — cross-repo, free+pro)
-        if: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        if: steps.check-token.outputs.has-token == 'true'
         run: |
           # Full cross-repo drift gate: checks free registry.json (this repo,
           # already validated above) plus pro registry.json against the
@@ -309,7 +322,7 @@ jobs:
           bash ../cli/scripts/plugin-counts.sh
 
       - name: Verify plugin counts pipeline (Mode B — free-side only, no cross-repo secret)
-        if: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN == '' }}
+        if: steps.check-token.outputs.has-token == 'false'
         run: |
           # No PLUGINS_PRO_CHECKOUT_TOKEN secret exists, so plugins-pro cannot
           # be checked out here (GITHUB_TOKEN is scoped to this repo only).
