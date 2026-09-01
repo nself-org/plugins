@@ -25,6 +25,11 @@ env:
   R2_BUCKET: nself-plugin-tarballs
   R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
+
+concurrency:
+  group: release-tarballs-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-upload:
     name: Build + Upload Free Plugin Tarballs

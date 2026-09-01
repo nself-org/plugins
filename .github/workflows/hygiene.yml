@@ -1,0 +1,470 @@
+name: Hygiene
+
+# Consolidates trivial, single-checkout, no-toolchain gates that were
+# previously separate workflows: clean-root, clean-working-tree,
+# multi-arch-check, nself-first-check, attribution-guard, hadolint,
+# api-contract-check, deprecation-check, doc-sync.
+#
+# Every check below ran before this consolidation and still runs here —
+# nothing was dropped, only regrouped into one job/one checkout. PR-context
+# checks (nself-first, api-contract, deprecation, doc-sync) and the
+# commit-message attribution check are guarded to their original event
+# requirements. Trigger is the union of the originals' triggers (push to any
+# branch not under stash-archive/**, any tag, any PR, manual dispatch) so no
+# individual check's coverage is narrowed by the merge.
+
+on:
+  push:
+    branches-ignore: ['stash-archive/**']
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Hygiene gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # --- clean-root.yml ---
+      - name: "clean-root: forbid markdown at repo root other than README.md"
+        id: cr_root_md
+        if: always()
+        run: |
+          OFFENDERS=$(find . -maxdepth 1 -name '*.md' ! -name 'README.md' -type f | sort)
+          if [ -n "$OFFENDERS" ]; then
+            echo "::error::Disallowed markdown files at repo root:"
+            echo "$OFFENDERS"
+            exit 1
+          fi
+          echo "Repo root markdown is clean (only README.md present)."
+
+      - name: "clean-root: forbid tracked OS/editor junk"
+        id: cr_junk
+        if: always()
+        run: |
+          OFFENDERS=$(git ls-files | grep -E '(^|/)(\.DS_Store|Thumbs\.db|desktop\.ini)$|\.swp$|\.swo$' || true)
+          if [ -n "$OFFENDERS" ]; then
+            echo "::error::Tracked OS / editor junk in repository:"
+            echo "$OFFENDERS"
+            exit 1
+          fi
+          echo "No tracked OS junk."
+
+      - name: "clean-root: forbid tracked secret-bearing .env files"
+        id: cr_env
+        if: always()
+        run: |
+          OFFENDERS=$(git ls-files \
+            | grep -E '(^|/)(\.env|\.env\.local|\.env\.secrets|\.env\.computed)$' \
+            | grep -vE '(^|/)(\.environments|environments)/[^/]+/\.env$' \
+            || true)
+          if [ -n "$OFFENDERS" ]; then
+            echo "::error::Tracked SECRET-BEARING .env file(s) found:"
+            echo "$OFFENDERS"
+            exit 1
+          fi
+          echo "No tracked secret-bearing .env files."
+
+      - name: "clean-root: verify .gitignore baseline patterns present"
+        if: always()
+        run: |
+          REQUIRED=(.DS_Store .env node_modules)
+          MISSING=()
+          for pattern in "${REQUIRED[@]}"; do
+            if ! grep -qE "(^|/)${pattern//./\\.}(\$|/)" .gitignore 2>/dev/null && ! grep -qE "^${pattern//./\\.}\$" .gitignore 2>/dev/null; then
+              MISSING+=("$pattern")
+            fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::warning::.gitignore missing baseline patterns: ${MISSING[*]}"
+          fi
+
+      # --- clean-working-tree.yml ---
+      - name: "clean-working-tree: tracked .DS_Store"
+        id: cwt_dsstore
+        if: always()
+        run: |
+          if git ls-files | grep -q '\.DS_Store'; then
+            echo "ERROR: .DS_Store files are tracked in git."
+            exit 1
+          fi
+
+      - name: "clean-working-tree: tracked .env secrets"
+        id: cwt_env
+        if: always()
+        run: |
+          FORBIDDEN=$(git ls-files | grep -E '^\.env$|\.env\.local$|\.env\.secrets$' || true)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "ERROR: Forbidden env files tracked: $FORBIDDEN"
+            exit 1
+          fi
+
+      - name: "clean-working-tree: .gitignore baseline"
+        if: always()
+        run: |
+          if [ ! -f .gitignore ]; then
+            echo "ERROR: .gitignore is missing"
+            exit 1
+          fi
+          MISSING=""
+          grep -q '\.DS_Store' .gitignore || MISSING="$MISSING .DS_Store"
+          if [ -n "$MISSING" ]; then
+            echo "WARNING: .gitignore may be missing patterns:$MISSING"
+          fi
+
+      - name: "clean-working-tree: root-level forbidden files"
+        id: cwt_root
+        if: always()
+        run: |
+          FORBIDDEN=$(find . -maxdepth 1 -name "*.md" \
+            ! -name "README.md" \
+            ! -name "AGENTS.md" \
+            2>/dev/null | grep -v '^\./$' || true)
+          if [ -n "$FORBIDDEN" ]; then
+            echo "ERROR: Forbidden root-level .md files: $FORBIDDEN"
+            exit 1
+          fi
+
+      # --- multi-arch-check.yml ---
+      - name: "multi-arch: report repo type (N/A stub)"
+        if: always()
+        run: |
+          echo "Repo type: Free plugin library (nself-org/plugins)"
+          echo "No Go binaries or Docker images produced. Multi-arch check N/A. PASS."
+
+      # --- nself-first-check.yml (PR-only: diffs base..head) ---
+      - name: "nself-first: verify docker-compose headers"
+        id: nself_first
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -e
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          FILES=$(git diff --name-only --diff-filter=AM "$BASE" "$HEAD" -- '**/docker-compose*.yml' '**/docker-compose*.yaml' || true)
+
+          if [ -z "$FILES" ]; then
+            echo "No compose files changed — OK."
+            exit 0
+          fi
+
+          FAIL=0
+          for f in $FILES; do
+            case "$f" in
+              ntask/backend/*) echo "SKIP (D6 ntask/ exception): $f"; continue ;;
+              *docker-compose.plugin.yml) echo "SKIP (plugin-fragment): $f"; continue ;;
+            esac
+            head -5 "$f" | grep -qE '^# (GENERATED BY nself build|NSELF-FIRST EXCEPTION:|DEPRECATED — side-channel compose)' && {
+              echo "OK: $f"
+              continue
+            }
+            echo "FAIL: $f is missing an approved nSelf-First header."
+            FAIL=1
+          done
+          exit $FAIL
+
+      # --- attribution-guard.yml ---
+      - name: "attribution-guard: tracked content"
+        id: attribution_content
+        if: always()
+        run: bash .github/scripts/no-attribution-check.sh --all
+
+      - name: "attribution-guard: commit messages (new commits only)"
+        id: attribution_commits
+        if: always()
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            RANGE="origin/${{ github.base_ref }}..${{ github.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE="${{ github.event.before }}"
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              LAST_TAG=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
+              if [ -n "$LAST_TAG" ]; then
+                RANGE="${LAST_TAG}..${{ github.sha }}"
+              else
+                RANGE="${{ github.sha }}"
+              fi
+            else
+              RANGE="$BEFORE..${{ github.sha }}"
+            fi
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+            if [ -n "$LAST_TAG" ]; then
+              RANGE="${LAST_TAG}..${{ github.sha }}"
+            else
+              RANGE="${{ github.sha }}"
+            fi
+          else
+            RANGE="${{ github.sha }}"
+          fi
+          echo "Attribution guard scope: $RANGE"
+          bash .github/scripts/no-attribution-check.sh --history-range "$RANGE"
+
+      # --- hadolint.yml (PR/push only when a Dockerfile actually changed) ---
+      - name: "hadolint: Dockerfile changed?"
+        id: hadolint_relevant
+        if: always()
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" || true)
+          else
+            CHANGED=$(git show --name-only --format='' HEAD || true)
+          fi
+          if echo "$CHANGED" | grep -qE '(^|/)(Dockerfile(\..+)?|\.hadolint\.yaml)$' || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfile changes — skipping hadolint."
+          fi
+
+      - name: "hadolint: lint Dockerfiles"
+        id: hadolint_run
+        if: always() && steps.hadolint_relevant.outputs.relevant == 'true'
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          recursive: true
+          failure-threshold: error
+          ignore: DL3008,DL3009,DL3015
+
+      # --- api-contract-check.yml (PR-only, paths-scoped originally) ---
+      - name: "api-contract-check: relevant paths changed?"
+        id: api_contract_relevant
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" || true)
+          if echo "$CHANGED" | grep -qE '^(\.workers/plugins-registry/src/|registry\.json$|registry-schema\.json$)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "No registry/worker changes — skipping API contract check."
+          fi
+
+      - name: "api-contract-check: Marketplace Worker endpoint surface vs F19 baseline"
+        id: api_contract
+        if: always() && github.event_name == 'pull_request' && steps.api_contract_relevant.outputs.relevant == 'true'
+        run: |
+          WORKER_SRC=".workers/plugins-registry/src/index.ts"
+          KNOWN_PATHS="/health /plugins /plugins/ /revocations /registry.json /registry /categories /manifest.json /marketplace /stats /.well-known"
+          MISSING=""
+          for path in $KNOWN_PATHS; do
+            path_stripped=$(echo "$path" | tr -d '/')
+            if ! grep -q "$path_stripped" "$WORKER_SRC" 2>/dev/null; then
+              MISSING="$MISSING $path"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            echo "BREAKING: Marketplace Worker paths potentially missing: $MISSING"
+            echo "breaking_found=true" >> "$GITHUB_ENV"
+            echo "MISSING_PATHS=$MISSING" >> "$GITHUB_ENV"
+          else
+            echo "Marketplace Worker contract check passed."
+          fi
+
+      - name: "api-contract-check: fail on breaking change without annotation"
+        id: api_contract_gate
+        if: always() && env.breaking_found == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if ! echo "$PR_BODY" | grep -q "BREAKING-CHANGE-OK:"; then
+            echo "API CONTRACT VIOLATION — Marketplace Worker"
+            echo "Potentially missing paths: $MISSING_PATHS"
+            exit 1
+          else
+            echo "Breaking change annotated. Proceeding."
+          fi
+
+      # --- deprecation-check.yml (PR-only: diffs base..head) ---
+      - name: "deprecation-check: removed commands have registry entry"
+        id: deprecation_removed
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          DELETED=$(git diff --name-only --diff-filter=D "$BASE" "$HEAD" -- 'cmd/commands/*.go' || true)
+          if [ -z "$DELETED" ]; then
+            echo "OK: no command files deleted in this PR"
+            exit 0
+          fi
+          REGISTRY="internal/deprecation/registry.yaml"
+          FAIL=0
+          for f in $DELETED; do
+            CMD=$(basename "$f" .go)
+            if ! grep -q "name:.*nself $CMD" "$REGISTRY" 2>/dev/null; then
+              echo "ERROR: Command '$CMD' removed without deprecation registry entry."
+              FAIL=1
+            fi
+          done
+          exit $FAIL
+
+      - name: "deprecation-check: no skip-phase removals"
+        id: deprecation_skipphase
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          REGISTRY_DIFF=$(git diff "$BASE" "$HEAD" -- internal/deprecation/registry.yaml || true)
+          if [ -z "$REGISTRY_DIFF" ]; then
+            echo "OK: no registry changes"
+            exit 0
+          fi
+          PHASE3_NAMES=$(echo "$REGISTRY_DIFF" | grep '^+.*phase: 3' | grep -v '^---' || true)
+          if [ -z "$PHASE3_NAMES" ]; then
+            echo "OK: no phase 3 entries added"
+            exit 0
+          fi
+          BASE_REGISTRY=$(git show "$BASE:internal/deprecation/registry.yaml" 2>/dev/null || echo "items: []")
+          FAIL=0
+          while IFS= read -r line; do
+            NAME=$(echo "$line" | grep -oP "name: '?\K[^'\"]+")
+            if [ -n "$NAME" ]; then
+              if ! echo "$BASE_REGISTRY" | grep -q "name:.*$NAME"; then
+                echo "ERROR: '$NAME' jumped directly to phase 3 without phase 1/2 in base."
+                FAIL=1
+              fi
+            fi
+          done <<< "$PHASE3_NAMES"
+          exit $FAIL
+
+      - name: "deprecation-check: Sunset headers have F19 backing"
+        id: deprecation_sunset
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          PING_DIFF=$(git diff "$BASE" "$HEAD" -- '*.ts' '*.js' | grep '^+.*Sunset:' | grep -v '^---' || true)
+          if [ -z "$PING_DIFF" ]; then
+            echo "OK: no new Sunset headers"
+            exit 0
+          fi
+          F19="../../.claude/docs/sport/F19-API-CONTRACT-LOCK-v1.0.9.md"
+          if [ ! -f "$F19" ]; then
+            F19=".claude/docs/sport/F19-API-CONTRACT-LOCK-v1.0.9.md"
+          fi
+          if ! grep -q "Sunset-Date Table" "$F19" 2>/dev/null; then
+            echo "ERROR: Sunset header added but F19 has no Sunset-Date Table section."
+            exit 1
+          fi
+          echo "OK: Sunset headers have F19 backing"
+
+      # --- doc-sync.yml (PR-only: diffs base..head) ---
+      - name: "doc-sync: compute PR diff"
+        id: docsync_diff
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD || true)
+          echo "changed<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed"
+
+      - name: "doc-sync: matrix check"
+        id: docsync_matrix
+        if: always() && github.event_name == 'pull_request'
+        env:
+          CHANGED: ${{ steps.docsync_diff.outputs.changed }}
+        run: |
+          set -u
+          missing=0
+          rows=""
+          matches() { echo "$CHANGED" | grep -qE "$1"; }
+
+          if matches '^cli/(cmd|internal/commands)/'; then
+            if ! matches '^(cli/\.wiki/commands/|\.claude/docs/sport/F02-COMMAND-INVENTORY\.md|\.claude/docs/reference/cli-commands\.md|web/docs/content/cli/)'; then
+              rows="${rows}- commands/flags changed without cli/.wiki/commands/ or F02-COMMAND-INVENTORY.md update\n"; missing=1
+            fi
+          fi
+          if matches '(^|/)\.env\.example$|^cli/internal/env/'; then
+            if ! matches '(\.claude/docs/sport/F09-ENV-VAR-INVENTORY\.md|cli/\.wiki/reference/env-vars\.md|web/docs/content/reference/env-vars|(^|/)plugin\.json$)'; then
+              rows="${rows}- env vars changed without a plugin.json or env-vars reference update\n"; missing=1
+            fi
+          fi
+          if matches '^web/backend/services/|^web/backend/.*/metadata/'; then
+            if ! matches '(web/docs/content/api/|\.claude/docs/API-Reference\.md|\.claude/docs/sport/F08-SERVICE-INVENTORY\.md)'; then
+              rows="${rows}- API endpoints changed without web/docs/content/api/ or F08-SERVICE-INVENTORY.md update\n"; missing=1
+            fi
+          fi
+          if matches '^(admin/app/|web/[^/]+/src/app/)'; then
+            if ! matches '(admin/\.wiki/|web/docs/content/|\.github/docs/|\.github/wiki/)'; then
+              rows="${rows}- UI pages changed without matching .wiki/ or web/docs/content/ update\n"; missing=1
+            fi
+          fi
+          if matches '^(web/org/content/(pricing|membership)/|web/org/src/.*(pricing|tier)|plugins-pro/.*/tier)'; then
+            if ! matches '(\.claude/docs/sport/F07-PRICING-TIERS\.md|\.claude/docs/membership/|web/org/content/(pricing|membership)/)'; then
+              rows="${rows}- pricing/tiers changed without F07-PRICING-TIERS.md or membership docs update\n"; missing=1
+            fi
+          fi
+          if matches '^(plugins|plugins-pro)/[^/]+/'; then
+            if ! matches '(\.claude/docs/sport/F0[346]-|plugins/README\.md|plugins-pro/README\.md|web/org/content/plugins/|web/docs/content/plugins/)'; then
+              rows="${rows}- plugins/bundles changed without F03/F04/F06 or README or web/*/content/plugins/ update\n"; missing=1
+            fi
+          fi
+          if matches '^(nginx/|.*docker-compose\.ya?ml$)'; then
+            if ! matches '(\.claude/docs/sport/F10-PORT-REGISTRY\.md|\.claude/docs/sport/F11-SUBDOMAIN-MAP\.md|\.claude/CLAUDE\.md)'; then
+              rows="${rows}- ports/subdomains changed without F10-PORT-REGISTRY.md or F11-SUBDOMAIN-MAP.md update\n"; missing=1
+            fi
+          fi
+          if matches '(^cli/VERSION$|pubspec\.yaml$|homebrew-nself/.*\.rb$|plugins-pro/VERSION$|^Cargo\.toml$)'; then
+            if ! matches '(\.claude/docs/MASTER-VERSIONS\.md|\.claude/docs/sport/F01-MASTER-VERSIONS\.md|web/org/content/changelog|homebrew-nself/Formula/)'; then
+              rows="${rows}- version files changed without MASTER-VERSIONS.md or F01 update\n"; missing=1
+            fi
+          fi
+
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::Doc-Sync Ritual violations detected"
+            printf '%b' "$rows"
+            exit 1
+          fi
+          echo "Doc-Sync Ritual: all surface changes have matching doc updates."
+
+      # --- aggregate: fail the job if any gate above failed, even though
+      # every gate ran (if: always()) so all failures are visible in one run ---
+      - name: Hygiene gate summary
+        if: always()
+        run: |
+          declare -A OUTCOMES=(
+            [cr_root_md]="${{ steps.cr_root_md.outcome }}"
+            [cr_junk]="${{ steps.cr_junk.outcome }}"
+            [cr_env]="${{ steps.cr_env.outcome }}"
+            [cwt_dsstore]="${{ steps.cwt_dsstore.outcome }}"
+            [cwt_env]="${{ steps.cwt_env.outcome }}"
+            [cwt_root]="${{ steps.cwt_root.outcome }}"
+            [nself_first]="${{ steps.nself_first.outcome }}"
+            [attribution_content]="${{ steps.attribution_content.outcome }}"
+            [attribution_commits]="${{ steps.attribution_commits.outcome }}"
+            [hadolint_run]="${{ steps.hadolint_run.outcome }}"
+            [api_contract]="${{ steps.api_contract.outcome }}"
+            [api_contract_gate]="${{ steps.api_contract_gate.outcome }}"
+            [deprecation_removed]="${{ steps.deprecation_removed.outcome }}"
+            [deprecation_skipphase]="${{ steps.deprecation_skipphase.outcome }}"
+            [deprecation_sunset]="${{ steps.deprecation_sunset.outcome }}"
+            [docsync_diff]="${{ steps.docsync_diff.outcome }}"
+            [docsync_matrix]="${{ steps.docsync_matrix.outcome }}"
+          )
+          FAIL=0
+          for k in "${!OUTCOMES[@]}"; do
+            v="${OUTCOMES[$k]}"
+            if [ "$v" = "failure" ]; then
+              echo "::error::gate failed: $k"
+              FAIL=1
+            fi
+          done
+          if [ "$FAIL" -eq 1 ]; then
+            exit 1
+          fi
+          echo "All hygiene gates passed (or were not applicable to this event)."

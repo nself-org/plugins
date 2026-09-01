@@ -7,8 +7,18 @@ name: SIEGE Security Regression (Syntax Check)
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
