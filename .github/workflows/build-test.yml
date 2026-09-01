@@ -15,10 +15,13 @@ jobs:
     name: Build & test all Go plugins
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # This loop matches any free/*/ directory with a go.mod, which as of P6
-    # is 59 of the 60 free plugins. The one exclusion is `forgejo` (docker
-    # compose + shell, genuinely no Go code) — that is the correct, expected
-    # gap, not a bug in the glob.
+    # This finds every go.mod anywhere under free/, not just free/*/go.mod.
+    # The depth-1 glob it replaced silently skipped 13 plugins that keep their
+    # module one level down (free/<name>/go/go.mod), a layout the P6 migration
+    # brought in with the plugins reclassified from plugins-pro. Those 13 were
+    # never built, vetted or tested by this gate. Plugins with genuinely no Go
+    # code (forgejo: docker compose plus shell) simply have no go.mod and are
+    # skipped by construction, which remains correct.
     #
     # `monitoring` DOES have a go.mod, cmd/main.go and internal/render/, and
     # IS built/tested here despite registry.json's `language` field saying
@@ -31,10 +34,18 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.4'
+      - name: Install libvips (required by storage-transform's govips binding)
+        # storage-transform/go binds libvips through govips and cannot compile
+        # without the headers. Its own Dockerfile installs libvips-dev for the
+        # same reason. Without this the module fails at pkg-config, which is a
+        # missing system package rather than a code fault.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvips-dev
+
       - name: Build, vet, and test every Go plugin
         run: |
           failed=0
-          for d in free/*/; do
+          while IFS= read -r gomod; do
+            d="$(dirname "$gomod")"
             if [ -f "$d/go.mod" ]; then
               echo "=== $d ==="
               # -o /dev/null because a plugin whose main package sits at cmd/
@@ -44,5 +55,5 @@ jobs:
               # is a directory"). CI only needs to know it compiles.
               ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
             fi
-          done
+          done < <(find free -name go.mod -not -path '*/vendor/*' | sort)
           exit $failed
