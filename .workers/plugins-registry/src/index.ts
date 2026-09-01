@@ -410,6 +410,23 @@ async function handlePlugin(path: string, env: Env, ctx: ExecutionContext): Prom
 async function handlePluginTarball(plugin: PluginEntry, env: Env): Promise<Response> {
   const { name, version, tier } = plugin;
 
+  // qa/bugs/paid-tarball-gated-by-repo-visibility-not-licence.md: this route's own
+  // header comment already claimed "Pro plugins always use the ping_api gated
+  // download — never this path", but nothing enforced it — a pro-tier plugin fell
+  // through to the same GitHub-redirect code below and only 404'd because
+  // plugins-pro happens to be a private repo. No entitlement was ever checked.
+  // Enforce the claim for real: refuse here and point callers at the real gate.
+  if (tier === "pro") {
+    return jsonResponse(
+      {
+        error: "paid plugin — use the licence-gated download endpoint",
+        plugin: name,
+        download_url: `https://ping.nself.org/plugins/${name}/download`,
+      },
+      401,
+    );
+  }
+
   const revoked = await isRevoked(env, name, version);
   if (revoked) {
     return jsonResponse({ error: "plugin version revoked", plugin: name, version }, 410);
