@@ -2,7 +2,7 @@
   "name": "nself-cloud",
   "version": "0.1.0",
   "api_version": "1.0.0",
-  "description": "\u0273Cloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.",
+  "description": "ɳCloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.",
   "author": "nSelf Team",
   "license": "MIT",
   "isCommercial": false,
@@ -79,7 +79,7 @@
     "supported": false,
     "isolationColumn": null,
     "isolationMechanism": "tenant_id",
-    "note": "\u0273Cloud only. Tenant isolation via tenant_id UUID + Hasura row filter. source_account_id not applicable (Multi-Tenant Convention Wall: nself-cloud uses tenant_id isolation, not multi-app isolation)."
+    "note": "ɳCloud only. Tenant isolation via tenant_id UUID + Hasura row filter. source_account_id not applicable (Multi-Tenant Convention Wall: nself-cloud uses tenant_id isolation, not multi-app isolation)."
   },
   "permissions": {
     "database": [

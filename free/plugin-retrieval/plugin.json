@@ -1,7 +1,7 @@
 {
   "name": "plugin-retrieval",
   "version": "0.1.0",
-  "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for \u0273Claw memory and nself-ai-mcp search/recall tools.",
+  "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for ɳClaw memory and nself-ai-mcp search/recall tools.",
   "author": "nSelf",
   "license": "MIT",
   "licenseType": "free",
