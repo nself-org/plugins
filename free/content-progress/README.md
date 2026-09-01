@@ -36,7 +36,7 @@ Required environment variables:
 - `DATABASE_URL` or individual `POSTGRES_*` variables
 
 Optional settings:
-- `PROGRESS_PLUGIN_PORT` (default: 3022)
+- `PROGRESS_PLUGIN_PORT` (default: 3003)
 - `PROGRESS_COMPLETE_THRESHOLD` (default: 95%)
 - `PROGRESS_HISTORY_SAMPLE_SECONDS` (default: 30)
 - `PROGRESS_API_KEY` (for authentication)
@@ -65,7 +65,7 @@ nself-content-progress init
 
 # Start API server
 nself-content-progress server
-nself-content-progress server --port 3022 --host 0.0.0.0
+nself-content-progress server --port 3003 --host 0.0.0.0
 
 # Show plugin status
 nself-content-progress status
@@ -347,7 +347,7 @@ PROGRESS_HISTORY_SAMPLE_SECONDS=30  # Only log every 30 seconds
 Use the `X-Source-Account-Id` header to isolate data:
 
 ```bash
-curl -X POST http://localhost:3022/v1/progress \
+curl -X POST http://localhost:3003/v1/progress \
   -H "X-Source-Account-Id: app-123" \
   -H "Content-Type: application/json" \
   -d '{"user_id":"user1","content_type":"movie","content_id":"abc","position_seconds":120}'

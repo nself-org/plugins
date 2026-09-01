@@ -27,7 +27,7 @@ npm run dev
 
 ```javascript
 // User watches a movie for 2 minutes (120 seconds) out of 2 hours (7200 seconds)
-const response = await fetch('http://localhost:3022/v1/progress', {
+const response = await fetch('http://localhost:3003/v1/progress', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -69,7 +69,7 @@ const response = await fetch('http://localhost:3022/v1/progress', {
 
 ```javascript
 // Get user's "continue watching" list
-const response = await fetch('http://localhost:3022/v1/continue-watching/user_123?limit=10');
+const response = await fetch('http://localhost:3003/v1/continue-watching/user_123?limit=10');
 const data = await response.json();
 
 // Response:
@@ -98,7 +98,7 @@ const data = await response.json();
 ```javascript
 // User finishes watching (or manually marks as completed)
 const response = await fetch(
-  'http://localhost:3022/v1/progress/user_123/movie/inception-2010/complete',
+  'http://localhost:3003/v1/progress/user_123/movie/inception-2010/complete',
   { method: 'POST' }
 );
 
@@ -115,7 +115,7 @@ const response = await fetch(
 
 ```javascript
 // User adds a movie to their watchlist
-const response = await fetch('http://localhost:3022/v1/watchlist', {
+const response = await fetch('http://localhost:3003/v1/watchlist', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -133,7 +133,7 @@ const response = await fetch('http://localhost:3022/v1/watchlist', {
 
 ```javascript
 // User favorites a show
-const response = await fetch('http://localhost:3022/v1/favorites', {
+const response = await fetch('http://localhost:3003/v1/favorites', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -148,7 +148,7 @@ const response = await fetch('http://localhost:3022/v1/favorites', {
 
 ```javascript
 // Get comprehensive user stats
-const response = await fetch('http://localhost:3022/v1/stats/user_123');
+const response = await fetch('http://localhost:3003/v1/stats/user_123');
 const stats = await response.json();
 
 // Response:
@@ -182,7 +182,7 @@ npm run dev
 npm start
 
 # Custom port and host
-node dist/cli.js server --port 3022 --host 0.0.0.0
+node dist/cli.js server --port 3003 --host 0.0.0.0
 ```
 
 ### Check Status
@@ -291,7 +291,7 @@ export function useProgress(userId: string, contentType: string, contentId: stri
 
   useEffect(() => {
     // Load initial progress
-    fetch(`http://localhost:3022/v1/progress/${userId}/${contentType}/${contentId}`)
+    fetch(`http://localhost:3003/v1/progress/${userId}/${contentType}/${contentId}`)
       .then(res => res.json())
       .then(data => setProgress({
         position: data.position_seconds,
@@ -302,7 +302,7 @@ export function useProgress(userId: string, contentType: string, contentId: stri
   }, [userId, contentType, contentId]);
 
   const updateProgress = async (positionSeconds: number, durationSeconds: number) => {
-    const response = await fetch('http://localhost:3022/v1/progress', {
+    const response = await fetch('http://localhost:3003/v1/progress', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -407,7 +407,7 @@ export function trackProgress(progressApiUrl: string) {
 
 ```javascript
 // App 1: Netflix Clone
-fetch('http://localhost:3022/v1/progress', {
+fetch('http://localhost:3003/v1/progress', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -422,7 +422,7 @@ fetch('http://localhost:3022/v1/progress', {
 });
 
 // App 2: YouTube Clone
-fetch('http://localhost:3022/v1/progress', {
+fetch('http://localhost:3003/v1/progress', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -445,7 +445,7 @@ fetch('http://localhost:3022/v1/progress', {
 # .env for production
 DATABASE_URL=postgresql://user:pass@prod-db.example.com:5432/nself?sslmode=require
 
-PROGRESS_PLUGIN_PORT=3022
+PROGRESS_PLUGIN_PORT=3003
 PROGRESS_PLUGIN_HOST=0.0.0.0
 
 # Complete at 98% (instead of default 95%)
@@ -471,16 +471,16 @@ LOG_LEVEL=info
 
 ```bash
 # Health check
-curl http://localhost:3022/health
+curl http://localhost:3003/health
 
 # Readiness check (database connectivity)
-curl http://localhost:3022/ready
+curl http://localhost:3003/ready
 
 # Detailed liveness
-curl http://localhost:3022/live
+curl http://localhost:3003/live
 
 # Plugin status
-curl http://localhost:3022/v1/status
+curl http://localhost:3003/v1/status
 ```
 
 ## Cleanup Old Data

@@ -17,7 +17,7 @@ type Config struct {
 // LoadConfig reads environment variables and returns a validated Config.
 func LoadConfig() Config {
 	cfg := Config{
-		Port:                 3022,
+		Port:                 3003,
 		CompleteThreshold:    95,
 		HistorySampleSeconds: 30,
 		HistoryRetentionDays: 365,
