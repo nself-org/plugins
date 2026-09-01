@@ -34,7 +34,7 @@
     "np_cloud_team_memberships"
   ],
   "status": "planned",
-  "tier": "max",
+  "tier": "free",
   "language": "go",
   "entryPoint": "nself-cloud",
   "entry": "main.go",

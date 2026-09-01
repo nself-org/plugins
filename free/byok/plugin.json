@@ -131,7 +131,7 @@
   ],
   "min_memory_mb": 64,
   "systemd_after": "network.target",
-  "tier": "max",
+  "tier": "free",
   "routes": [
     {
       "method": "GET",

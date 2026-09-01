@@ -95,7 +95,7 @@
   },
   "port": 3214,
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "entryPoint": "binary",
   "routes": [

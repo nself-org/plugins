@@ -14,7 +14,7 @@
   "minNselfVersion": "1.0.0",
   "category": "commerce",
   "language": "go",
-  "tier": "pro",
+  "tier": "free",
   "tags": [
     "payments",
     "stripe",

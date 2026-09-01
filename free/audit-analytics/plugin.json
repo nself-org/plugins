@@ -89,7 +89,7 @@
   },
   "port": 3218,
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "entryPoint": "binary",
   "binary_name": "audit-analytics",

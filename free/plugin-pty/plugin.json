@@ -6,7 +6,7 @@
   "author": "nself-org",
   "license": "MIT",
   "licenseType": "free",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "minNselfVersion": "1.1.1",
   "isCommercial": false,

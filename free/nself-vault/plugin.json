@@ -3,7 +3,7 @@
   "author": "nSelf Team",
   "displayName": "Per-Row Encryption (Vault)",
   "version": "1.0.0",
-  "tier": "pro",
+  "tier": "free",
   "category": "security",
   "minNselfVersion": "1.0.0",
   "bundle": [

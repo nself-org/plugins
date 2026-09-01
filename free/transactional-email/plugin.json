@@ -27,7 +27,7 @@
   "entryPoint": "binary",
   "entry": "cmd/main.go",
   "status": "planned",
-  "tier": "pro",
+  "tier": "free",
   "bundle": [
     "shared"
   ],

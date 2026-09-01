@@ -83,7 +83,7 @@
   ],
   "min_memory_mb": 64,
   "systemd_after": "network.target",
-  "tier": "pro",
+  "tier": "free",
   "routes": [
     {
       "method": "GET",

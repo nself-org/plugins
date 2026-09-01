@@ -245,7 +245,7 @@
       "auth": "bearer"
     }
   ],
-  "tier": "max",
+  "tier": "free",
   "dependencies": {
     "required": [],
     "optional": []

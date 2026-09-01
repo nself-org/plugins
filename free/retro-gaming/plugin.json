@@ -239,7 +239,7 @@
     }
   ],
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "routes": [
     {
       "method": "GET",

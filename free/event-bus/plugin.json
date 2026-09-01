@@ -14,7 +14,7 @@
   "minNselfVersion": "1.0.0",
   "category": "infrastructure",
   "language": "go",
-  "tier": "pro",
+  "tier": "free",
   "tags": [
     "events",
     "pubsub",
