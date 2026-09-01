@@ -51,9 +51,18 @@ jobs:
           fi
 
           # Env vars
+          #
+          # This repo's env contract lives in each plugin's plugin.json, which is
+          # where 118 of the plugins declare it. The three paths this rule used to
+          # accept are all unreachable here: .claude/ is gitignored in this repo so
+          # it can never appear in a diff, and cli/.wiki/ and web/docs/ belong to
+          # other repositories. That made the rule impossible to satisfy rather
+          # than merely strict, so every env-touching change failed doc-sync with
+          # no action available to the author. Accept plugin.json, which is the
+          # inventory that actually exists.
           if matches '(^|/)\.env\.example$|^cli/internal/env/'; then
-            if ! matches '(\.claude/docs/sport/F09-ENV-VAR-INVENTORY\.md|cli/\.wiki/reference/env-vars\.md|web/docs/content/reference/env-vars)'; then
-              rows="${rows}- env vars changed without F09-ENV-VAR-INVENTORY.md or env-vars reference update\n"
+            if ! matches '(\.claude/docs/sport/F09-ENV-VAR-INVENTORY\.md|cli/\.wiki/reference/env-vars\.md|web/docs/content/reference/env-vars|(^|/)plugin\.json$)'; then
+              rows="${rows}- env vars changed without a plugin.json or env-vars reference update\n"
               missing=1
             fi
           fi
