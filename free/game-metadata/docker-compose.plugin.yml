@@ -1,0 +1,23 @@
+services:
+  game-metadata:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/game-metadata
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_game_metadata
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3123:3123"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: "3123"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3123/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

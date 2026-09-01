@@ -1,0 +1,68 @@
+{
+  "name": "@nself/plugin-file-processing",
+  "version": "1.0.0",
+  "description": "File processing plugin for nself with thumbnails, optimization, and virus scanning",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "nself-file-processing": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "worker": "node dist/worker.js",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-force-exit --import tsx/esm tests/*.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.485.0",
+    "@aws-sdk/lib-storage": "^3.485.0",
+    "@azure/storage-blob": "^12.17.0",
+    "@fastify/cors": "^8.4.0",
+    "@fastify/multipart": "^8.0.0",
+    "@google-cloud/storage": "^7.7.0",
+    "@nself/plugin-utils": "file:../../../shared",
+    "bullmq": "^5.0.0",
+    "clamscan": "^2.1.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "exifreader": "^4.18.0",
+    "fastify": "^4.24.0",
+    "file-type": "^19.0.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "ioredis": "^5.3.2",
+    "pg": "^8.11.3",
+    "sharp": "^0.33.1"
+  },
+  "devDependencies": {
+    "@types/clamscan": "^2.4.1",
+    "@types/fluent-ffmpeg": "^2.1.24",
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.6.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": ">=5.7.0",
+      "file-type": ">=21.3.1",
+      "@xmldom/xmldom": ">=0.9.10",
+      "@tootallnate/once": ">=2.0.1",
+      "uuid": ">=11.1.1",
+      "esbuild": ">=0.28.1",
+      "form-data": ">=2.5.6",
+      "exifreader": ">=4.40.1",
+      "fast-uri": ">=3.1.5",
+      "sharp": ">=0.35.0",
+      "find-my-way": ">=9.7.0"
+    }
+  }
+}

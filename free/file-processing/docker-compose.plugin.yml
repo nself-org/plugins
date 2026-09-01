@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  file-processing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nself/nself-file-processing:latest
+    ports:
+      - "3089:3089"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=3089
+      - FILE_STORAGE_BUCKET=${FILE_STORAGE_BUCKET:-files}
+      - FILE_STORAGE_PROVIDER=${FILE_STORAGE_PROVIDER:-minio}
+      - FILE_STORAGE_ENDPOINT=${FILE_STORAGE_ENDPOINT:-}
+      - FILE_STORAGE_ACCESS_KEY=${FILE_STORAGE_ACCESS_KEY:-}
+      - FILE_STORAGE_SECRET_KEY=${FILE_STORAGE_SECRET_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3089/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

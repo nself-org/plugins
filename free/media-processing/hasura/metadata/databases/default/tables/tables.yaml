@@ -1,0 +1,9 @@
+- "!include np_mediap_encoding_profiles
+np_mediap_jobs
+np_mediap_job_outputs
+np_mediap_hls_manifests
+np_mediap_subtitles
+np_mediap_trickplay
+np_mediap_webhook_events
+np_mediap_watcher_events
+np_mediap_uploads.yaml"
