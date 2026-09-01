@@ -109,7 +109,7 @@
   ],
   "min_memory_mb": 64,
   "systemd_after": "network.target postgresql.service",
-  "tier": "max",
+  "tier": "free",
   "feature_flag": "multi_tenant_controller",
   "feature_flag_env_override": "NSELF_FLAG_MULTI_TENANT_CONTROLLER",
   "routes": [

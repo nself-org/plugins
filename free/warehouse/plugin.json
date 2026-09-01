@@ -15,7 +15,7 @@
   "port": 8210,
   "category": "infrastructure",
   "language": "go",
-  "tier": "pro",
+  "tier": "free",
   "tags": [
     "warehouse",
     "bigquery",

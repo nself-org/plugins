@@ -58,7 +58,7 @@
   "health": "/health",
   "author": "nself-org",
   "license": "MIT",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "minNselfVersion": "1.0.0",
   "dependencies": {

@@ -8,7 +8,7 @@
   "bundle": "shared",
   "visibility": "public",
   "status": "planned",
-  "tier": "pro",
+  "tier": "free",
   "port": 3851,
   "service_type": "custom_service",
   "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",

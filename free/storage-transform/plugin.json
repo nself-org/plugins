@@ -72,7 +72,7 @@
   ],
   "min_memory_mb": 128,
   "systemd_after": "network.target redis.service",
-  "tier": "pro",
+  "tier": "free",
   "nginx": {
     "template": "nginx/storage-transform.conf.tmpl",
     "cache_zone": "storage_img_cache",

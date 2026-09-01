@@ -46,7 +46,7 @@
     "postSync": null
   },
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "dependencies": {
     "required": [],
     "optional": []

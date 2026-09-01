@@ -136,7 +136,7 @@
     "nominatimRps": 1
   },
   "status": "planned",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "entry": "cmd/main.go",
   "dependencies": {

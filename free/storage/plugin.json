@@ -14,7 +14,7 @@
   "minNselfVersion": "1.1.0",
   "port": 9007,
   "category": "infrastructure",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "tags": [
     "storage",

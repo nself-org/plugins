@@ -113,7 +113,7 @@
   ],
   "min_memory_mb": 128,
   "systemd_after": "network.target",
-  "tier": "pro",
+  "tier": "free",
   "service_type": "custom_service",
   "entryPoint": "binary",
   "nginx_locations": [

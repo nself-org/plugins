@@ -16,7 +16,7 @@
   "entryPoint": "binary",
   "entry": "main.go",
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "category": "development",
   "port": 3770,
   "tags": [

@@ -99,7 +99,7 @@
   "language": "go",
   "entryPoint": "binary",
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "routes": [
     {
       "method": "GET",

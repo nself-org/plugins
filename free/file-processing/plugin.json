@@ -95,7 +95,7 @@
     ]
   },
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "language": "rust",
   "entryPoint": "binary",
   "routes": [

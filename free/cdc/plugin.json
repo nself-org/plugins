@@ -15,7 +15,7 @@
   "port": 8209,
   "category": "infrastructure",
   "language": "go",
-  "tier": "pro",
+  "tier": "free",
   "tags": [
     "cdc",
     "postgres",

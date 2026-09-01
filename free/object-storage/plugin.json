@@ -111,7 +111,7 @@
     ]
   },
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "routes": [
     {

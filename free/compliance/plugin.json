@@ -173,7 +173,7 @@
   },
   "port": 3211,
   "status": "stable",
-  "tier": "pro",
+  "tier": "free",
   "language": "go",
   "entryPoint": "binary",
   "routes": [
