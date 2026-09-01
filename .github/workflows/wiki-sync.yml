@@ -12,6 +12,11 @@ on:
 permissions:
   contents: write
 
+
+concurrency:
+  group: wiki-sync-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   sync-wiki:
     runs-on: ubuntu-latest

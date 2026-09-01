@@ -7,8 +7,18 @@ name: License Gate
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   release:
     types: [created]
   workflow_dispatch:

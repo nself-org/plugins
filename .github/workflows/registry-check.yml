@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+
+concurrency:
+  group: registry-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   registry-consistency:
     name: Registry Consistency Gate

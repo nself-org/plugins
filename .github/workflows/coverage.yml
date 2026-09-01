@@ -6,8 +6,18 @@ name: Coverage Gate (free plugins)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
 
 env:
   # Initial floor calibrated to current ecosystem coverage (S88b.T05 — introduced 2026-04-21).

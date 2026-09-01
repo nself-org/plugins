@@ -23,6 +23,11 @@ permissions:
   contents: write
   pull-requests: write
 
+
+concurrency:
+  group: quarterly-doc-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   audit:
     runs-on: ubuntu-latest

@@ -3,8 +3,18 @@ name: Validate Plugins
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   push:
     branches: [main, develop]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/wiki/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
