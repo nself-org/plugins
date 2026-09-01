@@ -28,7 +28,12 @@ build/
 
 # Logs
 *.log
-logs/
+# Anchored to repo root — an unanchored `logs/` matched at any depth and
+# silently untracked a real Go package (free/functions-v8/go/internal/logs/),
+# which broke `go build`/go-licenses in CI with "no required module provides
+# package .../internal/logs" once the file was gitignored out of the repo.
+# Same class of bug as the /cache/ fix below.
+/logs/
 
 # Cache & temp
 # Anchored to repo root — an unanchored `cache/` matched at any depth and

@@ -40,12 +40,28 @@ jobs:
           echo "=== License Gate: plugins/ ==="
           ALLOWED="MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0,Unlicense,CC0-1.0,LGPL-2.1,LGPL-3.0"
 
+          # Per-module license-check ignores (path prefixes go-licenses should not
+          # try to classify itself — their transitive deps are still checked).
+          # Each entry here is a genuinely-permissive license go-licenses cannot
+          # recognize automatically; verify the LICENSE file before adding one.
+          #
+          # github.com/segmentio/asm — pulled in transitively by free/warehouse/go
+          # via github.com/apache/arrow-go/v18. Verified 2026-09-01 by reading
+          # the module's LICENSE file directly (v1.2.1, module cache): full text
+          # is "MIT No Attribution" (SPDX: MIT-0) — a permissive variant of MIT
+          # that drops the attribution clause, so it is even less restrictive
+          # than plain MIT. go-licenses' classifier does not recognize the
+          # MIT-0 wording and reports it as unknown/forbidden. See
+          # https://github.com/segmentio/asm/blob/master/LICENSE and
+          # https://spdx.org/licenses/MIT-0.html.
+          IGNORE_ARGS="--ignore github.com/nself-org --ignore github.com/segmentio/asm"
+
           # Check each Go plugin that has a go.mod
           FAILED=0
           for gomod in $(find . -name go.mod -not -path '*/vendor/*' | sort); do
             dir=$(dirname "$gomod")
             echo "Checking: $dir"
-            if ! (cd "$dir" && go-licenses check ./... --allowed_licenses="$ALLOWED" --ignore github.com/nself-org 2>&1); then
+            if ! (cd "$dir" && go-licenses check ./... --allowed_licenses="$ALLOWED" $IGNORE_ARGS 2>&1); then
               echo "FAIL: Disallowed license in $dir"
               FAILED=1
             fi
