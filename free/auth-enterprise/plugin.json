@@ -146,7 +146,7 @@
     "Recovery codes are bcrypt-hashed (cost 10); raw codes are never stored.",
     "SSO client_secret values in np_sso_providers.metadata should be encrypted by the application before persistence.",
     "SAML response signature verification uses structural XML checks only; integrate crewjam/saml for full XMLDSig in production.",
-    "MFA is free for all users per the Security-Always-Free doctrine; SSO is gated by NSELF_SSO=true and a \u0273Self+ license."
+    "MFA is free for all users per the Security-Always-Free doctrine; SSO is gated by NSELF_SSO=true and a ɳSelf+ license."
   ],
   "routes": [
     {

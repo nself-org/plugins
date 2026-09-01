@@ -1600,7 +1600,7 @@
     },
     "sentry-cli": {
       "version": "1.0.0",
-      "description": "\u0273Sentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
+      "description": "ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -1632,11 +1632,11 @@
       "cliCommands": [
         {
           "name": "sentry",
-          "description": "Manage \u0273Sentry monitors, incidents, status pages and alerts"
+          "description": "Manage ɳSentry monitors, incidents, status pages and alerts"
         },
         {
           "name": "sentry-server",
-          "description": "Provision and manage a self-hosted \u0273Sentry server"
+          "description": "Provision and manage a self-hosted ɳSentry server"
         }
       ]
     },
@@ -2155,7 +2155,7 @@
     },
     "audit-analytics": {
       "version": "1.0.0",
-      "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts. \u0273Self+ required. Free tier retains full audit capture and basic search.",
+      "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts. ɳSelf+ required. Free tier retains full audit capture and basic search.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
@@ -2681,7 +2681,7 @@
     },
     "hipaa": {
       "version": "1.1.2",
-      "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow. Requires \u0273Self+ license.",
+      "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow. Requires ɳSelf+ license.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
@@ -2708,7 +2708,7 @@
     },
     "home": {
       "version": "1.1.2",
-      "description": "Home automation bridge. Connects Home Assistant and MQTT to \u0273Self, enabling smart device control, state monitoring, scene activation, and command logging.",
+      "description": "Home automation bridge. Connects Home Assistant and MQTT to ɳSelf, enabling smart device control, state monitoring, scene activation, and command logging.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
@@ -2855,7 +2855,7 @@
     },
     "nself-cloud": {
       "version": "0.1.0",
-      "description": "Internal \u0273Cloud managed hosting infrastructure plugin \u2014 provisions isolated nSelf instances for Cloud customers",
+      "description": "Internal ɳCloud managed hosting infrastructure plugin \u2014 provisions isolated nSelf instances for Cloud customers",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -3148,7 +3148,7 @@
     },
     "pentest": {
       "version": "1.1.2",
-      "description": "Penetration-test readiness kit. Generates structured scope documents, provisions pentest credentials, tracks findings, and manages remediation. \u0273Self+ tier.",
+      "description": "Penetration-test readiness kit. Generates structured scope documents, provisions pentest credentials, tracks findings, and manages remediation. ɳSelf+ tier.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
@@ -3267,7 +3267,7 @@
     },
     "plugin-retrieval": {
       "version": "0.1.0",
-      "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for \u0273Claw memory and nself-ai-mcp search/recall tools.",
+      "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for ɳClaw memory and nself-ai-mcp search/recall tools.",
       "category": "data",
       "tier": "free",
       "license": "MIT",
@@ -3367,7 +3367,7 @@
     },
     "siem": {
       "version": "1.1.2",
-      "description": "Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization. \u0273Self+ required for external destinations.",
+      "description": "Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization. ɳSelf+ required for external destinations.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",

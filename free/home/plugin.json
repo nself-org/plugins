@@ -2,7 +2,7 @@
   "name": "home",
   "version": "1.1.2",
   "api_version": "1.0.0",
-  "description": "Home automation bridge. Connects Home Assistant and MQTT to \u0273Self, enabling smart device control, state monitoring, scene activation, and command logging.",
+  "description": "Home automation bridge. Connects Home Assistant and MQTT to ɳSelf, enabling smart device control, state monitoring, scene activation, and command logging.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,
