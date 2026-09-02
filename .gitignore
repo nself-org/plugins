@@ -120,3 +120,9 @@ NEEDED3.md
 # Build tool artifacts (Mega P1 T-E3-03 hardening)
 .turbo/
 *.tsbuildinfo
+
+# Generated Files & Secret Safety (P6-E11-W2-S2-T13) -- PPI hard rule
+backend/docker-compose.yml
+backend/docker-compose.override.yml
+*.generated.env
+**/*.gen.yml
