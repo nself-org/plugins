@@ -68,7 +68,36 @@ func GetScheduleStatus() ScheduleStatus {
 	}
 }
 
+// resolveSchedulerHome returns the home directory the scheduled unit should run
+// with. The timer is installed as root and runs as root, so root's home is what
+// makes the unit's plugin lookup match the one the installing user just used.
+// os.UserHomeDir reads $HOME, which is set for the interactive install, and we
+// fall back to /root rather than failing, because an empty HOME in the unit is
+// the exact breakage this exists to prevent.
+func resolveSchedulerHome() (string, error) {
+	if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+		return home, nil
+	}
+	return "/root", nil
+}
+
 // ── Linux / systemd ───────────────────────────────────────────────────────────
+
+// systemdServiceUnit renders the disk-cleanup service unit. Split out from
+// installSystemdTimer, which writes to /etc and shells out to systemctl, so the
+// contents of the unit can actually be asserted in a test.
+func systemdServiceUnit(home, nself string) string {
+	return fmt.Sprintf(`[Unit]
+Description=nSelf daily disk cleanup
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+Environment=HOME=%s
+ExecStart=%s maintenance disk-cleanup
+`, home, nself)
+}
 
 func installSystemdTimer() error {
 	nself, err := resolveNselfBinary()
@@ -76,15 +105,19 @@ func installSystemdTimer() error {
 		return err
 	}
 
-	service := fmt.Sprintf(`[Unit]
-Description=nSelf daily disk cleanup
-After=docker.service
-Wants=docker.service
+	// systemd starts a unit with an almost empty environment: no HOME unless
+	// the unit sets one. nself resolves its plugins under $HOME/.nself/plugins,
+	// so without this the timer fires every night, fails to find the very
+	// plugin that provides disk-cleanup, and exits 1. Nothing surfaces that:
+	// the unit just sits in failed state until someone looks, by which point
+	// the disk it was supposed to be cleaning is full. That is not
+	// hypothetical, it is how the nSelf CI host reached 100% on 2026-09-02.
+	home, err := resolveSchedulerHome()
+	if err != nil {
+		return err
+	}
 
-[Service]
-Type=oneshot
-ExecStart=%s maintenance disk-cleanup
-`, nself)
+	service := systemdServiceUnit(home, nself)
 
 	timer := `[Unit]
 Description=nSelf daily disk cleanup timer
