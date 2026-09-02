@@ -27,6 +27,13 @@ Subcommands:
 	SilenceUsage: true,
 }
 
+// buildCaches is opt-in on purpose. On a workstation these caches are the
+// difference between a fast build and a slow one; on a CI host they are
+// usually the largest thing on the disk and the standard steps do not touch
+// them (2026-09-02: standard cleanup freed ~1 GB on a host whose build caches
+// held ~15 GB, after it had already hit 100%).
+var buildCaches bool
+
 // ── disk-cleanup ──────────────────────────────────────────────────────────────
 
 var maintenanceDiskCleanupCmd = &cobra.Command{
@@ -43,7 +50,13 @@ var maintenanceDiskCleanupCmd = &cobra.Command{
   3. journalctl --vacuum-time=7d
      Removes journal entries older than 7 days (Linux only; no-op on macOS).
 
-Disk usage is reported before and after the cleanup.`,
+Disk usage is reported before and after the cleanup.
+
+With --build-caches, additionally clears re-derivable build caches using each
+tool's own cleanup command (go clean -cache -modcache, pnpm store prune, npm
+cache clean, docker builder prune). Off by default: on a workstation those
+caches are what make builds fast. On a CI host they are usually the largest
+thing on the disk and none of the three steps above touch them.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ui.CommandHeader("nSelf Maintenance", "Disk cleanup")
 
@@ -85,8 +98,23 @@ Disk usage is reported before and after the cleanup.`,
 			}
 		}
 
-		ui.Section("After cleanup")
 		after := result.After
+		if buildCaches {
+			ui.Section("Clearing build caches")
+			bc := maintenance.CleanBuildCaches()
+			if len(bc.Ran) > 0 {
+				ui.Info(fmt.Sprintf("Cleared: %s", strings.Join(bc.Ran, ", ")))
+			}
+			if len(bc.Skipped) > 0 {
+				ui.Dimmed(fmt.Sprintf("  Not installed, skipped: %s", strings.Join(bc.Skipped, ", ")))
+			}
+			for _, e := range bc.Errors {
+				ui.Warn(fmt.Sprintf("  %v", e))
+			}
+			after = bc.After
+		}
+
+		ui.Section("After cleanup")
 		printDiskUsage(after)
 
 		freed := result.Before.UsedGB - after.UsedGB
@@ -219,6 +247,8 @@ func init() {
 	maintenanceScheduleCmd.Flags().BoolVar(&maintenanceScheduleDaily, "daily", false, "Install daily cleanup timer at 03:00 local time")
 	maintenanceScheduleCmd.Flags().BoolVar(&maintenanceScheduleOff, "off", false, "Remove the daily cleanup timer")
 
+	maintenanceDiskCleanupCmd.Flags().BoolVar(&buildCaches, "build-caches", false,
+		"Also clear re-derivable build caches (go, pnpm, npm, docker builder). Off by default: on a workstation these make builds fast; on a CI host they are usually the largest consumer.")
 	maintenanceCmd.AddCommand(maintenanceDiskCleanupCmd)
 	maintenanceCmd.AddCommand(maintenanceScheduleCmd)
 	maintenanceCmd.AddCommand(maintenanceStatusCmd)
