@@ -9,7 +9,7 @@
   "minNselfVersion": "1.0.0",
   "runtime": "go",
   "language": "go",
-  "port": 3022,
+  "port": 3003,
   "category": "media",
   "tags": [
     "media",

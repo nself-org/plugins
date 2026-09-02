@@ -14,8 +14,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	t.Setenv("PROGRESS_HISTORY_RETENTION_DAYS", "")
 
 	cfg := LoadConfig()
-	if cfg.Port != 3022 {
-		t.Errorf("default Port = %d, want 3022", cfg.Port)
+	if cfg.Port != 3003 {
+		t.Errorf("default Port = %d, want 3003", cfg.Port)
 	}
 	if cfg.CompleteThreshold != 95 {
 		t.Errorf("default CompleteThreshold = %d, want 95", cfg.CompleteThreshold)
