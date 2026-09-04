@@ -12,10 +12,14 @@
     "kv:create": "wrangler kv:namespace create PLUGINS_KV",
     "kv:list": "wrangler kv:namespace list",
     "secret:sync-token": "wrangler secret put GITHUB_SYNC_TOKEN",
-    "whoami": "wrangler whoami"
+    "whoami": "wrangler whoami",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/*.test.mjs"
   },
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^3.0.0",
+    "typescript": "^5.9.0",
+    "@cloudflare/workers-types": "^4.20250101.0"
   },
   "keywords": [
     "nself",
