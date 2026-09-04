@@ -287,6 +287,15 @@ _in_list() {
     return 1
 }
 
+_is_valid_sha256() {
+    local v="$1"
+    [ "${#v}" -eq 64 ] || return 1
+    case "$v" in
+        *[!0-9a-f]*) return 1 ;;
+    esac
+    return 0
+}
+
 # ---------------------------------------------------------------------------
 # Iterators — produce uniform stream of fields separated by ASCII Unit
 # Separator (0x1f). Tabs collapse consecutive empties under bash `read`
@@ -853,6 +862,88 @@ EOF
     fi
 else
     warn "CHECK-14" "registry" "python3 not available — skipping duplicate table-prefix check"
+fi
+
+# =============================================================================
+# CHECK 15 — checksum integrity (added P6, registry-flat-checksum-field fix)
+#
+# nself-org/cli's installer only ever reads the FLAT `checksum` field
+# (internal/plugin/registry_parse.go pluginEntry.Checksum, json:"checksum")
+# and its installer_locked.go verifyChecksum() hard-refuses installing a
+# status=stable plugin with no checksum. The nested `checksums.sha256` field
+# that build-and-upload-tarballs.sh also writes is NOT consumed by any known
+# CLI code path (confirmed via `git grep checksums origin/main -- internal`
+# on nself-org/cli returning no registry-entry consumer). So:
+#   - a stable plugin missing a non-empty flat checksum is an ERROR
+#   - a non-empty checksum must be 64 lowercase hex chars
+#   - when both checksum and checksums.sha256 are non-empty they must agree
+#     (a "sha256:" prefix on the legacy nested field is tolerated/stripped
+#     before comparing, since some historical writes included it)
+# =============================================================================
+section "CHECK 15 — checksum integrity (flat field required for status=stable)"
+CHECKSUM_VIOLATIONS=0
+CHECKSUM_USV="${TMPDIR_VAL}/checksum.usv"
+case "$REGISTRY_FORMAT" in
+    aggregated)
+        "$JQ" -r '
+            .plugins
+            | to_entries[]
+            | [
+                .key,
+                (.value.status // ""),
+                (.value.checksum // ""),
+                (.value.checksums.sha256 // "")
+              ]
+            | join("'"$US"'")
+        ' "$REGISTRY_FILE" > "$CHECKSUM_USV"
+        ;;
+    array)
+        "$JQ" -r '
+            .[]
+            | [
+                (.name // ""),
+                (.status // ""),
+                (.checksum // ""),
+                (.checksums.sha256 // "")
+              ]
+            | join("'"$US"'")
+        ' "$REGISTRY_FILE" > "$CHECKSUM_USV"
+        ;;
+    array-wrapped)
+        "$JQ" -r '
+            .plugins[]
+            | [
+                (.name // ""),
+                (.status // ""),
+                (.checksum // ""),
+                (.checksums.sha256 // "")
+              ]
+            | join("'"$US"'")
+        ' "$REGISTRY_FILE" > "$CHECKSUM_USV"
+        ;;
+esac
+while IFS="$US" read -r name status checksum checksums_sha; do
+    [ -z "$name" ] && continue
+    if [ "$status" = "stable" ] && [ -z "$checksum" ]; then
+        err "CHECK-15" "$name" "status=stable but flat 'checksum' field is missing/empty — cli's verifyChecksum() hard-refuses installing a stable plugin with no checksum (it reads .checksum, NOT .checksums.sha256)"
+        CHECKSUM_VIOLATIONS=$((CHECKSUM_VIOLATIONS + 1))
+    fi
+    if [ -n "$checksum" ] && ! _is_valid_sha256 "$checksum"; then
+        err "CHECK-15" "$name" "checksum '$checksum' is not a lowercase 64-char hex sha256"
+        CHECKSUM_VIOLATIONS=$((CHECKSUM_VIOLATIONS + 1))
+    fi
+    if [ -n "$checksum" ] && [ -n "$checksums_sha" ]; then
+        checksums_sha_norm="${checksums_sha#sha256:}"
+        checksum_lc="$(printf '%s' "$checksum" | tr 'A-F' 'a-f')"
+        checksums_sha_lc="$(printf '%s' "$checksums_sha_norm" | tr 'A-F' 'a-f')"
+        if [ "$checksum_lc" != "$checksums_sha_lc" ]; then
+            err "CHECK-15" "$name" "checksum ('$checksum') and checksums.sha256 ('$checksums_sha') disagree"
+            CHECKSUM_VIOLATIONS=$((CHECKSUM_VIOLATIONS + 1))
+        fi
+    fi
+done < "$CHECKSUM_USV"
+if [ "$CHECKSUM_VIOLATIONS" -eq 0 ]; then
+    ok "CHECK-15" "checksum fields present/consistent for all status=stable plugins"
 fi
 
 # =============================================================================

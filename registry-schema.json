@@ -58,6 +58,20 @@
     "plugin": {
       "type": "object",
       "required": ["version", "description"],
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "stable" } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["checksum"],
+            "properties": {
+              "checksum": { "type": "string", "minLength": 64 }
+            }
+          }
+        }
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -247,8 +261,14 @@
           },
           "description": "Multi-app isolation support configuration"
         },
+        "checksum": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{64})?$",
+          "description": "SHA-256 checksum of the plugin tarball, lowercase 64-char hex, no 'sha256:' prefix. Empty string means not yet computed (pre-existing placeholder, e.g. ollama). This is the FLAT field the CLI installer actually reads (nself-org/cli internal/plugin/registry_parse.go pluginEntry.Checksum, json:\"checksum\") and enforces in internal/plugin/installer_locked.go's verifyChecksum(). A non-empty value is REQUIRED when status is 'stable' (see the plugin-level conditional below) — a stable plugin with no checksum is refused at install time. Must match checksums.sha256 below when both are non-empty (shared/validate-registry.sh CHECK-15)."
+        },
         "checksums": {
           "type": "object",
+          "description": "Legacy/nested checksum record. NOT read by any known CLI code path (verified against nself-org/cli internal/, 2026-09) — kept for tooling that may still reference it and must stay equal to the flat `checksum` field above.",
           "properties": {
             "sha256": { "type": "string" }
           }
