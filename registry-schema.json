@@ -117,6 +117,10 @@
           "type": "boolean",
           "description": "Whether this plugin requires a paid license"
         },
+        "tier_pair": {
+          "type": "boolean",
+          "description": "True when this slug is intentionally served by both this free registry and the paid plugins-pro registry as a free/pro tier pair of the same product (e.g. cron, notify) rather than an accidental slug collision. Must be true on BOTH the free and paid registry entries for the slug — plugins-pro's scripts/check-bundles-registry-consistency.py cross-registry duplicate-slug check fails any slug present in both registries unless both sides carry this flag. Optional; absent means false."
+        },
         "language": {
           "type": "string",
           "description": "Implementation language (go, typescript, etc.)"
