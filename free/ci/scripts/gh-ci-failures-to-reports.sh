@@ -10,8 +10,19 @@
 # anything, which is the cost the bridge exists to remove. Only NEW reports pay for the
 # extra lookups; the seen-manifest means an unchanged failure is never re-fetched.
 #
+# Three guards keep old failures from resurfacing as new ones (2026-09-03 incident:
+# a May lint failure, fixed the next day, was reported in September):
+#   1. EVERY listed failed run is recorded in the seen-manifest, not only the one
+#      emitted per workflow. GitHub's status-filtered run listing is eventually
+#      consistent and occasionally omits the newest run; without this the next-older
+#      (never recorded) failure fell through the newest-per-workflow pick as "new".
+#   2. --max-age-days N (default 14, 0 disables): anything older is never reported.
+#   3. A failure whose workflow has a NEWER successful run is already resolved and
+#      is skipped (--no-superseded-check disables). One extra API call, paid only
+#      for candidates that passed the two cheaper guards.
+#
 # Usage: gh-ci-failures-to-reports.sh [--org nself-org] [--out DIR] [--per-repo N] [--repos "a b c"]
-#        [--log-lines N] [--no-logs]
+#        [--log-lines N] [--no-logs] [--max-age-days N] [--no-superseded-check]
 set -euo pipefail
 ORG="${GH_ORG:-nself-org}"
 OUT="${NSENTRY_REMOTE_DIR:-/opt/nself-ops/errors}"
@@ -19,13 +30,47 @@ PER=10
 REPOS=""
 LOG_LINES="${NSENTRY_LOG_LINES:-40}"
 WANT_LOGS=1
+MAX_AGE_DAYS="${NSENTRY_MAX_AGE_DAYS:-14}"
+CHECK_SUPERSEDED=1
 while [ $# -gt 0 ]; do case "$1" in
   --org) ORG="$2"; shift 2;; --out) OUT="$2"; shift 2;;
   --per-repo) PER="$2"; shift 2;; --repos) REPOS="$2"; shift 2;;
-  --log-lines) LOG_LINES="$2"; shift 2;; --no-logs) WANT_LOGS=0; shift;; *) shift;; esac; done
+  --log-lines) LOG_LINES="$2"; shift 2;; --no-logs) WANT_LOGS=0; shift;;
+  --max-age-days) MAX_AGE_DAYS="$2"; shift 2;; --no-superseded-check) CHECK_SUPERSEDED=0; shift;;
+  *) shift;; esac; done
 mkdir -p "$OUT"; SEEN="$OUT/.gh-seen"; touch "$SEEN"
 [ -n "$REPOS" ] || REPOS=$(gh repo list "$ORG" --no-archived --limit 100 --json name -q '.[].name')
 ts(){ date -u +%Y%m%d-%H%M%S; }
+
+# epoch_of — ISO-8601 UTC timestamp (as GitHub emits it) to epoch seconds.
+# GNU date first, BSD/macOS date second; 0 when neither parses it, which the
+# callers treat as "unknown, do not skip".
+epoch_of(){
+  date -u -d "$1" +%s 2>/dev/null \
+    || date -ju -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s 2>/dev/null \
+    || echo 0
+}
+
+# too_old — true when the run's createdAt is past the --max-age-days window.
+too_old(){
+  [ "${MAX_AGE_DAYS:-0}" -gt 0 ] || return 1
+  local e; e=$(epoch_of "$1")
+  [ "$e" -gt 0 ] || return 1
+  [ "$e" -lt $(( $(date -u +%s) - MAX_AGE_DAYS * 86400 )) ]
+}
+
+# superseded — true when the latest run of workflow $2 in repo $1 is newer than
+# the candidate's createdAt ($3) and concluded success. Any lookup failure means
+# "not superseded": reporting once too often beats silently dropping a failure.
+# Timestamps are ISO-8601 UTC, so a string compare orders them correctly.
+superseded(){
+  local latest concl when
+  latest=$(gh run list --repo "$ORG/$1" --workflow "$2" --limit 1 \
+    --json conclusion,createdAt -q '.[] | [.conclusion,.createdAt] | @tsv' 2>/dev/null || true)
+  [ -n "$latest" ] || return 1
+  IFS=$'\t' read -r concl when <<<"$latest"
+  [ "$concl" = "success" ] && [ "$when" \> "$3" ]
+}
 
 # yqs — quote an arbitrary string for a YAML double-quoted scalar. Log lines
 # routinely contain colons, quotes and backslashes; an unquoted one silently
@@ -54,14 +99,21 @@ first_error(){
 }
 
 for r in $REPOS; do
-  # one entry per workflow (latest failed run), so we don't spam per-run
+  # The full listing is kept: the newest-per-workflow pick below decides what is
+  # REPORTED, but every row is recorded as seen afterwards (guard 1 above).
+  listing=$(mktemp)
   gh run list --repo "$ORG/$r" --status failure --limit "$PER" \
     --json workflowName,headSha,displayTitle,url,createdAt,event,databaseId \
-    -q '.[] | [.workflowName,.headSha,.displayTitle,.url,.createdAt,.event,.databaseId] | @tsv' 2>/dev/null | \
-  awk -F'\t' '!seen[$1]++' | while IFS=$'\t' read -r wf sha title url created event runid; do
+    -q '.[] | [.workflowName,.headSha,.displayTitle,.url,.createdAt,.event,.databaseId] | @tsv' \
+    > "$listing" 2>/dev/null || : > "$listing"
+  # one entry per workflow (latest failed run), so we don't spam per-run
+  awk -F'\t' '!seen[$1]++' "$listing" | while IFS=$'\t' read -r wf sha title url created event runid; do
     [ -z "$wf" ] && continue
     key="ghci:$r:$wf:${sha:0:8}"
     grep -qxF "$key" "$SEEN" && continue
+    if too_old "$created"; then echo "SKIP $key (run $created older than ${MAX_AGE_DAYS}d)"; continue; fi
+    if [ "$CHECK_SUPERSEDED" = "1" ] && superseded "$r" "$wf" "$created"; then
+      echo "SKIP $key (a later run of \"$wf\" succeeded)"; continue; fi
     h=$(printf '%s' "$key" | md5sum 2>/dev/null | cut -c1-6 || printf '%s' "$key" | md5 | cut -c1-6)
     f="$OUT/$(ts)-$h-ci-$r.md"
 
@@ -134,5 +186,13 @@ for r in $REPOS; do
     [ -n "$logf" ] && rm -f "$logf"
     echo "$key" >> "$SEEN"; echo "WROTE $f"
   done
+  # Record every listed failure (reported, skipped, or shadowed by a newer one in
+  # the same workflow) so none of them can ever come back as "new".
+  while IFS=$'\t' read -r wf sha _; do
+    [ -n "$wf" ] || continue
+    key="ghci:$r:$wf:${sha:0:8}"
+    grep -qxF "$key" "$SEEN" || echo "$key" >> "$SEEN"
+  done < "$listing"
+  rm -f "$listing"
 done
-echo "gh-ci bridge done → $OUT (new reports listed above; deduped via .gh-seen)"
+echo "gh-ci bridge done → $OUT (new reports listed above; deduped via .gh-seen, max age ${MAX_AGE_DAYS}d)"
