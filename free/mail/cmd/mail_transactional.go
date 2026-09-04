@@ -7,8 +7,7 @@
 // --message-id, --json).
 //
 // Outputs: JSON or human-readable send/broadcast/status results; errors
-// via mapMailError (mail.go) or requireLicense (mail.go) when no license
-// key is configured.
+// via mapMailError (mail.go).
 //
 // Constraints: no dependency on the core CLI's internal/* packages.
 package main
@@ -67,9 +66,6 @@ must be set.`,
 		if err != nil {
 			return err
 		}
-		if client == nil {
-			return requireLicense(cmd)
-		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
@@ -127,9 +123,6 @@ var mailBroadcastCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if client == nil {
-			return requireLicense(cmd)
-		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
@@ -164,9 +157,6 @@ var mailStatusCmd = &cobra.Command{
 		client, err := resolveMailClient()
 		if err != nil {
 			return err
-		}
-		if client == nil {
-			return requireLicense(cmd)
 		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)

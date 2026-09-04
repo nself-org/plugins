@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"text/template"
 	"time"
@@ -639,32 +638,15 @@ During an outage, status updates are published to status.nself.org every 30 minu
 // SOC 2 HTTP handlers
 // -------------------------------------------------------------------------
 
-// checkSOC2License verifies the request carries a ɳSelf+ license.
-// In production this delegates to ping_api. Here we check the env flag.
-func checkSOC2License(r *http.Request) bool {
-	if os.Getenv("NSELF_COMPLIANCE_SOC2") == "true" {
-		return true
-	}
-	// Allow explicit header override for internal testing
-	return r.Header.Get("X-Nself-License-Tier") == "business" ||
-		r.Header.Get("X-Nself-License-Tier") == "enterprise"
-}
-
-func checkExportLicense(r *http.Request) bool {
-	if os.Getenv("NSELF_COMPLIANCE_EXPORT") == "true" {
-		return true
-	}
-	return r.Header.Get("X-Nself-License-Tier") == "business" ||
-		r.Header.Get("X-Nself-License-Tier") == "enterprise"
-}
+// SOC 2 handlers below were gated by checkSOC2License/checkExportLicense (an
+// NSELF_COMPLIANCE_SOC2 / NSELF_COMPLIANCE_EXPORT env-var check, 401 "license
+// required" otherwise) until 2026-09-03 (P6-E3-W2-S1-T5 FIX-PLUGINS). compliance
+// is a free plugin (plugin.json: requires_license=false, requiredEntitlements=[])
+// with no gated entitlement documented, so the gate was removed.
 
 // SOC2ControlsHandler GET /compliance/soc2/controls
 func SOC2ControlsHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkSOC2License(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required for SOC 2 dashboard")
-			return
-		}
 		controls := []SOC2Control{
 			{ID: "CC6", Name: "Logical and Physical Access Controls", Status: "implemented", EvidenceCount: 2},
 			{ID: "CC7", Name: "System Operations and Change Management", Status: "implemented", EvidenceCount: 1},
@@ -679,10 +661,6 @@ func SOC2ControlsHandler(db *DB) http.HandlerFunc {
 // CreateEvidencePackHandler POST /compliance/soc2/evidence
 func CreateEvidencePackHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkExportLicense(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required for evidence pack export")
-			return
-		}
 
 		var req EvidenceRequest
 		if err := decode(r, &req); err != nil {
@@ -723,10 +701,6 @@ func CreateEvidencePackHandler(db *DB) http.HandlerFunc {
 // ListChangeLogHandler GET /compliance/change-log
 func ListChangeLogHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkSOC2License(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required")
-			return
-		}
 		rows, err := db.Pool.Query(r.Context(), `
 			SELECT id, tenant_id, changed_by, change_type, description, ticket_ref, approved_by, applied_at, rollback_at, created_at
 			FROM np_change_log
@@ -760,10 +734,6 @@ func ListChangeLogHandler(db *DB) http.HandlerFunc {
 // CreateChangeLogHandler POST /compliance/change-log
 func CreateChangeLogHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkSOC2License(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required")
-			return
-		}
 		var req CreateChangeLogRequest
 		if err := decode(r, &req); err != nil {
 			errJSON(w, http.StatusBadRequest, "invalid request body")
@@ -795,10 +765,6 @@ func CreateChangeLogHandler(db *DB) http.HandlerFunc {
 // ListAccessReviewsHandler GET /compliance/access-reviews
 func ListAccessReviewsHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkSOC2License(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required")
-			return
-		}
 		rows, err := db.Pool.Query(r.Context(), `
 			SELECT id, tenant_id, reviewer_id, period_start, period_end, status, findings, completed_at, created_at, updated_at
 			FROM np_access_reviews
@@ -838,10 +804,6 @@ func ListAccessReviewsHandler(db *DB) http.HandlerFunc {
 // CreateAccessReviewHandler POST /compliance/access-reviews
 func CreateAccessReviewHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkSOC2License(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required")
-			return
-		}
 		var req CreateAccessReviewRequest
 		if err := decode(r, &req); err != nil {
 			errJSON(w, http.StatusBadRequest, "invalid request body")
@@ -869,10 +831,6 @@ func CreateAccessReviewHandler(db *DB) http.HandlerFunc {
 // PatchAccessReviewHandler PATCH /compliance/access-reviews/:id
 func PatchAccessReviewHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !checkSOC2License(r) {
-			errJSON(w, http.StatusUnauthorized, "ɳSelf+ license required")
-			return
-		}
 		id := chi.URLParam(r, "id")
 		var req PatchAccessReviewRequest
 		if err := decode(r, &req); err != nil {

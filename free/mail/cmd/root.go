@@ -7,14 +7,14 @@
 //
 // Inputs: os.Args, as passed through by the plugin router.
 //
-// Outputs: process exit code (0 success, 1 fail, 2 no-license-configured,
-// mirroring mailExitNoLicense in core).
+// Outputs: process exit code (0 success, 1 fail). mail is a free plugin —
+// the former 2/no-license-configured exit code was removed 2026-09-03
+// (P6-E3-W2-S1-T5 FIX-PLUGINS) along with mail.go's requireLicense.
 //
 // Constraints: no dependency on any github.com/nself-org/cli/internal/*
 // package — those are unreachable from outside the cli module. mail.go
-// depended on internal/license.CollectLicenseKeys, internal/plugin.
-// ExitCodeError, and internal/ui; all are reimplemented standalone in
-// internal/licensekeys, main.go's local exitCodeError, and internal/tui
+// depended on internal/license.CollectLicenseKeys and internal/ui; both are
+// reimplemented standalone in internal/licensekeys and internal/tui
 // respectively. The domain package internal/mail (the ping_api HTTP client)
 // moved wholesale, unchanged. SilenceUsage/SilenceErrors mirror core's
 // RootCmd (cmd/commands/root.go): without them cobra prints its own
@@ -32,8 +32,8 @@ var rootCmd = &cobra.Command{
 	Long: `Send transactional and broadcast email through the nSelf stack.
 
 The 'nself mail' command wraps the mux + Postmark plugins. ping_api proxies
-each call to the running stack, so the Postmark plugin must be installed
-and a valid license key must be configured.
+each call to the running stack; a license key is forwarded when configured
+but is not required.
 
 Subcommands:
   send         Send a single transactional email

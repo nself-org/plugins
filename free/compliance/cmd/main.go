@@ -63,7 +63,7 @@ func newRouter(db *internal.DB) http.Handler {
 		// Stats
 		r.Get("/stats", internal.StatsHandler(db))
 
-		// SOC 2 — requires ɳSelf+ license (NSELF_COMPLIANCE_SOC2=true)
+		// SOC 2
 		r.Get("/compliance/soc2/controls", internal.SOC2ControlsHandler(db))
 		r.Post("/compliance/soc2/evidence", internal.CreateEvidencePackHandler(db))
 

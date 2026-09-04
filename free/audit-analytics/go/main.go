@@ -1,8 +1,9 @@
 // audit-analytics — advanced audit log analytics plugin for nSelf.
 // Provides anomaly detection (z-score over np_audit_log), user behaviour heatmaps,
 // privileged-action review queue, and webhook/email alerts.
-// ɳSelf+ license required (NSELF_AUDIT_ANALYTICS=true).
-// Real-time alerts (Enterprise) enabled via NSELF_AUDIT_ANALYTICS_REALTIME=true.
+// Free plugin (plugin.json: requires_license=false) — no license required to run.
+// Real-time alerts for MEDIUM/LOW anomalies are an opt-in behavior toggle via
+// NSELF_AUDIT_ANALYTICS_REALTIME=true (HIGH/CRITICAL always alert regardless).
 package main
 
 import (
@@ -27,9 +28,6 @@ import (
 )
 
 func main() {
-	if os.Getenv("NSELF_AUDIT_ANALYTICS") != "true" {
-		log.Fatal("audit-analytics: NSELF_AUDIT_ANALYTICS=true is required (ɳSelf+ license)")
-	}
 	if os.Getenv("AUDIT_ANALYTICS_SHARED_SECRET") == "" {
 		slog.Warn("audit-analytics: AUDIT_ANALYTICS_SHARED_SECRET not set — running in open-dev mode (all analytics endpoints unauthenticated)")
 	}

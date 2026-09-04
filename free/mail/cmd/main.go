@@ -2,17 +2,19 @@
 //
 // Inputs: os.Args via cobra's rootCmd.Execute().
 //
-// Outputs: process exit code — 0 on success, the code carried by an
-// *exitCodeError when RunE returns one (2 for "no license configured",
-// matching mailExitNoLicense in core), or 1 for any other error.
+// Outputs: process exit code — 0 on success, 1 on any RunE error.
 //
 // Constraints: this file is package main in its own Go module, so — unlike
 // the core CLI, where os.Exit is confined to cmd/nself/main.go — os.Exit here
 // is the only sane way to report the exit code to the parent nself process
 // that exec'd this binary (internal/plugin.ProxyCommand in the core CLI).
-// Mirrors cmd/nself/main.go's silent-error handling: requireLicense already
-// wrote its own message to cmd.ErrOrStderr(), so main() must not print
-// "Error: ..." again for that case.
+//
+// AMENDMENT 2026-09-03 (P6-E3-W2-S1-T5 FIX-PLUGINS): the local exitCodeError/
+// exitCoder machinery and its "no license configured" exit-2 path were
+// removed along with mail.go's requireLicense — mail is a free plugin
+// (plugin.json: requires_license=false) and no longer hard-blocks without a
+// license key. Any remaining ping_api-side auth error now surfaces as a
+// normal error via mapMailError, same as every other backend failure.
 package main
 
 import (
@@ -20,39 +22,9 @@ import (
 	"os"
 )
 
-// exitCoder is satisfied by *exitCodeError. Named locally (not imported)
-// because the core CLI's internal/errs.ExitCoder is unreachable across the
-// module boundary — this plugin defines its own minimal equivalent.
-type exitCoder interface {
-	ExitCode() int
-}
-
-// exitCodeError is the plugin's local equivalent of the core CLI's
-// internal/plugin.ExitCodeError: requireLicense (mail.go) returns one so
-// main() exits with code 2 without printing a duplicate message.
-type exitCodeError struct {
-	Code int
-}
-
-func (e *exitCodeError) Error() string { return fmt.Sprintf("exit code %d", e.Code) }
-func (e *exitCodeError) ExitCode() int { return e.Code }
-
 func main() {
-	err := rootCmd.Execute()
-	if err == nil {
-		return
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
 	}
-
-	code := 1
-	if coder, ok := err.(exitCoder); ok {
-		code = coder.ExitCode()
-		// A *exitCodeError means requireLicense already printed its own
-		// message; printing "Error: ..." again would duplicate it.
-		if _, silent := err.(*exitCodeError); silent {
-			os.Exit(code)
-		}
-	}
-
-	fmt.Fprintln(os.Stderr, "Error:", err)
-	os.Exit(code)
 }

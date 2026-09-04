@@ -1,11 +1,10 @@
 # NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
 services:
-  search:
+  audit-log:
     build:
       context: ${NSELF_PLUGIN_DIR}/../..
-      dockerfile: free/search/Dockerfile
-    # image: nself/nself-search:latest  # optional override once published; build: is the default so `nself plugin install` works with no registry pull
-    container_name: ${COMPOSE_PROJECT_NAME}_search
+      dockerfile: free/audit-log/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_audit_log
     restart: unless-stopped
     networks:
       - ${DOCKER_NETWORK}
@@ -14,12 +13,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      PORT: "3302"
+      PORT: "3308"
       PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-}
     ports:
-      - "127.0.0.1:3302:3302"
+      - "127.0.0.1:3308:3308"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3302/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3308/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -27,8 +27,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${PLUGIN_SEARCH_MEMORY:-256m}
-          cpus: '${PLUGIN_SEARCH_CPU:-0.5}'
+          memory: ${PLUGIN_AUDIT_LOG_MEMORY:-256m}
+          cpus: '${PLUGIN_AUDIT_LOG_CPU:-0.5}'
     logging:
       driver: json-file
       options:

@@ -2,7 +2,6 @@
 
 **Port:** 3212 (⚠️ conflicts with `admin-api` plugin — see Port Conflict below)
 **Bundle:** Unbundled (standalone, free, no license required)
-**License flag:** `NSELF_HIPAA=true`
 
 The HIPAA plugin provides Health Insurance Portability and Accountability Act (HIPAA) compliance tooling for nSelf deployments handling Protected Health Information (PHI). It includes three core capabilities: a PHI column registry, a PHI access audit log with 6-year retention enforcement, and de-identification/tokenization of PHI data.
 
@@ -51,9 +50,9 @@ Safe Harbor masking by category:
 - **address** → `123 [STREET MASKED]`
 - **mrn** → leading chars masked, last 4 preserved
 
-### BAA Record Management (Enterprise)
+### BAA Record Management
 
-Business Associate Agreement tracking (requires `NSELF_HIPAA_BAA=true`):
+Business Associate Agreement tracking:
 
 ```http
 GET  /hipaa/baa
@@ -79,8 +78,8 @@ nself plugin list | grep hipaa
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | Postgres connection string |
-| `NSELF_HIPAA` | Yes | `false` | Enable PHI registry + audit log + de-id endpoints |
-| `NSELF_HIPAA_BAA` | No | `false` | Enable BAA management endpoints |
+| `NSELF_HIPAA` | No | — | Unused; reserved for future entitlement checks (all endpoints are always enabled — free plugin) |
+| `NSELF_HIPAA_BAA` | No | — | Unused; reserved for future entitlement checks (BAA endpoints are always enabled — free plugin) |
 | `HIPAA_PLUGIN_PORT` | No | `3212` | HTTP listen port |
 | `HIPAA_PLUGIN_HOST` | No | `0.0.0.0` | HTTP listen host |
 | `HIPAA_API_KEY` | No | — | Shared secret for X-HIPAA-API-Key header auth |

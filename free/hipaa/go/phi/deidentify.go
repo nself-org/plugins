@@ -136,7 +136,7 @@ func DeidentifyHandler(pool *pgxpool.Pool) http.HandlerFunc {
 // TokenizeHandler tokenizes a single PHI value.
 func TokenizeHandler(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_ = pool // future: check license gate via pool
+		_ = pool // reserved for a future persistent token store; hipaa is a free plugin, no license gate here
 		var req struct {
 			Value string `json:"value"`
 		}

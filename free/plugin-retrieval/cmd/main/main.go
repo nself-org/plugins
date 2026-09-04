@@ -3,7 +3,9 @@
 // Inputs: NSELF_DB_URL env var.
 // Outputs: HTTP JSON responses.
 // Constraints:
-//   - NSELF_LICENSE_KEY must be set (license gate).
+//   - plugin-retrieval is a free plugin (plugin.json: requires_license=false)
+//     — the former NSELF_LICENSE_KEY-required gate was removed 2026-09-03
+//     (P6-E3-W2-S1-T5 FIX-PLUGINS).
 //   - SSRF N/A: all DB queries are local Postgres only.
 package main
 
@@ -24,11 +26,6 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("NSELF_DB_URL is required")
 	}
-	licenseKey := os.Getenv("NSELF_LICENSE_KEY")
-	if licenseKey == "" {
-		log.Fatal("NSELF_LICENSE_KEY is required (pro license)")
-	}
-
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("open db: %v", err)

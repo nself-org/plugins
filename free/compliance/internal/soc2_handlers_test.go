@@ -1,7 +1,14 @@
 // Purpose: DB-backed handler tests for SOC 2 controls, change-log, and access-review endpoints.
 // Inputs: httptest requests routed through handler-factory HandlerFuncs with a mocked pgx pool.
-// Outputs: asserts HTTP status codes, JSON response bodies, license-gate behavior, and SQL expectations met.
+// Outputs: asserts HTTP status codes, JSON response bodies, and SQL expectations met.
 // Constraints: No real Postgres; pgxmock.PgxPoolIface satisfies internal.PgxIface.
+//
+// AMENDMENT 2026-09-03 (P6-E3-W2-S1-T5 FIX-PLUGINS): the "_Unlicensed" cases
+// (asserting 401 with no X-Nself-License-Tier header) were removed along
+// with soc2.go's checkSOC2License/checkExportLicense gate — compliance is a
+// free plugin with no gated entitlement documented in plugin.json, so the
+// gate no longer exists to test. licensedReq keeps its name/signature to
+// avoid touching every call site; the header it sets is now a harmless no-op.
 package internal
 
 import (
@@ -20,7 +27,6 @@ func licensedReq(method, url, body string) *http.Request {
 	} else {
 		r = httptest.NewRequest(method, url, nil)
 	}
-	r.Header.Set("X-Nself-License-Tier", "business")
 	return r
 }
 
@@ -30,15 +36,6 @@ func TestSOC2ControlsHandler_Licensed(t *testing.T) {
 	SOC2ControlsHandler(db)(rec, licensedReq(http.MethodGet, "/api/v1/compliance/soc2/controls", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestSOC2ControlsHandler_Unlicensed(t *testing.T) {
-	db, _ := newMockDB(t)
-	rec := httptest.NewRecorder()
-	SOC2ControlsHandler(db)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/compliance/soc2/controls", nil))
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d", rec.Code)
 	}
 }
 
@@ -53,15 +50,6 @@ func TestListChangeLogHandler_Licensed(t *testing.T) {
 	ListChangeLogHandler(db)(rec, licensedReq(http.MethodGet, "/api/v1/compliance/change-log", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestListChangeLogHandler_Unlicensed(t *testing.T) {
-	db, _ := newMockDB(t)
-	rec := httptest.NewRecorder()
-	ListChangeLogHandler(db)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/compliance/change-log", nil))
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d", rec.Code)
 	}
 }
 
@@ -84,15 +72,6 @@ func TestCreateChangeLogHandler_OK(t *testing.T) {
 	CreateChangeLogHandler(db)(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestCreateChangeLogHandler_Unlicensed(t *testing.T) {
-	db, _ := newMockDB(t)
-	rec := httptest.NewRecorder()
-	CreateChangeLogHandler(db)(rec, httptest.NewRequest(http.MethodPost, "/api/v1/compliance/change-log", strings.NewReader(`{}`)))
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d", rec.Code)
 	}
 }
 
@@ -125,15 +104,6 @@ func TestListAccessReviewsHandler_Licensed(t *testing.T) {
 	ListAccessReviewsHandler(db)(rec, licensedReq(http.MethodGet, "/api/v1/compliance/access-reviews", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestListAccessReviewsHandler_Unlicensed(t *testing.T) {
-	db, _ := newMockDB(t)
-	rec := httptest.NewRecorder()
-	ListAccessReviewsHandler(db)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/compliance/access-reviews", nil))
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d", rec.Code)
 	}
 }
 
@@ -171,16 +141,6 @@ func TestPatchAccessReviewHandler_OK(t *testing.T) {
 	}
 }
 
-func TestPatchAccessReviewHandler_Unlicensed(t *testing.T) {
-	db, _ := newMockDB(t)
-	rec := httptest.NewRecorder()
-	req := reqWithChiParam(http.MethodPatch, "/api/v1/compliance/access-reviews/ar1", `{}`, "id", "ar1")
-	PatchAccessReviewHandler(db)(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d", rec.Code)
-	}
-}
-
 func TestPatchAccessReviewHandler_InvalidJSON(t *testing.T) {
 	db, _ := newMockDB(t)
 	rec := httptest.NewRecorder()
@@ -188,16 +148,6 @@ func TestPatchAccessReviewHandler_InvalidJSON(t *testing.T) {
 	req.Header.Set("X-Nself-License-Tier", "business")
 	PatchAccessReviewHandler(db)(rec, req)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d", rec.Code)
-	}
-}
-
-func TestCreateEvidencePackHandler_Unlicensed(t *testing.T) {
-	db, _ := newMockDB(t)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/compliance/soc2/evidence", strings.NewReader(`{}`))
-	CreateEvidencePackHandler(db)(rec, req)
-	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d", rec.Code)
 	}
 }

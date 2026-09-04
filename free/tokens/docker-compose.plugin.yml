@@ -7,8 +7,8 @@
 services:
   tokens:
     build:
-      context: ${NSELF_PLUGIN_DIR}/tokens
-      dockerfile: Dockerfile
+      context: ${NSELF_PLUGIN_DIR}/../..
+      dockerfile: free/tokens/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_tokens
     restart: unless-stopped
     ports:

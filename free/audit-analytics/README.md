@@ -19,7 +19,7 @@ Advanced audit log analytics plugin for nSelf. Provides anomaly detection, user 
 ## Requirements
 
 - nSelf CLI >= 1.0.9
-- Free (MIT), no license key. Set `NSELF_AUDIT_ANALYTICS=true` to enable.
+- Free (MIT), no license key required to run.
 - Postgres with `np_audit_log` table populated by the `audit` plugin
 
 ## Installation
@@ -33,7 +33,7 @@ nself plugin install audit-analytics
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | Postgres connection string |
-| `NSELF_AUDIT_ANALYTICS` | Yes | `false` | Set to `true` to enable |
+| `NSELF_AUDIT_ANALYTICS` | No | — | Unused; reserved for future entitlement checks (free plugin, always enabled) |
 | `AUDIT_ANALYTICS_PORT` | No | `3714` | HTTP listen port |
 | `AUDIT_ANALYTICS_SHARED_SECRET` | No | — | Bearer token for endpoint auth (open-dev mode if unset) |
 | `NSELF_AUDIT_ANOMALY_ZSCORE` | No | `3.0` | Z-score threshold for anomaly detection |
