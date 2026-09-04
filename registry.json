@@ -343,13 +343,13 @@
       }
     },
     "content-progress": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Track video, audio, and content playback progress with continue watching, watchlists, and favorites",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/content-progress-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/content-progress-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/content-progress/tarball",
       "requires_license": false,
       "language": "go",
@@ -376,7 +376,12 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "f3ff367a61c38d039136c96ec3b42dded23334bed532a50071f623adaa5644ac",
+      "checksums": {
+        "sha256": "f3ff367a61c38d039136c96ec3b42dded23334bed532a50071f623adaa5644ac"
+      },
+      "releaseTag": "v1.0.1"
     },
     "costs": {
       "version": "1.0.0",
@@ -408,13 +413,13 @@
       }
     },
     "cron": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
       "category": "automation",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/cron-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cron/tarball",
       "requires_license": false,
       "tier_pair": true,
@@ -438,7 +443,12 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "e79736337868685a85fd25ba3d98ad1bc4ab9d2c8eaa5f3185383f39719b2940",
+      "checksums": {
+        "sha256": "e79736337868685a85fd25ba3d98ad1bc4ab9d2c8eaa5f3185383f39719b2940"
+      },
+      "releaseTag": "v1.0.1"
     },
     "dlq": {
       "version": "1.0.0",
@@ -503,13 +513,13 @@
       }
     },
     "donorbox": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Donorbox donation data sync with webhook handling",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/donorbox-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/donorbox-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/donorbox/tarball",
       "requires_license": false,
       "language": "go",
@@ -537,7 +547,12 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "b0f8057faa416e45c54e34b8f3c8b78734aae6257a1bda07ff59ecfe7966fae3",
+      "checksums": {
+        "sha256": "b0f8057faa416e45c54e34b8f3c8b78734aae6257a1bda07ff59ecfe7966fae3"
+      },
+      "releaseTag": "v1.0.1"
     },
     "dr": {
       "version": "1.0.0",
@@ -1112,13 +1127,13 @@
       }
     },
     "maintenance": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Maintenance utilities: disk cleanup, log rotation and the maintenance scheduler.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/maintenance-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/maintenance-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/maintenance/tarball",
       "requires_license": false,
       "language": "go",
@@ -1139,7 +1154,12 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-maintenance"
-      }
+      },
+      "checksum": "a330de5ba86fcbc5a2466b82f893c31990e2903d0db01ed51437b60a939daf3b",
+      "checksums": {
+        "sha256": "a330de5ba86fcbc5a2466b82f893c31990e2903d0db01ed51437b60a939daf3b"
+      },
+      "releaseTag": "v1.0.1"
     },
     "mdns": {
       "version": "1.0.0",
@@ -1300,13 +1320,13 @@
       }
     },
     "notifications": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Multi-channel notification service. Channels: Email (SMTP), Push (placeholder), SMS (placeholder). HTTP endpoints for sending notifications, managing templates, and user notification preferences.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notifications-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/notifications-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notifications/tarball",
       "requires_license": false,
       "language": "go",
@@ -1331,16 +1351,21 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "7a2e1d5e9c2043a52b7767bafca901625d2ea156196d736c69de38f59d5e406c",
+      "checksums": {
+        "sha256": "7a2e1d5e9c2043a52b7767bafca901625d2ea156196d736c69de38f59d5e406c"
+      },
+      "releaseTag": "v1.0.1"
     },
     "notify": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notify-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/notify-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notify/tarball",
       "requires_license": false,
       "tier_pair": true,
@@ -1363,7 +1388,12 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "0594ae00ced6c6ec04ae388ebc9ff654e8b71baf7799f9ca75bb7b040ee96ee2",
+      "checksums": {
+        "sha256": "0594ae00ced6c6ec04ae388ebc9ff654e8b71baf7799f9ca75bb7b040ee96ee2"
+      },
+      "releaseTag": "v1.0.1"
     },
     "ollama": {
       "version": "1.1.1",
@@ -1562,13 +1592,13 @@
       }
     },
     "search": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/search-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/search/tarball",
       "requires_license": false,
       "language": "go",
@@ -1598,7 +1628,12 @@
       },
       "bundles": [
         "task"
-      ]
+      ],
+      "checksum": "631876a4982ca5129a095b44f699cf835aeba3897b8fdbd7c8c39a333c338796",
+      "checksums": {
+        "sha256": "631876a4982ca5129a095b44f699cf835aeba3897b8fdbd7c8c39a333c338796"
+      },
+      "releaseTag": "v1.0.1"
     },
     "sentry-cli": {
       "version": "1.0.0",
@@ -3414,13 +3449,13 @@
       "tables": []
     },
     "storage": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/storage-1.0.0.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.1/storage-1.0.1.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/storage/tarball",
       "requires_license": false,
       "language": "go",
@@ -3435,7 +3470,12 @@
       "name": "storage",
       "author": "nself",
       "minNselfVersion": "1.1.0",
-      "tables": []
+      "tables": [],
+      "checksum": "8f9edd9027ad44526fdede098370d549ca20495dcd9b11ff190a4832e82f9c1c",
+      "checksums": {
+        "sha256": "8f9edd9027ad44526fdede098370d549ca20495dcd9b11ff190a4832e82f9c1c"
+      },
+      "releaseTag": "v1.0.1"
     },
     "storage-transform": {
       "version": "1.1.2",

@@ -1,6 +1,6 @@
 {
   "name": "storage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0",
   "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
   "author": "nself",
