@@ -239,8 +239,11 @@ func (db *DB) InitSchema() error {
 			d.paypal_transaction_id,
 			d.processing_fee
 		FROM np_donorbox_donations d
-		WHERE d.status != 'refunded'
-		ORDER BY d.donation_date DESC;
+		WHERE d.status != 'refunded';
+		-- ORDER BY removed (P4 deferred-backlog row 8): idx_np_donorbox_donations_date
+		-- already covers donation_date, so a view-level ORDER BY forced a sort on
+		-- every caller regardless of need. Callers that need ordering add
+		-- ORDER BY on the outer query and get the index instead of a forced sort.
 
 		CREATE OR REPLACE VIEW np_donorbox_campaign_summary AS
 		SELECT
