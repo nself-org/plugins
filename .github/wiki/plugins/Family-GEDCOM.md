@@ -16,7 +16,7 @@ Generic GEDCOM file importer for the family plugin. Accepts any GEDCOM 5.5.1 / 7
 
 This plugin runs as its own container in your nSelf stack (rebuild with `nself build && nself start` after install).
 
-Category: `social`. Current version: `0.0.1`.
+Category: `content`. Current version: `0.0.1`.
 
 ## Configuration
 
