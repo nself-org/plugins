@@ -11,6 +11,11 @@ import (
 // RegisterRoutes mounts all feature-flags API routes on the given router.
 // pubsub is optional: pass nil to disable Redis broadcast (falls back to TTL only).
 func RegisterRoutes(r chi.Router, db *DB, pubsub *PubSub) {
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
 	eval := NewEvaluator(db)
 
 	r.Route("/v1", func(r chi.Router) {

@@ -2,8 +2,8 @@
 services:
   audit-log:
     build:
-      context: ${NSELF_PLUGIN_DIR}/../..
-      dockerfile: free/audit-log/Dockerfile
+      context: ${NSELF_PLUGIN_DIR}/audit-log
+      dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_audit_log
     restart: unless-stopped
     networks:

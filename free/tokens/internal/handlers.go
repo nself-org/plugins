@@ -9,6 +9,11 @@ import (
 
 // RegisterRoutes mounts all tokens API routes on the given router.
 func RegisterRoutes(r chi.Router, db *DB, cfg *Config) {
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
 	r.Route("/v1", func(r chi.Router) {
 		// Token issuance and validation
 		r.Post("/tokens/issue", handleIssueToken(db, cfg))

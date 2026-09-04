@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -8,6 +9,11 @@ import (
 
 // RegisterRoutes mounts all webhook endpoints on the given router.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, dispatcher *Dispatcher) {
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
 	// Endpoint CRUD
 	r.Post("/v1/webhooks", handleCreateEndpoint(pool))
 	r.Get("/v1/webhooks", handleListEndpoints(pool))
