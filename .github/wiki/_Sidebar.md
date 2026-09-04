@@ -33,12 +33,12 @@
 - [[AI|plugins/AI]]
 - [[Jobs|plugins/Jobs]]
 - [[Notifications|plugins/Notifications]]
-- [[File Processing|plugins/FileProcessing]]
+- [[File Processing|plugins/File-Processing]]
 - [[Auth|plugins/Auth]]
 - [[Realtime|plugins/Realtime]]
 - [[Analytics|plugins/Analytics]]
 
-**View All:** [[Home|Home#all-plugins-65-total]]
+**View All:** [[Home|Home#plugin-directory-64-of-129-shown]] (or see the full alphabetical list below — 129/129 synced with `registry.json`)
 
 ### All Free Plugins
 - [[Access-Controls|plugins/Access-Controls]]
