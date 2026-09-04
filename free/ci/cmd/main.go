@@ -10,7 +10,9 @@
 //
 //	nself-ci [flags] [repo-root]              — single-repo gate
 //	nself-ci run [flags] [search-root]        — pipeline: discover .ci.yaml + run stages
+//	nself-ci build --artifact android [dir]   — local signed-APK build + gh release upload
 //	nself ci run --env staging                — via nself CLI proxy
+//	nself ci build --artifact android         — via nself CLI proxy
 //
 // SPORT: PLUGINS-CI-000
 package main
@@ -34,10 +36,14 @@ var gatewayBaseForEnv = map[string]string{
 }
 
 func main() {
-	// Check for "run" subcommand as first non-flag argument.
+	// Check for "run"/"build" subcommands as first non-flag argument.
 	args := os.Args[1:]
 	if len(args) > 0 && args[0] == "run" {
 		runPipelineCmd(args[1:])
+		return
+	}
+	if len(args) > 0 && args[0] == "build" {
+		runArtifactBuildCmd(args[1:])
 		return
 	}
 
@@ -128,6 +134,86 @@ func printPipelineResults(gates []internal.GateResult) bool {
 	}
 	fmt.Printf("  Pipeline: %s\n\n", overall)
 	return allPassed
+}
+
+// runArtifactBuildCmd implements "nself-ci build --artifact android [dir]".
+// Local artifact-build lane (P6-E11-W2-S1-T6): private repos need a signed
+// release artifact without a GitHub-hosted runner or a third nSelf server.
+// Android only — macOS/Windows/TV/WearOS stay on GitHub-hosted runners.
+func runArtifactBuildCmd(rawArgs []string) {
+	fs := flag.NewFlagSet("build", flag.ExitOnError)
+	var (
+		artifact = fs.String("artifact", "", "Artifact type to build (only \"android\" is supported)")
+		upload   = fs.Bool("upload", false, "Attach the built artifact to a GitHub release via `gh release upload`")
+		tag      = fs.String("tag", "", "Release tag to upload to (required with --upload)")
+		owner    = fs.String("owner", "", "GitHub owner for --upload (default: from git remote)")
+		repo     = fs.String("repo", "", "GitHub repo for --upload (default: from git remote)")
+		verbose  = fs.Bool("v", false, "Print each command before running")
+		timeout  = fs.Int("timeout", 900, "Build step timeout in seconds (release builds are slow)")
+	)
+	_ = fs.Parse(rawArgs)
+
+	if *artifact != "android" {
+		fmt.Fprintf(os.Stderr, "error: --artifact %q not supported (only \"android\" — macOS/Windows/TV/WearOS stay on GitHub-hosted runners)\n", *artifact)
+		os.Exit(1)
+	}
+
+	androidDir := "."
+	if fs.NArg() > 0 {
+		androidDir = fs.Arg(0)
+	}
+
+	fmt.Printf("nself-ci build --artifact android — %s\n", androidDir)
+	fmt.Println(strings.Repeat("─", 60))
+
+	result := internal.BuildAndroidArtifact(androidDir, *timeout, *verbose)
+	mark := "PASS"
+	if !result.Gate.Passed {
+		mark = "FAIL"
+	}
+	fmt.Printf("  %-30s  %s  (%s)\n", result.Gate.Name, mark, result.Gate.Elapsed.Round(time.Millisecond))
+	if result.Gate.Output != "" {
+		for _, line := range strings.SplitAfter(result.Gate.Output, "\n") {
+			fmt.Print("    ", line)
+		}
+		fmt.Println()
+	}
+	fmt.Println(strings.Repeat("─", 60))
+
+	if !result.Gate.Passed {
+		os.Exit(1)
+	}
+
+	if !*upload {
+		return
+	}
+
+	resolvedOwner, resolvedRepo := *owner, *repo
+	if resolvedOwner == "" || resolvedRepo == "" {
+		o, r, err := internal.RepoOwnerName(androidDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: cannot resolve GitHub remote for --upload: %v\n", err)
+			fmt.Fprintf(os.Stderr, "hint: pass --owner and --repo\n")
+			os.Exit(1)
+		}
+		if resolvedOwner == "" {
+			resolvedOwner = o
+		}
+		if resolvedRepo == "" {
+			resolvedRepo = r
+		}
+	}
+	if *tag == "" {
+		fmt.Fprintln(os.Stderr, "error: --tag is required with --upload")
+		os.Exit(1)
+	}
+
+	out, err := internal.UploadArtifact(resolvedOwner, resolvedRepo, *tag, result.APKPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Uploaded %s to %s/%s@%s\n%s\n", result.APKPath, resolvedOwner, resolvedRepo, *tag, out)
 }
 
 // runSingleRepoCmd implements the original gate behaviour for a single repo root.

@@ -7,10 +7,20 @@ Local CI gate runner for nSelf repositories. Detects the repo stack and runs lin
 1. Detects which stacks are present: Go (`go.mod`), Node/TS (`package.json`), Flutter (`pubspec.yaml`)
 2. Runs stack-specific gates:
    - **Go:** `gofmt -l .` + `go vet ./...` + `go test ./...`
-   - **Node:** `pnpm run lint` + `pnpm run typecheck` + `pnpm run test` + `pnpm run build` (skips missing scripts)
+   - **Node:** `pnpm run lint` + `pnpm run typecheck` + `pnpm run test` + `pnpm run build` (skips missing scripts; a pnpm/npm workspace recurses into member packages so a root with no scripts of its own still runs real gates instead of reporting a false PASSED — see `internal/gate_runners.go`)
    - **Flutter:** `flutter analyze` + `flutter test`
 3. Scans for secrets with `gitleaks` (uses repo `.github/gitleaks.toml` if present). Defaults to git-mode (respects `.gitignore`, scans tracked content); pass `--filesystem` to force the old `--no-git` filesystem-scan behavior for a non-checkout source tree.
 4. Posts a `nself-ci` commit status to GitHub so it appears in PR checks
+5. `nself-ci build --artifact android` produces a signed release APK locally and can attach it to a GitHub release — see "Artifact builds" below.
+
+## What it explicitly does NOT do
+
+`nself ci` detects stacks and runs equivalent gates/artifact builds directly — it does **not** parse or execute arbitrary `.github/workflows/*.yml` files, and it is not a GitHub Actions emulator. Repos with custom Actions steps beyond lint/test/build/artifact (E2E, Lighthouse, axe-a11y, CodeQL, Trivy, SBOM, license audit, coverage ratchet, bundle-size, commitlint, i18n-check, deploy) still need those specific jobs run somewhere, per the PPI's Two-Servers-Only split:
+
+- **Public repos** keep those jobs on free GitHub-hosted runners (Actions minutes are free for public repos).
+- **Private repos** run them via a dedicated additional `nself ci` gate (a new gate type — not implemented by this plugin today), never a third nSelf server.
+
+See `.claude/docs/doctrines/nself-ci-runner-ceiling.md` for the full runner-ceiling policy this restates.
 
 ## Usage
 
@@ -57,6 +67,30 @@ nself ci --filesystem [repo-root]
 cd plugins/free/ci
 go build -o nself-ci ./cmd/
 ```
+
+## Artifact builds
+
+`nself-ci build --artifact android [android-dir]` produces a signed Android release APK on the developer's own machine — closing the private-repo "gates but no release artifact" gap without a GitHub-hosted runner or a third nSelf server. It mirrors the exact signing steps `nchat/.github/workflows/build-react-native.yml` and `deploy-mobile-android.yml` already use, so the same keystore secrets work in both places:
+
+```bash
+export ANDROID_KEYSTORE_BASE64="$(cat release.keystore | base64)"
+export ANDROID_KEYSTORE_PASSWORD=...
+export ANDROID_KEY_ALIAS=...
+export ANDROID_KEY_PASSWORD=...
+
+# Build only (prints the produced APK path)
+nself-ci build --artifact android frontend/platforms/react-native/android
+
+# Build + attach to a GitHub release
+nself-ci build --artifact android --upload --tag v1.2.3 frontend/platforms/react-native/android
+
+# Via nself CLI proxy
+nself ci build --artifact android frontend/platforms/react-native/android
+```
+
+Steps: base64-decode the keystore into `<android-dir>/app/release.keystore` → `./gradlew assembleRelease` (keystore env vars inherited by gradle's signing config) → locate the signed APK under `<android-dir>/app/build/outputs/apk/`.
+
+**Android only.** macOS/Windows/TV/WearOS artifacts explicitly stay on GitHub-hosted runners — this lane does not attempt them (see P6-E11-W2-S1-T6; Ummat's own gap report never asked for them either).
 
 ## Requiring nself-ci in branch protection
 
