@@ -3,7 +3,7 @@
   "author": "nSelf Team",
   "minNselfVersion": "1.0.0",
   "display_name": "File Virus & Content Scanning",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "language": "go",
   "bundle": [
     "nFamily",
@@ -14,7 +14,7 @@
   "tier": "free",
   "port": 3829,
   "service_type": "custom_service",
-  "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
+  "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred — requires partner agreement)",
   "category": "security",
   "license": "MIT",
   "min_nself_version": "1.1.0",
@@ -78,7 +78,7 @@
     "SCAN-CSAM-02",
     "SCAN-PERF-01"
   ],
-  "csam_note": "CSAM hash detection disabled by default. Requires operator partner agreement (Microsoft PhotoDNA or NCMEC). Not a bundle add-on. See SPEC.md \u00a714.",
+  "csam_note": "CSAM hash detection disabled by default. Requires operator partner agreement (Microsoft PhotoDNA or NCMEC). Not a bundle add-on. See SPEC.md §14.",
   "checksum": "2a8943610ddd543293f398437a371290485e6d27c3d8feb034d5f813f0670018",
   "bundles": [
     "nsentry"

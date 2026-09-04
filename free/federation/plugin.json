@@ -1,6 +1,6 @@
 {
   "name": "federation",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage GraphQL Federation: compose an Apollo Router supergraph from installed plugin subgraphs, check subgraph health, and introspect the composed schema.",
   "author": "nself",
   "license": "MIT",

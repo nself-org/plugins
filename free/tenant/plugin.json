@@ -1,6 +1,6 @@
 {
   "name": "tenant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports.",
   "author": "nself",
   "license": "MIT",

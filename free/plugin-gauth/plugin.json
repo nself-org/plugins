@@ -1,6 +1,6 @@
 {
   "name": "plugin-gauth",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "Headless server-side Google OAuth token refresh for nSelf AI services",
   "author": "nSelf",
   "license": "MIT",

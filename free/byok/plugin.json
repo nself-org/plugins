@@ -1,6 +1,6 @@
 {
   "name": "byok",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Bring Your Own Key (BYOK) per-tenant encryption. Envelope encryption with customer-managed keys (CMK) via AWS KMS, GCP Cloud KMS, or HashiCorp Vault Transit. DEK wrapped by CMK. Satisfies HIPAA, FedRAMP High, FFIEC, and DORA key-control requirements. Enterprise-only.",
   "author": "nself",
@@ -59,7 +59,7 @@
     "kms.configured": "KMS provider configured for tenant",
     "kms.verified": "KMS connectivity verified",
     "key.rotated": "Key rotation job completed",
-    "key.revoked": "CMK revoked \u2014 data access blocked",
+    "key.revoked": "CMK revoked — data access blocked",
     "rotation.started": "Key rotation job started",
     "rotation.failed": "Key rotation job failed"
   },

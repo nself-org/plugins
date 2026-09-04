@@ -1,6 +1,6 @@
 {
   "name": "release",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Orchestrate the nSelf project's own 12-step release cascade: tag and release cli and plugins-pro, build and push the admin image, and open the Homebrew formula PR.",
   "author": "nself",
   "license": "MIT",

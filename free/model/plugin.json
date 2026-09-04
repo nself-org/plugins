@@ -1,6 +1,6 @@
 {
   "name": "model",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage local AI models via Ollama: list, pull, remove, update, benchmark, plus the legacy `ollama` command tree.",
   "author": "nself",
   "license": "MIT",

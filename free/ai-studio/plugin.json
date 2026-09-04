@@ -1,6 +1,6 @@
 {
   "name": "ai-studio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Google AI Studio integration for local nSelf instances: secure Cloudflare Tunnel bridge with schema-context injection and read-only enforcement.",
   "author": "nself",
   "license": "MIT",

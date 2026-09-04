@@ -1,6 +1,6 @@
 {
   "name": "sms",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "plugin-sms",
   "description": "SMS messaging via Twilio. Send, track, and manage opt-outs.",
   "port": 9009,

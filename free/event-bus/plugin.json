@@ -1,6 +1,6 @@
 {
   "name": "event-bus",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Internal event bus with pub/sub, fan-out delivery, dead-letter queue, and replay for inter-plugin messaging.",
   "author": "nself",

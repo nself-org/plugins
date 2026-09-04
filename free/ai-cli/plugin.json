@@ -1,6 +1,6 @@
 {
   "name": "ai-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI operations for nSelf: chat, local Ollama model management, and Gemini API key pool provisioning and rotation.",
   "author": "nself",
   "license": "MIT",

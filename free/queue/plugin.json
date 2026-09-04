@@ -1,6 +1,6 @@
 {
   "name": "queue",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Inspect and manage nSelf background job queues: depth, stuck jobs, retries and purges.",
   "author": "nself",
   "license": "MIT",

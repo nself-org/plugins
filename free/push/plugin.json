@@ -1,6 +1,6 @@
 {
   "name": "push",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "APNs + FCM push notification relay. Hasura event-trigger fan-out, delivery state tracking, exponential backoff retry. Handles iOS (Apple Push Notification service) and Android (Firebase Cloud Messaging v1 API).",
   "author": "nself",
   "license": "MIT",
@@ -26,7 +26,9 @@
     "np_push_outbox",
     "np_push_devices"
   ],
-  "dependencies": {"redis": ">=1.0.0"},
+  "dependencies": {
+    "redis": ">=1.0.0"
+  },
   "optionalDependencies": [],
   "envVars": {
     "required": [

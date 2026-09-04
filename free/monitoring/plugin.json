@@ -1,6 +1,6 @@
 {
   "name": "monitoring",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
   "author": "nself",
   "license": "MIT",

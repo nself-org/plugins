@@ -1,6 +1,6 @@
 {
   "name": "maintenance",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Maintenance utilities: disk cleanup, log rotation and the maintenance scheduler.",
   "author": "nself",
   "license": "MIT",

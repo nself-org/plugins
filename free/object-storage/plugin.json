@@ -1,6 +1,6 @@
 {
   "name": "object-storage",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Multi-provider object storage with S3-compatible API, local storage, presigned URLs, and multipart uploads",
   "author": "nself",

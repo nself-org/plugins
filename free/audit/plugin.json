@@ -1,6 +1,6 @@
 {
   "name": "audit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Ecosystem documentation audit: banned words, dead links, and missing anchors across READMEs, wiki, docs, SPORT, PPI, and PRI.",
   "author": "nself",
   "license": "MIT",

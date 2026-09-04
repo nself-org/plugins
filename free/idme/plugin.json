@@ -1,6 +1,6 @@
 {
   "name": "idme",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "ID.me OAuth authentication with government-grade identity verification for 7 groups",
   "author": "nself",

@@ -1,6 +1,6 @@
 {
   "name": "mdns",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "mDNS/Bonjour service discovery for zero-config LAN advertising",
   "author": "nself",
   "language": "go",

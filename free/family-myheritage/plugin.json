@@ -1,8 +1,8 @@
 {
   "name": "family-myheritage",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
-  "description": "MyHeritage \u2192 nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company \u2014 lowest legal risk, potential partnership path.",
+  "description": "MyHeritage → nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company — lowest legal risk, potential partnership path.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,

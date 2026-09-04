@@ -1,6 +1,6 @@
 {
   "name": "transactional-email",
-  "version": "1.1.0",
+  "version": "1.0.1",
   "api_version": "1.0",
   "description": "Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay.",
   "author": "nself",

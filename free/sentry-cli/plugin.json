@@ -1,6 +1,6 @@
 {
   "name": "sentry-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
   "author": "nself",
   "license": "MIT",

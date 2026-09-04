@@ -1,6 +1,6 @@
 {
   "name": "content-progress",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Track video, audio, and content playback progress with continue watching, watchlists, and favorites",
   "author": "nself",
   "license": "MIT",

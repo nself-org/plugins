@@ -1,6 +1,6 @@
 {
   "name": "subtitle-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Subtitle search, download, and sync verification via OpenSubtitles",
   "author": "nself",
   "license": "MIT",

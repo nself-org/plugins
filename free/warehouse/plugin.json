@@ -1,8 +1,8 @@
 {
   "name": "warehouse",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
-  "description": "Data warehouse sync \u2014 exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
+  "description": "Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,

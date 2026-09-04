@@ -1,6 +1,6 @@
 {
   "name": "dogfood",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
   "author": "nself",
   "license": "MIT",

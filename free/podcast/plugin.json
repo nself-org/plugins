@@ -1,6 +1,6 @@
 {
   "name": "podcast",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management",
   "author": "nself",

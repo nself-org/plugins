@@ -1,6 +1,6 @@
 {
   "name": "nself-geo",
-  "version": "1.1.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Forward and reverse geocoding with provider-agnostic caching layer. Nominatim (free, OSM) is the default; Google Places and Mapbox are premium fallbacks. Exposes geocodeAddress, reverseGeocode, geocodeBatch, clearGeoCache via Hasura Remote Schema.",
   "author": "nself",

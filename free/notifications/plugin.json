@@ -1,6 +1,6 @@
 {
   "name": "notifications",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Email notification service (SMTP). Push and SMS channels are always-error placeholders — they accept requests but return 501 Not Implemented. Use the 'notify' plugin for real push notifications. Deprecated since v1.1.0; replacement: notify.",
   "author": "nself",
   "license": "MIT",
@@ -80,7 +80,9 @@
   "replacedBy": "notify",
   "removal_target": "v2.0.0",
   "status": "deprecated",
-  "capabilities": ["email"],
+  "capabilities": [
+    "email"
+  ],
   "binary_name": "notifications",
   "health_endpoint": "/health",
   "arch_support": [

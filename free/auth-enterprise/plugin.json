@@ -1,6 +1,6 @@
 {
   "name": "auth-enterprise",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "description": "MFA enforcement (TOTP + WebAuthn policy) and SSO via SAML 2.0 and OIDC for Google Workspace, Okta, and Microsoft Entra ID.",
   "category": "authentication",
   "isCommercial": false,

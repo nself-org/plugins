@@ -1,6 +1,6 @@
 {
   "name": "e2ee",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "End-to-end encryption key directory: X3DH prekey distribution + Kyber-1024 (ML-KEM-1024) post-quantum prekeys for nchat. Server stores PUBLIC keys only; private keys never leave the client.",
   "author": "nself",
   "license": "MIT",

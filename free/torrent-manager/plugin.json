@@ -1,6 +1,6 @@
 {
   "name": "torrent-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement",
   "author": "nself",
   "license": "MIT",

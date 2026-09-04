@@ -1,6 +1,6 @@
 {
   "name": "waf",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Web Application Firewall management: enable Coraza with the OWASP Core Rule Set, switch between detection and blocking mode, and review recent WAF events.",
   "author": "nself",
   "license": "MIT",

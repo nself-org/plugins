@@ -2,7 +2,7 @@
   "name": "nself-sync",
   "author": "nSelf Team",
   "displayName": "Event-Log Sync Engine for ɳClaw",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "tier": "free",
   "category": "infrastructure",
   "minNselfVersion": "1.1.1",
