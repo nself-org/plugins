@@ -20,4 +20,4 @@ require (
 	golang.org/x/text v0.24.0 // indirect
 )
 
-replace github.com/nself-org/plugin-sdk => ../../sdk
+replace github.com/nself-org/plugin-sdk => ./sdk

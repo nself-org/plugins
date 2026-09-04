@@ -1,15 +1,21 @@
-# Build context: plugins/ root (docker build -f free/notifications/Dockerfile .)
-# nself build / nself plugin install invoke this via docker-compose.plugin.yml's
-# `build.context: ${NSELF_PLUGIN_DIR}/../..` + `build.dockerfile: free/notifications/Dockerfile`
-# so the ../../sdk replace directive in go.mod resolves inside the image too.
+# Build context: this plugin's own install directory
+# (docker build -f Dockerfile .), i.e. ${NSELF_PLUGIN_DIR}/notifications
+# after `nself plugin install notifications` — matches the flat layout
+# internal/plugin/flatten_extracted.go produces and
+# internal/build/plugins.go:canonicalDockerfile expects. sdk/ is
+# vendored into this directory (see go.mod's replace directive) so
+# the build never reaches outside its own context (P6-E3-W2-S1-T5
+# 2026-09-03: the prior ${NSELF_PLUGIN_DIR}/../.. context assumed a
+# per-plugin NSELF_PLUGIN_DIR the CLI never sets — it's always the
+# flat global plugin root).
 FROM golang:1.26-alpine AS builder
 WORKDIR /build
-# Copy the SDK first for layer caching (go.mod's replace target).
+# Copy the vendored SDK first for layer caching (go.mod's replace target).
 COPY sdk/ sdk/
-# Copy plugin source.
-COPY free/notifications/ free/notifications/
-WORKDIR /build/free/notifications
+COPY go.mod go.sum ./
 RUN go mod download
+# Copy the rest of the plugin source.
+COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /plugin ./cmd/
 
 FROM alpine:3.19

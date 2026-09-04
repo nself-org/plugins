@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"net/http"
 	"encoding/json"
 
 	"github.com/go-chi/chi/v5"
@@ -9,6 +10,11 @@ import (
 
 // RegisterRoutes mounts all notifications endpoints on the given router.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool) {
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
 	// Notifications
 	r.Post("/v1/notifications", handleSendNotification(pool))
 	r.Get("/v1/notifications", handleListNotifications(pool))
