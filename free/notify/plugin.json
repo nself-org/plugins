@@ -6,6 +6,7 @@
   "license": "MIT",
   "isCommercial": false,
   "licenseType": "free",
+  "tier_pair": true,
   "requiredEntitlements": [],
   "requires_license": false,
   "homepage": "https://nself.org/plugins",

@@ -417,6 +417,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cron/tarball",
       "requires_license": false,
+      "tier_pair": true,
       "language": "go",
       "tags": [
         "cron",
@@ -1342,6 +1343,7 @@
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.0.0/notify-1.0.0.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notify/tarball",
       "requires_license": false,
+      "tier_pair": true,
       "language": "go",
       "tags": [
         "notifications",
