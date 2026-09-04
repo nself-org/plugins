@@ -1,6 +1,6 @@
 {
   "name": "nself-cloud",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "ɳCloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.",
   "author": "nSelf Team",
@@ -108,7 +108,7 @@
       "method": "POST",
       "path": "/api/cloud/login",
       "auth": "none",
-      "description": "Email+password or magic link \u2014 returns JWT."
+      "description": "Email+password or magic link — returns JWT."
     },
     {
       "method": "GET",
@@ -181,7 +181,7 @@
       "path": "/webhooks/stripe",
       "auth": "none",
       "hmac": "STRIPE_PLATFORM_WEBHOOK_SECRET",
-      "description": "Stripe platform webhook \u2014 HMAC verified, raw body required."
+      "description": "Stripe platform webhook — HMAC verified, raw body required."
     },
     {
       "method": "POST",

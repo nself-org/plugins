@@ -1,6 +1,6 @@
 {
   "name": "mail",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Send transactional and broadcast email through the nSelf stack: mux + Postmark pipeline via ping_api, template management, and DKIM verification.",
   "author": "nself",
   "license": "MIT",
@@ -51,5 +51,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables of its own \u2014 it calls ping_api (default https://ping.nself.org), which proxies to the mux + transactional-email (Postmark) pro plugins. `nself plugin install mail` must place the built nself-mail binary at ~/.nself/plugins/bin/nself-mail, where internal/plugin/router.go's ProxyCommand execs it for `nself mail <args>` with stdio inherited. Extracted from cli/cmd/commands/mail.go, mail_transactional.go, and mail_admin.go under CLI-R11. Requires an nSelf+ or nClaw bundle license (matching the underlying transactional-email plugin's requires_license: true); exits 2 with a clear message when no license key is configured, exactly as the in-core command did."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables of its own — it calls ping_api (default https://ping.nself.org), which proxies to the mux + transactional-email (Postmark) pro plugins. `nself plugin install mail` must place the built nself-mail binary at ~/.nself/plugins/bin/nself-mail, where internal/plugin/router.go's ProxyCommand execs it for `nself mail <args>` with stdio inherited. Extracted from cli/cmd/commands/mail.go, mail_transactional.go, and mail_admin.go under CLI-R11. Requires an nSelf+ or nClaw bundle license (matching the underlying transactional-email plugin's requires_license: true); exits 2 with a clear message when no license key is configured, exactly as the in-core command did."
 }

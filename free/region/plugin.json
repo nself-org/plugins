@@ -1,6 +1,6 @@
 {
   "name": "region",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-region management: add replica regions, list and inspect their status, and promote a region to primary.",
   "author": "nself",
   "license": "MIT",

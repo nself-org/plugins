@@ -1,6 +1,6 @@
 {
   "name": "observability",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration",
   "author": "nself",

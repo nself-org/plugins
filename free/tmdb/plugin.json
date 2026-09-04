@@ -1,6 +1,6 @@
 {
   "name": "tmdb",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support",
   "author": "nself",

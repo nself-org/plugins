@@ -1,6 +1,6 @@
 {
   "name": "plugin-clawde",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "description": "ClawDE daemon integration backend. Manages session lifecycle, tracks daemon health, and streams events via SSE for the ClawDE AI development environment.",
   "author": "nSelf",
   "license": "MIT",

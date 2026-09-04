@@ -1,6 +1,6 @@
 {
   "name": "vpn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin.",
   "author": "nself",
   "license": "MIT",

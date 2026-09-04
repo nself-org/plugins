@@ -1,6 +1,6 @@
 {
   "name": "link-preview",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "URL metadata extraction with Open Graph, Twitter Cards, and caching",
   "author": "nself",
   "license": "MIT",

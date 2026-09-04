@@ -1,6 +1,6 @@
 {
   "name": "job-queue",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Durable background job queue with priorities, retries, scheduled execution, and per-job progress tracking.",
   "author": "nself",

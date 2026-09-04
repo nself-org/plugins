@@ -1,6 +1,6 @@
 {
   "name": "k8s",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.",
   "author": "nself",
   "license": "MIT",
@@ -48,5 +48,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install k8s` must place the built nself-k8s binary at ~/.nself/plugins/bin/nself-k8s, where internal/plugin/router.go's ProxyCommand execs it for `nself k8s <args>` with stdio inherited. Extracted from cli/cmd/commands/k8s.go, cli/internal/k8s/, and cli/charts/nself/ under CLI-R11. Status is 'planned' (not 'stable') because the source command itself was PLANNED \u2014 deferred pending UD-12 minor release approval. The chart has a Postgres StatefulSet+Service, a Hasura Deployment+Service, an Auth Deployment, and an nginx Ingress (+ optional cert-manager Certificate) \u2014 it has not been helm-lint/template validated against a real cluster since extraction."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install k8s` must place the built nself-k8s binary at ~/.nself/plugins/bin/nself-k8s, where internal/plugin/router.go's ProxyCommand execs it for `nself k8s <args>` with stdio inherited. Extracted from cli/cmd/commands/k8s.go, cli/internal/k8s/, and cli/charts/nself/ under CLI-R11. Status is 'planned' (not 'stable') because the source command itself was PLANNED — deferred pending UD-12 minor release approval. The chart has a Postgres StatefulSet+Service, a Hasura Deployment+Service, an Auth Deployment, and an nginx Ingress (+ optional cert-manager Certificate) — it has not been helm-lint/template validated against a real cluster since extraction."
 }

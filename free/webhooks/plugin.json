@@ -1,6 +1,6 @@
 {
   "name": "webhooks",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue",
   "author": "nself",
   "license": "MIT",

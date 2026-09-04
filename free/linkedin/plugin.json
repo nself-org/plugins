@@ -1,6 +1,6 @@
 {
   "name": "linkedin",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "LinkedIn publishing integration. OAuth 2.0 connection, post to LinkedIn feed with optional image attachments, post history, and Claw tool descriptor.",
   "author": "nself",

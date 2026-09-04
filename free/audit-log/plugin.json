@@ -1,6 +1,6 @@
 {
   "name": "audit-log",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
   "author": "nself",
   "license": "MIT",

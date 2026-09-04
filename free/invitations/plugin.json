@@ -1,6 +1,6 @@
 {
   "name": "invitations",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Invitation management system with email/SMS delivery and tracking",
   "author": "nself",
   "license": "MIT",

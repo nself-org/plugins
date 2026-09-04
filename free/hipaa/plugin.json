@@ -1,6 +1,6 @@
 {
   "name": "hipaa",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow.",
   "author": "nself",
@@ -29,7 +29,7 @@
     "np_baa_records"
   ],
   "webhooks": {
-    "phi.accessed": "PHI column accessed \u2014 row written to np_phi_audit_log",
+    "phi.accessed": "PHI column accessed — row written to np_phi_audit_log",
     "phi.column.registered": "PHI column registered in registry",
     "phi.column.unregistered": "PHI column unregistered",
     "baa.requested": "BAA signing workflow initiated",

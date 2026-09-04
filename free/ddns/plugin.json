@@ -1,6 +1,6 @@
 {
   "name": "ddns",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Dynamic DNS plugin with external IP monitoring. Planned: DNS provider API integration (Cloudflare, Route53) for automated record updates",
   "author": "nself",

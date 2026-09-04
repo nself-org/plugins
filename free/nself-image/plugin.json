@@ -1,6 +1,6 @@
 {
   "name": "nself-image",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "api_version": "1.1.0",
   "description": "Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization.",
   "author": "nSelf Team",

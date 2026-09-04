@@ -1,6 +1,6 @@
 {
   "name": "gauth",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
   "author": "nself",
   "license": "MIT",

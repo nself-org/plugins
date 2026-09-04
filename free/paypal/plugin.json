@@ -1,6 +1,6 @@
 {
   "name": "paypal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "PayPal payment data sync with webhook handling",
   "author": "nself",
   "license": "MIT",

@@ -1,8 +1,8 @@
 {
   "name": "cdc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
-  "description": "Change Data Capture \u2014 streams Postgres WAL events to downstream consumers via webhooks or message queues.",
+  "description": "Change Data Capture — streams Postgres WAL events to downstream consumers via webhooks or message queues.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,

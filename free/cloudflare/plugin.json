@@ -1,6 +1,6 @@
 {
   "name": "cloudflare",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Cloudflare zone, DNS, R2, cache, and analytics management",
   "author": "nself",

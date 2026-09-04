@@ -1,6 +1,6 @@
 {
   "name": "payments",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with webhook normalization.",
   "author": "nself",

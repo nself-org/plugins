@@ -1,18 +1,26 @@
 {
   "name": "family-gedcom",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "description": "Generic GEDCOM file importer for the family plugin. Accepts any GEDCOM 5.5.1 / 7.0 file from any provider with optional photo-folder upload. PLANNED: requires the 'family' plugin (ɳFamily bundle, planned v1.1.0) and 'object-storage' + 'photos' plugins. Not installable until the family plugin ships.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,
   "minNselfVersion": "1.0.0",
   "category": "social",
-  "tags": ["family", "genealogy", "gedcom", "migration", "importer"],
+  "tags": [
+    "family",
+    "genealogy",
+    "gedcom",
+    "migration",
+    "importer"
+  ],
   "tables": [],
   "webhooks": {},
   "actions": {},
   "envVars": {
-    "required": ["DATABASE_URL"],
+    "required": [
+      "DATABASE_URL"
+    ],
     "optional": []
   },
   "config": {},
@@ -23,12 +31,25 @@
     "defaultValue": "primary"
   },
   "permissions": {
-    "database": ["create", "read", "update", "delete"],
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
     "network": [],
-    "filesystem": ["storage", "temp", "logs"]
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ]
   },
   "dependencies": {
-    "plugins": ["family", "object-storage", "photos"]
+    "plugins": [
+      "family",
+      "object-storage",
+      "photos"
+    ]
   },
   "homepage": "https://nself.org/plugins",
   "repository": "https://github.com/nself-org/plugins",

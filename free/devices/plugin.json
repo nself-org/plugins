@@ -1,6 +1,6 @@
 {
   "name": "devices",
-  "version": "1.1.2",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "IoT device enrollment, trust management, and command dispatch service.",
   "author": "nself",

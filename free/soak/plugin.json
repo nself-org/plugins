@@ -1,6 +1,6 @@
 {
   "name": "soak",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage soak testing lifecycle: abort an active soak and roll back to a prior version.",
   "author": "nself",
   "license": "MIT",

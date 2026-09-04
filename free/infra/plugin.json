@@ -1,6 +1,6 @@
 {
   "name": "infra",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
   "author": "nself",
   "license": "MIT",

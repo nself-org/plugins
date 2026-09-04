@@ -1,6 +1,6 @@
 {
   "name": "flags",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage feature flags served by the feature-flags plugin: list, get, set, history, canary rollouts and kill switches.",
   "author": "nself",
   "license": "MIT",

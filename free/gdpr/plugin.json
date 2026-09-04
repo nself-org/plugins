@@ -1,6 +1,6 @@
 {
   "name": "gdpr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "GDPR data portability (Art. 20) and right-to-erasure (Art. 17) tools for self-hosted nSelf instances.",
   "author": "nself",
   "license": "MIT",

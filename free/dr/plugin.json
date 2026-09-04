@@ -1,6 +1,6 @@
 {
   "name": "dr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Disaster recovery: promote a standby, fence the old primary, run drills, and install the systemd units DR needs.",
   "author": "nself",
   "license": "MIT",

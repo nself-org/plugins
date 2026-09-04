@@ -1,6 +1,6 @@
 {
   "name": "monitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Monitoring stack management: upgrade the bundled Grafana dashboards.",
   "author": "nself",
   "license": "MIT",
@@ -43,5 +43,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install monitor` must place the built nself-monitor binary at ~/.nself/plugins/bin/nself-monitor, where internal/plugin/router.go's ProxyCommand execs it for `nself monitor <args>` with stdio inherited. Extracted from cli/cmd/commands/monitor.go under CLI-R11 (the command had no internal/* package of its own \u2014 the dashboard list was inline)."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install monitor` must place the built nself-monitor binary at ~/.nself/plugins/bin/nself-monitor, where internal/plugin/router.go's ProxyCommand execs it for `nself monitor <args>` with stdio inherited. Extracted from cli/cmd/commands/monitor.go under CLI-R11 (the command had no internal/* package of its own — the dashboard list was inline)."
 }

@@ -1,7 +1,7 @@
 {
   "name": "content-safety",
   "displayName": "ɳSelf Content Safety",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Trust-safety evidence, legal holds, spam detection, raid protection, and abuse scoring",
   "author": "nSelf",
   "license": "MIT",

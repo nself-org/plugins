@@ -1,6 +1,6 @@
 {
   "name": "gateway",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Manage the nSelf AI gateway (nself-ai-gateway, port 3761): service health, provider key vault, quota usage, and routing rules.",
   "author": "nself",
   "license": "MIT",

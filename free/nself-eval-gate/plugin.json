@@ -1,6 +1,6 @@
 {
   "name": "nself-eval-gate",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api_version": "1.0.0",
   "description": "Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality precision/recall/fact_f1 metrics, CI integration via nself ci eval, and autonomy-tier threshold enforcement.",
   "author": "nself",
