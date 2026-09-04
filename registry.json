@@ -37,7 +37,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-ai"
-      }
+      },
+      "checksum": "ec3c916309b5d4d304cb073fe206fcfff37a4c1bede74c91f429e2635238e660"
     },
     "ai-studio": {
       "version": "1.0.0",
@@ -67,7 +68,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-ai-studio"
-      }
+      },
+      "checksum": "5145e1d367ff7f485b43cdfa40078d1f9ba4daf729f26a1264e7f3eb27d90c10"
     },
     "alerts": {
       "version": "1.0.0",
@@ -98,7 +100,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-alerts"
-      }
+      },
+      "checksum": "0dcc785e714894a2afb4a18c28b2c4c6575a3fb33f8a6d39cf8fd3e495468363"
     },
     "api": {
       "version": "1.0.0",
@@ -128,7 +131,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-api"
-      }
+      },
+      "checksum": "840660cf901309be03ff2524efe67626a9b336065003ce944d50cc2799aacd6b"
     },
     "audit": {
       "version": "1.0.0",
@@ -158,7 +162,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-audit"
-      }
+      },
+      "checksum": "a18e941dd636995cc100d2728ab9af6c6cff9ec00e4519427574b3bf82409fab"
     },
     "audit-log": {
       "version": "1.0.0",
@@ -189,7 +194,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "1fb648dc2eb3fb454bcb81178f7e91a01b4a00366486a0448e0f86ba59ed9819"
     },
     "backup": {
       "version": "1.0.0",
@@ -221,7 +227,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main"
-      }
+      },
+      "checksum": "05b46b1b74fd40d9a60fee4953eb4656323f25a855f48ac1d8ca7f7b130ea9bc"
     },
     "ci": {
       "version": "1.0.1",
@@ -284,7 +291,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-claw"
-      }
+      },
+      "checksum": "ffe59dff7107602af91aec30418770ffacc040f2c70e5fe2b2204557e90959df"
     },
     "content-acquisition": {
       "version": "1.0.0",
@@ -340,7 +348,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "a4e6789e2a302b1d92f2d2d125695a1019864bf197bb2d6aa0488bf5d55fd92e"
     },
     "content-progress": {
       "version": "1.0.0",
@@ -405,7 +414,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-costs"
-      }
+      },
+      "checksum": "dc3488230c2824b117b049f718729b8a07dc3efb53ba0ac81305606244d16586"
     },
     "cron": {
       "version": "1.0.0",
@@ -469,7 +479,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-dlq"
-      }
+      },
+      "checksum": "bc0208657bdd25bedb44e9e3dbc790ca2c8542001b45cce07f466fa468a83880"
     },
     "dogfood": {
       "version": "1.0.0",
@@ -500,7 +511,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-dogfood"
-      }
+      },
+      "checksum": "045a7821cc6f76a5e593e0e9710a6a96f95069482cd491055357196e800aac1f"
     },
     "donorbox": {
       "version": "1.0.0",
@@ -568,7 +580,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-dr"
-      }
+      },
+      "checksum": "563dfac09b9496c8082a7147a5ec324516aabe7b63f0a8c5d45ac966c87645a1"
     },
     "e2ee": {
       "version": "1.0.0",
@@ -611,7 +624,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "2cf7c5d061b298a9acdce1b1c613c5105d6b7c07b2ee5e393592aec6490f9ab9"
     },
     "family-gedcom": {
       "version": "0.0.1",
@@ -676,7 +690,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "fe1aab08bb5af073320bbccb35f84c1b569140ea4d7b22e8eb30da17a3c4c94e"
     },
     "federation": {
       "version": "1.0.0",
@@ -707,7 +722,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-federation"
-      }
+      },
+      "checksum": "233709e2356362fd33a61988991b3dfa604178b8a7c4535933be4d14e43dbc46"
     },
     "flags": {
       "version": "1.0.0",
@@ -737,7 +753,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-flags"
-      }
+      },
+      "checksum": "b2d20309b4cb018840e79cb580f8d079d7aca86c954e1be31503ea179d2cc73e"
     },
     "forgejo": {
       "version": "1.0.0",
@@ -770,7 +787,8 @@
         "language": "shell",
         "runtime": "docker",
         "entryPoint": "docker-compose.plugin.yml"
-      }
+      },
+      "checksum": "40f5249850d72361e053d2c0f65bfea70f4250f189842409ccbd8bf1a3141617"
     },
     "gateway": {
       "version": "1.0.0",
@@ -800,7 +818,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-gateway"
-      }
+      },
+      "checksum": "ca9fc87c73b2030f0d3f101599c6ccb85219bf8fb6faec8e4c10b1b8b4fb8145"
     },
     "gauth": {
       "version": "1.0.0",
@@ -830,7 +849,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-gauth"
-      }
+      },
+      "checksum": "e0c7afb6357603d0dc6ff788bb603142308414e43dd9a7ea4c1db0a9c0a6089e"
     },
     "gdpr": {
       "version": "1.0.0",
@@ -862,7 +882,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-gdpr"
-      }
+      },
+      "checksum": "9b5e66a085685ff0afebff75ebf31aae603e475c3e78983897712ac93353e048"
     },
     "github": {
       "version": "1.0.0",
@@ -916,7 +937,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "nself-github"
-      }
+      },
+      "checksum": "3a9a321bad7e90780754e272677db3346517e36c4d8bf4a72d2391e220532a70"
     },
     "github-runner": {
       "version": "1.0.0",
@@ -947,7 +969,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "5a520b38fd8d67406bd6ccaad2208ce0d47199356c83044fd66b322eb9ee18ab"
     },
     "infra": {
       "version": "1.0.0",
@@ -981,7 +1004,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-infra"
-      }
+      },
+      "checksum": "79b54d6cac2811a0b9e36237237e51775f050e2b4c241d998144fc67013527a3"
     },
     "invitations": {
       "version": "1.0.0",
@@ -1013,7 +1037,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "f58a70dd3db269a912ecb2ee216470cdd55812d0fc7c8a5e00b9502a29fde642"
     },
     "jobs": {
       "version": "1.0.0",
@@ -1046,7 +1071,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "b1557330387b73da199d4656051aa5e629326c09bc8cdd05dbe9b584b398fd1d"
     },
     "k8s": {
       "version": "1.0.0",
@@ -1077,7 +1103,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-k8s"
-      }
+      },
+      "checksum": "4279219613efe24c4bc45801e723a8e3515cabd35b100d07138c887d56341b84"
     },
     "link-preview": {
       "version": "1.0.0",
@@ -1109,7 +1136,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "502f6dd621511022f34e1dd26b022f8f186f5ae8ef94578e4fa6ee146ff1756f"
     },
     "maintenance": {
       "version": "1.0.0",
@@ -1171,7 +1199,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "3779f949538b763babdfee62a1f0e91d9b56eae9a7cc8c9fcdba281cb62aa13b"
     },
     "mlflow": {
       "version": "1.0.0",
@@ -1201,7 +1230,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "43ce027f1ddf945c908ee20ddb5743919f13ca1652bf8554eb292d002410a7db"
     },
     "model": {
       "version": "1.0.0",
@@ -1231,7 +1261,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-model"
-      }
+      },
+      "checksum": "48ae5a5c80f2ddf55e8062ebe1662345b9024c929a49ed5a1069b59012bca25e"
     },
     "monitor": {
       "version": "1.0.0",
@@ -1262,7 +1293,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-monitor"
-      }
+      },
+      "checksum": "83d44b25ef08032c5e59cd5dcc7e942d395588b7c637fbe42067dcb2c8a05069"
     },
     "monitoring": {
       "version": "1.0.0",
@@ -1297,7 +1329,8 @@
         "language": "config",
         "runtime": "compose",
         "entryPoint": "docker-compose.plugin.yml"
-      }
+      },
+      "checksum": "eb37abb447377dc9caa997d91fe6d4a2f74e3dff53049aacbe9da3f7090116d9"
     },
     "notifications": {
       "version": "1.0.0",
@@ -1387,7 +1420,7 @@
       ],
       "dependencies": [],
       "name": "ollama",
-      "checksum": ""
+      "checksum": "affe917f8d212725db3ed2852ef0cc6b4513fac701406e4bf2774dbcb869d52f"
     },
     "paypal": {
       "version": "1.0.0",
@@ -1431,7 +1464,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "nself-paypal"
-      }
+      },
+      "checksum": "7463d23e21ecb18abd156d74f667f9142895d2e14dd8babf444bac980a0e931f"
     },
     "push": {
       "version": "1.0.0",
@@ -1467,7 +1501,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "9996bd5b11728cae924903de21a7707626aac74d7c4e0d85145a11c5a2bac1d1"
     },
     "queue": {
       "version": "1.0.0",
@@ -1497,7 +1532,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-queue"
-      }
+      },
+      "checksum": "dae510c5e9ca74a953f01a91e8dc748a616d6e53ed7234ba5362d0e88eadbd55"
     },
     "region": {
       "version": "1.0.0",
@@ -1528,7 +1564,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-region"
-      }
+      },
+      "checksum": "3e946c8313f1babaeeb921320ce486df37cf47409fabd43ea091e859f6023349"
     },
     "release": {
       "version": "1.0.0",
@@ -1559,7 +1596,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-release"
-      }
+      },
+      "checksum": "20370a691d45e5733030c774517a1fb4a72b720f497ea173529a6134be1d8ff3"
     },
     "search": {
       "version": "1.0.0",
@@ -1640,7 +1678,8 @@
           "name": "sentry-server",
           "description": "Provision and manage a self-hosted ɳSentry server"
         }
-      ]
+      ],
+      "checksum": "72a27113f873c22e352f810cc12afffc4920cf6a91f7b6a550163bd12dec20ab"
     },
     "shopify": {
       "version": "1.0.0",
@@ -1679,7 +1718,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "nself-shopify"
-      }
+      },
+      "checksum": "3bfad295b5e32935085f6c82ec4fde2c0e1d1f231ef6853e4be76e0658c6ec68"
     },
     "soak": {
       "version": "1.0.0",
@@ -1709,7 +1749,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-soak"
-      }
+      },
+      "checksum": "8524e1525b2a4c9eb4d7f789190b82f4dc8581f8731843653a4137f72b6787ec"
     },
     "stripe": {
       "version": "1.0.0",
@@ -1763,7 +1804,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "nself-stripe"
-      }
+      },
+      "checksum": "7b18a350f19295dab1f3d3b3dfd5e513aa9fde6835fa211d5c498834497ec0df"
     },
     "subtitle-manager": {
       "version": "1.0.0",
@@ -1809,7 +1851,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "00b82d4895dd9fa895ab7cf9573ce9825ff2488b8a1e4ab1961715039d97b0b8"
     },
     "tenant": {
       "version": "1.0.0",
@@ -1850,7 +1893,8 @@
           "name": "billing",
           "description": "Per-tenant usage metering, invoices and billing reports"
         }
-      ]
+      ],
+      "checksum": "176b5638fb79851ba553c8762a2fbb90473dbbfacb7e3a2cd216bc006b29e5a0"
     },
     "tokens": {
       "version": "1.0.0",
@@ -1887,7 +1931,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "efb42c6f1ef5f66ddff282de4f33adf9c0752c1e6948d3a35ea6b72e9acf0d4e"
     },
     "torrent-manager": {
       "version": "1.0.0",
@@ -1945,7 +1990,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "200e9f719ddac9404c4398989da50e83c60ebba94a805067cf9a01856553ae12"
     },
     "vpn": {
       "version": "1.0.0",
@@ -1983,7 +2029,8 @@
         "language": "go",
         "runtime": "go",
         "entryPoint": "cmd/main.go"
-      }
+      },
+      "checksum": "5702a2f833eefddeeec79ea00191cc5605ae6a08199826c61f3e47e0e645c1f6"
     },
     "waf": {
       "version": "1.0.0",
@@ -2014,7 +2061,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-waf"
-      }
+      },
+      "checksum": "bc213923cbf88e36f3938dc67d81386d5cf9595d1637d58c751d20c3397596ab"
     },
     "watchdog": {
       "version": "1.0.0",
@@ -2045,7 +2093,8 @@
         "entryPoint": "cmd/",
         "pluginType": "cli",
         "binaryName": "nself-watchdog"
-      }
+      },
+      "checksum": "ea331b4bab40bae81146d1a5c6fbee0574c3225215b5b08bf1587f8cc66a41c5"
     },
     "webhooks": {
       "version": "1.0.0",
@@ -2080,7 +2129,8 @@
       },
       "bundles": [
         "task"
-      ]
+      ],
+      "checksum": "a709b79eac7ee68a6da7bc3bf7f76e34db5cecbcec88703389bfe5fe6c242ead"
     },
     "access-controls": {
       "version": "1.1.2",
