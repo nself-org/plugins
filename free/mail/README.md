@@ -4,8 +4,7 @@ Send transactional and broadcast email through the nSelf stack: the mux +
 Postmark pipeline via `ping_api`, template management, and DKIM
 verification.
 
-**Tier:** Pro (MIT) — requires an ɳSelf+ or ɳClaw bundle
-license (the bundle that ships the Postmark plugin).
+**Tier:** Free (MIT).
 
 ## Installation
 
@@ -29,9 +28,8 @@ nself mail templates list
 nself mail dkim verify --domain example.com
 ```
 
-Every subcommand accepts `--json` for machine-readable output. Without a
-configured license key, every subcommand exits 2 with:
-`nself mail requires nSelf+ or nClaw bundle (Postmark plugin) — run 'nself license add <key>'`.
+Every subcommand accepts `--json` for machine-readable output. A configured
+license key is forwarded to `ping_api` when present but is not required.
 
 ## History
 

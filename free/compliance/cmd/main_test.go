@@ -93,17 +93,6 @@ func TestNewRouter_SOC2ControlsRouteDispatch(t *testing.T) {
 	}
 }
 
-func TestNewRouter_SOC2ControlsRouteDispatch_Unlicensed(t *testing.T) {
-	db, _ := newTestDB(t)
-	r := newRouter(db)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/compliance/soc2/controls", nil)
-	r.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestNewRouter_DSARsRouteDispatch(t *testing.T) {
 	db, mock := newTestDB(t)
 	mock.ExpectQuery("SELECT id, source_account_id, request_type").WithArgs(pgxmock.AnyArg()).
@@ -122,13 +111,3 @@ func TestNewRouter_DSARsRouteDispatch(t *testing.T) {
 	}
 }
 
-func TestNewRouter_ChangeLogRouteDispatch_Unlicensed(t *testing.T) {
-	db, _ := newTestDB(t)
-	r := newRouter(db)
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/compliance/change-log", nil)
-	r.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-}

@@ -1,14 +1,17 @@
 // Purpose: plugin-pty entry point.
 //   Starts HTTP + WebSocket server on port 9100.
 //   Provides PTY session lifecycle and WebSocket I/O relay for ClawDE.
-// Inputs:  NSELF_DB_URL, NSELF_LICENSE_KEY, PTY_MAX_PER_TENANT, PTY_SESSION_TIMEOUT_SECS.
+// Inputs:  NSELF_DB_URL, PTY_MAX_PER_TENANT, PTY_SESSION_TIMEOUT_SECS.
 // Outputs: HTTP JSON + WebSocket PTY I/O.
 // Constraints:
-//   - NSELF_LICENSE_KEY must be set (pro license gate).
+//   - plugin-pty is a free plugin (plugin.json: requires_license=false) —
+//     the former NSELF_LICENSE_KEY-required gate was removed 2026-09-03
+//     (P6-E3-W2-S1-T5 FIX-PLUGINS).
 //   - All session operations require source_account_id.
 //   - Max PTY sessions per tenant enforced before spawn.
 //
-// SPORT: F04-PLUGIN-INVENTORY-PRO.md — plugin-pty
+// SPORT: F04-PLUGIN-INVENTORY.md — plugin-pty (moved out of the pro
+// inventory during P6's free-by-default reclassification)
 package main
 
 import (
@@ -29,12 +32,6 @@ import (
 )
 
 func main() {
-	// License gate
-	if os.Getenv("NSELF_LICENSE_KEY") == "" {
-		fmt.Fprintln(os.Stderr, "plugin-pty: NSELF_LICENSE_KEY is required (pro license)")
-		os.Exit(1)
-	}
-
 	dbURL := os.Getenv("NSELF_DB_URL")
 	if dbURL == "" {
 		fmt.Fprintln(os.Stderr, "plugin-pty: NSELF_DB_URL is required")

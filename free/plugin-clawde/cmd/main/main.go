@@ -1,10 +1,12 @@
 // Purpose: plugin-clawde entry point. Starts HTTP server on port 3847.
 //   Provides /health, /sessions, /sessions/{id}/heartbeat,
 //   /sessions/{id}/events endpoints.
-// Inputs: NSELF_DB_URL, NSELF_LICENSE_KEY env vars.
+// Inputs: NSELF_DB_URL env var.
 // Outputs: HTTP JSON responses and SSE event streams.
 // Constraints:
-//   - NSELF_LICENSE_KEY must be set (pro license gate).
+//   - plugin-clawde is a free plugin (plugin.json: requires_license=false) —
+//     the former NSELF_LICENSE_KEY-required gate was removed 2026-09-03
+//     (P6-E3-W2-S1-T5 FIX-PLUGINS).
 //   - All session operations require source_account_id (Multi-App Isolation).
 package main
 
@@ -26,11 +28,6 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("NSELF_DB_URL is required")
 	}
-	licenseKey := os.Getenv("NSELF_LICENSE_KEY")
-	if licenseKey == "" {
-		log.Fatal("NSELF_LICENSE_KEY is required (pro license)")
-	}
-
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("open db: %v", err)

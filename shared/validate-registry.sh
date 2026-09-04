@@ -791,6 +791,71 @@ EOF
 fi
 
 # =============================================================================
+# CHECK 14 — No two plugins in this registry claim the same table prefix
+# (added 2026-09-03, P6-E3-W2-S1-T5 FIX-PLUGINS, following an install-time
+# "table prefix already claimed" conflict report between jobs/np_jobs_ and
+# cron/np_cron_ — live re-derivation from registry.json + plugin.json found
+# NO actual duplicate prefix anywhere in the registry, so that conflict was
+# stale local install-environment state, not a repo defect; this check
+# exists so a REAL duplicate-prefix regression fails CI instead of only
+# surfacing at install time on someone's machine). Prefix = first two
+# underscore-separated segments of a table name (mirrors cli's
+# internal/plugin/config.go:tablePrefix — "np_chat_messages" -> "np_chat_").
+# =============================================================================
+section "CHECK 14 — no duplicate table-prefix ownership across registry"
+PREFIX_VIOLATIONS=0
+if [ -n "$PYTHON3" ]; then
+    PREFIX_FINDINGS="$("$PYTHON3" - "$REGISTRY_FILE" "$REGISTRY_FORMAT" <<'PYEOF'
+import json, sys, collections
+
+path, fmt = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    d = json.load(f)
+
+if fmt == "aggregated":
+    items = list(d.get("plugins", {}).items())
+elif fmt == "array-wrapped":
+    items = [(p.get("name"), p) for p in d.get("plugins", [])]
+else:
+    items = [(p.get("name"), p) for p in d]
+
+def prefix(table):
+    parts = table.split("_")
+    if len(parts) < 2:
+        return None
+    return "_".join(parts[:2]) + "_"
+
+owners = collections.defaultdict(set)
+for name, p in items:
+    if not isinstance(p, dict):
+        continue
+    for t in (p.get("tables") or []):
+        pfx = prefix(t)
+        if pfx:
+            owners[pfx].add(name or "?")
+
+for pfx, names in sorted(owners.items()):
+    if len(names) > 1:
+        print(f"{pfx}\t{','.join(sorted(names))}")
+PYEOF
+)"
+    if [ -n "$PREFIX_FINDINGS" ]; then
+        while IFS=$'\t' read -r dpfx downers; do
+            [ -z "$dpfx" ] && continue
+            err "CHECK-14" "$downers" "Table prefix '$dpfx' claimed by more than one plugin ($downers) — table names must not collide on their first two underscore-separated segments"
+            PREFIX_VIOLATIONS=$((PREFIX_VIOLATIONS + 1))
+        done <<EOF
+$PREFIX_FINDINGS
+EOF
+    fi
+    if [ "$PREFIX_VIOLATIONS" -eq 0 ]; then
+        ok "CHECK-14" "no duplicate table-prefix ownership found"
+    fi
+else
+    warn "CHECK-14" "registry" "python3 not available — skipping duplicate table-prefix check"
+fi
+
+# =============================================================================
 # Optional: --strict mode runs the legacy per-plugin field validator
 # (kept for backward compatibility with the original validator behavior)
 # =============================================================================

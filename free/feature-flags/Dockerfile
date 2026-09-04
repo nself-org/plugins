@@ -1,15 +1,15 @@
-FROM golang:1.25-alpine AS builder
-
+# Build context: plugins/ root (docker build -f free/feature-flags/Dockerfile .)
+# nself build / nself plugin install invoke this via docker-compose.plugin.yml's
+# `build.context: ${NSELF_PLUGIN_DIR}/../..` + `build.dockerfile: free/feature-flags/Dockerfile`
+# so the ../../sdk replace directive in go.mod resolves inside the image too.
+FROM golang:1.26-alpine AS builder
 WORKDIR /build
-
-# Copy SDK dependency first for caching
-COPY ../../sdk /build/sdk
-
-# Copy plugin source
-COPY go.mod go.sum ./
+# Copy the SDK first for layer caching (go.mod's replace target).
+COPY sdk/ sdk/
+# Copy plugin source.
+COPY free/feature-flags/ free/feature-flags/
+WORKDIR /build/free/feature-flags
 RUN go mod download
-
-COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /feature-flags ./cmd/main.go
 
 FROM alpine:3.20

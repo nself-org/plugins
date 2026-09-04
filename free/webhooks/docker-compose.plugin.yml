@@ -1,7 +1,10 @@
 # NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
 services:
   webhooks:
-    image: nself/nself-webhooks:latest
+    build:
+      context: ${NSELF_PLUGIN_DIR}/../..
+      dockerfile: free/webhooks/Dockerfile
+    # image: nself/nself-webhooks:latest  # optional override once published; build: is the default so `nself plugin install` works with no registry pull
     container_name: ${COMPOSE_PROJECT_NAME}_webhooks
     restart: unless-stopped
     networks:

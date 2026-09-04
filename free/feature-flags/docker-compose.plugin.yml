@@ -7,8 +7,8 @@
 services:
   feature-flags:
     build:
-      context: ${NSELF_PLUGIN_DIR}/feature-flags
-      dockerfile: Dockerfile
+      context: ${NSELF_PLUGIN_DIR}/../..
+      dockerfile: free/feature-flags/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_feature_flags
     restart: unless-stopped
     ports:

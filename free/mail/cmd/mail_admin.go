@@ -6,7 +6,7 @@
 // --json).
 //
 // Outputs: a table or JSON listing of templates, or a DKIM verification
-// report; errors via mapMailError/requireLicense (mail.go).
+// report; errors via mapMailError (mail.go).
 //
 // Constraints: no dependency on the core CLI's internal/* packages.
 package main
@@ -39,9 +39,6 @@ var mailTemplatesListCmd = &cobra.Command{
 		client, err := resolveMailClient()
 		if err != nil {
 			return err
-		}
-		if client == nil {
-			return requireLicense(cmd)
 		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
@@ -88,9 +85,6 @@ var mailDKIMVerifyCmd = &cobra.Command{
 		client, err := resolveMailClient()
 		if err != nil {
 			return err
-		}
-		if client == nil {
-			return requireLicense(cmd)
 		}
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
