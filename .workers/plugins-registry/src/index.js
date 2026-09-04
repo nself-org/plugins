@@ -501,13 +501,45 @@ async function handlePlugin(path, env, ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// Tier gate — GET /plugins/:name/tarball must never hand out a direct
+// download for a paid tier. This is the ACTUAL deployed guard: wrangler.toml
+// `main = "src/index.js"`, so this file — not index.ts — is what runs at
+// plugins.nself.org. (qa/bugs/paid-tarball-gated-by-repo-visibility-not-
+// licence.md: PR #66 added a tier==="pro" guard to index.ts only; this file
+// had NO guard at all until now, and "max" was never covered anywhere.)
+//
+// Fail-safe by construction: only the literal string "free" passes. Any
+// other tier value — "pro", "max", or a future tier nobody has updated this
+// function for — is blocked by default rather than needing to be added to
+// an allow-list. index.ts carries a compile-time-exhaustive twin of this
+// same rule (isDirectDownloadTier) for when that file becomes the deploy
+// source of truth.
+// ---------------------------------------------------------------------------
+
+function isDirectDownloadTier(tier) {
+  return tier === 'free';
+}
+
+// ---------------------------------------------------------------------------
 // Tarball redirect — GET /plugins/:name/tarball
 // Constructs the GitHub release tarball URL, optionally signs it, and redirects.
+// Non-free tiers are refused outright — see isDirectDownloadTier() above.
 // ---------------------------------------------------------------------------
 
 async function handlePluginTarball(plugin, env) {
   const { name, version, tier } = plugin;
   const resolvedVersion = version || '0.0.0';
+
+  if (!isDirectDownloadTier(tier)) {
+    return jsonResponse(
+      {
+        error:        'paid plugin — use the licence-gated download endpoint',
+        plugin:       name,
+        download_url: `https://ping.nself.org/plugins/${name}/download`,
+      },
+      401,
+    );
+  }
 
   const repo      = (tier === 'pro') ? 'plugins-pro' : 'plugins';
   const tarballUrl =
@@ -825,3 +857,11 @@ function mergeCategoriesFromPlugins(plugins) {
 function toTitleCase(str) {
   return str.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
+
+// ---------------------------------------------------------------------------
+// Named exports for unit testing (see index.test.mjs). The Worker itself is
+// invoked only via the default export's fetch() below — these are additive,
+// not part of the Worker's request surface.
+// ---------------------------------------------------------------------------
+
+export { isDirectDownloadTier, handlePluginTarball };

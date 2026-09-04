@@ -52,6 +52,7 @@ import type {
   Env,
   PluginEntry,
   PluginListResponse,
+  PluginTier,
   KVEnvelope,
   RevokedAuthorEntry,
   RevokedAuthorListResponse,
@@ -407,16 +408,37 @@ async function handlePlugin(path: string, env: Env, ctx: ExecutionContext): Prom
 // Pro plugins always use the ping_api gated download — never this path.
 // ---------------------------------------------------------------------------
 
+// qa/bugs/paid-tarball-gated-by-repo-visibility-not-licence.md / P6 siege HIGH:
+// PR #66 first added a guard here, but it only checked `tier === "pro"`.
+// PluginTier is "free" | "pro" | "max" (a live plugin, "ai", ships at "max"),
+// so a max-tier tarball still fell through to the unauthenticated redirect
+// below. This switch is exhaustive over PluginTier: adding a 4th tier
+// without adding a case here is a TypeScript compile error (via the `never`
+// assignment in `default`), so the guard cannot silently miss a new paid
+// tier the way it missed "max". index.js — the file wrangler.toml actually
+// deploys (`main = "src/index.js"`) — carries a runtime-fail-safe twin of
+// this same rule (isDirectDownloadTier); that file, not this one, is what
+// serves plugins.nself.org today.
+function isDirectDownloadTier(tier: PluginTier): boolean {
+  switch (tier) {
+    case "free":
+      return true;
+    case "pro":
+    case "max":
+      return false;
+    default: {
+      const _exhaustive: never = tier;
+      return _exhaustive;
+    }
+  }
+}
+
 async function handlePluginTarball(plugin: PluginEntry, env: Env): Promise<Response> {
   const { name, version, tier } = plugin;
 
-  // qa/bugs/paid-tarball-gated-by-repo-visibility-not-licence.md: this route's own
-  // header comment already claimed "Pro plugins always use the ping_api gated
-  // download — never this path", but nothing enforced it — a pro-tier plugin fell
-  // through to the same GitHub-redirect code below and only 404'd because
-  // plugins-pro happens to be a private repo. No entitlement was ever checked.
-  // Enforce the claim for real: refuse here and point callers at the real gate.
-  if (tier === "pro") {
+  // Refuse every non-free tier and point callers at the real, licence-gated
+  // download route. See isDirectDownloadTier() above.
+  if (!isDirectDownloadTier(tier)) {
     return jsonResponse(
       {
         error: "paid plugin — use the licence-gated download endpoint",
@@ -778,3 +800,4 @@ function toTitleCase(str: string): string {
 
 // Re-export types for external consumers
 export type { Env, PluginEntry, PluginListResponse, KVEnvelope };
+export { isDirectDownloadTier, handlePluginTarball };
