@@ -1,11 +1,10 @@
-# ɳSelf Payments Plugin (Pro)
+# ɳSelf Payments Plugin
 
-Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with normalized webhook handling and multi-provider order management. Port 3086. **Pro plugin — requires a license.**
+Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with normalized webhook handling and multi-provider order management. Port 3086. **Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxx...
 nself plugin install payments
 ```
 

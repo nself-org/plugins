@@ -6,12 +6,11 @@ Streams nSelf Postgres (`np_*` tables) to ClickHouse, BigQuery, or Snowflake.
 
 - nSelf CLI v1.0.9+
 - `cdc` plugin installed and running (peer dependency)
-- License: Pro bundle or ɳSelf+
+- Free (MIT), no license required
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxx...
 nself plugin install cdc
 nself plugin install warehouse
 ```

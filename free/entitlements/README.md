@@ -1,32 +1,15 @@
 # Entitlements Plugin
 
-> Feature gating, subscription plan management, usage quota tracking, and metered billing. **Pro plugin — requires license.**
+> Feature gating, subscription plan management, usage quota tracking, and metered billing.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Basic (this is a `tier: pro` plugin per F07-PRICING-TIERS).
-
-## Bundle membership
-
-ɳSelf+ super-bundle ($49.99/yr). Foundational for any SaaS app built on nSelf, pair with `stripe` or `paypal` for billing.
-
-Or get all bundles + all apps via **ɳSelf+** ($49.99/yr).
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install entitlements
 nself build
 ```
-
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error.
 
 ## Description
 
@@ -102,9 +85,7 @@ curl -X POST -H 'Authorization: Bearer $TOKEN' https://api.example.com/entitleme
 
 ## Source
 
-Source-available (license required to run): [`plugins-pro/paid/entitlements/`](https://github.com/nself-org/plugins-pro/tree/main/paid/entitlements)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/entitlements/`](https://github.com/nself-org/plugins/tree/main/free/entitlements)
 
 ## See Also
 

@@ -1,11 +1,10 @@
 # plugin-llm-gateway
 
-> ClawDE-facing LLM gateway: per-tenant token quota, Redis-backed response caching, session context injection, and SSRF guard over nself-ai-gateway (port 3761). **Pro plugin — requires license.**
+> ClawDE-facing LLM gateway: per-tenant token quota, Redis-backed response caching, session context injection, and SSRF guard over nself-ai-gateway (port 3761).
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxx...
 nself plugin install plugin-llm-gateway
 ```
 
@@ -121,10 +120,9 @@ Both tables use `source_account_id TEXT NOT NULL DEFAULT 'primary'` for multi-ap
 
 ## License
 
-Requires `clawde` bundle or ɳSelf+ subscription.
+Free (MIT) — no license required.
 
 ```bash
-nself license set nself_pro_xxxxx...
 nself plugin install plugin-llm-gateway
 nself plugin status plugin-llm-gateway
 ```

@@ -4,7 +4,7 @@ Hybrid retrieval plugin for nSelf. Combines pgvector ANN (cosine similarity) and
 BM25 (full-text search) using Reciprocal Rank Fusion (RRF) to produce ranked results that
 outperform either method alone.
 
-**Port:** 3825 | **License:** Pro | **Bundle:** ɳClaw (AI-CP)
+**Port:** 3825 | **License:** Free (MIT) | **Bundle:** ɳClaw (AI-CP)
 
 ---
 
@@ -63,7 +63,7 @@ Returns `{"status":"ok"}` or `{"status":"unhealthy"}` (503).
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string (with pgvector enabled) |
-| `NSELF_LICENSE_KEY` | Yes | — | nSelf Pro license key |
+| `NSELF_LICENSE_KEY` | No | — | Unused; reserved for future entitlement checks |
 | `NSELF_RETRIEVAL_PORT` | No | `3825` | HTTP server port |
 
 ---
@@ -83,7 +83,6 @@ Hasura row filters enforce `source_account_id = X-Hasura-Source-Account-Id`.
 ## Installation
 
 ```bash
-nself license set <your-key>
 nself plugin install plugin-retrieval
 ```
 
@@ -91,4 +90,4 @@ nself plugin install plugin-retrieval
 
 ## License
 
-Requires an active nSelf Pro license. Purchase at [nself.org/pro](https://nself.org/pro).
+MIT license — no purchase required.

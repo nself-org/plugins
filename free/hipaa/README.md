@@ -1,7 +1,7 @@
 # ɳSelf HIPAA Plugin
 
 **Port:** 3212 (⚠️ conflicts with `admin-api` plugin — see Port Conflict below)
-**Bundle:** Unbundled (standalone, requires ɳSelf+ license)
+**Bundle:** Unbundled (standalone, free, no license required)
 **License flag:** `NSELF_HIPAA=true`
 
 The HIPAA plugin provides Health Insurance Portability and Accountability Act (HIPAA) compliance tooling for nSelf deployments handling Protected Health Information (PHI). It includes three core capabilities: a PHI column registry, a PHI access audit log with 6-year retention enforcement, and de-identification/tokenization of PHI data.

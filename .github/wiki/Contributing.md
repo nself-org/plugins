@@ -182,7 +182,7 @@ Do not open a public issue for security vulnerabilities. Follow the process in [
 - [ENFORCEMENT.md](https://github.com/nself-org/plugins/blob/main/.github/ENFORCEMENT.md) — code of conduct enforcement
 - [CODEOWNERS](https://github.com/nself-org/plugins/blob/main/.github/CODEOWNERS) — who reviews what
 - [[Plugin-Development]] — detailed plugin dev guide
-- [[Plugin-Overview]] — all 25 free plugins
+- [[All Plugins|Home#all-plugins-64-total]]: the full plugin catalog
 
 ---
 ← [[Home]] | [[_Sidebar]]

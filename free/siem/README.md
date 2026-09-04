@@ -1,11 +1,11 @@
 # siem
 
-Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization. ɳSelf+ required for external destinations.
+Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization.
 
 ## Details
 
 - **Category:** infrastructure
-- **Tier:** pro
+- **Tier:** free
 - **Language:** go
 - **Port:** 8002
 - **License:** MIT

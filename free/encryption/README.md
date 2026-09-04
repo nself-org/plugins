@@ -5,7 +5,7 @@ Each tenant supplies a Customer Managed Key (CMK) hosted in AWS KMS, GCP
 Cloud KMS, or HashiCorp Vault Transit; nSelf wraps its Data Encryption Keys
 (DEKs) with that CMK.
 
-**Tier:** Pro (MIT) — requires an ɳSelf+ or Enterprise license
+**Tier:** Free (MIT) — no license required
 (`NSELF_BYOK=true`).
 
 ## Installation

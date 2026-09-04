@@ -1,32 +1,15 @@
 # Cloudflare Plugin
 
-> Cloudflare zone, DNS, R2, cache, and analytics management. **Pro plugin — requires license.**
+> Cloudflare zone, DNS, R2, cache, and analytics management.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Basic (this is a `tier: pro` plugin per F07-PRICING-TIERS).
-
-## Bundle membership
-
-Not currently part of a named bundle (unbundled per F04-PLUGIN-INVENTORY). Common companion plugin for any nSelf deployment fronted by Cloudflare DNS or R2. Available via any per-bundle subscription or ɳSelf+.
-
-Or get all bundles + all apps via **ɳSelf+** ($3.99/mo or $39.99/yr).
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install cloudflare
 nself build
 ```
-
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error.
 
 ## Description
 
@@ -79,7 +62,7 @@ Public endpoints exposed by the plugin. Internal admin endpoints exist but are n
 | GET | `/health` | Liveness probe |
 | GET | `/` | Plugin index / capability list |
 
-Refer to the plugin's OpenAPI spec (under `paid/cloudflare/`) for the full route list.
+Refer to the plugin's OpenAPI spec (under `free/cloudflare/`) for the full route list.
 
 ## Examples
 
@@ -104,9 +87,7 @@ curl -X POST -H 'Authorization: Bearer $TOKEN' https://api.example.com/cloudflar
 
 ## Source
 
-Source-available (license required to run): [`plugins-pro/paid/cloudflare/`](https://github.com/nself-org/plugins-pro/tree/main/paid/cloudflare)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/cloudflare/`](https://github.com/nself-org/plugins/tree/main/free/cloudflare)
 
 ## See Also
 
