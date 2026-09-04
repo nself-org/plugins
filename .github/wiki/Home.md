@@ -35,7 +35,8 @@ Command pages include action/subcommand syntax, argument shapes, and option flag
 
 ### Plugin Documentation
 
-See [[All Plugins|#all-plugins-64-total]] below for the complete catalog of 64 plugins organized across 16 categories.
+<!-- Registry has 129 free plugins across 14 categories, generated via `jq '.plugins|length' registry.json` — the table below (64 rows) is a partial sample pending full regen (P6-E9-W4-S3-T2 tracks the related F03 SPORT regen); see `_Sidebar.md` § All Free Plugins or `.github/wiki/plugins/` for the complete 129-plugin list. -->
+See [[All Plugins|#plugin-directory-64-of-129-shown]] below for a sample; the full catalog is 129 free plugins across 14 categories (see `_Sidebar.md` § All Free Plugins for the complete alphabetical list, or `registry.json`).
 
 **Popular Plugins:**
 - [[Stripe|plugins/Stripe]] - Payment processing and subscription management
@@ -45,7 +46,7 @@ See [[All Plugins|#all-plugins-64-total]] below for the complete catalog of 64 p
 - [[Jobs|plugins/Jobs]] - Background job queue with BullMQ
 - [[Notifications|plugins/Notifications]] - Multi-channel notification delivery
 - [[Auth|plugins/Auth]] - Advanced authentication with OAuth, WebAuthn, TOTP 2FA
-- [[File Processing|plugins/FileProcessing]] - Image/video processing and optimization
+- [[File Processing|plugins/File-Processing]] - Image/video processing and optimization
 - [[Realtime|plugins/Realtime]] - WebSocket server with presence tracking
 - [[Analytics|plugins/Analytics]] - Event tracking and funnel analytics
 
@@ -99,15 +100,16 @@ Legacy `docs/` is retired. Public docs belong in `.github/wiki/` only.
 2. Commands in `Commands.md` and `commands/*.md` must match action/CLI source files.
 3. Any drift between code and docs is treated as a defect.
 
-## All Plugins (64 Total)
+## Plugin Directory (64 of 129 Shown)
 
-Organized across 16 categories: **Admin**, **Authentication**, **Automation**, **Commerce**, **Communication**, **Compliance**, **Content**, **Data**, **Development**, **Infrastructure**, **Integrations**, **Media**, **Monitoring**, **Networking**, **Sports**, **Streaming**
+<!-- Registry (129 plugins) uses 14 canonical categories per registry.json; this sample table's category column is synced to those values. -->
+This is a partial sample (64 of 129 free plugins). Registry categories (14, from `registry.json`): **authentication**, **automation**, **commerce**, **communication**, **compliance**, **content**, **data**, **development**, **infrastructure**, **integrations**, **media**, **social**, **sports**, **streaming**.
 
 | Plugin | Port | Category | Description |
 |--------|------|----------|-------------|
 | [access-controls](plugins/Access-Controls) | 3027 | authentication | Role-based and attribute-based access control (RBAC + ABAC) with policy engine |
 | [activity-feed](plugins/Activity-Feed) | 3209 | content | Universal activity feed system with fan-out-on-read/write, aggregation, and subscriptions |
-| [admin-api](plugins/Admin-Api) | 3212 | admin | Admin API service providing aggregated metrics, system health, session counts, storage breakdown, and real-time dashboard endpoints |
+| [admin-api](plugins/Admin-Api) | 3212 | infrastructure | Admin API service providing aggregated metrics, system health, session counts, storage breakdown, and real-time dashboard endpoints |
 | [ai](plugins/Ai) | 3101 | integrations | Unified AI gateway with multi-provider LLM support, embeddings, semantic search, prompt templates, and usage tracking |
 | [analytics](plugins/Analytics) | 3206 | infrastructure | Event tracking, counters, funnels, and quota management analytics engine |
 | [auth](plugins/Auth) | 3014 | authentication | Advanced authentication: OAuth, WebAuthn/passkeys, TOTP 2FA, magic links, device-code flow |
@@ -121,7 +123,7 @@ Organized across 16 categories: **Admin**, **Authentication**, **Automation**, *
 | [compliance](plugins/Compliance) | 3211 | compliance | Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting |
 | [content-acquisition](plugins/Content-Acquisition) | 3202 | media | Automated content acquisition with RSS monitoring, release calendar, and download rules engine |
 | [content-progress](plugins/Content-Progress) | 3022 | media | Track video, audio, and content playback progress with continue watching, watchlists, and favorites |
-| [ddns](plugins/Ddns) | 3217 | networking | Dynamic DNS updater with multi-provider support and external IP monitoring |
+| [ddns](plugins/Ddns) | 3217 | infrastructure | Dynamic DNS updater with multi-provider support and external IP monitoring |
 | [devices](plugins/Devices) | 3603 | streaming | IoT device enrollment, trust management, and command dispatch service |
 | [documents](plugins/Documents) | 3106 | data | Document management and generation service with templates, versioning, and sharing |
 | [donorbox](plugins/Donorbox) | 3005 | commerce | Donorbox donation data sync with webhook handling |
@@ -139,13 +141,13 @@ Organized across 16 categories: **Admin**, **Authentication**, **Automation**, *
 | [knowledge-base](plugins/Knowledge-Base) | 3713 | content | Knowledge base with documentation, FAQ, semantic search, versioning, translations, and analytics |
 | [link-preview](plugins/Link-Preview) | 3718 | content | URL metadata extraction with Open Graph, Twitter Cards, oEmbed support, custom previews, and caching |
 | [livekit](plugins/Livekit) | 3107 | communication | LiveKit voice/video infrastructure - room management, participant tracking, recording/egress, quality monitoring |
-| [mdns](plugins/Mdns) | 3216 | networking | mDNS/Bonjour service discovery for zero-config LAN advertising |
+| [mdns](plugins/Mdns) | 3216 | infrastructure | mDNS/Bonjour service discovery for zero-config LAN advertising |
 | [media-processing](plugins/Media-Processing) | 3019 | media | FFmpeg-based media encoding and processing with HLS streaming support |
 | [meetings](plugins/Meetings) | 3710 | development | Calendar integration and meeting management with room booking, Google/Outlook sync, recurring meetings, and availability tracking |
 | [moderation](plugins/Moderation) | 3208 | content | Unified content moderation platform with profanity filtering, toxicity detection, AI-powered review, rule-based policies, automated actions, manual review workflows, user strikes, and appeals management |
-| [notifications](plugins/Notifications) | 3102 | infrastructure | Multi-channel notifications with email, FCM/APNs push, and SMS delivery, templates, preferences, and tracking |
+| [notifications](plugins/Notifications) | 3102 | communication | Multi-channel notifications with email, FCM/APNs push, and SMS delivery, templates, preferences, and tracking |
 | [object-storage](plugins/Object-Storage) | 3301 | infrastructure | Multi-provider object storage with S3-compatible API, local storage, presigned URLs, and multipart uploads |
-| [observability](plugins/Observability) | 3215 | monitoring | Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration |
+| [observability](plugins/Observability) | 3215 | infrastructure | Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration |
 | [paypal](plugins/Paypal) | 3004 | commerce | PayPal payment data sync with webhook handling |
 | [photos](plugins/Photos) | 3108 | media | Photo album management with EXIF extraction, tagging, face grouping, and thumbnails |
 | [podcast](plugins/Podcast) | 3210 | media | Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management |

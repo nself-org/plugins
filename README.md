@@ -11,9 +11,10 @@ Free and open-source plugins for [nself](https://nself.org) — the self-hosted 
 nself plugin install <name>
 ```
 
-## Free Plugins (122)
+## Free Plugins (129)
 
-All 122 plugins are MIT-licensed and listed below (generated from `registry.json` via `cli/scripts/plugin-counts.sh` — see `.claude/docs/sport/F03-PLUGIN-INVENTORY-FREE.md` for narrative detail, currently pending its own regen per P6-E9-W4-S3-T2).
+<!-- Count generated from registry.json (`jq '.plugins|length' registry.json`), verified via cli/scripts/plugin-counts.sh — do not hand-type this number. -->
+All 129 plugins are MIT-licensed and listed below (generated from `registry.json` via `cli/scripts/plugin-counts.sh` — see `.claude/docs/sport/F03-PLUGIN-INVENTORY-FREE.md` for narrative detail, currently pending its own regen per P6-E9-W4-S3-T2).
 
 | Plugin | Description | Category |
 | ------ | ----------- | -------- |
@@ -61,12 +62,15 @@ All 122 plugins are MIT-licensed and listed below (generated from `registry.json
 | [family-wikitree](./free/family-wikitree/) | WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API). | Social |
 | [feature-flags](./free/feature-flags/) | Feature flags service with targeting rules, segments, and evaluation engine | Infrastructure |
 | [federation](./free/federation/) | Manage GraphQL Federation: compose an Apollo Router supergraph from installed plugin subgraphs, check subgraph health, and introspect the composed schema. | Infrastructure |
+| [file-processing](./free/file-processing/) | File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure. Planned: Inbound webhook support for storage provider notifications | Infrastructure |
 | [flags](./free/flags/) | Manage feature flags served by the feature-flags plugin: list, get, set, history, canary rollouts and kill switches. | Development |
 | [forgejo](./free/forgejo/) | Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod). | Development |
 | [functions-v8](./free/functions-v8/) | Edge Functions V8 Runtime. Deploy short-lived TypeScript functions with a Deno V8 isolate pool. HTTP-trigger, <50ms cold-start, allowlist-only env injection, Prometheus metrics, SSE log streaming. | Infrastructure |
+| [game-metadata](./free/game-metadata/) | Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management | Media |
 | [gateway](./free/gateway/) | Manage the nSelf AI gateway (nself-ai-gateway, port 3761): service health, provider key vault, quota usage, and routing rules. | Integrations |
 | [gauth](./free/gauth/) | Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth. | Integrations |
 | [gdpr](./free/gdpr/) | GDPR data portability (Art. 20) and right-to-erasure (Art. 17) tools for self-hosted nSelf instances. | Compliance |
+| [geocoding](./free/geocoding/) | Geocoding plugin with geofence storage. Planned: Google Maps API integration for forward/reverse geocoding and place search | Infrastructure |
 | [github](./free/github/) | GitHub repository, issue, and workflow integration | Development |
 | [github-runner](./free/github-runner/) | GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners. | Development |
 | [hipaa](./free/hipaa/) | HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow. Requires ɳSelf+ license. | Compliance |
@@ -82,6 +86,7 @@ All 122 plugins are MIT-licensed and listed below (generated from `registry.json
 | [mail](./free/mail/) | Send transactional and broadcast email through the nSelf stack: mux + Postmark pipeline via ping_api, template management, and DKIM verification. | Communication |
 | [maintenance](./free/maintenance/) | Maintenance utilities: disk cleanup, log rotation and the maintenance scheduler. | Infrastructure |
 | [mdns](./free/mdns/) | mDNS/Bonjour service discovery for zero-config LAN advertising | Infrastructure |
+| [media-processing](./free/media-processing/) | FFmpeg-based media encoding and processing with HLS streaming support | Media |
 | [meetings](./free/meetings/) | Calendar integration and meeting management with room booking, recurring meetings, and availability tracking. External calendar sync (Google/Outlook) planned for future release. | Development |
 | [mlflow](./free/mlflow/) | MLflow experiment tracking and model registry | Data |
 | [model](./free/model/) | Manage local AI models via Ollama: list, pull, remove, update, benchmark, plus the legacy ollama command tree. | Integrations |
@@ -94,7 +99,6 @@ All 122 plugins are MIT-licensed and listed below (generated from `registry.json
 | [nself-geo](./free/nself-geo/) | Forward and reverse geocoding with provider-agnostic caching layer. Nominatim (free, OSM) is the default; Google Places and Mapbox are premium fallbacks. Exposes geocodeAddress, reverseGeocode, geocodeBatch, clearGeoCache via Hasura Remote Schema. | Integrations |
 | [nself-image](./free/nself-image/) | Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization. | Media |
 | [nself-pdf](./free/nself-pdf/) | Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger | Content |
-| [nself-saas-gateway](./free/nself-saas-gateway/) | Unified tenant-scoped REST facade for the nSentry SaaS (api.sentry.nself.org): /v1 monitors, incidents, status pages, and alert channels over the bundle plugins, plus tenant signup and billing tier updates. | Monitoring |
 | [nself-scan](./free/nself-scan/) | Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred — requires partner agreement) | Compliance |
 | [nself-sync](./free/nself-sync/) | Event-log sync engine for nClaw. Multi-device state synchronization via hybrid logical clocks (HLC) and last-write-wins (LWW) conflict resolution. JWT-authenticated push/pull/snapshot/subscribe with Ed25519-signed events. | Infrastructure |
 | [nself-vault](./free/nself-vault/) | nSelf-managed envelope encryption KMS. Provides per-row/column selective encryption with key rotation, audit logging, and Hasura Action surface. Eliminates ad-hoc per-team AES wrappers. | Infrastructure |
@@ -110,6 +114,7 @@ All 122 plugins are MIT-licensed and listed below (generated from `registry.json
 | [plugin-llm-gateway](./free/plugin-llm-gateway/) | ClawDE-facing LLM gateway: per-tenant token quota, Redis response caching, session context injection, and SSRF guard over nself-ai-gateway (port 3761). Simplifies ClawDE client LLM calls. | Ai |
 | [plugin-pty](./free/plugin-pty/) | Pseudo-terminal bridge for ClawDE AI sessions. Spawns, manages, and relays PTY processes with per-tenant resource limits and WebSocket I/O. | Ai |
 | [plugin-retrieval](./free/plugin-retrieval/) | Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for ɳClaw memory and nself-ai-mcp search/recall tools. | Ai |
+| [podcast](./free/podcast/) | Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management | Media |
 | [post](./free/post/) | Multi-platform content publishing. Publish to WordPress, Ghost, Twitter/X, LinkedIn, Telegram channels, Dev.to, and Hashnode with optional scheduling. | Content |
 | [push](./free/push/) | APNs + FCM push notification relay. Hasura event-trigger fan-out, delivery state tracking, exponential backoff retry. Handles iOS (Apple Push Notification service) and Android (Firebase Cloud Messaging v1 API). | Communication |
 | [queue](./free/queue/) | Inspect and manage nSelf background job queues: depth, stuck jobs, retries and purges. | Infrastructure |
@@ -119,16 +124,19 @@ All 122 plugins are MIT-licensed and listed below (generated from `registry.json
 | [rom-discovery](./free/rom-discovery/) | ROM metadata database, search, discovery, automated download orchestration, and multi-source scraping for nself-tv | Media |
 | [search](./free/search/) | Full-text search engine with PostgreSQL FTS and MeiliSearch support | Infrastructure |
 | [sentry-cli](./free/sentry-cli/) | ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server. | Infrastructure |
+| [shared-utils](./free/shared-utils/) | Shared Go utilities (request-ID tracing middleware, HTTP client propagation, server lifecycle helpers) used internally by multiple free nself plugins. Not installable directly. | Infrastructure |
 | [shopify](./free/shopify/) | Shopify store, orders, and product synchronization | Commerce |
 | [siem](./free/siem/) | Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization. ɳSelf+ required for external destinations. | Infrastructure |
 | [sms](./free/sms/) | SMS messaging via Twilio. Send, track, and manage opt-outs. | Communication |
 | [soak](./free/soak/) | Manage soak testing lifecycle: abort an active soak and roll back to a prior version. | Infrastructure |
+| [sports](./free/sports/) | Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats | Sports |
 | [storage](./free/storage/) | S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation. | Infrastructure |
 | [storage-transform](./free/storage-transform/) | On-the-fly image transformation CDN: resize, crop, format convert (WebP/AVIF/JPEG/PNG), quality, and device-pixel-ratio support. URL-param driven, Redis LRU cache, Nginx cache headers, rate limiting. | Infrastructure |
 | [stripe](./free/stripe/) | Stripe billing data sync with webhook handling | Commerce |
 | [subtitle-manager](./free/subtitle-manager/) | Subtitle search, download, and sync verification via OpenSubtitles | Media |
 | [tenant](./free/tenant/) | Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports. | Infrastructure |
 | [tenant-controller](./free/tenant-controller/) | Multi-tenant master controller for nCloud. Manages N isolated nSelf project instances behind a single deploy: per-project Postgres schema, Hasura metadata namespace, Nginx vhost, JWT secret, Redis key prefix, and MinIO bucket. Enables 50 projects on one Hetzner CX21. | Infrastructure |
+| [tmdb](./free/tmdb/) | Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support | Media |
 | [tokens](./free/tokens/) | Secure content delivery tokens, HLS encryption key management, and entitlement checks | Media |
 | [torrent-manager](./free/torrent-manager/) | Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement | Media |
 | [transactional-email](./free/transactional-email/) | Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay. | Communication |
