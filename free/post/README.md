@@ -1,30 +1,15 @@
 # Post Plugin
 
-> Multi-platform content publishing for WordPress, Ghost, Twitter/X, LinkedIn, Telegram, Dev.to, and Hashnode with optional scheduling. **Pro plugin — requires license.**
+> Multi-platform content publishing for WordPress, Ghost, Twitter/X, LinkedIn, Telegram, Dev.to, and Hashnode with optional scheduling.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Pro (this is a `tier: max` plugin per F07-PRICING-TIERS, Basic does not unlock).
-
-## Bundle membership
-
-This plugin is currently sold via tier subscription only (Pro and up) and via the **ɳSelf+** super-bundle ($49.99/yr). PPI flagged `post` as a candidate for the ɳClaw bundle's "publishing tools" expansion; F06-BUNDLE-INVENTORY will reflect the final mapping.
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install post
 nself build
 ```
-
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error.
 
 ## Description
 
@@ -115,9 +100,7 @@ curl -X POST https://api.example.com/post/posts \
 
 ## Source
 
-Source-available (license required to run): [`plugins-pro/paid/post/`](https://github.com/nself-org/plugins-pro/tree/main/paid/post)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/post/`](https://github.com/nself-org/plugins/tree/main/free/post)
 
 ## See Also
 

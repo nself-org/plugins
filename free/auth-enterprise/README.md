@@ -1,17 +1,16 @@
-# ɳSelf Auth Enterprise Plugin (Pro)
+# ɳSelf Auth Enterprise Plugin
 
-MFA enforcement (TOTP + WebAuthn policy) and SSO via SAML 2.0 and OIDC for Google Workspace, Okta, and Microsoft Entra ID. Port 3826. **Pro plugin (max tier) — requires a license.**
+MFA enforcement (TOTP + WebAuthn policy) and SSO via SAML 2.0 and OIDC for Google Workspace, Okta, and Microsoft Entra ID. Port 3826. **Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxx...
 nself plugin install auth-enterprise
 ```
 
 ## What It Does
 
-Adds enterprise-grade authentication controls to your nSelf deployment. MFA enforcement is always active and free for all users per the Security-Always-Free doctrine. SSO requires `NSELF_SSO=true` and a ɳSelf+ license.
+Adds enterprise-grade authentication controls to your nSelf deployment. MFA enforcement is always active and free for all users per the Security-Always-Free doctrine. SSO requires `NSELF_SSO=true`.
 
 Key features:
 - **TOTP** — TOTP enrollment, verification, and 30-second window challenge (RFC 6238, 1-step drift tolerance).
@@ -68,4 +67,4 @@ All tables include `source_account_id` for multi-app isolation.
 - TOTP secrets stored as plaintext base32 — enable pgcrypto column-level encryption for at-rest encryption in production.
 - Recovery codes are bcrypt-hashed (cost 10); raw codes are never persisted.
 - SSO client secrets in `np_sso_providers` should be encrypted by the application before storage.
-- MFA is always free per the Security-Always-Free doctrine; SSO requires `NSELF_SSO=true` and ɳSelf+.
+- MFA is always free per the Security-Always-Free doctrine; SSO requires `NSELF_SSO=true`.

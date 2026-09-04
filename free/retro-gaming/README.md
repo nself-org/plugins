@@ -1,32 +1,15 @@
 # Retro Gaming Plugin
 
-> Retro gaming ROM library management, emulator core serving, save states, play sessions, and controller configuration for nTV. **Pro plugin — requires license.**
+> Retro gaming ROM library management, emulator core serving, save states, play sessions, and controller configuration for nTV.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Basic (this is a `tier: pro` plugin per F07-PRICING-TIERS).
-
-## Bundle membership
-
-Not currently included in any of the five product bundles (ɳClaw, ClawDE, nTV, nFamily, nChat). Typically paired with the nTV bundle plugins (`media-processing`, `streaming`, `epg`, `tmdb`) to build the full nTV retro gaming stack.
-
-Or get all bundles + all apps via **ɳSelf+** ($49.99/yr).
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install retro-gaming
 nself build
 ```
-
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error.
 
 ## Description
 
@@ -134,9 +117,7 @@ curl -X POST -H 'Authorization: Bearer $TOKEN' \
 
 ## Source
 
-Source-available (license required to run): [`plugins-pro/paid/retro-gaming/`](https://github.com/nself-org/plugins-pro/tree/main/paid/retro-gaming)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/retro-gaming/`](https://github.com/nself-org/plugins/tree/main/free/retro-gaming)
 
 ## See Also
 

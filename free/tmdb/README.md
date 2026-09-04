@@ -1,32 +1,15 @@
 # Tmdb Plugin
 
-> Media metadata enrichment from TMDB, IMDb, TVDB, and MusicBrainz with auto-matching, a manual review queue, and multi-provider support. **Free MIT plugin.**
+> Media metadata enrichment from TMDB, IMDb, TVDB, and MusicBrainz with auto-matching, a manual review queue, and multi-provider support.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Basic (this is a `tier: pro` plugin per F07-PRICING-TIERS).
-
-## Bundle membership
-
-**nTV** ($0.99/mo) bundle, see `.github/docs/licensing/bundles.md`. Also via tier subscription.
-
-Or get all bundles + all apps via **ɳSelf+** ($49.99/yr).
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install tmdb
 nself build
 ```
-
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error.
 
 ## Description
 
@@ -106,9 +89,7 @@ curl -H 'Authorization: Bearer $TOKEN' https://api.example.com/tmdb/tv/12345/art
 
 ## Source
 
-Source (MIT, no license required): [`plugins-pro/paid/tmdb/`](https://github.com/nself-org/plugins-pro/tree/main/paid/tmdb)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/tmdb/`](https://github.com/nself-org/plugins/tree/main/free/tmdb)
 
 ## See Also
 

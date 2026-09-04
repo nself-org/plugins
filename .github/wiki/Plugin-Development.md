@@ -289,7 +289,7 @@ Pro plugins additionally set:
 
 ## 9. Hot Reload (Dev)
 
-Running the plugin via `nself plugin dev my-notifier` watches your source tree and rebuilds on change. Internally, the loader sets `NSELF_DEV_HOT_RELOAD=1`; the SDK's server mounts a `/debug/reload` endpoint that triggers a graceful restart. See the [[Hot-Reload-Dev]] page for details.
+Running the plugin via `nself plugin dev my-notifier` watches your source tree and rebuilds on change. Internally, the loader sets `NSELF_DEV_HOT_RELOAD=1`; the SDK's server mounts a `/debug/reload` endpoint that triggers a graceful restart.
 
 ---
 

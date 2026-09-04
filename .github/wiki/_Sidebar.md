@@ -24,6 +24,7 @@
 ### Plugin Ecosystem
 - [[Plugin-Marketplace]]
 - [[Plugin-Development]]
+- [[Plugin-Registry]]
 
 ### Popular Plugins
 - [[Stripe|plugins/Stripe]]

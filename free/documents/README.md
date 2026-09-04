@@ -1,32 +1,15 @@
 # Documents Plugin
 
-> Document management and generation service with templates, versioning, and sharing. **Pro plugin — requires license.**
+> Document management and generation service with templates, versioning, and sharing.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Basic (this is a `tier: pro` plugin per F07-PRICING-TIERS).
-
-## Bundle membership
-
-ɳSelf+ super-bundle ($3.99/mo · $39.99/yr). Useful in any deployment that issues invoices, contracts, or reports programmatically.
-
-Or get all bundles + all apps via **ɳSelf+** ($3.99/mo · $39.99/yr).
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install documents
 nself build
 ```
-
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error.
 
 ## Description
 
@@ -99,9 +82,7 @@ curl -X POST -H 'Authorization: Bearer $TOKEN' https://api.example.com/documents
 
 ## Source
 
-Source-available (license required to run): [`plugins-pro/paid/documents/`](https://github.com/nself-org/plugins-pro/tree/main/paid/documents)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/documents/`](https://github.com/nself-org/plugins/tree/main/free/documents)
 
 ## See Also
 

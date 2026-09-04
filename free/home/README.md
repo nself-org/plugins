@@ -1,32 +1,17 @@
 # Home Plugin
 
-> Home automation bridge connecting Home Assistant and MQTT to ɳSelf for smart device control, state monitoring, and scene activation. **Pro plugin. Requires license.**
+> Home automation bridge connecting Home Assistant and MQTT to ɳSelf for smart device control, state monitoring, and scene activation.
 
-## Tier required
-
-| Tier | Monthly | Annual | Includes this plugin? |
-|------|---------|--------|----------------------|
-| Free | $0 | $0 | No |
-| Any bundle | $0.99/mo | $9.99/yr | If in bundle |
-| ɳSelf+ | $3.99/mo | $39.99/yr | Yes |
-
-**Minimum tier:** Basic (this is a `tier: pro` plugin per F07-PRICING-TIERS).
-
-## Bundle membership
-
-This plugin is currently sold via tier subscription only (Basic and up). It is also included in the **ɳSelf+** super-bundle ($3.99/mo or $39.99/yr), which covers the entire catalog plus all apps and priority support.
-
-If a future ɳClaw automation expansion adds `home` to the ɳClaw bundle, F06-BUNDLE-INVENTORY and `registry.json` will reflect that change.
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 nself plugin install home
 nself build
 ```
 
-The license is validated against `ping.nself.org/license/validate`. Tier is checked server-side; insufficient tier returns an error. After install, `nself build` regenerates the docker-compose stack with the plugin service included.
+After install, `nself build` regenerates the docker-compose stack with the plugin service included.
 
 ## Description
 
@@ -102,9 +87,7 @@ curl -X POST https://api.your-domain.tld/home/scene/scene.evening \
 
 ## Source
 
-Source-available (license required to run): [`plugins-pro/paid/home/`](https://github.com/nself-org/plugins-pro/tree/main/paid/home)
-
-Note: `plugins-pro` is a private repository. Source access is granted to ɳSelf+ subscribers and Enterprise customers.
+MIT licensed, source included in this repository: [`free/home/`](https://github.com/nself-org/plugins/tree/main/free/home)
 
 ## See Also
 

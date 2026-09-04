@@ -8,8 +8,8 @@ All public docs are authored in `/.wiki` and synced to GitHub Wiki via `.github/
 
 - [[Installation]]
 - [[Quick Start|getting-started/Quick-Start]]
-- [[Commands|COMMANDS]]
-- [[Repository Structure|REPOSITORY-STRUCTURE]]
+- [[Commands|Commands]]
+- [[Repository Structure|Repository-Structure]]
 
 ## Top-Level Categories
 
@@ -21,7 +21,7 @@ All public docs are authored in `/.wiki` and synced to GitHub Wiki via `.github/
 
 ### Commands (Complete Reference)
 
-- [[Commands|COMMANDS]]
+- [[Commands|Commands]]
 - [[File Processing Commands|commands/File-Processing]]
 - [[GitHub Commands|commands/GitHub]]
 - [[ID.me Commands|commands/IDme]]
@@ -56,8 +56,8 @@ See [[All Plugins|#all-plugins-64-total]] below for the complete catalog of 64 p
 
 ### Engineering Guides
 
-- [[Plugin Development|DEVELOPMENT]]
-- [[TypeScript Plugin Guide|TYPESCRIPT_PLUGIN_GUIDE]]
+- [[Plugin Development|Development]]
+- [[TypeScript Plugin Guide|Typescript-Plugin-Guide]]
 - [[Multi-App Setup|guides/Multi-App-Setup]] 🆕 **All plugins support multi-app isolation**
 - [[Deployment|guides/Deployment]]
 - [[Migration|guides/Migration]]
@@ -66,11 +66,11 @@ See [[All Plugins|#all-plugins-64-total]] below for the complete catalog of 64 p
 
 ### Governance and Reference
 
-- [[Repository Structure|REPOSITORY-STRUCTURE]]
+- [[Repository Structure|Repository-Structure]]
 - [[Security]]
-- [[Contributing|CONTRIBUTING]]
-- [[Planned Plugins|PLANNED]]
-- [[Changelog|CHANGELOG]]
+- [[Contributing|Contributing]]
+- [[Planned Plugins|Planned]]
+- [[Changelog|Changelog]]
 - [[License]]
 
 ## Root Structure Policy (Canonical)

@@ -3,7 +3,7 @@
 PTY bridge for ClawDE AI sessions. Spawns, manages, and relays pseudo-terminal processes
 with per-tenant resource limits and WebSocket I/O.
 
-**Port:** 9100 | **Bundle:** ClawDE | **License:** Pro (requires_license=true)
+**Port:** 9100 | **Bundle:** ClawDE | **License:** Free (MIT)
 
 ---
 
@@ -72,7 +72,7 @@ Sends binary frames from PTY output. Accepts binary frames for PTY input.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
-| `NSELF_LICENSE_KEY` | Yes | — | nSelf license key |
+| `NSELF_LICENSE_KEY` | No | — | Unused; reserved for future entitlement checks |
 | `PTY_MAX_PER_TENANT` | No | `5` | Max concurrent PTY sessions per tenant |
 | `PTY_SESSION_TIMEOUT_SECS` | No | `3600` | Session idle timeout |
 | `PTY_PORT` | No | `9100` | HTTP server port |
@@ -118,4 +118,4 @@ curl -X POST http://localhost:9100/sessions \
 - Cross-tenant session access blocked at handler (403) and Hasura row-filter layers
 - Resource limit (429) prevents runaway PTY spawning per tenant
 - Audit log records all lifecycle events for compliance
-- Requires valid `NSELF_LICENSE_KEY` at startup
+- Free (MIT), no license key required to run

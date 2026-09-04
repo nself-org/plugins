@@ -3,7 +3,7 @@
 ClawDE daemon integration backend for nSelf. Manages session lifecycle, tracks daemon
 health, and provides an append-only event log for the ClawDE AI development environment.
 
-**Port:** 3847 | **License:** Pro | **Bundle:** ClawDE
+**Port:** 3847 | **License:** Free (MIT) | **Bundle:** ClawDE
 
 ---
 
@@ -57,7 +57,7 @@ Query: `?source_account_id=primary`. Sets `status=closed`. Returns `{"status":"c
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
-| `NSELF_LICENSE_KEY` | Yes | — | nSelf Pro license key |
+| `NSELF_LICENSE_KEY` | No | — | Unused; reserved for future entitlement checks |
 | `NSELF_CLAWDE_PORT` | No | `3847` | HTTP server port |
 | `NSELF_CLAWDE_DAEMON_ADDR` | No | `localhost:3848` | ClawDE PTY bridge address |
 | `NSELF_CLAWDE_SESSION_TTL_MINUTES` | No | `60` | Session expiry with no heartbeat |
@@ -78,7 +78,6 @@ Both use `source_account_id` (Multi-App Isolation Convention).
 ## Installation
 
 ```bash
-nself license set <your-key>
 nself plugin install plugin-clawde
 ```
 
@@ -86,4 +85,4 @@ nself plugin install plugin-clawde
 
 ## License
 
-Requires an active nSelf Pro license. Purchase at [nself.org/pro](https://nself.org/pro).
+MIT license — no purchase required.

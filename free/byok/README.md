@@ -1,15 +1,14 @@
 # BYOK Plugin
 
-> Bring Your Own Key per-tenant encryption with customer-managed keys (CMK). **Max-tier Pro plugin.**
+> Bring Your Own Key per-tenant encryption with customer-managed keys (CMK).
 
-> **Requires:** the ɳSelf+ (max) license tier. Set it with `nself license set nself_max_...` before installing.
+**Tier:** Free (MIT) — no license required.
 
 BYOK gives each tenant control of its own encryption key. Application data is sealed with AES-256-GCM, and the data key is wrapped by a key the customer owns in AWS KMS, GCP Cloud KMS, or HashiCorp Vault Transit. nSelf never holds the unwrappable root key, which satisfies HIPAA, FedRAMP High, FFIEC, and DORA key-control requirements.
 
 ## Install
 
 ```bash
-nself license set nself_max_xxxxx...
 nself plugin install byok
 ```
 

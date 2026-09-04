@@ -16,7 +16,6 @@ automerge HTTP sync, backed by Postgres. No extra infra required.
 ## Install
 
 ```bash
-nself license set nself_pro_...
 nself plugin install crdt
 nself build
 ```
@@ -77,4 +76,4 @@ if (msg) {
 
 ## License
 
-MIT. Requires nSelf Pro license.
+MIT. No license required.

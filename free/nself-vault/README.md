@@ -2,21 +2,11 @@
 
 Per-device envelope encryption for nSelf. Each registered device holds its own encrypted copy of a credential's key material. Only the owning device can decrypt its envelope.
 
-**Pro plugin — requires license.**
-
-## Bundles
-
-Included in: ɳClaw bundle, ClawDE bundle, and shared pro tier (any ɳSelf+ subscriber).
-
-| Tier | Monthly | Annual |
-|------|---------|--------|
-| Any bundle | $0.99/mo | $9.99/yr |
-| ɳSelf+ | $3.99/mo | $39.99/yr |
+**Tier:** Free (MIT) — no license required.
 
 ## Install
 
 ```bash
-nself license set nself_pro_<your-key>
 nself plugin install nself-vault
 nself build && nself start
 ```
@@ -74,4 +64,4 @@ All `/vault/v1/*` routes require `Authorization: Bearer <nself-jwt>`.
 
 ## License
 
-This plugin requires a valid nSelf license key. See [nself.org/pricing](https://nself.org/pricing).
+MIT license — no key required.

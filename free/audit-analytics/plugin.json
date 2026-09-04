@@ -2,7 +2,7 @@
   "name": "audit-analytics",
   "version": "1.0.0",
   "api_version": "1.0.0",
-  "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts. ɳSelf+ required. Free tier retains full audit capture and basic search.",
+  "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,
