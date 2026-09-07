@@ -30,34 +30,41 @@
  */
 
 // ---------------------------------------------------------------------------
-// Bundle membership (canonical — keep in sync with SPORT F06-BUNDLE-INVENTORY)
+// Bundle membership. Mirrors plugins-pro/bundles.json, which is canonical per
+// ADR-P6-03. SPORT F06-BUNDLE-INVENTORY.md is a superseded redirect stub and must
+// NOT be used as the source here. Canon order: task, chat, claw, family, sentry, clawde.
 // ---------------------------------------------------------------------------
 
 const BUNDLES = {
-  nclaw: {
+  task: {
+    name: 'ɳTask Bundle',
+    price: '$0',
+    plugins: ['storage', 'notifications', 'jobs', 'search', 'feature-flags', 'audit-log', 'webhooks', 'tokens'],
+  },
+  chat: {
+    name: 'ɳChat Bundle',
+    price: '$0.99/mo',
+    plugins: ['bots', 'livekit', 'nself-sms', 'support'],
+  },
+  claw: {
     name: 'ɳClaw Bundle',
     price: '$0.99/mo',
-    plugins: ['ai', 'claw', 'claw-web', 'mux', 'voice', 'browser', 'google', 'notify', 'cron'],
+    plugins: ['ai', 'browser', 'claw', 'claw-budget', 'claw-news', 'claw-web', 'cron', 'google', 'knowledge-base', 'mcp', 'mux', 'notify', 'voice'],
+  },
+  family: {
+    name: 'ɳFamily Bundle',
+    price: '$0.99/mo',
+    plugins: ['activity-feed', 'calendar', 'chat', 'family', 'family-geni', 'geolocation', 'moderation', 'nself-csam', 'photos', 'social'],
+  },
+  sentry: {
+    name: 'ɳSentry Bundle',
+    price: '$0.99/mo',
+    plugins: ['nself-alert-router', 'nself-anomaly', 'nself-audit', 'nself-crash', 'nself-cron-monitor', 'nself-errors', 'nself-incident-mgmt', 'nself-oncall', 'nself-rum', 'nself-saas-gateway', 'nself-slo-tracker', 'nself-status-page', 'nself-stripe', 'nself-synthetic-monitor', 'nself-uptime-monitor'],
   },
   clawde: {
-    name: 'ClawDE+ Bundle',
-    price: '$1.99/mo',
-    plugins: ['realtime', 'auth', 'cms', 'notify'],
-  },
-  ntv: {
-    name: 'nTV Bundle',
+    name: 'ClawDE Bundle',
     price: '$0.99/mo',
-    plugins: ['media-processing', 'streaming', 'epg', 'tmdb', 'torrent-manager', 'content-acquisition'],
-  },
-  nfamily: {
-    name: 'nFamily Bundle',
-    price: '$0.99/mo',
-    plugins: ['social', 'photos', 'activity-feed', 'moderation', 'realtime', 'cms', 'chat'],
-  },
-  nchat: {
-    name: 'nChat Bundle',
-    price: '$0.99/mo',
-    plugins: ['chat', 'livekit', 'recording', 'moderation', 'bots', 'realtime', 'auth'],
+    plugins: ['auth', 'cms', 'realtime'],
   },
 };
 
