@@ -76,8 +76,21 @@ mkdir -p "$(dirname "$OUT")"
 # themselves wall-clock noise. --sort=name makes the member order a pure
 # function of the file tree, independent of the underlying filesystem's
 # directory-entry order or which shell mechanism (glob vs find) enumerated it.
+#
+# --mode='go-w,a+rX' normalizes file MODE bits too — measured directly (P6
+# re-cut, 2026-09-11): with everything else above already pinned, identical
+# git content checked out on two different machines still produced tar
+# streams that hashed differently (b8f9afaf vs db4dc18d) because one
+# checkout had files at 644 and the other at 664. tar records each member's
+# mode byte-for-byte, so the building machine's umask was leaking into the
+# archive exactly like mtime/uid/gid did before those were pinned above.
+# go-w clears group/other write regardless of umask; a+rX makes files
+# world-readable and directories/already-executable files world-executable,
+# without flipping a non-executable file executable. Adding this flag made
+# both machines produce the byte-identical tar stream for the same content.
 "$TAR_BIN" --sort=name \
   --mtime='UTC 1970-01-01' \
   --owner=0 --group=0 --numeric-owner \
+  --mode='go-w,a+rX' \
   --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
   -cf - "$@" | gzip -n -9 > "$OUT"
