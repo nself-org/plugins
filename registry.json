@@ -39,9 +39,9 @@
         "binaryName": "nself-ai"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "929f40d695cc73a27d5594ef27631f22ee211cce3d5be591ddab5f97f2897b4a",
+      "checksum": "f5162fae82506ccb27d97a97da592127c3ee69a8e07e007dacdb0ca0d6793b16",
       "checksums": {
-        "sha256": "929f40d695cc73a27d5594ef27631f22ee211cce3d5be591ddab5f97f2897b4a"
+        "sha256": "f5162fae82506ccb27d97a97da592127c3ee69a8e07e007dacdb0ca0d6793b16"
       }
     },
     "ai-studio": {
@@ -74,9 +74,9 @@
         "binaryName": "nself-ai-studio"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "82ba400708acd347a188596f0096f29c3846b531f627b1903cd40989c7a49875",
+      "checksum": "c7e06f093d614b71c92c381c1319fe2833d7e0afb30576cc592d5c72ce1773eb",
       "checksums": {
-        "sha256": "82ba400708acd347a188596f0096f29c3846b531f627b1903cd40989c7a49875"
+        "sha256": "c7e06f093d614b71c92c381c1319fe2833d7e0afb30576cc592d5c72ce1773eb"
       }
     },
     "alerts": {
@@ -110,9 +110,9 @@
         "binaryName": "nself-alerts"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "d07deb6fbb5af9341785d5b17fae3438ccfca78027f53ab2cdfb53fd59f15928",
+      "checksum": "6fc9176c37c5cd82666ce672dc92571dbb3d57cb65d8d93cad11893d81b4d5fd",
       "checksums": {
-        "sha256": "d07deb6fbb5af9341785d5b17fae3438ccfca78027f53ab2cdfb53fd59f15928"
+        "sha256": "6fc9176c37c5cd82666ce672dc92571dbb3d57cb65d8d93cad11893d81b4d5fd"
       }
     },
     "api": {
@@ -145,9 +145,9 @@
         "binaryName": "nself-api"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "7bca130829cc77a8b583c8fdce1de9a3ff498c0edb150eb625197abe61c95cef",
+      "checksum": "72f91ba7a43328281e43c29d12abf922080d308ae4e7fa691ffdd443198f4757",
       "checksums": {
-        "sha256": "7bca130829cc77a8b583c8fdce1de9a3ff498c0edb150eb625197abe61c95cef"
+        "sha256": "72f91ba7a43328281e43c29d12abf922080d308ae4e7fa691ffdd443198f4757"
       }
     },
     "audit": {
@@ -180,9 +180,9 @@
         "binaryName": "nself-audit"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "1bfb60421ce0ceaf48c50bebfeeb0845e727c3d36b6e8631e8cdcaa01c641277",
+      "checksum": "08d01f3917a8db177626996e2f3f54a5ca86e5d6029e02b2ec0a5dce9a9d003e",
       "checksums": {
-        "sha256": "1bfb60421ce0ceaf48c50bebfeeb0845e727c3d36b6e8631e8cdcaa01c641277"
+        "sha256": "08d01f3917a8db177626996e2f3f54a5ca86e5d6029e02b2ec0a5dce9a9d003e"
       }
     },
     "audit-log": {
@@ -216,9 +216,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "53a00ff7bd1268739ad55340a47b4d66e38c86dfe77af4dacd9693cc2a5ace8d",
+      "checksum": "215bfb2e2764ba2626a297a78adab845a7815ee17957c377f38ca7848ccea55f",
       "checksums": {
-        "sha256": "53a00ff7bd1268739ad55340a47b4d66e38c86dfe77af4dacd9693cc2a5ace8d"
+        "sha256": "215bfb2e2764ba2626a297a78adab845a7815ee17957c377f38ca7848ccea55f"
       }
     },
     "backup": {
@@ -253,9 +253,9 @@
         "entryPoint": "cmd/main"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "5a7f60f21c3638d701797523f823495ba0096585ad54a9826ed3c559dfc64de4",
+      "checksum": "458e3b22b604a0d76e2993e5e7843182281ad1e84214afc31dc6364e3cc7d35a",
       "checksums": {
-        "sha256": "5a7f60f21c3638d701797523f823495ba0096585ad54a9826ed3c559dfc64de4"
+        "sha256": "458e3b22b604a0d76e2993e5e7843182281ad1e84214afc31dc6364e3cc7d35a"
       }
     },
     "ci": {
@@ -290,9 +290,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "7cc9e2cba7ef23c950ceb584c9407155347376a7663f53aae44aa68d05893f4f",
+      "checksum": "118c7967172a7cedd1426cd180c95d0a76778d2cdee8fce5411511e3aaea752d",
       "checksums": {
-        "sha256": "7cc9e2cba7ef23c950ceb584c9407155347376a7663f53aae44aa68d05893f4f"
+        "sha256": "118c7967172a7cedd1426cd180c95d0a76778d2cdee8fce5411511e3aaea752d"
       }
     },
     "claw-cli": {
@@ -326,9 +326,9 @@
         "binaryName": "nself-claw"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "c47f1034c3b8cf594df44a6fe438d34f271afe370f80675df8f8920b01801d7b",
+      "checksum": "eb6afc0c454935090941efe9316c19d475bdc7a3881d01054b3d12390fc1f589",
       "checksums": {
-        "sha256": "c47f1034c3b8cf594df44a6fe438d34f271afe370f80675df8f8920b01801d7b"
+        "sha256": "eb6afc0c454935090941efe9316c19d475bdc7a3881d01054b3d12390fc1f589"
       }
     },
     "content-acquisition": {
@@ -387,9 +387,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "3b1111ac8e208abdca8211609d8204e537e9fe239a7464cb75a15216f46de9d4",
+      "checksum": "095fa07082add3e68fb4706d031300ace955256b47a2d737b8724369698a78e3",
       "checksums": {
-        "sha256": "3b1111ac8e208abdca8211609d8204e537e9fe239a7464cb75a15216f46de9d4"
+        "sha256": "095fa07082add3e68fb4706d031300ace955256b47a2d737b8724369698a78e3"
       }
     },
     "content-progress": {
@@ -427,9 +427,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "4aa627cae1f3fe38d2eb84807c3de3e34c7b4fd6df5281c3f96ef1ffad99badb",
+      "checksum": "5bc44b327755732a219ecdaec757126e6550616cf4fcaa6ac8869c4a32b9e286",
       "checksums": {
-        "sha256": "4aa627cae1f3fe38d2eb84807c3de3e34c7b4fd6df5281c3f96ef1ffad99badb"
+        "sha256": "5bc44b327755732a219ecdaec757126e6550616cf4fcaa6ac8869c4a32b9e286"
       },
       "releaseTag": "v1.0.1"
     },
@@ -462,9 +462,9 @@
         "binaryName": "nself-costs"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "42de877b7d08c626e509b49fc18983b498f91f8afd40de22af0f7bb369ff16b7",
+      "checksum": "e930ed1162eb189c74547bd0b1ef05de6fade4f7d90045ddf179bbd679a19b31",
       "checksums": {
-        "sha256": "42de877b7d08c626e509b49fc18983b498f91f8afd40de22af0f7bb369ff16b7"
+        "sha256": "e930ed1162eb189c74547bd0b1ef05de6fade4f7d90045ddf179bbd679a19b31"
       }
     },
     "cron": {
@@ -499,9 +499,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "428b023440b3d1cd171c4393b8d5d105c4d819106ea676761deef3fdd26d6170",
+      "checksum": "2cb08a2843c49c027504499c643b44d6156224d0275e6422e3488705801a665a",
       "checksums": {
-        "sha256": "428b023440b3d1cd171c4393b8d5d105c4d819106ea676761deef3fdd26d6170"
+        "sha256": "2cb08a2843c49c027504499c643b44d6156224d0275e6422e3488705801a665a"
       },
       "releaseTag": "v1.0.1"
     },
@@ -536,9 +536,9 @@
         "binaryName": "nself-dlq"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "94d607388f664d95d006596b4c27431d45122fa2edbc79ca942aa90907e1e337",
+      "checksum": "8021708fd8b304b023aedff339dc82cbc36561d7ab5f066ba3709b6daf716b96",
       "checksums": {
-        "sha256": "94d607388f664d95d006596b4c27431d45122fa2edbc79ca942aa90907e1e337"
+        "sha256": "8021708fd8b304b023aedff339dc82cbc36561d7ab5f066ba3709b6daf716b96"
       }
     },
     "dogfood": {
@@ -572,9 +572,9 @@
         "binaryName": "nself-dogfood"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "17c4320a75deba1b8ddc5ee699604159147d72059725e0c164d578ab9e7f6808",
+      "checksum": "bb633b2e22edc8086074dbeeda3eaa4553935a1b6f0562356c3505f5774ea498",
       "checksums": {
-        "sha256": "17c4320a75deba1b8ddc5ee699604159147d72059725e0c164d578ab9e7f6808"
+        "sha256": "bb633b2e22edc8086074dbeeda3eaa4553935a1b6f0562356c3505f5774ea498"
       }
     },
     "donorbox": {
@@ -613,9 +613,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "e53b414cc3cf5e51caf17600a2db632cff81b5484846fd12afeabb02d7d62842",
+      "checksum": "b25c64cb98710de42be81aaf257f9db75e153e81f7878ed6c768451e04c192a2",
       "checksums": {
-        "sha256": "e53b414cc3cf5e51caf17600a2db632cff81b5484846fd12afeabb02d7d62842"
+        "sha256": "b25c64cb98710de42be81aaf257f9db75e153e81f7878ed6c768451e04c192a2"
       },
       "releaseTag": "v1.0.1"
     },
@@ -650,9 +650,9 @@
         "binaryName": "nself-dr"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "c313238697e5a4ad49c1b0313c7003db05225dbc6fdea2814872796c0d41f9ca",
+      "checksum": "958adebb709b79ee4a47f6a547b8c5ccd8b2ef0c4b9bf688e1509e1ca9c3daa3",
       "checksums": {
-        "sha256": "c313238697e5a4ad49c1b0313c7003db05225dbc6fdea2814872796c0d41f9ca"
+        "sha256": "958adebb709b79ee4a47f6a547b8c5ccd8b2ef0c4b9bf688e1509e1ca9c3daa3"
       }
     },
     "e2ee": {
@@ -698,9 +698,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "bcfe85b98b14ea38c716f8e8af85343accf8851fa501e7e388cd13969574a695",
+      "checksum": "5d995fcd2a876d2ce69e45922c2b0a6cbd99d7edb11a4185ffab8ff2652d2d2e",
       "checksums": {
-        "sha256": "bcfe85b98b14ea38c716f8e8af85343accf8851fa501e7e388cd13969574a695"
+        "sha256": "5d995fcd2a876d2ce69e45922c2b0a6cbd99d7edb11a4185ffab8ff2652d2d2e"
       }
     },
     "family-gedcom": {
@@ -736,9 +736,9 @@
         "entryPoint": "binary"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "beb154eff26de41146400e0c2e811c311f30e41d57a1f12a144f4f1791657a66",
+      "checksum": "cbf04fc56d0b8121d84da19e9e5e6715fa3f9394e2bda3d02966898199817d81",
       "checksums": {
-        "sha256": "beb154eff26de41146400e0c2e811c311f30e41d57a1f12a144f4f1791657a66"
+        "sha256": "cbf04fc56d0b8121d84da19e9e5e6715fa3f9394e2bda3d02966898199817d81"
       }
     },
     "feature-flags": {
@@ -773,9 +773,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "1524bd911dad654d53831e9e67353380ab527521181afd97931832cb2345a386",
+      "checksum": "837ca39444c01f878d42538503afc36f375d80882db08bffde2030e251398531",
       "checksums": {
-        "sha256": "1524bd911dad654d53831e9e67353380ab527521181afd97931832cb2345a386"
+        "sha256": "837ca39444c01f878d42538503afc36f375d80882db08bffde2030e251398531"
       }
     },
     "federation": {
@@ -809,9 +809,9 @@
         "binaryName": "nself-federation"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "b9d33347c04dc5de7639987abd8f5a8fe2c07e2e217f05b67e14e16774179df7",
+      "checksum": "3869bb5d988aaa1dfb2f9d4d9a755faeffa06f4772e9f3349a4819abb802623d",
       "checksums": {
-        "sha256": "b9d33347c04dc5de7639987abd8f5a8fe2c07e2e217f05b67e14e16774179df7"
+        "sha256": "3869bb5d988aaa1dfb2f9d4d9a755faeffa06f4772e9f3349a4819abb802623d"
       }
     },
     "flags": {
@@ -844,9 +844,9 @@
         "binaryName": "nself-flags"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "482ebc0b1a91ab18e5a78f37c9ec02b9aec5ab89c312f889045312a80e21c61c",
+      "checksum": "31ffe025c10a82ee91625cc49b73ab0d20f91de57c1b7a12a0c1ac7a2d78326b",
       "checksums": {
-        "sha256": "482ebc0b1a91ab18e5a78f37c9ec02b9aec5ab89c312f889045312a80e21c61c"
+        "sha256": "31ffe025c10a82ee91625cc49b73ab0d20f91de57c1b7a12a0c1ac7a2d78326b"
       }
     },
     "forgejo": {
@@ -882,9 +882,9 @@
         "entryPoint": "docker-compose.plugin.yml"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "06b21dc8aeb09b43a97c6cffb8848bd60d15ef6ec6a961b5e733023d821e5958",
+      "checksum": "f818e08355c4eaec6fd0add1f46674e6fdd455fa2c2d0f3855f044e871f859e8",
       "checksums": {
-        "sha256": "06b21dc8aeb09b43a97c6cffb8848bd60d15ef6ec6a961b5e733023d821e5958"
+        "sha256": "f818e08355c4eaec6fd0add1f46674e6fdd455fa2c2d0f3855f044e871f859e8"
       }
     },
     "gateway": {
@@ -917,9 +917,9 @@
         "binaryName": "nself-gateway"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "62e17f6263ae9cc467c8a4be3a010118c969235d87343b0e7277c015bc0f3551",
+      "checksum": "f72afd7a20df9b3da73f681a3317d60fdeaab80e936df9992cd49ac5dd5cc66b",
       "checksums": {
-        "sha256": "62e17f6263ae9cc467c8a4be3a010118c969235d87343b0e7277c015bc0f3551"
+        "sha256": "f72afd7a20df9b3da73f681a3317d60fdeaab80e936df9992cd49ac5dd5cc66b"
       }
     },
     "gauth": {
@@ -952,9 +952,9 @@
         "binaryName": "nself-gauth"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "3c3a7faa9973559ef948828e3725b016c3686c940b05f8f92adae3f1569b4dcc",
+      "checksum": "65803c554fab43aeefb6fddd0c1a2ed3d9c25a1b6c1d99522805666cd256f369",
       "checksums": {
-        "sha256": "3c3a7faa9973559ef948828e3725b016c3686c940b05f8f92adae3f1569b4dcc"
+        "sha256": "65803c554fab43aeefb6fddd0c1a2ed3d9c25a1b6c1d99522805666cd256f369"
       }
     },
     "gdpr": {
@@ -989,9 +989,9 @@
         "binaryName": "nself-gdpr"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "5cb6e085982b6745581e7f6fa87a6e0899334f20df2d873569dac80b8be95fdf",
+      "checksum": "08947829a10d401006ccda9ec9205a0a005983523f982da7e9a803d01e561e88",
       "checksums": {
-        "sha256": "5cb6e085982b6745581e7f6fa87a6e0899334f20df2d873569dac80b8be95fdf"
+        "sha256": "08947829a10d401006ccda9ec9205a0a005983523f982da7e9a803d01e561e88"
       }
     },
     "github": {
@@ -1048,9 +1048,9 @@
         "entryPoint": "nself-github"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "2014ea4c985f5281110f347094fa9707874b718c601e9b8cbfe333dc5dad2b29",
+      "checksum": "2249b35287164a57769bf437951f8e5720e76adbc5060c7ab30d76b8e5396554",
       "checksums": {
-        "sha256": "2014ea4c985f5281110f347094fa9707874b718c601e9b8cbfe333dc5dad2b29"
+        "sha256": "2249b35287164a57769bf437951f8e5720e76adbc5060c7ab30d76b8e5396554"
       }
     },
     "github-runner": {
@@ -1084,9 +1084,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "7ef16d2fc3ba95075787d15d0909950faaade1b4895766eebf7015d316d9fd16",
+      "checksum": "812ed28c5375ec45057462a582a086228754fc90579bc26307a3ae99adb2dead",
       "checksums": {
-        "sha256": "7ef16d2fc3ba95075787d15d0909950faaade1b4895766eebf7015d316d9fd16"
+        "sha256": "812ed28c5375ec45057462a582a086228754fc90579bc26307a3ae99adb2dead"
       }
     },
     "infra": {
@@ -1123,9 +1123,9 @@
         "binaryName": "nself-infra"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "253c2828438e44219400fc3dae6e06e2bef37ed99ad0c1d8593fec1d0e04f2da",
+      "checksum": "c01219518f1d1ac5e51ae8fc1bf40154a5babfd87e60a473e670836d76339b20",
       "checksums": {
-        "sha256": "253c2828438e44219400fc3dae6e06e2bef37ed99ad0c1d8593fec1d0e04f2da"
+        "sha256": "c01219518f1d1ac5e51ae8fc1bf40154a5babfd87e60a473e670836d76339b20"
       }
     },
     "invitations": {
@@ -1160,9 +1160,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "3cf1d9acc19ff50c5929af91951b832c34c6f9603c932a8acbb79565a35cbd83",
+      "checksum": "4789b2293589617ccadb3bf0cff64c816eb40c16ac88a6e971f60bbbaf13b36d",
       "checksums": {
-        "sha256": "3cf1d9acc19ff50c5929af91951b832c34c6f9603c932a8acbb79565a35cbd83"
+        "sha256": "4789b2293589617ccadb3bf0cff64c816eb40c16ac88a6e971f60bbbaf13b36d"
       }
     },
     "jobs": {
@@ -1198,9 +1198,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "9e86cc86215a3340cfbaa1966b6cf0c715af6fa58228be3a3fd4b34c54cd36fa",
+      "checksum": "36e9a5ae3626ae392a93054ce59be209c5e0aed18bec33559fd781a632f88f96",
       "checksums": {
-        "sha256": "9e86cc86215a3340cfbaa1966b6cf0c715af6fa58228be3a3fd4b34c54cd36fa"
+        "sha256": "36e9a5ae3626ae392a93054ce59be209c5e0aed18bec33559fd781a632f88f96"
       }
     },
     "k8s": {
@@ -1234,9 +1234,9 @@
         "binaryName": "nself-k8s"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "02f349cbbb20b9e052986671fceeeb03e52a2eb457c31acaaadacea5e9cee518",
+      "checksum": "3d57bb77ab1bde3d938aed25383227dbffc4f65a8c8149e0b4d1d4eb8a885fed",
       "checksums": {
-        "sha256": "02f349cbbb20b9e052986671fceeeb03e52a2eb457c31acaaadacea5e9cee518"
+        "sha256": "3d57bb77ab1bde3d938aed25383227dbffc4f65a8c8149e0b4d1d4eb8a885fed"
       }
     },
     "link-preview": {
@@ -1271,9 +1271,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "7bdc88448b7f7d26f4bdb0e92e91969251f8cae69d88e88640f949ba83b5f895",
+      "checksum": "18396b5a1b3f6a914557f96a03994d0bb889647a64feb17688ff8445efea8e4b",
       "checksums": {
-        "sha256": "7bdc88448b7f7d26f4bdb0e92e91969251f8cae69d88e88640f949ba83b5f895"
+        "sha256": "18396b5a1b3f6a914557f96a03994d0bb889647a64feb17688ff8445efea8e4b"
       }
     },
     "maintenance": {
@@ -1305,9 +1305,9 @@
         "pluginType": "cli",
         "binaryName": "nself-maintenance"
       },
-      "checksum": "6d6821ca10516847ec97a7cc9fe3cc213104091b7eb64203ab047b00212e796d",
+      "checksum": "81eeefba47402707b2ed8c19c01195a2c2059303c0ca6030af8b8f88a73b8845",
       "checksums": {
-        "sha256": "6d6821ca10516847ec97a7cc9fe3cc213104091b7eb64203ab047b00212e796d"
+        "sha256": "81eeefba47402707b2ed8c19c01195a2c2059303c0ca6030af8b8f88a73b8845"
       },
       "releaseTag": "v1.0.1"
     },
@@ -1343,9 +1343,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "9994fc1c572e4c1f04fcc58d0fd06e871c5e2317b83595f6e1a1d61cd226940a",
+      "checksum": "427df3ebb91a2162599add09b8fde145901b781da11fbe3d7ed6746ce1dfa995",
       "checksums": {
-        "sha256": "9994fc1c572e4c1f04fcc58d0fd06e871c5e2317b83595f6e1a1d61cd226940a"
+        "sha256": "427df3ebb91a2162599add09b8fde145901b781da11fbe3d7ed6746ce1dfa995"
       }
     },
     "mlflow": {
@@ -1378,9 +1378,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "366b85b397b29ee5478046b9668ac68735348c3bf4b00ced910b6916578a2676",
+      "checksum": "cddc0c0c7005b2b35160f01e23c9c12d78fbb457730a362c08f0f3ea29456194",
       "checksums": {
-        "sha256": "366b85b397b29ee5478046b9668ac68735348c3bf4b00ced910b6916578a2676"
+        "sha256": "cddc0c0c7005b2b35160f01e23c9c12d78fbb457730a362c08f0f3ea29456194"
       }
     },
     "model": {
@@ -1413,9 +1413,9 @@
         "binaryName": "nself-model"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "0d956ffb7b5e5a3b394c8c6beed04804d69593d2270013eb5a3c2784b530486d",
+      "checksum": "9fae49b490d9f0f616fd5d99647615cfcd056e4d2599fb4067296109b468b794",
       "checksums": {
-        "sha256": "0d956ffb7b5e5a3b394c8c6beed04804d69593d2270013eb5a3c2784b530486d"
+        "sha256": "9fae49b490d9f0f616fd5d99647615cfcd056e4d2599fb4067296109b468b794"
       }
     },
     "monitor": {
@@ -1449,9 +1449,9 @@
         "binaryName": "nself-monitor"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "60bae7945c03fadc2e23134b0c9df801c1bd6f794e4cfc3283125f0cc9f68d65",
+      "checksum": "7477c038111ee8f3a8d0113496b9088e6af91d0349906c9cad941c57dd04c71a",
       "checksums": {
-        "sha256": "60bae7945c03fadc2e23134b0c9df801c1bd6f794e4cfc3283125f0cc9f68d65"
+        "sha256": "7477c038111ee8f3a8d0113496b9088e6af91d0349906c9cad941c57dd04c71a"
       }
     },
     "monitoring": {
@@ -1489,9 +1489,9 @@
         "entryPoint": "docker-compose.plugin.yml"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "607f8bf657cf47b40d987b9e76c8232e19d25ec0800a588b60de267d530fc3ff",
+      "checksum": "6d9fbb34cea12b625955a49c2474450cb8704119249d57d95ff4bf1a183df88d",
       "checksums": {
-        "sha256": "607f8bf657cf47b40d987b9e76c8232e19d25ec0800a588b60de267d530fc3ff"
+        "sha256": "6d9fbb34cea12b625955a49c2474450cb8704119249d57d95ff4bf1a183df88d"
       }
     },
     "notifications": {
@@ -1527,9 +1527,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "0f1a96c77bf746531bc9936b35b1fd68bb3b770489e75571ea753815fbc5278f",
+      "checksum": "dfcb4b63140ba3b92903c3b61467c1c22b6fcf175fd255d81ab41dc20c8687dd",
       "checksums": {
-        "sha256": "0f1a96c77bf746531bc9936b35b1fd68bb3b770489e75571ea753815fbc5278f"
+        "sha256": "dfcb4b63140ba3b92903c3b61467c1c22b6fcf175fd255d81ab41dc20c8687dd"
       },
       "releaseTag": "v1.0.1"
     },
@@ -1564,9 +1564,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "8f8e159221ea1bd6dde14e0f0ef0bfa84abbedbbef7a5bd7d03db2acd9abf267",
+      "checksum": "ed66f58a66cb2c7a715eb534a2bd6b6a1bcbec6d3a4b118b8f53513a894a1c34",
       "checksums": {
-        "sha256": "8f8e159221ea1bd6dde14e0f0ef0bfa84abbedbbef7a5bd7d03db2acd9abf267"
+        "sha256": "ed66f58a66cb2c7a715eb534a2bd6b6a1bcbec6d3a4b118b8f53513a894a1c34"
       },
       "releaseTag": "v1.0.1"
     },
@@ -1642,9 +1642,9 @@
         "entryPoint": "nself-paypal"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "4e83db8fcf1a130fdae4e214bfc53880f363964d829df38cb6a349ce88982fb8",
+      "checksum": "e51790ab52ccf1515d1cd8e266d393517de564f31480cd9245243cd6340e2be8",
       "checksums": {
-        "sha256": "4e83db8fcf1a130fdae4e214bfc53880f363964d829df38cb6a349ce88982fb8"
+        "sha256": "e51790ab52ccf1515d1cd8e266d393517de564f31480cd9245243cd6340e2be8"
       }
     },
     "push": {
@@ -1683,9 +1683,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "4dcf1390bd469b6b382d1c35bff8b83e3d2257f56e80eda0e13e6f971574c047",
+      "checksum": "9fe3a18eda502ac0a6752e4bf1c49fc656b680ca1fd9035a22cdba5a5b24d58a",
       "checksums": {
-        "sha256": "4dcf1390bd469b6b382d1c35bff8b83e3d2257f56e80eda0e13e6f971574c047"
+        "sha256": "9fe3a18eda502ac0a6752e4bf1c49fc656b680ca1fd9035a22cdba5a5b24d58a"
       }
     },
     "queue": {
@@ -1718,9 +1718,9 @@
         "binaryName": "nself-queue"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "cc42ff87dee15da9054d000eaa6f741ba36ba96b0a998db813ad86c2b34a5e09",
+      "checksum": "4939d2a683660401008f8256938c955f54ebda0580836403fa14d4e409558626",
       "checksums": {
-        "sha256": "cc42ff87dee15da9054d000eaa6f741ba36ba96b0a998db813ad86c2b34a5e09"
+        "sha256": "4939d2a683660401008f8256938c955f54ebda0580836403fa14d4e409558626"
       }
     },
     "region": {
@@ -1754,9 +1754,9 @@
         "binaryName": "nself-region"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "4b666bae91337cc939894af65e40e1bdd845d031948ec4ac39488bdc55d07941",
+      "checksum": "7abea93ea691327681db5b30a29d428e1c6e78dcc08545c460e893e2927987cc",
       "checksums": {
-        "sha256": "4b666bae91337cc939894af65e40e1bdd845d031948ec4ac39488bdc55d07941"
+        "sha256": "7abea93ea691327681db5b30a29d428e1c6e78dcc08545c460e893e2927987cc"
       }
     },
     "release": {
@@ -1790,9 +1790,9 @@
         "binaryName": "nself-release"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "53b25c469f679c21770412cdbfcb23cbd37c7ef690042285b80423202d1ea11d",
+      "checksum": "9c1a86d97f31336f2ddba29ab8840bf94758eab8892e290a34adb1a18f5937b8",
       "checksums": {
-        "sha256": "53b25c469f679c21770412cdbfcb23cbd37c7ef690042285b80423202d1ea11d"
+        "sha256": "9c1a86d97f31336f2ddba29ab8840bf94758eab8892e290a34adb1a18f5937b8"
       }
     },
     "search": {
@@ -1833,9 +1833,9 @@
       "bundles": [
         "task"
       ],
-      "checksum": "e7289716e97530f05f8bd97a66f12da5af4677019063df4b00abb1bf1cfd956d",
+      "checksum": "f5ad32a815f4edc9d4f350314f51e6b1a35e424d0a2259181f52a30c7e907c41",
       "checksums": {
-        "sha256": "e7289716e97530f05f8bd97a66f12da5af4677019063df4b00abb1bf1cfd956d"
+        "sha256": "f5ad32a815f4edc9d4f350314f51e6b1a35e424d0a2259181f52a30c7e907c41"
       },
       "releaseTag": "v1.0.1"
     },
@@ -1881,9 +1881,9 @@
         }
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "9365ce7bc6a7054b7a309e7b6e5e0988501562b2da6828f39b06107bbe61bcd9",
+      "checksum": "1e11103c42b29f73494bced741aa589bbd536ba7f70af887ed000700fa15ba0f",
       "checksums": {
-        "sha256": "9365ce7bc6a7054b7a309e7b6e5e0988501562b2da6828f39b06107bbe61bcd9"
+        "sha256": "1e11103c42b29f73494bced741aa589bbd536ba7f70af887ed000700fa15ba0f"
       }
     },
     "shopify": {
@@ -1925,9 +1925,9 @@
         "entryPoint": "nself-shopify"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "3b15141c2e88e9ff7702ba43a2ad5c32bfe6e1a365d480cd837b5f94502b6609",
+      "checksum": "ccee3978999fea81981d8ca6c83c4a6bc52ebd61557efe1ff6016f0ffbfce56f",
       "checksums": {
-        "sha256": "3b15141c2e88e9ff7702ba43a2ad5c32bfe6e1a365d480cd837b5f94502b6609"
+        "sha256": "ccee3978999fea81981d8ca6c83c4a6bc52ebd61557efe1ff6016f0ffbfce56f"
       }
     },
     "soak": {
@@ -1960,9 +1960,9 @@
         "binaryName": "nself-soak"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "a749b85a584ad0a86c5f29ace5aec702ab1d66da0d8719577d2185d2fcb1f4fe",
+      "checksum": "c37bae3da111b3e6b01cfe2c90580fa4f8e6e2e89407c96a83b4db987f2d07ee",
       "checksums": {
-        "sha256": "a749b85a584ad0a86c5f29ace5aec702ab1d66da0d8719577d2185d2fcb1f4fe"
+        "sha256": "c37bae3da111b3e6b01cfe2c90580fa4f8e6e2e89407c96a83b4db987f2d07ee"
       }
     },
     "stripe": {
@@ -2019,9 +2019,9 @@
         "entryPoint": "nself-stripe"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "61eb1e6f88c159f0a85321107c42f970585c6c166cc1a6485dabff36546bd881",
+      "checksum": "1333b4119fe65b099d7cc614577c4171848f86b1c83f10b456fac08faf263100",
       "checksums": {
-        "sha256": "61eb1e6f88c159f0a85321107c42f970585c6c166cc1a6485dabff36546bd881"
+        "sha256": "1333b4119fe65b099d7cc614577c4171848f86b1c83f10b456fac08faf263100"
       }
     },
     "subtitle-manager": {
@@ -2070,9 +2070,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "21852338855eebee7e30a23e0db33a225c68199045f03eae71fc59393d361313",
+      "checksum": "bef3fdb2502141e0c25219ded69d704e923759b268b88b58514a8ae19a1a6e80",
       "checksums": {
-        "sha256": "21852338855eebee7e30a23e0db33a225c68199045f03eae71fc59393d361313"
+        "sha256": "bef3fdb2502141e0c25219ded69d704e923759b268b88b58514a8ae19a1a6e80"
       }
     },
     "tenant": {
@@ -2116,9 +2116,9 @@
         }
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "8950500b0301f58c1fde2ffd09258053693795b95f743c5c42148eba2acf852a",
+      "checksum": "f7495c9764f5197b8553fff4c2b64230ac9cb575d6f533929f6b654541f6d3ae",
       "checksums": {
-        "sha256": "8950500b0301f58c1fde2ffd09258053693795b95f743c5c42148eba2acf852a"
+        "sha256": "f7495c9764f5197b8553fff4c2b64230ac9cb575d6f533929f6b654541f6d3ae"
       }
     },
     "tokens": {
@@ -2158,9 +2158,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "2c42f2ecfa676aaccc617b9435e5dd63b47f892f037674cc309a7f886d303ace",
+      "checksum": "2e5cd40780b4ad27479ffd59e56e839b40f5cac119eebe6456a0501bc426562f",
       "checksums": {
-        "sha256": "2c42f2ecfa676aaccc617b9435e5dd63b47f892f037674cc309a7f886d303ace"
+        "sha256": "2e5cd40780b4ad27479ffd59e56e839b40f5cac119eebe6456a0501bc426562f"
       }
     },
     "torrent-manager": {
@@ -2221,9 +2221,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "7526353648c0817c9596ba453898a7daa6d050825dafa05694033409a0ff95e1",
+      "checksum": "792ec903947aa318983772cb61058a02eefce68f6321fad5ae2f7ae772a0eeae",
       "checksums": {
-        "sha256": "7526353648c0817c9596ba453898a7daa6d050825dafa05694033409a0ff95e1"
+        "sha256": "792ec903947aa318983772cb61058a02eefce68f6321fad5ae2f7ae772a0eeae"
       }
     },
     "vpn": {
@@ -2264,9 +2264,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "853564f1aaa2e80840e17e34a4fc0f357bbc3e33e3ea5cbfa274f1e28bbd112d",
+      "checksum": "ae0484724af35ce5a2405b9b4310f5ebe697c4383dced62286f30b2308227886",
       "checksums": {
-        "sha256": "853564f1aaa2e80840e17e34a4fc0f357bbc3e33e3ea5cbfa274f1e28bbd112d"
+        "sha256": "ae0484724af35ce5a2405b9b4310f5ebe697c4383dced62286f30b2308227886"
       }
     },
     "waf": {
@@ -2300,9 +2300,9 @@
         "binaryName": "nself-waf"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "113cf3f68e042f09ea9ad0705409596ed06782ccf83b33f05533c0d8532fc2d2",
+      "checksum": "62506f1c3bddaf331476a80c120500f7934f798a9e36dc72a9f8b1d058478542",
       "checksums": {
-        "sha256": "113cf3f68e042f09ea9ad0705409596ed06782ccf83b33f05533c0d8532fc2d2"
+        "sha256": "62506f1c3bddaf331476a80c120500f7934f798a9e36dc72a9f8b1d058478542"
       }
     },
     "watchdog": {
@@ -2336,9 +2336,9 @@
         "binaryName": "nself-watchdog"
       },
       "releaseTag": "v1.0.1",
-      "checksum": "bfee984fc52203ade2601e57d4dee58b7521da30d78e5dccb39fe9739c1d6361",
+      "checksum": "a3d09925851e709538e9ad6706b051e8584fef5eb8df342aee068c56035ed76f",
       "checksums": {
-        "sha256": "bfee984fc52203ade2601e57d4dee58b7521da30d78e5dccb39fe9739c1d6361"
+        "sha256": "a3d09925851e709538e9ad6706b051e8584fef5eb8df342aee068c56035ed76f"
       }
     },
     "webhooks": {
@@ -2376,9 +2376,9 @@
         "task"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "661ae10b78fde4712a96fa5b6bd6a6a87ca7d62b2c0b2658d81e329cd7a06bd9",
+      "checksum": "0ee5c202f4456c3aca514ab79b706aef36d0032a4a56595e925c0f51c2a93223",
       "checksums": {
-        "sha256": "661ae10b78fde4712a96fa5b6bd6a6a87ca7d62b2c0b2658d81e329cd7a06bd9"
+        "sha256": "0ee5c202f4456c3aca514ab79b706aef36d0032a4a56595e925c0f51c2a93223"
       }
     },
     "access-controls": {
@@ -2406,9 +2406,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "e18d769b9892971b0fab59340f335bf0cda961e9da331ac48f8227e8e7a6d4e1",
+      "checksum": "6e9d3966a4588ce1c2d7a10c0f5c48f64015c68fc80a648ad7392c81223e8530",
       "checksums": {
-        "sha256": "e18d769b9892971b0fab59340f335bf0cda961e9da331ac48f8227e8e7a6d4e1"
+        "sha256": "6e9d3966a4588ce1c2d7a10c0f5c48f64015c68fc80a648ad7392c81223e8530"
       }
     },
     "admin-api": {
@@ -2435,9 +2435,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "898eae4cb4a7fc011a8c3065db69ce6649753d26bc1b441742cfa5f96417c82b",
+      "checksum": "3c9ba5681c326ed0d3d3cfc1d4d64b1e215ad69e8202bbc1d5221e1ee1a45be5",
       "checksums": {
-        "sha256": "898eae4cb4a7fc011a8c3065db69ce6649753d26bc1b441742cfa5f96417c82b"
+        "sha256": "3c9ba5681c326ed0d3d3cfc1d4d64b1e215ad69e8202bbc1d5221e1ee1a45be5"
       }
     },
     "analytics": {
@@ -2464,9 +2464,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "e1c0303cc47aba74110d35afdad0b4c84ad53612239f94dcfe79573e0f5455a8",
+      "checksum": "24731bcf900ecb1e0c4910f29559f7f0b34e94e9775f2aafe7c8841f00761b74",
       "checksums": {
-        "sha256": "e1c0303cc47aba74110d35afdad0b4c84ad53612239f94dcfe79573e0f5455a8"
+        "sha256": "24731bcf900ecb1e0c4910f29559f7f0b34e94e9775f2aafe7c8841f00761b74"
       }
     },
     "audit-analytics": {
@@ -2497,9 +2497,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "a3fe57d141a6942619ff372fcda392ae509ced54ca943d5083de8304288a59e3",
+      "checksum": "5b04e63cbf0fc749e821c746b4e6324b77af6dab33142a874bbd05ba243319da",
       "checksums": {
-        "sha256": "a3fe57d141a6942619ff372fcda392ae509ced54ca943d5083de8304288a59e3"
+        "sha256": "5b04e63cbf0fc749e821c746b4e6324b77af6dab33142a874bbd05ba243319da"
       }
     },
     "auth-enterprise": {
@@ -2520,9 +2520,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "7699c8a293a29b6bd508cbf8bda5dd7a503296777e366cb5fa52b81860bf1d5b",
+      "checksum": "30489ebbaf7b4ef63c7ec0e073ca5f228f5e8ee91f91bd16b434f305e9ecbedd",
       "checksums": {
-        "sha256": "7699c8a293a29b6bd508cbf8bda5dd7a503296777e366cb5fa52b81860bf1d5b"
+        "sha256": "30489ebbaf7b4ef63c7ec0e073ca5f228f5e8ee91f91bd16b434f305e9ecbedd"
       }
     },
     "byok": {
@@ -2554,9 +2554,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "304ca7b1e44dd075c3ed306c014badd9c09774f749bec79538da9abf84b7b193",
+      "checksum": "3069a7d9a2797069881476d8fdc7ee51de79c761acc1249ad9070b851ff6b191",
       "checksums": {
-        "sha256": "304ca7b1e44dd075c3ed306c014badd9c09774f749bec79538da9abf84b7b193"
+        "sha256": "3069a7d9a2797069881476d8fdc7ee51de79c761acc1249ad9070b851ff6b191"
       }
     },
     "cdc": {
@@ -2583,9 +2583,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "27283b38f2b2ebe1ad0880294f5c92c8edbc9b16a460c0f956db1f17e9241b1b",
+      "checksum": "b81f8530b1b42d81a2ecb5064581ac4f84cef01c5b6616b5b86489b28e5eabbe",
       "checksums": {
-        "sha256": "27283b38f2b2ebe1ad0880294f5c92c8edbc9b16a460c0f956db1f17e9241b1b"
+        "sha256": "b81f8530b1b42d81a2ecb5064581ac4f84cef01c5b6616b5b86489b28e5eabbe"
       }
     },
     "cdn": {
@@ -2612,9 +2612,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "c5246780f162c44eeae8a399f63a7438470f869f8444b578fd2d2182d2ed5615",
+      "checksum": "09d3af8e778af8d12017c8780305036648fe26bc2ea71d9108e67a1d39383a04",
       "checksums": {
-        "sha256": "c5246780f162c44eeae8a399f63a7438470f869f8444b578fd2d2182d2ed5615"
+        "sha256": "09d3af8e778af8d12017c8780305036648fe26bc2ea71d9108e67a1d39383a04"
       }
     },
     "cloudflare": {
@@ -2642,9 +2642,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "eca7aee1ff93a7ab0382e6e03ae4433c247108a36db295c98638b5c952c377ff",
+      "checksum": "a5af1c0d901bfa883b56f69f20ad523014746916da144e5ffb50f59ea795c8cd",
       "checksums": {
-        "sha256": "eca7aee1ff93a7ab0382e6e03ae4433c247108a36db295c98638b5c952c377ff"
+        "sha256": "a5af1c0d901bfa883b56f69f20ad523014746916da144e5ffb50f59ea795c8cd"
       }
     },
     "compliance": {
@@ -2681,9 +2681,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "64f7dd87d62aa5067da7676405b66f2d08af3162f984eed613862e889f7efab6",
+      "checksum": "90c1a11d71c0d7cb2fbc66da981c4a6cef1971268998d0deb726d7f697a7ae97",
       "checksums": {
-        "sha256": "64f7dd87d62aa5067da7676405b66f2d08af3162f984eed613862e889f7efab6"
+        "sha256": "90c1a11d71c0d7cb2fbc66da981c4a6cef1971268998d0deb726d7f697a7ae97"
       }
     },
     "content-safety": {
@@ -2711,9 +2711,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "5649ee9d565d7458fea9cb1bf2da4ea2ac9a05d37c1e1c51bde7acca76b0e9af",
+      "checksum": "0bd848955d59d7472a826e65a8d7e5b0778d78c482cda5574576c2484d91081e",
       "checksums": {
-        "sha256": "5649ee9d565d7458fea9cb1bf2da4ea2ac9a05d37c1e1c51bde7acca76b0e9af"
+        "sha256": "0bd848955d59d7472a826e65a8d7e5b0778d78c482cda5574576c2484d91081e"
       }
     },
     "crdt": {
@@ -2743,9 +2743,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "4597773f5630a34707af29756b0144dbc4f36544498a55dad6acb86c46888369",
+      "checksum": "592b535e6331bd1d8241cbf138cefaae8de5e1b1683b6bb86fb77fbc685db402",
       "checksums": {
-        "sha256": "4597773f5630a34707af29756b0144dbc4f36544498a55dad6acb86c46888369"
+        "sha256": "592b535e6331bd1d8241cbf138cefaae8de5e1b1683b6bb86fb77fbc685db402"
       }
     },
     "ddns": {
@@ -2773,9 +2773,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "0df7bcd666c646319c5e4fed150c5e7b5850da168ca3cae08edc408e166aa1ac",
+      "checksum": "df8d74fbcf27336bdcfc25371865c905e1b972cec93ef7ce339bce3801d7be7c",
       "checksums": {
-        "sha256": "0df7bcd666c646319c5e4fed150c5e7b5850da168ca3cae08edc408e166aa1ac"
+        "sha256": "df8d74fbcf27336bdcfc25371865c905e1b972cec93ef7ce339bce3801d7be7c"
       }
     },
     "devices": {
@@ -2803,9 +2803,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "894c0311e6ef913bbe7a03eeb15e42ff9fd3c20e4ecb9e5dee43b20c85082308",
+      "checksum": "d63bbb38f214d7a126dbe6251088511f396288c042bf0e6d4ef1c2ff21b69d01",
       "checksums": {
-        "sha256": "894c0311e6ef913bbe7a03eeb15e42ff9fd3c20e4ecb9e5dee43b20c85082308"
+        "sha256": "d63bbb38f214d7a126dbe6251088511f396288c042bf0e6d4ef1c2ff21b69d01"
       }
     },
     "documents": {
@@ -2833,9 +2833,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "cab7fbda0d68a5676f9547810edeb1c4b788f43a304c8a387b1cc2a1b8a658cc",
+      "checksum": "4316ffc6541cf1c7a8c0d4b968eaadf03b990580019a8bf3232da4f38dfc60d3",
       "checksums": {
-        "sha256": "cab7fbda0d68a5676f9547810edeb1c4b788f43a304c8a387b1cc2a1b8a658cc"
+        "sha256": "4316ffc6541cf1c7a8c0d4b968eaadf03b990580019a8bf3232da4f38dfc60d3"
       }
     },
     "email": {
@@ -2856,9 +2856,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "8e42a8e106881ca7daf6e176af3ebcd564bf00648011c6767b408607de8a1e6c",
+      "checksum": "9330c3b0e9ace6613e6ed5edf88c99b03bcbcd1bfb22dec32ddeb403917d41bb",
       "checksums": {
-        "sha256": "8e42a8e106881ca7daf6e176af3ebcd564bf00648011c6767b408607de8a1e6c"
+        "sha256": "9330c3b0e9ace6613e6ed5edf88c99b03bcbcd1bfb22dec32ddeb403917d41bb"
       }
     },
     "encryption": {
@@ -2885,9 +2885,9 @@
       "minNselfVersion": "1.2.8",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "de2bd338986e79ccd44d34417c8e5e77beb1a2889880fdacacb41d4637a376e0",
+      "checksum": "83c67d0ced4bae71407601524bcf163d6cd721b04ae3c505e63526928110a03b",
       "checksums": {
-        "sha256": "de2bd338986e79ccd44d34417c8e5e77beb1a2889880fdacacb41d4637a376e0"
+        "sha256": "83c67d0ced4bae71407601524bcf163d6cd721b04ae3c505e63526928110a03b"
       }
     },
     "entitlements": {
@@ -2915,9 +2915,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "0b04c598bd0e64fb23f4a2ae7c3b71d463d428e06dd6ac3502f35239db2661d2",
+      "checksum": "5e9445780e78bfb0f04d15f20ffbdbfcf7ae69feca427c46a7b3865b4c197b80",
       "checksums": {
-        "sha256": "0b04c598bd0e64fb23f4a2ae7c3b71d463d428e06dd6ac3502f35239db2661d2"
+        "sha256": "5e9445780e78bfb0f04d15f20ffbdbfcf7ae69feca427c46a7b3865b4c197b80"
       }
     },
     "event-bus": {
@@ -2943,9 +2943,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "003a90f8bbc609123ee6b24cf8d20d289df31ca57dd0fe61d617d235c3abbf07",
+      "checksum": "818b61f997ef6052f915e96fc59ab288006455f8523c13dc6f5b087481cfeb98",
       "checksums": {
-        "sha256": "003a90f8bbc609123ee6b24cf8d20d289df31ca57dd0fe61d617d235c3abbf07"
+        "sha256": "818b61f997ef6052f915e96fc59ab288006455f8523c13dc6f5b087481cfeb98"
       }
     },
     "family-ancestry": {
@@ -2973,9 +2973,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "93ef6dcc17675bb30c041b12cfac5da52294bd6af7db7d573774937f4f85bea7",
+      "checksum": "ef05c58b911c37f00d1c1f1feaa84bf4ed0a6742cfe388297e35110a157b72a4",
       "checksums": {
-        "sha256": "93ef6dcc17675bb30c041b12cfac5da52294bd6af7db7d573774937f4f85bea7"
+        "sha256": "ef05c58b911c37f00d1c1f1feaa84bf4ed0a6742cfe388297e35110a157b72a4"
       }
     },
     "family-familysearch": {
@@ -3004,9 +3004,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "8759be1318a484259d732377d5dddc9b3ec3e5dd08f9275ac71ffe279e302ebe",
+      "checksum": "31fe27efc8875036dbdc17e43ac36906fc27de38706086954fb6af7cf9d8a751",
       "checksums": {
-        "sha256": "8759be1318a484259d732377d5dddc9b3ec3e5dd08f9275ac71ffe279e302ebe"
+        "sha256": "31fe27efc8875036dbdc17e43ac36906fc27de38706086954fb6af7cf9d8a751"
       }
     },
     "family-myheritage": {
@@ -3034,9 +3034,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "fbde06c21904033de8773821fc6da82e7c73973037dd5271063b330f36fbaaf9",
+      "checksum": "e88fca02f8ed544aab0695e2e462cc7a5ea552f07a639461c07981758187790e",
       "checksums": {
-        "sha256": "fbde06c21904033de8773821fc6da82e7c73973037dd5271063b330f36fbaaf9"
+        "sha256": "e88fca02f8ed544aab0695e2e462cc7a5ea552f07a639461c07981758187790e"
       }
     },
     "family-wikitree": {
@@ -3064,9 +3064,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "5980bbd3add7a4f577312ed0ffecb3d9bfb6615d350ad06b3840d520dc15decc",
+      "checksum": "a7c494f0fc166a880d17efdade77a56500428c29ff142cd96239e1782ba83a25",
       "checksums": {
-        "sha256": "5980bbd3add7a4f577312ed0ffecb3d9bfb6615d350ad06b3840d520dc15decc"
+        "sha256": "a7c494f0fc166a880d17efdade77a56500428c29ff142cd96239e1782ba83a25"
       }
     },
     "functions-v8": {
@@ -3095,9 +3095,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "416874eb50c747e80558ddbca02bcc79b9efc868b524e04c6df67d07fe965984",
+      "checksum": "f5ca59c1f8b9b484537d58904633250de6505ed13c4a58b67eb1481c68333508",
       "checksums": {
-        "sha256": "416874eb50c747e80558ddbca02bcc79b9efc868b524e04c6df67d07fe965984"
+        "sha256": "f5ca59c1f8b9b484537d58904633250de6505ed13c4a58b67eb1481c68333508"
       }
     },
     "hipaa": {
@@ -3127,9 +3127,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "d185750737dd8817d320652db5b3958ff498a3dcec39656635a8e4c703307650",
+      "checksum": "a822f40d2f55e0fa2f327ed8e1abb8b8d06f7060e3b9b37be15ae7c73b4d6fb5",
       "checksums": {
-        "sha256": "d185750737dd8817d320652db5b3958ff498a3dcec39656635a8e4c703307650"
+        "sha256": "a822f40d2f55e0fa2f327ed8e1abb8b8d06f7060e3b9b37be15ae7c73b4d6fb5"
       }
     },
     "home": {
@@ -3156,9 +3156,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "1cc72e9017b0ff7163aa78051d25aa5f8dbbc8b8fe0058d899bd78fe2fe29187",
+      "checksum": "b516901b055cbf661cb93d8067d049ed09f2db42f142958235ae489ff8531be1",
       "checksums": {
-        "sha256": "1cc72e9017b0ff7163aa78051d25aa5f8dbbc8b8fe0058d899bd78fe2fe29187"
+        "sha256": "b516901b055cbf661cb93d8067d049ed09f2db42f142958235ae489ff8531be1"
       }
     },
     "idme": {
@@ -3187,9 +3187,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "a7ea57d0d17d038a5a6b7bd703577007d4badb8012f2bf1e3d6db2441167a38e",
+      "checksum": "c830f4c19b0e4e44353b54dabfff1e3185d615577fd21f21590465eea9ff28ba",
       "checksums": {
-        "sha256": "a7ea57d0d17d038a5a6b7bd703577007d4badb8012f2bf1e3d6db2441167a38e"
+        "sha256": "c830f4c19b0e4e44353b54dabfff1e3185d615577fd21f21590465eea9ff28ba"
       }
     },
     "job-queue": {
@@ -3215,9 +3215,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "1abbd052c5c564d5772212bcb87de643e8275190b89b0081f10310adf8ad418a",
+      "checksum": "e2831cd3c06444ce9f0976ab965b066d3cee91d5608d9c3fe0b15421f45fdae2",
       "checksums": {
-        "sha256": "1abbd052c5c564d5772212bcb87de643e8275190b89b0081f10310adf8ad418a"
+        "sha256": "e2831cd3c06444ce9f0976ab965b066d3cee91d5608d9c3fe0b15421f45fdae2"
       }
     },
     "linkedin": {
@@ -3244,9 +3244,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "157f2502e026d382c06008271914ce97e1e4d6c4e7f13d7ac8a4c977ac41e20a",
+      "checksum": "761d4027be619d52f72925b5f260dde6eb8d8bcc28b32ef7d67ea2afe644fb15",
       "checksums": {
-        "sha256": "157f2502e026d382c06008271914ce97e1e4d6c4e7f13d7ac8a4c977ac41e20a"
+        "sha256": "761d4027be619d52f72925b5f260dde6eb8d8bcc28b32ef7d67ea2afe644fb15"
       }
     },
     "mail": {
@@ -3273,9 +3273,9 @@
       "minNselfVersion": "1.2.8",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "7b28487eddd2a5ec866e31ebb11d4ce19cd6fa73b724bda9d83b7e319f80689c",
+      "checksum": "a547a631637d4d1c2cad1cc960ec1796e14b59178973b7c54e7dd9c34265f0d8",
       "checksums": {
-        "sha256": "7b28487eddd2a5ec866e31ebb11d4ce19cd6fa73b724bda9d83b7e319f80689c"
+        "sha256": "a547a631637d4d1c2cad1cc960ec1796e14b59178973b7c54e7dd9c34265f0d8"
       }
     },
     "meetings": {
@@ -3304,9 +3304,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "dde30f60460c66b5295b3847726a63c688e44692f7beba3d85848477e000ac2f",
+      "checksum": "6f49a02a07ada9bb72daffdf70e06da92caf71a95b2ec05d413fa60b2f4c99a0",
       "checksums": {
-        "sha256": "dde30f60460c66b5295b3847726a63c688e44692f7beba3d85848477e000ac2f"
+        "sha256": "6f49a02a07ada9bb72daffdf70e06da92caf71a95b2ec05d413fa60b2f4c99a0"
       }
     },
     "nself-cloud": {
@@ -3332,9 +3332,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "79fb2a982d8e5dd72cb2130adb3ba6bdbe44230985b301f310d381876e241c79",
+      "checksum": "81d6ad39e3ef18c2812f1a664d1c13ceb6940159b556f56f63d60af227f624ea",
       "checksums": {
-        "sha256": "79fb2a982d8e5dd72cb2130adb3ba6bdbe44230985b301f310d381876e241c79"
+        "sha256": "81d6ad39e3ef18c2812f1a664d1c13ceb6940159b556f56f63d60af227f624ea"
       }
     },
     "nself-eval-gate": {
@@ -3361,9 +3361,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "0d5c1f9ff4f24e50093890b60f9f8480b255905edcde025a4b62ac36e3e8a360",
+      "checksum": "fd1287c644e3c60d29038c68c62e7e20bc15d5f407fe59cc10c9b1862514dba1",
       "checksums": {
-        "sha256": "0d5c1f9ff4f24e50093890b60f9f8480b255905edcde025a4b62ac36e3e8a360"
+        "sha256": "fd1287c644e3c60d29038c68c62e7e20bc15d5f407fe59cc10c9b1862514dba1"
       }
     },
     "nself-geo": {
@@ -3391,9 +3391,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "42ffc22524d78e9ede45823960ce2174aff06cf099f8818e896396fd99bed6b8",
+      "checksum": "48367db3d350895d27fe742237d89ebd1c0210ecca1e2285c78e237cc1d507e5",
       "checksums": {
-        "sha256": "42ffc22524d78e9ede45823960ce2174aff06cf099f8818e896396fd99bed6b8"
+        "sha256": "48367db3d350895d27fe742237d89ebd1c0210ecca1e2285c78e237cc1d507e5"
       }
     },
     "nself-image": {
@@ -3426,9 +3426,9 @@
       "minNselfVersion": "1.2.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "16881c2975f870712b720f4546101c3534c33a082065f31ff20f8289c2bbc2d7",
+      "checksum": "a664b5853c5df24ceaa0fea75a59da1aac25e7c07a596fa2d69f2ca4b873f1d0",
       "checksums": {
-        "sha256": "16881c2975f870712b720f4546101c3534c33a082065f31ff20f8289c2bbc2d7"
+        "sha256": "a664b5853c5df24ceaa0fea75a59da1aac25e7c07a596fa2d69f2ca4b873f1d0"
       }
     },
     "nself-pdf": {
@@ -3458,9 +3458,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "5fdb8e8f76b282266a2018368de24d87ec674ac797c0737b6c4df34751fb2568",
+      "checksum": "3ddade984c51555b8ee81aa83c1b5e2fcf9f7c9f3d09562e102f573e9de597df",
       "checksums": {
-        "sha256": "5fdb8e8f76b282266a2018368de24d87ec674ac797c0737b6c4df34751fb2568"
+        "sha256": "3ddade984c51555b8ee81aa83c1b5e2fcf9f7c9f3d09562e102f573e9de597df"
       }
     },
     "nself-scan": {
@@ -3492,9 +3492,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "5220e812687655b7b0cdbb94daaf783b1bd23ba0ca3880b53c457e519346c5d1",
+      "checksum": "85db1a432059ce4588ac0f36dcfc62270c11b473c267db8acc0567e3dfeadbc5",
       "checksums": {
-        "sha256": "5220e812687655b7b0cdbb94daaf783b1bd23ba0ca3880b53c457e519346c5d1"
+        "sha256": "85db1a432059ce4588ac0f36dcfc62270c11b473c267db8acc0567e3dfeadbc5"
       }
     },
     "nself-sync": {
@@ -3529,9 +3529,9 @@
         "np_sync_cursors"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "365865218e415d628bb4e7519288573accca71649a2ed990546417cfe2324d38",
+      "checksum": "e78deb7b78f361deac0c1529f92a9ca40edfbedfbf9e9e437eda2cbd5837aa6c",
       "checksums": {
-        "sha256": "365865218e415d628bb4e7519288573accca71649a2ed990546417cfe2324d38"
+        "sha256": "e78deb7b78f361deac0c1529f92a9ca40edfbedfbf9e9e437eda2cbd5837aa6c"
       }
     },
     "nself-vault": {
@@ -3561,9 +3561,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "8a580e105cc45a8ac5c860eae957948445fa72daafa70915cf2a7b4964702bfa",
+      "checksum": "af60a93d84444127ea7e22a826c951b2a31a2a4a71a8a7bb37a0b1205e1937a2",
       "checksums": {
-        "sha256": "8a580e105cc45a8ac5c860eae957948445fa72daafa70915cf2a7b4964702bfa"
+        "sha256": "af60a93d84444127ea7e22a826c951b2a31a2a4a71a8a7bb37a0b1205e1937a2"
       }
     },
     "object-storage": {
@@ -3594,9 +3594,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "8d8b02a9ad5f83b5ceb236188a6305d768751647e50629708337fe6cc8449218",
+      "checksum": "5b7bf3e129efdde764528d9cd4fb96a4f790067778eaf5aa7a709f4147b8c7df",
       "checksums": {
-        "sha256": "8d8b02a9ad5f83b5ceb236188a6305d768751647e50629708337fe6cc8449218"
+        "sha256": "5b7bf3e129efdde764528d9cd4fb96a4f790067778eaf5aa7a709f4147b8c7df"
       }
     },
     "observability": {
@@ -3623,9 +3623,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "32e1031b640e9a744d2cdaeaa1dbc77835bda9c507fe49b6194c16252695b0e3",
+      "checksum": "c5c66501998cc7aa423a18ac8f0ba9509dfc15c440b641856028087679c50ef7",
       "checksums": {
-        "sha256": "32e1031b640e9a744d2cdaeaa1dbc77835bda9c507fe49b6194c16252695b0e3"
+        "sha256": "c5c66501998cc7aa423a18ac8f0ba9509dfc15c440b641856028087679c50ef7"
       }
     },
     "payments": {
@@ -3652,9 +3652,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "6b609410d6b4afd2cd731ee6405dfa465e1bb3fa9bf5503310a56980a4ce997f",
+      "checksum": "7e25ca3e13a458eddbfa97e73e5a11dd1534cf7da917f768ac9dddfa387810fd",
       "checksums": {
-        "sha256": "6b609410d6b4afd2cd731ee6405dfa465e1bb3fa9bf5503310a56980a4ce997f"
+        "sha256": "7e25ca3e13a458eddbfa97e73e5a11dd1534cf7da917f768ac9dddfa387810fd"
       }
     },
     "pentest": {
@@ -3681,9 +3681,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "406641a69aef5ee4301fb4ecb6db55b235c33a8d584e1aaa836c2416d80b8a5f",
+      "checksum": "039d896548cc7c64c3033712906baacb0aa21ddd3c7629451c140133bc2d32fc",
       "checksums": {
-        "sha256": "406641a69aef5ee4301fb4ecb6db55b235c33a8d584e1aaa836c2416d80b8a5f"
+        "sha256": "039d896548cc7c64c3033712906baacb0aa21ddd3c7629451c140133bc2d32fc"
       }
     },
     "pentest-kit": {
@@ -3709,9 +3709,9 @@
       "minNselfVersion": "1.2.8",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "8a13ec5fd704b38a2aa4c978fb0dac20e4bfd8bf3fdf96550589dd897db7713a",
+      "checksum": "4495d4ad638f6b791ac5f01ba4fc9493cee0fa26122b7391542bd9fd514d3c5a",
       "checksums": {
-        "sha256": "8a13ec5fd704b38a2aa4c978fb0dac20e4bfd8bf3fdf96550589dd897db7713a"
+        "sha256": "4495d4ad638f6b791ac5f01ba4fc9493cee0fa26122b7391542bd9fd514d3c5a"
       }
     },
     "plugin-clawde": {
@@ -3732,9 +3732,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "20bed42be70497a920b109b3f21c9e05fe76070c2f2f8d534e3366fd6574afa8",
+      "checksum": "32e27e2fb3036a89aae6c69617ef25cb7cff8fcf13992583e4e68d9251f13abc",
       "checksums": {
-        "sha256": "20bed42be70497a920b109b3f21c9e05fe76070c2f2f8d534e3366fd6574afa8"
+        "sha256": "32e27e2fb3036a89aae6c69617ef25cb7cff8fcf13992583e4e68d9251f13abc"
       }
     },
     "plugin-gauth": {
@@ -3755,9 +3755,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "fef4fdaea54c4ec250e6d104d5c7f66894229465e32e63c4991c978946cbea3b",
+      "checksum": "f5d3ae0adbdfb86c3cdb18f0c41975645d85a723616f73d40d431bbaba751abf",
       "checksums": {
-        "sha256": "fef4fdaea54c4ec250e6d104d5c7f66894229465e32e63c4991c978946cbea3b"
+        "sha256": "f5d3ae0adbdfb86c3cdb18f0c41975645d85a723616f73d40d431bbaba751abf"
       }
     },
     "plugin-llm-gateway": {
@@ -3778,9 +3778,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "79b02e05e909ea75ef2dd9cb3a76a5499bd6e22c88dff60af486c12f09a381e5",
+      "checksum": "773524889faa560b682a1d648fe76ab7a2289e95c5997dd2d864ecea13d91a68",
       "checksums": {
-        "sha256": "79b02e05e909ea75ef2dd9cb3a76a5499bd6e22c88dff60af486c12f09a381e5"
+        "sha256": "773524889faa560b682a1d648fe76ab7a2289e95c5997dd2d864ecea13d91a68"
       }
     },
     "plugin-pty": {
@@ -3801,9 +3801,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "f25dbb28223f439b4e5ad53b3540689f393cf4e23de57f8b31336fddf4df4ff1",
+      "checksum": "d0113187dd8ea1204c24f8370d86dfc6ca3092bc43c13f822200b15df0a77da2",
       "checksums": {
-        "sha256": "f25dbb28223f439b4e5ad53b3540689f393cf4e23de57f8b31336fddf4df4ff1"
+        "sha256": "d0113187dd8ea1204c24f8370d86dfc6ca3092bc43c13f822200b15df0a77da2"
       }
     },
     "plugin-retrieval": {
@@ -3824,9 +3824,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "44f2739e254c1e7fc4eebaf147ed4143923e705f02403aae562cb6be2c1f3418",
+      "checksum": "a41a11ae99ed35b9542babc025b17650440c540fc7bba098a721dcf1c532af45",
       "checksums": {
-        "sha256": "44f2739e254c1e7fc4eebaf147ed4143923e705f02403aae562cb6be2c1f3418"
+        "sha256": "a41a11ae99ed35b9542babc025b17650440c540fc7bba098a721dcf1c532af45"
       }
     },
     "post": {
@@ -3857,9 +3857,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "7131e61958567798262219bd82b3ab5510777f859c999bb3b13c22dbecdec522",
+      "checksum": "0bfe68a2847edfbd12114b22eab5ec683f2415f019f1c0a75cc3a597e02aeb08",
       "checksums": {
-        "sha256": "7131e61958567798262219bd82b3ab5510777f859c999bb3b13c22dbecdec522"
+        "sha256": "0bfe68a2847edfbd12114b22eab5ec683f2415f019f1c0a75cc3a597e02aeb08"
       }
     },
     "retro-gaming": {
@@ -3889,9 +3889,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "3be264e6953c6ec7917bac24691b476770c4248e5c61f2ef76e8ccaf3dddbf42",
+      "checksum": "02c6d55ae0800323ff9a205c5917a6941223f54a04df9a4b039f99713483476a",
       "checksums": {
-        "sha256": "3be264e6953c6ec7917bac24691b476770c4248e5c61f2ef76e8ccaf3dddbf42"
+        "sha256": "02c6d55ae0800323ff9a205c5917a6941223f54a04df9a4b039f99713483476a"
       }
     },
     "rom-discovery": {
@@ -3921,9 +3921,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "4b8abc0c03b7a0304a72c40fc1daed9db01266c0c5eac7abcb4461c63831dcb8",
+      "checksum": "d648bdf3bf37aed7d08a3efb8ac73615e02a436fabbf690b6ff4c654cf575cdf",
       "checksums": {
-        "sha256": "4b8abc0c03b7a0304a72c40fc1daed9db01266c0c5eac7abcb4461c63831dcb8"
+        "sha256": "d648bdf3bf37aed7d08a3efb8ac73615e02a436fabbf690b6ff4c654cf575cdf"
       }
     },
     "siem": {
@@ -3954,9 +3954,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "cd0ce7b4b47eab94e2d15eba337ef50453ee640e0d0caecfa207311ebad462d5",
+      "checksum": "57a2930c5f498777bcff01ceef148afd3efaec1013dcc1bb13813bc7ad200191",
       "checksums": {
-        "sha256": "cd0ce7b4b47eab94e2d15eba337ef50453ee640e0d0caecfa207311ebad462d5"
+        "sha256": "57a2930c5f498777bcff01ceef148afd3efaec1013dcc1bb13813bc7ad200191"
       }
     },
     "sms": {
@@ -3977,9 +3977,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "ce8253e6287bf697b957f8e8f9d56b3848eab9ca5d2b54a9fff3f674d1239bdf",
+      "checksum": "a2b4aa085299f1b4a2972009c1fed3ef0ffb965d6fe66a2be2aaa61b08ec7645",
       "checksums": {
-        "sha256": "ce8253e6287bf697b957f8e8f9d56b3848eab9ca5d2b54a9fff3f674d1239bdf"
+        "sha256": "a2b4aa085299f1b4a2972009c1fed3ef0ffb965d6fe66a2be2aaa61b08ec7645"
       }
     },
     "storage": {
@@ -4005,9 +4005,9 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "checksum": "8ae54cd144a1209ef9c3317b78e90c86c370064af90eb1cef8119cd24f73e34c",
+      "checksum": "cee934dc9e8a95f67950cf3bdf81f70e610ace5dedede89b82f7eedd346564c4",
       "checksums": {
-        "sha256": "8ae54cd144a1209ef9c3317b78e90c86c370064af90eb1cef8119cd24f73e34c"
+        "sha256": "cee934dc9e8a95f67950cf3bdf81f70e610ace5dedede89b82f7eedd346564c4"
       },
       "releaseTag": "v1.0.1"
     },
@@ -4037,9 +4037,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "8d1c6b5789466d28a2ebd7ec094076f9b7fb4121c638fb909feb247d0575ad77",
+      "checksum": "522a38ef35a689a40719af0c9d9cd56d929cf08ded564bd62843ff46e68fb403",
       "checksums": {
-        "sha256": "8d1c6b5789466d28a2ebd7ec094076f9b7fb4121c638fb909feb247d0575ad77"
+        "sha256": "522a38ef35a689a40719af0c9d9cd56d929cf08ded564bd62843ff46e68fb403"
       }
     },
     "tenant-controller": {
@@ -4067,9 +4067,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "0c718c096dddad1941c26aaaed3a8f5548da42dc4a6baf84aff558dae0009ffa",
+      "checksum": "6ed7d89b72a4b11b1dce4a2e494aed69cfca0ec51294a1d8382280be3d46ea96",
       "checksums": {
-        "sha256": "0c718c096dddad1941c26aaaed3a8f5548da42dc4a6baf84aff558dae0009ffa"
+        "sha256": "6ed7d89b72a4b11b1dce4a2e494aed69cfca0ec51294a1d8382280be3d46ea96"
       }
     },
     "transactional-email": {
@@ -4098,9 +4098,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "cc9fc21e72e7c09cc18823b23c273b01d647a8ca539318206db31e99b588869d",
+      "checksum": "43a86b405669f09d47b05ee6700767f8f54af36315e09ab93d4184473d4cb299",
       "checksums": {
-        "sha256": "cc9fc21e72e7c09cc18823b23c273b01d647a8ca539318206db31e99b588869d"
+        "sha256": "43a86b405669f09d47b05ee6700767f8f54af36315e09ab93d4184473d4cb299"
       }
     },
     "warehouse": {
@@ -4127,9 +4127,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "29d7bd10cefffcf4c487e065639b31d0f1f5aad9834fa330f6da9271d0b4652c",
+      "checksum": "0ac4dbb1bd55c893140181a8a16419a6da96f1fb0754b3d1861576ed5c5717b3",
       "checksums": {
-        "sha256": "29d7bd10cefffcf4c487e065639b31d0f1f5aad9834fa330f6da9271d0b4652c"
+        "sha256": "0ac4dbb1bd55c893140181a8a16419a6da96f1fb0754b3d1861576ed5c5717b3"
       }
     },
     "web3": {
@@ -4159,9 +4159,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "63467f3f0d1dfe9c90cdbc1b0f65b5a2bfc21a05b3442a697d79b367259e7575",
+      "checksum": "77cf94dedf162dc7580e1cb695c4793525a5dea33993f280bd4de661ab1263df",
       "checksums": {
-        "sha256": "63467f3f0d1dfe9c90cdbc1b0f65b5a2bfc21a05b3442a697d79b367259e7575"
+        "sha256": "77cf94dedf162dc7580e1cb695c4793525a5dea33993f280bd4de661ab1263df"
       }
     },
     "workflows": {
@@ -4190,9 +4190,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.0.1",
-      "checksum": "4e51cd2f137606ef9ffa1893ffb46f6f56dabfb825fc6287f57b829ff8603360",
+      "checksum": "b287a558fbb4595c9e58611389d1e4048ea43aca7d8913910cd10056b5818063",
       "checksums": {
-        "sha256": "4e51cd2f137606ef9ffa1893ffb46f6f56dabfb825fc6287f57b829ff8603360"
+        "sha256": "b287a558fbb4595c9e58611389d1e4048ea43aca7d8913910cd10056b5818063"
       }
     },
     "shared-utils": {
@@ -4253,9 +4253,9 @@
         "np_tmdb_webhook_events"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "321658a5f9b4675d3ef8057437a27b1cc86fe0f8f741b6a2c7def8b18b092fa8",
+      "checksum": "043bc8d4ced877a59e78ce67b8e6b25b489afd42d4e45ba8fdbe0fecb16318df",
       "checksums": {
-        "sha256": "321658a5f9b4675d3ef8057437a27b1cc86fe0f8f741b6a2c7def8b18b092fa8"
+        "sha256": "043bc8d4ced877a59e78ce67b8e6b25b489afd42d4e45ba8fdbe0fecb16318df"
       }
     },
     "game-metadata": {
@@ -4289,9 +4289,9 @@
         "np_game_genres"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "56e10843c4621defb361b488bc5eaadb7042d4664fb9b8d2fd3bad12941dac1d",
+      "checksum": "81c220149c3b9555644c9891f29879bf416acab722c690aea4df016872bf0ffc",
       "checksums": {
-        "sha256": "56e10843c4621defb361b488bc5eaadb7042d4664fb9b8d2fd3bad12941dac1d"
+        "sha256": "81c220149c3b9555644c9891f29879bf416acab722c690aea4df016872bf0ffc"
       }
     },
     "sports": {
@@ -4336,9 +4336,9 @@
         "np_sports_webhook_events"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "4b03bede383a8cafa9dd5def446354f05f13f0ed6c3efa0db2a30ea1fad188b4",
+      "checksum": "78a8d9026d5c367e678c2e2b74d13268b799ffa6ad956360a64200d089b4e626",
       "checksums": {
-        "sha256": "4b03bede383a8cafa9dd5def446354f05f13f0ed6c3efa0db2a30ea1fad188b4"
+        "sha256": "78a8d9026d5c367e678c2e2b74d13268b799ffa6ad956360a64200d089b4e626"
       }
     },
     "podcast": {
@@ -4372,9 +4372,9 @@
         "np_podcast_categories"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "c52fe13426ff43596fd890f02a31a3420012d16307d0496677c001540030d138",
+      "checksum": "f4714ca8dbbcc668cf4936d152f4f2e68173af7dfea0a9cec18f71eac491f50f",
       "checksums": {
-        "sha256": "c52fe13426ff43596fd890f02a31a3420012d16307d0496677c001540030d138"
+        "sha256": "f4714ca8dbbcc668cf4936d152f4f2e68173af7dfea0a9cec18f71eac491f50f"
       }
     },
     "file-processing": {
@@ -4405,9 +4405,9 @@
         "np_fileproc_metadata"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "1f6a3e10d0ad03305cf03fa31a23d116d521c7c9816e527d706c058668075476",
+      "checksum": "b8a9551f38586f2215b0a0e38a01d11b304d42e880c11d7b89843b72d3ba771e",
       "checksums": {
-        "sha256": "1f6a3e10d0ad03305cf03fa31a23d116d521c7c9816e527d706c058668075476"
+        "sha256": "b8a9551f38586f2215b0a0e38a01d11b304d42e880c11d7b89843b72d3ba771e"
       }
     },
     "media-processing": {
@@ -4448,9 +4448,9 @@
         "np_mediap_uploads"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "09cd367c834a7a0fb056eb7b968b024698fd459da5970d0264d08ed1c9101077",
+      "checksum": "cda9c4d015cf49631f55105bb4dc99806775d585f3bcdd74851d49d0fcb02a78",
       "checksums": {
-        "sha256": "09cd367c834a7a0fb056eb7b968b024698fd459da5970d0264d08ed1c9101077"
+        "sha256": "cda9c4d015cf49631f55105bb4dc99806775d585f3bcdd74851d49d0fcb02a78"
       }
     },
     "geocoding": {
@@ -4482,9 +4482,9 @@
         "np_geoc_places"
       ],
       "releaseTag": "v1.0.1",
-      "checksum": "d2da7cd5ac419533f49e069a160e89e9e90147999c2812a48884173a4fff9e98",
+      "checksum": "0641b2a79af09bccd0c7cfd75055609bf2bbcc0e9b5e3bffd03ecca2b37fff4e",
       "checksums": {
-        "sha256": "d2da7cd5ac419533f49e069a160e89e9e90147999c2812a48884173a4fff9e98"
+        "sha256": "0641b2a79af09bccd0c7cfd75055609bf2bbcc0e9b5e3bffd03ecca2b37fff4e"
       }
     }
   }
