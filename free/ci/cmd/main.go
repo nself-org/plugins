@@ -363,11 +363,16 @@ func printResults(r *internal.Result) {
 
 	for _, g := range r.Gates {
 		mark := "PASS"
-		if !g.Passed {
+		switch {
+		case g.Skipped:
+			mark = "SKIP"
+		case !g.Passed:
 			mark = "FAIL"
 		}
 		fmt.Printf("  %-30s  %s  (%s)\n", g.Name, mark, g.Elapsed.Round(time.Millisecond))
-		if !g.Passed && g.Output != "" {
+		// Always show WHY for a skip or a failure — a silent SKIP/PASS line
+		// is exactly the shape of the G-015 bug this gate now refuses to be.
+		if (g.Skipped || !g.Passed) && g.Output != "" {
 			for _, line := range strings.SplitAfter(g.Output, "\n") {
 				fmt.Print("    ", line)
 			}

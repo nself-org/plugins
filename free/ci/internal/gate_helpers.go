@@ -87,6 +87,38 @@ func extractJSONObject(json, key string) map[string]string {
 	return result
 }
 
+// extractJSONStringArray extracts a top-level JSON string-array field (e.g.
+// "workspaces": ["packages/*", "apps/*"]) using the same simple string
+// parsing as extractJSONObject — no external JSON library. Handles only a
+// flat array of string literals, which is the shape package.json
+// "workspaces" always takes in practice.
+func extractJSONStringArray(json, key string) []string {
+	search := `"` + key + `"`
+	idx := strings.Index(json, search)
+	if idx < 0 {
+		return nil
+	}
+	start := strings.Index(json[idx:], "[")
+	if start < 0 {
+		return nil
+	}
+	start += idx + 1
+	end := strings.Index(json[start:], "]")
+	if end < 0 {
+		return nil
+	}
+	block := json[start : start+end]
+
+	var items []string
+	for _, part := range strings.Split(block, ",") {
+		part = strings.Trim(strings.TrimSpace(part), `"'`)
+		if part != "" {
+			items = append(items, part)
+		}
+	}
+	return items
+}
+
 // isGitRepo reports whether root is inside a git checkout.
 //
 // Purpose:     Decide whether gitleaks can scan tracked content (respecting
@@ -106,62 +138,6 @@ func isGitRepo(root string) bool {
 		}
 		dir = parent
 	}
-}
-
-// workspaceMembers returns the directories of a pnpm/npm workspace's member
-// packages, or nil when root is not a workspace.
-//
-// Purpose:     Let the Node gates see scripts that live in member packages
-//              rather than the root package.json.
-// Inputs:      root string — repo root
-// Outputs:     []string — absolute member directories containing a package.json
-// Constraints: Handles pnpm-workspace.yaml globs and package.json "workspaces".
-//              Skips node_modules. Glob depth is whatever the pattern states.
-func workspaceMembers(root string) []string {
-	var patterns []string
-
-	if data, err := os.ReadFile(filepath.Join(root, "pnpm-workspace.yaml")); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			if !strings.HasPrefix(line, "- ") {
-				continue
-			}
-			pat := strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "- ")), `'"`)
-			// Members outside the repo (sibling checkouts) are not ours to gate.
-			if pat != "" && !strings.HasPrefix(pat, "..") {
-				patterns = append(patterns, pat)
-			}
-		}
-	}
-
-	if len(patterns) == 0 {
-		if ws, ok := loadPackageJSON(root)["workspaces"].([]interface{}); ok {
-			for _, w := range ws {
-				if str, ok := w.(string); ok {
-					patterns = append(patterns, str)
-				}
-			}
-		}
-	}
-
-	seen := map[string]bool{}
-	var members []string
-	for _, pat := range patterns {
-		matches, err := filepath.Glob(filepath.Join(root, pat))
-		if err != nil {
-			continue
-		}
-		for _, m := range matches {
-			if strings.Contains(m, "node_modules") || seen[m] {
-				continue
-			}
-			if fileExists(filepath.Join(m, "package.json")) {
-				seen[m] = true
-				members = append(members, m)
-			}
-		}
-	}
-	return members
 }
 
 // anyMemberHasScript reports whether at least one workspace member defines the

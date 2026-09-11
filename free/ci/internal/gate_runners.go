@@ -57,78 +57,38 @@ func gitleaksArgs(root, configFlag string, isRepo bool) []string {
 	return args
 }
 
+// markSubstantive flags each gate as substantive (a real lint/test/build/
+// analyze check) unless runStep already marked it Skipped — e.g. the tool
+// binary was missing. A step that never executed a command must not count
+// toward "something was verified" just because its caller intended it to.
+// G-015 / SPORT: PLUGINS-CI-007
+func markSubstantive(gates []GateResult) {
+	for i := range gates {
+		if !gates[i].Skipped {
+			gates[i].Substantive = true
+		}
+	}
+}
+
 // runGoGates runs gofmt, go vet, and go test for a Go repo.
 func runGoGates(root string, timeout int, verbose bool) []GateResult {
-	return []GateResult{
+	gates := []GateResult{
 		runStep("go:fmt", root, timeout, verbose, "gofmt", "-l", "."),
 		runStep("go:vet", root, timeout, verbose, "go", "vet", "./..."),
 		runStep("go:test", root, timeout, verbose, "go", "test", "-count=1", "-timeout", fmt.Sprintf("%ds", timeout), "./..."),
 	}
-}
-
-// runNodeGates runs pnpm lint, pnpm test, and pnpm build for a Node repo.
-// Falls back to npm if pnpm is not present.
-func runNodeGates(root string, timeout int, verbose bool) []GateResult {
-	pm := "pnpm"
-	if _, err := exec.LookPath("pnpm"); err != nil {
-		pm = "npm"
-	}
-
-	pkg := loadPackageJSON(root)
-
-	// A pnpm/npm workspace keeps its real scripts in member packages, not the
-	// root package.json. Reading only the root made whole repos run ZERO gates
-	// and still report PASSED. Recurse when the root has no script of its own
-	// but a member does.
-	if members := workspaceMembers(root); len(members) > 0 {
-		var gates []GateResult
-		for _, script := range []string{"lint", "typecheck", "test", "build"} {
-			if hasScript(pkg, script) {
-				gates = append(gates, runStep("node:"+script, root, timeout, verbose, pm, "run", script))
-				continue
-			}
-			if anyMemberHasScript(members, script) {
-				// --if-present so members without the script are skipped rather
-				// than failing the whole recursive run.
-				gates = append(gates, runStep("node:"+script+" (workspace)", root, timeout, verbose,
-					pm, "-r", "--if-present", "run", script))
-			}
-		}
-		if len(gates) > 0 {
-			return gates
-		}
-	}
-
-	var gates []GateResult
-	if hasScript(pkg, "lint") {
-		gates = append(gates, runStep("node:lint", root, timeout, verbose, pm, "run", "lint"))
-	}
-	if hasScript(pkg, "typecheck") {
-		gates = append(gates, runStep("node:typecheck", root, timeout, verbose, pm, "run", "typecheck"))
-	}
-	if hasScript(pkg, "test") {
-		gates = append(gates, runStep("node:test", root, timeout, verbose, pm, "run", "test"))
-	}
-	if hasScript(pkg, "build") {
-		gates = append(gates, runStep("node:build", root, timeout, verbose, pm, "run", "build"))
-	}
-
-	if len(gates) == 0 {
-		// No scripts found; at minimum run tsc if tsconfig.json exists.
-		if fileExists(filepath.Join(root, "tsconfig.json")) {
-			gates = append(gates, runStep("node:tsc", root, timeout, verbose, pm, "exec", "tsc", "--noEmit"))
-		}
-	}
-
+	markSubstantive(gates)
 	return gates
 }
 
 // runFlutterGates runs flutter analyze and flutter test.
 func runFlutterGates(root string, timeout int, verbose bool) []GateResult {
-	return []GateResult{
+	gates := []GateResult{
 		runStep("flutter:analyze", root, timeout, verbose, "flutter", "analyze"),
 		runStep("flutter:test", root, timeout, verbose, "flutter", "test", "--reporter", "compact"),
 	}
+	markSubstantive(gates)
+	return gates
 }
 
 // runRustGates runs cargo clippy (deny warnings) and cargo test for a Rust crate.
@@ -138,12 +98,14 @@ func runFlutterGates(root string, timeout int, verbose bool) []GateResult {
 // Outputs: []GateResult — clippy lint + unit test results
 // Constraints: clippy --deny warnings; cargo test --all-features; SPORT PLUGINS-CI-004
 func runRustGates(root string, timeout int, verbose bool) []GateResult {
-	return []GateResult{
+	gates := []GateResult{
 		runStep("rust:clippy", root, timeout, verbose,
 			"cargo", "clippy", "--all-targets", "--all-features", "--", "--deny", "warnings"),
 		runStep("rust:test", root, timeout, verbose,
 			"cargo", "test", "--all-features"),
 	}
+	markSubstantive(gates)
+	return gates
 }
 
 // runGatewayRoutingCheck verifies that the nself-ai-gateway on staging responds
@@ -205,6 +167,7 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 	if _, err := exec.LookPath(cmd); err != nil {
 		gr.Output = fmt.Sprintf("command not found: %s (skipped)", cmd)
 		gr.Passed = true // Skip missing optional tools gracefully.
+		gr.Skipped = true
 		gr.Elapsed = time.Since(start)
 		return gr
 	}
