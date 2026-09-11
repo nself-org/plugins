@@ -273,12 +273,44 @@ jobs:
               --prerelease=false
           fi
 
-          # Upload all tarballs and checksums (clobber = idempotent)
-          gh release upload "$TAG" \
-            dist/*.tar.gz \
-            dist/*.sha256 \
-            --repo "${{ github.repository }}" \
-            --clobber
+          # NEVER --clobber. An asset already on the release is the artifact
+          # of record: registry.json's checksums are written from those exact
+          # published bytes (scripts/verify-published-checksums.sh --write).
+          #
+          # The release flow uploads the tarballs to a DRAFT release first, then
+          # writes their hashes into registry.json, then merges, then publishes.
+          # Publishing creates the tag, which triggers THIS workflow. If it then
+          # rebuilt and clobbered, the bytes on the release would no longer be
+          # the bytes those checksums attest to, and all 129 free plugins would
+          # fail verification at the exact moment of release. CI cannot
+          # reproduce the uploaded bytes: identical tar streams still gzip
+          # differently across machines (Apple gzip vs GNU gzip, and across zlib
+          # versions), measured 2026-09-11.
+          #
+          # So: upload only what is missing. That is what "idempotent" in this
+          # file's header always meant, and what --clobber never did.
+          existing="$(gh release view "$TAG" --repo "${{ github.repository }}" \
+            --json assets --jq '.assets[].name' 2>/dev/null || true)"
+
+          to_upload=()
+          skipped=0
+          for f in dist/*.tar.gz dist/*.sha256; do
+            [ -e "$f" ] || continue
+            if printf '%s\n' "$existing" | grep -qxF "$(basename "$f")"; then
+              skipped=$((skipped + 1))
+              continue
+            fi
+            to_upload+=("$f")
+          done
+
+          echo "Assets already on $TAG (left untouched): ${skipped}"
+          if [ "${#to_upload[@]}" -eq 0 ]; then
+            echo "Nothing new to upload — every built asset is already published."
+          else
+            echo "Uploading ${#to_upload[@]} missing asset(s)."
+            gh release upload "$TAG" "${to_upload[@]}" \
+              --repo "${{ github.repository }}"
+          fi
 
           echo "Upload complete"
 
