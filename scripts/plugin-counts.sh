@@ -9,12 +9,14 @@
 # Inputs:
 #   registry.json in this repo (free) and in a sibling ../plugins-pro
 #   checkout (pro, private). Each entry's own manifest
-#   (free|paid/<slug>/plugin.{json,yaml,yml}) supplies the installable flag;
-#   the registry entry itself is not the source of truth for that flag
-#   (though see the emitted "contradictions" note if one is found anyway).
-#   A slug present in both registries is one plugin (a duplicate) unless
-#   either registry's entry sets "dual_registry": true, in which case it is
-#   two distinct plugins that happen to share a name.
+#   (free|paid/<slug>/plugin.{json,yaml,yml}) supplies the installable flag.
+#   A registry entry may mirror that flag, but the manifest wins; if the two
+#   disagree the script prints a DRIFT line on stderr and still counts by the
+#   manifest.
+#   A slug present in both registries is one two-tier product (the free entry
+#   is its free tier, the pro entry its pro tier) and counts once. Both sides
+#   must carry "tier_pair": true; an unflagged shared slug is a hard error,
+#   not a second way of counting.
 #
 # Outputs:
 #   Default: a human-readable table on stdout.
@@ -158,13 +160,20 @@ def tier_report(repo, tier_dir, plugins):
     non_installable = []
     for slug, entry in plugins.items():
         found, installable = manifest_installable(repo, tier_dir, slug)
+        # A registry entry MAY mirror the manifest's installable flag, and
+        # several do. That is fine and not worth reporting. What matters is the
+        # two disagreeing, because then a reader of registry.json alone would
+        # reach a different count than this generator does. Report only that.
         if isinstance(entry, dict) and "installable" in entry:
-            contradictions.append(
-                f"{repo}:{slug} — registry entry carries an installable flag "
-                f"directly (installable={entry['installable']}); the locked "
-                f"schema says the registry entry never carries this flag. "
-                f"The manifest is used as the source of truth regardless."
-            )
+            registry_says = bool(entry["installable"])
+            if found and registry_says != installable:
+                contradictions.append(
+                    f"{repo}:{slug} — registry entry says installable="
+                    f"{registry_says} but the plugin manifest says "
+                    f"{installable}. The manifest wins here, so the count is "
+                    f"still correct, but the two must be reconciled: anyone "
+                    f"reading registry.json alone will get a different number."
+                )
         if not installable:
             non_installable.append(slug)
     non_installable.sort()
@@ -178,13 +187,33 @@ def tier_report(repo, tier_dir, plugins):
 free_report, free_status = tier_report(free_repo, "free", free_plugins)
 pro_report, pro_status = tier_report(pro_repo, "paid", pro_plugins)
 
+# Overlap rule. A slug in both registries is a two-tier product: the free entry
+# is its free tier, the pro entry its pro tier (e.g. cron, notify). Both sides
+# must carry "tier_pair": true — plugins-pro/scripts/check-bundles-registry-
+# consistency.py already enforces that, so an unflagged shared slug is a data
+# error rather than a second kind of overlap. One product counts once.
+#
+# There is deliberately no "count it twice" case. An earlier draft of this
+# script invented a "dual_registry" flag for that, but no registry entry has
+# ever carried it, so the branch was dead and the real field (tier_pair) went
+# unread. Today that still produced 171 because every shared slug happens to be
+# a tier pair, but it was luck, not logic.
 shared = sorted(set(free_plugins) & set(pro_plugins))
-dual_registry = sorted(
+unflagged = sorted(
     s for s in shared
-    if bool(free_plugins.get(s, {}).get("dual_registry"))
-    or bool(pro_plugins.get(s, {}).get("dual_registry"))
+    if not (bool(free_plugins.get(s, {}).get("tier_pair"))
+            and bool(pro_plugins.get(s, {}).get("tier_pair")))
 )
-duplicates = sorted(s for s in shared if s not in dual_registry)
+if unflagged:
+    sys.exit(
+        "ERROR: slug(s) in both registries without tier_pair:true on both sides: "
+        + ", ".join(unflagged)
+        + "\nEvery shared slug must be declared a free/pro tier pair. Fix the"
+        " registries (see plugins-pro/scripts/check-bundles-registry-consistency.py)"
+        " rather than guessing how to count it."
+    )
+tier_pairs = shared
+duplicates = shared
 
 total_entries = free_report["entries"] + pro_report["entries"] - len(duplicates)
 non_dup_free_installable = sum(1 for s in free_plugins if s not in duplicates and free_status[s])
@@ -204,7 +233,7 @@ result = {
     },
     "free": free_report,
     "pro": pro_report,
-    "overlap": {"sharedSlugs": shared, "dualRegistry": dual_registry, "duplicates": duplicates},
+    "overlap": {"sharedSlugs": shared, "tierPairs": tier_pairs, "duplicates": duplicates},
     "totals": {"entries": total_entries, "installable": total_installable},
     "advertised": total_installable,
 }
@@ -217,14 +246,13 @@ else:
     print(f"pro    {pro_report['entries']:>4}  installable {pro_report['installable']:>4}"
           + (f"  (non-installable: {', '.join(pro_report['nonInstallable'])})" if pro_report["nonInstallable"] else ""))
     if shared:
-        print(f"       shared slugs: {', '.join(shared)}"
-              + (f" (dual-registry, counted twice: {', '.join(dual_registry)})" if dual_registry else "")
-              + (f" (duplicate, counted once: {', '.join(duplicates)})" if duplicates else ""))
+        print(f"       tier pairs (free+pro tiers of one product, counted once): "
+              f"{', '.join(shared)}")
     print(f"total  {result['totals']['entries']:>4}  installable {result['totals']['installable']:>4}")
     print(f"advertised: {result['advertised']}")
 
 for c in contradictions:
-    print(f"NOTE (data contradicts locked schema, not corrected here): {c}", file=sys.stderr)
+    print(f"DRIFT: {c}", file=sys.stderr)
 
 sys.exit(0)
 PYEOF
