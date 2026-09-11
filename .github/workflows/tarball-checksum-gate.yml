@@ -1,0 +1,309 @@
+name: Tarball Checksum Gate
+
+# Verifies registry.json's checksums against the PUBLISHED RELEASE ASSETS
+# for each plugin's registry.json `releaseTag`, not against a fresh CI
+# rebuild.
+#
+# Why not rebuild-and-compare (what this gate did before the P6 re-cut):
+# scripts/deterministic-tar.sh pins mtime, uid/gid, member order and (as of
+# this same re-cut) file mode — but it still shells out to `gzip -n -9`,
+# and DEFLATE output is implementation- and version-dependent by design.
+# Measured directly (2026-09-11): with byte-identical tar streams as input,
+# Apple gzip 479 (macOS) and GNU gzip 1.12 (Linux/ubuntu-latest) produced
+# DIFFERENT compressed bytes for the same real plugin content — 6e9d3966 vs
+# 0283c3b3. Python's zlib diverges the same way across zlib 1.2.12 (macOS)
+# vs 1.3 (Linux). A trivially compressible probe (all-zeros, short text)
+# can make two gzip builds agree by accident, which is how this hid before
+# — real plugin data exposes it every time. So a CI rebuild-and-diff gate
+# can NEVER reliably pass: even a byte-perfect deterministic-tar.sh recipe
+# hits a gzip build difference the tar flags cannot fix, because the
+# divergence is downstream of tar entirely.
+#
+# The release model this repo actually ships under settles this: the
+# artifact of record is whatever bytes get UPLOADED to the GitHub release,
+# and registry.json's checksums are meant to be written FROM those
+# published bytes (scripts/verify-published-checksums.sh --write), not
+# computed independently and hoped to match. So this gate downloads the
+# real release asset for each plugin's registry.json releaseTag and diffs
+# THAT — the exact thing `nself plugin install` downloads and
+# internal/plugin/security.go's verifyChecksum checks against.
+#
+# No release exists yet for a given tag == the normal state of an open
+# version-bump PR (this one, right now: v1.2.1 has no release). The gate
+# SKIPS the compare for any plugin whose tag has no published release,
+# says so via ::notice::, and PASSES — it must never fail merely because
+# the owner hasn't cut the release yet, and it must never silently pass
+# without saying which branch it took. Once a release DOES exist for a
+# tag, a checksum mismatch against its real asset FAILS the gate — proven
+# locally before this file was written: same registry checksum against a
+# byte-identical rebuilt asset passes, a corrupted asset fails, restoring
+# it passes again (see PR body / commit message for the transcript).
+#
+# scripts/deterministic-tar.sh and scripts/build-tarballs.sh are unchanged
+# in spirit and still required: they are what makes a LOCAL rebuild
+# reproducible across contributors' machines and CI, which is what lets
+# someone sanity-check a tarball before it's uploaded. They were never
+# going to make two different gzip implementations byte-agree, and this
+# gate no longer asks them to.
+#
+# A second job, platform-checksum-gate, applies the identical published-
+# asset treatment to the per-platform binary tarballs added in plugins#83
+# (registry.json's checksums.platforms.<platform> fields, commit 0eae661).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'free/**'
+      - 'registry.json'
+      - 'scripts/deterministic-tar.sh'
+      - 'scripts/build-tarballs.sh'
+      - 'scripts/verify-published-checksums.sh'
+      - '.github/workflows/tarball-checksum-gate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checksum-gate:
+    name: Verify registry.json checksums against published release assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Diff registry.json checksums against each plugin's published release asset
+        run: |
+          set -euo pipefail
+
+          REPO="nself-org/plugins"
+          WORK="$(mktemp -d)"
+          FAIL=0
+          CHECKED=0
+          SKIPPED_NO_RELEASE=0
+          SKIPPED_NO_CHECKSUM=0
+          declare -A RELEASE_EXISTS
+
+          while IFS= read -r plugin_dir; do
+            name="$(basename "$plugin_dir")"
+
+            entry="$(jq -c --arg n "$name" '.plugins[$n] // empty' registry.json)"
+            if [ -z "$entry" ]; then
+              # registry-check.yml's concern (presence parity), not this gate's.
+              continue
+            fi
+
+            expected_checksum="$(printf '%s' "$entry" | jq -r '.checksum // empty')"
+            expected_nested="$(printf '%s' "$entry" | jq -r '.checksums.sha256 // empty')"
+
+            if [ -z "$expected_checksum" ] && [ -z "$expected_nested" ]; then
+              # e.g. shared-utils: installable:false, no tarball/download_url,
+              # nothing for a checksum to attest to.
+              SKIPPED_NO_CHECKSUM=$((SKIPPED_NO_CHECKSUM + 1))
+              continue
+            fi
+
+            tag="$(printf '%s' "$entry" | jq -r '.releaseTag // empty')"
+            version="$(printf '%s' "$entry" | jq -r '.version // empty')"
+
+            if [ -z "$tag" ] || [ -z "$version" ]; then
+              echo "::warning::$name has a checksum recorded but no releaseTag/version — cannot resolve a published asset to verify against"
+              SKIPPED_NO_RELEASE=$((SKIPPED_NO_RELEASE + 1))
+              continue
+            fi
+
+            if [ -z "${RELEASE_EXISTS[$tag]+x}" ]; then
+              if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
+                RELEASE_EXISTS["$tag"]=1
+              else
+                RELEASE_EXISTS["$tag"]=0
+              fi
+            fi
+
+            if [ "${RELEASE_EXISTS[$tag]}" = "0" ]; then
+              echo "::notice::No published release $tag yet — skipping the published-bytes checksum compare for $name (registry version=$version). This is the normal state before the owner cuts the release; it is NOT a pass on the checksum itself."
+              SKIPPED_NO_RELEASE=$((SKIPPED_NO_RELEASE + 1))
+              continue
+            fi
+
+            tarball_name="${name}-${version}.tar.gz"
+            if ! gh release download "$tag" --repo "$REPO" --pattern "$tarball_name" --dir "$WORK" --clobber >/dev/null 2>&1; then
+              echo "MISSING $name: release $tag exists but has no asset named $tarball_name"
+              FAIL=1
+              continue
+            fi
+
+            asset_path="${WORK}/${tarball_name}"
+            actual="$(sha256sum "$asset_path" | cut -d' ' -f1)"
+            CHECKED=$((CHECKED + 1))
+            rm -f "$asset_path"
+
+            # Case-insensitive compare, matching internal/plugin/security.go's
+            # verifyChecksum (strings.EqualFold) — the actual install-time check.
+            if [ -n "$expected_checksum" ]; then
+              lhs="$(printf '%s' "$expected_checksum" | tr '[:upper:]' '[:lower:]')"
+              rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
+              if [ "$lhs" != "$rhs" ]; then
+                echo "MISMATCH $name: registry .checksum=$expected_checksum  published=$actual"
+                FAIL=1
+              fi
+            fi
+
+            # checksums.sha256 may carry a "sha256:" prefix; strip before comparing.
+            if [ -n "$expected_nested" ]; then
+              nested_hex="${expected_nested#sha256:}"
+              lhs="$(printf '%s' "$nested_hex" | tr '[:upper:]' '[:lower:]')"
+              rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
+              if [ "$lhs" != "$rhs" ]; then
+                echo "MISMATCH $name: registry .checksums.sha256=$expected_nested  published=$actual"
+                FAIL=1
+              fi
+            fi
+          done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
+
+          echo ""
+          echo "Checked against a published release asset: $CHECKED"
+          echo "Skipped (no release published yet for that tag): $SKIPPED_NO_RELEASE"
+          echo "Skipped (no checksum recorded): $SKIPPED_NO_CHECKSUM"
+
+          rm -rf "$WORK"
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "::error::one or more registry.json checksums do not match the corresponding published release asset"
+            echo "Rebuild locally with scripts/build-tarballs.sh <version>, upload it to the" >&2
+            echo "release, then re-run scripts/verify-published-checksums.sh <tag> --write" >&2
+            echo "to bring registry.json back in sync with what is actually published." >&2
+            exit 1
+          fi
+
+          if [ "$CHECKED" -eq 0 ]; then
+            echo "::notice::No plugin's releaseTag currently has a published GitHub release — this gate had nothing to compare against and is passing vacuously, not because any checksum was verified. It will start actually checking bytes once a release exists for these tags."
+          fi
+
+          echo "OK: every checksum that could be checked against a published release asset matches"
+
+  platform-checksum-gate:
+    name: Verify registry.json checksums.platforms against published release assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Diff registry.json checksums.platforms against each plugin's published per-platform assets
+        run: |
+          set -euo pipefail
+
+          REPO="nself-org/plugins"
+          WORK="$(mktemp -d)"
+          FAIL=0
+          CHECKED=0
+          SKIPPED_NO_RELEASE=0
+          SKIPPED_NO_BINARY=0
+          declare -A RELEASE_EXISTS
+
+          # Matches internal/plugin/arch.go's PlatformArch() — the same list
+          # scripts/build-tarballs.sh cross-compiles for a binaryName plugin.
+          PLATFORMS="darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64"
+
+          while IFS= read -r plugin_dir; do
+            name="$(basename "$plugin_dir")"
+
+            bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${plugin_dir}/plugin.json" 2>/dev/null || printf '')"
+            if [ -z "$bin_name" ]; then
+              SKIPPED_NO_BINARY=$((SKIPPED_NO_BINARY + 1))
+              continue
+            fi
+
+            entry="$(jq -c --arg n "$name" '.plugins[$n] // empty' registry.json)"
+            [ -z "$entry" ] && continue
+
+            tag="$(printf '%s' "$entry" | jq -r '.releaseTag // empty')"
+            version="$(printf '%s' "$entry" | jq -r '.version // empty')"
+            if [ -z "$tag" ] || [ -z "$version" ]; then
+              echo "::warning::$name declares binaryName but registry entry has no releaseTag/version — cannot resolve platform assets"
+              SKIPPED_NO_RELEASE=$((SKIPPED_NO_RELEASE + 1))
+              continue
+            fi
+
+            if [ -z "${RELEASE_EXISTS[$tag]+x}" ]; then
+              if gh release view "$tag" --repo "$REPO" >/dev/null 2>&1; then
+                RELEASE_EXISTS["$tag"]=1
+              else
+                RELEASE_EXISTS["$tag"]=0
+              fi
+            fi
+
+            if [ "${RELEASE_EXISTS[$tag]}" = "0" ]; then
+              echo "::notice::No published release $tag yet — skipping the published-bytes platform-checksum compare for $name. This is the normal state before the owner cuts the release."
+              SKIPPED_NO_RELEASE=$((SKIPPED_NO_RELEASE + 1))
+              continue
+            fi
+
+            for platform in $PLATFORMS; do
+              ptar_name="${name}-${version}-${platform}.tar.gz"
+              expected="$(printf '%s' "$entry" | jq -r --arg p "$platform" '.checksums.platforms[$p] // empty')"
+
+              if [ -z "$expected" ]; then
+                echo "MISSING $name/$platform: no registry checksums.platforms.$platform recorded (install-time verification refuses this unconditionally)"
+                FAIL=1
+                continue
+              fi
+
+              if ! gh release download "$tag" --repo "$REPO" --pattern "$ptar_name" --dir "$WORK" --clobber >/dev/null 2>&1; then
+                echo "MISSING-ASSET $name/$platform: release $tag exists but has no asset named $ptar_name"
+                FAIL=1
+                continue
+              fi
+
+              ptar="${WORK}/${ptar_name}"
+              actual="$(sha256sum "$ptar" | cut -d' ' -f1)"
+              CHECKED=$((CHECKED + 1))
+              rm -f "$ptar"
+
+              lhs="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
+              rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
+              if [ "$lhs" != "$rhs" ]; then
+                echo "MISMATCH $name/$platform: registry .checksums.platforms.$platform=$expected  published=$actual"
+                FAIL=1
+              fi
+            done
+          done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
+
+          echo ""
+          echo "Checked against a published platform asset: $CHECKED"
+          echo "Skipped (no release published yet for that tag): $SKIPPED_NO_RELEASE"
+          echo "Skipped (no binaryName): $SKIPPED_NO_BINARY"
+
+          rm -rf "$WORK"
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "::error::one or more registry.json checksums.platforms entries are missing, or do not match a published per-platform release asset"
+            exit 1
+          fi
+
+          if [ "$CHECKED" -eq 0 ]; then
+            echo "::notice::No binaryName plugin's releaseTag currently has a published GitHub release — this gate had nothing to compare against and is passing vacuously, not because any platform checksum was verified."
+          fi
+
+          echo "OK: every checksums.platforms entry that could be checked against a published asset matches"
