@@ -1,0 +1,150 @@
+name: Tarball Checksum Gate
+
+# Rebuilds every free plugin's source tarball from the checked-out tree
+# using the SAME recipe (scripts/deterministic-tar.sh) that
+# release-tarballs.yml uses to build the assets a tag push actually
+# publishes, then asserts the freshly built sha256 matches registry.json's
+# `checksum` (and, when present, `checksums.sha256`) for that plugin.
+#
+# Why this exists: registry.json can carry a checksum that was computed by
+# ANY build (a contributor's laptop, an earlier CI run, hand-editing) at ANY
+# point, with no guarantee it still matches what the release pipeline would
+# produce today. `nself plugin install` hard-fails on a checksum mismatch
+# (internal/plugin/security.go verifyChecksum) — so a stale or
+# wrongly-computed checksum in registry.json is a shipped defect, not a
+# cosmetic one. This gate makes that defect impossible to merge: it rebuilds
+# the real bytes and fails the PR the moment they disagree, rather than
+# discovering it after users start getting failed installs post-release.
+#
+# This job does not build the per-platform binary tarballs (those need Go
+# compilation for every plugin with a binaryName, which is what
+# build-test.yml already exercises) — registry.json stores exactly one
+# checksum per plugin, and that one checksum was always computed from the
+# source tarball (scripts/build-tarballs.sh), never from a per-platform
+# binary. Comparing the source tarball's bytes against it is the whole
+# claim this field makes.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'free/**'
+      - 'registry.json'
+      - 'scripts/deterministic-tar.sh'
+      - 'scripts/build-tarballs.sh'
+      - '.github/workflows/tarball-checksum-gate.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checksum-gate:
+    name: Verify registry.json checksums match rebuilt tarballs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Rebuild every free plugin's source tarball and diff against registry.json
+        run: |
+          set -euo pipefail
+
+          WORK="$(mktemp -d)"
+          FAIL=0
+          CHECKED=0
+          SKIPPED_NO_CHECKSUM=0
+
+          # tar's own --sort=name inside deterministic-tar.sh makes each
+          # individual archive's member order stable; sort here too so the
+          # gate's own iteration order (and therefore its log/output) is
+          # deterministic across runs.
+          while IFS= read -r plugin_dir; do
+            name="$(basename "$plugin_dir")"
+
+            # ollama is the one deliberate, permanent exception (see
+            # .github/RELEASE-v1.0.1.md "Two exceptions"): it ships under its
+            # own pre-existing v1.1.1 GitHub release, built independently of
+            # this repo's tarball pipeline, and its registry.json checksum was
+            # verified by downloading and hashing that real live asset
+            # directly — not by this pipeline rebuilding free/ollama from the
+            # checked-out tree. Rebuilding it here would compare against a
+            # tarball this gate has no way of reproducing (a different
+            # release, built on a different date, by a different process) and
+            # would fail forever regardless of whether free/ollama/ is fine.
+            if [ "$name" = "ollama" ]; then
+              echo "SKIP ollama — checksum verified against its own external v1.1.1 release, not this pipeline's build"
+              continue
+            fi
+
+            entry="$(jq -c --arg n "$name" '.plugins[$n] // empty' registry.json)"
+            if [ -z "$entry" ]; then
+              # A free/* directory with no registry.json entry at all is
+              # registry-check.yml's concern (presence parity), not this
+              # gate's (checksum correctness) — skip rather than duplicate it.
+              continue
+            fi
+
+            expected_checksum="$(printf '%s' "$entry" | jq -r '.checksum // empty')"
+            expected_nested="$(printf '%s' "$entry" | jq -r '.checksums.sha256 // empty')"
+
+            if [ -z "$expected_checksum" ] && [ -z "$expected_nested" ]; then
+              # e.g. shared-utils: installable:false, no tarball/download_url,
+              # no checksum to attest to — deliberately not distributed.
+              SKIPPED_NO_CHECKSUM=$((SKIPPED_NO_CHECKSUM + 1))
+              continue
+            fi
+
+            out="${WORK}/${name}.tar.gz"
+            bash scripts/deterministic-tar.sh "$out" "$plugin_dir"
+            actual="$(sha256sum "$out" | cut -d' ' -f1)"
+            CHECKED=$((CHECKED + 1))
+
+            # Case-insensitive compare, matching internal/plugin/security.go's
+            # verifyChecksum (strings.EqualFold) — the actual install-time check.
+            if [ -n "$expected_checksum" ]; then
+              lhs="$(printf '%s' "$expected_checksum" | tr '[:upper:]' '[:lower:]')"
+              rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
+              if [ "$lhs" != "$rhs" ]; then
+                echo "MISMATCH $name: registry .checksum=$expected_checksum  rebuilt=$actual"
+                FAIL=1
+              fi
+            fi
+
+            # checksums.sha256 may carry a "sha256:" prefix (the release
+            # workflow's backfill step writes it that way); strip it before
+            # comparing so both conventions are handled.
+            if [ -n "$expected_nested" ]; then
+              nested_hex="${expected_nested#sha256:}"
+              lhs="$(printf '%s' "$nested_hex" | tr '[:upper:]' '[:lower:]')"
+              rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
+              if [ "$lhs" != "$rhs" ]; then
+                echo "MISMATCH $name: registry .checksums.sha256=$expected_nested  rebuilt=$actual"
+                FAIL=1
+              fi
+            fi
+          done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
+
+          echo ""
+          echo "Checked: $CHECKED plugin(s) with a registry checksum"
+          echo "Skipped (no checksum recorded): $SKIPPED_NO_CHECKSUM"
+
+          rm -rf "$WORK"
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "ERROR: one or more registry.json checksums do not match the tarball" >&2
+            echo "scripts/deterministic-tar.sh builds from the checked-out free/<name>" >&2
+            echo "tree right now. Rebuild with:" >&2
+            echo "  bash scripts/build-tarballs.sh <version>" >&2
+            echo "and update the mismatched entries' checksum / checksums.sha256." >&2
+            exit 1
+          fi
+
+          echo "OK: every registry.json checksum matches a freshly rebuilt tarball"
