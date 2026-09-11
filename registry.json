@@ -41,7 +41,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "f5162fae82506ccb27d97a97da592127c3ee69a8e07e007dacdb0ca0d6793b16",
       "checksums": {
-        "sha256": "f5162fae82506ccb27d97a97da592127c3ee69a8e07e007dacdb0ca0d6793b16"
+        "sha256": "f5162fae82506ccb27d97a97da592127c3ee69a8e07e007dacdb0ca0d6793b16",
+        "platforms": {
+          "darwin-arm64": "5bdf210dbeb16255c516e71c97b5ee599fbe9767c452f81babcd05534fc68513",
+          "darwin-amd64": "099c19bc11726483942e5bf140f230ae3ab9e26f8ae9e0e2695303fa0b8a7d08",
+          "linux-amd64": "a9787e8d159c32110299c885841c3dcc9b3ecc61a96e0399c90c9ba2397bb168",
+          "linux-arm64": "0dc16e82e45044f0766e4a68bf74619520e9ba28b11bf453ef16a0d750578a7a",
+          "windows-amd64": "b89598b6e46a2a3f00c25632e402878c0c1ab7f4f7be13ab494532f417fe1a7e"
+        }
       }
     },
     "ai-studio": {
@@ -76,7 +83,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "c7e06f093d614b71c92c381c1319fe2833d7e0afb30576cc592d5c72ce1773eb",
       "checksums": {
-        "sha256": "c7e06f093d614b71c92c381c1319fe2833d7e0afb30576cc592d5c72ce1773eb"
+        "sha256": "c7e06f093d614b71c92c381c1319fe2833d7e0afb30576cc592d5c72ce1773eb",
+        "platforms": {
+          "darwin-arm64": "18c6510d0192be1e2eb1af413a5796b912e8ffc8d5e2823dd50c4cf57735399b",
+          "darwin-amd64": "c94d3380938b1059e13ed78ea5d69724243e09f25634fd1597144009a4822a4a",
+          "linux-amd64": "bc203b8f4839beb565b171c244aaaacb191714cb9e3ffe23141cb9ef324183a0",
+          "linux-arm64": "32ba15d6ad87126f282e0a4ddd2d8e079169c3e88d9b559326d127b69eacdb89",
+          "windows-amd64": "f6db648b3ac1dffcf12641fbf99f8845e18979db8535638b09d221bea515794a"
+        }
       }
     },
     "alerts": {
@@ -112,7 +126,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "6fc9176c37c5cd82666ce672dc92571dbb3d57cb65d8d93cad11893d81b4d5fd",
       "checksums": {
-        "sha256": "6fc9176c37c5cd82666ce672dc92571dbb3d57cb65d8d93cad11893d81b4d5fd"
+        "sha256": "6fc9176c37c5cd82666ce672dc92571dbb3d57cb65d8d93cad11893d81b4d5fd",
+        "platforms": {
+          "darwin-arm64": "c8404a68c43fff044ae2fcf51d8a92b3383ca1cecac15e22b643ba18fe58b999",
+          "darwin-amd64": "7c7935f5ad85c3d2d83f57e0dc61cdbc8cfb0982246365b234f65603a7a845c4",
+          "linux-amd64": "11cac40a8de1c5977c010bb62c10a1456e2b9bf3e389169218d1f29cf22242d8",
+          "linux-arm64": "2f621947d4e4d1d58fa6e8c615c02c1568a92b9dcfcdd53844c71bfd1d1d3202",
+          "windows-amd64": "2407c97c56d58fc466da6443f0dd2d8e9884b4d7f05c8d72aba5b73b75061a33"
+        }
       }
     },
     "api": {
@@ -147,7 +168,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "72f91ba7a43328281e43c29d12abf922080d308ae4e7fa691ffdd443198f4757",
       "checksums": {
-        "sha256": "72f91ba7a43328281e43c29d12abf922080d308ae4e7fa691ffdd443198f4757"
+        "sha256": "72f91ba7a43328281e43c29d12abf922080d308ae4e7fa691ffdd443198f4757",
+        "platforms": {
+          "darwin-arm64": "da2120963f1892bce743c6441aad974d953321b4c44d6a01e2a2fb6967cd260c",
+          "darwin-amd64": "b17ae30218bfb5149546674c265778954707b2eaad1e4f01f5a23e457f01e7f0",
+          "linux-amd64": "a23a17e0cb1c70b37157b35bc334c7b33ba1f96612473d657a7202aac47dc014",
+          "linux-arm64": "3cb6bd84c48b4f01d8d43b3904d7e36e216ee529720e83a2460a15ac9c7fc4ef",
+          "windows-amd64": "59eff7819129606c8798bc4ebfd840d1e843a54dd939ca71d32c07340102b487"
+        }
       }
     },
     "audit": {
@@ -182,7 +210,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "08d01f3917a8db177626996e2f3f54a5ca86e5d6029e02b2ec0a5dce9a9d003e",
       "checksums": {
-        "sha256": "08d01f3917a8db177626996e2f3f54a5ca86e5d6029e02b2ec0a5dce9a9d003e"
+        "sha256": "08d01f3917a8db177626996e2f3f54a5ca86e5d6029e02b2ec0a5dce9a9d003e",
+        "platforms": {
+          "darwin-arm64": "f23ebcfd12569190ff1aeb181a708e2fba35a36365ca37500b54e52bf20c0bcc",
+          "darwin-amd64": "afe57a4839b1415d0d9cb10d56df3a8e5e73b018e11493beba88e562435d8333",
+          "linux-amd64": "665e7feb09f72c231a128d4aa9e5beebcd23fad9b0640d9a184d5de70444b205",
+          "linux-arm64": "850da1083be62c74cbf0bc36213e881a9c55a90cd6c210ce73cec2e7b52178c0",
+          "windows-amd64": "1be13f1a13651c7d9d21374c8dddfdbe94a8980e0b2f4a03767645a60916c633"
+        }
       }
     },
     "audit-log": {
@@ -328,7 +363,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "eb6afc0c454935090941efe9316c19d475bdc7a3881d01054b3d12390fc1f589",
       "checksums": {
-        "sha256": "eb6afc0c454935090941efe9316c19d475bdc7a3881d01054b3d12390fc1f589"
+        "sha256": "eb6afc0c454935090941efe9316c19d475bdc7a3881d01054b3d12390fc1f589",
+        "platforms": {
+          "darwin-arm64": "cc59c8081b44b725e3a5540e0a531d73d6dba24f51cc8b68f5f63ded0a52e69b",
+          "darwin-amd64": "a1098b9abd36d59a3c8ed1aa4427eae794b2a8a0a8602731c52dd18591f41675",
+          "linux-amd64": "1dfafc56b99195a784ae3119a1e201de20e692001db93fb04beb0f27580086c7",
+          "linux-arm64": "bd429329132d3b9236579db37ca34f076f9303e042f200dd5d93346d59d3b487",
+          "windows-amd64": "ecb99abd0a6a2de6ba703c6249db489ba258a58d977ac360b7a41e5d1a4cdf3e"
+        }
       }
     },
     "content-acquisition": {
@@ -464,7 +506,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "e930ed1162eb189c74547bd0b1ef05de6fade4f7d90045ddf179bbd679a19b31",
       "checksums": {
-        "sha256": "e930ed1162eb189c74547bd0b1ef05de6fade4f7d90045ddf179bbd679a19b31"
+        "sha256": "e930ed1162eb189c74547bd0b1ef05de6fade4f7d90045ddf179bbd679a19b31",
+        "platforms": {
+          "darwin-arm64": "7b40834bb5c9813e09a16cadfc81073a93bbee39506a418f7a08795233311885",
+          "darwin-amd64": "ee1bea1543f96a1321c6697c9438991b9d08bb982b095b585d37def59d5cc7fd",
+          "linux-amd64": "8687c821a736120b6a6d825410fc23d23b36947bf78c7841aeefdc81c35d91a4",
+          "linux-arm64": "b7e27340d4d62f7994e5c2706746a81067014009d2c860cde87abef483349e6a",
+          "windows-amd64": "1cd1782de547bad85a9fddd40f87b26842dfc424790691435db8b67c6129fcf9"
+        }
       }
     },
     "cron": {
@@ -538,7 +587,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "8021708fd8b304b023aedff339dc82cbc36561d7ab5f066ba3709b6daf716b96",
       "checksums": {
-        "sha256": "8021708fd8b304b023aedff339dc82cbc36561d7ab5f066ba3709b6daf716b96"
+        "sha256": "8021708fd8b304b023aedff339dc82cbc36561d7ab5f066ba3709b6daf716b96",
+        "platforms": {
+          "darwin-arm64": "c8019b590f0b0dc3d1baf9e7cbf120b2f5fd1c561be780c29ddee0324f82ba80",
+          "darwin-amd64": "f03c70cf02325e420202e984a2b63a7d74b438c7e035e4167ff131743c231b77",
+          "linux-amd64": "4084d129ef54c960284b110b26b4a306ce35a9c3b9568c6a0a62cfb87c2c49f8",
+          "linux-arm64": "f1997872dc9f4fc26a390ede89167f040e4a7a79a2cf79fdb30b938c699f0384",
+          "windows-amd64": "091376523991093cb461e493dc179c1878def1cc0b91562fbd81de6988d03c6b"
+        }
       }
     },
     "dogfood": {
@@ -574,7 +630,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "bb633b2e22edc8086074dbeeda3eaa4553935a1b6f0562356c3505f5774ea498",
       "checksums": {
-        "sha256": "bb633b2e22edc8086074dbeeda3eaa4553935a1b6f0562356c3505f5774ea498"
+        "sha256": "bb633b2e22edc8086074dbeeda3eaa4553935a1b6f0562356c3505f5774ea498",
+        "platforms": {
+          "darwin-arm64": "af520c6bef1a3155d9e24eb60e9637145490479559932ecca8b160582aec4ba4",
+          "darwin-amd64": "2232275278bd76115590e69048f8ff32fec50c89667a40cb77a2f0eb921cf805",
+          "linux-amd64": "7a3b9b8cdc846655a9ec0799cb521aee5c280b168647ca4bfcab61dac88c5a70",
+          "linux-arm64": "20a86a538a2437c5dbb4b7b2d4fd51f6cb4ccaa6d1502f8725788ef58de423bd",
+          "windows-amd64": "fe903f7f017807dbbba8bcf64b1ef6f0b67825690b580d1fcc9150b611aa2c32"
+        }
       }
     },
     "donorbox": {
@@ -652,7 +715,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "958adebb709b79ee4a47f6a547b8c5ccd8b2ef0c4b9bf688e1509e1ca9c3daa3",
       "checksums": {
-        "sha256": "958adebb709b79ee4a47f6a547b8c5ccd8b2ef0c4b9bf688e1509e1ca9c3daa3"
+        "sha256": "958adebb709b79ee4a47f6a547b8c5ccd8b2ef0c4b9bf688e1509e1ca9c3daa3",
+        "platforms": {
+          "darwin-arm64": "3cbb0cf8c52ee159f35667e21c87284bd0a89e209322b6b697e972ab029efc2b",
+          "darwin-amd64": "1983e5022fcc66227d29dee16da007e9dc18b614f7e3efade9f7d75a5007d9f1",
+          "linux-amd64": "5d592b2e21285e726745a03c0ec0124f18876572a15b454b1b9197ba8a25b3a9",
+          "linux-arm64": "31f4a7d1164fef01c3d02b228431a2074838df5e61dc7876e0b358737f808f1c",
+          "windows-amd64": "4ea198d683dd8fd7a3e05a6694e0873cf663e32b692aa82b61eb69698dbb570b"
+        }
       }
     },
     "e2ee": {
@@ -811,7 +881,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "3869bb5d988aaa1dfb2f9d4d9a755faeffa06f4772e9f3349a4819abb802623d",
       "checksums": {
-        "sha256": "3869bb5d988aaa1dfb2f9d4d9a755faeffa06f4772e9f3349a4819abb802623d"
+        "sha256": "3869bb5d988aaa1dfb2f9d4d9a755faeffa06f4772e9f3349a4819abb802623d",
+        "platforms": {
+          "darwin-arm64": "681b38261abf7e7b5a2cff2c45758b87d181777f142bf0090c2daf53cfeb5f22",
+          "darwin-amd64": "0a628a30d93a831cd5a874e6ffb9061b99d8ff78bb154bfab5b4817876f8e144",
+          "linux-amd64": "cb0fe237925c8e262f4ab4e24f327780f2076d839976bafc918f1df2b85f138e",
+          "linux-arm64": "c9c7c3b409873f7b73763be352c6c1d70f938abd34495aafb2ee57b23c9c132d",
+          "windows-amd64": "a82e0ab75e540be234a5036715248f66d09a9367a3b8b2908a2aec8ffbc21c9a"
+        }
       }
     },
     "flags": {
@@ -846,7 +923,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "31ffe025c10a82ee91625cc49b73ab0d20f91de57c1b7a12a0c1ac7a2d78326b",
       "checksums": {
-        "sha256": "31ffe025c10a82ee91625cc49b73ab0d20f91de57c1b7a12a0c1ac7a2d78326b"
+        "sha256": "31ffe025c10a82ee91625cc49b73ab0d20f91de57c1b7a12a0c1ac7a2d78326b",
+        "platforms": {
+          "darwin-arm64": "0e9caa2b8aa53e8211481be1b40283d64adca120d66ceb7aa0236bd8a28893ce",
+          "darwin-amd64": "e2d9777318cbbf2fcb4e8819cbd15b0303549edb2a0963f4d79a90c3a1a27bb3",
+          "linux-amd64": "8b8cd713038044686af2f43644089e1d09b3c5650e715b5db4d15518b4328f77",
+          "linux-arm64": "dceae54c8cc57774b01921e0d98fc0957174cd686fec7f551b2391e319407f2f",
+          "windows-amd64": "e596b2a825f04194ade06f2efafaaaad9f87a79c027b3fbb10ef6e161336daa7"
+        }
       }
     },
     "forgejo": {
@@ -919,7 +1003,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "f72afd7a20df9b3da73f681a3317d60fdeaab80e936df9992cd49ac5dd5cc66b",
       "checksums": {
-        "sha256": "f72afd7a20df9b3da73f681a3317d60fdeaab80e936df9992cd49ac5dd5cc66b"
+        "sha256": "f72afd7a20df9b3da73f681a3317d60fdeaab80e936df9992cd49ac5dd5cc66b",
+        "platforms": {
+          "darwin-arm64": "84fa603ca058d2f2e7e5c93c304dd1042d1124f7dc8d1c69321ec284bb87c93e",
+          "darwin-amd64": "6a873e9f30603ca13a295aed728434d454238fe055defc7bdd16644f34c1dcc0",
+          "linux-amd64": "f97dd7e15abc6e92138fe22d939746611202d98e3baa727c058d89e5bdaaf5b3",
+          "linux-arm64": "22a5c21ee20cda5e53e557840c9b2be8ac589ba7efc007b67a6c4899827e813a",
+          "windows-amd64": "96a1b84085f7b2d7555290ff32aa4475dd6be1e536cec420b20744e93d1f9519"
+        }
       }
     },
     "gauth": {
@@ -954,7 +1045,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "65803c554fab43aeefb6fddd0c1a2ed3d9c25a1b6c1d99522805666cd256f369",
       "checksums": {
-        "sha256": "65803c554fab43aeefb6fddd0c1a2ed3d9c25a1b6c1d99522805666cd256f369"
+        "sha256": "65803c554fab43aeefb6fddd0c1a2ed3d9c25a1b6c1d99522805666cd256f369",
+        "platforms": {
+          "darwin-arm64": "9a0d42af48c5fe66a1ba43ba923c9bc778e05989439e90ab398c15d7f34719f1",
+          "darwin-amd64": "c0e3466449685de83be121732bbb86a59226e3fb49c8a234ba0b49f0948995dc",
+          "linux-amd64": "329b8da1c53fec3a4f200b8823583f535361f943fe5682ad3932b0859ba701d1",
+          "linux-arm64": "29cb95ffabb36cb44f10b5b7b6f95c0b683ea26c1b61b81ac00caac9aa76a0a4",
+          "windows-amd64": "ea7bf96284020876b4877719f064901ac40cddb2e5e66e46ab7b95fd32698104"
+        }
       }
     },
     "gdpr": {
@@ -991,7 +1089,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "08947829a10d401006ccda9ec9205a0a005983523f982da7e9a803d01e561e88",
       "checksums": {
-        "sha256": "08947829a10d401006ccda9ec9205a0a005983523f982da7e9a803d01e561e88"
+        "sha256": "08947829a10d401006ccda9ec9205a0a005983523f982da7e9a803d01e561e88",
+        "platforms": {
+          "darwin-arm64": "9a6d58d1f3cd4a9484ea7ad54710ec0242747f1cf88f18ace26811cce4c4c57b",
+          "darwin-amd64": "fdda06a3c20fb456f094e7b52cddaf5d8d6ea610203114d3c738ee79b7bfeb80",
+          "linux-amd64": "174999ec7419f5ba5823cf0f24fec77ce653864d16ecb3121848e8bdb7bc31ca",
+          "linux-arm64": "34b95e89f0e6857f9ee6843404e09d79062454cedbf1586d8321744577c1dd03",
+          "windows-amd64": "cf830252176244ffb248e5f0af2ded5269e5ccc5f658cd0b28e01bfd92e6f97a"
+        }
       }
     },
     "github": {
@@ -1125,7 +1230,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "c01219518f1d1ac5e51ae8fc1bf40154a5babfd87e60a473e670836d76339b20",
       "checksums": {
-        "sha256": "c01219518f1d1ac5e51ae8fc1bf40154a5babfd87e60a473e670836d76339b20"
+        "sha256": "c01219518f1d1ac5e51ae8fc1bf40154a5babfd87e60a473e670836d76339b20",
+        "platforms": {
+          "darwin-arm64": "b668494f59e8eff7201a5e3644039208a577613fd81703298abcb5f82931b737",
+          "darwin-amd64": "9a187941e9a45eb55920f8a6f31a221bb9323c10fdbf8d72f23d48f3ff71dbf8",
+          "linux-amd64": "7289f2bfcae4da763a48923164e1c72edaa51cdf8f676dafd622ee872e624bbf",
+          "linux-arm64": "469d9104e2261c06bed947f9d4e52eb19344a1bd8810baeaef3c78ee3b701ed3",
+          "windows-amd64": "3ab512917906f707334a4ae395d2b7fd223bc45a4cab0fb74c74476c8aaa9470"
+        }
       }
     },
     "invitations": {
@@ -1236,7 +1348,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "3d57bb77ab1bde3d938aed25383227dbffc4f65a8c8149e0b4d1d4eb8a885fed",
       "checksums": {
-        "sha256": "3d57bb77ab1bde3d938aed25383227dbffc4f65a8c8149e0b4d1d4eb8a885fed"
+        "sha256": "3d57bb77ab1bde3d938aed25383227dbffc4f65a8c8149e0b4d1d4eb8a885fed",
+        "platforms": {
+          "darwin-arm64": "64585db0263234f49fa9dc63aa87f73f715c8301e716bfff7e71777ef88fb0aa",
+          "darwin-amd64": "cbbfc223ee715e2d90f81863fbbcf840139aacaac11b2b8ba62b0427fa6c89cc",
+          "linux-amd64": "a43d91bd63ab180b08e2db1ba33a34f50617a76985a51262260ca789a112c4e1",
+          "linux-arm64": "9a55b485d44d59edc4a5ea2e786e85b673e65bcfa768a004a6a4b76921379203",
+          "windows-amd64": "cde4f8ecff6f0a2785a59825304c5090612982b27608848eb31fe428ae3188d2"
+        }
       }
     },
     "link-preview": {
@@ -1307,7 +1426,14 @@
       },
       "checksum": "81eeefba47402707b2ed8c19c01195a2c2059303c0ca6030af8b8f88a73b8845",
       "checksums": {
-        "sha256": "81eeefba47402707b2ed8c19c01195a2c2059303c0ca6030af8b8f88a73b8845"
+        "sha256": "81eeefba47402707b2ed8c19c01195a2c2059303c0ca6030af8b8f88a73b8845",
+        "platforms": {
+          "darwin-arm64": "ef7eb2afc8348fee829ab91e8bdaaa697c08c9d379b0126c10927bd9070a57ea",
+          "darwin-amd64": "6b3b5403db6b02431829092efe32a8b6d8072af2198fe8dc1a502793ceb042a3",
+          "linux-amd64": "3ba05bc51297061fca1a62006871662974fe25c15018daac5a7114ded5ce57ce",
+          "linux-arm64": "681d10b3d996a69eebc26abdb327debbe689fe2d8002a72a1edbdf4f1a4ec22d",
+          "windows-amd64": "12982d3775323f4af2d8d10755f86d71d244cc8179eca6eec70196b2514fe5d0"
+        }
       },
       "releaseTag": "v1.0.1"
     },
@@ -1415,7 +1541,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "9fae49b490d9f0f616fd5d99647615cfcd056e4d2599fb4067296109b468b794",
       "checksums": {
-        "sha256": "9fae49b490d9f0f616fd5d99647615cfcd056e4d2599fb4067296109b468b794"
+        "sha256": "9fae49b490d9f0f616fd5d99647615cfcd056e4d2599fb4067296109b468b794",
+        "platforms": {
+          "darwin-arm64": "1e0efe1f961a31ef7c30f6e29d990dd38ab177797c400cd65c6b3409f3dc2a2f",
+          "darwin-amd64": "a90c13a84dfe6ccd0d981c575ae827028d4118c2d26d377a2cf610963a86a1e9",
+          "linux-amd64": "e51e531ee6fb9c1a7742e95dce3bb43efa6b042bbe2b76f3d17ba5bbfd59ec0b",
+          "linux-arm64": "7bf83615ea5db70410ac97689a582d925847fe2e91af6536a2f8dfff24cf868a",
+          "windows-amd64": "e20a3b81ededebaa86e5eb8d75b9e0a58ce014f8494686fae4dcacaf54099dd5"
+        }
       }
     },
     "monitor": {
@@ -1451,7 +1584,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "7477c038111ee8f3a8d0113496b9088e6af91d0349906c9cad941c57dd04c71a",
       "checksums": {
-        "sha256": "7477c038111ee8f3a8d0113496b9088e6af91d0349906c9cad941c57dd04c71a"
+        "sha256": "7477c038111ee8f3a8d0113496b9088e6af91d0349906c9cad941c57dd04c71a",
+        "platforms": {
+          "darwin-arm64": "f39462147e39c65868b6a7f15c2dce159d0ad031373b43fc660c4be0be6ed665",
+          "darwin-amd64": "9ee97e770018b2ec2afc370caac95ccc0546d5ddc86189db401ebb1d603eaccf",
+          "linux-amd64": "963e1208d53a4bcf21b041be44e8175bebd6362acc8d65aa2f289cc0e9f32966",
+          "linux-arm64": "52e2f3294ada39266b1d8640778867af694d8a1c4a1dfdcea2cfac7531bb321a",
+          "windows-amd64": "7fe8c3dd079ed208aa2042683c3e9628ce692d758fe296a39dc9b080b020861d"
+        }
       }
     },
     "monitoring": {
@@ -1720,7 +1860,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "4939d2a683660401008f8256938c955f54ebda0580836403fa14d4e409558626",
       "checksums": {
-        "sha256": "4939d2a683660401008f8256938c955f54ebda0580836403fa14d4e409558626"
+        "sha256": "4939d2a683660401008f8256938c955f54ebda0580836403fa14d4e409558626",
+        "platforms": {
+          "darwin-arm64": "7b6ed611ffc64c78aef4b79b9627da08434d40b4554498d5f4346d53a43bd1b4",
+          "darwin-amd64": "b18cf8b9548510905d9362fb1e78e546353389c0b19cf06125e5e31d275b0cf5",
+          "linux-amd64": "c939e68012ef4f07f5dd5c4b5ff6cf7b4ec78ee4195413429a946573455211ee",
+          "linux-arm64": "84208085a8c6e943f8621419c0f91d3a31347fd4a8dac485559a44598c9c46dd",
+          "windows-amd64": "8ccc15d1a9aa94ae27c94af6fe12a96bc76908f6206cd7f14c8cd3fa9eb83595"
+        }
       }
     },
     "region": {
@@ -1756,7 +1903,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "7abea93ea691327681db5b30a29d428e1c6e78dcc08545c460e893e2927987cc",
       "checksums": {
-        "sha256": "7abea93ea691327681db5b30a29d428e1c6e78dcc08545c460e893e2927987cc"
+        "sha256": "7abea93ea691327681db5b30a29d428e1c6e78dcc08545c460e893e2927987cc",
+        "platforms": {
+          "darwin-arm64": "5cd31df61b3a22e130b3efed777ab812467a92d27486008d378ba9d5f24af8d8",
+          "darwin-amd64": "ec6c2426ae0ae9c243a72d148462e310a2be53560d9b53861f68db4d83f91e4d",
+          "linux-amd64": "2f34d3abb1122e91198a3c76a9e379638016ee2be70e92a46a57e848f25f1328",
+          "linux-arm64": "d0194abec4b33c07cd138a7ddf45f90eea80e946fe24690cc6f4c23a39149d6d",
+          "windows-amd64": "57f15cc1bf85f9e29cb5974532e574e13abde0db272c19960192a904faceeabb"
+        }
       }
     },
     "release": {
@@ -1792,7 +1946,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "9c1a86d97f31336f2ddba29ab8840bf94758eab8892e290a34adb1a18f5937b8",
       "checksums": {
-        "sha256": "9c1a86d97f31336f2ddba29ab8840bf94758eab8892e290a34adb1a18f5937b8"
+        "sha256": "9c1a86d97f31336f2ddba29ab8840bf94758eab8892e290a34adb1a18f5937b8",
+        "platforms": {
+          "darwin-arm64": "824061303fa0922c4fd38d96ed8c2d1cf04ae38dd2753fb16a648b340b8cfe0e",
+          "darwin-amd64": "783cd3b7e724209ce7cbc6dd1b05560f8b66fa897c0baf076629947c1b56eb44",
+          "linux-amd64": "6fc5329a39f977dad3195174cf7bfb0bf66012730a9d8ef88c226b985a25eab8",
+          "linux-arm64": "e45f8e3824baff993adf8ec31fca337c73cc08db2fca812b7a2922b840ab912a",
+          "windows-amd64": "0b818576aa24bd89af364f099d3b4637eb28a1d0059c50fcee58d259b6637a08"
+        }
       }
     },
     "search": {
@@ -1883,7 +2044,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "1e11103c42b29f73494bced741aa589bbd536ba7f70af887ed000700fa15ba0f",
       "checksums": {
-        "sha256": "1e11103c42b29f73494bced741aa589bbd536ba7f70af887ed000700fa15ba0f"
+        "sha256": "1e11103c42b29f73494bced741aa589bbd536ba7f70af887ed000700fa15ba0f",
+        "platforms": {
+          "darwin-arm64": "36871d2c965e144cb112d76877dc4e144785f2939f5d40850de4343bab9fa577",
+          "darwin-amd64": "a136d357f3fd70103467528f3e30bfb8fbfceccfb41df18b16c5f936d16b78eb",
+          "linux-amd64": "159acbe36d8da4724329e5964d6bcb01de1011526d87ca1bc31c2f41dd73b94b",
+          "linux-arm64": "cf81ff1f89d426a8d74956fe90483b2304d8ef2e6282ea01cd10d62063772dd3",
+          "windows-amd64": "cacec8bca6140b6ce23afbe330a8914d57fb6b9cb549950fab99c016771b38e9"
+        }
       }
     },
     "shopify": {
@@ -1962,7 +2130,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "c37bae3da111b3e6b01cfe2c90580fa4f8e6e2e89407c96a83b4db987f2d07ee",
       "checksums": {
-        "sha256": "c37bae3da111b3e6b01cfe2c90580fa4f8e6e2e89407c96a83b4db987f2d07ee"
+        "sha256": "c37bae3da111b3e6b01cfe2c90580fa4f8e6e2e89407c96a83b4db987f2d07ee",
+        "platforms": {
+          "darwin-arm64": "d3fc6b07c2d56a17a119b29c335a695bf83a0b284811c7bf2f51ece575b74b8a",
+          "darwin-amd64": "cd75d8c347702b13c15d99866ffb72a193c3112d21c1d7de56ebe3666ec1c08e",
+          "linux-amd64": "f593d00f397a2c94a5f0631cc9ee0402ee083939230f28ecb71b6ba669b733b1",
+          "linux-arm64": "121809645664ceeedae5fab3a0cd34ac5993cb0bf2bf39dbf9737247bf3ced1e",
+          "windows-amd64": "fb86d50ae269fd966e94560f293ee3e4fd4f746e5523dc1ff2dbabe0f83b9cee"
+        }
       }
     },
     "stripe": {
@@ -2118,7 +2293,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "f7495c9764f5197b8553fff4c2b64230ac9cb575d6f533929f6b654541f6d3ae",
       "checksums": {
-        "sha256": "f7495c9764f5197b8553fff4c2b64230ac9cb575d6f533929f6b654541f6d3ae"
+        "sha256": "f7495c9764f5197b8553fff4c2b64230ac9cb575d6f533929f6b654541f6d3ae",
+        "platforms": {
+          "darwin-arm64": "d53369c3ca6155f606fa9daa1cdcf617afea35beebd76404f4c0f0c50f4d863a",
+          "darwin-amd64": "20a691916fc8bab09ac7fac86a7c0b65c7065845b9d3463317436e6cc7c40026",
+          "linux-amd64": "b17b17548d7da7084ad6eecb82b2086c9119fb7675f4a70c45a6667a6bbe5983",
+          "linux-arm64": "2c9080bf9427d20d03cc0bf7742b2ef2f3f4db9a4bcaf2cbf65c20f71dedc6a5",
+          "windows-amd64": "5699c34a1a40164ed3a6adcb3fb39a056b413efc9464923696a638e3c1fe8c07"
+        }
       }
     },
     "tokens": {
@@ -2302,7 +2484,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "62506f1c3bddaf331476a80c120500f7934f798a9e36dc72a9f8b1d058478542",
       "checksums": {
-        "sha256": "62506f1c3bddaf331476a80c120500f7934f798a9e36dc72a9f8b1d058478542"
+        "sha256": "62506f1c3bddaf331476a80c120500f7934f798a9e36dc72a9f8b1d058478542",
+        "platforms": {
+          "darwin-arm64": "8aa8d8c4c14a94a66421f3b497f7dfceb5fcf0f86f2d95514918f530216b6d11",
+          "darwin-amd64": "fb909c4fec21e18bfb8b7c14ab2ef4ae882cea669da07310f00cd78497146ee1",
+          "linux-amd64": "dc453d0f9b666997a7640e5a8467742f366447066258a842b258014a01d5f795",
+          "linux-arm64": "1860f6d0303ad5289b762c8fda44539c9200e7819413587c7540912c4b4d800e",
+          "windows-amd64": "c45da6e10a66874054135bb13447bd426b63872f07931761310200653f99106c"
+        }
       }
     },
     "watchdog": {
@@ -2338,7 +2527,14 @@
       "releaseTag": "v1.0.1",
       "checksum": "a3d09925851e709538e9ad6706b051e8584fef5eb8df342aee068c56035ed76f",
       "checksums": {
-        "sha256": "a3d09925851e709538e9ad6706b051e8584fef5eb8df342aee068c56035ed76f"
+        "sha256": "a3d09925851e709538e9ad6706b051e8584fef5eb8df342aee068c56035ed76f",
+        "platforms": {
+          "darwin-arm64": "65bf8e627eaef4ebde7eead0cc04d4d7dff9010b2040eeb2dbf680689f50c657",
+          "darwin-amd64": "b738d7cc9af170fb11c93cd6cfc70a7676bfe6c18f747c4349dc4c94bc41fab6",
+          "linux-amd64": "0d8070578bc571f0a23f5e4e358a6deab3d00ddb8bd9b382b2ca85dc91296163",
+          "linux-arm64": "6db2a6ff8e740dc327b18537ad46afbc828c078384cdaed22d4dc9d7f2326d38",
+          "windows-amd64": "89b253b21863cca09e224e5246eaaef2b9b439bc2973619b2f4c12e25eeaf786"
+        }
       }
     },
     "webhooks": {
