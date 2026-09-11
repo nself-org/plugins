@@ -77,7 +77,11 @@ jobs:
               return
             fi
 
-            tar -czf "$tarball" "$plugin_dir"
+            # scripts/deterministic-tar.sh is the ONE tarball recipe shared with
+            # scripts/build-tarballs.sh — fixed mtime/owner/sort/pax so the bytes
+            # this workflow publishes always match whatever built the checksum
+            # recorded in registry.json, no matter which of the two built it.
+            bash scripts/deterministic-tar.sh "$tarball" "$plugin_dir"
             sha256=$(sha256sum "$tarball" | cut -d' ' -f1)
             printf "%s  %s\n" "$sha256" "${plugin_name}-${VERSION}.tar.gz" > "$checksum_file"
             echo "BUILT $plugin_name sha256:${sha256}"
@@ -151,7 +155,10 @@ jobs:
               fi
 
               local ptar="${DIST_DIR}/${plugin_name}-${VERSION}-${platform}.tar.gz"
-              tar -czf "$ptar" -C "$stage" "${plugin_name}"
+              # Same shared recipe as the source tarball above — the per-platform
+              # binary archives had the identical mtime/ordering non-determinism
+              # (compiled-binary mtimes and per-run staging-dir enumeration order).
+              bash scripts/deterministic-tar.sh "$ptar" -C "$stage" "${plugin_name}"
               psha=$(sha256sum "$ptar" | cut -d' ' -f1)
               printf "%s  %s\n" "$psha" "$(basename "$ptar")" > "${ptar}.sha256"
               rm -rf "$stage"

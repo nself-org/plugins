@@ -45,10 +45,16 @@ sha256_file() {
 
 mkdir -p "$DIST_DIR"
 
-# Walk free/ plugin directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DETERMINISTIC_TAR="${SCRIPT_DIR}/deterministic-tar.sh"
+
+# Walk free/ plugin directories in a fixed, filesystem-order-independent
+# sequence (matches the traversal .github/workflows/release-tarballs.yml
+# uses) — member order inside each individual tarball is already pinned by
+# deterministic-tar.sh's --sort=name, this just makes the build log/exit
+# order predictable too.
 BUILT=0
-for plugin_dir in "${PLUGINS_DIR}"/*/; do
-  [ -d "$plugin_dir" ] || continue
+while IFS= read -r plugin_dir; do
   plugin_name="$(basename "$plugin_dir")"
   tarball_name="${plugin_name}-${VERSION}.tar.gz"
   checksum_name="${tarball_name}.sha256"
@@ -62,7 +68,11 @@ for plugin_dir in "${PLUGINS_DIR}"/*/; do
   fi
 
   log "Building ${tarball_name} ..."
-  if ! tar -czf "$tarball_path" "$plugin_dir" 2>/dev/null; then
+  # No trailing slash on plugin_dir: deterministic-tar.sh's --sort=name
+  # already makes member order stable regardless, but a consistent
+  # no-trailing-slash argument keeps this script and the workflow's
+  # `find -type d` output (which never has one) textually identical inputs.
+  if ! "$DETERMINISTIC_TAR" "$tarball_path" "${plugin_dir%/}"; then
     err "Failed to build tarball for $plugin_name"
     continue
   fi
@@ -72,7 +82,7 @@ for plugin_dir in "${PLUGINS_DIR}"/*/; do
 
   log "  sha256: ${sha256}"
   BUILT=$((BUILT + 1))
-done
+done < <(find "$PLUGINS_DIR" -maxdepth 1 -mindepth 1 -type d | sort)
 
 log "Built ${BUILT} tarballs in ${DIST_DIR}/"
 
