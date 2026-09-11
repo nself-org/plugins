@@ -16,13 +16,18 @@ name: Tarball Checksum Gate
 # the real bytes and fails the PR the moment they disagree, rather than
 # discovering it after users start getting failed installs post-release.
 #
-# This job does not build the per-platform binary tarballs (those need Go
-# compilation for every plugin with a binaryName, which is what
-# build-test.yml already exercises) — registry.json stores exactly one
-# checksum per plugin, and that one checksum was always computed from the
-# source tarball (scripts/build-tarballs.sh), never from a per-platform
-# binary. Comparing the source tarball's bytes against it is the whole
-# claim this field makes.
+# A second job, per-platform-checksum-gate, does the same thing for the
+# per-platform binary tarballs: for every plugin with a binaryName, it
+# cross-compiles all 5 platform builds (the same Go build + deterministic-tar.sh
+# recipe release-tarballs.yml uses — via scripts/build-tarballs.sh's
+# build_platform_tarballs(), sourced rather than re-implemented, so there is
+# exactly one recipe for this) and diffs the result against registry.json's
+# checksums.platforms.<platform> for that plugin. internal/plugin/download.go
+# tries this asset before the source tarball whenever binaryName is set, and
+# internal/plugin/security.go's install-time verification refuses the install
+# outright if the matching entry here is absent or wrong (plugins#83) — so a
+# missing or stale platform checksum is exactly as much a shipped defect as a
+# stale source checksum, and this gate makes it exactly as unmergeable.
 
 on:
   pull_request:
@@ -148,3 +153,140 @@ jobs:
           fi
 
           echo "OK: every registry.json checksum matches a freshly rebuilt tarball"
+
+  platform-checksum-gate:
+    name: Verify registry.json checksums.platforms match rebuilt binary tarballs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      # Matches release-tarballs.yml's Go version — the per-platform binaries
+      # this job cross-compiles have to be built the same way the real
+      # release build compiles them, or a Go-version-specific bug could pass
+      # here and still ship broken.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: Rebuild every binaryName plugin's platform tarballs and diff against registry.json
+        run: |
+          set -euo pipefail
+
+          # Sourced, not re-implemented: build_platform_tarballs() and
+          # sha256_file() (and the PLATFORMS list) are defined once in
+          # scripts/build-tarballs.sh and used both by a contributor running
+          # it locally and by this gate — see that file's own doc comment for
+          # why it is written to be sourceable without running its main().
+          # shellcheck source=scripts/build-tarballs.sh
+          source scripts/build-tarballs.sh
+
+          WORK="$(mktemp -d)"
+          FAIL=0
+          CHECKED=0
+          SKIPPED_NO_BINARY=0
+
+          while IFS= read -r plugin_dir; do
+            name="$(basename "$plugin_dir")"
+
+            # ollama has no binaryName (it is not a CLI-command plugin) and is
+            # excluded from the source-checksum gate above for the same
+            # external-release reason; it never reaches the binaryName check
+            # below anyway, but skip explicitly for the same documented
+            # reason as that job.
+            if [ "$name" = "ollama" ]; then
+              continue
+            fi
+
+            bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${plugin_dir}/plugin.json" 2>/dev/null || printf '')"
+            if [ -z "$bin_name" ]; then
+              # No command binary to build or verify — this plugin's package
+              # is source and works everywhere; the source-checksum gate
+              # already covers it.
+              SKIPPED_NO_BINARY=$((SKIPPED_NO_BINARY + 1))
+              continue
+            fi
+
+            entry="$(jq -c --arg n "$name" '.plugins[$n] // empty' registry.json)"
+            if [ -z "$entry" ]; then
+              continue
+            fi
+            version="$(printf '%s' "$entry" | jq -r '.version // empty')"
+            if [ -z "$version" ]; then
+              echo "ERROR $name: registry entry has no version; cannot name or compare a platform tarball"
+              FAIL=1
+              continue
+            fi
+
+            if ! build_platform_tarballs "$plugin_dir" "$name" "$version" "$WORK"; then
+              echo "ERROR $name: failed to build one or more platform tarballs"
+              FAIL=1
+              continue
+            fi
+
+            for platform in $PLATFORMS; do
+              ptar="${WORK}/${name}-${version}-${platform}.tar.gz"
+              if [ ! -f "$ptar" ]; then
+                echo "ERROR $name/$platform: expected $ptar was not produced"
+                FAIL=1
+                continue
+              fi
+              actual="$(sha256_file "$ptar")"
+              CHECKED=$((CHECKED + 1))
+
+              expected="$(printf '%s' "$entry" | jq -r --arg p "$platform" '.checksums.platforms[$p] // empty')"
+
+              # A missing checksums.platforms entry for a plugin that DOES
+              # ship a binary for this platform is refused here, the same as
+              # a mismatch — not skipped the way an absent SOURCE checksum
+              # is (shared-utils, etc. above). internal/plugin's install-time
+              # policy (installer_locked.go's resolveArtifactChecksum) is
+              # equally unconditional: a downloaded platform binary with no
+              # matching registry checksum refuses the install outright,
+              # with no leniency and no env var to bypass it — so an entry
+              # missing here is not a softer finding than a wrong one, it is
+              # the exact defect that policy exists to catch before release.
+              if [ -z "$expected" ]; then
+                echo "MISSING $name/$platform: no registry checksums.platforms.$platform recorded (install-time verification refuses this unconditionally)"
+                FAIL=1
+                rm -f "$ptar" "${ptar}.sha256"
+                continue
+              fi
+
+              # Plain lowercase hex, matching how registry-schema.json
+              # documents this field and how the CLI's raw hex comparison
+              # reads it — no "sha256:" prefix stripping needed here (that
+              # convention is checksums.sha256's, the source-tarball
+              # sibling field, not this one's).
+              lhs="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
+              rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
+              if [ "$lhs" != "$rhs" ]; then
+                echo "MISMATCH $name/$platform: registry .checksums.platforms.$platform=$expected  rebuilt=$actual"
+                FAIL=1
+              fi
+              rm -f "$ptar" "${ptar}.sha256"
+            done
+          done < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
+
+          echo ""
+          echo "Checked: $CHECKED platform tarball(s)"
+          echo "Skipped (no binaryName): $SKIPPED_NO_BINARY"
+
+          rm -rf "$WORK"
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo ""
+            echo "ERROR: one or more registry.json checksums.platforms entries are missing or do not match a freshly rebuilt platform tarball" >&2
+            echo "Rebuild with:" >&2
+            echo "  bash scripts/build-tarballs.sh <version>" >&2
+            echo "and update the mismatched/missing checksums.platforms.<platform> entries." >&2
+            exit 1
+          fi
+
+          echo "OK: every binaryName plugin's checksums.platforms matches a freshly rebuilt tarball"
