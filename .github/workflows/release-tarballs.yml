@@ -246,6 +246,7 @@ jobs:
           # Free plugin tarballs are source-only; arch verification is not applicable here.
 
       - name: Upload tarballs to GitHub Release
+        id: upload
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -312,9 +313,19 @@ jobs:
               --repo "${{ github.repository }}"
           fi
 
+          echo "uploaded_count=${#to_upload[@]}" >> "$GITHUB_OUTPUT"
           echo "Upload complete"
 
+      # Only backfill when THIS run actually published something. When every
+      # asset is already on the release (the tag-push run that follows
+      # publishing a draft, for instance) the bytes of record are the ones
+      # already there, and a fresh local build is not guaranteed to reproduce
+      # them. Recomputing from dist/ would overwrite verified checksums with
+      # unverified ones. scripts/verify-published-checksums.sh is the tool that
+      # writes checksums for an already-populated release; it reads the
+      # published bytes rather than a rebuild.
       - name: Backfill checksums in registry.json
+        if: steps.upload.outputs.uploaded_count != '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -389,6 +400,7 @@ jobs:
           echo "registry.json updated ($after_count entries, unchanged)"
 
       - name: Commit updated registry.json
+        if: steps.upload.outputs.uploaded_count != '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
