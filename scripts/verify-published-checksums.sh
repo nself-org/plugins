@@ -114,8 +114,41 @@ fi
 REGISTRY_JSON="$(cat "$REGISTRY_FILE")"
 MISMATCHES=0
 MISSING_ASSETS=0
+DOWNLOAD_ERRORS=0
 CHECKED=0
 WRITTEN=0
+
+# Fetch the release's asset list ONCE, and fetch the bytes ONCE.
+#
+# This used to run `gh release download --pattern <name>` per asset: 578 API
+# calls for v1.2.1. That is slow, it trips GitHub's secondary rate limit (the
+# same limit that broke the upload job at 525 assets), and — because the call
+# was `>/dev/null 2>&1` — a throttled or transient download was indistinguishable
+# from a genuinely absent asset and got reported as "MISSING". On the first
+# v1.2.1 run that produced a false MISSING for flags/linux-arm64, an asset which
+# was in fact present on the release. A checksum gate that cries missing under
+# load is worse than no gate: the failure mode is to dismiss it as noise.
+#
+# So: list once, download everything once, then work from local files. An asset
+# absent from the manifest is MISSING (a real release defect). An asset that is
+# in the manifest but has no local file is a DOWNLOAD ERROR (transient/infra).
+# They are counted separately and mean different things.
+ASSET_MANIFEST="${WORK_DIR}/.asset-manifest"
+if ! gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' > "$ASSET_MANIFEST" 2>/dev/null; then
+  err "could not list assets on release $TAG"
+  exit 1
+fi
+log "Release $TAG lists $(wc -l < "$ASSET_MANIFEST" | tr -d ' ') asset(s); downloading them once."
+
+asset_is_published() { grep -Fxq "$1" "$ASSET_MANIFEST"; }
+
+dl_err="${WORK_DIR}/.download-stderr"
+if ! gh release download "$TAG" --repo "$REPO" --dir "$WORK_DIR" --clobber >/dev/null 2>"$dl_err"; then
+  err "bulk download of $TAG's assets failed; cannot verify against published bytes."
+  err "gh said: $(tr '\n' ' ' < "$dl_err" | cut -c1-400)"
+  exit 1
+fi
+rm -f "$dl_err"
 
 # Iterate plugin names in a stable, deterministic order rather than
 # registry.json's own (already-alphabetical) key order directly, so this
@@ -138,14 +171,18 @@ while IFS= read -r name; do
   tarball_name="${name}-${VERSION}.tar.gz"
   asset_path="${WORK_DIR}/${tarball_name}"
 
-  if ! gh release download "$TAG" --repo "$REPO" --pattern "$tarball_name" --dir "$WORK_DIR" --clobber >/dev/null 2>&1; then
+  if ! asset_is_published "$tarball_name"; then
     printf "MISSING %s: no asset named %s on release %s\n" "$name" "$tarball_name" "$TAG"
     MISSING_ASSETS=$((MISSING_ASSETS + 1))
     continue
   fi
+  if [ ! -f "$asset_path" ]; then
+    printf "DOWNLOAD-ERROR %s: %s is published but was not downloaded\n" "$name" "$tarball_name"
+    DOWNLOAD_ERRORS=$((DOWNLOAD_ERRORS + 1))
+    continue
+  fi
 
   computed_sha="$(sha256_file "$asset_path")"
-  rm -f "$asset_path"
   CHECKED=$((CHECKED + 1))
 
   reg_flat="$(printf '%s' "$entry" | jq -r '.checksum // ""')"
@@ -185,14 +222,18 @@ while IFS= read -r name; do
       ptar_name="${name}-${VERSION}-${platform}.tar.gz"
       ptar_path="${WORK_DIR}/${ptar_name}"
 
-      if ! gh release download "$TAG" --repo "$REPO" --pattern "$ptar_name" --dir "$WORK_DIR" --clobber >/dev/null 2>&1; then
+      if ! asset_is_published "$ptar_name"; then
         printf "MISSING %s/%s: no asset named %s on release %s\n" "$name" "$platform" "$ptar_name" "$TAG"
         MISSING_ASSETS=$((MISSING_ASSETS + 1))
         continue
       fi
+      if [ ! -f "$ptar_path" ]; then
+        printf "DOWNLOAD-ERROR %s/%s: %s is published but was not downloaded\n" "$name" "$platform" "$ptar_name"
+        DOWNLOAD_ERRORS=$((DOWNLOAD_ERRORS + 1))
+        continue
+      fi
 
       p_computed="$(sha256_file "$ptar_path")"
-      rm -f "$ptar_path"
       CHECKED=$((CHECKED + 1))
 
       if [ "$WRITE" = "true" ]; then
@@ -220,10 +261,17 @@ else
 fi
 
 if [ "$MISSING_ASSETS" -gt 0 ]; then
-  err "${MISSING_ASSETS} expected asset(s) were not found on release ${TAG}."
+  err "${MISSING_ASSETS} expected asset(s) are genuinely absent from release ${TAG}."
+  err "That is a release defect: rebuild and upload the missing artifact(s)."
 fi
 
-if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ]; then
+if [ "$DOWNLOAD_ERRORS" -gt 0 ]; then
+  err "${DOWNLOAD_ERRORS} asset(s) are published but could not be downloaded."
+  err "That is transient (network or GitHub rate limiting), NOT a missing artifact."
+  err "Re-run this script; do not rebuild or re-upload anything on account of it."
+fi
+
+if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ]; then
   exit 1
 fi
 
