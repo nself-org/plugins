@@ -63,6 +63,7 @@ See [[All Plugins|#plugin-directory-64-of-129-shown]] below for a sample; the fu
 - [[Deployment|guides/Deployment]]
 - [[Migration|guides/Migration]]
 - [[Best Practices|guides/Best-Practices]]
+- [[Adopting the nself-ci Gate|guides/Nself-CI-Adoption]]
 - [[Troubleshooting FAQ|troubleshooting/FAQ]]
 
 ### Governance and Reference
