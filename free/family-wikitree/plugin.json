@@ -1,6 +1,6 @@
 {
   "name": "family-wikitree",
-  "version": "1.0.1",
+  "version": "1.2.1",
   "api_version": "1.0.0",
   "description": "WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
   "author": "nself",

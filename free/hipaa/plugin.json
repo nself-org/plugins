@@ -1,6 +1,6 @@
 {
   "name": "hipaa",
-  "version": "1.0.1",
+  "version": "1.2.1",
   "api_version": "1.0.0",
   "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow.",
   "author": "nself",

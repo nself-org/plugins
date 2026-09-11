@@ -1,6 +1,6 @@
 {
   "name": "email",
-  "version": "1.0.1",
+  "version": "1.2.1",
   "displayName": "plugin-email",
   "description": "Transactional email via Elastic Email. Send, template, and track emails.",
   "port": 9008,

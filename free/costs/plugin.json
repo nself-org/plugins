@@ -1,6 +1,6 @@
 {
   "name": "costs",
-  "version": "1.0.1",
+  "version": "1.2.1",
   "description": "Show estimated per-install operational costs: Hetzner VPS, Cloudflare, Vercel, Stripe fees, and installed paid plugin licenses.",
   "author": "nself",
   "license": "MIT",
