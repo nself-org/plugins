@@ -1,0 +1,108 @@
+name: Plugin Counts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "registry.json"
+      - "free/**/plugin.json"
+      - "free/**/plugin.yaml"
+      - "free/**/plugin.yml"
+      - "scripts/plugin-counts.sh"
+      - "counts.json"
+  repository_dispatch:
+    types: [plugin-registry-updated]
+  schedule:
+    # 06:00 UTC nightly — catches plugins-pro-side drift even when this repo
+    # itself has no qualifying push (the pro registry has no way to notify
+    # this public repo directly).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: plugin-counts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-free-only:
+    name: Verify free registry (no secret required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Sanity-check free registry.json is well-formed and non-empty
+        run: |
+          python3 -c "
+          import json
+          d = json.load(open('registry.json'))
+          plugins = d.get('plugins', {})
+          assert isinstance(plugins, dict), 'registry.json plugins must be an object'
+          assert len(plugins) > 0, 'registry.json plugins is empty'
+          print(f'free registry.json: {len(plugins)} entries, well-formed')
+          "
+
+  regenerate-and-verify-counts:
+    name: Regenerate + verify counts.json (cross-repo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: verify-free-only
+    steps:
+      - name: Check for PLUGINS_PRO_CHECKOUT_TOKEN
+        # `secrets.X` cannot be referenced directly in a step/job `if:` — the
+        # workflow_dispatch validator rejects it. Resolve into an env var
+        # here and gate later steps on this step's output instead (same
+        # pattern already used in registry-check.yml).
+        id: check-token
+        env:
+          HAS_TOKEN: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        run: echo "has-token=${HAS_TOKEN}" >> "$GITHUB_OUTPUT"
+
+      - name: Fail loudly if PLUGINS_PRO_CHECKOUT_TOKEN is not configured
+        if: steps.check-token.outputs.has-token != 'true'
+        run: |
+          echo "ERROR: PLUGINS_PRO_CHECKOUT_TOKEN not configured." >&2
+          echo "This gate cannot verify counts.json without reading the" >&2
+          echo "private nself-org/plugins-pro registry, and it never emits" >&2
+          echo "partial (free-only) counts as a fallback — a silently-wrong" >&2
+          echo "count is the exact failure this generator exists to prevent." >&2
+          echo "Provision the secret (owner-gated, scoped read access to" >&2
+          echo "nself-org/plugins-pro) to enable this gate." >&2
+          exit 1
+
+      - name: Checkout plugins (this repo)
+        uses: actions/checkout@v7
+
+      - name: Checkout plugins-pro
+        uses: actions/checkout@v7
+        with:
+          repository: nself-org/plugins-pro
+          path: ../plugins-pro
+          token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
+
+      - name: Regenerate counts.json
+        run: bash scripts/plugin-counts.sh --json > /tmp/fresh-counts.json
+
+      - name: Verify committed counts.json matches a fresh regeneration
+        run: |
+          python3 -c "
+          import json, sys
+
+          fresh = json.load(open('/tmp/fresh-counts.json'))
+          committed = json.load(open('counts.json'))
+          # generated_at is a wall-clock timestamp, expected to differ.
+          fresh.pop('generated_at', None)
+          committed.pop('generated_at', None)
+
+          if fresh != committed:
+              print('MISMATCH: committed counts.json is stale.', file=sys.stderr)
+              print('Run: bash scripts/plugin-counts.sh --json > counts.json', file=sys.stderr)
+              print(file=sys.stderr)
+              print('fresh:', json.dumps(fresh, indent=2), file=sys.stderr)
+              print('committed:', json.dumps(committed, indent=2), file=sys.stderr)
+              sys.exit(1)
+
+          print('counts.json matches a fresh regeneration.')
+          print(f\"advertised: {fresh['advertised']}\")
+          "
