@@ -98,10 +98,31 @@ first_error(){
   printf '%s' "$hit" | _err_clean
 }
 
+# A run that executed ZERO steps did not fail — it never started. That is what
+# an exhausted Actions allowance looks like: the run is created, every job dies
+# in ~3s before checkout, `gh run view --log-failed` answers "log not found"
+# (BlobNotFound), and the conclusion is still "failure". Reporting those as CI
+# failures is actively harmful: on a repo whose minutes are gone, EVERY push
+# emits one report per workflow, and the resulting flood is what buries the one
+# report that is real. That happened on 2026-09-04 — a genuine broken
+# production deploy sat unread among ~30 billing notifications.
+#
+# So these are counted, not silenced. Per-workflow reports are suppressed and
+# replaced by a single "CI could not run" report per repo per day (see the
+# blocked-run summary after the loop). You still learn CI is down; you learn it
+# once instead of fifteen times.
+never_ran() { # <repo> <runid> -> 0 when the run executed no steps at all
+  local n
+  n=$(gh run view "$2" --repo "$ORG/$1" --json jobs \
+        -q '[.jobs[].steps[]] | length' 2>/dev/null || echo "-1")
+  [ "$n" = "0" ]
+}
+
 for r in $REPOS; do
   # The full listing is kept: the newest-per-workflow pick below decides what is
   # REPORTED, but every row is recorded as seen afterwards (guard 1 above).
   listing=$(mktemp)
+  blocked=$(mktemp)   # runs that never executed a step (see never_ran)
   gh run list --repo "$ORG/$r" --status failure --limit "$PER" \
     --json workflowName,headSha,displayTitle,url,createdAt,event,databaseId \
     -q '.[] | [.workflowName,.headSha,.displayTitle,.url,.createdAt,.event,.databaseId] | @tsv' \
@@ -114,6 +135,12 @@ for r in $REPOS; do
     if too_old "$created"; then echo "SKIP $key (run $created older than ${MAX_AGE_DAYS}d)"; continue; fi
     if [ "$CHECK_SUPERSEDED" = "1" ] && superseded "$r" "$wf" "$created"; then
       echo "SKIP $key (a later run of \"$wf\" succeeded)"; continue; fi
+    if [ -n "${runid:-}" ] && never_ran "$r" "$runid"; then
+      printf '%s\t%s\n' "$wf" "$url" >> "$blocked"
+      echo "$key" >> "$SEEN"
+      echo "SKIP $key (run executed 0 steps — CI could not start, not a code failure)"
+      continue
+    fi
     h=$(printf '%s' "$key" | md5sum 2>/dev/null | cut -c1-6 || printf '%s' "$key" | md5 | cut -c1-6)
     f="$OUT/$(ts)-$h-ci-$r.md"
 
@@ -186,6 +213,40 @@ for r in $REPOS; do
     [ -n "$logf" ] && rm -f "$logf"
     echo "$key" >> "$SEEN"; echo "WROTE $f"
   done
+  # ── One "CI could not run" report per repo per day ──────────────────────
+  # Keyed on the date, not the sha, so a repo whose minutes are gone produces
+  # ONE report a day no matter how many times you push. The alternative that
+  # was rejected: skipping silently. If the allowance runs out mid-sprint you
+  # need to be told once, or you will read a wall of green-looking silence as
+  # "CI is fine" when nothing has run for a week.
+  if [ -s "$blocked" ]; then
+    bkey="ghci-blocked:$r:$(date -u +%F)"
+    if ! grep -qxF "$bkey" "$SEEN"; then
+      bh=$(printf '%s' "$bkey" | md5sum 2>/dev/null | cut -c1-6 || printf '%s' "$bkey" | md5 | cut -c1-6)
+      bf="$OUT/$(ts)-$bh-ci-blocked-$r.md"
+      bn=$(wc -l < "$blocked" | tr -d ' ')
+      { echo "---"; echo "id: $bkey"; echo "created_at: $(date -u +%FT%TZ)";
+        echo "title: \"CI could not run: $ORG/$r ($bn workflows)\""; echo "severity: high";
+        echo "source: github-actions"; echo "repo: $ORG/$r"; echo "kind: infrastructure";
+        echo "---"; echo;
+        echo "# CI could not run: $ORG/$r"; echo;
+        echo "$bn workflow run(s) today were created and then executed **zero steps**.";
+        echo "Every job ended in a few seconds, before checkout, and the logs are";
+        echo "absent (BlobNotFound). GitHub still records the conclusion as"; 
+        echo "\"failure\", which is why these look like broken builds and are not."; echo;
+        echo "This is almost always an exhausted Actions allowance on a private";
+        echo "repository. **Nothing here says anything about the code** — no test";
+        echo "ran, nothing was compiled. Do not go hunting for a regression."; echo;
+        echo "Affected workflows:"; echo;
+        while IFS=$'\t' read -r w u; do [ -n "$w" ] && echo "- $w — $u"; done < "$blocked"
+        echo; echo "Per-workflow reports for these are suppressed deliberately: one";
+        echo "report a day, not one per workflow per push.";
+        echo; echo "Routed by nSentry (GitHub-Actions bridge) → your .claude/inbox."; } > "$bf"
+      echo "$bkey" >> "$SEEN"; echo "WROTE $bf"
+    fi
+  fi
+  rm -f "$blocked"
+
   # Record every listed failure (reported, skipped, or shadowed by a newer one in
   # the same workflow) so none of them can ever come back as "new".
   while IFS=$'\t' read -r wf sha _; do

@@ -133,13 +133,21 @@ for update in "${REGISTRY_UPDATES[@]}"; do
   sha256="${rest2%%:::*}"
   release_tag="${rest2##*:::}"
 
+  # NOTE (P6 checksum-field fix): the CLI installer's registry parser
+  # (nself-org/cli internal/plugin/registry_parse.go pluginEntry.Checksum,
+  # `json:"checksum"`) and installer_locked.go's verifyChecksum() read the
+  # FLAT `checksum` field, never the nested `checksums.sha256` below. Both
+  # are written here, raw lowercase hex with NO "sha256:" prefix, so they
+  # stay in sync (shared/validate-registry.sh CHECK-15 fails the registry if
+  # they ever disagree).
   REGISTRY_JSON="$(printf '%s' "$REGISTRY_JSON" | jq \
     --arg name "$plugin_name" \
     --arg url "$tarball_url" \
-    --arg sha "sha256:${sha256}" \
+    --arg sha "$sha256" \
     --arg tag "$release_tag" \
     --arg sig "" \
     '(.plugins[$name].tarballUrl) = $url |
+     (.plugins[$name].checksum) = $sha |
      (.plugins[$name].checksums.sha256) = $sha |
      (.plugins[$name].releaseTag) = $tag |
      (.plugins[$name].signature) = $sig')"

@@ -1,0 +1,127 @@
+name: Plugin Counts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "registry.json"
+      - "free/**/plugin.json"
+      - "free/**/plugin.yaml"
+      - "free/**/plugin.yml"
+      - "scripts/plugin-counts.sh"
+      - "counts.json"
+  repository_dispatch:
+    types: [plugin-registry-updated]
+  schedule:
+    # 06:00 UTC nightly — catches plugins-pro-side drift even when this repo
+    # itself has no qualifying push (the pro registry has no way to notify
+    # this public repo directly).
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: plugin-counts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-free-only:
+    name: Verify free registry (no secret required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Sanity-check free registry.json is well-formed and non-empty
+        run: |
+          python3 -c "
+          import json
+          d = json.load(open('registry.json'))
+          plugins = d.get('plugins', {})
+          assert isinstance(plugins, dict), 'registry.json plugins must be an object'
+          assert len(plugins) > 0, 'registry.json plugins is empty'
+          print(f'free registry.json: {len(plugins)} entries, well-formed')
+          "
+
+  regenerate-and-verify-counts:
+    name: Regenerate + verify counts.json (cross-repo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: verify-free-only
+    steps:
+      - name: Check for PLUGINS_PRO_CHECKOUT_TOKEN
+        # `secrets.X` cannot be referenced directly in a step/job `if:` — the
+        # workflow_dispatch validator rejects it. Resolve into an env var
+        # here and gate later steps on this step's output instead (same
+        # pattern already used in registry-check.yml).
+        id: check-token
+        env:
+          HAS_TOKEN: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
+        run: echo "has-token=${HAS_TOKEN}" >> "$GITHUB_OUTPUT"
+
+      # Mode B — the secret is absent, so the cross-repo half cannot run.
+      #
+      # This step used to `exit 1` here. That was wrong and it turned main red on
+      # every push: PLUGINS_PRO_CHECKOUT_TOKEN is owner-gated and does not exist,
+      # so the job could never pass, and a permanently-red main hides real
+      # failures rather than catching them.
+      #
+      # The distinction that matters: GENERATING counts without the pro registry
+      # must hard-fail, because a free-only artifact published as if complete is
+      # the exact bug this pipeline exists to remove. scripts/plugin-counts.sh
+      # still does that and exits 1 on a missing sibling. VERIFYING only the free
+      # half is legitimate, and the verify-free-only job above already did it.
+      #
+      # So this announces which mode ran and stops, loudly and visibly. It never
+      # skips silently, and it never lets a stale counts.json through unnoticed:
+      # the free-side check still ran, and the nightly cron plus the notice below
+      # keep the gap visible. Same Mode A / Mode B shape as registry-check.yml.
+      - name: Mode B — cross-repo verification skipped (no secret)
+        if: steps.check-token.outputs.has-token != 'true'
+        run: |
+          echo "::notice::Mode B — PLUGINS_PRO_CHECKOUT_TOKEN is not configured, so"
+          echo "::notice::counts.json was NOT verified against the private plugins-pro"
+          echo "::notice::registry. The free registry WAS verified by the job above."
+          echo "::notice::Provision the secret (owner-gated, scoped read access to"
+          echo "::notice::nself-org/plugins-pro) to enable the full cross-repo gate."
+          echo "Mode B: free-side verified, pro-side NOT verified (secret absent)."
+
+      - name: Checkout plugins (this repo)
+        if: steps.check-token.outputs.has-token == 'true'
+        uses: actions/checkout@v7
+
+      - name: Checkout plugins-pro
+        if: steps.check-token.outputs.has-token == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: nself-org/plugins-pro
+          path: ../plugins-pro
+          token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
+
+      - name: Regenerate counts.json
+        if: steps.check-token.outputs.has-token == 'true'
+        run: bash scripts/plugin-counts.sh --json > /tmp/fresh-counts.json
+
+      - name: Verify committed counts.json matches a fresh regeneration
+        if: steps.check-token.outputs.has-token == 'true'
+        run: |
+          python3 -c "
+          import json, sys
+
+          fresh = json.load(open('/tmp/fresh-counts.json'))
+          committed = json.load(open('counts.json'))
+          # generated_at is a wall-clock timestamp, expected to differ.
+          fresh.pop('generated_at', None)
+          committed.pop('generated_at', None)
+
+          if fresh != committed:
+              print('MISMATCH: committed counts.json is stale.', file=sys.stderr)
+              print('Run: bash scripts/plugin-counts.sh --json > counts.json', file=sys.stderr)
+              print(file=sys.stderr)
+              print('fresh:', json.dumps(fresh, indent=2), file=sys.stderr)
+              print('committed:', json.dumps(committed, indent=2), file=sys.stderr)
+              sys.exit(1)
+
+          print('counts.json matches a fresh regeneration.')
+          print(f\"advertised: {fresh['advertised']}\")
+          "
