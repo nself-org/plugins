@@ -1718,7 +1718,7 @@
       "license": "Source-Available",
       "min_nself_version": "1.0.9",
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.1/ollama-1.2.1.tar.gz",
-      "download_url": "https://ping.nself.org/plugins/ollama/download",
+      "download_url": "https://plugins.nself.org/plugins/ollama/tarball",
       "requires_license": false,
       "language": "go",
       "tags": [
