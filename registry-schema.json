@@ -250,7 +250,22 @@
         "checksums": {
           "type": "object",
           "properties": {
-            "sha256": { "type": "string" }
+            "sha256": {
+              "type": "string",
+              "description": "SHA-256 of the source tarball <name>-<version>.tar.gz. Duplicates the top-level `checksum` field."
+            },
+            "platforms": {
+              "type": "object",
+              "description": "SHA-256 checksums of the five per-platform binary tarballs (<name>-<version>-<platform>.tar.gz), one per key. Present only for plugins with a binaryName (implementation.binaryName or the flat binaryName field) — internal/plugin/download.go tries this asset before the source tarball whenever binaryName is set, and internal/plugin/security.go refuses the install if the matching entry here is absent, so an entry is required for every platform that plugin actually ships. Keys MUST be exactly the platform strings internal/plugin/arch.go's PlatformArch() returns; values are plain lowercase hex sha256, no 'sha256:' prefix (unlike the sibling `sha256` field above, which some writers prefix — the CLI compares platform checksums with a raw hex equality check).",
+              "properties": {
+                "darwin-arm64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "darwin-amd64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "linux-amd64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "linux-arm64": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "windows-amd64": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              },
+              "additionalProperties": false
+            }
           }
         },
         "tarballUrl": {
