@@ -47,6 +47,40 @@ jobs:
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
             | tar xz -C /usr/local/bin gitleaks
 
+      # This repo has no pnpm-workspace.yaml (see gate_workspace.go), so the
+      # node gate runs lint/typecheck/test/build against each nested
+      # package.json directly, one directory at a time. Nothing installs
+      # those directories' own dependencies for it — install them here so
+      # the check reflects the packages' real declared dependencies instead
+      # of failing on modules that were simply never fetched.
+      - name: Install Node dependencies for independent packages
+        run: |
+          pnpm install --frozen-lockfile --dir .workers/plugins-registry
+          pnpm install --frozen-lockfile --dir free/feature-flags/sdk-ts
+          pnpm install --frozen-lockfile --dir shared
+
+      # ORDER IS LOAD-BEARING: shared must be BUILT before the packages that
+      # depend on it are INSTALLED.
+      #
+      # free/file-processing/ts and free/media-processing/ts depend on
+      # @nself/plugin-utils via "file:../../../shared". pnpm does NOT symlink a
+      # file: dependency back to the source tree — it takes a real directory
+      # COPY into its store (.pnpm/@nself+plugin-utils@file+..+..+..+shared_*/)
+      # at install time. Anything produced in shared/ AFTER that install, such
+      # as shared/dist, is therefore absent from the copy the dependents
+      # actually resolve against, and since @nself/plugin-utils' main/types
+      # point at ./dist/*, tsc reports "Cannot find module '@nself/plugin-utils'"
+      # for every importing file.
+      #
+      # Building shared first means the copy already contains dist/.
+      - name: Build shared plugin-utils package (before its dependents install)
+        run: pnpm --dir shared run build
+
+      - name: Install Node dependencies for packages depending on shared
+        run: |
+          pnpm install --frozen-lockfile --dir free/file-processing/ts
+          pnpm install --frozen-lockfile --dir free/media-processing/ts
+
       - name: Run nself ci gate
         env:
           GH_TOKEN: ${{ github.token }}

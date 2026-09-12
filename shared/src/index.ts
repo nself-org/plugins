@@ -11,6 +11,7 @@ export * from './http.js';
 export * from './validation.js';
 export * from './security.js';
 export * from './app-context.js';
+export * from './metrics.js';
 
 // Re-export commonly used items at top level
 export { createLogger, Logger } from './logger.js';
@@ -51,3 +52,4 @@ export {
   parseCsvList,
   buildAccountConfigs,
 } from './app-context.js';
+export { createMetrics, type PluginMetrics } from './metrics.js';

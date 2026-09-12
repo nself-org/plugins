@@ -132,7 +132,7 @@ export class FeatureFlagsClient {
   async evaluate<T extends FlagValue>(
     key: string,
     defaultValue: T,
-    ctx?: EvaluateRequest,
+    ctx?: Omit<EvaluateRequest, 'flag_key'>,
   ): Promise<T> {
     const cached = this.cache.get(key)
     if (cached !== undefined) {
@@ -142,7 +142,9 @@ export class FeatureFlagsClient {
       const resp = await fetch(`${this.baseURL}/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flag_key: key, ...ctx }),
+        // flag_key always comes from the explicit `key` param — spread ctx
+        // first so it can never silently override the flag being evaluated.
+        body: JSON.stringify({ ...ctx, flag_key: key }),
       })
       if (!resp.ok) return defaultValue
       const data: EvaluateResponse = await resp.json()
