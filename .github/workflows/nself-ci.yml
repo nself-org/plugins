@@ -47,6 +47,17 @@ jobs:
           curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz \
             | tar xz -C /usr/local/bin gitleaks
 
+      # This repo has no pnpm-workspace.yaml (see gate_workspace.go), so the
+      # node gate runs lint/typecheck/test/build against each nested
+      # package.json directly, one directory at a time. Nothing installs
+      # those directories' own dependencies for it — install them here so
+      # the check reflects the packages' real declared dependencies instead
+      # of failing on modules that were simply never fetched.
+      - name: Install Node dependencies for nested packages
+        run: |
+          pnpm install --frozen-lockfile --dir .workers/plugins-registry
+          pnpm install --frozen-lockfile --dir free/feature-flags/sdk-ts
+
       - name: Run nself ci gate
         env:
           GH_TOKEN: ${{ github.token }}
