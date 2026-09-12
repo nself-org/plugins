@@ -53,6 +53,20 @@ type GateResult struct {
 	Passed  bool
 	Output  string
 	Elapsed time.Duration
+	// Substantive is true when this gate actually verified repo code — a
+	// lint, typecheck, test, build, or static-analysis step that ran for
+	// real. Meta checks (secrets scan, gateway routing, eval) and steps that
+	// never executed (missing binary/script — see Skipped) are false, so
+	// Run() can tell "every real check was skipped" from "everything was
+	// verified" even though both cases have Passed=true. G-015 / SPORT:
+	// PLUGINS-CI-007
+	Substantive bool
+	// Skipped is true when this entry represents a check that did NOT
+	// execute (missing script, missing binary, absent env var). Output
+	// always carries the reason. A skipped gate never fails the run by
+	// itself and never counts toward Substantive coverage. G-015 / SPORT:
+	// PLUGINS-CI-007
+	Skipped bool
 }
 
 // Result is the overall gate run result.

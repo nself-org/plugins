@@ -112,6 +112,42 @@ func Run(cfg Config) (*Result, error) {
 		return res, nil
 	}
 
+	// 8. Reject a run where every gate that DID execute was non-substantive.
+	//
+	// G-015: (1) above only caught the case of literally zero gates. Wiring
+	// this gate into nself-org/plugins showed a second, worse shape of the
+	// same bug — gitleaks ran (1 gate, len(res.Gates) != 0) while the
+	// detected "node" stack contributed nothing, because its scripts live in
+	// nested member packages the old detector never looked at. The result
+	// printed "Overall: PASSED" having verified zero lines of code. A gate
+	// meant to be a required merge check must never look identical whether
+	// it checked everything or checked nothing, so this counts only gates
+	// that actually ran a lint/test/build/analyze step (Substantive &&
+	// !Skipped) and refuses to pass when that count is zero, regardless of
+	// how many meta/skipped entries are present.
+	substantive := 0
+	for _, g := range res.Gates {
+		if g.Substantive && !g.Skipped {
+			substantive++
+		}
+	}
+	if substantive == 0 {
+		res.Passed = false
+		res.Gates = append(res.Gates, GateResult{
+			Name:   "gate:no-substantive-checks",
+			Passed: false,
+			Output: fmt.Sprintf(
+				"Detected stack(s) %s produced zero lint/test/build/analyze checks — "+
+					"only non-code checks ran (e.g. secrets scan). See the SKIP entries "+
+					"above for which checks were skipped and why.\n"+
+					"Passing this would report \"Overall: PASSED\" without verifying any code.",
+				strings.Join(res.Stack, "+"),
+			),
+		})
+		res.Elapsed = time.Since(start)
+		return res, nil
+	}
+
 	res.Passed = true
 	for _, g := range res.Gates {
 		if !g.Passed {
