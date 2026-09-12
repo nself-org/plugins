@@ -53,22 +53,33 @@ jobs:
       # those directories' own dependencies for it — install them here so
       # the check reflects the packages' real declared dependencies instead
       # of failing on modules that were simply never fetched.
-      - name: Install Node dependencies for nested packages
+      - name: Install Node dependencies for independent packages
         run: |
           pnpm install --frozen-lockfile --dir .workers/plugins-registry
           pnpm install --frozen-lockfile --dir free/feature-flags/sdk-ts
           pnpm install --frozen-lockfile --dir shared
+
+      # ORDER IS LOAD-BEARING: shared must be BUILT before the packages that
+      # depend on it are INSTALLED.
+      #
+      # free/file-processing/ts and free/media-processing/ts depend on
+      # @nself/plugin-utils via "file:../../../shared". pnpm does NOT symlink a
+      # file: dependency back to the source tree — it takes a real directory
+      # COPY into its store (.pnpm/@nself+plugin-utils@file+..+..+..+shared_*/)
+      # at install time. Anything produced in shared/ AFTER that install, such
+      # as shared/dist, is therefore absent from the copy the dependents
+      # actually resolve against, and since @nself/plugin-utils' main/types
+      # point at ./dist/*, tsc reports "Cannot find module '@nself/plugin-utils'"
+      # for every importing file.
+      #
+      # Building shared first means the copy already contains dist/.
+      - name: Build shared plugin-utils package (before its dependents install)
+        run: pnpm --dir shared run build
+
+      - name: Install Node dependencies for packages depending on shared
+        run: |
           pnpm install --frozen-lockfile --dir free/file-processing/ts
           pnpm install --frozen-lockfile --dir free/media-processing/ts
-
-      # free/file-processing/ts and free/media-processing/ts both depend on
-      # @nself/plugin-utils via a "file:../../../shared" path dependency.
-      # pnpm links the directory but never runs its build script, so
-      # shared/dist (what "@nself/plugin-utils"'s main/types fields point
-      # at) does not exist yet — build it before the two plugins are
-      # typechecked/built against it.
-      - name: Build shared plugin-utils package
-        run: pnpm --dir shared run build
 
       - name: Run nself ci gate
         env:
