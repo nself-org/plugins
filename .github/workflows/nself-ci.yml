@@ -57,6 +57,18 @@ jobs:
         run: |
           pnpm install --frozen-lockfile --dir .workers/plugins-registry
           pnpm install --frozen-lockfile --dir free/feature-flags/sdk-ts
+          pnpm install --frozen-lockfile --dir shared
+          pnpm install --frozen-lockfile --dir free/file-processing/ts
+          pnpm install --frozen-lockfile --dir free/media-processing/ts
+
+      # free/file-processing/ts and free/media-processing/ts both depend on
+      # @nself/plugin-utils via a "file:../../../shared" path dependency.
+      # pnpm links the directory but never runs its build script, so
+      # shared/dist (what "@nself/plugin-utils"'s main/types fields point
+      # at) does not exist yet — build it before the two plugins are
+      # typechecked/built against it.
+      - name: Build shared plugin-utils package
+        run: pnpm --dir shared run build
 
       - name: Run nself ci gate
         env:
