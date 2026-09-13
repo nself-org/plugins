@@ -18,6 +18,8 @@
  *   GET /plugins/:name/signature    Ed25519 signature metadata for the plugin tarball
  *   GET /categories                 All categories (merged from both registries)
  *   GET /manifest.json              CLI-compatible flat plugin array
+ *   GET /bundles.json               Bundle-to-plugin membership map (ADR-P6-03)
+ *   GET /bundles-schema.json        Schema for /bundles.json
  *   GET /health                     Health check
  *   GET /stats                      Cache statistics
  *   POST /api/sync                  Force-refresh KV cache (webhook from GitHub Actions)
@@ -26,6 +28,8 @@
  *   registry:free          — cached free registry raw JSON (with timestamp envelope)
  *   registry:pro           — cached pro registry raw JSON (with timestamp envelope)
  *   registry:combined      — cached merged output (with timestamp envelope)
+ *   bundles-json-v1        — cached bundles.json raw JSON (with timestamp envelope)
+ *   bundles-schema-v1      — cached bundles-schema.json raw JSON (with timestamp envelope)
  *   revocations:list       — JSON array of revoked plugin versions
  *   stats:global           — request statistics
  *
@@ -62,6 +66,25 @@ const KV_COMBINED = 'registry:combined';
 const KV_STATS    = 'stats:global';
 
 const DEFAULT_CACHE_TTL = 300; // seconds
+
+// bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03: served by this worker at
+// plugins.nself.org/bundles.json). Lives in plugins-pro alongside registry.json
+// today; the path becomes nself-org/bundles/contents/bundles.json once the
+// plugins-pro -> bundles repo rename (ADR-P6-01 / W3-S3-T6) has landed — update
+// these two URL constants then, nothing else in this route needs to change.
+// Own KV keys, distinct from registry:*, so a bundles.json refresh/miss never
+// invalidates the unrelated registry cache.
+const BUNDLES_JSON_API_URL =
+  'https://api.github.com/repos/nself-org/plugins-pro/contents/bundles.json';
+const BUNDLES_SCHEMA_API_URL =
+  'https://api.github.com/repos/nself-org/plugins-pro/contents/bundles-schema.json';
+const KV_BUNDLES_JSON   = 'bundles-json-v1';
+const KV_BUNDLES_SCHEMA = 'bundles-schema-v1';
+const BUNDLES_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+
+// Canonical bundle slugs, ordering-canon order (nSelf PPI: task -> chat ->
+// claw -> family -> sentry -> clawde). TV Bundle retired 2026-08-31; 6 slugs.
+const CANONICAL_BUNDLE_SLUGS = ['task', 'chat', 'claw', 'family', 'sentry', 'clawde'];
 
 // ---------------------------------------------------------------------------
 // CORS + response helpers
@@ -120,6 +143,12 @@ export default {
 
       if (method === 'GET' && path === '/manifest.json') {
         return await handleManifest(env, ctx);
+      }
+      if (method === 'GET' && path === '/bundles.json') {
+        return await handleBundlesJson(env, ctx);
+      }
+      if (method === 'GET' && path === '/bundles-schema.json') {
+        return await handleBundlesSchema(env, ctx);
       }
       if (method === 'GET' && path === '/health') {
         return handleHealth(env);
@@ -197,6 +226,8 @@ export default {
           'GET /plugins/:name/signature',
           'GET /categories',
           'GET /manifest.json',
+          'GET /bundles.json',
+          'GET /bundles-schema.json',
           'GET /health',
           'GET /stats',
           'GET /marketplace[?tier=free|pro][&category=X][&bundle=Y][&q=search]',
@@ -694,6 +725,8 @@ async function handleSync(request, env, ctx) {
       env.PLUGINS_KV.delete(KV_FREE),
       env.PLUGINS_KV.delete(KV_PRO),
       env.PLUGINS_KV.delete(KV_COMBINED),
+      env.PLUGINS_KV.delete(KV_BUNDLES_JSON),
+      env.PLUGINS_KV.delete(KV_BUNDLES_SCHEMA),
     ]);
   }
 
@@ -782,6 +815,149 @@ async function handleManifest(env, ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// Bundles — GET /bundles.json, GET /bundles-schema.json (P6-E4-W3-S3-T8,
+// ADR-P6-03). Fetch + KV-cache mirror fetchProRegistry's pattern above
+// (authenticated GitHub Contents API fetch, base64 decode, timestamp-
+// envelope KV cache) reused rather than re-implemented, per DRY.
+// ---------------------------------------------------------------------------
+
+/**
+ * Structural validation of a fetched bundles.json body against the shape
+ * bundles-schema.json requires. No JSON-Schema library dependency (this
+ * worker is dependency-light by design) — checks exactly the constraints the
+ * schema encodes: schema_version present, bundles keyed by exactly the 6
+ * canonical slugs, each entry carrying its required fields.
+ */
+function validateBundlesJson(data) {
+  const errors = [];
+
+  if (typeof data !== 'object' || data === null) {
+    return { valid: false, errors: ['bundles.json is not an object'] };
+  }
+  if (typeof data.schema_version !== 'string' || !/^\d+\.\d+\.\d+$/.test(data.schema_version)) {
+    errors.push('schema_version missing or not a semver string');
+  }
+  if (typeof data.bundles !== 'object' || data.bundles === null || Array.isArray(data.bundles)) {
+    errors.push('bundles field missing or not an object');
+    return { valid: false, errors };
+  }
+
+  const keys       = Object.keys(data.bundles);
+  const unexpected = keys.filter(k => !CANONICAL_BUNDLE_SLUGS.includes(k));
+  const missing    = CANONICAL_BUNDLE_SLUGS.filter(k => !keys.includes(k));
+  if (unexpected.length > 0) errors.push(`unexpected bundle slug(s): ${unexpected.join(', ')}`);
+  if (missing.length > 0)    errors.push(`missing bundle slug(s): ${missing.join(', ')}`);
+
+  const requiredFields = ['display', 'tier', 'price_monthly', 'price_yearly', 'saas', 'page', 'plugins'];
+  for (const [slug, entry] of Object.entries(data.bundles)) {
+    if (typeof entry !== 'object' || entry === null) {
+      errors.push(`bundle "${slug}" is not an object`);
+      continue;
+    }
+    for (const field of requiredFields) {
+      if (!(field in entry)) errors.push(`bundle "${slug}" missing required field "${field}"`);
+    }
+    if ('tier' in entry && entry.tier !== 'free' && entry.tier !== 'paid') {
+      errors.push(`bundle "${slug}" has invalid tier "${entry.tier}"`);
+    }
+    if ('plugins' in entry && !Array.isArray(entry.plugins)) {
+      errors.push(`bundle "${slug}" plugins field is not an array`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+async function fetchGitHubContentsJson(url, env) {
+  if (!env.GH_ACCESS_TOKEN) {
+    console.warn(`GH_ACCESS_TOKEN not set — cannot fetch ${url}`);
+    return null;
+  }
+
+  const resp = await fetch(url, {
+    headers: {
+      'Authorization': `token ${env.GH_ACCESS_TOKEN}`,
+      'Accept':        'application/vnd.github.v3+json',
+      'User-Agent':    'nself-plugin-registry/2.0',
+    },
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    console.error(`Fetch failed for ${url}: ${resp.status} — ${body.slice(0, 200)}`);
+    return null;
+  }
+
+  const envelope = await resp.json();
+  try {
+    return JSON.parse(atob(envelope.content.replace(/\n/g, '')));
+  } catch (e) {
+    console.error(`Failed to decode content for ${url}:`, e.message);
+    return null;
+  }
+}
+
+async function handleBundlesJson(env, ctx) {
+  const cacheTtl = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+
+  const cached = await kvGet(env, KV_BUNDLES_JSON);
+  if (cached && isFresh(cached, cacheTtl)) {
+    return jsonResponse(cached.data, 200, {
+      'Cache-Control': BUNDLES_CACHE_CONTROL,
+      'X-Cache':       'HIT',
+    });
+  }
+
+  const data = await fetchGitHubContentsJson(BUNDLES_JSON_API_URL, env);
+  if (data === null) {
+    return jsonResponse(
+      { error: 'bundles.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset' },
+      502,
+    );
+  }
+
+  const { valid, errors } = validateBundlesJson(data);
+  if (!valid) {
+    console.error('bundles.json failed schema validation:', errors.join('; '));
+    return jsonResponse({ error: 'bundles.json failed schema validation', details: errors }, 502);
+  }
+
+  ctx.waitUntil(kvPutWrapped(env, KV_BUNDLES_JSON, data));
+
+  return jsonResponse(data, 200, {
+    'Cache-Control': BUNDLES_CACHE_CONTROL,
+    'X-Cache':       'MISS',
+  });
+}
+
+async function handleBundlesSchema(env, ctx) {
+  const cacheTtl = parseInt(env.CACHE_TTL || DEFAULT_CACHE_TTL, 10);
+
+  const cached = await kvGet(env, KV_BUNDLES_SCHEMA);
+  if (cached && isFresh(cached, cacheTtl)) {
+    return jsonResponse(cached.data, 200, {
+      'Cache-Control': BUNDLES_CACHE_CONTROL,
+      'X-Cache':       'HIT',
+    });
+  }
+
+  const data = await fetchGitHubContentsJson(BUNDLES_SCHEMA_API_URL, env);
+  if (data === null) {
+    return jsonResponse(
+      { error: 'bundles-schema.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset' },
+      502,
+    );
+  }
+
+  ctx.waitUntil(kvPutWrapped(env, KV_BUNDLES_SCHEMA, data));
+
+  return jsonResponse(data, 200, {
+    'Cache-Control': BUNDLES_CACHE_CONTROL,
+    'X-Cache':       'MISS',
+  });
+}
+
+// ---------------------------------------------------------------------------
 // KV helpers — all values stored as { data, timestamp } envelope
 // ---------------------------------------------------------------------------
 
@@ -864,4 +1040,4 @@ function toTitleCase(str) {
 // not part of the Worker's request surface.
 // ---------------------------------------------------------------------------
 
-export { isDirectDownloadTier, handlePluginTarball };
+export { isDirectDownloadTier, handlePluginTarball, validateBundlesJson, handleBundlesJson };

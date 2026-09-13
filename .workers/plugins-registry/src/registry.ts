@@ -427,4 +427,196 @@ export async function fetchAllPlugins(
   return { free, pro, all: [...free, ...pro] };
 }
 
+// ---------------------------------------------------------------------------
+// bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03: served by this worker at
+// plugins.nself.org/bundles.json). Lives in plugins-pro alongside
+// registry.json today; the path becomes nself-org/bundles/contents/*.json
+// once the plugins-pro -> bundles repo rename (ADR-P6-01 / W3-S3-T6) has
+// landed — update the two URL constants below then, nothing else here needs
+// to change. Fetched the same way as the pro registry via the GitHub
+// Contents API and cached under its own KV key so a bundles.json miss/
+// refresh never invalidates the unrelated pro-registry cache.
+// ---------------------------------------------------------------------------
+
+const BUNDLES_JSON_API_URL =
+  "https://api.github.com/repos/nself-org/plugins-pro/contents/bundles.json";
+const BUNDLES_SCHEMA_API_URL =
+  "https://api.github.com/repos/nself-org/plugins-pro/contents/bundles-schema.json";
+
+export const KV_BUNDLES_JSON = "bundles-json-v1";
+export const KV_BUNDLES_SCHEMA = "bundles-schema-v1";
+
+// Canonical bundle slugs, in ordering-canon order (nSelf PPI "Ordering" rule:
+// task → chat → claw → family → sentry → clawde). The TV Bundle was retired
+// 2026-08-31 (owner directive) and bundles-schema.json's own propertyNames
+// enum already excludes it — 6 slugs, not 7.
+export const CANONICAL_BUNDLE_SLUGS = [
+  "task",
+  "chat",
+  "claw",
+  "family",
+  "sentry",
+  "clawde",
+] as const;
+
+export interface BundlesJsonFile {
+  schema_version: string;
+  bundles: Record<string, unknown>;
+}
+
+/**
+ * Structural validation of a fetched bundles.json body against the shape
+ * bundles-schema.json requires, without pulling in a JSON-Schema library
+ * (this worker is dependency-light by design). Checks exactly the
+ * constraints the schema encodes: schema_version present, bundles keyed by
+ * exactly the 6 canonical slugs, and each bundle entry carries its required
+ * fields.
+ */
+export function validateBundlesJson(data: unknown): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (typeof data !== "object" || data === null) {
+    return { valid: false, errors: ["bundles.json is not an object"] };
+  }
+  const file = data as Partial<BundlesJsonFile>;
+
+  if (typeof file.schema_version !== "string" || !/^\d+\.\d+\.\d+$/.test(file.schema_version)) {
+    errors.push("schema_version missing or not a semver string");
+  }
+  if (typeof file.bundles !== "object" || file.bundles === null || Array.isArray(file.bundles)) {
+    errors.push("bundles field missing or not an object");
+    return { valid: false, errors };
+  }
+
+  const keys = Object.keys(file.bundles);
+  const unexpected = keys.filter((k) => !(CANONICAL_BUNDLE_SLUGS as readonly string[]).includes(k));
+  const missing = CANONICAL_BUNDLE_SLUGS.filter((k) => !keys.includes(k));
+  if (unexpected.length > 0) errors.push(`unexpected bundle slug(s): ${unexpected.join(", ")}`);
+  if (missing.length > 0) errors.push(`missing bundle slug(s): ${missing.join(", ")}`);
+
+  const requiredFields = ["display", "tier", "price_monthly", "price_yearly", "saas", "page", "plugins"];
+  for (const [slug, entry] of Object.entries(file.bundles)) {
+    if (typeof entry !== "object" || entry === null) {
+      errors.push(`bundle "${slug}" is not an object`);
+      continue;
+    }
+    const rec = entry as Record<string, unknown>;
+    for (const field of requiredFields) {
+      if (!(field in rec)) errors.push(`bundle "${slug}" missing required field "${field}"`);
+    }
+    if ("tier" in rec && rec.tier !== "free" && rec.tier !== "paid") {
+      errors.push(`bundle "${slug}" has invalid tier "${String(rec.tier)}"`);
+    }
+    if ("plugins" in rec && !Array.isArray(rec.plugins)) {
+      errors.push(`bundle "${slug}" plugins field is not an array`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Fetches bundles.json from the plugins-pro repo via the GitHub Contents
+ * API, mirroring fetchProRegistry's auth + KV-cache pattern above (reused
+ * rather than re-implemented per DRY). Returns the raw parsed JSON
+ * (unvalidated — callers run validateBundlesJson separately so a schema
+ * failure can be reported distinctly from a fetch failure) or null on
+ * fetch/decode failure.
+ */
+export async function fetchBundlesJson(
+  env: Env,
+  ctx: ExecutionContext,
+  bypass = false,
+): Promise<unknown | null> {
+  if (!env.GH_ACCESS_TOKEN) {
+    console.warn("GH_ACCESS_TOKEN not set — bundles.json unavailable");
+    return null;
+  }
+
+  const kv = env.REGISTRY ?? env.PLUGINS_KV;
+  const ttl = cacheTtl(env);
+
+  if (!bypass && kv) {
+    const cached = await kvGet<unknown>(kv, KV_BUNDLES_JSON);
+    if (cached && isFresh(cached, ttl)) {
+      return cached.data;
+    }
+  }
+
+  const resp = await fetch(BUNDLES_JSON_API_URL, {
+    headers: {
+      Authorization: `token ${env.GH_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "nself-plugin-registry/2.0",
+    },
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    console.error(`bundles.json fetch failed: ${resp.status} — ${body.slice(0, 200)}`);
+    return null;
+  }
+
+  let data: unknown;
+  try {
+    const envelope = (await resp.json()) as GitHubContentsResponse;
+    data = decodeGitHubContent(envelope.content);
+  } catch (e) {
+    console.error("Failed to decode bundles.json content:", (e as Error).message);
+    return null;
+  }
+
+  if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_BUNDLES_JSON, data));
+  return data;
+}
+
+/**
+ * Fetches bundles-schema.json — same repo, same auth pattern, its own KV key.
+ * Served as-is (no validation of the schema against itself).
+ */
+export async function fetchBundlesSchema(
+  env: Env,
+  ctx: ExecutionContext,
+  bypass = false,
+): Promise<unknown | null> {
+  if (!env.GH_ACCESS_TOKEN) {
+    return null;
+  }
+
+  const kv = env.REGISTRY ?? env.PLUGINS_KV;
+  const ttl = cacheTtl(env);
+
+  if (!bypass && kv) {
+    const cached = await kvGet<unknown>(kv, KV_BUNDLES_SCHEMA);
+    if (cached && isFresh(cached, ttl)) {
+      return cached.data;
+    }
+  }
+
+  const resp = await fetch(BUNDLES_SCHEMA_API_URL, {
+    headers: {
+      Authorization: `token ${env.GH_ACCESS_TOKEN}`,
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "nself-plugin-registry/2.0",
+    },
+  });
+
+  if (!resp.ok) {
+    console.error(`bundles-schema.json fetch failed: ${resp.status}`);
+    return null;
+  }
+
+  let data: unknown;
+  try {
+    const envelope = (await resp.json()) as GitHubContentsResponse;
+    data = decodeGitHubContent(envelope.content);
+  } catch (e) {
+    console.error("Failed to decode bundles-schema.json content:", (e as Error).message);
+    return null;
+  }
+
+  if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_BUNDLES_SCHEMA, data));
+  return data;
+}
+
 export { cacheTtl, kvGet, kvPutWrapped, isFresh, DEFAULT_CACHE_TTL };

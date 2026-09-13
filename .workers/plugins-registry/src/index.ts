@@ -16,6 +16,8 @@
  *   GET /registry                        — Alias for /registry.json
  *   GET /categories                      — Category list
  *   GET /manifest.json                   — Flat CLI manifest for nself plugin outdated
+ *   GET /bundles.json                    — Bundle-to-plugin map (ADR-P6-03)
+ *   GET /bundles-schema.json             — Schema for /bundles.json
  *   GET /marketplace                     — Enriched marketplace view
  *   GET /stats                           — Cache statistics
  *   GET /.well-known/revoked-authors.json — Author CRL (S58-T09, polled daily by CLI)
@@ -25,6 +27,8 @@
  *   registry:free      — free registry (timestamp envelope)
  *   registry:pro       — pro registry  (timestamp envelope)
  *   registry:combined  — merged output (timestamp envelope)
+ *   bundles-json-v1    — bundles.json (timestamp envelope)
+ *   bundles-schema-v1  — bundles-schema.json (timestamp envelope)
  *   revocations:list   — JSON array of RevocationEntry
  *   revocations:authors — JSON array of RevokedAuthorEntry (S58-T09)
  *   stats:global       — request counters
@@ -42,6 +46,11 @@ import {
   fetchFreeRegistry,
   fetchProRegistry,
   fetchAllPlugins,
+  fetchBundlesJson,
+  fetchBundlesSchema,
+  validateBundlesJson,
+  KV_BUNDLES_JSON,
+  KV_BUNDLES_SCHEMA,
   cacheTtl,
   kvGet,
   kvPutWrapped,
@@ -172,6 +181,14 @@ export default {
         return handleManifest(env, ctx);
       }
 
+      // Bundles — P6-E4-W3-S3-T8 / ADR-P6-03
+      if (method === "GET" && resolvedPath === "/bundles.json") {
+        return handleBundlesJson(env, ctx);
+      }
+      if (method === "GET" && resolvedPath === "/bundles-schema.json") {
+        return handleBundlesSchema(env, ctx);
+      }
+
       // Stats
       if (method === "GET" && resolvedPath === "/stats") {
         return handleStats(env);
@@ -281,6 +298,8 @@ export default {
             "GET /registry.json",
             "GET /categories",
             "GET /manifest.json",
+            "GET /bundles.json",
+            "GET /bundles-schema.json",
             "GET /marketplace",
             "GET /marketplace/ratings/:name",
             "POST /marketplace/ratings/:name",
@@ -632,6 +651,58 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
 }
 
 // ---------------------------------------------------------------------------
+// GET /bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03).
+//
+// Serves the bundle-to-plugin membership map from plugins-pro (today; the
+// nself-org/bundles repo after the rename lands), cached in PLUGINS_KV under
+// its own key (bundles-json-v1, distinct from the registry:* keys) so a
+// stale registry cache and a stale bundles.json cache invalidate
+// independently. Cache-Control matches the ticket guide's stated convention
+// (s-maxage + stale-while-revalidate) rather than this worker's usual plain
+// max-age, since bundles.json is fetched by CDN edges more aggressively than
+// the per-request registry endpoints.
+// ---------------------------------------------------------------------------
+
+const BUNDLES_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
+
+async function handleBundlesJson(env: Env, ctx: ExecutionContext): Promise<Response> {
+  const data = await fetchBundlesJson(env, ctx);
+  if (data === null) {
+    return jsonResponse(
+      { error: "bundles.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset" },
+      502,
+    );
+  }
+
+  const { valid, errors } = validateBundlesJson(data);
+  if (!valid) {
+    console.error("bundles.json failed schema validation:", errors.join("; "));
+    return jsonResponse(
+      { error: "bundles.json failed schema validation", details: errors },
+      502,
+    );
+  }
+
+  return jsonResponse(data, 200, { "Cache-Control": BUNDLES_CACHE_CONTROL });
+}
+
+// ---------------------------------------------------------------------------
+// GET /bundles-schema.json — the schema bundles.json validates against.
+// Passthrough + cache only; not itself schema-validated.
+// ---------------------------------------------------------------------------
+
+async function handleBundlesSchema(env: Env, ctx: ExecutionContext): Promise<Response> {
+  const data = await fetchBundlesSchema(env, ctx);
+  if (data === null) {
+    return jsonResponse(
+      { error: "bundles-schema.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset" },
+      502,
+    );
+  }
+  return jsonResponse(data, 200, { "Cache-Control": BUNDLES_CACHE_CONTROL });
+}
+
+// ---------------------------------------------------------------------------
 // GET /.well-known/revoked-authors.json — Author Certificate Revocation List
 // (S58-T09)
 //
@@ -728,6 +799,8 @@ async function handleSync(
       kv.delete("registry:pro"),
       kv.delete(KV_COMBINED),
       kv.delete(KV_MANIFEST),
+      kv.delete(KV_BUNDLES_JSON),
+      kv.delete(KV_BUNDLES_SCHEMA),
     ]);
   }
 
