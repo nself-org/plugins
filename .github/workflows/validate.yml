@@ -111,6 +111,85 @@ jobs:
 
           printf "\nAll plugin.json files are valid\n"
 
+      # A plugin declaring status "deprecated" must carry a complete deprecation
+      # block. cli/internal/plugin/manifest.go REFUSES to parse the manifest
+      # otherwise, and listInstalled() then skips the directory — so the plugin
+      # installs "successfully" and is invisible to `nself plugin list
+      # --installed` and `nself doctor`.
+      #
+      # That is not hypothetical: free/notifications shipped status "deprecated"
+      # with only the flat deprecated/deprecatedSince/replacedBy fields and no
+      # block, and it is one of the eight plugins in the free Task Bundle. The
+      # bundle installed eight plugins and listed seven, with nothing saying why
+      # (found 2026-09-13). The step above validates required fields but never
+      # looked at the deprecation block, so it passed this all the way through.
+      #
+      # Notice period comes from .github/wiki/Deprecation-Policy.md: free (MIT)
+      # plugins get a minimum of 6 months from announcedDate to eolDate.
+      - name: Deprecated plugins carry a complete deprecation block
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys, datetime, urllib.request, urllib.error
+
+          REQUIRED = ("announcedDate", "eolDate", "migrationGuide")
+          MIN_NOTICE_DAYS = 182  # 6 months, per Deprecation-Policy.md
+          errors = []
+
+          def iso(name, value, where):
+              try:
+                  return datetime.date.fromisoformat(value)
+              except (TypeError, ValueError):
+                  errors.append(f"{where}: deprecation.{name} is not an ISO date (YYYY-MM-DD): {value!r}")
+                  return None
+
+          for f in sorted(pathlib.Path("free").glob("*/plugin.json")):
+              d = json.loads(f.read_text())
+              if d.get("status") != "deprecated":
+                  continue
+              block = d.get("deprecation")
+              if not isinstance(block, dict):
+                  errors.append(
+                      f"{f}: status is \"deprecated\" but there is no `deprecation` block. "
+                      "The flat deprecated/deprecatedSince/replacedBy fields are NOT a "
+                      "substitute - the CLI will refuse to parse this manifest and the "
+                      "plugin will silently vanish from every listing."
+                  )
+                  continue
+              for key in REQUIRED:
+                  if not block.get(key):
+                      errors.append(f"{f}: deprecation.{key} is required")
+              a = iso("announcedDate", block.get("announcedDate"), f)
+              e = iso("eolDate", block.get("eolDate"), f)
+              if a and e:
+                  notice = (e - a).days
+                  if notice < MIN_NOTICE_DAYS:
+                      errors.append(
+                          f"{f}: notice period is {notice} days; Deprecation-Policy.md "
+                          f"requires at least {MIN_NOTICE_DAYS} (6 months) for free plugins"
+                      )
+              url = block.get("migrationGuide") or ""
+              if url and not url.startswith(("http://", "https://")):
+                  errors.append(f"{f}: deprecation.migrationGuide must be an absolute URL, got {url!r}")
+              elif url:
+                  # The policy requires this to resolve. A definitive 4xx is a real
+                  # defect and fails. A network error is NOT treated as a failure -
+                  # a DNS blip must not turn this into a flaky gate.
+                  try:
+                      req = urllib.request.Request(url, method="GET", headers={"User-Agent": "nself-ci"})
+                      urllib.request.urlopen(req, timeout=20).read(1)
+                  except urllib.error.HTTPError as ex:
+                      errors.append(f"{f}: deprecation.migrationGuide {url} returned HTTP {ex.code}")
+                  except Exception as ex:
+                      print(f"  note: could not reach {url} ({ex}) - not failing on a network error")
+
+          if errors:
+              print("\nDeprecation block validation failed:")
+              for e in errors:
+                  print(f"  ERROR: {e}")
+              sys.exit(1)
+          print("All deprecated plugins carry a complete, policy-compliant deprecation block.")
+          PY
+
       - name: Check for duplicate ports
         run: |
           printf "Checking for port conflicts...\n"

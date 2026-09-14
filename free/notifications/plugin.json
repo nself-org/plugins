@@ -92,5 +92,11 @@
   ],
   "min_memory_mb": 64,
   "systemd_after": "network.target",
-  "tier": "free"
+  "tier": "free",
+  "deprecation": {
+    "announcedDate": "2026-05-07",
+    "eolDate": "2026-11-07",
+    "replacedBy": "notify",
+    "migrationGuide": "https://github.com/nself-org/plugins/wiki/Notify"
+  }
 }
