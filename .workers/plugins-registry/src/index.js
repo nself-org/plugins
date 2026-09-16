@@ -5,7 +5,7 @@
  *
  * Serves a unified plugin registry that merges:
  *   - Free registry  (public, plugins/registry.json on GitHub)
- *   - Pro registry   (private, plugins-pro/registry.json via GitHub API with token)
+ *   - Pro registry   (private, the Bundles repo registry.json via GitHub API with token)
  *
  * Endpoints:
  *   GET /registry.json              Combined registry (free + pro), or ?tier=free|pro to filter
@@ -34,7 +34,7 @@
  *   stats:global           — request statistics
  *
  * Secrets (set via wrangler secret put):
- *   GH_ACCESS_TOKEN        — Fine-grained PAT with contents:read on nself-org/plugins-pro
+ *   GH_ACCESS_TOKEN        — Fine-grained PAT with contents:read on nself-org/bundles
  *                            Also used for authenticated free registry fetch (avoids raw CDN cache)
  *   GITHUB_SYNC_TOKEN      — Bearer token for POST /api/sync (from GitHub Actions)
  *   SIGNING_PRIVATE_KEY    — Ed25519 private key (32 bytes as hex, 64 hex chars)
@@ -54,7 +54,7 @@ const FREE_REGISTRY_API_URL =
   'https://api.github.com/repos/nself-org/plugins/contents/registry.json';
 
 const PRO_REGISTRY_API_URL =
-  'https://api.github.com/repos/nself-org/plugins-pro/contents/registry.json';
+  'https://api.github.com/repos/nself-org/bundles/contents/registry.json';
 
 // Fallback: unauthenticated raw URL for free registry (used when GITHUB_TOKEN absent)
 const FREE_REGISTRY_RAW_URL =
@@ -68,16 +68,16 @@ const KV_STATS    = 'stats:global';
 const DEFAULT_CACHE_TTL = 300; // seconds
 
 // bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03: served by this worker at
-// plugins.nself.org/bundles.json). Lives in plugins-pro alongside registry.json
+// plugins.nself.org/bundles.json). Lives in the Bundles repo alongside registry.json
 // today; the path becomes nself-org/bundles/contents/bundles.json once the
-// plugins-pro -> bundles repo rename (ADR-P6-01 / W3-S3-T6) has landed — update
+// plugins-pro -> bundles rename (ADR-P6-01 / W3-S3-T6) landed 2026-09-16; updated
 // these two URL constants then, nothing else in this route needs to change.
 // Own KV keys, distinct from registry:*, so a bundles.json refresh/miss never
 // invalidates the unrelated registry cache.
 const BUNDLES_JSON_API_URL =
-  'https://api.github.com/repos/nself-org/plugins-pro/contents/bundles.json';
+  'https://api.github.com/repos/nself-org/bundles/contents/bundles.json';
 const BUNDLES_SCHEMA_API_URL =
-  'https://api.github.com/repos/nself-org/plugins-pro/contents/bundles-schema.json';
+  'https://api.github.com/repos/nself-org/bundles/contents/bundles-schema.json';
 const KV_BUNDLES_JSON   = 'bundles-json-v1';
 const KV_BUNDLES_SCHEMA = 'bundles-schema-v1';
 const BUNDLES_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
@@ -572,7 +572,7 @@ async function handlePluginTarball(plugin, env) {
     );
   }
 
-  const repo      = (tier === 'pro') ? 'plugins-pro' : 'plugins';
+  const repo      = (tier === 'pro') ? 'bundles' : 'plugins';
   const tarballUrl =
     `https://github.com/nself-org/${repo}/releases/download/v${resolvedVersion}/${name}-${resolvedVersion}.tar.gz`;
 
@@ -620,7 +620,7 @@ async function handlePluginSignature(plugin, env) {
     );
   }
 
-  const repo       = (tier === 'pro') ? 'plugins-pro' : 'plugins';
+  const repo       = (tier === 'pro') ? 'bundles' : 'plugins';
   const tarballUrl =
     `https://github.com/nself-org/${repo}/releases/download/v${resolvedVersion}/${name}-${resolvedVersion}.tar.gz`;
   const canonical  = canonicalPluginString(name, resolvedVersion, tarballUrl);

@@ -30,7 +30,7 @@
  */
 
 // ---------------------------------------------------------------------------
-// Bundle membership. Mirrors plugins-pro/bundles.json, which is canonical per
+// Bundle membership. Mirrors the Bundles repo bundles.json, which is canonical per
 // ADR-P6-03. SPORT F06-BUNDLE-INVENTORY.md is a superseded redirect stub and must
 // NOT be used as the source here. Canon order: task, chat, claw, family, sentry, clawde.
 // ---------------------------------------------------------------------------
