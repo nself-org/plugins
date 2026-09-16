@@ -36,7 +36,7 @@
  * Secrets (set via `wrangler secret put`):
  *   SIGNING_PRIVATE_KEY  — Ed25519 seed, 32 bytes as 64 lowercase hex chars
  *   PUBLIC_KEY_HEX       — Ed25519 public key, 32 bytes as 64 lowercase hex chars
- *   GH_ACCESS_TOKEN      — Fine-grained PAT (contents:read on plugins + plugins-pro)
+ *   GH_ACCESS_TOKEN      — Fine-grained PAT (contents:read on plugins + bundles)
  *   GITHUB_SYNC_TOKEN    — Bearer token for POST /api/sync
  */
 
@@ -473,7 +473,7 @@ async function handlePluginTarball(plugin: PluginEntry, env: Env): Promise<Respo
     return jsonResponse({ error: "plugin version revoked", plugin: name, version }, 410);
   }
 
-  const repo = tier === "pro" ? "plugins-pro" : "plugins";
+  const repo = tier === "pro" ? "bundles" : "plugins";
   // GitHub Releases URL (canonical fallback, always valid)
   const githubURL =
     `https://github.com/nself-org/${repo}/releases/download/v${version}/${name}-${version}.tar.gz`;
@@ -519,7 +519,7 @@ async function handlePluginTarball(plugin: PluginEntry, env: Env): Promise<Respo
 async function handlePluginSignature(plugin: PluginEntry, env: Env): Promise<Response> {
   const { name, version, tier } = plugin;
 
-  const repo = tier === "pro" ? "plugins-pro" : "plugins";
+  const repo = tier === "pro" ? "bundles" : "plugins";
   const tarballURL =
     `https://github.com/nself-org/${repo}/releases/download/v${version}/${name}-${version}.tar.gz`;
 
@@ -653,7 +653,7 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
 // ---------------------------------------------------------------------------
 // GET /bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03).
 //
-// Serves the bundle-to-plugin membership map from plugins-pro (today; the
+// Serves the bundle-to-plugin membership map from the Bundles repo (today; the
 // nself-org/bundles repo after the rename lands), cached in PLUGINS_KV under
 // its own key (bundles-json-v1, distinct from the registry:* keys) so a
 // stale registry cache and a stale bundles.json cache invalidate

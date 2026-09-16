@@ -237,7 +237,7 @@ function normaliseToArray(data: RegistryWireFormat, expectedTier: PluginTier): P
     raw = data.plugins;
   } else if ("plugins" in data && typeof data.plugins === "object" && data.plugins !== null) {
     // Use Object.entries so the dict key becomes the fallback name when the entry
-    // omits the "name" field (plugins-pro/registry.json uses this dict format).
+    // omits the "name" field (the Bundles repo registry.json uses this dict format).
     raw = Object.entries(data.plugins as Record<string, Omit<PluginEntry, "tier"> & { tier?: PluginTier }>)
       .map(([key, entry]) => (entry.name ? entry : { ...entry, name: key }));
   } else {
@@ -270,7 +270,7 @@ function normaliseToArray(data: RegistryWireFormat, expectedTier: PluginTier): P
 const FREE_REGISTRY_API_URL =
   "https://api.github.com/repos/nself-org/plugins/contents/registry.json";
 const PRO_REGISTRY_API_URL =
-  "https://api.github.com/repos/nself-org/plugins-pro/contents/registry.json";
+  "https://api.github.com/repos/nself-org/bundles/contents/registry.json";
 const FREE_REGISTRY_RAW_URL =
   "https://raw.githubusercontent.com/nself-org/plugins/main/registry.json";
 
@@ -429,9 +429,9 @@ export async function fetchAllPlugins(
 
 // ---------------------------------------------------------------------------
 // bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03: served by this worker at
-// plugins.nself.org/bundles.json). Lives in plugins-pro alongside
+// plugins.nself.org/bundles.json). Lives in the Bundles repo alongside
 // registry.json today; the path becomes nself-org/bundles/contents/*.json
-// once the plugins-pro -> bundles repo rename (ADR-P6-01 / W3-S3-T6) has
+// the plugins-pro -> bundles rename (ADR-P6-01 / W3-S3-T6) landed 2026-09-16 and these are updated; it
 // landed — update the two URL constants below then, nothing else here needs
 // to change. Fetched the same way as the pro registry via the GitHub
 // Contents API and cached under its own KV key so a bundles.json miss/
@@ -439,9 +439,9 @@ export async function fetchAllPlugins(
 // ---------------------------------------------------------------------------
 
 const BUNDLES_JSON_API_URL =
-  "https://api.github.com/repos/nself-org/plugins-pro/contents/bundles.json";
+  "https://api.github.com/repos/nself-org/bundles/contents/bundles.json";
 const BUNDLES_SCHEMA_API_URL =
-  "https://api.github.com/repos/nself-org/plugins-pro/contents/bundles-schema.json";
+  "https://api.github.com/repos/nself-org/bundles/contents/bundles-schema.json";
 
 export const KV_BUNDLES_JSON = "bundles-json-v1";
 export const KV_BUNDLES_SCHEMA = "bundles-schema-v1";
@@ -516,7 +516,7 @@ export function validateBundlesJson(data: unknown): { valid: boolean; errors: st
 }
 
 /**
- * Fetches bundles.json from the plugins-pro repo via the GitHub Contents
+ * Fetches bundles.json from the Bundles repo via the GitHub Contents
  * API, mirroring fetchProRegistry's auth + KV-cache pattern above (reused
  * rather than re-implemented per DRY). Returns the raw parsed JSON
  * (unvalidated — callers run validateBundlesJson separately so a schema
