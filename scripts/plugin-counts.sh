@@ -7,7 +7,7 @@
 # recomputing anything.
 #
 # Inputs:
-#   registry.json in this repo (free) and in a sibling ../plugins-pro
+#   registry.json in this repo (free) and in a sibling ../bundles
 #   checkout (pro, private). Each entry's own manifest
 #   (free|paid/<slug>/plugin.{json,yaml,yml}) supplies the installable flag.
 #   A registry entry may mirror that flag, but the manifest wins; if the two
@@ -25,8 +25,8 @@
 # Constraints:
 #   --origin reads both registries (and every manifest referenced by them)
 #   from origin/main via `git show`, not the working tree — use this for any
-#   doc generation or CI, since a local plugins-pro checkout can be on a
-#   feature branch. Missing/unreadable ../plugins-pro is a hard failure
+#   doc generation or CI, since a local bundles checkout can be on a
+#   feature branch. Missing/unreadable ../bundles is a hard failure
 #   (never emits free-only numbers — that silent-drift failure mode is
 #   exactly what this generator exists to eliminate).
 set -euo pipefail
@@ -49,12 +49,19 @@ done
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" # this (free) repo root
 siblings="$(dirname "$root")"
-pro_repo="$siblings/plugins-pro"
+# The licensed-plugin repo was renamed nself-org/plugins-pro -> nself-org/bundles
+# (ADR-P6-01). Accept either sibling directory name: a clone made after the
+# rename is "bundles", one made before it is still "plugins-pro" on disk and
+# reaches GitHub through the rename redirect. Prefer the new name.
+pro_repo="$siblings/bundles"
+if [ ! -e "$pro_repo/.git" ] && [ -e "$siblings/plugins-pro/.git" ]; then
+  pro_repo="$siblings/plugins-pro"
+fi
 
 if [ ! -d "$pro_repo/.git" ] && [ ! -f "$pro_repo/.git" ]; then
-  echo "ERROR: missing sibling repo: $pro_repo" >&2
-  echo "This generator reads pro counts from a sibling checkout of the" >&2
-  echo "private nself-org/plugins-pro repo. Clone it next to this repo." >&2
+  echo "ERROR: missing sibling repo: $siblings/bundles" >&2
+  echo "This generator reads licensed-plugin counts from a sibling checkout" >&2
+  echo "of the private nself-org/bundles repo. Clone it next to this repo." >&2
   echo "Refusing to emit free-only counts: a silently-wrong count is the" >&2
   echo "exact failure this generator exists to prevent." >&2
   exit 1
@@ -189,7 +196,7 @@ pro_report, pro_status = tier_report(pro_repo, "paid", pro_plugins)
 
 # Overlap rule. A slug in both registries is a two-tier product: the free entry
 # is its free tier, the pro entry its pro tier (e.g. cron, notify). Both sides
-# must carry "tier_pair": true — plugins-pro/scripts/check-bundles-registry-
+# must carry "tier_pair": true — bundles/scripts/check-bundles-registry-
 # consistency.py already enforces that, so an unflagged shared slug is a data
 # error rather than a second kind of overlap. One product counts once.
 #
@@ -209,7 +216,7 @@ if unflagged:
         "ERROR: slug(s) in both registries without tier_pair:true on both sides: "
         + ", ".join(unflagged)
         + "\nEvery shared slug must be declared a free/pro tier pair. Fix the"
-        " registries (see plugins-pro/scripts/check-bundles-registry-consistency.py)"
+        " registries (see bundles/scripts/check-bundles-registry-consistency.py)"
         " rather than guessing how to count it."
     )
 tier_pairs = shared
@@ -229,7 +236,7 @@ result = {
     ).stdout.strip(),
     "sources": {
         "free": {"repo": "nself-org/plugins", "sha": blob_sha(free_repo, "registry.json")},
-        "pro": {"repo": "nself-org/plugins-pro", "sha": blob_sha(pro_repo, "registry.json")},
+        "pro": {"repo": "nself-org/bundles", "sha": blob_sha(pro_repo, "registry.json")},
     },
     "free": free_report,
     "pro": pro_report,
