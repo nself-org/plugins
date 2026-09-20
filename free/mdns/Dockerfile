@@ -1,16 +1,22 @@
-FROM golang:1.25-alpine AS builder
+# Build context: this plugin's own directory (${NSELF_PLUGIN_DIR}/mdns), matching
+# the ai/claw/mux/voice plugin pattern — nself installs a plugin flat with no
+# sibling sdk/ directory. Run: docker build -f Dockerfile . (from within this dir)
+#
+# go.mod's `replace github.com/nself-org/plugin-sdk => ../../sdk` still points
+# at the plugins/ repo-root layout and cannot resolve once the build context is
+# this plugin's own directory. That's fine: vendor/ (committed, `go mod vendor`)
+# already contains github.com/nself-org/plugin-sdk, so the build below runs in
+# vendor mode (-mod=vendor) and never touches the network or the replace path.
+# Re-vendor after any go.mod/go.sum change: `go mod vendor` from this dir.
+
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
 
-# Copy SDK dependency first for caching
-COPY ../../sdk /build/sdk
-
-# Copy plugin source
-COPY go.mod go.sum ./
-RUN go mod download
-
+# Copy plugin source, including the committed vendor/ dir (context root ==
+# this plugin's own directory).
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /mdns ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /mdns ./cmd/main.go
 
 FROM alpine:3.20
 
