@@ -3,26 +3,25 @@
 # the ai/claw/mux/voice plugin pattern — nself installs a plugin flat with no
 # sibling sdk/ directory. Run: docker build -f Dockerfile . (from within this dir)
 #
-# KNOWN ISSUE (not fixed by this change): go.mod's
-#   replace github.com/nself-org/plugin-sdk => ../../sdk
-# assumes a plugins/ repo-root build context and will not resolve once the
-# context is this plugin's own directory — `go mod download` will fail until
-# the sdk source is vendored into this plugin's package at release-tarball
-# time or plugin-sdk is published as its own versioned module. Not addressed
-# here; flagged for follow-up.
+# go.mod's `replace github.com/nself-org/plugin-sdk => ../../sdk` still points
+# at the plugins/ repo-root layout and cannot resolve once the build context is
+# this plugin's own directory. That's fine: vendor/ (committed, `go mod vendor`)
+# already contains github.com/nself-org/plugin-sdk, so the build below runs in
+# vendor mode (-mod=vendor) and never touches the network or the replace path.
+# Re-vendor after any go.mod/go.sum change: `go mod vendor` from this dir.
 
 # Stage 1: builder
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
 WORKDIR /build
 
-# Copy plugin source (context root == this plugin's own directory).
+# Copy plugin source, including the committed vendor/ dir (context root ==
+# this plugin's own directory).
 COPY . .
 
-RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /nself-push ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /nself-push ./cmd/main.go
 
 # Stage 2: minimal runtime
 FROM alpine:3.20
