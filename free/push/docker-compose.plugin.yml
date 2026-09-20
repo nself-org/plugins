@@ -7,8 +7,8 @@
 services:
   plugin-push:
     build:
-      context: ${NSELF_PLUGIN_DIR}/../..
-      dockerfile: free/push/Dockerfile
+      context: ${NSELF_PLUGIN_DIR}/push
+      dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_plugin_push
     restart: unless-stopped
     ports:
