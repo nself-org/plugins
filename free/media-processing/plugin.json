@@ -1,6 +1,6 @@
 {
   "name": "media-processing",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "api_version": "1.0.0",
   "description": "FFmpeg-based media encoding and processing with HLS streaming support",
   "author": "nself",

@@ -1,6 +1,6 @@
 {
   "name": "dlq",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Manage dead-letter queues for nSelf plugins: re-enqueue rows that failed processing back to the work queue, with safe row limits and dry-run preview.",
   "author": "nself",
   "license": "MIT",
