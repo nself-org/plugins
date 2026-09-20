@@ -1,6 +1,6 @@
 {
   "name": "claw-cli",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "CLI client for the nClaw AI assistant: prompt, chat, pairing, keys, memories, topics, sessions, MCP server, OpenAI-compatible proxy, and schema migrations.",
   "author": "nself",
   "license": "MIT",

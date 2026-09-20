@@ -1,6 +1,6 @@
 {
   "name": "monitor",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Monitoring stack management: upgrade the bundled Grafana dashboards.",
   "author": "nself",
   "license": "MIT",

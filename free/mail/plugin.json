@@ -1,6 +1,6 @@
 {
   "name": "mail",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Send transactional and broadcast email through the nSelf stack: mux + Postmark pipeline via ping_api, template management, and DKIM verification.",
   "author": "nself",
   "license": "MIT",
