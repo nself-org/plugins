@@ -1,20 +1,26 @@
 # nself-post (Go) — multi-stage build
-# Build context: paid/post/ directory
+#
+# Build context: this plugin's own directory (${NSELF_PLUGIN_DIR}/post), matching
+# the ai/claw/mux/voice plugin pattern — nself installs a plugin flat with no
+# sibling shared-utils/ directory.
+#
+# go.mod's `replace github.com/nself-org/plugins/free/shared-utils => ../shared-utils`
+# cannot resolve once the build context is this plugin's own directory (the old
+# `go mod download` step here always failed once that replace target left the
+# build context). That's fine: vendor/ (committed, `go mod vendor`) already
+# contains github.com/nself-org/plugins/free/shared-utils, so the build below
+# runs in vendor mode (-mod=vendor) and never touches the network or the
+# replace path. Re-vendor after any go.mod/go.sum change: `go mod vendor` from
+# this dir.
 
 # Stage 1: builder
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache ca-certificates git
 
 WORKDIR /build
-
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY cmd/ cmd/
-COPY internal/ internal/
-
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nself-post ./cmd/
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -trimpath -ldflags="-s -w" -o /nself-post ./cmd/
 
 # Stage 2: runtime
 FROM alpine:3.19
