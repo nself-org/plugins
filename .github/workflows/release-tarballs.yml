@@ -316,97 +316,19 @@ jobs:
           echo "uploaded_count=${#to_upload[@]}" >> "$GITHUB_OUTPUT"
           echo "Upload complete"
 
-      # Only backfill when THIS run actually published something. When every
-      # asset is already on the release (the tag-push run that follows
-      # publishing a draft, for instance) the bytes of record are the ones
-      # already there, and a fresh local build is not guaranteed to reproduce
-      # them. Recomputing from dist/ would overwrite verified checksums with
-      # unverified ones. scripts/verify-published-checksums.sh is the tool that
-      # writes checksums for an already-populated release; it reads the
-      # published bytes rather than a rebuild.
-      - name: Backfill checksums in registry.json
-        if: steps.upload.outputs.uploaded_count != '0'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          VERSION="${TAG#v}"
-          REPO="${{ github.repository }}"
-
-          before_count="$(jq '.plugins | length' registry.json)"
-
-          # dist/ holds TWO kinds of tarball: the source tarball
-          # <name>-<version>.tar.gz, and for cli plugins five platform tarballs
-          # <name>-<version>-<platform>.tar.gz. They need different registry
-          # fields, and telling them apart matters.
-          #
-          # This loop used to derive the plugin name as "${tarball_name%-${VERSION}.tar.gz}".
-          # That suffix does not match a platform tarball (which ends
-          # "-linux-amd64.tar.gz"), so the substitution was a no-op and
-          # plugin_name came out as the whole filename. jq's `.plugins[$name] = ...`
-          # then CREATED that key. One run on v1.2.1 grew registry.json from 129
-          # entries to 289 — 160 junk entries such as
-          # "ai-cli-1.2.1-darwin-amd64.tar.gz", each with a checksum and no
-          # version. The CLI resolves installs from this file, so that is a
-          # corrupt registry, and it was committed and pushed automatically.
-          #
-          # Now: strip at the FIRST "-<version>", classify by what follows, and
-          # refuse to write a key that does not already exist, so a naming change
-          # fails the release loudly instead of silently inventing entries.
-          for checksum_file in dist/*.sha256; do
-            tarball_name="$(basename "$checksum_file" .sha256)"
-            sha256="$(cut -d' ' -f1 "$checksum_file")"
-            tarball_url="https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}"
-
-            stem="${tarball_name%.tar.gz}"        # <name>-<version>[-<platform>]
-            plugin_name="${stem%%-${VERSION}*}"   # <name>
-            suffix="${stem#*-${VERSION}}"         # "" (source) or "-<platform>"
-
-            if ! jq -e --arg name "$plugin_name" '.plugins | has($name)' registry.json >/dev/null; then
-              echo "::error::$tarball_name resolved to plugin '$plugin_name', which is not in registry.json."
-              echo "::error::Refusing to create a new registry entry from a tarball filename."
-              exit 1
-            fi
-
-            if [ -z "$suffix" ]; then
-              # Source tarball — the artifact the flat checksum attests to.
-              jq --arg name "$plugin_name" \
-                 --arg sha "sha256:${sha256}" \
-                 --arg url "$tarball_url" \
-                 --arg tag "$TAG" \
-                 '(.plugins[$name].checksums.sha256) = $sha |
-                  (.plugins[$name].tarballUrl) = $url |
-                  (.plugins[$name].releaseTag) = $tag' \
-                 registry.json > registry.tmp.json && mv registry.tmp.json registry.json
-            else
-              # Platform tarball — belongs under checksums.platforms.<platform>.
-              platform="${suffix#-}"
-              jq --arg name "$plugin_name" \
-                 --arg platform "$platform" \
-                 --arg sha "sha256:${sha256}" \
-                 '(.plugins[$name].checksums.platforms[$platform]) = $sha' \
-                 registry.json > registry.tmp.json && mv registry.tmp.json registry.json
-            fi
-          done
-
-          # The entry count must not change. Backfilling checksums never adds or
-          # removes a plugin; if it did, something derived a name wrongly again.
-          after_count="$(jq '.plugins | length' registry.json)"
-          if [ "$after_count" != "$before_count" ]; then
-            echo "::error::registry.json entry count changed during checksum backfill: ${before_count} -> ${after_count}"
-            exit 1
-          fi
-
-          echo "registry.json updated ($after_count entries, unchanged)"
-
-      - name: Commit updated registry.json
-        if: steps.upload.outputs.uploaded_count != '0'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add registry.json
-          git diff --staged --quiet || git commit -m "chore: backfill tarball checksums in registry.json for ${{ steps.tag.outputs.tag }}"
-          git push || true
+      # This workflow builds and uploads release ASSETS only. It must never
+      # write to the repository. registry.json checksums are written by
+      # exactly one tool, run against the PUBLISHED release bytes:
+      #   scripts/verify-published-checksums.sh --write <tag>
+      # Two prior incidents came from this workflow computing and pushing its
+      # own checksums instead: a naming-derivation bug on v1.2.1 grew
+      # registry.json from 129 to 289 entries (junk keys like
+      # "ai-cli-1.2.1-darwin-amd64.tar.gz"), and on v1.2.2 (runs 35541157880 /
+      # 35541439580) this step pushed commit 22f34fb to chore/release-1.2.2
+      # with a wrong "sha256:"-prefixed format and, for warehouse, watchdog,
+      # web3, webhooks and workflows, hashes that did not match the published
+      # bytes at all. Do not re-add a backfill/commit/push step here — run the
+      # verify script manually (or from the release-publish flow) instead.
 
       - name: Verify GitHub upload
         env:
