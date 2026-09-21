@@ -1,6 +1,6 @@
 {
   "name": "content-acquisition",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
   "author": "nself",
   "license": "MIT",

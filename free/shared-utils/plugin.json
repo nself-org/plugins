@@ -1,6 +1,6 @@
 {
   "name": "shared-utils",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Shared Go utilities (request-ID tracing middleware, HTTP client propagation, server lifecycle helpers) used internally by multiple free nself plugins. Not installable directly.",
   "author": "nself",
   "license": "MIT",
