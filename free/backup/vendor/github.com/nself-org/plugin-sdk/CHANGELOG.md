@@ -7,6 +7,12 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **`server` package (`server.New`)**: `GET /health` now serves as an alias of `GET /healthz` (same handler, same JSON body). The nSelf CLI's docker-compose healthcheck convention (`internal/compose/custom_services.go`) probes `/health`, and every plugin's `docker-compose.plugin.yml` + `plugin.json` documents `/health` as the health endpoint — but `server.New` only ever registered `/healthz` and `/readyz`, so any consumer would 404 on the container healthcheck.
+- **`sdk.NewServer` (root package shim, `shims.go`)**: this is the constructor most plugins actually call (`sdk.NewServer(port)`, not `server.New(Options)`), and it previously returned a bare `chi.Router` with **no routes at all** — not `/healthz`, not `/health`, not `/readyz`. Every plugin built on it (`notify`, `cron`, and 19 others — `backup`, `content-acquisition`, `content-progress`, `donorbox`, `feature-flags`, `github-runner`, `invitations`, `link-preview`, `mdns`, `mlflow`, `notifications`, `paypal`, `push`, `search`, `shopify`, `subtitle-manager`, `tokens`, `torrent-manager`, `vpn`, `webhooks`) shipped with no health route whatsoever, so their container healthchecks 404'd and `docker compose ps` reported them permanently unhealthy even though the service was live. `NewServer` now pre-registers `/healthz`, `/health`, and `/readyz` against a shared liveness handler (callers may still override any of them on the returned `Router()`). Root-caused via the nself CLI golden-path E2E, 2026-09-21 (defect first observed on `notify`/`cron`).
+
 ## [0.1.0] - 2026-04-23
 
 ### Added

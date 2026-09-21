@@ -22,17 +22,19 @@ type HealthChecker interface {
 
 // Options configures the default server.
 type Options struct {
-	Plugin    string
-	Version   string
-	Metrics   *metrics.Registry // optional; if nil, a new one is created
-	Ready     HealthChecker     // optional; used by /readyz
-	Timeout   time.Duration     // request timeout; default 30s
-	Routes    func(r chi.Router, m *metrics.Registry)
+	Plugin  string
+	Version string
+	Metrics *metrics.Registry // optional; if nil, a new one is created
+	Ready   HealthChecker     // optional; used by /readyz
+	Timeout time.Duration     // request timeout; default 30s
+	Routes  func(r chi.Router, m *metrics.Registry)
 }
 
 // New returns a *chi.Mux with the default nSelf plugin stack mounted:
 //
 //	GET /healthz  - liveness (always 200 once the server is up)
+//	GET /health   - liveness alias (same handler as /healthz; the nSelf CLI's
+//	                docker-compose healthcheck convention probes /health)
 //	GET /readyz   - readiness (delegates to Options.Ready)
 //	GET /metrics  - Prometheus metrics
 //	GET /version  - plugin version info
@@ -52,13 +54,20 @@ func New(opts Options) *chi.Mux {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Timeout(opts.Timeout))
 
-	r.Get("/healthz", func(w http.ResponseWriter, req *http.Request) {
+	liveness := func(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":  "ok",
 			"plugin":  opts.Plugin,
 			"version": opts.Version,
 		})
-	})
+	}
+	r.Get("/healthz", liveness)
+	// /health is an alias of /healthz: the nSelf CLI generates docker-compose
+	// healthchecks against GET /health by convention (internal/compose/custom_services.go),
+	// and every plugin's docker-compose.plugin.yml probes it. Without this
+	// alias the container healthcheck 404s and the service reports unhealthy
+	// even though it is live (nself CLI golden-path E2E, 2026-09-21).
+	r.Get("/health", liveness)
 
 	r.Get("/readyz", func(w http.ResponseWriter, req *http.Request) {
 		ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)

@@ -49,6 +49,24 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
+// TestNewServer_DefaultHealthRoutes verifies /healthz, /health, and /readyz
+// all respond 200 on a bare sdk.NewServer(port) with no routes registered.
+// Regression guard: plugins built on this constructor (notify, cron, and
+// 19 others) previously shipped with no health route at all, so the
+// container healthcheck 404'd and reported them permanently unhealthy
+// (nself CLI golden-path E2E, 2026-09-21).
+func TestNewServer_DefaultHealthRoutes(t *testing.T) {
+	s := NewServer(9999)
+	for _, path := range []string{"/healthz", "/health", "/readyz"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, path, nil)
+		s.Router().ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", path, w.Code)
+		}
+	}
+}
+
 func TestRecovery_Passthrough(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
