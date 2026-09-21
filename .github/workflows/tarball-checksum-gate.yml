@@ -108,6 +108,22 @@ jobs:
             expected_checksum="$(printf '%s' "$entry" | jq -r '.checksum // empty')"
             expected_nested="$(printf '%s' "$entry" | jq -r '.checksums.sha256 // empty')"
 
+            # Validate checksum format before comparing: must be 64 lowercase hex chars
+            if [ -n "$expected_checksum" ]; then
+              if ! [[ "$expected_checksum" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "INVALID $name: registry .checksum must be 64 lowercase hex chars, got: ${expected_checksum:0:12}..."
+                FAIL=1
+                continue
+              fi
+            fi
+            if [ -n "$expected_nested" ]; then
+              if ! [[ "$expected_nested" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "INVALID $name: registry .checksums.sha256 must be 64 lowercase hex chars, got: ${expected_nested:0:12}..."
+                FAIL=1
+                continue
+              fi
+            fi
+
             if [ -z "$expected_checksum" ] && [ -z "$expected_nested" ]; then
               # e.g. shared-utils: installable:false, no tarball/download_url,
               # nothing for a checksum to attest to.
@@ -161,10 +177,8 @@ jobs:
               fi
             fi
 
-            # checksums.sha256 may carry a "sha256:" prefix; strip before comparing.
             if [ -n "$expected_nested" ]; then
-              nested_hex="${expected_nested#sha256:}"
-              lhs="$(printf '%s' "$nested_hex" | tr '[:upper:]' '[:lower:]')"
+              lhs="$(printf '%s' "$expected_nested" | tr '[:upper:]' '[:lower:]')"
               rhs="$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')"
               if [ "$lhs" != "$rhs" ]; then
                 echo "MISMATCH $name: registry .checksums.sha256=$expected_nested  published=$actual"
