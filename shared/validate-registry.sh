@@ -877,8 +877,6 @@ fi
 #   - a stable plugin missing a non-empty flat checksum is an ERROR
 #   - a non-empty checksum must be 64 lowercase hex chars
 #   - when both checksum and checksums.sha256 are non-empty they must agree
-#     (a "sha256:" prefix on the legacy nested field is tolerated/stripped
-#     before comparing, since some historical writes included it)
 # =============================================================================
 section "CHECK 15 — checksum integrity (flat field required for status=stable)"
 CHECKSUM_VIOLATIONS=0
@@ -933,7 +931,12 @@ while IFS="$US" read -r name status checksum checksums_sha; do
         CHECKSUM_VIOLATIONS=$((CHECKSUM_VIOLATIONS + 1))
     fi
     if [ -n "$checksum" ] && [ -n "$checksums_sha" ]; then
-        checksums_sha_norm="${checksums_sha#sha256:}"
+        if ! _is_valid_sha256 "$checksums_sha"; then
+            err "CHECK-15" "$name" "checksums.sha256 must be 64 lowercase hex chars, got: ${checksums_sha:0:12}..."
+            CHECKSUM_VIOLATIONS=$((CHECKSUM_VIOLATIONS + 1))
+            continue
+        fi
+        checksums_sha_norm="$checksums_sha"
         checksum_lc="$(printf '%s' "$checksum" | tr 'A-F' 'a-f')"
         checksums_sha_lc="$(printf '%s' "$checksums_sha_norm" | tr 'A-F' 'a-f')"
         if [ "$checksum_lc" != "$checksums_sha_lc" ]; then
