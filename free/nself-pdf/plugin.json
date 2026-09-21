@@ -3,7 +3,7 @@
   "author": "nSelf Team",
   "minNselfVersion": "1.0.0",
   "display_name": "PDF Generation",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "language": "go",
   "bundle": "shared",
   "visibility": "public",

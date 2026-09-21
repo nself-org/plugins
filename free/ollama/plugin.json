@@ -1,6 +1,6 @@
 {
   "name": "ollama",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "api_version": "1.0.0",
   "description": "One-click offline LLM stack. Stands up an Ollama Docker container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install. GPU passthrough is optional and localhost-only (port 11434 binds to 127.0.0.1 — never exposed externally).",
   "author": "nself",

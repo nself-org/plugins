@@ -1,6 +1,6 @@
 {
   "name": "shopify",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Shopify store, orders, and product synchronization",
   "author": "nself",
   "language": "go",

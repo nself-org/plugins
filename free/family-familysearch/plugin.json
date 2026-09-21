@@ -1,6 +1,6 @@
 {
   "name": "family-familysearch",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "api_version": "1.0.0",
   "description": "FamilySearch → nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
   "author": "nself",
