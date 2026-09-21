@@ -1,6 +1,6 @@
 {
   "name": "nself-cloud",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "api_version": "1.0.0",
   "description": "ɳCloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.",
   "author": "nSelf Team",

@@ -1,6 +1,6 @@
 {
   "name": "donorbox",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Donorbox donation data sync with webhook handling",
   "author": "nself",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "rom-discovery",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "api_version": "1.0.0",
   "description": "ROM metadata database, search, discovery, automated download orchestration, and multi-source scraping for nself-tv",
   "author": "nself",
