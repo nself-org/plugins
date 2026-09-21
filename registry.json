@@ -1,20 +1,20 @@
 {
   "schema_version": "2.0.0",
-  "generated_at": "2026-09-20T22:14:53.000000Z",
+  "generated_at": "2026-09-21T19:58:24.511743Z",
   "plugins_count": 129,
-  "last_updated": "2026-09-20",
+  "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
   "note": "nSelf Free Plugin Registry — 60 MIT-licensed plugins.",
   "plugins": {
     "ai-cli": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "AI operations for nSelf: chat, local Ollama model management, and Gemini API key pool provisioning and rotation.",
       "category": "automation",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ai-cli-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ai-cli-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ai-cli/tarball",
       "requires_license": false,
       "language": "go",
@@ -38,7 +38,7 @@
         "pluginType": "cli",
         "binaryName": "nself-ai"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ce1734affe3317a303cada20d033d6eaa676b7c2ad8a2105f06515bedac9a256",
       "checksums": {
         "sha256": "ce1734affe3317a303cada20d033d6eaa676b7c2ad8a2105f06515bedac9a256",
@@ -50,16 +50,16 @@
           "windows-amd64": "aa5a933b3a811a15e65302cc0e57e8dea3ec46fc816971af602af6d5598821bf"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ai-cli-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ai-cli-1.2.3.tar.gz"
     },
     "ai-studio": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Google AI Studio integration for local nSelf instances via a secure Cloudflare Tunnel.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ai-studio-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ai-studio-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ai-studio/tarball",
       "requires_license": false,
       "language": "go",
@@ -81,7 +81,7 @@
         "pluginType": "cli",
         "binaryName": "nself-ai-studio"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4b60faff2e1f70905f7cfb2f1f3445e43df27c4360d31d5490bca5da3e2893d5",
       "checksums": {
         "sha256": "4b60faff2e1f70905f7cfb2f1f3445e43df27c4360d31d5490bca5da3e2893d5",
@@ -93,16 +93,16 @@
           "windows-amd64": "aac5af939dc1206b08fd6239fe4c2bdbf58c0f22b003d0250235358c7b1699f4"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ai-studio-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ai-studio-1.2.3.tar.gz"
     },
     "alerts": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage Prometheus alert rules and Alertmanager silences: list, silence, and send synthetic test alerts.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/alerts-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/alerts-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/alerts/tarball",
       "requires_license": false,
       "language": "go",
@@ -125,7 +125,7 @@
         "pluginType": "cli",
         "binaryName": "nself-alerts"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "9a1248d9e68513d3beeb90eb2d58d2e28bdfa8147c60bdc2eb6e340e8939c4ec",
       "checksums": {
         "sha256": "9a1248d9e68513d3beeb90eb2d58d2e28bdfa8147c60bdc2eb6e340e8939c4ec",
@@ -137,16 +137,16 @@
           "windows-amd64": "ed3719c79607081c600c190da29ad11cf7deb64ccba319af05349fa045626b1a"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/alerts-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/alerts-1.2.3.tar.gz"
     },
     "api": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Inspect the nSelf plugin API surface: endpoint probes, deprecation calendar, and the API changelog.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/api-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/api-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/api/tarball",
       "requires_license": false,
       "language": "go",
@@ -168,7 +168,7 @@
         "pluginType": "cli",
         "binaryName": "nself-api"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "c18b6d68ca01709c2dd58dfeae48530013184b227712d51efd546c28ad67e7a3",
       "checksums": {
         "sha256": "c18b6d68ca01709c2dd58dfeae48530013184b227712d51efd546c28ad67e7a3",
@@ -180,16 +180,16 @@
           "windows-amd64": "341493491277d26841fc338f80cf55ad0f2b0c7bfb2c4e4be10b356cb2300065"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/api-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/api-1.2.3.tar.gz"
     },
     "audit": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Ecosystem documentation audit: banned words, dead links, and missing anchors across READMEs, wiki, docs, SPORT, PPI, and PRI.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/audit-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/audit-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/audit/tarball",
       "requires_license": false,
       "language": "go",
@@ -211,7 +211,7 @@
         "pluginType": "cli",
         "binaryName": "nself-audit"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "f5e2370ffba20329ecb207a6f7953fcb385139ebec3255448b0d678dd36b258d",
       "checksums": {
         "sha256": "f5e2370ffba20329ecb207a6f7953fcb385139ebec3255448b0d678dd36b258d",
@@ -223,16 +223,16 @@
           "windows-amd64": "7b44999a712af12c268a5fde29d5d042c718a4823d214f31f71541176d4bff9d"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/audit-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/audit-1.2.3.tar.gz"
     },
     "audit-log": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/audit-log-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/audit-log-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/audit-log/tarball",
       "requires_license": false,
       "language": "go",
@@ -255,21 +255,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "0225ff33f06dc9d5c760f99c3d1ff24d9ab8c9ee9edc7361f43bece6586ca982",
       "checksums": {
         "sha256": "0225ff33f06dc9d5c760f99c3d1ff24d9ab8c9ee9edc7361f43bece6586ca982"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/audit-log-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/audit-log-1.2.3.tar.gz"
     },
     "backup": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "PostgreSQL backup and restore automation with scheduling",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/backup-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/backup-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/backup/tarball",
       "requires_license": false,
       "language": "go",
@@ -293,21 +293,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "34d6634244eca0641e266ffbb2e201f02f858344b7baed6bf08f2f4f091e25c6",
       "checksums": {
         "sha256": "34d6634244eca0641e266ffbb2e201f02f858344b7baed6bf08f2f4f091e25c6"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/backup-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/backup-1.2.3.tar.gz"
     },
     "ci": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ci-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ci-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ci/tarball",
       "requires_license": false,
       "language": "go",
@@ -331,21 +331,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4eee8f3dd5a4e163d97857edc63c5b2dd8172548499fe326df7046472a927156",
       "checksums": {
         "sha256": "4eee8f3dd5a4e163d97857edc63c5b2dd8172548499fe326df7046472a927156"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ci-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ci-1.2.3.tar.gz"
     },
     "claw-cli": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "CLI client for the nClaw AI assistant: prompt, chat, pairing, keys, memories, topics, sessions, MCP server, OpenAI-compatible proxy, and schema migrations.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/claw-cli-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/claw-cli-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/claw-cli/tarball",
       "requires_license": false,
       "language": "go",
@@ -368,7 +368,7 @@
         "pluginType": "cli",
         "binaryName": "nself-claw"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "9ea626afc79bb9cc8576e52c47aec1d0ca535ffb9ce1be478095ae959119dfe4",
       "checksums": {
         "sha256": "9ea626afc79bb9cc8576e52c47aec1d0ca535ffb9ce1be478095ae959119dfe4",
@@ -380,16 +380,16 @@
           "windows-amd64": "ca64c8159434d37110c406ab8b5f30694952be54ec5b39d987418c7bb5efa627"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/claw-cli-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/claw-cli-1.2.3.tar.gz"
     },
     "content-acquisition": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/content-acquisition-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/content-acquisition-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/content-acquisition/tarball",
       "requires_license": false,
       "language": "go",
@@ -437,21 +437,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "2a90d2206b408fa2be30cc9929ad77a7c456bc284fff0c40693df72045aed756",
       "checksums": {
         "sha256": "2a90d2206b408fa2be30cc9929ad77a7c456bc284fff0c40693df72045aed756"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/content-acquisition-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/content-acquisition-1.2.3.tar.gz"
     },
     "content-progress": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Track video, audio, and content playback progress with continue watching, watchlists, and favorites",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/content-progress-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/content-progress-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/content-progress/tarball",
       "requires_license": false,
       "language": "go",
@@ -483,17 +483,17 @@
       "checksums": {
         "sha256": "f8c305faeb68a60b4207ad1348dab19114480ae42324f6fbde435ec27aee2f61"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/content-progress-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/content-progress-1.2.3.tar.gz"
     },
     "costs": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Show estimated per-install operational costs: Hetzner VPS, Cloudflare, Vercel, Stripe fees, and installed paid plugin licenses.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/costs-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/costs-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/costs/tarball",
       "requires_license": false,
       "language": "go",
@@ -514,7 +514,7 @@
         "pluginType": "cli",
         "binaryName": "nself-costs"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "59af6fca2162fd564de6629fee3bd57bafaeb59f60782d3c9d74e1034d328161",
       "checksums": {
         "sha256": "59af6fca2162fd564de6629fee3bd57bafaeb59f60782d3c9d74e1034d328161",
@@ -526,16 +526,16 @@
           "windows-amd64": "d86a17725f8f749e579b7d0cdf96558e6d708b00d6279d9f492062c0ad15ba51"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/costs-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/costs-1.2.3.tar.gz"
     },
     "cron": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
       "category": "automation",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cron-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cron-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cron/tarball",
       "requires_license": false,
       "tier_pair": true,
@@ -564,17 +564,17 @@
       "checksums": {
         "sha256": "698ed1a4cc898f4d7b0a7aa5dc1dfae17df90eab09e72ca80e36f7b5b827963a"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cron-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cron-1.2.3.tar.gz"
     },
     "dlq": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage dead-letter queues for nSelf plugins: re-enqueue rows that failed processing back to the work queue, with safe row limits and dry-run preview.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/dlq-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/dlq-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/dlq/tarball",
       "requires_license": false,
       "language": "go",
@@ -597,7 +597,7 @@
         "pluginType": "cli",
         "binaryName": "nself-dlq"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "3ec9b5c2d4a7bf8d04e7bd93b6f09e6b99b0ba8adab514d357312ed2026d3a2e",
       "checksums": {
         "sha256": "3ec9b5c2d4a7bf8d04e7bd93b6f09e6b99b0ba8adab514d357312ed2026d3a2e",
@@ -609,16 +609,16 @@
           "windows-amd64": "6badd29c93646002d5eb878ed649d9c3feeaf5dd6e21a89d9f0d72d4b053befc"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/dlq-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/dlq-1.2.3.tar.gz"
     },
     "dogfood": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/dogfood-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/dogfood-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/dogfood/tarball",
       "requires_license": false,
       "language": "go",
@@ -641,7 +641,7 @@
         "pluginType": "cli",
         "binaryName": "nself-dogfood"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "6e5b36f07cced6a06f20ab5e0bdcf2a3cbc4e74a89258c5c74d1b0499189932e",
       "checksums": {
         "sha256": "6e5b36f07cced6a06f20ab5e0bdcf2a3cbc4e74a89258c5c74d1b0499189932e",
@@ -653,16 +653,16 @@
           "windows-amd64": "c41906120314fc220761db5963c3e07f5884a85b3cedb466bc8458c85626afff"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/dogfood-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/dogfood-1.2.3.tar.gz"
     },
     "donorbox": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Donorbox donation data sync with webhook handling",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/donorbox-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/donorbox-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/donorbox/tarball",
       "requires_license": false,
       "language": "go",
@@ -695,17 +695,17 @@
       "checksums": {
         "sha256": "2fe2e41d8166352f5c8babc3d4480089ce271ea0008efd5c731a497279cb76dd"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/donorbox-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/donorbox-1.2.3.tar.gz"
     },
     "dr": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Disaster recovery: promote a standby, fence the old primary, run drills, and install the systemd units DR needs.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/dr-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/dr-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/dr/tarball",
       "requires_license": false,
       "language": "go",
@@ -728,7 +728,7 @@
         "pluginType": "cli",
         "binaryName": "nself-dr"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "9f74a189da49bb0ef2d1e13109a1a19eaa5731f4ca9fd30ac1f8da7b9fd3405a",
       "checksums": {
         "sha256": "9f74a189da49bb0ef2d1e13109a1a19eaa5731f4ca9fd30ac1f8da7b9fd3405a",
@@ -740,16 +740,16 @@
           "windows-amd64": "4c9561d99916cec3c818e245c576047714cb2eafa8b4d976a6abaebf8c0ff2d4"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/dr-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/dr-1.2.3.tar.gz"
     },
     "e2ee": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "End-to-end encryption key directory: X3DH prekey distribution + Kyber-1024 (ML-KEM-1024) post-quantum prekeys for nchat. Server stores PUBLIC keys only; private keys never leave the client.",
       "category": "authentication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/e2ee-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/e2ee-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/e2ee/tarball",
       "requires_license": false,
       "language": "go",
@@ -784,21 +784,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "f6cc4a979aaf7ae753a36c32909e9757769b885c9dedcaba39d7cada1c9abfa1",
       "checksums": {
         "sha256": "f6cc4a979aaf7ae753a36c32909e9757769b885c9dedcaba39d7cada1c9abfa1"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/e2ee-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/e2ee-1.2.3.tar.gz"
     },
     "family-gedcom": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
       "category": "content",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-gedcom-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-gedcom-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/family-gedcom/tarball",
       "requires_license": false,
       "language": "go",
@@ -823,21 +823,21 @@
         "runtime": "go",
         "entryPoint": "binary"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "be69ef737b92937e0a695afb6e1ec3ede6f04b4ac70f26e2daacc8416e63ddbe",
       "checksums": {
         "sha256": "be69ef737b92937e0a695afb6e1ec3ede6f04b4ac70f26e2daacc8416e63ddbe"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-gedcom-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-gedcom-1.2.3.tar.gz"
     },
     "feature-flags": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Feature flags service with targeting rules, segments, and evaluation engine",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/feature-flags-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/feature-flags-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/feature-flags/tarball",
       "requires_license": false,
       "language": "go",
@@ -861,21 +861,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "62a76c03fb9b6d6b7274afc540be2923b6a8cccc9b2c356dc3d9cf3dda6ed7a4",
       "checksums": {
         "sha256": "62a76c03fb9b6d6b7274afc540be2923b6a8cccc9b2c356dc3d9cf3dda6ed7a4"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/feature-flags-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/feature-flags-1.2.3.tar.gz"
     },
     "federation": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage GraphQL Federation: compose an Apollo Router supergraph from installed plugin subgraphs, check subgraph health, and introspect the composed schema.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/federation-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/federation-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/federation/tarball",
       "requires_license": false,
       "language": "go",
@@ -898,7 +898,7 @@
         "pluginType": "cli",
         "binaryName": "nself-federation"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "04d819922ddfb4731b4ec12b5b93df725581d00a57bbafda3af1bc08176be928",
       "checksums": {
         "sha256": "04d819922ddfb4731b4ec12b5b93df725581d00a57bbafda3af1bc08176be928",
@@ -910,16 +910,16 @@
           "windows-amd64": "9325b0ecb134d93c644f396e2e92a68dcd91aa1d3b5ac13bf1f76c626fa84aa3"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/federation-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/federation-1.2.3.tar.gz"
     },
     "flags": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage feature flags served by the feature-flags plugin: list, get, set, history, canary rollouts and kill switches.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/flags-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/flags-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/flags/tarball",
       "requires_license": false,
       "language": "go",
@@ -941,7 +941,7 @@
         "pluginType": "cli",
         "binaryName": "nself-flags"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "25233f87ee110ec6c139f70b4f4b8591ff9f6f8b1bff5d4bbbd239d19652de4c",
       "checksums": {
         "sha256": "25233f87ee110ec6c139f70b4f4b8591ff9f6f8b1bff5d4bbbd239d19652de4c",
@@ -953,16 +953,16 @@
           "windows-amd64": "4a3d9aa946fdab6f4186964e0ffc790afbce49986cc11c64cef953173943b734"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/flags-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/flags-1.2.3.tar.gz"
     },
     "forgejo": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/forgejo-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/forgejo-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/forgejo/tarball",
       "requires_license": false,
       "language": "config",
@@ -987,21 +987,21 @@
         "runtime": "docker",
         "entryPoint": "docker-compose.plugin.yml"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "f6a42a24cff42078c7a6bc45bb33c760cef81af74db584ff80d8c57c22ca3188",
       "checksums": {
         "sha256": "f6a42a24cff42078c7a6bc45bb33c760cef81af74db584ff80d8c57c22ca3188"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/forgejo-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/forgejo-1.2.3.tar.gz"
     },
     "gateway": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage the nSelf AI gateway (nself-ai-gateway, port 3761): service health, provider key vault, quota usage, and routing rules.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/gateway-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/gateway-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/gateway/tarball",
       "requires_license": false,
       "language": "go",
@@ -1023,7 +1023,7 @@
         "pluginType": "cli",
         "binaryName": "nself-gateway"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d6957a06f8cacadd8ec177c90758e1d7821da03bec870443b4079fe2c10d026b",
       "checksums": {
         "sha256": "d6957a06f8cacadd8ec177c90758e1d7821da03bec870443b4079fe2c10d026b",
@@ -1035,16 +1035,16 @@
           "windows-amd64": "e5b36c0f4b208a9e2dd4993e89d2fe2c1cd85df61ddc368eccd8d41bc2cf69b0"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/gateway-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/gateway-1.2.3.tar.gz"
     },
     "gauth": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/gauth-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/gauth-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/gauth/tarball",
       "requires_license": false,
       "language": "go",
@@ -1066,7 +1066,7 @@
         "pluginType": "cli",
         "binaryName": "nself-gauth"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "057a144396362ba00684a1a09979714cb80699925d6fc9e384258637da0c7345",
       "checksums": {
         "sha256": "057a144396362ba00684a1a09979714cb80699925d6fc9e384258637da0c7345",
@@ -1078,16 +1078,16 @@
           "windows-amd64": "2919f8039e1b8bddf930ce9984b91c2fe468cdcc7779a2353aedb253e990e670"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/gauth-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/gauth-1.2.3.tar.gz"
     },
     "gdpr": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "GDPR data portability (Art. 20) and right-to-erasure (Art. 17) tools for self-hosted nSelf instances.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/gdpr-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/gdpr-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/gdpr/tarball",
       "requires_license": false,
       "language": "go",
@@ -1111,7 +1111,7 @@
         "pluginType": "cli",
         "binaryName": "nself-gdpr"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "493ab462b0942fe5c7249d1ad3402c7ed446ac689451bed6020a26af04117366",
       "checksums": {
         "sha256": "493ab462b0942fe5c7249d1ad3402c7ed446ac689451bed6020a26af04117366",
@@ -1123,16 +1123,16 @@
           "windows-amd64": "cce3cbaf737267714d4b10132df06eb4158b838700f20f5f65321a14c0f76281"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/gdpr-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/gdpr-1.2.3.tar.gz"
     },
     "github": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "GitHub repository, issue, and workflow integration",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/github-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/github-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/github/tarball",
       "requires_license": false,
       "language": "go",
@@ -1178,21 +1178,21 @@
         "runtime": "go",
         "entryPoint": "nself-github"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a93e390227995dfa8a41552186c3249ec74b7b4e4dcd1c793b816251d150535e",
       "checksums": {
         "sha256": "a93e390227995dfa8a41552186c3249ec74b7b4e4dcd1c793b816251d150535e"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/github-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/github-1.2.3.tar.gz"
     },
     "github-runner": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/github-runner-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/github-runner-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/github-runner/tarball",
       "requires_license": false,
       "language": "go",
@@ -1215,21 +1215,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "10c64827763fad52c57c25656459e271666a9c755d60cfff95b9d2facf999ed0",
       "checksums": {
         "sha256": "10c64827763fad52c57c25656459e271666a9c755d60cfff95b9d2facf999ed0"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/github-runner-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/github-runner-1.2.3.tar.gz"
     },
     "infra": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/infra-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/infra-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/infra/tarball",
       "requires_license": false,
       "language": "go",
@@ -1255,7 +1255,7 @@
         "pluginType": "cli",
         "binaryName": "nself-infra"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "1cf57b0a3f22b23a21905458829e0f9407832beac94e5efd7797692de375b623",
       "checksums": {
         "sha256": "1cf57b0a3f22b23a21905458829e0f9407832beac94e5efd7797692de375b623",
@@ -1267,16 +1267,16 @@
           "windows-amd64": "001676cfed54dd315c432bc86419efed8a416ef2de3213bdd957d7c79d3ba573"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/infra-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/infra-1.2.3.tar.gz"
     },
     "invitations": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Invitation management system with email/SMS delivery and tracking",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/invitations-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/invitations-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/invitations/tarball",
       "requires_license": false,
       "language": "go",
@@ -1300,21 +1300,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d1182ebaffae6e2844780a1b53ea333ca7eea9e314a8a8a062bd855ff0e58614",
       "checksums": {
         "sha256": "d1182ebaffae6e2844780a1b53ea333ca7eea9e314a8a8a062bd855ff0e58614"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/invitations-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/invitations-1.2.3.tar.gz"
     },
     "jobs": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "PostgreSQL-backed background job queue with priorities, scheduling, retries, and REST API. Simplified Go implementation using database polling instead of Redis/BullMQ.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/jobs-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/jobs-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/jobs/tarball",
       "requires_license": false,
       "language": "go",
@@ -1339,21 +1339,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4d47f1a510eea6e68e469cbe80258ac76ac72a1fa0f9653806104a9ae7c38fcd",
       "checksums": {
         "sha256": "4d47f1a510eea6e68e469cbe80258ac76ac72a1fa0f9653806104a9ae7c38fcd"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/jobs-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/jobs-1.2.3.tar.gz"
     },
     "k8s": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/k8s-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/k8s-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/k8s/tarball",
       "requires_license": false,
       "language": "go",
@@ -1376,7 +1376,7 @@
         "pluginType": "cli",
         "binaryName": "nself-k8s"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "3552e26039c01fee3f0b0ad494c88d96d797ecc9e8e7b7a0ac155a692ef03ff9",
       "checksums": {
         "sha256": "3552e26039c01fee3f0b0ad494c88d96d797ecc9e8e7b7a0ac155a692ef03ff9",
@@ -1388,16 +1388,16 @@
           "windows-amd64": "f5a922b796a713384fc758903b387e8b147f607516aba1fc7cd35c9bfc5ef924"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/k8s-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/k8s-1.2.3.tar.gz"
     },
     "link-preview": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "URL metadata extraction with Open Graph, Twitter Cards, and caching",
       "category": "content",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/link-preview-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/link-preview-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/link-preview/tarball",
       "requires_license": false,
       "language": "go",
@@ -1421,21 +1421,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "286cfb12caabf3b69922041de756f60ef7d3ad9e6f17be9f9342d0b784ac058c",
       "checksums": {
         "sha256": "286cfb12caabf3b69922041de756f60ef7d3ad9e6f17be9f9342d0b784ac058c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/link-preview-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/link-preview-1.2.3.tar.gz"
     },
     "maintenance": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Maintenance utilities: disk cleanup, log rotation and the maintenance scheduler.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/maintenance-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/maintenance-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/maintenance/tarball",
       "requires_license": false,
       "language": "go",
@@ -1468,17 +1468,17 @@
           "windows-amd64": "7490c5d64032d5a554997253403383ee85f44ccd1fad89c5c5ede0b3791476d8"
         }
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/maintenance-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/maintenance-1.2.3.tar.gz"
     },
     "mdns": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "mDNS/Bonjour service discovery for zero-config LAN advertising",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/mdns-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/mdns-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/mdns/tarball",
       "requires_license": false,
       "language": "go",
@@ -1502,21 +1502,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "5feacb2071d145c073c51ecbed2937ab74024a380d8b025fa1a33aef9d45bc6a",
       "checksums": {
         "sha256": "5feacb2071d145c073c51ecbed2937ab74024a380d8b025fa1a33aef9d45bc6a"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/mdns-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/mdns-1.2.3.tar.gz"
     },
     "mlflow": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "MLflow experiment tracking and model registry",
       "category": "data",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/mlflow-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/mlflow-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/mlflow/tarball",
       "requires_license": false,
       "language": "go",
@@ -1538,21 +1538,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ef071bdab7d80a2179beb2016ba82e1540494895b12c2f4570bb178bcaf6f368",
       "checksums": {
         "sha256": "ef071bdab7d80a2179beb2016ba82e1540494895b12c2f4570bb178bcaf6f368"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/mlflow-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/mlflow-1.2.3.tar.gz"
     },
     "model": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage local AI models via Ollama: list, pull, remove, update, benchmark, plus the legacy ollama command tree.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/model-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/model-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/model/tarball",
       "requires_license": false,
       "language": "go",
@@ -1574,7 +1574,7 @@
         "pluginType": "cli",
         "binaryName": "nself-model"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d1ed369c8ae4190bd640b2fe324a6309112fd329699af5cc1251bf24c912d8fa",
       "checksums": {
         "sha256": "d1ed369c8ae4190bd640b2fe324a6309112fd329699af5cc1251bf24c912d8fa",
@@ -1586,16 +1586,16 @@
           "windows-amd64": "53d360b1a69239ce89cb92d8765ef58d3124a6e14db09ce7351a75654680565b"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/model-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/model-1.2.3.tar.gz"
     },
     "monitor": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Monitoring stack management: upgrade the bundled Grafana dashboards.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/monitor-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/monitor-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/monitor/tarball",
       "requires_license": false,
       "language": "go",
@@ -1618,7 +1618,7 @@
         "pluginType": "cli",
         "binaryName": "nself-monitor"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4065b696f3530556525c99ed08fbd59c038a493e0d0d33c248ec7a50ac1519ec",
       "checksums": {
         "sha256": "4065b696f3530556525c99ed08fbd59c038a493e0d0d33c248ec7a50ac1519ec",
@@ -1630,16 +1630,16 @@
           "windows-amd64": "f0a1d05ccb05b2b70ae072fd3b035c6561abed3b5bac653230aad2a76935a461"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/monitor-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/monitor-1.2.3.tar.gz"
     },
     "monitoring": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/monitoring-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/monitoring-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/monitoring/tarball",
       "requires_license": false,
       "language": "config",
@@ -1666,21 +1666,21 @@
         "runtime": "compose",
         "entryPoint": "docker-compose.plugin.yml"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "35a4928ec5c7a10b1a256b8f1497f6d663621665d13d80b8a193b1d58941408c",
       "checksums": {
         "sha256": "35a4928ec5c7a10b1a256b8f1497f6d663621665d13d80b8a193b1d58941408c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/monitoring-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/monitoring-1.2.3.tar.gz"
     },
     "notifications": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-channel notification service. Channels: Email (SMTP), Push (placeholder), SMS (placeholder). HTTP endpoints for sending notifications, managing templates, and user notification preferences.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/notifications-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/notifications-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notifications/tarball",
       "requires_license": false,
       "language": "go",
@@ -1710,17 +1710,17 @@
       "checksums": {
         "sha256": "514a8f0e15e1dede270652c04d6490f888150c70b18679e2a8aa4a377ce854ff"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/notifications-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/notifications-1.2.3.tar.gz"
     },
     "notify": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/notify-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/notify-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/notify/tarball",
       "requires_license": false,
       "tier_pair": true,
@@ -1748,17 +1748,17 @@
       "checksums": {
         "sha256": "1423ac47e2395b3238983b5f74ee71f64d7f609f117db2c27a26462e42f2ba5e"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/notify-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/notify-1.2.3.tar.gz"
     },
     "ollama": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "One-click offline LLM stack. Stands up an Ollama container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install.",
       "category": "integrations",
       "tier": "free",
       "license": "Source-Available",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ollama-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ollama-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ollama/tarball",
       "requires_license": false,
       "language": "go",
@@ -1777,17 +1777,17 @@
       "checksums": {
         "sha256": "a1cf6f550b32aefed8cf250f40a22da54245b940850bf90c26e8e86eefdd1998"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ollama-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ollama-1.2.3.tar.gz"
     },
     "paypal": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "PayPal payment data sync with webhook handling",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/paypal-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/paypal-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/paypal/tarball",
       "requires_license": false,
       "language": "go",
@@ -1823,21 +1823,21 @@
         "runtime": "go",
         "entryPoint": "nself-paypal"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "b4ba3192195572dd2f84979bc5b7b048903f9a5769ac8920c736f17e5fd19b3f",
       "checksums": {
         "sha256": "b4ba3192195572dd2f84979bc5b7b048903f9a5769ac8920c736f17e5fd19b3f"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/paypal-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/paypal-1.2.3.tar.gz"
     },
     "push": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "APNs + FCM push notification relay. Hasura event-trigger fan-out, delivery state tracking, exponential backoff retry. Handles iOS (Apple Push Notification service) and Android (Firebase Cloud Messaging v1 API).",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/push-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/push-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/push/tarball",
       "requires_license": false,
       "language": "go",
@@ -1865,21 +1865,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "cf007fdf3e283367712535a95032967d157ca864679755526639b0e3ae20744a",
       "checksums": {
         "sha256": "cf007fdf3e283367712535a95032967d157ca864679755526639b0e3ae20744a"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/push-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/push-1.2.3.tar.gz"
     },
     "queue": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Inspect and manage nSelf background job queues: depth, stuck jobs, retries and purges.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/queue-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/queue-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/queue/tarball",
       "requires_license": false,
       "language": "go",
@@ -1901,7 +1901,7 @@
         "pluginType": "cli",
         "binaryName": "nself-queue"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "8d4ef4aee6de33228aaad0dead8e2c09e527043df6ca69e3d45a4213b5ec0970",
       "checksums": {
         "sha256": "8d4ef4aee6de33228aaad0dead8e2c09e527043df6ca69e3d45a4213b5ec0970",
@@ -1913,16 +1913,16 @@
           "windows-amd64": "735d61b3c6251531e1bec1bd262da26e258ab901a01aade84f91ddd51ba02a02"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/queue-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/queue-1.2.3.tar.gz"
     },
     "region": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-region management: add replica regions, list and inspect their status, and promote a region to primary.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/region-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/region-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/region/tarball",
       "requires_license": false,
       "language": "go",
@@ -1945,7 +1945,7 @@
         "pluginType": "cli",
         "binaryName": "nself-region"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "5ee2e9ac5ad8f2f4f2586cbafe93c030899132caa903c17e819a9a7c540fab1d",
       "checksums": {
         "sha256": "5ee2e9ac5ad8f2f4f2586cbafe93c030899132caa903c17e819a9a7c540fab1d",
@@ -1957,16 +1957,16 @@
           "windows-amd64": "8da0445814eaa41e1d1673d95ce8c7aa4f232ad1890a88eabea2edbe9642eadf"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/region-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/region-1.2.3.tar.gz"
     },
     "release": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Orchestrate the nSelf project's own 12-step release cascade: tag and release cli and plugins-pro, build and push the admin image, and open the Homebrew formula PR.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/release-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/release-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/release/tarball",
       "requires_license": false,
       "language": "go",
@@ -1989,7 +1989,7 @@
         "pluginType": "cli",
         "binaryName": "nself-release"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ffcbbcd9b2a7c441ac44c9bf863109df02bfd8e5d28f08868e47f5f1469da53b",
       "checksums": {
         "sha256": "ffcbbcd9b2a7c441ac44c9bf863109df02bfd8e5d28f08868e47f5f1469da53b",
@@ -2001,16 +2001,16 @@
           "windows-amd64": "b57a74f2497773e6e56f58e81a2fb47bebc17fe438079c36ca5f242345964bf7"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/release-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/release-1.2.3.tar.gz"
     },
     "search": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/search-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/search-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/search/tarball",
       "requires_license": false,
       "language": "go",
@@ -2045,17 +2045,17 @@
       "checksums": {
         "sha256": "3aa2862eac0c5e9f940e2f0c8a2583e6b99e0f88c41b86a07e1cc92d5d984ed7"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/search-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/search-1.2.3.tar.gz"
     },
     "sentry-cli": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/sentry-cli-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/sentry-cli-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/sentry-cli/tarball",
       "requires_license": false,
       "language": "go",
@@ -2089,7 +2089,7 @@
           "description": "Provision and manage a self-hosted ɳSentry server"
         }
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4c11ec139c2cc588d04d73ed2cedd5398f819faf68de2e50c0b2ce833df5e2d8",
       "checksums": {
         "sha256": "4c11ec139c2cc588d04d73ed2cedd5398f819faf68de2e50c0b2ce833df5e2d8",
@@ -2101,16 +2101,16 @@
           "windows-amd64": "97800688340569ff51707a510775455227a4c6d5f821be5623794ea509373dd4"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/sentry-cli-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/sentry-cli-1.2.3.tar.gz"
     },
     "shopify": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Shopify store, orders, and product synchronization",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/shopify-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/shopify-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/shopify/tarball",
       "requires_license": false,
       "language": "go",
@@ -2141,21 +2141,21 @@
         "runtime": "go",
         "entryPoint": "nself-shopify"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a800c4525180cdb9803686b1ec77b76f89f92f60a19dfff9064c60e57a8217ce",
       "checksums": {
         "sha256": "a800c4525180cdb9803686b1ec77b76f89f92f60a19dfff9064c60e57a8217ce"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/shopify-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/shopify-1.2.3.tar.gz"
     },
     "soak": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Manage soak testing lifecycle: abort an active soak and roll back to a prior version.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/soak-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/soak-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/soak/tarball",
       "requires_license": false,
       "language": "go",
@@ -2177,7 +2177,7 @@
         "pluginType": "cli",
         "binaryName": "nself-soak"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ce74d5f7f4a76a14cea754364c2cd9d57ae0b3b908613c7603cbda0941852e43",
       "checksums": {
         "sha256": "ce74d5f7f4a76a14cea754364c2cd9d57ae0b3b908613c7603cbda0941852e43",
@@ -2189,16 +2189,16 @@
           "windows-amd64": "f4e4223a6d9321e47eb4fa427f0bfbb4d205f6f3af73395a782e6d1bd7df8976"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/soak-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/soak-1.2.3.tar.gz"
     },
     "stripe": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Stripe billing data sync with webhook handling",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/stripe-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/stripe-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/stripe/tarball",
       "requires_license": false,
       "language": "go",
@@ -2244,21 +2244,21 @@
         "runtime": "go",
         "entryPoint": "nself-stripe"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "9a493c003713f64529960e4c4295bb74c32cd5884332368e9e8a00e452990f6f",
       "checksums": {
         "sha256": "9a493c003713f64529960e4c4295bb74c32cd5884332368e9e8a00e452990f6f"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/stripe-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/stripe-1.2.3.tar.gz"
     },
     "subtitle-manager": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Subtitle search, download, and sync verification via OpenSubtitles",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/subtitle-manager-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/subtitle-manager-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/subtitle-manager/tarball",
       "requires_license": false,
       "language": "go",
@@ -2296,21 +2296,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "b91cb0d3f741d15a8191b6296d1e69870d1abece37e0026d36bed5ce07916266",
       "checksums": {
         "sha256": "b91cb0d3f741d15a8191b6296d1e69870d1abece37e0026d36bed5ce07916266"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/subtitle-manager-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/subtitle-manager-1.2.3.tar.gz"
     },
     "tenant": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tenant-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tenant-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/tenant/tarball",
       "requires_license": false,
       "language": "go",
@@ -2343,7 +2343,7 @@
           "description": "Per-tenant usage metering, invoices and billing reports"
         }
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "b34c9b520ff2d8822c5f13341ac8c1c2685fcc35df5336a9f3d1dc2d4f8f312a",
       "checksums": {
         "sha256": "b34c9b520ff2d8822c5f13341ac8c1c2685fcc35df5336a9f3d1dc2d4f8f312a",
@@ -2355,16 +2355,16 @@
           "windows-amd64": "4731f534506812ab6f05fb09a177f1933b5f8210d39a8179aabe3ef3758d30d8"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tenant-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tenant-1.2.3.tar.gz"
     },
     "tokens": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tokens-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tokens-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/tokens/tarball",
       "requires_license": false,
       "language": "go",
@@ -2393,21 +2393,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "881e8465b3d276363f17457bf7d988b707cec104c4b8da8c6b2b12ac08f98d49",
       "checksums": {
         "sha256": "881e8465b3d276363f17457bf7d988b707cec104c4b8da8c6b2b12ac08f98d49"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tokens-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tokens-1.2.3.tar.gz"
     },
     "torrent-manager": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Torrent downloading with Transmission/qBittorrent integration, multi-source search, seeding policies, and VPN enforcement",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/torrent-manager-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/torrent-manager-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/torrent-manager/tarball",
       "requires_license": false,
       "language": "go",
@@ -2457,21 +2457,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "0604cace8d45a03fa121dc95dd98310241fae580a278cf99bd0c246c5be4fac7",
       "checksums": {
         "sha256": "0604cace8d45a03fa121dc95dd98310241fae580a278cf99bd0c246c5be4fac7"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/torrent-manager-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/torrent-manager-1.2.3.tar.gz"
     },
     "vpn": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin.",
       "category": "authentication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/vpn-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/vpn-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/vpn/tarball",
       "requires_license": false,
       "language": "go",
@@ -2501,21 +2501,21 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "8d015b983cc6a17e69256610945f3ab603d2dc92c7b3c784d87d9ccb0125e8a8",
       "checksums": {
         "sha256": "8d015b983cc6a17e69256610945f3ab603d2dc92c7b3c784d87d9ccb0125e8a8"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/vpn-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/vpn-1.2.3.tar.gz"
     },
     "waf": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Web Application Firewall management: enable Coraza with the OWASP Core Rule Set, switch between detection and blocking mode, and review recent WAF events.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/waf-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/waf-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/waf/tarball",
       "requires_license": false,
       "language": "go",
@@ -2538,7 +2538,7 @@
         "pluginType": "cli",
         "binaryName": "nself-waf"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "9fdbe367d2c23993539e7924439a0416dbe199973ef09f6bd0dd3c97ea997e96",
       "checksums": {
         "sha256": "9fdbe367d2c23993539e7924439a0416dbe199973ef09f6bd0dd3c97ea997e96",
@@ -2550,16 +2550,16 @@
           "windows-amd64": "338b3084fd0aa48f6517302c97c93bc0cd30160fe4eeb76c9147bb0bba96db73"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/waf-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/waf-1.2.3.tar.gz"
     },
     "watchdog": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Self-healing container watchdog with circuit breaker: status, resets, event history, and TG/email escalation alerts.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/watchdog-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/watchdog-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/watchdog/tarball",
       "requires_license": false,
       "language": "go",
@@ -2582,7 +2582,7 @@
         "pluginType": "cli",
         "binaryName": "nself-watchdog"
       },
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "366786c45c7c1f9aa7f26f76657d76a1eb3fd6342dc7f3ea96a62e296d9ab767",
       "checksums": {
         "sha256": "366786c45c7c1f9aa7f26f76657d76a1eb3fd6342dc7f3ea96a62e296d9ab767",
@@ -2594,16 +2594,16 @@
           "windows-amd64": "a793b9b1d379d518283fcb0faac042d45c90784d3a0681bdd63408cb17e97196"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/watchdog-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/watchdog-1.2.3.tar.gz"
     },
     "webhooks": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "0.9.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/webhooks-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/webhooks-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/webhooks/tarball",
       "requires_license": false,
       "language": "go",
@@ -2630,7 +2630,7 @@
       "bundles": [
         "task"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d29017ffa0e9dff5cf2ad554188af794c56299e58f115aa8dea38da5c479e68c",
       "checksums": {
         "sha256": "d29017ffa0e9dff5cf2ad554188af794c56299e58f115aa8dea38da5c479e68c",
@@ -2642,16 +2642,16 @@
           "windows-amd64": "44d5d74c8e775e1d487fe50b63ac81609dbf6e087e4b6795e6fe5c05ef91d67e"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/webhooks-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/webhooks-1.2.3.tar.gz"
     },
     "access-controls": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Role-based and attribute-based access control (RBAC + ABAC) with policy engine",
       "category": "authentication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/access-controls-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/access-controls-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/access-controls/tarball",
       "requires_license": false,
       "language": "go",
@@ -2668,21 +2668,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "028797789a0ca36c46bbe546cd13fa726092a680e324285dda287eca3f38f5ea",
       "checksums": {
         "sha256": "028797789a0ca36c46bbe546cd13fa726092a680e324285dda287eca3f38f5ea"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/access-controls-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/access-controls-1.2.3.tar.gz"
     },
     "admin-api": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Admin API service providing aggregated metrics, system health, session counts, storage breakdown, and real-time dashboard endpoints",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/admin-api-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/admin-api-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/admin-api/tarball",
       "requires_license": false,
       "language": "go",
@@ -2698,21 +2698,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "e819e098cc7e3115545c9b9828244fe6941e6651a1121455870ad10797aaa258",
       "checksums": {
         "sha256": "e819e098cc7e3115545c9b9828244fe6941e6651a1121455870ad10797aaa258"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/admin-api-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/admin-api-1.2.3.tar.gz"
     },
     "analytics": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Event tracking, counters, funnels, and quota management analytics engine",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/analytics-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/analytics-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/analytics/tarball",
       "requires_license": false,
       "language": "go",
@@ -2728,21 +2728,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "0f1e78cbcb9da4b613814fd5725681f5cafa3891a861386b5eaf6940ead085bc",
       "checksums": {
         "sha256": "0f1e78cbcb9da4b613814fd5725681f5cafa3891a861386b5eaf6940ead085bc"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/analytics-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/analytics-1.2.3.tar.gz"
     },
     "audit-analytics": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/audit-analytics-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/audit-analytics-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/audit-analytics/tarball",
       "requires_license": false,
       "language": "go",
@@ -2762,21 +2762,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "8cec03d08e03f75d18b5f44ec062200c24806e4a0a779f9941d2d53d74dd51aa",
       "checksums": {
         "sha256": "8cec03d08e03f75d18b5f44ec062200c24806e4a0a779f9941d2d53d74dd51aa"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/audit-analytics-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/audit-analytics-1.2.3.tar.gz"
     },
     "auth-enterprise": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "MFA enforcement (TOTP + WebAuthn policy) and SSO via SAML 2.0 and OIDC for Google Workspace, Okta, and Microsoft Entra ID.",
       "category": "authentication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/auth-enterprise-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/auth-enterprise-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/auth-enterprise/tarball",
       "requires_license": false,
       "language": "go",
@@ -2786,21 +2786,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "2413a119f48de155b11cb0f79f42dcb8c0e4e25bcdfde148dbf3c936a688f3bd",
       "checksums": {
         "sha256": "2413a119f48de155b11cb0f79f42dcb8c0e4e25bcdfde148dbf3c936a688f3bd"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/auth-enterprise-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/auth-enterprise-1.2.3.tar.gz"
     },
     "byok": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Bring Your Own Key (BYOK) per-tenant encryption. Envelope encryption with customer-managed keys (CMK) via AWS KMS, GCP Cloud KMS, or HashiCorp Vault Transit. DEK wrapped by CMK. Satisfies HIPAA, FedRAMP High, FFIEC, and DORA key-control requirements. Enterprise-only.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/byok-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/byok-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/byok/tarball",
       "requires_license": false,
       "language": "go",
@@ -2821,21 +2821,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d6f6fbe335e7088245061bcccbeb9d501afd5f1cf5d57580bee70a0a58b8cd48",
       "checksums": {
         "sha256": "d6f6fbe335e7088245061bcccbeb9d501afd5f1cf5d57580bee70a0a58b8cd48"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/byok-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/byok-1.2.3.tar.gz"
     },
     "cdc": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Change Data Capture — streams Postgres WAL events to downstream consumers via webhooks or message queues.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cdc-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cdc-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cdc/tarball",
       "requires_license": false,
       "language": "go",
@@ -2851,21 +2851,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "f303c27085e35a26c4e0dec5ea4a4eb0e6deec77e50845ba8399718800b92e5b",
       "checksums": {
         "sha256": "f303c27085e35a26c4e0dec5ea4a4eb0e6deec77e50845ba8399718800b92e5b"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cdc-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cdc-1.2.3.tar.gz"
     },
     "cdn": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "CDN management and integration plugin - cache purging, signed URLs. Planned: analytics sync from Cloudflare/BunnyCDN",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cdn-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cdn-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cdn/tarball",
       "requires_license": false,
       "language": "go",
@@ -2881,21 +2881,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "bb34b314aad58af3776c27f719768909fede44847e4c17d0528b515b09587845",
       "checksums": {
         "sha256": "bb34b314aad58af3776c27f719768909fede44847e4c17d0528b515b09587845"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cdn-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cdn-1.2.3.tar.gz"
     },
     "cloudflare": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Cloudflare zone, DNS, R2, cache, and analytics management",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cloudflare-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cloudflare-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/cloudflare/tarball",
       "requires_license": false,
       "language": "go",
@@ -2912,21 +2912,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "205adc4f61365f32c46f544ae6f00e3ba33f5ec8f11c80e801b42ae2ece3a7d9",
       "checksums": {
         "sha256": "205adc4f61365f32c46f544ae6f00e3ba33f5ec8f11c80e801b42ae2ece3a7d9"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/cloudflare-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/cloudflare-1.2.3.tar.gz"
     },
     "compliance": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Comprehensive compliance and audit platform with GDPR/CCPA/HIPAA/SOC2/PCI management, DSARs, consent tracking, data retention, breach notification, immutable audit logging, SIEM integration, and compliance reporting",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/compliance-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/compliance-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/compliance/tarball",
       "requires_license": false,
       "language": "go",
@@ -2952,21 +2952,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "1de5bc44b0c96c0a7c1aecf5d787f856feeb29aaddf59ab1c93ed4ee97231d03",
       "checksums": {
         "sha256": "1de5bc44b0c96c0a7c1aecf5d787f856feeb29aaddf59ab1c93ed4ee97231d03"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/compliance-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/compliance-1.2.3.tar.gz"
     },
     "content-safety": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Trust-safety evidence, legal holds, spam detection, raid protection, and abuse scoring",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/content-safety-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/content-safety-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/content-safety/tarball",
       "requires_license": false,
       "language": "go",
@@ -2983,21 +2983,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d180d2ab26fc0d6f63fa01298e64b80bde9817dd0d4805f8546b497e2914cdb9",
       "checksums": {
         "sha256": "d180d2ab26fc0d6f63fa01298e64b80bde9817dd0d4805f8546b497e2914cdb9"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/content-safety-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/content-safety-1.2.3.tar.gz"
     },
     "crdt": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "CRDT offline-first primitives. Self-hosted Yjs (y-websocket protocol) and automerge sync server with Postgres persistence. Drop-in replacement for Liveblocks/PartyKit with zero extra infra.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/crdt-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/crdt-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/crdt/tarball",
       "requires_license": false,
       "language": "go",
@@ -3016,21 +3016,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a3409824d970cdb3342ed27fa71505751213d88eafd85e413abf334a96ea2422",
       "checksums": {
         "sha256": "a3409824d970cdb3342ed27fa71505751213d88eafd85e413abf334a96ea2422"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/crdt-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/crdt-1.2.3.tar.gz"
     },
     "ddns": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Dynamic DNS plugin with external IP monitoring. Planned: DNS provider API integration (Cloudflare, Route53) for automated record updates",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ddns-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ddns-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ddns/tarball",
       "requires_license": false,
       "language": "go",
@@ -3047,21 +3047,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d9ad11f8f9a13beebd1a5992d56d520fb8a3a9a69a2a89a8a520987b8d90114c",
       "checksums": {
         "sha256": "d9ad11f8f9a13beebd1a5992d56d520fb8a3a9a69a2a89a8a520987b8d90114c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/ddns-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/ddns-1.2.3.tar.gz"
     },
     "devices": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "IoT device enrollment, trust management, and command dispatch service.",
       "category": "streaming",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/devices-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/devices-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/devices/tarball",
       "requires_license": false,
       "language": "go",
@@ -3078,21 +3078,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "eafd77c1dfa44cc01d72b50eb26096527ca10be84f64569c0270caef72d281bf",
       "checksums": {
         "sha256": "eafd77c1dfa44cc01d72b50eb26096527ca10be84f64569c0270caef72d281bf"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/devices-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/devices-1.2.3.tar.gz"
     },
     "documents": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Document management and generation service with templates, versioning, and sharing",
       "category": "data",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/documents-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/documents-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/documents/tarball",
       "requires_license": false,
       "language": "go",
@@ -3109,21 +3109,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "caf201fbd80d652b4ea9bb263d8c5b80cbb64d1b6fbd0d0b24cf657233b63f8c",
       "checksums": {
         "sha256": "caf201fbd80d652b4ea9bb263d8c5b80cbb64d1b6fbd0d0b24cf657233b63f8c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/documents-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/documents-1.2.3.tar.gz"
     },
     "email": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Transactional email via Elastic Email. Send, template, and track emails.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/email-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/email-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/email/tarball",
       "requires_license": false,
       "language": "go",
@@ -3133,21 +3133,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a5c68a58397d851be171dc856ba7a413a86b0f6263ccab8d4b3dbde70cad8436",
       "checksums": {
         "sha256": "a5c68a58397d851be171dc856ba7a413a86b0f6263ccab8d4b3dbde70cad8436"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/email-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/email-1.2.3.tar.gz"
     },
     "encryption": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Bring Your Own Key (BYOK) per-tenant envelope encryption for nSelf Cloud: AWS KMS, GCP Cloud KMS, and HashiCorp Vault Transit, with key rotation and an audit trail.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/encryption-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/encryption-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/encryption/tarball",
       "requires_license": false,
       "language": "go",
@@ -3163,7 +3163,7 @@
       "author": "nself",
       "minNselfVersion": "1.2.8",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "e66bf6c88308e17b334c75a63b41ad600a62796732e4729f7dc9fe823bd879bd",
       "checksums": {
         "sha256": "e66bf6c88308e17b334c75a63b41ad600a62796732e4729f7dc9fe823bd879bd",
@@ -3175,16 +3175,16 @@
           "windows-amd64": "d33b2d08462555340a643a4831059e5f199a0304dd2de698bdb4ac356358cd49"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/encryption-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/encryption-1.2.3.tar.gz"
     },
     "entitlements": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Feature gating, subscription plan management, usage quota tracking, and metered billing",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/entitlements-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/entitlements-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/entitlements/tarball",
       "requires_license": false,
       "language": "go",
@@ -3201,21 +3201,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "1798cebaf9d4768892e868239d14dcac142785e47726e2e017563951508e1dd1",
       "checksums": {
         "sha256": "1798cebaf9d4768892e868239d14dcac142785e47726e2e017563951508e1dd1"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/entitlements-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/entitlements-1.2.3.tar.gz"
     },
     "event-bus": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Internal event bus with pub/sub, fan-out delivery, dead-letter queue, and replay for inter-plugin messaging.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/event-bus-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/event-bus-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/event-bus/tarball",
       "requires_license": false,
       "language": "go",
@@ -3230,21 +3230,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "48b3a45a61f7c667b93b5abe0ea6fccfb84a809eb16680c93574699c7045aa28",
       "checksums": {
         "sha256": "48b3a45a61f7c667b93b5abe0ea6fccfb84a809eb16680c93574699c7045aa28"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/event-bus-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/event-bus-1.2.3.tar.gz"
     },
     "family-ancestry": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Ancestry.com → nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-ancestry-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-ancestry-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/family-ancestry/tarball",
       "requires_license": false,
       "language": "go",
@@ -3261,21 +3261,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "1154f2045509e5b9f884609d2c7550090be29e937d139b960f9e5ffe93a3c75c",
       "checksums": {
         "sha256": "1154f2045509e5b9f884609d2c7550090be29e937d139b960f9e5ffe93a3c75c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-ancestry-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-ancestry-1.2.3.tar.gz"
     },
     "family-familysearch": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "FamilySearch → nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-familysearch-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-familysearch-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/family-familysearch/tarball",
       "requires_license": false,
       "language": "go",
@@ -3293,21 +3293,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ab9a22bc19d0599d91dc2a254231d5aea69ca8bfa47d68e1793ac73a207f1fc3",
       "checksums": {
         "sha256": "ab9a22bc19d0599d91dc2a254231d5aea69ca8bfa47d68e1793ac73a207f1fc3"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-familysearch-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-familysearch-1.2.3.tar.gz"
     },
     "family-myheritage": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "MyHeritage → nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company — lowest legal risk, potential partnership path.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-myheritage-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-myheritage-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/family-myheritage/tarball",
       "requires_license": false,
       "language": "go",
@@ -3324,21 +3324,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "420abcc85353069a59f5b236d73181cfacf9182eb52c7469626632645a8b0121",
       "checksums": {
         "sha256": "420abcc85353069a59f5b236d73181cfacf9182eb52c7469626632645a8b0121"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-myheritage-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-myheritage-1.2.3.tar.gz"
     },
     "family-wikitree": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
       "category": "social",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-wikitree-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-wikitree-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/family-wikitree/tarball",
       "requires_license": false,
       "language": "go",
@@ -3355,21 +3355,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "2b9607242c4a12442b85631466755cd393a2396cbac160dd6835e06febe8179b",
       "checksums": {
         "sha256": "2b9607242c4a12442b85631466755cd393a2396cbac160dd6835e06febe8179b"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/family-wikitree-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/family-wikitree-1.2.3.tar.gz"
     },
     "functions-v8": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Edge Functions V8 Runtime. Deploy short-lived TypeScript functions with a Deno V8 isolate pool. HTTP-trigger, <50ms cold-start, allowlist-only env injection, Prometheus metrics, SSE log streaming.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/functions-v8-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/functions-v8-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/functions-v8/tarball",
       "requires_license": false,
       "language": "go",
@@ -3387,21 +3387,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "c674f3b6374674dc81515ef41c0e91a5228a14e1109161e919ae79db0a0a54d1",
       "checksums": {
         "sha256": "c674f3b6374674dc81515ef41c0e91a5228a14e1109161e919ae79db0a0a54d1"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/functions-v8-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/functions-v8-1.2.3.tar.gz"
     },
     "hipaa": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/hipaa-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/hipaa-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/hipaa/tarball",
       "requires_license": false,
       "language": "go",
@@ -3420,21 +3420,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "2591e87026d367df3c48ef2a215f4c2926a7a283eab7d47c3e84265d8cd76573",
       "checksums": {
         "sha256": "2591e87026d367df3c48ef2a215f4c2926a7a283eab7d47c3e84265d8cd76573"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/hipaa-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/hipaa-1.2.3.tar.gz"
     },
     "home": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Home automation bridge. Connects Home Assistant and MQTT to ɳSelf, enabling smart device control, state monitoring, scene activation, and command logging.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/home-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/home-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/home/tarball",
       "requires_license": false,
       "language": "go",
@@ -3450,21 +3450,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "912de51f9da2e63f1b56e547f7f2c05dac7ba4b160c0bb419fd084321ee28d93",
       "checksums": {
         "sha256": "912de51f9da2e63f1b56e547f7f2c05dac7ba4b160c0bb419fd084321ee28d93"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/home-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/home-1.2.3.tar.gz"
     },
     "idme": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "ID.me OAuth authentication with government-grade identity verification for 7 groups",
       "category": "authentication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/idme-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/idme-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/idme/tarball",
       "requires_license": false,
       "language": "go",
@@ -3482,21 +3482,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "77f65d701371c31a82b916af58491327bd2bded040825a19853576bd5c7d703a",
       "checksums": {
         "sha256": "77f65d701371c31a82b916af58491327bd2bded040825a19853576bd5c7d703a"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/idme-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/idme-1.2.3.tar.gz"
     },
     "job-queue": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Durable background job queue with priorities, retries, scheduled execution, and per-job progress tracking.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/job-queue-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/job-queue-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/job-queue/tarball",
       "requires_license": false,
       "language": "go",
@@ -3511,21 +3511,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "7ea83767d3cdef222ce0807e3dd866f9a778189f4765aa85d2a1b28ff18c1428",
       "checksums": {
         "sha256": "7ea83767d3cdef222ce0807e3dd866f9a778189f4765aa85d2a1b28ff18c1428"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/job-queue-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/job-queue-1.2.3.tar.gz"
     },
     "linkedin": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "LinkedIn publishing integration. OAuth 2.0 connection, post to LinkedIn feed with optional image attachments, post history, and Claw tool descriptor.",
       "category": "content",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/linkedin-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/linkedin-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/linkedin/tarball",
       "requires_license": false,
       "language": "go",
@@ -3541,21 +3541,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "79689aa162aabd1aa80980824e8ec8bdda0dd59aef54f2a67e21bae6cb1c43f5",
       "checksums": {
         "sha256": "79689aa162aabd1aa80980824e8ec8bdda0dd59aef54f2a67e21bae6cb1c43f5"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/linkedin-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/linkedin-1.2.3.tar.gz"
     },
     "mail": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Send transactional and broadcast email through the nSelf stack: mux + Postmark pipeline via ping_api, template management, and DKIM verification.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/mail-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/mail-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/mail/tarball",
       "requires_license": false,
       "language": "go",
@@ -3571,7 +3571,7 @@
       "author": "nself",
       "minNselfVersion": "1.2.8",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "040980231b9b73fe672475b62bba5042451d7a22375bf58c26f8623a49613fef",
       "checksums": {
         "sha256": "040980231b9b73fe672475b62bba5042451d7a22375bf58c26f8623a49613fef",
@@ -3583,16 +3583,16 @@
           "windows-amd64": "ccceca14e7b68b53e1a10cdb1f168aec2bb5f8b6ff39e7fd8de98c712073cec9"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/mail-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/mail-1.2.3.tar.gz"
     },
     "meetings": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Calendar integration and meeting management with room booking, recurring meetings, and availability tracking. External calendar sync (Google/Outlook) planned for future release.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/meetings-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/meetings-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/meetings/tarball",
       "requires_license": false,
       "language": "go",
@@ -3610,21 +3610,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "753cb00077c030598da7adcc958af2ef057b3e7f6e0569d8596dc01ebba54554",
       "checksums": {
         "sha256": "753cb00077c030598da7adcc958af2ef057b3e7f6e0569d8596dc01ebba54554"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/meetings-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/meetings-1.2.3.tar.gz"
     },
     "nself-cloud": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Internal ɳCloud managed hosting infrastructure plugin — provisions isolated nSelf instances for Cloud customers",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-cloud-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-cloud-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-cloud/tarball",
       "requires_license": false,
       "language": "go",
@@ -3639,21 +3639,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a9d94cdfcd0776ca6e9fa782f933f8dd980a0d1447bf312cb0bb4b79b3c11bcf",
       "checksums": {
         "sha256": "a9d94cdfcd0776ca6e9fa782f933f8dd980a0d1447bf312cb0bb4b79b3c11bcf"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-cloud-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-cloud-1.2.3.tar.gz"
     },
     "nself-eval-gate": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality precision/recall/fact_f1 metrics, CI integration via nself ci eval, and autonomy-tier threshold enforcement.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-eval-gate-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-eval-gate-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-eval-gate/tarball",
       "requires_license": false,
       "language": "go",
@@ -3669,21 +3669,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.1",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "3ba025b7b28e5c6e349d5d4d2a1d493a255e49cf4af929a1bd60df2b8d2eece1",
       "checksums": {
         "sha256": "3ba025b7b28e5c6e349d5d4d2a1d493a255e49cf4af929a1bd60df2b8d2eece1"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-eval-gate-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-eval-gate-1.2.3.tar.gz"
     },
     "nself-geo": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Forward and reverse geocoding with provider-agnostic caching layer. Nominatim (free, OSM) is the default; Google Places and Mapbox are premium fallbacks. Exposes geocodeAddress, reverseGeocode, geocodeBatch, clearGeoCache via Hasura Remote Schema.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-geo-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-geo-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-geo/tarball",
       "requires_license": false,
       "language": "go",
@@ -3700,21 +3700,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "d5a48936d83334e9525c4b2e94d92e785265cfa2168cdf48a35f67c42dc3a799",
       "checksums": {
         "sha256": "d5a48936d83334e9525c4b2e94d92e785265cfa2168cdf48a35f67c42dc3a799"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-geo-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-geo-1.2.3.tar.gz"
     },
     "nself-image": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization.",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-image-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-image-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-image/tarball",
       "requires_license": false,
       "language": "rust",
@@ -3736,21 +3736,21 @@
       "author": "nself",
       "minNselfVersion": "1.2.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "058aa1997f9a79515c1c04009b9187ccdc6918eee0e2f1cf33840d656342abd2",
       "checksums": {
         "sha256": "058aa1997f9a79515c1c04009b9187ccdc6918eee0e2f1cf33840d656342abd2"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-image-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-image-1.2.3.tar.gz"
     },
     "nself-pdf": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
       "category": "content",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-pdf-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-pdf-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-pdf/tarball",
       "requires_license": false,
       "language": "go",
@@ -3769,21 +3769,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "0be7657ae757df8e9d31b892dbc8067ffddc305b8eb2130ced78635044771447",
       "checksums": {
         "sha256": "0be7657ae757df8e9d31b892dbc8067ffddc305b8eb2130ced78635044771447"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-pdf-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-pdf-1.2.3.tar.gz"
     },
     "nself-scan": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred — requires partner agreement)",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-scan-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-scan-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-scan/tarball",
       "requires_license": false,
       "language": "go",
@@ -3804,21 +3804,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "367cd40d61995149dd5474f26a62d3a445c77088a30e876fc10c80b3ed62c34d",
       "checksums": {
         "sha256": "367cd40d61995149dd5474f26a62d3a445c77088a30e876fc10c80b3ed62c34d"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-scan-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-scan-1.2.3.tar.gz"
     },
     "nself-sync": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Event-log sync engine for nClaw. Multi-device state synchronization via hybrid logical clocks (HLC) and last-write-wins (LWW) conflict resolution. JWT-authenticated push/pull/snapshot/subscribe with Ed25519-signed events.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-sync-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-sync-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-sync/tarball",
       "requires_license": false,
       "language": "go",
@@ -3842,21 +3842,21 @@
         "np_devices",
         "np_sync_cursors"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "9ef4dccf08fc06d2373dd79280e0f945ef082d83965664b7aa938a702720a902",
       "checksums": {
         "sha256": "9ef4dccf08fc06d2373dd79280e0f945ef082d83965664b7aa938a702720a902"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-sync-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-sync-1.2.3.tar.gz"
     },
     "nself-vault": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "nSelf-managed envelope encryption KMS. Provides per-row/column selective encryption with key rotation, audit logging, and Hasura Action surface. Eliminates ad-hoc per-team AES wrappers.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-vault-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-vault-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/nself-vault/tarball",
       "requires_license": false,
       "language": "go",
@@ -3875,21 +3875,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "e7e00cff243909166bd9d4b14a97a2844672796b05ae5a924a4437df93774a7c",
       "checksums": {
         "sha256": "e7e00cff243909166bd9d4b14a97a2844672796b05ae5a924a4437df93774a7c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/nself-vault-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/nself-vault-1.2.3.tar.gz"
     },
     "object-storage": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-provider object storage with S3-compatible API, local storage, presigned URLs, and multipart uploads",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/object-storage-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/object-storage-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/object-storage/tarball",
       "requires_license": false,
       "language": "go",
@@ -3909,21 +3909,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a58c0963d6fbf14a4e98884f18115d25f0efc349b439308fe8b0274ac714944e",
       "checksums": {
         "sha256": "a58c0963d6fbf14a4e98884f18115d25f0efc349b439308fe8b0274ac714944e"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/object-storage-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/object-storage-1.2.3.tar.gz"
     },
     "observability": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Unified observability service with health probes, watchdog timers, service auto-discovery, and systemd integration",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/observability-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/observability-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/observability/tarball",
       "requires_license": false,
       "language": "go",
@@ -3939,21 +3939,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "b4b820e9ec0565fa848a026603640927f03a051d849bf89695ff829ab959dc14",
       "checksums": {
         "sha256": "b4b820e9ec0565fa848a026603640927f03a051d849bf89695ff829ab959dc14"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/observability-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/observability-1.2.3.tar.gz"
     },
     "payments": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with webhook normalization.",
       "category": "commerce",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/payments-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/payments-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/payments/tarball",
       "requires_license": false,
       "language": "go",
@@ -3969,21 +3969,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "572e99ec150cd8586df9e6230f92216233554434d6d9631e2294a5a56bc64056",
       "checksums": {
         "sha256": "572e99ec150cd8586df9e6230f92216233554434d6d9631e2294a5a56bc64056"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/payments-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/payments-1.2.3.tar.gz"
     },
     "pentest": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Penetration-test readiness kit. Generates structured scope documents, provisions pentest credentials, tracks findings, and manages remediation. ɳSelf+ tier.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/pentest-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/pentest-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/pentest/tarball",
       "requires_license": false,
       "language": "go",
@@ -3999,21 +3999,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "1f740d46e23dcc73a31c0c1ff798ae2f0ff97e1acf50c76d207c7679bfc57e69",
       "checksums": {
         "sha256": "1f740d46e23dcc73a31c0c1ff798ae2f0ff97e1acf50c76d207c7679bfc57e69"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/pentest-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/pentest-1.2.3.tar.gz"
     },
     "pentest-kit": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "CLI front end for the pentest plugin: generate scope documents, provision test credentials, import findings, and check remediation status from `nself pentest-kit`. Business+ tier.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.2.8",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/pentest-kit-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/pentest-kit-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/pentest-kit/tarball",
       "requires_license": false,
       "language": "go",
@@ -4028,7 +4028,7 @@
       "author": "nself",
       "minNselfVersion": "1.2.8",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a0b419019adba6f9c0742b305398e7b5ebee234396a44cece46c7e0a0af2c6bf",
       "checksums": {
         "sha256": "a0b419019adba6f9c0742b305398e7b5ebee234396a44cece46c7e0a0af2c6bf",
@@ -4040,16 +4040,16 @@
           "windows-amd64": "39c329594701dd75d8c1e08b4c2a85b6f331a324486bcaecbf788b7bdb272b55"
         }
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/pentest-kit-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/pentest-kit-1.2.3.tar.gz"
     },
     "plugin-clawde": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "ClawDE daemon integration backend. Manages session lifecycle, tracks daemon health, and streams events via SSE for the ClawDE AI development environment.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-clawde-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-clawde-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/plugin-clawde/tarball",
       "requires_license": false,
       "language": "go",
@@ -4059,21 +4059,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.1",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "5f01d5441655b12bfb381e1f107a03b3faf98019c5ee6830c7350d2b6ee3eac2",
       "checksums": {
         "sha256": "5f01d5441655b12bfb381e1f107a03b3faf98019c5ee6830c7350d2b6ee3eac2"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-clawde-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-clawde-1.2.3.tar.gz"
     },
     "plugin-gauth": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Headless server-side Google OAuth token refresh for nSelf AI services",
       "category": "authentication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-gauth-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-gauth-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/plugin-gauth/tarball",
       "requires_license": false,
       "language": "rust",
@@ -4083,21 +4083,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.1",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "703934ca393002feaa6990f5b46b77a89796c4f4d3b8b818f6845dabe4840c14",
       "checksums": {
         "sha256": "703934ca393002feaa6990f5b46b77a89796c4f4d3b8b818f6845dabe4840c14"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-gauth-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-gauth-1.2.3.tar.gz"
     },
     "plugin-llm-gateway": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "ClawDE-facing LLM gateway: per-tenant token quota, Redis response caching, session context injection, and SSRF guard over nself-ai-gateway (port 3761). Simplifies ClawDE client LLM calls.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-llm-gateway-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-llm-gateway-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/plugin-llm-gateway/tarball",
       "requires_license": false,
       "language": "go",
@@ -4107,21 +4107,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.1",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "c5d43dc099636dceaff49e823f1569c2645b5f3535a756f5d9edbd565eb9261f",
       "checksums": {
         "sha256": "c5d43dc099636dceaff49e823f1569c2645b5f3535a756f5d9edbd565eb9261f"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-llm-gateway-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-llm-gateway-1.2.3.tar.gz"
     },
     "plugin-pty": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Pseudo-terminal bridge for ClawDE AI sessions. Spawns, manages, and relays PTY processes with per-tenant resource limits and WebSocket I/O.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-pty-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-pty-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/plugin-pty/tarball",
       "requires_license": false,
       "language": "go",
@@ -4131,21 +4131,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.1",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "2c7f39f641cb68dad25cf9abc66bd912c479a5d69fa63a655252d159bba31619",
       "checksums": {
         "sha256": "2c7f39f641cb68dad25cf9abc66bd912c479a5d69fa63a655252d159bba31619"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-pty-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-pty-1.2.3.tar.gz"
     },
     "plugin-retrieval": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for ɳClaw memory and nself-ai-mcp search/recall tools.",
       "category": "data",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.1",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-retrieval-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-retrieval-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/plugin-retrieval/tarball",
       "requires_license": false,
       "language": "go",
@@ -4155,21 +4155,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.1",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "a7fe3531a2ad9a78c2394cec634c87f9f2f939e08ccf28a38d5d089d97aa2501",
       "checksums": {
         "sha256": "a7fe3531a2ad9a78c2394cec634c87f9f2f939e08ccf28a38d5d089d97aa2501"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/plugin-retrieval-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/plugin-retrieval-1.2.3.tar.gz"
     },
     "post": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-platform content publishing. Publish to WordPress, Ghost, Twitter/X, LinkedIn, Telegram channels, Dev.to, and Hashnode with optional scheduling.",
       "category": "content",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/post-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/post-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/post/tarball",
       "requires_license": false,
       "language": "go",
@@ -4189,21 +4189,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4168a76b9b26f7795e2933a29e32d328ea1725d2ec88e176af3c50787e668ff2",
       "checksums": {
         "sha256": "4168a76b9b26f7795e2933a29e32d328ea1725d2ec88e176af3c50787e668ff2"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/post-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/post-1.2.3.tar.gz"
     },
     "retro-gaming": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Retro gaming ROM library management, emulator core serving, save state synchronization, play sessions, and controller configuration for nself-tv",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/retro-gaming-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/retro-gaming-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/retro-gaming/tarball",
       "requires_license": false,
       "language": "go",
@@ -4222,21 +4222,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "f76d43e69d676dae1b53e1241e04d4adbed0fc86c0d1e995a31f78c40facc086",
       "checksums": {
         "sha256": "f76d43e69d676dae1b53e1241e04d4adbed0fc86c0d1e995a31f78c40facc086"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/retro-gaming-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/retro-gaming-1.2.3.tar.gz"
     },
     "rom-discovery": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "ROM metadata database, search, discovery, automated download orchestration, and multi-source scraping for nself-tv",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/rom-discovery-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/rom-discovery-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/rom-discovery/tarball",
       "requires_license": false,
       "language": "go",
@@ -4255,21 +4255,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "8e205504a9e86560f85395ceece11ee59202ca9c09e46e52f8ba84b4241edbe2",
       "checksums": {
         "sha256": "8e205504a9e86560f85395ceece11ee59202ca9c09e46e52f8ba84b4241edbe2"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/rom-discovery-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/rom-discovery-1.2.3.tar.gz"
     },
     "siem": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Forward nSelf audit logs and security events to external SIEM platforms: Datadog, Splunk HEC, Elastic, Loki, and custom webhooks. OCSF/ECS schema normalization.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/siem-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/siem-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/siem/tarball",
       "requires_license": false,
       "language": "go",
@@ -4289,21 +4289,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "2378f7f2d30e1bfcddef3f9dbb5a669f1dd44b8a3f0359695b9b7502e4985639",
       "checksums": {
         "sha256": "2378f7f2d30e1bfcddef3f9dbb5a669f1dd44b8a3f0359695b9b7502e4985639"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/siem-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/siem-1.2.3.tar.gz"
     },
     "sms": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "SMS messaging via Twilio. Send, track, and manage opt-outs.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/sms-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/sms-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/sms/tarball",
       "requires_license": false,
       "language": "go",
@@ -4313,21 +4313,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "6c7bb3e08623aa01fa7867993ed906afc92a15244fa3a77ec125ea1a5f1aea38",
       "checksums": {
         "sha256": "6c7bb3e08623aa01fa7867993ed906afc92a15244fa3a77ec125ea1a5f1aea38"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/sms-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/sms-1.2.3.tar.gz"
     },
     "storage": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/storage-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/storage-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/storage/tarball",
       "requires_license": false,
       "language": "go",
@@ -4347,17 +4347,17 @@
       "checksums": {
         "sha256": "56ae52a52b98f98bcb12caceb5e22889c0d78316f4368f0904a3e622568ec69f"
       },
-      "releaseTag": "v1.2.2",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/storage-1.2.2.tar.gz"
+      "releaseTag": "v1.2.3",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/storage-1.2.3.tar.gz"
     },
     "storage-transform": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "On-the-fly image transformation CDN: resize, crop, format convert (WebP/AVIF/JPEG/PNG), quality, and device-pixel-ratio support. URL-param driven, Redis LRU cache, Nginx cache headers, rate limiting.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/storage-transform-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/storage-transform-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/storage-transform/tarball",
       "requires_license": false,
       "language": "go",
@@ -4375,21 +4375,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "60f847231cf67acecf1f353428f4d6e078d21c417166e4b33b65bc1c9400f884",
       "checksums": {
         "sha256": "60f847231cf67acecf1f353428f4d6e078d21c417166e4b33b65bc1c9400f884"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/storage-transform-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/storage-transform-1.2.3.tar.gz"
     },
     "tenant-controller": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Multi-tenant master controller for nCloud. Manages N isolated nSelf project instances behind a single deploy: per-project Postgres schema, Hasura metadata namespace, Nginx vhost, JWT secret, Redis key prefix, and MinIO bucket. Enables 50 projects on one Hetzner CX21.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.9",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tenant-controller-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tenant-controller-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/tenant-controller/tarball",
       "requires_license": false,
       "language": "go",
@@ -4406,21 +4406,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.9",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "cb3f0a42dadd8e7f579538bb804ee062f0e7be19d982a1e820910519fc8274eb",
       "checksums": {
         "sha256": "cb3f0a42dadd8e7f579538bb804ee062f0e7be19d982a1e820910519fc8274eb"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tenant-controller-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tenant-controller-1.2.3.tar.gz"
     },
     "transactional-email": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay.",
       "category": "communication",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.1.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/transactional-email-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/transactional-email-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/transactional-email/tarball",
       "requires_license": false,
       "language": "go",
@@ -4438,21 +4438,21 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ba7f363c1e1ef852fbd378155337f2df616cfa72091fea925af544790207506c",
       "checksums": {
         "sha256": "ba7f363c1e1ef852fbd378155337f2df616cfa72091fea925af544790207506c"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/transactional-email-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/transactional-email-1.2.3.tar.gz"
     },
     "warehouse": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/warehouse-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/warehouse-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/warehouse/tarball",
       "requires_license": false,
       "language": "go",
@@ -4468,21 +4468,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "75c95999cd07aee26f29959a593f441060761ec1e4dbb5e35fa34508df8b5cbe",
       "checksums": {
         "sha256": "75c95999cd07aee26f29959a593f441060761ec1e4dbb5e35fa34508df8b5cbe"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/warehouse-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/warehouse-1.2.3.tar.gz"
     },
     "web3": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/web3-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/web3-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/web3/tarball",
       "requires_license": false,
       "language": "go",
@@ -4501,21 +4501,21 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "91349c54dac5ef3e07ded0df6fc8a2ef2754189e9c5c724403d212b42bd5bf7e",
       "checksums": {
         "sha256": "91349c54dac5ef3e07ded0df6fc8a2ef2754189e9c5c724403d212b42bd5bf7e"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/web3-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/web3-1.2.3.tar.gz"
     },
     "workflows": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Automation engine providing trigger-action workflow chains, conditional logic, scheduled tasks, webhook integrations, and cross-plugin orchestration",
       "category": "automation",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/workflows-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/workflows-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/workflows/tarball",
       "requires_license": false,
       "language": "go",
@@ -4533,15 +4533,15 @@
       "author": "nself",
       "minNselfVersion": "1.0.0",
       "tables": [],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "cf494ba74b6149a79bbdb189d34c8a76e1df7ff6dbb59fdb78593ef1b5b8f5d3",
       "checksums": {
         "sha256": "cf494ba74b6149a79bbdb189d34c8a76e1df7ff6dbb59fdb78593ef1b5b8f5d3"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/workflows-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/workflows-1.2.3.tar.gz"
     },
     "shared-utils": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Shared Go utilities (request-ID tracing middleware, HTTP client propagation, server lifecycle helpers) used internally by multiple free nself plugins. Not installable directly.",
       "category": "infrastructure",
       "tier": "free",
@@ -4563,18 +4563,18 @@
       "checksums": {
         "sha256": "c24ed1da2b2622875916f2b69e643cf60e2658adbf2d20a4915d52f18f06a749"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/shared-utils-1.2.2.tar.gz",
-      "releaseTag": "v1.2.2",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/shared-utils-1.2.3.tar.gz",
+      "releaseTag": "v1.2.3",
       "checksum": "c24ed1da2b2622875916f2b69e643cf60e2658adbf2d20a4915d52f18f06a749"
     },
     "tmdb": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Comprehensive media metadata enrichment from TMDB/IMDb/TVDB/MusicBrainz with auto-matching, manual review queue, and multi-provider support",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tmdb-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tmdb-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/tmdb/tarball",
       "requires_license": false,
       "language": "go",
@@ -4603,21 +4603,21 @@
         "np_tmdb_match_queue",
         "np_tmdb_webhook_events"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4742ad941eafaaae0b3fee037e1e7a874a7daac8abbdd30b29bbf5141de75ef6",
       "checksums": {
         "sha256": "4742ad941eafaaae0b3fee037e1e7a874a7daac8abbdd30b29bbf5141de75ef6"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/tmdb-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/tmdb-1.2.3.tar.gz"
     },
     "game-metadata": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/game-metadata-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/game-metadata-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/game-metadata/tarball",
       "requires_license": false,
       "language": "go",
@@ -4640,21 +4640,21 @@
         "np_game_platforms",
         "np_game_genres"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "496c68106b99f167ff054045a62c023065a8f4f5cf367584151014e1528a4034",
       "checksums": {
         "sha256": "496c68106b99f167ff054045a62c023065a8f4f5cf367584151014e1528a4034"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/game-metadata-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/game-metadata-1.2.3.tar.gz"
     },
     "sports": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats",
       "category": "sports",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/sports-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/sports-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/sports/tarball",
       "requires_license": false,
       "language": "go",
@@ -4688,21 +4688,21 @@
         "np_sports_sync_state",
         "np_sports_webhook_events"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "4bc02f71e9dcbbb7788022cea0ebff03a72234217b09736c579f4e534b32fd41",
       "checksums": {
         "sha256": "4bc02f71e9dcbbb7788022cea0ebff03a72234217b09736c579f4e534b32fd41"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/sports-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/sports-1.2.3.tar.gz"
     },
     "podcast": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/podcast-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/podcast-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/podcast/tarball",
       "requires_license": false,
       "language": "go",
@@ -4725,21 +4725,21 @@
         "np_podcast_playback_positions",
         "np_podcast_categories"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "7ca0c51f8e56b9d696528b9fdd3692daf83a7d941fc7283d3be972d5d34f06b6",
       "checksums": {
         "sha256": "7ca0c51f8e56b9d696528b9fdd3692daf83a7d941fc7283d3be972d5d34f06b6"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/podcast-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/podcast-1.2.3.tar.gz"
     },
     "file-processing": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure. Planned: Inbound webhook support for storage provider notifications",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/file-processing-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/file-processing-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/file-processing/tarball",
       "requires_license": false,
       "language": "rust",
@@ -4759,21 +4759,21 @@
         "np_fileproc_thumbnails",
         "np_fileproc_metadata"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "19fb87b8ec57ab7008a247fe73718ea39eb60ee69c30e4a36fffde3b394b3688",
       "checksums": {
         "sha256": "19fb87b8ec57ab7008a247fe73718ea39eb60ee69c30e4a36fffde3b394b3688"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/file-processing-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/file-processing-1.2.3.tar.gz"
     },
     "media-processing": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "FFmpeg-based media encoding and processing with HLS streaming support",
       "category": "media",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/media-processing-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/media-processing-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/media-processing/tarball",
       "requires_license": false,
       "language": "rust",
@@ -4803,21 +4803,21 @@
         "np_mediap_watcher_events",
         "np_mediap_uploads"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "3aa66e04bd04ca638653164c5c2df2f8b46a7b7e04713931173990a29c9ed214",
       "checksums": {
         "sha256": "3aa66e04bd04ca638653164c5c2df2f8b46a7b7e04713931173990a29c9ed214"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/media-processing-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/media-processing-1.2.3.tar.gz"
     },
     "geocoding": {
-      "version": "1.2.2",
+      "version": "1.2.3",
       "description": "Geocoding plugin with geofence storage. Planned: Google Maps API integration for forward/reverse geocoding and place search",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.2/geocoding-1.2.2.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.3/geocoding-1.2.3.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/geocoding/tarball",
       "requires_license": false,
       "language": "go",
@@ -4838,12 +4838,12 @@
         "np_geoc_geofence_events",
         "np_geoc_places"
       ],
-      "releaseTag": "v1.2.2",
+      "releaseTag": "v1.2.3",
       "checksum": "ba3d1d8df82723f4b4871c8cc18214d7eaa2f9a9c1769a2f9ffac19f85c7a092",
       "checksums": {
         "sha256": "ba3d1d8df82723f4b4871c8cc18214d7eaa2f9a9c1769a2f9ffac19f85c7a092"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.2/geocoding-1.2.2.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.3/geocoding-1.2.3.tar.gz"
     }
   }
 }

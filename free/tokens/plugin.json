@@ -1,6 +1,6 @@
 {
   "name": "tokens",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
   "author": "nself",
   "license": "MIT",
