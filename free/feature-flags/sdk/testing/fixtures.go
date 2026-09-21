@@ -117,8 +117,9 @@ func AssertMetricPresent(t *stdtesting.T, expo, metric string) {
 }
 
 // AssertHealthEndpoints exercises the canonical SDK endpoints (/healthz,
-// /readyz, /metrics, /version) and fails the test if any diverge from the
-// contract every plugin must satisfy.
+// /health, /readyz, /metrics, /version) and fails the test if any diverge
+// from the contract every plugin must satisfy. /health is the nSelf CLI's
+// docker-compose healthcheck convention (an alias of /healthz).
 func AssertHealthEndpoints(t *stdtesting.T, h http.Handler) {
 	t.Helper()
 	for _, tc := range []struct {
@@ -126,6 +127,7 @@ func AssertHealthEndpoints(t *stdtesting.T, h http.Handler) {
 		wantStatus int
 	}{
 		{"/healthz", http.StatusOK},
+		{"/health", http.StatusOK},
 		{"/version", http.StatusOK},
 		{"/metrics", http.StatusOK},
 	} {
