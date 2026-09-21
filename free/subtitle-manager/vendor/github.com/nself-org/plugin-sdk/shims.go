@@ -8,6 +8,7 @@ package sdk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -71,9 +72,41 @@ func (s *Server) ListenAndServe() error {
 	return srv.ListenAndServe()
 }
 
-// NewServer returns a Server with a new chi router bound to port.
+// NewServer returns a Server with a new chi router bound to port, pre-wired
+// with the default liveness endpoints every plugin container's docker-compose
+// healthcheck depends on:
+//
+//	GET /healthz - liveness (always 200 once the server is up)
+//	GET /health  - liveness alias (the nSelf CLI's docker-compose healthcheck
+//	               convention, internal/compose/custom_services.go, probes
+//	               /health; every plugin.json documents /health as the
+//	               health_endpoint)
+//	GET /readyz  - readiness; this thin shim has no dependency-check hook, so
+//	               it mirrors liveness. Plugins needing real readiness checks
+//	               (DB ping, upstream API) should override /readyz via
+//	               Router() before calling ListenAndServe.
+//
+// Callers remain free to register their own /health*/readyz on Router() —
+// chi's last registration wins, so an explicit override still takes effect.
+// Before this default existed, plugins built on NewServer (e.g. notify,
+// cron) shipped with no health route at all: the container healthcheck
+// 404'd and `docker compose ps` reported them permanently unhealthy even
+// though the service was live (nself CLI golden-path E2E, 2026-09-21).
 func NewServer(port int) *Server {
-	return &Server{router: chi.NewRouter(), port: port}
+	r := chi.NewRouter()
+	r.Get("/healthz", handleLiveness)
+	r.Get("/health", handleLiveness)
+	r.Get("/readyz", handleLiveness)
+	return &Server{router: r, port: port}
+}
+
+// handleLiveness is the default liveness responder shared by /healthz,
+// /health, and /readyz on a shim-created Server. See NewServer's doc comment
+// for why /health must exist and why /readyz has no dependency check here.
+func handleLiveness(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
 
 // Recovery is an HTTP middleware that recovers from panics and returns 500.
