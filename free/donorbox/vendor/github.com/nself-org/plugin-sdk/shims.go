@@ -62,7 +62,12 @@ func (s *Server) Router() chi.Router {
 }
 
 // ListenAndServe starts the HTTP server on the configured port.
+//
+// It registers the default liveness routes (via ensureHealthRoutes) just
+// before the listener starts, rather than NewServer registering them at
+// construction time — see ensureHealthRoutes for why.
 func (s *Server) ListenAndServe() error {
+	ensureHealthRoutes(s.router)
 	addr := fmt.Sprintf(":%d", s.port)
 	srv := &http.Server{
 		Addr:    addr,
@@ -72,9 +77,34 @@ func (s *Server) ListenAndServe() error {
 	return srv.ListenAndServe()
 }
 
-// NewServer returns a Server with a new chi router bound to port, pre-wired
-// with the default liveness endpoints every plugin container's docker-compose
-// healthcheck depends on:
+// NewServer returns a Server with a new, empty chi router bound to port.
+// The default liveness endpoints (see ensureHealthRoutes) are NOT registered
+// here — they are deferred to ListenAndServe. Route registration is
+// intentionally NOT done in this constructor: chi panics with "all
+// middlewares must be defined before routes on a mux" if any route exists
+// on the router before Router().Use(...) is called, and the standard plugin
+// pattern is:
+//
+//	srv := sdk.NewServer(port)
+//	r := srv.Router()
+//	r.Use(sdk.Recovery, sdk.Logger, ...)
+//	internal.RegisterRoutes(r, ...)
+//	srv.ListenAndServe()
+//
+// A NewServer that pre-registered /healthz, /health, /readyz would make
+// every plugin's r.Use(...) call above panic, because those three routes
+// would already exist on the mux by the time Use runs. This was PR #104's
+// regression: notify and cron (built on exactly this pattern) panicked at
+// startup in the nSelf golden-path E2E (2026-09-21) with that exact chi
+// panic, because the unit test added in #104 never called Use() after
+// NewServer and so never exercised the ordering.
+func NewServer(port int) *Server {
+	r := chi.NewRouter()
+	return &Server{router: r, port: port}
+}
+
+// ensureHealthRoutes registers the default liveness endpoints every plugin
+// container's docker-compose healthcheck depends on:
 //
 //	GET /healthz - liveness (always 200 once the server is up)
 //	GET /health  - liveness alias (the nSelf CLI's docker-compose healthcheck
@@ -86,23 +116,29 @@ func (s *Server) ListenAndServe() error {
 //	               (DB ping, upstream API) should override /readyz via
 //	               Router() before calling ListenAndServe.
 //
-// Callers remain free to register their own /health*/readyz on Router() —
-// chi's last registration wins, so an explicit override still takes effect.
-// Before this default existed, plugins built on NewServer (e.g. notify,
-// cron) shipped with no health route at all: the container healthcheck
-// 404'd and `docker compose ps` reported them permanently unhealthy even
-// though the service was live (nself CLI golden-path E2E, 2026-09-21).
-func NewServer(port int) *Server {
-	r := chi.NewRouter()
-	r.Get("/healthz", handleLiveness)
-	r.Get("/health", handleLiveness)
-	r.Get("/readyz", handleLiveness)
-	return &Server{router: r, port: port}
+// It is called from ListenAndServe rather than from NewServer — see
+// NewServer's doc comment for why registering routes at construction time
+// breaks every plugin's Router().Use(...) call with a chi panic.
+//
+// Each path is registered ONLY if the router has no handler for it yet
+// (checked via chi's Match, which walks the routing tree without executing
+// a handler). This means a plugin that registers its own GET /health before
+// calling ListenAndServe keeps that handler — this default never overrides
+// an explicit plugin route, matching the pre-#104-regression contract
+// ("callers remain free to register their own /health*/readyz on Router()").
+func ensureHealthRoutes(r chi.Router) {
+	for _, path := range []string{"/healthz", "/health", "/readyz"} {
+		if r.Match(chi.NewRouteContext(), http.MethodGet, path) {
+			continue
+		}
+		r.Get(path, handleLiveness)
+	}
 }
 
 // handleLiveness is the default liveness responder shared by /healthz,
-// /health, and /readyz on a shim-created Server. See NewServer's doc comment
-// for why /health must exist and why /readyz has no dependency check here.
+// /health, and /readyz on a shim-created Server. See ensureHealthRoutes's
+// doc comment for why /health must exist and why /readyz has no dependency
+// check here.
 func handleLiveness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
