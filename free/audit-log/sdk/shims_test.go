@@ -49,6 +49,101 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
+// TestNewServer_RouterUseAfterConstruction is the direct regression guard
+// for PR #104: sdk.NewServer(port) must return a router with NO routes
+// registered yet, so that the standard plugin pattern —
+//
+//	srv := sdk.NewServer(port)
+//	r := srv.Router()
+//	r.Use(sdk.Recovery)   // <- panicked here before this fix
+//
+// — never hits chi's "all middlewares must be defined before routes on a
+// mux" panic. #104 shipped NewServer pre-registering /healthz, /health,
+// /readyz at construction time, which broke this exact call sequence in
+// every plugin built on it (notify, cron: nself golden-path E2E,
+// 2026-09-21). The #104 unit test never called Use() after NewServer, so
+// it never caught this.
+func TestNewServer_RouterUseAfterConstruction(t *testing.T) {
+	s := NewServer(9999)
+	r := s.Router()
+	// Must not panic.
+	r.Use(Recovery)
+	r.Use(Logger)
+	r.Get("/v1/ping", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+// TestListenAndServe_DefaultHealthRoutes mirrors a real plugin main: build a
+// Server via NewServer, call Router().Use(...) for middleware, register a
+// plugin route, and only then exercise the health routes through the same
+// registration path ListenAndServe uses (ensureHealthRoutes), rather than
+// hitting NewServer's router directly — the #104 test's gap. Regression
+// guard: plugins built on sdk.NewServer (notify, cron, and 19 others)
+// previously shipped with no health route at all, so the container
+// healthcheck 404'd and reported them permanently unhealthy; the #104 fix
+// for that then broke Router().Use() with a chi panic (nself CLI
+// golden-path E2E, 2026-09-21).
+func TestListenAndServe_DefaultHealthRoutes(t *testing.T) {
+	s := NewServer(9999)
+	r := s.Router()
+	r.Use(Recovery)
+	r.Use(Logger)
+	r.Get("/v1/ping", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Exercise the exact registration path ListenAndServe uses, without
+	// actually binding a listener.
+	ensureHealthRoutes(r)
+
+	for _, path := range []string{"/healthz", "/health", "/readyz"} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", path, w.Code)
+		}
+	}
+}
+
+// TestEnsureHealthRoutes_PluginRouteWins verifies a plugin-registered
+// /health handler is NOT overridden by ensureHealthRoutes — an explicit
+// plugin route must always win over the default liveness responder.
+func TestEnsureHealthRoutes_PluginRouteWins(t *testing.T) {
+	s := NewServer(9999)
+	r := s.Router()
+	r.Use(Recovery)
+
+	const sentinelBody = `{"custom":"health"}`
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(sentinelBody))
+	})
+
+	ensureHealthRoutes(r)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("/health: status = %d, want 200", w.Code)
+	}
+	if w.Body.String() != sentinelBody {
+		t.Errorf("/health: body = %q, want plugin's own %q (default must not override an explicit plugin route)", w.Body.String(), sentinelBody)
+	}
+
+	// The two routes ensureHealthRoutes still owns must still be present.
+	for _, path := range []string{"/healthz", "/readyz"} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", path, w.Code)
+		}
+	}
+}
+
 func TestRecovery_Passthrough(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
