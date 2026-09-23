@@ -1,6 +1,6 @@
 {
   "name": "gauth",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Manage Google OAuth tokens for nSelf AI services: status, refresh, and revoke against plugin-gauth.",
   "author": "nself",
   "license": "MIT",
@@ -47,5 +47,5 @@
     "required": [],
     "optional": []
   },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. It is a thin HTTP client to the paid plugin-gauth backend service (plugins-pro/paid/plugin-gauth, port 3762, requires_license=true) — the CLI surface itself has zero license checks, matching the Three-Surface Model (App/client tier is always free; only the backend bundle is paid). Extracted from cli/cmd/commands/gauth.go under CLI-R11; zero internal/* imports in the original file, so this is a verbatim move, not an adaptation."
+  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. It is a thin HTTP client to the paid plugin-gauth backend service (plugins-pro/paid/plugin-gauth, port 3762, requires_license=true) \u2014 the CLI surface itself has zero license checks, matching the Three-Surface Model (App/client tier is always free; only the backend bundle is paid). Extracted from cli/cmd/commands/gauth.go under CLI-R11; zero internal/* imports in the original file, so this is a verbatim move, not an adaptation."
 }

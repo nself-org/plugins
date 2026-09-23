@@ -1,6 +1,6 @@
 {
   "name": "entitlements",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "api_version": "1.0.0",
   "description": "Feature gating, subscription plan management, usage quota tracking, and metered billing",
   "author": "nself",

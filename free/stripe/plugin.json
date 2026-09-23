@@ -1,6 +1,6 @@
 {
   "name": "stripe",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Stripe billing data sync with webhook handling",
   "author": "nself",
   "license": "MIT",

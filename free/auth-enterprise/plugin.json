@@ -1,6 +1,6 @@
 {
   "name": "auth-enterprise",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "MFA enforcement (TOTP + WebAuthn policy) and SSO via SAML 2.0 and OIDC for Google Workspace, Okta, and Microsoft Entra ID.",
   "category": "authentication",
   "isCommercial": false,
@@ -146,7 +146,7 @@
     "Recovery codes are bcrypt-hashed (cost 10); raw codes are never stored.",
     "SSO client_secret values in np_sso_providers.metadata should be encrypted by the application before persistence.",
     "SAML response signature verification uses structural XML checks only; integrate crewjam/saml for full XMLDSig in production.",
-    "MFA is free for all users per the Security-Always-Free doctrine; SSO is gated by NSELF_SSO=true and a ɳSelf+ license."
+    "MFA is free for all users per the Security-Always-Free doctrine; SSO is gated by NSELF_SSO=true and a \u0273Self+ license."
   ],
   "routes": [
     {

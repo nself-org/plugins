@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Inspect the nSelf plugin API surface: endpoint probes, deprecation calendar, and the API changelog.",
   "author": "nself",
   "license": "MIT",
