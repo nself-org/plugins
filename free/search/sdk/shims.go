@@ -120,18 +120,33 @@ func NewServer(port int) *Server {
 // NewServer's doc comment for why registering routes at construction time
 // breaks every plugin's Router().Use(...) call with a chi panic.
 //
-// Each path is registered ONLY if the router has no handler for it yet
-// (checked via chi's Match, which walks the routing tree without executing
-// a handler). This means a plugin that registers its own GET /health before
-// calling ListenAndServe keeps that handler — this default never overrides
-// an explicit plugin route, matching the pre-#104-regression contract
-// ("callers remain free to register their own /health*/readyz on Router()").
+// Each path/method pair is registered ONLY if the router has no handler for
+// it yet (checked via chi's Match, which walks the routing tree without
+// executing a handler). This means a plugin that registers its own GET
+// /health before calling ListenAndServe keeps that handler — this default
+// never overrides an explicit plugin route, matching the pre-#104-regression
+// contract ("callers remain free to register their own /health*/readyz on
+// Router()").
+//
+// HEAD is registered alongside GET on the same terms. The nSelf CLI's
+// docker-compose healthcheck template probes with `wget --spider`, which
+// sends HEAD, not GET (internal/compose/custom_services.go). Before this,
+// ensureHealthRoutes registered GET only, so every plugin on the default
+// chi router had no route for HEAD /health at all; chi's default 405
+// handler answered "405 Method Not Allowed" and the container never went
+// healthy (nself golden-path E2E, free/cron, 2026-09-22). HEAD is checked
+// independently of GET: a plugin that registers its own GET /health but no
+// HEAD /health still gets the default HEAD handler, because GET and HEAD
+// are different entries in chi's routing tree and a GET handler is never
+// invoked for a HEAD request.
 func ensureHealthRoutes(r chi.Router) {
 	for _, path := range []string{"/healthz", "/health", "/readyz"} {
-		if r.Match(chi.NewRouteContext(), http.MethodGet, path) {
-			continue
+		if !r.Match(chi.NewRouteContext(), http.MethodGet, path) {
+			r.Get(path, handleLiveness)
 		}
-		r.Get(path, handleLiveness)
+		if !r.Match(chi.NewRouteContext(), http.MethodHead, path) {
+			r.Head(path, handleLivenessHead)
+		}
 	}
 }
 
@@ -143,6 +158,20 @@ func handleLiveness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+
+// handleLivenessHead answers HEAD requests for /healthz, /health, and
+// /readyz with a bare 200 and no body. It deliberately does not delegate to
+// handleLiveness and re-encode the JSON body: per RFC 9110 a HEAD response
+// must not have a body, and net/http's real Server would silently discard
+// any body written on a HEAD request anyway (chunkWriter.Write "eats"
+// writes for HEAD) — but httptest.ResponseRecorder, used in this package's
+// tests, does not emulate that discard, so writing a body here would pass
+// against a live server yet fail the unit test. Keeping this handler
+// write-free makes both environments agree.
+func handleLivenessHead(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 }
 
 // Recovery is an HTTP middleware that recovers from panics and returns 500.

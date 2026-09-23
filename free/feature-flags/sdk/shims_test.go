@@ -107,6 +107,40 @@ func TestListenAndServe_DefaultHealthRoutes(t *testing.T) {
 	}
 }
 
+// TestListenAndServe_HeadHealthRoutes is the direct regression guard for the
+// nself golden-path E2E failure on free/cron (2026-09-22): the CLI's
+// docker-compose healthcheck template runs `wget --spider`, which sends
+// HEAD, not GET. Before this fix, ensureHealthRoutes registered GET only,
+// so HEAD /health fell through to chi's default 405 handler and the
+// container never reported healthy even though GET /health returned 200.
+// Mirrors TestListenAndServe_DefaultHealthRoutes: build a Server via
+// NewServer, register middleware and a plugin route, then exercise HEAD
+// through the same registration path ListenAndServe uses
+// (ensureHealthRoutes).
+func TestListenAndServe_HeadHealthRoutes(t *testing.T) {
+	s := NewServer(9999)
+	r := s.Router()
+	r.Use(Recovery)
+	r.Use(Logger)
+	r.Get("/v1/ping", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	ensureHealthRoutes(r)
+
+	for _, path := range []string{"/healthz", "/health", "/readyz"} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodHead, path, nil)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("HEAD %s: status = %d, want 200", path, w.Code)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("HEAD %s: body = %q, want empty", path, w.Body.String())
+		}
+	}
+}
+
 // TestEnsureHealthRoutes_PluginRouteWins verifies a plugin-registered
 // /health handler is NOT overridden by ensureHealthRoutes — an explicit
 // plugin route must always win over the default liveness responder.
@@ -141,6 +175,19 @@ func TestEnsureHealthRoutes_PluginRouteWins(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Errorf("%s: status = %d, want 200", path, w.Code)
 		}
+	}
+
+	// The plugin registered its own GET /health but no HEAD /health, so
+	// ensureHealthRoutes must still supply the default HEAD handler — GET
+	// and HEAD are independent entries in chi's routing tree.
+	hw := httptest.NewRecorder()
+	hreq := httptest.NewRequest(http.MethodHead, "/health", nil)
+	r.ServeHTTP(hw, hreq)
+	if hw.Code != http.StatusOK {
+		t.Fatalf("HEAD /health: status = %d, want 200", hw.Code)
+	}
+	if hw.Body.Len() != 0 {
+		t.Errorf("HEAD /health: body = %q, want empty (plugin's GET body must not leak into the default HEAD handler)", hw.Body.String())
 	}
 }
 
