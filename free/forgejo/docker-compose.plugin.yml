@@ -76,7 +76,7 @@ services:
       - nself_network
       - forgejo_runner_net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/healthz"]
       interval: 30s
       timeout: 10s
       retries: 5

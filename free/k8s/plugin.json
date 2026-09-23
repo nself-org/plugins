@@ -1,6 +1,6 @@
 {
   "name": "k8s",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.",
   "author": "nself",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "documents",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "api_version": "1.0.0",
   "description": "Document management and generation service with templates, versioning, and sharing",
   "author": "nself",

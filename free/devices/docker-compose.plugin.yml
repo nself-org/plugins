@@ -21,7 +21,7 @@ services:
       DEV_INGEST_HEARTBEAT_INTERVAL: "${DEV_INGEST_HEARTBEAT_INTERVAL:-15}"
       DEV_INGEST_HEARTBEAT_TIMEOUT: "${DEV_INGEST_HEARTBEAT_TIMEOUT:-45}"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3603/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3603/health"]
       interval: 30s
       timeout: 5s
       retries: 3

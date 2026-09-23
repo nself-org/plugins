@@ -1,6 +1,6 @@
 {
   "name": "watchdog",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Self-healing container watchdog with circuit breaker: status, resets, event history, and TG/email escalation alerts.",
   "author": "nself",
   "license": "MIT",

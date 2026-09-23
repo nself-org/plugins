@@ -1,6 +1,6 @@
 {
   "name": "search",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Full-text search engine with PostgreSQL FTS and MeiliSearch support",
   "author": "nself",
   "license": "MIT",

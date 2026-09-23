@@ -21,7 +21,7 @@ services:
       CDN_BUNNYCDN_API_KEY: ${CDN_BUNNYCDN_API_KEY:-}
       CDN_FASTLY_API_TOKEN: ${CDN_FASTLY_API_TOKEN:-}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3036/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3036/health"]
       interval: 30s
       timeout: 5s
       retries: 3

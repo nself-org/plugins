@@ -1,6 +1,6 @@
 {
   "name": "game-metadata",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "api_version": "1.0.0",
   "description": "Game metadata service with IGDB integration, ROM hash matching, tier requirements, and artwork management",
   "author": "nself",
