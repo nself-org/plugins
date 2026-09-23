@@ -5,7 +5,7 @@
   "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
-  "note": "nSelf Free Plugin Registry \u2014 60 MIT-licensed plugins.",
+  "note": "nSelf Free Plugin Registry — 60 MIT-licensed plugins.",
   "plugins": {
     "ai-cli": {
       "version": "1.2.5",
@@ -39,15 +39,15 @@
         "binaryName": "nself-ai"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "966eac13f8678dae2aa3b5c02e3a7839c35fdeaff6ed3e3407f2087efc5d4697",
+      "checksum": "5f682cf5b723748c96fb9ad1de89c8e55a04589c01b13d4e307729fb572af1a9",
       "checksums": {
-        "sha256": "966eac13f8678dae2aa3b5c02e3a7839c35fdeaff6ed3e3407f2087efc5d4697",
+        "sha256": "5f682cf5b723748c96fb9ad1de89c8e55a04589c01b13d4e307729fb572af1a9",
         "platforms": {
-          "darwin-arm64": "caa0bc8c37015586994352ef5fd27adff93d48220111b22fa28a48e1a5cbd670",
-          "darwin-amd64": "c45ecf54ea5b6103e9cdb644588e9621cefe661cef2eb0110c9850d8da189d48",
-          "linux-amd64": "da4d5d5bf7733eaefc0c9bba8a0c6772487f4bdeed10c490bcb94ec07c09bee2",
-          "linux-arm64": "4cdb532f27b100e42c78486ac36caf9944547bd2aaff25c8ef63d1bd8f2e1aa4",
-          "windows-amd64": "25f90424d0b27937fed1352d5da19bb1eae2a5d360c64735ec637fdcad896597"
+          "darwin-arm64": "9c0e664bb2ea7dbc740ea28bcac2bf6623fb94d88f574378cfe5d04845c09e40",
+          "darwin-amd64": "020522bbe618daabcc77eae08cf14b4157638df5224a515e31930dc6e68df29d",
+          "linux-amd64": "236759c27af221becbd7d218f51c23aefcc9f338b587d1f5aaee79389d1cd528",
+          "linux-arm64": "ec8200ba70864908a4d44be929b73ea81c0c42b2d04dfca7af0cf6ef4488ee04",
+          "windows-amd64": "eca41b18572a553703902922d3745154754cf983f97096fcd9010d6ba769f2d7"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/ai-cli-1.2.5.tar.gz"
@@ -82,15 +82,15 @@
         "binaryName": "nself-ai-studio"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "e823a1708aa08a1db9ddfa03ae526c4f1d049c27249b646025de43ce80ce1743",
+      "checksum": "6735760fa5914a5a06809bfe055e664c31c75ca261ab3c86f8d92762dd4eeb8b",
       "checksums": {
-        "sha256": "e823a1708aa08a1db9ddfa03ae526c4f1d049c27249b646025de43ce80ce1743",
+        "sha256": "6735760fa5914a5a06809bfe055e664c31c75ca261ab3c86f8d92762dd4eeb8b",
         "platforms": {
-          "darwin-arm64": "40cc51ce4015e0d2e45336a8faecaace81d5ee57a118b9c5988f9a22d078ee35",
-          "darwin-amd64": "e6abf42fe407aa12c4a30736fb0cb23248b5da5cf29bc3c30cd80a5b46a56ae8",
-          "linux-amd64": "d8af5fd3863348e97910cb8d766c87a9cc4d9272a953bb68a4c377233b20da4a",
-          "linux-arm64": "28884eb7ce431146e2fcdc740828377b9feb99494a10ee0b199e1baa53900cf9",
-          "windows-amd64": "17c061b24cabf0c7a6a774274cf19aa46cb4d8590ef13736141e14d158bfa5ff"
+          "darwin-arm64": "b8ca8e62d74936daeab9bb9d809609e9af48de6c1ff1c6b803c03f6baccb5f35",
+          "darwin-amd64": "34ad227ebc165e544f25e499634ba2f0e731a581f5d083b9d1eb44e73bb7ea36",
+          "linux-amd64": "f59ef0be7893b50f6689df556dc4aed37e8e79c85dbce2fb75fc05ba3bb0a03d",
+          "linux-arm64": "4743827f9bf2511c2f8342531e9ff4206ab00d1990f76f53d639521963140d50",
+          "windows-amd64": "331c7a53201074809266b0ca89f0fa1a7c64b959d76b58421091459768eed491"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/ai-studio-1.2.5.tar.gz"
@@ -126,15 +126,15 @@
         "binaryName": "nself-alerts"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "46504ce29e52f8f1d818e029fd3a5f2eb2faddfb27ac9d65f63c2136260d3c7e",
+      "checksum": "cf3c954daa7a8eda6e9bb039b55589ab597a42b3ca414ed0e9ff7a120ad7b7f1",
       "checksums": {
-        "sha256": "46504ce29e52f8f1d818e029fd3a5f2eb2faddfb27ac9d65f63c2136260d3c7e",
+        "sha256": "cf3c954daa7a8eda6e9bb039b55589ab597a42b3ca414ed0e9ff7a120ad7b7f1",
         "platforms": {
-          "darwin-arm64": "2d3f7b3a3ff427eec0548de9b3d6c345ee03954b051bd75839776cf116cc22db",
-          "darwin-amd64": "5a709c7dcd5b9b2e0cc755b2566c86fa181d96688e137375c74fbe7030ecf005",
-          "linux-amd64": "5305063bc02387ada65abfad5c0214f187eaf3074d917fdeb063d2d2da223467",
-          "linux-arm64": "2f22832f570b041057db156b23dacdfe84dfeaecb359b3bbb4d083665cff7bc8",
-          "windows-amd64": "8df86a1c90fc8ab114a88e736a7455aee701c13a37660e199bf89c3bd471d752"
+          "darwin-arm64": "aecc76002da36de47ce91645598bc9a304653007e2beaca6d8c8a55423c38810",
+          "darwin-amd64": "8755814d51f3c3a64406d57e7bfb9e076aada821ca42b463b771c1852d8634a1",
+          "linux-amd64": "98d786492ab97f0e4b2e68437480473efe42630e49c53ffbde507169854e8edf",
+          "linux-arm64": "a33aaffcffc7935fb4f67be4a678cd2ead10acc113902e02092dd56c498978ae",
+          "windows-amd64": "208b767bd9a1b44b3ce9e9dd7477f79b7b076d58e956dd1e65ceaf1b96e5e0b9"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/alerts-1.2.5.tar.gz"
@@ -169,15 +169,15 @@
         "binaryName": "nself-api"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "39e5559f0c2de30890d9422df985f204db55fa9efce5c597f23f3fd3640d0aea",
+      "checksum": "79f1ea0eb5ffb991add9aa73a002aa463e321752320ef12d259ac27d00d279c3",
       "checksums": {
-        "sha256": "39e5559f0c2de30890d9422df985f204db55fa9efce5c597f23f3fd3640d0aea",
+        "sha256": "79f1ea0eb5ffb991add9aa73a002aa463e321752320ef12d259ac27d00d279c3",
         "platforms": {
-          "darwin-arm64": "7abd2161dad75df7c4afa8d40126c35ade138cbc262d6694d3feef528d6e9442",
-          "darwin-amd64": "2f2d7181062141b2e561a2775273a52fe27c26621a435078f03e9bd4bad3465a",
-          "linux-amd64": "26a73cd63eb3b721685a6a2a6023be9872196ca009165a068f3d0bd65d7e8793",
-          "linux-arm64": "590ddf9b3f7c983317ff056f6fc5d299d6e8ce6a88863a8aec3be4ae1ddc0f10",
-          "windows-amd64": "180186c11348fd65b382ff3a64fbad7b279f2002abcb46231153bbe5f14aea73"
+          "darwin-arm64": "1c77879101cefe5c10c9ed339409dd28b43a051595bf9a8067d170ca840eb26f",
+          "darwin-amd64": "d221f7cdf2109f778c6e79e83d2f3b81bfc85c98605a0780ca8dcac72df7d5c8",
+          "linux-amd64": "7869ecc8f3315be0dc5252e5213ccec4e6c3d450131676819c5994b8782b4e3b",
+          "linux-arm64": "ccb293541a47b1c960727d72bf1d366a005d6b63cb35cb652cda3b73d876c5c1",
+          "windows-amd64": "b275f7f453196cd568fc2bbf73621560796849f970e47a93070f170860360643"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/api-1.2.5.tar.gz"
@@ -212,15 +212,15 @@
         "binaryName": "nself-audit"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "3c77cfb161140f0ae810c51df465ff27d0d01792271ff1a49bd2073242826c4d",
+      "checksum": "6d69b8bb9a93cf29a64844b1df9326b37876ce321e7439c27b18972fbf1a4f26",
       "checksums": {
-        "sha256": "3c77cfb161140f0ae810c51df465ff27d0d01792271ff1a49bd2073242826c4d",
+        "sha256": "6d69b8bb9a93cf29a64844b1df9326b37876ce321e7439c27b18972fbf1a4f26",
         "platforms": {
-          "darwin-arm64": "e71b0125447d7758cf084a628aab3078189d1fff22ac566b2d6cc1bd38e51393",
-          "darwin-amd64": "614012d507e47935d1ee98406ca64fed016c699fe737a8dfdd0a366461d90fdc",
-          "linux-amd64": "a86e979ab3199998c155e34ca8fe072200f4abf56626cf1dc7131a33cef4679b",
-          "linux-arm64": "40ac85be62640b701a3015a95f21994dbf4119ce94ee8f80e9f7c15c6fbb2b6e",
-          "windows-amd64": "e1dc249d64a686faec03404761bf12100810c61800262c4281fb3f72b136536f"
+          "darwin-arm64": "06b808399336585c8c3bcece6b13c92f557ca23d039684d8c7e0913daf5f2a91",
+          "darwin-amd64": "5b3f878ecbdb2d90a8ea82ad267aaea6ea639b485cebc200ecf873e9d47062bd",
+          "linux-amd64": "2fcc9462a3d763c261a4eaae5e0c7ac67fb300d925c5962e46822ec49e260fc0",
+          "linux-arm64": "79156d5019f3020a541723e15d60d32aa6199633e08a72bcaafc290f1b917524",
+          "windows-amd64": "b48f29047f250ab061ee8fcaee3270118eb2c153063c23bf11dcabe56487ca65"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/audit-1.2.5.tar.gz"
@@ -256,9 +256,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "77b33d3561c22f5a218e4876a05b260387fb0888353e5bded60d8447a6315bb7",
+      "checksum": "60c2bc39fe800209478313f5438a93ebf6cd7a5a29ebf410218e9502d1fce5db",
       "checksums": {
-        "sha256": "77b33d3561c22f5a218e4876a05b260387fb0888353e5bded60d8447a6315bb7"
+        "sha256": "60c2bc39fe800209478313f5438a93ebf6cd7a5a29ebf410218e9502d1fce5db"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/audit-log-1.2.5.tar.gz"
     },
@@ -294,9 +294,9 @@
         "entryPoint": "cmd/main"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "b88fa4c0fb2eb62f18882fe4f77979b0031697556db763526dbe8e639e456dc9",
+      "checksum": "69f293862635abb040819f16f90db14a6fb6e53623dafa5524c975d66fb5ce25",
       "checksums": {
-        "sha256": "b88fa4c0fb2eb62f18882fe4f77979b0031697556db763526dbe8e639e456dc9"
+        "sha256": "69f293862635abb040819f16f90db14a6fb6e53623dafa5524c975d66fb5ce25"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/backup-1.2.5.tar.gz"
     },
@@ -332,9 +332,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "75d31a1072e0f9fa5931284969881a2d0d956115b3f3e4b4b10805c072514a64",
+      "checksum": "3c8a36d3167ab4cf9cacc292d59f0b6547b8833b1adb0f5eb5a1869bb07e56d8",
       "checksums": {
-        "sha256": "75d31a1072e0f9fa5931284969881a2d0d956115b3f3e4b4b10805c072514a64"
+        "sha256": "3c8a36d3167ab4cf9cacc292d59f0b6547b8833b1adb0f5eb5a1869bb07e56d8"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/ci-1.2.5.tar.gz"
     },
@@ -369,15 +369,15 @@
         "binaryName": "nself-claw"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "9679c0bdf141dee2757cfe1c6dacce9ab1ab92d80c8a55973db2c0f65070754b",
+      "checksum": "0ea01c3b2a374f6a223ebdd64e260946774e6c72bbdf50117bff5256e96d0596",
       "checksums": {
-        "sha256": "9679c0bdf141dee2757cfe1c6dacce9ab1ab92d80c8a55973db2c0f65070754b",
+        "sha256": "0ea01c3b2a374f6a223ebdd64e260946774e6c72bbdf50117bff5256e96d0596",
         "platforms": {
-          "darwin-arm64": "00a21c5dd5dddfaab52014df2b251e8d1a787b3956546710be0dc30735ba62a3",
-          "darwin-amd64": "36b904df5f48f70a849fac87aa003998cfe4446ef9e4079483616716c5339376",
-          "linux-amd64": "d3cb19318d4ca3c7eb03b40df9bac760c0261afe37a537066fdeec71a7bd2c1c",
-          "linux-arm64": "f57f8bf6d76500a26f1888458e4e123e8a341af6c7382c2411f7b3ea2ad42236",
-          "windows-amd64": "0c2eb7931f940231731bf6fd59b2507da0101ece94992d7c211ccc311d027b08"
+          "darwin-arm64": "1dae32fc08794fc6a060e677a3193b89a25579a635d6043504b3e65633132636",
+          "darwin-amd64": "8a8738610895f6cbe971607278b2c1d0a2596668def9e158452910dd4a97bc13",
+          "linux-amd64": "9304b5814cea6d3d64db5a49d5b09d5899b50623c3e75151b89dbfed7b3ad2c4",
+          "linux-arm64": "c26f3110b881255b02f7c496013a43ddbb7a71ea290757fd86e75c645fad8d1c",
+          "windows-amd64": "1088f099236bfa63eecdc0cb91aedba386de5145746ad3edc1bbd9ffb5407fd7"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/claw-cli-1.2.5.tar.gz"
@@ -438,9 +438,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "770e06f30a93469f1fb670250ba282b599467ea67694fc10a1f9c7880119fc83",
+      "checksum": "5c4882ecd57361740a4a3cd9248aa8454706cc5dcd14f68299ae51e08063e431",
       "checksums": {
-        "sha256": "770e06f30a93469f1fb670250ba282b599467ea67694fc10a1f9c7880119fc83"
+        "sha256": "5c4882ecd57361740a4a3cd9248aa8454706cc5dcd14f68299ae51e08063e431"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/content-acquisition-1.2.5.tar.gz"
     },
@@ -479,9 +479,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "89da05554ba6d313d6c2a83430a3992dab66ad77d9ae437ebb205a9efd405b0c",
+      "checksum": "8d86beb931895eb0bf7cdce82d8774e7b6c93e2d0acac76d8df4cc402ad9c51b",
       "checksums": {
-        "sha256": "89da05554ba6d313d6c2a83430a3992dab66ad77d9ae437ebb205a9efd405b0c"
+        "sha256": "8d86beb931895eb0bf7cdce82d8774e7b6c93e2d0acac76d8df4cc402ad9c51b"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/content-progress-1.2.5.tar.gz"
@@ -515,15 +515,15 @@
         "binaryName": "nself-costs"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "5846f97f1000cf4027d757023fd7d82c488aa43b4301e05974406847159928f4",
+      "checksum": "0a0f857b168cb493b03f1260a3c24e7acf6efe8cd2effe8c687d3115e9b4459b",
       "checksums": {
-        "sha256": "5846f97f1000cf4027d757023fd7d82c488aa43b4301e05974406847159928f4",
+        "sha256": "0a0f857b168cb493b03f1260a3c24e7acf6efe8cd2effe8c687d3115e9b4459b",
         "platforms": {
-          "darwin-arm64": "d4a5a92c068f07c335bdcd67bf3cd5a54b750c31786d628b6b15c63e68a65b13",
-          "darwin-amd64": "772576d3c057941d4e6e6cf5dd24c219959723667508cc025b3f378cf88c21a7",
-          "linux-amd64": "fda5e5030e1b6aa58e6b4be3bb6e82b2f8f4d264c13bb80be90b7f207e2d6b5c",
-          "linux-arm64": "bd8bbe9c39c514cf4c8bcc684a0c7acad96cfde3eb6ba8762a29cf09a1b5827a",
-          "windows-amd64": "b96251ecc5b52a785c6b803a1b6eb48bc45a3eb84717f32840b95c6fd1679532"
+          "darwin-arm64": "187f565a82c82b934ef60e489f25a5826d414f2be6794146840d76596a1752f7",
+          "darwin-amd64": "e2c4f33f019aa93ce4a0fe053ed59b6e9026171d6de4856601663e42e3e68c2c",
+          "linux-amd64": "a052530b181392d7f873b844bb155d0544930be7b62655c5e8999e494a7cf7f8",
+          "linux-arm64": "50e3ecee4898350ee10ade99c68a114f6155169259b94ccb3d70936731d9c193",
+          "windows-amd64": "707cc4c11162beb6d0d356bb748aff2a72490403a4f33c5832899fa8d8239133"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/costs-1.2.5.tar.gz"
@@ -560,9 +560,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "40d3c91cb114786e929f61abaf1b7557b801af5e81675625b709782b28aa1986",
+      "checksum": "5658800fb15c6785234c25f941593c3c574eaaf7a75f3176184dc5ececcf0f11",
       "checksums": {
-        "sha256": "40d3c91cb114786e929f61abaf1b7557b801af5e81675625b709782b28aa1986"
+        "sha256": "5658800fb15c6785234c25f941593c3c574eaaf7a75f3176184dc5ececcf0f11"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/cron-1.2.5.tar.gz"
@@ -598,15 +598,15 @@
         "binaryName": "nself-dlq"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "9f21e22f872c8480ff54e1ba7a1b281351f378091ae1d399f065426528c3cf41",
+      "checksum": "733fb5600030b6fede0d95a2330015a7642d46589c3ef9ec766dabb6f1214c34",
       "checksums": {
-        "sha256": "9f21e22f872c8480ff54e1ba7a1b281351f378091ae1d399f065426528c3cf41",
+        "sha256": "733fb5600030b6fede0d95a2330015a7642d46589c3ef9ec766dabb6f1214c34",
         "platforms": {
-          "darwin-arm64": "5c26f002906f69ff9d9f42cc1d732374e73887fe727dcb81279ce2bf434285da",
-          "darwin-amd64": "c04d4a628d353171386db60edf5de600aeeb1d559d9109262eabad4ad8f73f36",
-          "linux-amd64": "f921e3cdaa3dd816563de25114f7aee541859032864a875e41d8b8573a29ddd1",
-          "linux-arm64": "199543d6314d1fead32c90bb50a64111d8e83c18a898ae8d7a00812c89d4f889",
-          "windows-amd64": "675fad0d5ea8d1e2244035265a173cf6fcae13603b5c0e488b3ed1742d2f7194"
+          "darwin-arm64": "a0fd056a9483133f3a71331fae1502ec72cc0423360380e83acce2221ff593f6",
+          "darwin-amd64": "a235a9be01a139b6051c426919700664373d4fe9cf24210ce6bfa64d85b1f6f3",
+          "linux-amd64": "6de98bd28be90899527bdea3cf356c2b475ca97193cf662bc5003139b9967cd6",
+          "linux-arm64": "f6cb300b0b884b2fbacfeff4cf7864c61815fe56c65c37136dc86a67c86d5203",
+          "windows-amd64": "5f04bf046d1c21f3911ebc79eba4860b095ba40fd1509f8c59f294392285166f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/dlq-1.2.5.tar.gz"
@@ -642,15 +642,15 @@
         "binaryName": "nself-dogfood"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "f65710ca05440169770adba3d53262ee181a607e532f61d84c1d5fea928b05d6",
+      "checksum": "dd78972133f1cda16031f42495ada4db0a8457217d0be25d286c0186b940d325",
       "checksums": {
-        "sha256": "f65710ca05440169770adba3d53262ee181a607e532f61d84c1d5fea928b05d6",
+        "sha256": "dd78972133f1cda16031f42495ada4db0a8457217d0be25d286c0186b940d325",
         "platforms": {
-          "darwin-arm64": "37cb737d98974fa8e2679ed0c5e1d57e4419b5c7667df39da192550931817911",
-          "darwin-amd64": "5c0aa04fa69435358409290ae83f526a1056ce669dbae596578efa7346aa26ee",
-          "linux-amd64": "61318a3a51c7798667d585d5ce8f9ae13c18fbbae4ee9db99619a0f0d2956538",
-          "linux-arm64": "70b5242c6b3557576b2af51131b6487e6b6d6bf13e35e7949a689fc912476307",
-          "windows-amd64": "4e9955ec21d3d4fd0020bf5f8103c62c7f99696ffd003f364887293c35ed50f4"
+          "darwin-arm64": "b852e3b7a3ad1ef94ddb6355a0705914cbb51bee521481029d9d3a9c84b66962",
+          "darwin-amd64": "33704c6080c58547d97d44189b6c226c210395ab06ecb91f2eefaf4a1d2ae38b",
+          "linux-amd64": "0fa3039cc036d2be33bbf36e904e8d8b5ce5495c37bec7fa84ef307e4cede49c",
+          "linux-arm64": "07ecc6bb412c72c737b4d8f29e85e2f16d3d3cd1cc7250602832f55c73363718",
+          "windows-amd64": "9074e275d8cc4bf3550449450134b7a4b5814a76465e71be49f979deba49741d"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/dogfood-1.2.5.tar.gz"
@@ -691,9 +691,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "1acb99eec96efa05c9a5f276b0885bd6e34ad4c17e686005c6c3f2d2847ca159",
+      "checksum": "be3d105dd545bea1c0578ecc2680421a2734af92eb5df2061a89d00240e7a341",
       "checksums": {
-        "sha256": "1acb99eec96efa05c9a5f276b0885bd6e34ad4c17e686005c6c3f2d2847ca159"
+        "sha256": "be3d105dd545bea1c0578ecc2680421a2734af92eb5df2061a89d00240e7a341"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/donorbox-1.2.5.tar.gz"
@@ -729,15 +729,15 @@
         "binaryName": "nself-dr"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "bcb99b93918a1b9a558af896d7912a9e5621062b4eea01ef05dbe6383e0c1cbe",
+      "checksum": "5b84613b74ffe5d4bac01fb0971ba5f57bb6d49194ab1a07b921e7f49afd0575",
       "checksums": {
-        "sha256": "bcb99b93918a1b9a558af896d7912a9e5621062b4eea01ef05dbe6383e0c1cbe",
+        "sha256": "5b84613b74ffe5d4bac01fb0971ba5f57bb6d49194ab1a07b921e7f49afd0575",
         "platforms": {
-          "darwin-arm64": "672c30ef82bafb99aedf6d1d609ea866740baf5762a6e77e7b66fd97f7b1f066",
-          "darwin-amd64": "4ecc46ec3de9c91b08e9fbce75be755a5ee9cbf69a86d51973d9db2a23c142a1",
-          "linux-amd64": "558fec714bc0a03e637c9e9c7636a9b0e8bedc0e51bff39ea5f0b0f364dd5e12",
-          "linux-arm64": "d4986e7dcb36f151535d6607c5bba9cc1e7682ed2c631a4516270f086d9ce1cb",
-          "windows-amd64": "322ec72c3041bfba667c6ab1f85f345ac40e7b1ab1ab3ea2056b70a3b330fe16"
+          "darwin-arm64": "58d2892c2609f5f5a6d7453aec85d821a7ae3b7537e1f89937274abc09981848",
+          "darwin-amd64": "3e4ec063ca01a8a149d957e47091a50230f23a1fe845420fd6f193d279e91bee",
+          "linux-amd64": "3b2262f8dec488fd8998ab84d91e9a7ded12e8770bccd02c409c8c48833f6986",
+          "linux-arm64": "2b4c9f00b7cc632e9dd99db049c4570a8491b18652ca24c964bef71fff2eda21",
+          "windows-amd64": "fb28321cef16b289c839628f0ccc0633b273b32fd422b00efc8cace6ab6e8464"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/dr-1.2.5.tar.gz"
@@ -785,15 +785,15 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "e8b9a69356e58f12281a390cd15b6b50fbded1ee9ed981e6633e386fb0d1a774",
+      "checksum": "9aeaf5f9086370c1b4f774422b864b3b4ad1582900fbfc00bf108b6915e9cf48",
       "checksums": {
-        "sha256": "e8b9a69356e58f12281a390cd15b6b50fbded1ee9ed981e6633e386fb0d1a774"
+        "sha256": "9aeaf5f9086370c1b4f774422b864b3b4ad1582900fbfc00bf108b6915e9cf48"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/e2ee-1.2.5.tar.gz"
     },
     "family-gedcom": {
       "version": "1.2.5",
-      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin \u2014 showcases the core + helper-importer pattern.",
+      "description": "Generic GEDCOM file importer for the family plugin (PLANNED). Accepts any GEDCOM 5.5.1 / 7.0 file from any provider, with optional photo-folder upload. Free MIT plugin — showcases the core + helper-importer pattern.",
       "category": "content",
       "tier": "free",
       "license": "MIT",
@@ -824,9 +824,9 @@
         "entryPoint": "binary"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "71257ac70a9bf2ab56784a33ce8bc2176635ad23f6c00a4bac0d93dd6de58f5b",
+      "checksum": "8c948f9537e850091a63951377d872de45068ce8e2f08fe20346b105ed9400c9",
       "checksums": {
-        "sha256": "71257ac70a9bf2ab56784a33ce8bc2176635ad23f6c00a4bac0d93dd6de58f5b"
+        "sha256": "8c948f9537e850091a63951377d872de45068ce8e2f08fe20346b105ed9400c9"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/family-gedcom-1.2.5.tar.gz"
     },
@@ -862,9 +862,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "f4e056e5b0a845b11e771d65c67228b2e752189f6a0fce7ea3da08c75f6dd051",
+      "checksum": "5e0fa016f6bff62a84c6f56c6dee7692f6b90bb0e3121496ed0567bef08dbb81",
       "checksums": {
-        "sha256": "f4e056e5b0a845b11e771d65c67228b2e752189f6a0fce7ea3da08c75f6dd051"
+        "sha256": "5e0fa016f6bff62a84c6f56c6dee7692f6b90bb0e3121496ed0567bef08dbb81"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/feature-flags-1.2.5.tar.gz"
     },
@@ -899,15 +899,15 @@
         "binaryName": "nself-federation"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "b14bfc17c0d924528de14babfa1b3d134c06cddb59788617878946c499d7497e",
+      "checksum": "1a774ad69b47461f321c13cbb34f5fe0f12af3c2977a1a17f21dbfa71d471568",
       "checksums": {
-        "sha256": "b14bfc17c0d924528de14babfa1b3d134c06cddb59788617878946c499d7497e",
+        "sha256": "1a774ad69b47461f321c13cbb34f5fe0f12af3c2977a1a17f21dbfa71d471568",
         "platforms": {
-          "darwin-arm64": "8eb948d34055792f99d0725faee28b8a234e6882b3eefc7361af2323b522277c",
-          "darwin-amd64": "ce00d113bd11f5bf6bb654972dd14d5258d9a5c3bb8f52a7a13040a1545d0dec",
-          "linux-amd64": "8a5104372a29751dc5b703c8249aec13092d7f8c8eda2a979dca627fd22c55b2",
-          "linux-arm64": "70beca81a2f896508fe8477fee95473df01b0f4bb1de57c7cd0ba1721904c055",
-          "windows-amd64": "57836ea8e46b329c95ea1e88b13cdeb0e6cee50c275a7201b2951f42183a49e3"
+          "darwin-arm64": "99f7c1b2ab944441396b901cd7e1cb5536fbbe9c88d9426440dbc893f6d25814",
+          "darwin-amd64": "abda41774298009c51c8a8c95d1cdd495f479f0d321b5c25ac7ca9630cb58f50",
+          "linux-amd64": "0175c29b1fa5d5a8702f15630b92cf8a7b9f88dc0c5957376ef306008c54b955",
+          "linux-arm64": "828a9e84f51e54590923f2a45a1eb49194e906c17bb297e1c8de3fe2debe6c80",
+          "windows-amd64": "8383af0b771a072a90d76b753b95ed8f248eb74b9bab2feaed3eaffc9eba413b"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/federation-1.2.5.tar.gz"
@@ -942,22 +942,22 @@
         "binaryName": "nself-flags"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "91fbd09cc7e06af57d1ff383a17d4559f0de72fe3ce1466f8e15608acb813fb2",
+      "checksum": "d32d50c5126f2180e7f81bbb53df6b691678ced768e180563d66df0823b496f2",
       "checksums": {
-        "sha256": "91fbd09cc7e06af57d1ff383a17d4559f0de72fe3ce1466f8e15608acb813fb2",
+        "sha256": "d32d50c5126f2180e7f81bbb53df6b691678ced768e180563d66df0823b496f2",
         "platforms": {
-          "darwin-arm64": "325225d303978b580d4d0806684996620e93ceaf3a6a8f51b9dfaab3f2fef687",
-          "darwin-amd64": "f2fbc9459393250f0b5be44d252b72ae832ebce822a5e6f90909c431c24f67cb",
-          "linux-amd64": "5e5c4a97cd7019b0614709b1ba6a2b365df6743bfc95e30d9d36634b76558499",
-          "linux-arm64": "0e66e42a6a927ca481819dd801a642ab590f085911157cbb4f2cd402ded61328",
-          "windows-amd64": "c96e1405edb61ce78096541d4aeabd97978496565c3ca7ec23877ebcef65c7e1"
+          "darwin-arm64": "8a1383991fbc0a5d38eee68f54076c32f9d771a95f9cfddc08ccce442571ba7a",
+          "darwin-amd64": "8cd0200b830780ec6955e030a08b4d9b5cb7def97f52546a56d1d3dd178f1c61",
+          "linux-amd64": "30985ce02bda696db1ed946d74d5eaa85c8a3cefb1fa92725b4b9d631caf46ff",
+          "linux-arm64": "6fa4b32843ac5e3c7993e93c285261f1583768a7f6b80b8d153b266291aff1e2",
+          "windows-amd64": "6aaf5115ae8f5db41a4cb06ba1925bc7785252fc33466b81f1b1db5154215c7b"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/flags-1.2.5.tar.gz"
     },
     "forgejo": {
       "version": "1.2.5",
-      "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute \u2014 zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+      "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
       "category": "development",
       "tier": "free",
       "license": "MIT",
@@ -988,9 +988,9 @@
         "entryPoint": "docker-compose.plugin.yml"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "155e05373c4b204073f31e768099b1d9450f87deb4e033e7efdd4bea3df4cc3a",
+      "checksum": "d4ef7eed66935690ffd5023448ac37ffa23224862bf0343b40a58dad64f03fe6",
       "checksums": {
-        "sha256": "155e05373c4b204073f31e768099b1d9450f87deb4e033e7efdd4bea3df4cc3a"
+        "sha256": "d4ef7eed66935690ffd5023448ac37ffa23224862bf0343b40a58dad64f03fe6"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/forgejo-1.2.5.tar.gz"
     },
@@ -1024,15 +1024,15 @@
         "binaryName": "nself-gateway"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "80dc5ab8936396aa14bd5a7d1180b26639fe0a1606b379ba81b6a3a02add2a2e",
+      "checksum": "418276a3e466b05e21ae4f884240bfd421ed0eddef78843ecad992401d47d218",
       "checksums": {
-        "sha256": "80dc5ab8936396aa14bd5a7d1180b26639fe0a1606b379ba81b6a3a02add2a2e",
+        "sha256": "418276a3e466b05e21ae4f884240bfd421ed0eddef78843ecad992401d47d218",
         "platforms": {
-          "darwin-arm64": "4db02bdbd947db27099877167e65c689b3f8f4a98589c001b508367105a5a95f",
-          "darwin-amd64": "9e612c5a4342e30a4a6e88bece3a8d7fedda8ca9bf11efc8f87ab037cb2ac650",
-          "linux-amd64": "53c21cec7c45822815ee3cb0b5558ba2bf72d2302b22f884336e68888f7e529e",
-          "linux-arm64": "1037497a22d7a163e41fa6ba9d91e7ed1f4bd3465042b5d409b628d51cdd2427",
-          "windows-amd64": "c1313d95ccd97ab3141cc1a3c504b3d92d1b1f1c4ec8b84069f4f5ae4fb54ca3"
+          "darwin-arm64": "1c4bfcd5363e374fbe1a7ac9af229854c98ca4ea9acbbd77940b52782cef1c9e",
+          "darwin-amd64": "46b1551d9798feaa391bf2d57b75a58311ea07012720d5fbe04af581ac520519",
+          "linux-amd64": "2d4d5ef6a2824d8258a0ee16f9274fb58342c67e499c6ff61c126b7c1e860a9d",
+          "linux-arm64": "41329a30d74381924f4579f683efdecf2eb799519c93f9117543381f3e40eebd",
+          "windows-amd64": "6b53e2433061d300a1b4c6eebf89ea4f042eaa528f9f1d03423412ae85a4dcc0"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/gateway-1.2.5.tar.gz"
@@ -1067,15 +1067,15 @@
         "binaryName": "nself-gauth"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "177429cbc08b9b8db386d2662c345b0ee8cf933982e42b19e2532931b4f1ebdb",
+      "checksum": "81c633ca93f139de2dad4852ba7b69a7c4c6817c8f729d4d87c8f9fff72776a3",
       "checksums": {
-        "sha256": "177429cbc08b9b8db386d2662c345b0ee8cf933982e42b19e2532931b4f1ebdb",
+        "sha256": "81c633ca93f139de2dad4852ba7b69a7c4c6817c8f729d4d87c8f9fff72776a3",
         "platforms": {
-          "darwin-arm64": "9d7236afb0c2ff75c89d4b965deda834e13965a9ff3b58806983f9d75235717f",
-          "darwin-amd64": "0ac5d54853c25a60286aa27b789651e98267ee524c444548d2931ba5a036475e",
-          "linux-amd64": "f6a61ef7c93684243f793064e69e697ead48f604042b658cd57a30f6e459de9c",
-          "linux-arm64": "67a210ed1604e0a3fb32496a1f820f51ec0c33fead96d8021c0acc70cbbbca3b",
-          "windows-amd64": "12436b103701d11345e241ea197c217d6fc7d70ae0827acd126e901a003dfd83"
+          "darwin-arm64": "801f311168df45c60de9cc76dcd5bcfdfc4c6d3bd1f3b795b1594aabe6a37226",
+          "darwin-amd64": "29dfc43473130ec013e5a5e8a5c8df3555402f8e2982fdaf47b493bc9171f898",
+          "linux-amd64": "14da8a05a063a93951398c4a8a30b9e58011882e7578f68af3ff3cf1d5531c84",
+          "linux-arm64": "e7dd26eaf3901db7df86798f14518c984fe4197a2049dfdc79f75dc7e651cd65",
+          "windows-amd64": "07884dfb11fac4e717de3072a241e1dae948ade194a48e792ff5431eba8a1b6f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/gauth-1.2.5.tar.gz"
@@ -1112,15 +1112,15 @@
         "binaryName": "nself-gdpr"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "05e5c324e4bc93bb2267d9895385ae6f3b4f283c53a0ec2027fc7b2fad9310e6",
+      "checksum": "57c497f7e5f9faa987e2e66910a9b057ad011a0b7cffa8e8ea6d78a99bc59904",
       "checksums": {
-        "sha256": "05e5c324e4bc93bb2267d9895385ae6f3b4f283c53a0ec2027fc7b2fad9310e6",
+        "sha256": "57c497f7e5f9faa987e2e66910a9b057ad011a0b7cffa8e8ea6d78a99bc59904",
         "platforms": {
-          "darwin-arm64": "dff240b86acd3199461416ff19bd765b5ff17e3837cb629c411fb85d4e989849",
-          "darwin-amd64": "962b3231f041afb76b314bdd1a469c2d4a28c161fab122ab9825975719ad2553",
-          "linux-amd64": "68e166019c21b65d7cd6985c332f5c2a5eca6626cb9d96574766b871a16687f5",
-          "linux-arm64": "edd74285c05566c1769924607d12361d8d6931436cc466e5351aeead657b24da",
-          "windows-amd64": "c233999f5aba030ab3b28032a5518b88627867cac56cb3cefb4324fb2adaa514"
+          "darwin-arm64": "e963975ef5f439346fadefb442f4cb52f5662ceed4ecb19d82037163ace0e074",
+          "darwin-amd64": "7f190e2ffe15b4a2acc4772b4dfeb681023a4d4108f5430f90444269493ad901",
+          "linux-amd64": "4c5e9e86fe0180d3973aa9f49d2729048b48024a0340535fac51a64591d7364b",
+          "linux-arm64": "5039e456928480af29f1a3b70853471e0de6d6a82265660b150f5af8a36b624c",
+          "windows-amd64": "7e3aaf347df4abe42a6914c9fa55c825294c47e177915c8179850949a099c47d"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/gdpr-1.2.5.tar.gz"
@@ -1179,15 +1179,15 @@
         "entryPoint": "nself-github"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "2f536313756fc46e35e5b2c429ed1f15aeb25bf2a00f3093a3d14d37cd72d82f",
+      "checksum": "7e11c28054c8e469688fde03adf080d051c1eceb458b5d394f60423c1026d570",
       "checksums": {
-        "sha256": "2f536313756fc46e35e5b2c429ed1f15aeb25bf2a00f3093a3d14d37cd72d82f"
+        "sha256": "7e11c28054c8e469688fde03adf080d051c1eceb458b5d394f60423c1026d570"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/github-1.2.5.tar.gz"
     },
     "github-runner": {
       "version": "1.2.5",
-      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
+      "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
@@ -1216,9 +1216,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "72d1653578764c7f0678d78fe3c817c675ac058fd1ecf7d6ad3ef32073a8c5fb",
+      "checksum": "d9d98e017b3a8364afe45b72e04985549387a2b9271fe8fe45d572563be0e288",
       "checksums": {
-        "sha256": "72d1653578764c7f0678d78fe3c817c675ac058fd1ecf7d6ad3ef32073a8c5fb"
+        "sha256": "d9d98e017b3a8364afe45b72e04985549387a2b9271fe8fe45d572563be0e288"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/github-runner-1.2.5.tar.gz"
     },
@@ -1256,15 +1256,15 @@
         "binaryName": "nself-infra"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "64b3aee249c1ae12803fb830487a7012f5a9dd971563ef023edb97e87ea61b26",
+      "checksum": "62702be360963425d3ddd7d0060bbf48a00e66b332ea640e4573a2f820981155",
       "checksums": {
-        "sha256": "64b3aee249c1ae12803fb830487a7012f5a9dd971563ef023edb97e87ea61b26",
+        "sha256": "62702be360963425d3ddd7d0060bbf48a00e66b332ea640e4573a2f820981155",
         "platforms": {
-          "darwin-arm64": "0e76420178782b778e9ab929eed4218a56ad519cd4f655f384fac85ab06ac10d",
-          "darwin-amd64": "0769f33617abcee7f9b2170c5f33cb7edb439c708eb82a63c878b55dfd8717bd",
-          "linux-amd64": "9ba927ba9a10ef281bd73429703dbac6a42c7ff7f7d4c96beed80e5df24dc38d",
-          "linux-arm64": "acaf38b543d2f64363e53cab6da29514cf1074c7b174785c42778913e0811270",
-          "windows-amd64": "290b67abeef326344d85385f5d33b557e3ee464d8b4200dd34d010c6c2476242"
+          "darwin-arm64": "c5cb1da15b8bb1424c0c8769c34815e930be3cb95c5e3d5c6ffc532ef5e20050",
+          "darwin-amd64": "df3fafd8c4932fbc03f39a37d92e8972e9e1918cc18b3b4ba1f8103f3223b7fd",
+          "linux-amd64": "a32b1a04c46c277dc34c6858529279ee7eb3d06344d5509f672b539e7274958f",
+          "linux-arm64": "026bf6689f4d369902fa544c6d8e384733e57b5b013efe4bde200b7a86c9d221",
+          "windows-amd64": "2df8f04b93080b422d726cf4d254ba5b7bdeaece449a8fdfca88157e4fcb2910"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/infra-1.2.5.tar.gz"
@@ -1301,9 +1301,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "3624bfb205697a918205722e6dac34003109e9fe0ecaf6058f8153ff43037c29",
+      "checksum": "a61fd494d7fb50d83af5b9a721602acbef6d33ff09433812376c0b98ec597136",
       "checksums": {
-        "sha256": "3624bfb205697a918205722e6dac34003109e9fe0ecaf6058f8153ff43037c29"
+        "sha256": "a61fd494d7fb50d83af5b9a721602acbef6d33ff09433812376c0b98ec597136"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/invitations-1.2.5.tar.gz"
     },
@@ -1340,9 +1340,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "552448f0753c31e47ba6daea586d4789d60acf007fa5750956104815c3fd29b0",
+      "checksum": "583bbb14c2284e680e49f99c95574ac0dd6227947f4328e1b57c13fdc64e03f5",
       "checksums": {
-        "sha256": "552448f0753c31e47ba6daea586d4789d60acf007fa5750956104815c3fd29b0"
+        "sha256": "583bbb14c2284e680e49f99c95574ac0dd6227947f4328e1b57c13fdc64e03f5"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/jobs-1.2.5.tar.gz"
     },
@@ -1377,15 +1377,15 @@
         "binaryName": "nself-k8s"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "5b006d13cc4d52ab23716653dde1dc7d831a0a2413a61ec72760b8ee96af6c9c",
+      "checksum": "7a4ae97d98f6345d70473f626640067128c4e6f59c83a6fab4ce069c1a97f221",
       "checksums": {
-        "sha256": "5b006d13cc4d52ab23716653dde1dc7d831a0a2413a61ec72760b8ee96af6c9c",
+        "sha256": "7a4ae97d98f6345d70473f626640067128c4e6f59c83a6fab4ce069c1a97f221",
         "platforms": {
-          "darwin-arm64": "b89b49c45d2e6ad44eefb5df8c226b62c794734ba86a0dacb6dbaa6a2f6cee0d",
-          "darwin-amd64": "bd70981e43e01ee3d5c5800c2403982d6fa905eba3917895a10354774d50a2a7",
-          "linux-amd64": "7bf7c7e055021105803062a4052035fa46220ce153563ed5ddc7fd0ae71fac40",
-          "linux-arm64": "942848da2e1694f74aa28ba103b82f6d6a6c21db94e313ab535ba5040146c244",
-          "windows-amd64": "83c6b50a796475e66c3c732e70c7bece251280a60f69ae41b98ba251add4da66"
+          "darwin-arm64": "f49943480cd0cb3985ef0e6f39c4df4de360d537f6afc817ffcf036023b68879",
+          "darwin-amd64": "043a46c4b022a68863d0f1c3ad0f5c88a16daecf47d3a4f79caf5fc7bbae0e22",
+          "linux-amd64": "8628a38881b1abc20e4b7a28d7600f531da05cbc6888e726c6a1d5668114344a",
+          "linux-arm64": "ce1ed5047262a7006bc6930fe499b586f601cbf1e581fcace3f72d66ecf1dbb5",
+          "windows-amd64": "2c4137ebc1074bb8a41a77cce4f356b8817a88c8e9aef9c65516293dc44d5b6b"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/k8s-1.2.5.tar.gz"
@@ -1422,9 +1422,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "cc0e08c2a969cbd0b6307fb0f2976e7b43fa336433690e9d5e29532c72b9b922",
+      "checksum": "0b4c7f5982d3e78c35b9b9358decba946853fc5eb46407e64bfa40135a53d692",
       "checksums": {
-        "sha256": "cc0e08c2a969cbd0b6307fb0f2976e7b43fa336433690e9d5e29532c72b9b922"
+        "sha256": "0b4c7f5982d3e78c35b9b9358decba946853fc5eb46407e64bfa40135a53d692"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/link-preview-1.2.5.tar.gz"
     },
@@ -1457,15 +1457,15 @@
         "pluginType": "cli",
         "binaryName": "nself-maintenance"
       },
-      "checksum": "922824875984a50d278e6874229c70a92bd1b1420f9877a15c1b585b2462b396",
+      "checksum": "208b1c764c897e71be3141cd07b4671b180a4bf158ef8e326f4f567ada698894",
       "checksums": {
-        "sha256": "922824875984a50d278e6874229c70a92bd1b1420f9877a15c1b585b2462b396",
+        "sha256": "208b1c764c897e71be3141cd07b4671b180a4bf158ef8e326f4f567ada698894",
         "platforms": {
-          "darwin-arm64": "b843e7213b2d4cab128ab515c7350ceb8ffad00c2bcb3ae16ce7b2ca0784ad54",
-          "darwin-amd64": "8153570c6abe43daeaaecdd79d9b9456434f43cbbcde80261f12f643a1bc34b7",
-          "linux-amd64": "ab63b62eda82a30b0a7d9cf364dfc8d76cb40850281853ec7f5c4945e84730cb",
-          "linux-arm64": "ce88ef830bc4447b7a1e46aed4534a38204806ff88a13f98c882330266909e7e",
-          "windows-amd64": "515a0776e241028b147d8a2fc4e3660e853d46460d7bb5c811979dec565cd0d1"
+          "darwin-arm64": "a463baf6bccfee5f123a7d6ddc7b16f65a41b8b3c068f95d2e89312141756a8c",
+          "darwin-amd64": "10c04e4a762c06aee90b476ce6ac23f1e0d8aa7b2fce039c07786509d6020985",
+          "linux-amd64": "02fee5b42b1cba9f82059b038f0e343036d9d1279a2e32b0e07d068f380816a3",
+          "linux-arm64": "dd1bb63906ff5afd19643a8cdcec84ceb60d367a7818f49a3ef7334ea642464f",
+          "windows-amd64": "256c7a8d6968d90251896b41a60c2d14d46f109d4c7b2f0f19d9070550a4f962"
         }
       },
       "releaseTag": "v1.2.5",
@@ -1503,9 +1503,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "e8ff4267b002dba45500af617b5c1fc2d746a5d6608c413bc23008dff55a813f",
+      "checksum": "4fea412a1c4d60099ebcf7b50a888fdd68c701cfcb4216564fab673a57aed2ee",
       "checksums": {
-        "sha256": "e8ff4267b002dba45500af617b5c1fc2d746a5d6608c413bc23008dff55a813f"
+        "sha256": "4fea412a1c4d60099ebcf7b50a888fdd68c701cfcb4216564fab673a57aed2ee"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/mdns-1.2.5.tar.gz"
     },
@@ -1539,9 +1539,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "eb08640e8dd61e64aaf95c30629f9d17da4840b171e18957d858f93f5eb26b28",
+      "checksum": "1f9410c1e417d8fc8ce328f08ae29b3ff84ca14b338e17733b3a813a7e942ce4",
       "checksums": {
-        "sha256": "eb08640e8dd61e64aaf95c30629f9d17da4840b171e18957d858f93f5eb26b28"
+        "sha256": "1f9410c1e417d8fc8ce328f08ae29b3ff84ca14b338e17733b3a813a7e942ce4"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/mlflow-1.2.5.tar.gz"
     },
@@ -1575,15 +1575,15 @@
         "binaryName": "nself-model"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "3393e713859e5ad6e8393d519ea14ee0dcc6c3c0459567f6b5dbed7cf0f2ee0f",
+      "checksum": "ad81fde91cf8d2151ca3804687687fbada51154305b7f847151a9aa30199c1f6",
       "checksums": {
-        "sha256": "3393e713859e5ad6e8393d519ea14ee0dcc6c3c0459567f6b5dbed7cf0f2ee0f",
+        "sha256": "ad81fde91cf8d2151ca3804687687fbada51154305b7f847151a9aa30199c1f6",
         "platforms": {
-          "darwin-arm64": "d549838afa180614fc2e2a5be869a7944409ccde6bd648bf105f741c3a8d5372",
-          "darwin-amd64": "2b1370ec2571bef59171e384401315f5c7ff8eb4fa95caee5f19f7a9b2f603f9",
-          "linux-amd64": "387efb2ec2d83904a6c7bacc59d4f69d9f070630cd4afb9676bffd295492f59f",
-          "linux-arm64": "9b452a3215f1f0a14288f1f017abd40e87378cc754261903869513eec58f3be3",
-          "windows-amd64": "5c33b08c1516dbc8cedb5b75d1fa5181ed03e600f73569d41e81ccba1a5c6b81"
+          "darwin-arm64": "9872fb751a878b1fd66059a4d2bbafb81c61d22ba0a2b69b6e5e6743e3d6ffc4",
+          "darwin-amd64": "365b10944f1c2aad3c150de52820aa67999d11bbbedac038657d127828604586",
+          "linux-amd64": "6fa7abb740ed2e83cf5c713454354c2bf27af640e87c69117669a2b6abbac1c9",
+          "linux-arm64": "9159f7956f936b00e6f8984b54c70dac471f7999801e46c176e6c458f4a02468",
+          "windows-amd64": "32d2f6e62edb73e73d341ef4bdc1b186a4f2b92f105a6172536fcbf7373e223f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/model-1.2.5.tar.gz"
@@ -1619,15 +1619,15 @@
         "binaryName": "nself-monitor"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "1259bfdb86547272a4876cf56762687d9d3c04cdd4d050852af42087ea40e1bc",
+      "checksum": "cf15eab40c1c5935fc2c803190b454dde9e0b6444193b09456ed7a06ab6ea500",
       "checksums": {
-        "sha256": "1259bfdb86547272a4876cf56762687d9d3c04cdd4d050852af42087ea40e1bc",
+        "sha256": "cf15eab40c1c5935fc2c803190b454dde9e0b6444193b09456ed7a06ab6ea500",
         "platforms": {
-          "darwin-arm64": "20a5a5fac45f982c3f16ff424f5c9007ca348b4c32ad6a114b98040cb3a98105",
-          "darwin-amd64": "4610b27fb7f07a5157b214674cb6c42b0c064a153c397cb678996d46c0ea0e11",
-          "linux-amd64": "312e5550761585c7b958fdd97023d49c87dfd88f8b5dfded7c5a50ba8d3c4974",
-          "linux-arm64": "7e5a22fde91c24def177ea826f0a63690b80c54ce3edf8fe986f2a707c712393",
-          "windows-amd64": "4fcdc2c5c062c3141c05647c491f47f360c88b399ed72cb80f3d0ae512272235"
+          "darwin-arm64": "7ec29a085f5eebf84c8a50bce724c5f6467a318613f6795ff456265a24406725",
+          "darwin-amd64": "b2ee5a4ebd3746c7363c56d275d81845cf54b3f32d50b5a3c5a25b2c32117673",
+          "linux-amd64": "4509cddaef2809016acdbb597da9ffab5de978c31f7fcdf791e3ec50cdf85088",
+          "linux-arm64": "4970747e37e1e2d3eed28e12467ba751781ed14da315e7ebfd05e23b67385e31",
+          "windows-amd64": "524e2ec70d835ff0d6ae08947d8242e057de4bf78e9a34f8db88d6a6dea7017f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/monitor-1.2.5.tar.gz"
@@ -1667,9 +1667,9 @@
         "entryPoint": "docker-compose.plugin.yml"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "51681cea274331b849270a206eb5145883d20adc7834221dba1291e26153e9a5",
+      "checksum": "37da9d5f1066a28071538ef12493437470fdb78e12a6f57f907d75ddb2141f03",
       "checksums": {
-        "sha256": "51681cea274331b849270a206eb5145883d20adc7834221dba1291e26153e9a5"
+        "sha256": "37da9d5f1066a28071538ef12493437470fdb78e12a6f57f907d75ddb2141f03"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/monitoring-1.2.5.tar.gz"
     },
@@ -1706,9 +1706,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "4a61ab65e91ebec6119c2476662d0ff01f899095e0e5bb97f83140980822e462",
+      "checksum": "c8f97de2a92b195fc5a996eef22e069336c1ffd0b9488c4ab155b312094377e4",
       "checksums": {
-        "sha256": "4a61ab65e91ebec6119c2476662d0ff01f899095e0e5bb97f83140980822e462"
+        "sha256": "c8f97de2a92b195fc5a996eef22e069336c1ffd0b9488c4ab155b312094377e4"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/notifications-1.2.5.tar.gz"
@@ -1744,9 +1744,9 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "checksum": "84ad248e41c0bd6302d4c3fc44195d30bf11343fbf582680562b2524bc7ee146",
+      "checksum": "2fbb814c39e150b5490da97f7194aa1fd04caabb50f0cb962e3126b425cc8925",
       "checksums": {
-        "sha256": "84ad248e41c0bd6302d4c3fc44195d30bf11343fbf582680562b2524bc7ee146"
+        "sha256": "2fbb814c39e150b5490da97f7194aa1fd04caabb50f0cb962e3126b425cc8925"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/notify-1.2.5.tar.gz"
@@ -1773,9 +1773,9 @@
       ],
       "dependencies": [],
       "name": "ollama",
-      "checksum": "a569e8b452deb2de4faae1767a944199361adb5bc983f9ad051165b2670c62af",
+      "checksum": "3cd9173fa6cf57c0194d490e9498f5927c0b95700b7ddcd4415e2c50280924dc",
       "checksums": {
-        "sha256": "a569e8b452deb2de4faae1767a944199361adb5bc983f9ad051165b2670c62af"
+        "sha256": "3cd9173fa6cf57c0194d490e9498f5927c0b95700b7ddcd4415e2c50280924dc"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/ollama-1.2.5.tar.gz"
@@ -1824,9 +1824,9 @@
         "entryPoint": "nself-paypal"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "16e0917a55cb3d0e5333e5922c8df6cf5548c889f215cd40ee3be58f2df528fa",
+      "checksum": "6b2b519490a8d5bda97454ba010bb85a35b11042e5250ed44d1381e7ae088ffb",
       "checksums": {
-        "sha256": "16e0917a55cb3d0e5333e5922c8df6cf5548c889f215cd40ee3be58f2df528fa"
+        "sha256": "6b2b519490a8d5bda97454ba010bb85a35b11042e5250ed44d1381e7ae088ffb"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/paypal-1.2.5.tar.gz"
     },
@@ -1866,9 +1866,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "6b382950f2b581bc3cd17c80925ae1986db44db21cd8d669224030dee30c8cab",
+      "checksum": "27cd89f5bcff4383d0cb4edd50cf8d3c673274bf459b8ef7364cdb2bf7a4c2fc",
       "checksums": {
-        "sha256": "6b382950f2b581bc3cd17c80925ae1986db44db21cd8d669224030dee30c8cab"
+        "sha256": "27cd89f5bcff4383d0cb4edd50cf8d3c673274bf459b8ef7364cdb2bf7a4c2fc"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/push-1.2.5.tar.gz"
     },
@@ -1902,15 +1902,15 @@
         "binaryName": "nself-queue"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "c53e8b5fbced0a58fc7199460d35c470d837cf53a988508f5fcb4cce861dd04e",
+      "checksum": "36bb01ef1ae33bc475f5f78d09dcaaa8b1fd968a87fb0e0faafb6cb2af6adab0",
       "checksums": {
-        "sha256": "c53e8b5fbced0a58fc7199460d35c470d837cf53a988508f5fcb4cce861dd04e",
+        "sha256": "36bb01ef1ae33bc475f5f78d09dcaaa8b1fd968a87fb0e0faafb6cb2af6adab0",
         "platforms": {
-          "darwin-arm64": "62a0a5b9ee27bb87c278b57d3f65a895be7fb4863eec7ad38aeb92f9323b9fe8",
-          "darwin-amd64": "c86a444fed34b056387703ab3a80e26ec4f177a9b5fd48d8c2417f43acf55b26",
-          "linux-amd64": "2ef593d41b95ffdeb256a2f3173ffdd252a92b0a62670c2e51796707141271cc",
-          "linux-arm64": "f41853dd92ff9aeef6f2775a5dd4faf3b0243db016d50bbcf9f10ae15ea399fd",
-          "windows-amd64": "8400875cd538349d8b864790ac2cf0c9ece3b894e7bef46c54ff96251141b75f"
+          "darwin-arm64": "f24e7a7cd9c5dcdefbe6975df7df68a8707d3a1927b60029cd945f8dd2bfd6f1",
+          "darwin-amd64": "34278c6f1a3ae6def93a38cd9f3cbed5d918c01ce08c5ee2ae2885384c03cb6c",
+          "linux-amd64": "17c0e5ae11d9709d109abd92ed730e5ff465e404186373199d7e5ed7899b4db0",
+          "linux-arm64": "bc9f38a9c64f41a9a26e22025a7c950eda729428e698c05e4603d1ab74ea7d14",
+          "windows-amd64": "ea5ea7dadf953f7774c1f4aa3e0d75d626035f5e8eec57661fdafccef00aa54e"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/queue-1.2.5.tar.gz"
@@ -1946,15 +1946,15 @@
         "binaryName": "nself-region"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "99fd1792d16988332def0364a7c18fc9364d4343942bb798e2a3f7cce2f84790",
+      "checksum": "c5598f118421c40654196ac2032e3550db768ec4b82d1742ae97b2dc9a4b972f",
       "checksums": {
-        "sha256": "99fd1792d16988332def0364a7c18fc9364d4343942bb798e2a3f7cce2f84790",
+        "sha256": "c5598f118421c40654196ac2032e3550db768ec4b82d1742ae97b2dc9a4b972f",
         "platforms": {
-          "darwin-arm64": "3f2a266a9f2d9fa3589e4faee933744145b4ef64bb7b6580cc5a57ea61ef0df3",
-          "darwin-amd64": "7576a01e03cbd3eb30957c5b74a48caf34e5869ca46c25713e448c9265ec547f",
-          "linux-amd64": "848446a9cd216406bcf94bdb6dc97933282d5d99e55f908afae37af642ce99f3",
-          "linux-arm64": "46e005f0277e66fa46f39031fc0a7e1bfb9fe8689db8b9efa07cd134d301e095",
-          "windows-amd64": "3939e254d756407f261ad7c4b26bb7e24367a0ddb0cb13976d67f7ee52774fc1"
+          "darwin-arm64": "9c353c9bf6fb62c05a021276d64d84ee8796c29e03c71de0aa53b34d38d825c9",
+          "darwin-amd64": "820b80c86742e43310c8fdf3434c9138ca844216c650cc17b3c5c7254afab0c7",
+          "linux-amd64": "06065e400138a170b4758605e71683393bbce129101bd0fdef193954a989879a",
+          "linux-arm64": "0b0b20c9ceec105acbb37463e12b454ccfea09bf8df32cca555815e1bdbe1d3c",
+          "windows-amd64": "26cc7fcdd43650f3bf50fac367b2adb949cfc440dc8c382fbe57709a887df19f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/region-1.2.5.tar.gz"
@@ -1990,15 +1990,15 @@
         "binaryName": "nself-release"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "6817f551de85fb11a66a1787e1591a713adc37c1bce626ae619a9cef9ecd43d0",
+      "checksum": "b3a1d5a73708fa2a15e464d6e3126d59382f49fdb4d52f8139b301642dd3e93a",
       "checksums": {
-        "sha256": "6817f551de85fb11a66a1787e1591a713adc37c1bce626ae619a9cef9ecd43d0",
+        "sha256": "b3a1d5a73708fa2a15e464d6e3126d59382f49fdb4d52f8139b301642dd3e93a",
         "platforms": {
-          "darwin-arm64": "bad7de55ecd7a4832d1af3230189376a4379094321d16a718a4a48b46b8e3113",
-          "darwin-amd64": "81b9d93a5b4310ad50004bdd2e00088f5d5fba89b5edad36679811c3c9b44e2c",
-          "linux-amd64": "cec80844c4f95ae2d2f0f0b8869486f29f1cdd0e09ee187a14c32f024ee47edf",
-          "linux-arm64": "b7b5aa23e679bc468b62327aa9b77304182da25f1b56f09d40160011fd6ef16c",
-          "windows-amd64": "32cb0200d264393d12770da3f28306dd8267f21801041a78e7176df850a26328"
+          "darwin-arm64": "6fa16b9d14d54c8217e8ecdc8f504fc25ed889dadc9f5e71aea23648e2ede423",
+          "darwin-amd64": "7cde05fbaa4d139dc4bfcdf39a448dcaf0ffae897d24ddabf0f22b23a73d688a",
+          "linux-amd64": "d081c730bfd5ac86c64322343d866f00d4eb929d3bedce325f013809c17f8a80",
+          "linux-arm64": "d9f436a5529ebef661bd8faaba007a9c4ef6d51c8807007a9cdbd11af9c0b6ce",
+          "windows-amd64": "3f13e8b5cd88bfc6064807e370c1513d878ed5e4f81b79638928a7a486f4bed7"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/release-1.2.5.tar.gz"
@@ -2041,16 +2041,16 @@
       "bundles": [
         "task"
       ],
-      "checksum": "360708b3ae77f4f8d736e375b6ba2f411ad0697a1088f0c90b0df7938d0819f4",
+      "checksum": "765c68a0c3b1ed31af5cec6b77c9b4c9c86445a7ab6e04993d504d463280eaf8",
       "checksums": {
-        "sha256": "360708b3ae77f4f8d736e375b6ba2f411ad0697a1088f0c90b0df7938d0819f4"
+        "sha256": "765c68a0c3b1ed31af5cec6b77c9b4c9c86445a7ab6e04993d504d463280eaf8"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/search-1.2.5.tar.gz"
     },
     "sentry-cli": {
       "version": "1.2.5",
-      "description": "\u0273Sentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
+      "description": "ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -2082,23 +2082,23 @@
       "cliCommands": [
         {
           "name": "sentry",
-          "description": "Manage \u0273Sentry monitors, incidents, status pages and alerts"
+          "description": "Manage ɳSentry monitors, incidents, status pages and alerts"
         },
         {
           "name": "sentry-server",
-          "description": "Provision and manage a self-hosted \u0273Sentry server"
+          "description": "Provision and manage a self-hosted ɳSentry server"
         }
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "dbeaacb2443d1b0698592c34d173b3ed4cc3a0009988cadd9653bdafb955565f",
+      "checksum": "1f1ed190886a09331c2830c8eaef3e9a05d9a507ef014dd7efa5c54cdf8ec0d1",
       "checksums": {
-        "sha256": "dbeaacb2443d1b0698592c34d173b3ed4cc3a0009988cadd9653bdafb955565f",
+        "sha256": "1f1ed190886a09331c2830c8eaef3e9a05d9a507ef014dd7efa5c54cdf8ec0d1",
         "platforms": {
-          "darwin-arm64": "b345de6c251e167e3c642618207734645f88e88804b55cf3655db947aac34e82",
-          "darwin-amd64": "e1519126813b6aac836ead77fcda4d12b4fba1eb38fd8cde135e6666d15aede3",
-          "linux-amd64": "ec0d674cc589a0b3f7efc8986624458e05bdbd1fad04b3ff02e6986097324154",
-          "linux-arm64": "6c588f7d9303194a7c738e3a703bde5bd24df4e6bf1b3d5f4a6bd5823b8b0217",
-          "windows-amd64": "b7cf884dd4ce9dbe616f580752641393b5bc374bf745c4ae2ed7e8c96a38c665"
+          "darwin-arm64": "0303b85a82d669f24c2be2eb61aa898273d420a79fcd276d5d0683c01e7562e9",
+          "darwin-amd64": "a957a4b53649e53f8520095e5d96712961716cd9c2e8531122260ca9054fd0fd",
+          "linux-amd64": "77ac9a64802f71f3ab887c5747bbddc9c4d022b666eee3276794889223603d75",
+          "linux-arm64": "76a83c2c95ce22e32b5ce4a75333bdbdebe891a16e3ac3496dc4b376aeffd0d1",
+          "windows-amd64": "fef011e8efee6703e0df17490c34abbc9e2bfc514adffe8c784ee807e968de06"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/sentry-cli-1.2.5.tar.gz"
@@ -2142,9 +2142,9 @@
         "entryPoint": "nself-shopify"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "315d29bff56acb37603717b206030e57e488144bb64247677bd243acedcc5f3d",
+      "checksum": "7ab6424d029fbebbbc2905c3be920723e988507efbc1ef0020b42b17e2fad664",
       "checksums": {
-        "sha256": "315d29bff56acb37603717b206030e57e488144bb64247677bd243acedcc5f3d"
+        "sha256": "7ab6424d029fbebbbc2905c3be920723e988507efbc1ef0020b42b17e2fad664"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/shopify-1.2.5.tar.gz"
     },
@@ -2178,15 +2178,15 @@
         "binaryName": "nself-soak"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "865177ee4abd4400c9aa04f51c3c0ad2c1a61036d3ba8f03cac37e7bc2c235c4",
+      "checksum": "74d9169b66b51b0098626ea47a791ef10493e6ae49c6fe8b1dc586227366f611",
       "checksums": {
-        "sha256": "865177ee4abd4400c9aa04f51c3c0ad2c1a61036d3ba8f03cac37e7bc2c235c4",
+        "sha256": "74d9169b66b51b0098626ea47a791ef10493e6ae49c6fe8b1dc586227366f611",
         "platforms": {
-          "darwin-arm64": "1017690c420623bb7ba41dd749476c56ff459a1d0756c69f6b4068fb7eb740df",
-          "darwin-amd64": "4cb77a3a679c246ebdd8fadef5e7f5141c7453e3ddc913565aaa38ce482ca9c9",
-          "linux-amd64": "b3599411f82e9ccb70b93f774074d15b442fd9415b3a1a964ba2f770350069c9",
-          "linux-arm64": "263e5175bbee163dcc56efb6bb53b8fed323f5d174bb352ceda5632d75a2ced7",
-          "windows-amd64": "edd785a041ff74d7a40a5a4422fe7e0b4401331870a7d48ef6e9f2267ece7afe"
+          "darwin-arm64": "a9c903deb11984f83f2a3fe800a99b5cc39fd36529a8cd67d0689869121d421c",
+          "darwin-amd64": "ea64b41584ddc22d3430a11dd11fb203624cccc9ac2c5f90fc6fff8de92295ec",
+          "linux-amd64": "4d6ab77e98d892529d8fd8e84a3519de4c3e644db52f2eb92745e2409c5f8861",
+          "linux-arm64": "34df167426936238ba1734217bdae0a1b5176b1effb6fbc4194af6096e9016a7",
+          "windows-amd64": "391d83fcce77b9de0da247f3216ce5b502bf00c3902b7e55d88d7b109663694e"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/soak-1.2.5.tar.gz"
@@ -2245,9 +2245,9 @@
         "entryPoint": "nself-stripe"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "b547179f7d3743bed71d2742593beb56a0108d4920e239b0a0b0c6ce48286e55",
+      "checksum": "24adc50be84bc871539737d96a05891e62b22cebc94d1e55361897f8d7d25646",
       "checksums": {
-        "sha256": "b547179f7d3743bed71d2742593beb56a0108d4920e239b0a0b0c6ce48286e55"
+        "sha256": "24adc50be84bc871539737d96a05891e62b22cebc94d1e55361897f8d7d25646"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/stripe-1.2.5.tar.gz"
     },
@@ -2297,9 +2297,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "cf2ea6fa0ebd69f0b8b2f13c31631c9083f45779107407ee462eeda52fc4c0f9",
+      "checksum": "bfc35c5cd658e69e35551a37610c22846429f5245609cbb40875446ea6ce7150",
       "checksums": {
-        "sha256": "cf2ea6fa0ebd69f0b8b2f13c31631c9083f45779107407ee462eeda52fc4c0f9"
+        "sha256": "bfc35c5cd658e69e35551a37610c22846429f5245609cbb40875446ea6ce7150"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/subtitle-manager-1.2.5.tar.gz"
     },
@@ -2344,15 +2344,15 @@
         }
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "befffb2d6ed6f7a89ed412c4fc1a3e6e6fa81ad9cf7a5970d76eb6a9bd9efb1d",
+      "checksum": "d378f0046ca87158959f855c18d9bc5574ceb59820a9e41e58426dd292f2c5f4",
       "checksums": {
-        "sha256": "befffb2d6ed6f7a89ed412c4fc1a3e6e6fa81ad9cf7a5970d76eb6a9bd9efb1d",
+        "sha256": "d378f0046ca87158959f855c18d9bc5574ceb59820a9e41e58426dd292f2c5f4",
         "platforms": {
-          "darwin-arm64": "a6c019acb792e74774edc880d3f62e3ae3dcfd2993300417feb0d2067a578336",
-          "darwin-amd64": "231fa440d8d051f247a6d23f2d754f56681cae48ec359b7764affc58b5fbd280",
-          "linux-amd64": "53ece0080fd24cee4e06e198b6dc26382cef310b0da7744ae81c80d275165285",
-          "linux-arm64": "c963be77db1e43c5437dacc42293b0d0aaaeaf5101bb828f88aab6270d2f59b2",
-          "windows-amd64": "61b4424921b987a54096c5c344aebc9974dfa8102a90be1f01e500dbe55434ea"
+          "darwin-arm64": "4db63a92a36dfb6ff72ae8f751ab02bf4654e15b02dda7f80eb7590ed8c77a96",
+          "darwin-amd64": "258ecc06149cc1b7c14ea5c42e2473134e531542c7587b5b789b3e2c7f55d751",
+          "linux-amd64": "03d8bbb845b889967c591fb427553c69a47189a85ca2c8c2ba5070b509bb9e55",
+          "linux-arm64": "8e3e48399664c0da4a396ea3eee9590807e4aca429e22e4bcd1140194a6a5b62",
+          "windows-amd64": "80cc22c6d0c76e5a02d7cd72914dbbb827dea0e89ab0f8f64b0fe2880c53066f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/tenant-1.2.5.tar.gz"
@@ -2394,9 +2394,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "7868f968850c9aa0d547301a92a6cf82312ec1c17b12e8d9bcde9496639f5afb",
+      "checksum": "b694466e8c1b74430bcaa80c4495b6aef4e148b8b0db037b99fb3ea4da842dd9",
       "checksums": {
-        "sha256": "7868f968850c9aa0d547301a92a6cf82312ec1c17b12e8d9bcde9496639f5afb"
+        "sha256": "b694466e8c1b74430bcaa80c4495b6aef4e148b8b0db037b99fb3ea4da842dd9"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/tokens-1.2.5.tar.gz"
     },
@@ -2458,9 +2458,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "0b807574c1064d750d1c7bf1220081e9ac02fa7fe5b23a446329734daa461888",
+      "checksum": "68aeea0d1ff57a245875fb184a60cf35a618f61023cfafeeaeb29bc6dc9e7d9b",
       "checksums": {
-        "sha256": "0b807574c1064d750d1c7bf1220081e9ac02fa7fe5b23a446329734daa461888"
+        "sha256": "68aeea0d1ff57a245875fb184a60cf35a618f61023cfafeeaeb29bc6dc9e7d9b"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/torrent-manager-1.2.5.tar.gz"
     },
@@ -2502,9 +2502,9 @@
         "entryPoint": "cmd/main.go"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "67e9352125115123557b5567c22604cd8c64a6699313b8ac07a5c5ee484ef284",
+      "checksum": "6da77d9cfb7675e7cdd97c3bfedbb10151a3b5db1ddab57ce27589952d91e54c",
       "checksums": {
-        "sha256": "67e9352125115123557b5567c22604cd8c64a6699313b8ac07a5c5ee484ef284"
+        "sha256": "6da77d9cfb7675e7cdd97c3bfedbb10151a3b5db1ddab57ce27589952d91e54c"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/vpn-1.2.5.tar.gz"
     },
@@ -2539,15 +2539,15 @@
         "binaryName": "nself-waf"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "2b427904446ba89b4a4bfea4ac739cc77f2aef3173cb00ed813ba17231e84de0",
+      "checksum": "aaaccbe42899d2017d8792bad6c6bbb37614751a0d2c64ea43d442ef96554256",
       "checksums": {
-        "sha256": "2b427904446ba89b4a4bfea4ac739cc77f2aef3173cb00ed813ba17231e84de0",
+        "sha256": "aaaccbe42899d2017d8792bad6c6bbb37614751a0d2c64ea43d442ef96554256",
         "platforms": {
-          "darwin-arm64": "d905985695069de3c2ee605c734dc9cae6674cbedda16c5715e05f5b556655a7",
-          "darwin-amd64": "3c9a6b6dc41a772d1fbd3706d9780397729fac9e7373883046c686426b7b9023",
-          "linux-amd64": "b09d2c19cef86141d59fe4f9f7ea968ccbefcb80597eb7f2e8a0071101eb79d0",
-          "linux-arm64": "fb5c8563d5bbed3c3a33cbe0ff9d0128e1c05bd813bea154cb31fe0eb09b9d9e",
-          "windows-amd64": "1fd1d99c057296bfa8f0ac8fbcf2dfdaea916ae1c3d5016ac70d5727ab71b87a"
+          "darwin-arm64": "d51bc144c6aea0d81926380883f3a5f33dd70f567de118377d1f3987c11e9c32",
+          "darwin-amd64": "1e30336b9ecab2af0829fe1870e28ef2f6ac9a0644533e09b4f4a7bb40f834b0",
+          "linux-amd64": "6e3ea4ee5eadfb89e7de1a484f5f82e60cfc08bbf0c12eba4306dcbbbd37f63e",
+          "linux-arm64": "0e253839a43be57c3905de45679c2c272602875ba089aa44ede0a3ebbb4e8b77",
+          "windows-amd64": "f2d370e70f94bcf59c32da153f009c7c4e84aa210f76301fb00e5451bccf2f6a"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/waf-1.2.5.tar.gz"
@@ -2583,15 +2583,15 @@
         "binaryName": "nself-watchdog"
       },
       "releaseTag": "v1.2.5",
-      "checksum": "aebfbe0c7ed78f1e2baa702d6f0ef5659f783cb63c5c51785fce063b88a2314b",
+      "checksum": "d354bda4b333783999f4bb584fb8f0730e4e9f45f120c54f3cbc7525de9c3987",
       "checksums": {
-        "sha256": "aebfbe0c7ed78f1e2baa702d6f0ef5659f783cb63c5c51785fce063b88a2314b",
+        "sha256": "d354bda4b333783999f4bb584fb8f0730e4e9f45f120c54f3cbc7525de9c3987",
         "platforms": {
-          "darwin-arm64": "0264b5b91fc808fb6174f334d09bef33d2eae27fdbe108381c7ecd603278ee4d",
-          "darwin-amd64": "6a29e65e2a62df0299163a66a7dc9ace227463f02812e2cfafc1a862756cbf04",
-          "linux-amd64": "1bcdc1fcccfd062a496890199a8915aa628f9d7bee83805f7fe25d20544c28f3",
-          "linux-arm64": "ab4aa4259724bd0710da07b71530cbf561196ab7622cbf52cfddc31d69cd3f88",
-          "windows-amd64": "c752432288cc4725ba78ce4f1ecaa9f036bda7a7aa7895901d5029840d668084"
+          "darwin-arm64": "5bd86bb43ebbe69cd465abe283f9d344e792bb80d470334ba27dd8a021819be3",
+          "darwin-amd64": "857913eb04539e60d0db69e7b5fd07013e53c22a452f5e5f0429f84c77955691",
+          "linux-amd64": "6c382716c85743bae7f46a15a181f15fe48fb5f31af467d4969492d624b69bca",
+          "linux-arm64": "70445fa5218d0c65500cf6384f91f461b8cee55edcdefa0402fdc9c8c20b48f1",
+          "windows-amd64": "7cbaec685d764ea121602a25fe3d02949aef48cc9c27f43bf1fc0558c6423272"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/watchdog-1.2.5.tar.gz"
@@ -2631,15 +2631,15 @@
         "task"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "469e74fa8399647a176ddc313e573b551d3860c755266f1d173f22cfaa944a85",
+      "checksum": "0a3365bc860cb5de866c082ebf7ca1285cb31ce922a32148f0c6bd63a2fa683b",
       "checksums": {
-        "sha256": "469e74fa8399647a176ddc313e573b551d3860c755266f1d173f22cfaa944a85",
+        "sha256": "0a3365bc860cb5de866c082ebf7ca1285cb31ce922a32148f0c6bd63a2fa683b",
         "platforms": {
-          "darwin-arm64": "a6ef55b5a48c68b0a733f2207ef2c98f68ee1c24c085efa0cfbaeff0d0448fda",
-          "darwin-amd64": "0244d32c94191bd6176cdb770ebc57c00968d02e54c8add67078093d68f8409e",
-          "linux-amd64": "66b13288380f0bc0f7e9f5620409a6ca954ed9640aaec7907d66a7a15eb84529",
-          "linux-arm64": "3cb6b5bc7fb3925077515d841eec39597f6590fd048d198618035c0207022a07",
-          "windows-amd64": "cad45732a0f841ade6b3a5973c5cc3956427b59f9b28c7c63919004cab13fe68"
+          "darwin-arm64": "23471bdc23cfed55f71d2d08595b166a9fe376e9fc35f583385d43193c49ecdf",
+          "darwin-amd64": "b9ba4874500d685bf4f81000e0bda8e227d95d89a7daaad8c4f277fca33d59f1",
+          "linux-amd64": "5bc3a981721cac11dec70773036f6f89b5fc5bbb927fbef8949193d2d5def45b",
+          "linux-arm64": "0223178c0a1dffcba14814fadb5710dde9521e4c025e37399f07208e6043812b",
+          "windows-amd64": "06cc99133b38500fd7387a6f1120c991f65b3ff94641b7ad790ebcf7572d2f58"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/webhooks-1.2.5.tar.gz"
@@ -2669,9 +2669,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "650f0245ee96e6d23b3d0e341ac9a5c8265d0ebdebd636b037217de671e87606",
+      "checksum": "d09551ef0f0e9cf1c1498a09f49707cc7c4a4e6b9a9729d8a5bf328c5929ab60",
       "checksums": {
-        "sha256": "650f0245ee96e6d23b3d0e341ac9a5c8265d0ebdebd636b037217de671e87606"
+        "sha256": "d09551ef0f0e9cf1c1498a09f49707cc7c4a4e6b9a9729d8a5bf328c5929ab60"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/access-controls-1.2.5.tar.gz"
     },
@@ -2699,9 +2699,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "bf38e194571f00447a6384209823005eeeb49ae59919faa3fbdc60b6ccb6439a",
+      "checksum": "6a20b01c73d91898d7848f8a2e8fe79a4ad3f7ba544fc766e117d43204dbcb41",
       "checksums": {
-        "sha256": "bf38e194571f00447a6384209823005eeeb49ae59919faa3fbdc60b6ccb6439a"
+        "sha256": "6a20b01c73d91898d7848f8a2e8fe79a4ad3f7ba544fc766e117d43204dbcb41"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/admin-api-1.2.5.tar.gz"
     },
@@ -2729,9 +2729,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "ee2d431f65f7625090408a05875b2805a9c1250ccfa9a2e98e4d4fcedff897ac",
+      "checksum": "c9d3064fd4f178e13af37cd136e5f36fd01cc17fce8e3c469685490b1a5252ad",
       "checksums": {
-        "sha256": "ee2d431f65f7625090408a05875b2805a9c1250ccfa9a2e98e4d4fcedff897ac"
+        "sha256": "c9d3064fd4f178e13af37cd136e5f36fd01cc17fce8e3c469685490b1a5252ad"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/analytics-1.2.5.tar.gz"
     },
@@ -2763,9 +2763,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "c6f9d86c19df1e423f27e346d04b9a7c970cbd0e5f9e96ec84b6312e4a2ad6dc",
+      "checksum": "96f45fdce3f29cdd145a795ec6c438970555559108522bcd1b68d8148706259e",
       "checksums": {
-        "sha256": "c6f9d86c19df1e423f27e346d04b9a7c970cbd0e5f9e96ec84b6312e4a2ad6dc"
+        "sha256": "96f45fdce3f29cdd145a795ec6c438970555559108522bcd1b68d8148706259e"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/audit-analytics-1.2.5.tar.gz"
     },
@@ -2787,9 +2787,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "32d6d0e9b6aeb073bde1cf537328b6eb5b99629e165c902c1e46e6791d801345",
+      "checksum": "66004027d7d724008105b3c1b8a580c3618fedfa21786be6154027d9a63e3b1a",
       "checksums": {
-        "sha256": "32d6d0e9b6aeb073bde1cf537328b6eb5b99629e165c902c1e46e6791d801345"
+        "sha256": "66004027d7d724008105b3c1b8a580c3618fedfa21786be6154027d9a63e3b1a"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/auth-enterprise-1.2.5.tar.gz"
     },
@@ -2822,15 +2822,15 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "0f44b3f88232885f6141e2a8f0283e2794037c2ef82db396710afd9545c96923",
+      "checksum": "6f01866a8afebba9cc537e1cf527e054eb6c5fc871cb74c8a280c32f798154e7",
       "checksums": {
-        "sha256": "0f44b3f88232885f6141e2a8f0283e2794037c2ef82db396710afd9545c96923"
+        "sha256": "6f01866a8afebba9cc537e1cf527e054eb6c5fc871cb74c8a280c32f798154e7"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/byok-1.2.5.tar.gz"
     },
     "cdc": {
       "version": "1.2.5",
-      "description": "Change Data Capture \u2014 streams Postgres WAL events to downstream consumers via webhooks or message queues.",
+      "description": "Change Data Capture — streams Postgres WAL events to downstream consumers via webhooks or message queues.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -2852,9 +2852,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "22e5a732575dac30a94dbdaa98ce7bc2658a05077a54eb2e4363ab709a7bdd76",
+      "checksum": "c032558bbe119f3390d701061103012babfaa48f4c54c9e131f9dcd7925ea4d7",
       "checksums": {
-        "sha256": "22e5a732575dac30a94dbdaa98ce7bc2658a05077a54eb2e4363ab709a7bdd76"
+        "sha256": "c032558bbe119f3390d701061103012babfaa48f4c54c9e131f9dcd7925ea4d7"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/cdc-1.2.5.tar.gz"
     },
@@ -2882,9 +2882,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "e912711f3094694c958f04e741f8b7b23671e635fdf1a8b0ad85b5fd026c4c07",
+      "checksum": "606d5d782c0ce843d546d3bca647632bf7bbbf5a64d92c1a4585890d41292292",
       "checksums": {
-        "sha256": "e912711f3094694c958f04e741f8b7b23671e635fdf1a8b0ad85b5fd026c4c07"
+        "sha256": "606d5d782c0ce843d546d3bca647632bf7bbbf5a64d92c1a4585890d41292292"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/cdn-1.2.5.tar.gz"
     },
@@ -2913,9 +2913,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "e004adc3f0ce3cea9f551806eccc9e3902fa1955c55ba73bfe8c901326452e67",
+      "checksum": "611e60e1c0d18bdc54570c97726ed4ca9dbccf1f229cbea528e906252854f7d7",
       "checksums": {
-        "sha256": "e004adc3f0ce3cea9f551806eccc9e3902fa1955c55ba73bfe8c901326452e67"
+        "sha256": "611e60e1c0d18bdc54570c97726ed4ca9dbccf1f229cbea528e906252854f7d7"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/cloudflare-1.2.5.tar.gz"
     },
@@ -2953,9 +2953,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "cb5f5c7d4701f839505ec51e90fc5f8f61601bce2f67689f88ba7e6493177360",
+      "checksum": "2ac5c64c7cd1588b99e7d0840fffdf34910aa8d23546c2524fd15bfbb1496506",
       "checksums": {
-        "sha256": "cb5f5c7d4701f839505ec51e90fc5f8f61601bce2f67689f88ba7e6493177360"
+        "sha256": "2ac5c64c7cd1588b99e7d0840fffdf34910aa8d23546c2524fd15bfbb1496506"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/compliance-1.2.5.tar.gz"
     },
@@ -2984,9 +2984,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "0ed071bd45647a843602fbf9b5e26f7c605488d5144108d97b8b950cc30bd7e3",
+      "checksum": "f0df59e756962696e451ee9023d5f53ade57810cc6d0f67f5e0b8714903aaf93",
       "checksums": {
-        "sha256": "0ed071bd45647a843602fbf9b5e26f7c605488d5144108d97b8b950cc30bd7e3"
+        "sha256": "f0df59e756962696e451ee9023d5f53ade57810cc6d0f67f5e0b8714903aaf93"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/content-safety-1.2.5.tar.gz"
     },
@@ -3017,9 +3017,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "346902799820d68f9e758b069cfda77e2acbc3a57345a8d865605707305abfc3",
+      "checksum": "73a8a94e94dff17db0549ecf85a7336cb143cbd8458e561bb379dcb153718488",
       "checksums": {
-        "sha256": "346902799820d68f9e758b069cfda77e2acbc3a57345a8d865605707305abfc3"
+        "sha256": "73a8a94e94dff17db0549ecf85a7336cb143cbd8458e561bb379dcb153718488"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/crdt-1.2.5.tar.gz"
     },
@@ -3048,9 +3048,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "b610a3453504deaec3d14b5a60a51988381bc26f463be70368c5614dcf0e83ad",
+      "checksum": "577ba1fd2c21d08b0a99df719d431b11f87a7911eb90fe10f8ea791d08fa4289",
       "checksums": {
-        "sha256": "b610a3453504deaec3d14b5a60a51988381bc26f463be70368c5614dcf0e83ad"
+        "sha256": "577ba1fd2c21d08b0a99df719d431b11f87a7911eb90fe10f8ea791d08fa4289"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/ddns-1.2.5.tar.gz"
     },
@@ -3079,9 +3079,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "da3733829c0f369e85deee259faf0dae6d6047c5b4c38d216ac10c74cabd0db0",
+      "checksum": "b6448abc9f02b2f5f4649edf9ba11d7220b43562a5918bf15886f5ec6f8a2cc2",
       "checksums": {
-        "sha256": "da3733829c0f369e85deee259faf0dae6d6047c5b4c38d216ac10c74cabd0db0"
+        "sha256": "b6448abc9f02b2f5f4649edf9ba11d7220b43562a5918bf15886f5ec6f8a2cc2"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/devices-1.2.5.tar.gz"
     },
@@ -3110,9 +3110,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "2b97d946f69b1b119e13418f0b04733fce4dc0f9608376a2948315c793612639",
+      "checksum": "d98de087bcf942827a7749134fec9ba6c9068dbf7a45f6036f53ef38b6a5418b",
       "checksums": {
-        "sha256": "2b97d946f69b1b119e13418f0b04733fce4dc0f9608376a2948315c793612639"
+        "sha256": "d98de087bcf942827a7749134fec9ba6c9068dbf7a45f6036f53ef38b6a5418b"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/documents-1.2.5.tar.gz"
     },
@@ -3134,9 +3134,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "241db6874fb40cd87f9d27715ca5d788f953e0866e7f3774e44dfa16f18d3b11",
+      "checksum": "34102d3670cd31cb0047c850a9a227c26923cec7d6b663cf8307e6f847efe02b",
       "checksums": {
-        "sha256": "241db6874fb40cd87f9d27715ca5d788f953e0866e7f3774e44dfa16f18d3b11"
+        "sha256": "34102d3670cd31cb0047c850a9a227c26923cec7d6b663cf8307e6f847efe02b"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/email-1.2.5.tar.gz"
     },
@@ -3164,15 +3164,15 @@
       "minNselfVersion": "1.2.8",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "764670f846ea18223fd9342b0287afc73065fbdbd42a436b11f82bdbe765a640",
+      "checksum": "e6abce6eff2459e9a86b68682849b657d7eab1a6eb09f8fce577eee88c84f25c",
       "checksums": {
-        "sha256": "764670f846ea18223fd9342b0287afc73065fbdbd42a436b11f82bdbe765a640",
+        "sha256": "e6abce6eff2459e9a86b68682849b657d7eab1a6eb09f8fce577eee88c84f25c",
         "platforms": {
-          "darwin-arm64": "61b08d72522997342034237c39ba2e7a44987ed348481284bd232e44eac2aa41",
-          "darwin-amd64": "2fbb636b19ec647d681ee20f3887435b27e859bf722f6e2baea85fd687292800",
-          "linux-amd64": "86710ec2a3c45c57248341d3ee681c35f1a2733656fc81d04907542f22537a59",
-          "linux-arm64": "d9e54eb2006e548d6b785dafb30f32ed64084265e7ef8215adcbc4da47b21053",
-          "windows-amd64": "fffa7d49b73ff64c0d3404abcafabf86c6777f06446eb73c0a90308694482e8d"
+          "darwin-arm64": "ac7cbae007415011613534f438d4d40a6e0e8e5b1697c1e257116410fc551197",
+          "darwin-amd64": "f0aaf1f4edf518355091a5aea654983caaba8415319abc4a545e73b23f122f5f",
+          "linux-amd64": "205265fe1184c17d82a72193f387758b03ec27c970b50079104c0c4cf58ecf8f",
+          "linux-arm64": "7a9ff0f9604451314fec1e0f30f455c1e5043dedc1632d807c0511be6e234ff4",
+          "windows-amd64": "f9692e14f3475efaa2d07b14cdf88be748282700bd529a68de425fbf7c426cbf"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/encryption-1.2.5.tar.gz"
@@ -3202,9 +3202,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "9806bdfcbab2cd0df45666ea13a8e118492d82f75f146842435b38886b5e107c",
+      "checksum": "33e9296425a9660f7a19208e0d8ece7bc494411f6125fcdd899080464be32613",
       "checksums": {
-        "sha256": "9806bdfcbab2cd0df45666ea13a8e118492d82f75f146842435b38886b5e107c"
+        "sha256": "33e9296425a9660f7a19208e0d8ece7bc494411f6125fcdd899080464be32613"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/entitlements-1.2.5.tar.gz"
     },
@@ -3231,15 +3231,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "83304e205c7805293548378256d3295b44c677475f5598c08f98641d38616092",
+      "checksum": "e3d923b43b610b7c8404075f8cd413dfe97a37e4190f3799f73dd2bdcb5be272",
       "checksums": {
-        "sha256": "83304e205c7805293548378256d3295b44c677475f5598c08f98641d38616092"
+        "sha256": "e3d923b43b610b7c8404075f8cd413dfe97a37e4190f3799f73dd2bdcb5be272"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/event-bus-1.2.5.tar.gz"
     },
     "family-ancestry": {
       "version": "1.2.5",
-      "description": "Ancestry.com \u2192 nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
+      "description": "Ancestry.com → nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -3262,15 +3262,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "54b962aa9de8e21b2033984caa53765fca21abcd2f3242a115b756f80c4cd64c",
+      "checksum": "26251157e00d36199e6eeea115933c90410c086e554ddd04be19c8ec4b31b8d9",
       "checksums": {
-        "sha256": "54b962aa9de8e21b2033984caa53765fca21abcd2f3242a115b756f80c4cd64c"
+        "sha256": "26251157e00d36199e6eeea115933c90410c086e554ddd04be19c8ec4b31b8d9"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/family-ancestry-1.2.5.tar.gz"
     },
     "family-familysearch": {
       "version": "1.2.5",
-      "description": "FamilySearch \u2192 nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
+      "description": "FamilySearch → nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -3294,15 +3294,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "b746d71d2e9812eb49df555c046941a53955ef58e86759ff144f315579e5d3e9",
+      "checksum": "ac1bd57a23a755c20132f44b6401a6d8db14bfdc6c9895b719f371573b204590",
       "checksums": {
-        "sha256": "b746d71d2e9812eb49df555c046941a53955ef58e86759ff144f315579e5d3e9"
+        "sha256": "ac1bd57a23a755c20132f44b6401a6d8db14bfdc6c9895b719f371573b204590"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/family-familysearch-1.2.5.tar.gz"
     },
     "family-myheritage": {
       "version": "1.2.5",
-      "description": "MyHeritage \u2192 nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company \u2014 lowest legal risk, potential partnership path.",
+      "description": "MyHeritage → nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company — lowest legal risk, potential partnership path.",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -3325,15 +3325,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "fab9497f99a01561bfa2d6bee3ecc80ae74f3913e4b223317a0b7ffd179dfe26",
+      "checksum": "cb407383e6aa15ee4f8f28818dbb17b239880dde40db84995ff22fbd7e9f91bb",
       "checksums": {
-        "sha256": "fab9497f99a01561bfa2d6bee3ecc80ae74f3913e4b223317a0b7ffd179dfe26"
+        "sha256": "cb407383e6aa15ee4f8f28818dbb17b239880dde40db84995ff22fbd7e9f91bb"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/family-myheritage-1.2.5.tar.gz"
     },
     "family-wikitree": {
       "version": "1.2.5",
-      "description": "WikiTree \u2192 nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
+      "description": "WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
       "category": "social",
       "tier": "free",
       "license": "MIT",
@@ -3356,9 +3356,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "d481e0da6fbe6edb590827fc7622181baa474c3aacf3164163de236827c1050d",
+      "checksum": "1ff370dbab4189d73dce5c29f8517c03d2f0cfc4855fa692d3fa8590f7aff0d1",
       "checksums": {
-        "sha256": "d481e0da6fbe6edb590827fc7622181baa474c3aacf3164163de236827c1050d"
+        "sha256": "1ff370dbab4189d73dce5c29f8517c03d2f0cfc4855fa692d3fa8590f7aff0d1"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/family-wikitree-1.2.5.tar.gz"
     },
@@ -3388,9 +3388,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "81d19ac47fccf680c0d42917c8ed8847c315c3a4a64866fac07f5db575efaf5b",
+      "checksum": "7be4affcc9f6e99b59168cec213c790b11467e6b090de36860b56909f5408db4",
       "checksums": {
-        "sha256": "81d19ac47fccf680c0d42917c8ed8847c315c3a4a64866fac07f5db575efaf5b"
+        "sha256": "7be4affcc9f6e99b59168cec213c790b11467e6b090de36860b56909f5408db4"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/functions-v8-1.2.5.tar.gz"
     },
@@ -3421,15 +3421,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "90b97354b6d01ef429b402f64c34bcce2c4a15c7bc9f92114cd7f8e80f144b95",
+      "checksum": "dc8c65cbd5db3f1df6b2ae11fa5c11403b05d47cc8ddd65dc30cd230535ebd8a",
       "checksums": {
-        "sha256": "90b97354b6d01ef429b402f64c34bcce2c4a15c7bc9f92114cd7f8e80f144b95"
+        "sha256": "dc8c65cbd5db3f1df6b2ae11fa5c11403b05d47cc8ddd65dc30cd230535ebd8a"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/hipaa-1.2.5.tar.gz"
     },
     "home": {
       "version": "1.2.5",
-      "description": "Home automation bridge. Connects Home Assistant and MQTT to \u0273Self, enabling smart device control, state monitoring, scene activation, and command logging.",
+      "description": "Home automation bridge. Connects Home Assistant and MQTT to ɳSelf, enabling smart device control, state monitoring, scene activation, and command logging.",
       "category": "integrations",
       "tier": "free",
       "license": "MIT",
@@ -3451,9 +3451,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "31f5517c1fc3c6e6f014a0db329aa29912b17864c8fc5f0c0489e2a425af516b",
+      "checksum": "a176f4b9537bdf13545f13659b742b10348247affe46b98f908152ac4fa3f891",
       "checksums": {
-        "sha256": "31f5517c1fc3c6e6f014a0db329aa29912b17864c8fc5f0c0489e2a425af516b"
+        "sha256": "a176f4b9537bdf13545f13659b742b10348247affe46b98f908152ac4fa3f891"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/home-1.2.5.tar.gz"
     },
@@ -3483,9 +3483,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "c85895e21fcc04a9f3eb3c69fbab23f002a2e569913a08cad64b80db9ceacc4d",
+      "checksum": "c60a5f0251ac29b7d2d8660107c2d361d20b10a4df0fe01786e3f0ec9642caf7",
       "checksums": {
-        "sha256": "c85895e21fcc04a9f3eb3c69fbab23f002a2e569913a08cad64b80db9ceacc4d"
+        "sha256": "c60a5f0251ac29b7d2d8660107c2d361d20b10a4df0fe01786e3f0ec9642caf7"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/idme-1.2.5.tar.gz"
     },
@@ -3512,9 +3512,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "647d5364df4aeac7eee9f7d43deb83befc49583c3bfdbf394701d8c7f3f77de8",
+      "checksum": "6452e53455cacac31beae1a43a2c01912f210cd564112a547b9c2be88d8665af",
       "checksums": {
-        "sha256": "647d5364df4aeac7eee9f7d43deb83befc49583c3bfdbf394701d8c7f3f77de8"
+        "sha256": "6452e53455cacac31beae1a43a2c01912f210cd564112a547b9c2be88d8665af"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/job-queue-1.2.5.tar.gz"
     },
@@ -3542,9 +3542,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "64ee3b95e43b14bdf4ac247d4cdb1bbe8c265b07e44d922a1da84ceb4a6fdd75",
+      "checksum": "4333fc35104ee68d67704e6f5714279f00f5204e0686706ba5c9004647f49d55",
       "checksums": {
-        "sha256": "64ee3b95e43b14bdf4ac247d4cdb1bbe8c265b07e44d922a1da84ceb4a6fdd75"
+        "sha256": "4333fc35104ee68d67704e6f5714279f00f5204e0686706ba5c9004647f49d55"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/linkedin-1.2.5.tar.gz"
     },
@@ -3572,15 +3572,15 @@
       "minNselfVersion": "1.2.8",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "d4786dbd1bcd9a7d420d3a55c5579bd6cdb448c35ba2d9c6b408fb73618538ca",
+      "checksum": "bb5bd1b28e9c3321ee0ddb141444b125efd7bb3c1c9306b8cf0a77ab4f9bc175",
       "checksums": {
-        "sha256": "d4786dbd1bcd9a7d420d3a55c5579bd6cdb448c35ba2d9c6b408fb73618538ca",
+        "sha256": "bb5bd1b28e9c3321ee0ddb141444b125efd7bb3c1c9306b8cf0a77ab4f9bc175",
         "platforms": {
-          "darwin-arm64": "1bb8621faa0ebce43966c42da1beeb09ada0abf0e84f58d83917153119fba102",
-          "darwin-amd64": "bcce357ee5b5dc13171aa03366d6b0a99a9fc71daa1a37c4f6600b60ea08bdd2",
-          "linux-amd64": "b3f864f288e7eb1d0a1f1b00da068938de19db9732e0b74a4a1f22acb26d5603",
-          "linux-arm64": "9db2293ee44a55743299f6d924a5d815439d3b5c3f3044f48adb4d1b5c003fec",
-          "windows-amd64": "9ad6475e097147c73733f32b443e02e90fdbc487813a1643f0d99ffe2f130750"
+          "darwin-arm64": "133b17a584c81b737b75fef97b8a9f7d2c1bbf0a6d2e8e0f6168a139aa299740",
+          "darwin-amd64": "7f3fddc21e97828acf4ac71a486f02b6adc9fb831ec0a0ae81e00f41e184898e",
+          "linux-amd64": "6460859f8da726f1c7cd7b7f31c2bf833e6d09b299ea42d450866937b2fa95e6",
+          "linux-arm64": "ea36cd218daa4171771f626bed516494c8345f9078ae5aebe19bde708902cf7b",
+          "windows-amd64": "874b8736c6ddad5d777d356158e1c34ffb042243412af136dff03fef4195b54f"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/mail-1.2.5.tar.gz"
@@ -3611,15 +3611,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "d709035f38f5e3cb33dbc5bcda0cdb4272f1e9e78c7f039b7b3349ad71fed7de",
+      "checksum": "a947bf33870e07517b5d2425d414690def5c3320b7787f2682fce87c227ca469",
       "checksums": {
-        "sha256": "d709035f38f5e3cb33dbc5bcda0cdb4272f1e9e78c7f039b7b3349ad71fed7de"
+        "sha256": "a947bf33870e07517b5d2425d414690def5c3320b7787f2682fce87c227ca469"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/meetings-1.2.5.tar.gz"
     },
     "nself-cloud": {
       "version": "1.2.5",
-      "description": "Internal \u0273Cloud managed hosting infrastructure plugin \u2014 provisions isolated nSelf instances for Cloud customers",
+      "description": "Internal ɳCloud managed hosting infrastructure plugin — provisions isolated nSelf instances for Cloud customers",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -3640,9 +3640,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "de5c53e8d5f8735da092c44184bc5ebd49335a50fe625467118b9ed30889693a",
+      "checksum": "8fca782c9e30717ad11515bc9a440e0a207412dd36bc4e8b939f207dc8d70356",
       "checksums": {
-        "sha256": "de5c53e8d5f8735da092c44184bc5ebd49335a50fe625467118b9ed30889693a"
+        "sha256": "8fca782c9e30717ad11515bc9a440e0a207412dd36bc4e8b939f207dc8d70356"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-cloud-1.2.5.tar.gz"
     },
@@ -3670,9 +3670,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "77ad6ecac46dadf7d01c783e7bcbeb1abba693bfebc85f5cefafe26bc41cd44a",
+      "checksum": "6c524b2f845fe92a0934e1295bc681c9ababc1a4c310bfacd605a7dfc401a16e",
       "checksums": {
-        "sha256": "77ad6ecac46dadf7d01c783e7bcbeb1abba693bfebc85f5cefafe26bc41cd44a"
+        "sha256": "6c524b2f845fe92a0934e1295bc681c9ababc1a4c310bfacd605a7dfc401a16e"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-eval-gate-1.2.5.tar.gz"
     },
@@ -3701,9 +3701,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "26626e202e495798d9f9a9c35d0d43387646e9e7bf834065c25bc33d74284375",
+      "checksum": "0f47434b1f4fed4b85c58976a8572b5a118ced82e7a1f7617d62ab840a415a59",
       "checksums": {
-        "sha256": "26626e202e495798d9f9a9c35d0d43387646e9e7bf834065c25bc33d74284375"
+        "sha256": "0f47434b1f4fed4b85c58976a8572b5a118ced82e7a1f7617d62ab840a415a59"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-geo-1.2.5.tar.gz"
     },
@@ -3737,9 +3737,9 @@
       "minNselfVersion": "1.2.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "033c16aa6cbf101687650831da5d6e02528231e154f2378c7cf7b82d192427cd",
+      "checksum": "866fc595c370450a1e895916be59e64aa53bffe5dbaba2fcd7d24cfb90e62318",
       "checksums": {
-        "sha256": "033c16aa6cbf101687650831da5d6e02528231e154f2378c7cf7b82d192427cd"
+        "sha256": "866fc595c370450a1e895916be59e64aa53bffe5dbaba2fcd7d24cfb90e62318"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-image-1.2.5.tar.gz"
     },
@@ -3770,15 +3770,15 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "319354fefc2bf085327dcb419615f74e3e6d435c0153214e5393e7f3a83fa707",
+      "checksum": "757b18c904648ac078f969f90f631ae243e72fd62268ed9115e5e936efdfe411",
       "checksums": {
-        "sha256": "319354fefc2bf085327dcb419615f74e3e6d435c0153214e5393e7f3a83fa707"
+        "sha256": "757b18c904648ac078f969f90f631ae243e72fd62268ed9115e5e936efdfe411"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-pdf-1.2.5.tar.gz"
     },
     "nself-scan": {
       "version": "1.2.5",
-      "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
+      "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred — requires partner agreement)",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
@@ -3805,9 +3805,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "255f6fa0080abe87b84d6ad120f01689f58368fc1bddad09b057ee3fa5df28b0",
+      "checksum": "77c9ae5583932de5e835e406e26914ea554145187514b823f7b07d862074e249",
       "checksums": {
-        "sha256": "255f6fa0080abe87b84d6ad120f01689f58368fc1bddad09b057ee3fa5df28b0"
+        "sha256": "77c9ae5583932de5e835e406e26914ea554145187514b823f7b07d862074e249"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-scan-1.2.5.tar.gz"
     },
@@ -3843,9 +3843,9 @@
         "np_sync_cursors"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "e8df66eba4e257a07c0215a3324e2152589a4430d5de7376570852bb444e53e4",
+      "checksum": "882a686c588a922ccfe01b41e052ebb97acfae521dbb51836b26beca1549c3d0",
       "checksums": {
-        "sha256": "e8df66eba4e257a07c0215a3324e2152589a4430d5de7376570852bb444e53e4"
+        "sha256": "882a686c588a922ccfe01b41e052ebb97acfae521dbb51836b26beca1549c3d0"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-sync-1.2.5.tar.gz"
     },
@@ -3876,9 +3876,9 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "51f2c04f70ce82a2bf2c6170c638458701705e865b56a220268d3a1d9d22a549",
+      "checksum": "1310ea0880297422896ffa7b11ec1d9d10d84d9a48d37bcac1f3314228b175eb",
       "checksums": {
-        "sha256": "51f2c04f70ce82a2bf2c6170c638458701705e865b56a220268d3a1d9d22a549"
+        "sha256": "1310ea0880297422896ffa7b11ec1d9d10d84d9a48d37bcac1f3314228b175eb"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/nself-vault-1.2.5.tar.gz"
     },
@@ -3910,9 +3910,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "76617f463da815baaa87d31a99e19c8377bfbaaac66a77111c99694c1fa802cb",
+      "checksum": "0ff32e49b8d08d1d4e8dd86f2f41e94fe390cf7a17d1dcb71dfa5f5362d12588",
       "checksums": {
-        "sha256": "76617f463da815baaa87d31a99e19c8377bfbaaac66a77111c99694c1fa802cb"
+        "sha256": "0ff32e49b8d08d1d4e8dd86f2f41e94fe390cf7a17d1dcb71dfa5f5362d12588"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/object-storage-1.2.5.tar.gz"
     },
@@ -3940,9 +3940,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "e3bcc3c9bb5051e92173e9ab700e578f4e322d05e0574a8a26504c4c2e816168",
+      "checksum": "ec24e53ce988493dee888598f515fad7fa9b661bba6135655c527369df26cd63",
       "checksums": {
-        "sha256": "e3bcc3c9bb5051e92173e9ab700e578f4e322d05e0574a8a26504c4c2e816168"
+        "sha256": "ec24e53ce988493dee888598f515fad7fa9b661bba6135655c527369df26cd63"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/observability-1.2.5.tar.gz"
     },
@@ -3970,15 +3970,15 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "be9f3982276e5fe55e83fb56a2e7047f67afbf99bb5e4520ac53b1f12fd56ee8",
+      "checksum": "36455ef0c17267c3cd6414ca878811f55cd6c034242c50b5c1f78bd391f38221",
       "checksums": {
-        "sha256": "be9f3982276e5fe55e83fb56a2e7047f67afbf99bb5e4520ac53b1f12fd56ee8"
+        "sha256": "36455ef0c17267c3cd6414ca878811f55cd6c034242c50b5c1f78bd391f38221"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/payments-1.2.5.tar.gz"
     },
     "pentest": {
       "version": "1.2.5",
-      "description": "Penetration-test readiness kit. Generates structured scope documents, provisions pentest credentials, tracks findings, and manages remediation. \u0273Self+ tier.",
+      "description": "Penetration-test readiness kit. Generates structured scope documents, provisions pentest credentials, tracks findings, and manages remediation. ɳSelf+ tier.",
       "category": "compliance",
       "tier": "free",
       "license": "MIT",
@@ -4000,9 +4000,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "e3e783268918088656e91aa7fda63a034dc4dfe36d1d004d5363c5bb0e5bc6bb",
+      "checksum": "c7339eaecdbf5f70412731c45a129bebf44eb91227e14eb1eb946394478b5ca7",
       "checksums": {
-        "sha256": "e3e783268918088656e91aa7fda63a034dc4dfe36d1d004d5363c5bb0e5bc6bb"
+        "sha256": "c7339eaecdbf5f70412731c45a129bebf44eb91227e14eb1eb946394478b5ca7"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/pentest-1.2.5.tar.gz"
     },
@@ -4029,15 +4029,15 @@
       "minNselfVersion": "1.2.8",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "ce49e3ed23e56fb4c8956826dddb8da44c172e882b342b3f5ca3df85bcc3b7f7",
+      "checksum": "5d14c22cc1e1a455b958eafbf88c880edb3d33ff4e1e293563fb868c4a9732f1",
       "checksums": {
-        "sha256": "ce49e3ed23e56fb4c8956826dddb8da44c172e882b342b3f5ca3df85bcc3b7f7",
+        "sha256": "5d14c22cc1e1a455b958eafbf88c880edb3d33ff4e1e293563fb868c4a9732f1",
         "platforms": {
-          "darwin-arm64": "c3219979e49477bf0bf6cfcae658f586265b7faf2c5928d9886b1ebdb7ef2e26",
-          "darwin-amd64": "f2d385d16d8e80c46a4d92fe9a849e7b2561a5677e68cdb0c54c238ae68ca4b3",
-          "linux-amd64": "55d4d7322f14425cf1136dc2b7364d34cf51dba641aeec7e2a031791c32674b4",
-          "linux-arm64": "0a3725b861c06703cda534022ddde50753512f548964d55d08324979ec28a653",
-          "windows-amd64": "939e68c229e98f465c30e74843e9e64e38a938e6d1c1998e50f36e71a934b144"
+          "darwin-arm64": "46b526ceacfab6d2c0477212e0356374e12cda1dfc68f7a86b5073b4417ae330",
+          "darwin-amd64": "902d05924bb9867c974cf8221d7cce5f6a8e3d18f50279dbd55468992a8999c1",
+          "linux-amd64": "5e94f5ba0cbc70a8df50355885200bf9c69c048d39e3f1468df096050a16c744",
+          "linux-arm64": "9ae25fc82c5bf37e1b90f398720fbe3d31f1d2730668d7b3a3bdf336864a3520",
+          "windows-amd64": "8d2e1d511bbdfd1b9a95cc2ad0ecb8ba33916a5c6ea5b9ce8fb30c47c4d060a5"
         }
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/pentest-kit-1.2.5.tar.gz"
@@ -4060,9 +4060,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "271e72f3e27dc79c268be0142d89951addfb4271504f401c8a09d8f7a57eff29",
+      "checksum": "8867d355c383d5494d790446ccd6c6e80ef8faa4032283e72a98af543405cbcb",
       "checksums": {
-        "sha256": "271e72f3e27dc79c268be0142d89951addfb4271504f401c8a09d8f7a57eff29"
+        "sha256": "8867d355c383d5494d790446ccd6c6e80ef8faa4032283e72a98af543405cbcb"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/plugin-clawde-1.2.5.tar.gz"
     },
@@ -4084,9 +4084,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "57443c574fecbde8904f3b5bbfc944fa5e48aabb270b86d0ad19eba2c6e11c8b",
+      "checksum": "300e56dc5e5b761b72b4babe7cbfdda427db6d96f56d2162518fa23160f1ca01",
       "checksums": {
-        "sha256": "57443c574fecbde8904f3b5bbfc944fa5e48aabb270b86d0ad19eba2c6e11c8b"
+        "sha256": "300e56dc5e5b761b72b4babe7cbfdda427db6d96f56d2162518fa23160f1ca01"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/plugin-gauth-1.2.5.tar.gz"
     },
@@ -4108,9 +4108,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "c7cd9cc35828675ba60b3bdd25852491339ba068d147fcd5f2541a1a59b88deb",
+      "checksum": "c66ee6f77bcc3ac29869aec22c9e632e5b200da0517a93dca82280bc5f0436d1",
       "checksums": {
-        "sha256": "c7cd9cc35828675ba60b3bdd25852491339ba068d147fcd5f2541a1a59b88deb"
+        "sha256": "c66ee6f77bcc3ac29869aec22c9e632e5b200da0517a93dca82280bc5f0436d1"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/plugin-llm-gateway-1.2.5.tar.gz"
     },
@@ -4132,15 +4132,15 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "bd8b4636f8e4cb6ef648c78b70c4dbe6f2ef237c1c4fb8331912b0f0da1eeaf7",
+      "checksum": "6b1d31552b664896d4f79036cb12cb994c113fcd653bba36f7dcccd5bca1aebd",
       "checksums": {
-        "sha256": "bd8b4636f8e4cb6ef648c78b70c4dbe6f2ef237c1c4fb8331912b0f0da1eeaf7"
+        "sha256": "6b1d31552b664896d4f79036cb12cb994c113fcd653bba36f7dcccd5bca1aebd"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/plugin-pty-1.2.5.tar.gz"
     },
     "plugin-retrieval": {
       "version": "1.2.5",
-      "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for \u0273Claw memory and nself-ai-mcp search/recall tools.",
+      "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for ɳClaw memory and nself-ai-mcp search/recall tools.",
       "category": "data",
       "tier": "free",
       "license": "MIT",
@@ -4156,9 +4156,9 @@
       "minNselfVersion": "1.1.1",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "8caa8258550a3e94eb2a07c9472849cff1231971e746cafbd9cf947485b97326",
+      "checksum": "3011aaf6bf9d22ae255fc32a44e7b3003b521120935e24275ef351b8da1faf95",
       "checksums": {
-        "sha256": "8caa8258550a3e94eb2a07c9472849cff1231971e746cafbd9cf947485b97326"
+        "sha256": "3011aaf6bf9d22ae255fc32a44e7b3003b521120935e24275ef351b8da1faf95"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/plugin-retrieval-1.2.5.tar.gz"
     },
@@ -4190,9 +4190,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "e5576d50c10117fe34f4df1607b3cdc814109d1672564a329c988345256e1b3c",
+      "checksum": "962ddebd13550882a7469ef52185e1e48a9591a4b07554cdb227fa526bdfad8d",
       "checksums": {
-        "sha256": "e5576d50c10117fe34f4df1607b3cdc814109d1672564a329c988345256e1b3c"
+        "sha256": "962ddebd13550882a7469ef52185e1e48a9591a4b07554cdb227fa526bdfad8d"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/post-1.2.5.tar.gz"
     },
@@ -4223,9 +4223,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "2639afad1857374a96f4fe60a33610c4aa0b264395c1ca507467bd72b3d9b7da",
+      "checksum": "d0639ef7d7dea587297901f04d65d3ceafe6dadc615392732128bbb5811cd20a",
       "checksums": {
-        "sha256": "2639afad1857374a96f4fe60a33610c4aa0b264395c1ca507467bd72b3d9b7da"
+        "sha256": "d0639ef7d7dea587297901f04d65d3ceafe6dadc615392732128bbb5811cd20a"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/retro-gaming-1.2.5.tar.gz"
     },
@@ -4256,9 +4256,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "61dc58d060a6e17c2590276d2cb5ebe5dcfe34db984c84ec48f9eba6bfbbc2a1",
+      "checksum": "e30f29fa70cec12d58f09385b1c659459b2c646277c9cdf881a4742384afeec5",
       "checksums": {
-        "sha256": "61dc58d060a6e17c2590276d2cb5ebe5dcfe34db984c84ec48f9eba6bfbbc2a1"
+        "sha256": "e30f29fa70cec12d58f09385b1c659459b2c646277c9cdf881a4742384afeec5"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/rom-discovery-1.2.5.tar.gz"
     },
@@ -4290,9 +4290,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "2a5f3b44d749c0b351a842a554950f3acdce25630705078a24307c1fa1a316fd",
+      "checksum": "d0ffbf60532cb777c9dd41bacb548d1759bdfc82aba11b8979419b7608e8b239",
       "checksums": {
-        "sha256": "2a5f3b44d749c0b351a842a554950f3acdce25630705078a24307c1fa1a316fd"
+        "sha256": "d0ffbf60532cb777c9dd41bacb548d1759bdfc82aba11b8979419b7608e8b239"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/siem-1.2.5.tar.gz"
     },
@@ -4314,9 +4314,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "d086cda30344bf0d660359486bfd712d21ff75a2a9a282b870956d8a4428a722",
+      "checksum": "00e9202b467ead994e1a5ea963bca55e1ef0e3f96b07e7829e3006d6499f88a8",
       "checksums": {
-        "sha256": "d086cda30344bf0d660359486bfd712d21ff75a2a9a282b870956d8a4428a722"
+        "sha256": "00e9202b467ead994e1a5ea963bca55e1ef0e3f96b07e7829e3006d6499f88a8"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/sms-1.2.5.tar.gz"
     },
@@ -4343,9 +4343,9 @@
       "author": "nself",
       "minNselfVersion": "1.1.0",
       "tables": [],
-      "checksum": "eac92d0cdf9dafa7b856897f6eea5a9a9e023ca2fddd39d04a2286301d6a506a",
+      "checksum": "faff46890ee17e38a4b9e9411b4bd3cc771e344aa5648527bb79deda1926f9eb",
       "checksums": {
-        "sha256": "eac92d0cdf9dafa7b856897f6eea5a9a9e023ca2fddd39d04a2286301d6a506a"
+        "sha256": "faff46890ee17e38a4b9e9411b4bd3cc771e344aa5648527bb79deda1926f9eb"
       },
       "releaseTag": "v1.2.5",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/storage-1.2.5.tar.gz"
@@ -4376,9 +4376,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "4b00578a9f4e1a17ead9657585a5afb319a8be40e51800bd83d42c9f9332591d",
+      "checksum": "b2a0d739b4f64ddace12708dbaff38c70c53fbab6a2a49485e3890651d8dd7b4",
       "checksums": {
-        "sha256": "4b00578a9f4e1a17ead9657585a5afb319a8be40e51800bd83d42c9f9332591d"
+        "sha256": "b2a0d739b4f64ddace12708dbaff38c70c53fbab6a2a49485e3890651d8dd7b4"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/storage-transform-1.2.5.tar.gz"
     },
@@ -4407,9 +4407,9 @@
       "minNselfVersion": "1.0.9",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "018cf70b485a1c2153a15100f23b2e38ea16c6b5b285b666d53fa75055695914",
+      "checksum": "12d96965ecdad32a55c25f37678af9495c6caa763569b3d454586d84d37e1f8b",
       "checksums": {
-        "sha256": "018cf70b485a1c2153a15100f23b2e38ea16c6b5b285b666d53fa75055695914"
+        "sha256": "12d96965ecdad32a55c25f37678af9495c6caa763569b3d454586d84d37e1f8b"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/tenant-controller-1.2.5.tar.gz"
     },
@@ -4439,15 +4439,15 @@
       "minNselfVersion": "1.1.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "685606cdb199bd5b99266ab76da373658f6854e782bca75e69533030cc6b2901",
+      "checksum": "6639e4e705bd07febcea0ce2f02eba07b948a76cb47eccc3aec16faf90beb733",
       "checksums": {
-        "sha256": "685606cdb199bd5b99266ab76da373658f6854e782bca75e69533030cc6b2901"
+        "sha256": "6639e4e705bd07febcea0ce2f02eba07b948a76cb47eccc3aec16faf90beb733"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/transactional-email-1.2.5.tar.gz"
     },
     "warehouse": {
       "version": "1.2.5",
-      "description": "Data warehouse sync \u2014 exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
+      "description": "Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
       "category": "infrastructure",
       "tier": "free",
       "license": "MIT",
@@ -4469,9 +4469,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "367d692360c2de9334b8d36be9a3291525b204c2ac4d51c421078f93f3f981d9",
+      "checksum": "8a83ebfb52243bb89122c651b0ece49680250f6ff425a170cacd502fc6162588",
       "checksums": {
-        "sha256": "367d692360c2de9334b8d36be9a3291525b204c2ac4d51c421078f93f3f981d9"
+        "sha256": "8a83ebfb52243bb89122c651b0ece49680250f6ff425a170cacd502fc6162588"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/warehouse-1.2.5.tar.gz"
     },
@@ -4502,9 +4502,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "a3d52d2e5e9d2b5ec43d6f9e486b1d7d7083b88f9a62c928505ae485bac5e58e",
+      "checksum": "bc7911f9ee422e080a52318afe112ce16950324115b772eb45603126758b9ef1",
       "checksums": {
-        "sha256": "a3d52d2e5e9d2b5ec43d6f9e486b1d7d7083b88f9a62c928505ae485bac5e58e"
+        "sha256": "bc7911f9ee422e080a52318afe112ce16950324115b772eb45603126758b9ef1"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/web3-1.2.5.tar.gz"
     },
@@ -4534,9 +4534,9 @@
       "minNselfVersion": "1.0.0",
       "tables": [],
       "releaseTag": "v1.2.5",
-      "checksum": "8d30663e00e636abe362fc1bb9e5984f22958ab6a429cba642bdb7baa15c18ab",
+      "checksum": "c7a28eabd7e1ea0f1b11477251d6b11bddf22c2d005eb392d68d5aef17563892",
       "checksums": {
-        "sha256": "8d30663e00e636abe362fc1bb9e5984f22958ab6a429cba642bdb7baa15c18ab"
+        "sha256": "c7a28eabd7e1ea0f1b11477251d6b11bddf22c2d005eb392d68d5aef17563892"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/workflows-1.2.5.tar.gz"
     },
@@ -4561,11 +4561,11 @@
       "tables": [],
       "installable": false,
       "checksums": {
-        "sha256": "4ee86797a93ebe4b203fd120a6c09b6bdd65d5a2c85972a8e4703684c6da8881"
+        "sha256": "e705243b3d0a62bcc070450fe75a8a49b0aca4f69e1db55edaa6cfb42b0f9546"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/shared-utils-1.2.5.tar.gz",
       "releaseTag": "v1.2.5",
-      "checksum": "4ee86797a93ebe4b203fd120a6c09b6bdd65d5a2c85972a8e4703684c6da8881"
+      "checksum": "e705243b3d0a62bcc070450fe75a8a49b0aca4f69e1db55edaa6cfb42b0f9546"
     },
     "tmdb": {
       "version": "1.2.5",
@@ -4604,9 +4604,9 @@
         "np_tmdb_webhook_events"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "0887ff07f1d18a8b199b079b6891f300fdccef9b6f067ef0b5d646de0ccd9e6a",
+      "checksum": "a42676de0dece8183dda01a53f5ad15d1d54fc8671fbcf72de551be86b8908b8",
       "checksums": {
-        "sha256": "0887ff07f1d18a8b199b079b6891f300fdccef9b6f067ef0b5d646de0ccd9e6a"
+        "sha256": "a42676de0dece8183dda01a53f5ad15d1d54fc8671fbcf72de551be86b8908b8"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/tmdb-1.2.5.tar.gz"
     },
@@ -4641,9 +4641,9 @@
         "np_game_genres"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "843e1b83200c409da7fb24d58f23884a2ae6d5a38830f09a55c16b479edd49de",
+      "checksum": "af0977cc1620573b2079f93a802576eec55abf687a1a62574d4aa3f43f5301a9",
       "checksums": {
-        "sha256": "843e1b83200c409da7fb24d58f23884a2ae6d5a38830f09a55c16b479edd49de"
+        "sha256": "af0977cc1620573b2079f93a802576eec55abf687a1a62574d4aa3f43f5301a9"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/game-metadata-1.2.5.tar.gz"
     },
@@ -4689,9 +4689,9 @@
         "np_sports_webhook_events"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "5b3c6e1676165a91b6ef2dd225352bdd936f90671f05a81ee1e3d0f4caa2810a",
+      "checksum": "5819f48fc027d9a035039d2db067ae94b334258766f582cc97c07c428a8dd938",
       "checksums": {
-        "sha256": "5b3c6e1676165a91b6ef2dd225352bdd936f90671f05a81ee1e3d0f4caa2810a"
+        "sha256": "5819f48fc027d9a035039d2db067ae94b334258766f582cc97c07c428a8dd938"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/sports-1.2.5.tar.gz"
     },
@@ -4726,9 +4726,9 @@
         "np_podcast_categories"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "80e0252d0c60881644cdb570039a4c08c3944d87ea2e2a7a4a67e7502f772679",
+      "checksum": "7865088e429c5aa033c5acf384b6c33fcd0a65582c68942be6a8a15b954d4425",
       "checksums": {
-        "sha256": "80e0252d0c60881644cdb570039a4c08c3944d87ea2e2a7a4a67e7502f772679"
+        "sha256": "7865088e429c5aa033c5acf384b6c33fcd0a65582c68942be6a8a15b954d4425"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/podcast-1.2.5.tar.gz"
     },
@@ -4760,9 +4760,9 @@
         "np_fileproc_metadata"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "6704c749fcd354de6e5bd9e7a72443379f1f4b232e8bcde95d934b72136c0f67",
+      "checksum": "2220b30249aa352341ce4e7ee04f6156b97542366ef08de72d0edeb18cbdace9",
       "checksums": {
-        "sha256": "6704c749fcd354de6e5bd9e7a72443379f1f4b232e8bcde95d934b72136c0f67"
+        "sha256": "2220b30249aa352341ce4e7ee04f6156b97542366ef08de72d0edeb18cbdace9"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/file-processing-1.2.5.tar.gz"
     },
@@ -4804,9 +4804,9 @@
         "np_mediap_uploads"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "ab314060cc97673eceb0798932ea06ce1a0b26d25b6dac960b62e157ecf33e91",
+      "checksum": "9478fa9124e7e3116bb380bed8adf479a1f93cce09ee8b2f65095824d9f06682",
       "checksums": {
-        "sha256": "ab314060cc97673eceb0798932ea06ce1a0b26d25b6dac960b62e157ecf33e91"
+        "sha256": "9478fa9124e7e3116bb380bed8adf479a1f93cce09ee8b2f65095824d9f06682"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/media-processing-1.2.5.tar.gz"
     },
@@ -4839,9 +4839,9 @@
         "np_geoc_places"
       ],
       "releaseTag": "v1.2.5",
-      "checksum": "fb6c01a28708d57e922007ae989da8f982da8a8325c5fb4589c6aa2bfd8280b1",
+      "checksum": "e4588ca1cad7663c92a9d8ebbc6eb9d094ef6569acf48dfb4943eacf4dfca1c7",
       "checksums": {
-        "sha256": "fb6c01a28708d57e922007ae989da8f982da8a8325c5fb4589c6aa2bfd8280b1"
+        "sha256": "e4588ca1cad7663c92a9d8ebbc6eb9d094ef6569acf48dfb4943eacf4dfca1c7"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.5/geocoding-1.2.5.tar.gz"
     }
