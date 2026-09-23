@@ -1,6 +1,6 @@
 {
   "name": "family-ancestry",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "api_version": "1.0.0",
   "description": "Ancestry.com \u2192 nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
   "author": "nself",

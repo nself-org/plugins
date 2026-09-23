@@ -1,6 +1,6 @@
 {
   "name": "encryption",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Bring Your Own Key (BYOK) per-tenant envelope encryption for nSelf Cloud: AWS KMS, GCP Cloud KMS, and HashiCorp Vault Transit, with key rotation and an audit trail.",
   "author": "nself",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "feature-flags",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Feature flags service with targeting rules, segments, and evaluation engine",
   "author": "nself",
   "license": "MIT",
