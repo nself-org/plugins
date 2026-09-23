@@ -1,6 +1,6 @@
 {
   "name": "access-controls",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "api_version": "1.0.0",
   "description": "Role-based and attribute-based access control (RBAC + ABAC) with policy engine",
   "author": "nself",

@@ -1,6 +1,6 @@
 {
   "name": "retro-gaming",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "api_version": "1.0.0",
   "description": "Retro gaming ROM library management, emulator core serving, save state synchronization, play sessions, and controller configuration for nself-tv",
   "author": "nself",

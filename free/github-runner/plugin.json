@@ -1,7 +1,7 @@
 {
   "name": "github-runner",
-  "version": "1.2.4",
-  "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
+  "version": "1.2.5",
+  "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,

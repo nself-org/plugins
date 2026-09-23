@@ -1,7 +1,7 @@
 {
   "name": "forgejo",
-  "version": "1.2.4",
-  "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute — zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
+  "version": "1.2.5",
+  "description": "Self-hosted Forgejo git forge + Forgejo Actions runner. Provides offline CI that executes .github/workflows/*.yml YAML on self-hosted compute \u2014 zero GitHub Actions quota consumed. Designed for the ops profile (ops server on staging/prod).",
   "author": "nself",
   "license": "MIT",
   "isCommercial": false,
