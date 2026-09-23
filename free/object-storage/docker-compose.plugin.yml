@@ -23,7 +23,7 @@ services:
     networks:
       - nself_network
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3301/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3301/health"]
       interval: 30s
       timeout: 5s
       retries: 3

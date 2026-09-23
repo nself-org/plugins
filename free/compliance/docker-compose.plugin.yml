@@ -17,7 +17,7 @@ services:
       - COMPLIANCE_API_KEY=${COMPLIANCE_API_KEY:-}
       - COMPLIANCE_LOG_LEVEL=${COMPLIANCE_LOG_LEVEL:-info}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3211/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3211/health"]
       interval: 30s
       timeout: 5s
       retries: 3

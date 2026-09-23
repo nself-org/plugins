@@ -20,7 +20,7 @@ services:
       - IDME_SANDBOX=${IDME_SANDBOX:-false}
       - IDME_WEBHOOK_SECRET=${IDME_WEBHOOK_SECRET:-}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3010/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3010/health"]
       interval: 30s
       timeout: 5s
       retries: 3

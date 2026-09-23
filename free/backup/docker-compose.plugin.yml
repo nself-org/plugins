@@ -19,7 +19,7 @@ services:
     ports:
       - "127.0.0.1:3050:3050"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3050/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3050/health"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -18,7 +18,7 @@ services:
       - E2EE_MAX_ONE_TIME_PREKEYS=${E2EE_MAX_ONE_TIME_PREKEYS:-100}
       - E2EE_MAX_KYBER_PREKEYS=${E2EE_MAX_KYBER_PREKEYS:-100}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3055/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3055/health"]
       interval: 30s
       timeout: 5s
       retries: 3
