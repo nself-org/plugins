@@ -58,11 +58,12 @@ done
 [ "$TIER" = free ] || pf_die "--tier free is required (the licensed tier is P7-PLUG-39)"
 [ -n "$OUT" ] || pf_die "--out FILE is required"
 PF_SERVED_URL="${PF_SERVED_URL%/}"
+[ -n "$MD" ] || MD="${OUT%.json}.md"
+# Delete any previous report before anything can abort, so a stale one is never current.
+rm -f "$OUT" "$MD"
 
 pf_need curl jq tar awk find git
 [ "$PF_NO_BUILD" = 1 ] || { pf_need docker; docker info >/dev/null 2>&1 || pf_die "docker daemon not reachable (use --no-build only to record skips)"; }
-[ -n "$MD" ] || MD="${OUT%.json}.md"
-rm -f "$OUT" "$MD"
 PF_RUN_ID="pf-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 PF_BUILDER=""
 SCRIPT_COMMIT="$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
@@ -71,7 +72,7 @@ PF_TIMEOUT_BIN=""
 for t in timeout gtimeout; do command -v "$t" >/dev/null 2>&1 && { PF_TIMEOUT_BIN="$t"; break; }; done
 
 PF_WORK="$(mktemp -d "${TMPDIR:-/tmp}/preflight.XXXXXX")"
-trap 'pf_docker_cleanup; rm -rf "$PF_WORK" "$OUT.tmp"' EXIT
+trap 'pf_docker_cleanup; rm -rf "$PF_WORK" "$OUT.tmp" "$MD.tmp"' EXIT
 mkdir -p "$PF_WORK/dl" "$PF_WORK/build" "$PF_WORK/logs"
 PF_ENTRIES="$PF_WORK/entries.jsonl"
 : >"$PF_ENTRIES"
@@ -137,7 +138,7 @@ jq -S -s --arg run_at "$RUN_AT" --arg served_url "$PF_SERVED_URL" --arg main_sha
                pass: ((($e | map(select(.result != "pass")) | length) == 0) and (($cov | length) == 0) and (($e | length) > 0))},
      entries: $e}' "$PF_ENTRIES" >"$OUT.tmp"
 mv "$OUT.tmp" "$OUT"
-pf_render_md "$OUT" "$SCRIPT_DIR/owners.tsv" >"$MD"
+pf_render_md "$OUT" "$SCRIPT_DIR/owners.tsv" >"$MD.tmp" && mv "$MD.tmp" "$MD"
 pf_log "wrote $OUT and $MD"
 
 if ! jq -e '.summary.coverage.ok and ((.entries | length) == .summary.expected)' "$OUT" >/dev/null; then
