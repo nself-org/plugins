@@ -21,10 +21,16 @@ pf_render_md() {
       def cell: tostring | gsub("\\|"; "/");
       . as $r
     | "# P7-PLUG-02 served-bytes preflight (free tier)\n",
-      "- Run at: \($r.header.run_at)",
-      "- Served registry: \($r.header.served_url)/registry.json?tier=free",
+      "## Provenance\n",
+      "- Run id: \($r.header.run_id)",
+      "- Run at: \($r.header.run_at) (UTC)",
+      "- Script: scripts/preflight at plugins commit \($r.header.script_commit)",
+      "- Served registry: \($r.header.served_registry)",
       "- Main registry: registry.json at \($r.header.main_ref) (\($r.header.main_sha))",
+      "- Build outcomes reused from --build-cache: \(if $r.header.build_cache_used then "yes (not a from-scratch build measurement)" else "no (every build measured in this run)" end)\n",
+      "## Result\n",
       "- Result: **\(if $r.summary.pass then "PASS" else "FAIL" end)** (\($r.summary.counts.pass) pass, \($r.summary.counts.fail) fail, \($r.summary.counts.skip) skip of \($r.summary.expected) expected entries)",
+      (if $r.summary.coverage.ok then empty else "- **Coverage failure**: \($r.summary.coverage.problems | join("; "))" end),
       "- A skip counts as a failure (Constitution 8.4); `installable:false` entries are asserted, not skipped.\n",
       "## Coverage\n",
       "| source | expected | measured | pass | fail | skip |",

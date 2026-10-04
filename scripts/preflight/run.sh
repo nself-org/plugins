@@ -11,10 +11,14 @@
 #                            [--strict] [--no-build] [--log-dir DIR]
 #                            [--build-cache DIR] [--served-url URL] [--main-ref REF]
 #
-# Exit: 0 report written (read summary.pass for the verdict), 1 with --strict
-# when summary.pass is false, 2 usage or infrastructure error (no report),
-# 3 entry count differs from the registry's own count (report still written).
-# Read-only; no credential; sequential. See scripts/preflight/README.md.
+# Exit: 0 report written (read summary.pass: exit 0 does NOT mean pass unless
+# --strict), 1 with --strict when summary.pass is false, 2 usage or
+# infrastructure error (any previous report at --out is deleted first, so a
+# stale one is never left behind), 3 coverage failure (an empty registry, or
+# fewer entries measured than the registry counts or lists as installable;
+# summary.by_class.coverage names it and summary.pass is false).
+# No credential, sequential. Docker work is scoped to this run (docker.sh).
+# See scripts/preflight/README.md.
 
 # PF_* variables are read by the sourced lib.sh.
 # shellcheck disable=SC2034
@@ -24,6 +28,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib.sh
 . "$SCRIPT_DIR/lib.sh"
+# shellcheck source=docker.sh
+. "$SCRIPT_DIR/docker.sh"
 # shellcheck source=report.sh
 . "$SCRIPT_DIR/report.sh"
 
@@ -55,11 +61,17 @@ PF_SERVED_URL="${PF_SERVED_URL%/}"
 
 pf_need curl jq tar awk find git
 [ "$PF_NO_BUILD" = 1 ] || { pf_need docker; docker info >/dev/null 2>&1 || pf_die "docker daemon not reachable (use --no-build only to record skips)"; }
+[ -n "$MD" ] || MD="${OUT%.json}.md"
+rm -f "$OUT" "$MD"
+PF_RUN_ID="pf-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+PF_BUILDER=""
+SCRIPT_COMMIT="$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+[ -z "$(git -C "$REPO_ROOT" status --porcelain -- scripts/preflight 2>/dev/null)" ] || SCRIPT_COMMIT="$SCRIPT_COMMIT-dirty"
 PF_TIMEOUT_BIN=""
 for t in timeout gtimeout; do command -v "$t" >/dev/null 2>&1 && { PF_TIMEOUT_BIN="$t"; break; }; done
 
 PF_WORK="$(mktemp -d "${TMPDIR:-/tmp}/preflight.XXXXXX")"
-trap 'rm -rf "$PF_WORK"' EXIT
+trap 'pf_docker_cleanup; rm -rf "$PF_WORK" "$OUT.tmp"' EXIT
 mkdir -p "$PF_WORK/dl" "$PF_WORK/build" "$PF_WORK/logs"
 PF_ENTRIES="$PF_WORK/entries.jsonl"
 : >"$PF_ENTRIES"
@@ -79,6 +91,9 @@ pf_registry_table "$PF_WORK/served.json" >"$PF_SERVED_TABLE"
 pf_registry_table "$PF_WORK/main.json" >"$PF_MAIN_TABLE"
 EXP_SERVED=$(jq -r '.pluginCount.free // (.plugins | length)' "$PF_WORK/served.json")
 EXP_MAIN=$(jq -r '.plugins_count // (.plugins | length)' "$PF_WORK/main.json")
+INS_SERVED=$(awk -F'\t' '$3 == "true"' "$PF_SERVED_TABLE" | wc -l | tr -d ' ')
+INS_MAIN=$(awk -F'\t' '$3 == "true"' "$PF_MAIN_TABLE" | wc -l | tr -d ' ')
+pf_log "run $PF_RUN_ID, script $SCRIPT_COMMIT; installable: served=$INS_SERVED main=$INS_MAIN"
 pf_log "expected: served=$EXP_SERVED main=$EXP_MAIN (rows: $(wc -l <"$PF_SERVED_TABLE" | tr -d ' ') / $(wc -l <"$PF_MAIN_TABLE" | tr -d ' '))"
 
 for src in served main; do
@@ -92,27 +107,41 @@ for src in served main; do
   done 3<"$tbl"
 done
 
-mkdir -p "$(dirname "$OUT")"
+mkdir -p "$(dirname "$OUT")" "$(dirname "$MD")"
 RUN_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 jq -S -s --arg run_at "$RUN_AT" --arg served_url "$PF_SERVED_URL" --arg main_sha "$MAIN_SHA" \
-  --arg main_ref "$MAIN_REF" --argjson es "$EXP_SERVED" --argjson em "$EXP_MAIN" '
+  --arg main_ref "$MAIN_REF" --arg run_id "$PF_RUN_ID" --arg script_commit "$SCRIPT_COMMIT" \
+  --argjson es "$EXP_SERVED" --argjson em "$EXP_MAIN" --argjson is "$INS_SERVED" --argjson im "$INS_MAIN" \
+  --argjson nobuild "$PF_NO_BUILD" --argjson bcache "$([ -n "$PF_BUILD_CACHE" ] && echo true || echo false)" '
   (sort_by([.source, .slug])) as $e
-  | {header: {run_at: $run_at, served_url: $served_url, main_ref: $main_ref, main_sha: $main_sha, tier: "free"},
+  | ($e | map(select(.source == "served")) | length) as $ns
+  | ($e | map(select(.source == "main")) | length) as $nm
+  | ([ (if $es == 0 then "served registry is empty" else empty end),
+       (if $em == 0 then "main registry is empty" else empty end),
+       (if $ns != $es then "served entries \($ns) != registry count \($es)" else empty end),
+       (if $nm != $em then "main entries \($nm) != registry count \($em)" else empty end),
+       (if $ns < $is then "served entries \($ns) < installable \($is)" else empty end),
+       (if $nm < $im then "main entries \($nm) < installable \($im)" else empty end) ]) as $cov
+  | {header: {run_at: $run_at, run_id: $run_id, script_commit: $script_commit, tier: "free",
+              served_url: $served_url, served_registry: ($served_url + "/registry.json?tier=free"),
+              main_ref: $main_ref, main_sha: $main_sha,
+              build_cache_used: $bcache, no_build: ($nobuild == 1)},
      summary: {expected: ($es + $em), expected_served: $es, expected_main: $em,
+               installable_served: $is, installable_main: $im,
+               coverage: {ok: (($cov | length) == 0), problems: $cov},
                counts: {pass: ($e | map(select(.result == "pass")) | length),
                         fail: ($e | map(select(.result == "fail")) | length),
                         skip: ($e | map(select(.result == "skip")) | length)},
-               by_class: ($e | map(select(.result != "pass")) | group_by(.class) | map({(.[0].class): length}) | add // {}),
-               pass: (($e | map(select(.result != "pass")) | length) == 0)},
-     entries: $e}' "$PF_ENTRIES" >"$OUT"
-
-[ -n "$MD" ] || MD="${OUT%.json}.md"
-mkdir -p "$(dirname "$MD")"
+               by_class: (($e | map(select(.result != "pass")) | group_by(.class) | map({(.[0].class): length}) | add // {})
+                          + (if ($cov | length) > 0 then {coverage: ($cov | length)} else {} end)),
+               pass: ((($e | map(select(.result != "pass")) | length) == 0) and (($cov | length) == 0) and (($e | length) > 0))},
+     entries: $e}' "$PF_ENTRIES" >"$OUT.tmp"
+mv "$OUT.tmp" "$OUT"
 pf_render_md "$OUT" "$SCRIPT_DIR/owners.tsv" >"$MD"
 pf_log "wrote $OUT and $MD"
 
-if ! jq -e '(.entries | length) == .summary.expected' "$OUT" >/dev/null; then
-  pf_log "ERROR: entries ($(jq '.entries | length' "$OUT")) != expected ($(jq '.summary.expected' "$OUT"))"
+if ! jq -e '.summary.coverage.ok and ((.entries | length) == .summary.expected)' "$OUT" >/dev/null; then
+  pf_log "ERROR: coverage failure: $(jq -c '.summary.coverage.problems' "$OUT") (entries $(jq '.entries | length' "$OUT"), expected $(jq '.summary.expected' "$OUT"))"
   exit 3
 fi
 if [ "$STRICT" = 1 ] && ! jq -e '.summary.pass' "$OUT" >/dev/null; then

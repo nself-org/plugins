@@ -10,9 +10,9 @@ bash scripts/preflight/run.sh --tier free --out "$TMPDIR/preflight.json" [--md s
   [--strict] [--no-build] [--log-dir DIR] [--build-cache DIR] [--served-url URL] [--main-ref REF]
 ```
 
-Read-only and credential-free. Requires `curl jq tar awk git docker`
+Credential-free. HTTP is read-only; the only local side effects are the docker builds described under Docker scope. Requires `curl jq tar awk git docker`
 (`timeout`/`gtimeout` optional: caps each build at `PF_BUILD_TIMEOUT`, default 1800 s).
-Everything is sequential, one docker build at a time. `--build-cache DIR` keeps build outcomes by tarball sha256 so an interrupted run resumes (never use it for the evidence run you want measured from scratch). A docker daemon outage is retried and then aborts the run with exit 2; it is never recorded as a plugin failure. A full cold run builds
+Everything is sequential, one docker build at a time. `--build-cache DIR` keeps build outcomes by tarball sha256 so an interrupted run resumes (never use it for the run you want measured from scratch; the report header and markdown state `build_cache_used`). A docker daemon outage is retried and then aborts the run with exit 2; it is never recorded as a plugin failure. A full cold run builds
 every Dockerfile once (identical bytes are built once, not twice) and takes
 roughly one to two hours; set `PF_PRUNE_EVERY` (default 10) to change how often
 the build cache is trimmed to 4 GB.
@@ -41,7 +41,7 @@ The first failing stage names the class.
 | `manifest` | no `plugin.json`, not a JSON object, or `name`/`version` differ from the registry entry |
 | `fragment` | a service plugin (`pluginType` is not `cli`, no bare `binaryName`) lacks `docker-compose.plugin.yml` or `Dockerfile` |
 | `build` | `docker build` of the extracted tree alone failed (or a CLI plugin has no `Dockerfile`) |
-| `drift` | served registry differs from `registry.json` at main (version, checksum, or slug absent) |
+| `drift` | served registry differs from `registry.json` at main (version, checksum, or slug absent). Checked first for every entry and it wins: an entry that also fails another stage is reported as `drift` with `; also <class>: <reason>`, so P7-PLUG-35 routing is never masked |
 
 `installable:false` entries with no `tarball` are asserted (declared, nothing to
 download) and pass. Anything not measured is `skip`, and a skip is not a pass
@@ -60,8 +60,28 @@ the served bytes, so two runs over the same bytes are identical after
 entry with its follow-up: served drift goes to P7-PLUG-35, a plugin goes to its
 batch Ticket (`owners.tsv`, P7-PLUG-40..47), an unowned slug needs a new debt id.
 
-Exit codes: 0 report written (read `summary.pass`), 1 `--strict` and not pass,
-2 usage or infrastructure error (no report), 3 count mismatch.
+Exit status, read this before gating on it: **0 means the report was written,
+not that the tier passes.** Gate on `--strict` (exit 1 when `summary.pass` is
+false) or on `jq -e '.summary.pass'`, never on the plain exit status alone.
+2 is a usage or infrastructure error: `--out` and `--md` are deleted at the
+start of every run, so a stale report is never left behind. 3 is a coverage
+failure: an empty registry, or fewer entries measured than a registry counts or
+lists as installable (`summary.coverage`, `summary.by_class.coverage`); zero
+entries can never pass.
+
+## Docker scope
+
+No global prune ever runs. The run creates a buildx builder
+`nself-preflight-<run-id>` and labels every image `nself.preflight=<run-id>`;
+cleanup removes only that builder (and its build cache), the labelled images and
+a buildkit image it had to pull. Without buildx it uses the default builder and
+never prunes the build cache. The run id is in `header.run_id`.
+
+## Determinism limit
+
+`reason` strings quote docker output (for example the Go version a Dockerfile
+image runs), so identical served bytes give identical reports only while the
+upstream base-image tags resolve to the same content.
 
 ## Not measured
 

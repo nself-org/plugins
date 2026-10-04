@@ -2,8 +2,8 @@
 # lib.sh - measurement functions for scripts/preflight/run.sh (P7-PLUG-02).
 #
 # Sourced, never executed. Read-only: HTTPS GETs of public endpoints, local
-# extraction and local `docker build`. Nothing is written outside $PF_WORK.
-# Everything is sequential (one download, one docker build at a time).
+# extraction and `docker build` (docker.sh; everything it creates is scoped to
+# the run id). Nothing is written outside $PF_WORK. Sequential throughout.
 #
 # Per-entry pipeline, first failing stage wins, class names the stage:
 #   404       route answered other than 302, or a download answered other than 200
@@ -12,7 +12,8 @@
 #   manifest  plugin.json missing, not JSON, or name/version != registry entry
 #   fragment  service plugin without docker-compose.plugin.yml or Dockerfile
 #   build     `docker build` of the extracted tree alone failed (or no Dockerfile)
-#   drift     served registry differs from registry.json at main (or slug absent)
+#   drift     served registry differs from registry.json at main (or slug absent);
+#             wins over every other class and names it ("; also <class>: ...")
 #
 # Constitution 8.4: a skipped stage is a skip, never a pass.
 #
@@ -91,11 +92,33 @@ pf_fetch_cached() {
   printf '%s' "$PF_DL_CODE" >"$PF_WORK/dl/$key.code"
 }
 
+# pf_drift SOURCE SLUG VERSION WANT: prints the drift description (empty when
+# the entry equals its counterpart in the other registry). Needs only the tables.
+pf_drift() {
+  local own other row t=$'\t'
+  if [ "$1" = served ]; then other="$PF_MAIN_TABLE"; own="the served registry"; else other="$PF_SERVED_TABLE"; own="registry.json at main"; fi
+  row=$(awk -F'\t' -v s="$2" '$1 == s {print $2 "\t" $5; exit}' "$other")
+  if [ -z "$row" ]; then
+    if [ "$1" = served ]; then printf 'drift: served registry lists %s but registry.json at main does not' "$2"
+    else printf 'drift: registry.json at main lists %s but the served registry does not' "$2"; fi
+    return 0
+  fi
+  [ "$row" = "$3$t$4" ] || printf 'drift: %s has %s/%s, the other registry has %s' "$own" "$3" \
+    "$(printf '%s' "$4" | cut -c1-12)" "$(printf '%s' "$row" | awk -F'\t' '{print $1 "/" substr($2,1,12)}')"
+}
+
 # pf_done RESULT CLASS REASON: append one entry. Reads source, slug, version,
-# route, dl and sha from the calling pf_check_entry frame (bash dynamic scope).
+# route, dl, sha and drift from the calling pf_check_entry frame (bash dynamic
+# scope). A drifting entry is never a pass and always reports class drift, with
+# any other failure kept in the reason, so P7-PLUG-35 routing cannot be masked.
 pf_done() {
+  local res="$1" cls="$2" why="$3"
+  if [ -n "$drift" ]; then
+    if [ "$res" = pass ]; then why="$drift"; else why="$drift; also ${cls:-none}: $3"; fi
+    res=fail cls=drift
+  fi
   jq -nc --arg source "$source" --arg slug "$slug" --arg version "$version" \
-    --arg result "$1" --arg class "$2" --arg reason "$3" \
+    --arg result "$res" --arg class "$cls" --arg reason "$why" \
     --arg route "$route" --arg dl "$dl" --arg sha "$sha" \
     '{source: $source, slug: $slug, version: $version, result: $result,
       class: (if $class == "" then null else $class end), reason: $reason,
@@ -104,82 +127,13 @@ pf_done() {
       sha256: (if $sha == "" then null else $sha end)}' >>"$PF_ENTRIES"
 }
 
-# pf_docker_up: wait (default 600 s) for the docker daemon; false when it stays down.
-pf_docker_up() {
-  local waited=0
-  while ! docker info >/dev/null 2>&1; do
-    [ "$waited" -lt "${PF_DOCKER_WAIT:-600}" ] || return 1
-    [ "$waited" != 0 ] || pf_log "docker daemon unreachable; waiting up to ${PF_DOCKER_WAIT:-600}s"
-    sleep 10
-    waited=$((waited + 10))
-  done
-}
-
-# pf_build ROOT SHA SLUG: docker build from the extracted tree alone. Sets
-# PF_B_RESULT PF_B_CLASS PF_B_REASON. Identical bytes (same sha256) are built
-# once; the second source reuses the measured outcome. With PF_BUILD_CACHE
-# (--build-cache DIR) outcomes persist so an interrupted run resumes.
-# A daemon outage is infrastructure, never a plugin build failure: the build is
-# retried once after the daemon returns, else the run aborts (exit 2).
-pf_build() {
-  local root="$1" sha="$2" slug="$3" cache rc=0 tag log err cause blk tries=0 short
-  short=$(printf '%s' "$sha" | cut -c1-12)
-  cache="$PF_WORK/build/$sha.res"
-  [ -f "$cache" ] || { [ -z "${PF_BUILD_CACHE:-}" ] || cache="$PF_BUILD_CACHE/$sha.res"; }
-  if [ -f "$cache" ]; then
-    IFS=$'\t' read -r PF_B_RESULT PF_B_CLASS PF_B_REASON <"$cache"
-    return 0
-  fi
-  cache="$PF_WORK/build/$sha.res"
-  if [ "${PF_NO_BUILD:-0}" = 1 ]; then
-    PF_B_RESULT=skip PF_B_CLASS=build PF_B_REASON="docker build skipped (--no-build); a skip is not a pass"
-    return 0
-  fi
-  tag="nself-preflight/${slug}:$short"
-  log="$PF_WORK/logs/${slug}-$short.log"
-  while :; do
-    rc=0
-    pf_docker_up || pf_die "docker daemon down; aborting (not a plugin failure)"
-    ${PF_TIMEOUT_BIN:+$PF_TIMEOUT_BIN ${PF_BUILD_TIMEOUT:-1800}} \
-      docker build --progress=plain -t "$tag" "$root" >"$log" 2>&1 || rc=$?
-    [ "$rc" != 0 ] || break
-    grep -Eq 'Docker Desktop is unable to start|failed to connect to the docker API|Cannot connect to the Docker daemon|error during connect|code = Unavailable' "$log" || break
-    tries=$((tries + 1))
-    [ "$tries" -lt 3 ] || pf_die "docker daemon keeps dropping during $slug; aborting (not a plugin failure)"
-    pf_log "docker daemon dropped during $slug (try $tries); retrying"
-  done
-  if [ "$rc" = 0 ]; then
-    PF_B_RESULT=pass PF_B_CLASS=- PF_B_REASON="docker build from the extracted tree succeeded"
-    docker rmi -f "$tag" >/dev/null 2>&1 || true
-  else
-    if [ "$rc" = 124 ]; then
-      PF_B_REASON="docker build timed out after ${PF_BUILD_TIMEOUT:-1800}s"
-    else
-      # Fixed text only: strip buildkit ref ids and step timestamps so two runs match.
-      err=$( (grep '^ERROR' "$log" || true) | tail -n 1 | sed -E 's/ of ref [a-z0-9:]+//; s/^ERROR: failed to build: failed to solve: //' | tr -s ' ' | cut -c1-150)
-      blk=$(awk '/^ > \[/ {b = 1; next} /^------$/ {b = 0} b' "$log" | sed -E 's/^[0-9]+\.[0-9]+ +//')
-      cause=$( (printf '%s\n' "$blk" | grep -iE 'is required|requires go|not found|cannot|unable' || true) | head -n 1 | tr -s ' ' | cut -c1-160)
-      [ -n "$cause" ] || cause=$( (printf '%s\n' "$blk" | grep -iE 'error|failed' || true) | head -n 1 | sed -E 's/ at `[^`]*`/ at <path>/' | tr -s ' ' | cut -c1-160)
-      PF_B_REASON="docker build exit $rc${err:+: $err}${cause:+ | cause: $cause}"
-    fi
-    PF_B_RESULT=fail PF_B_CLASS=build
-    [ -z "${PF_LOG_DIR:-}" ] || { mkdir -p "$PF_LOG_DIR" && cp "$log" "$PF_LOG_DIR/"; }
-  fi
-  printf '%s\t%s\t%s\n' "$PF_B_RESULT" "$PF_B_CLASS" "$PF_B_REASON" >"$cache"
-  [ -z "${PF_BUILD_CACHE:-}" ] || { mkdir -p "$PF_BUILD_CACHE" && cp "$cache" "$PF_BUILD_CACHE/$sha.res"; }
-  PF_BUILD_COUNT=$((${PF_BUILD_COUNT:-0} + 1))
-  docker image prune -f >/dev/null 2>&1 || true
-  if [ $((PF_BUILD_COUNT % ${PF_PRUNE_EVERY:-10})) = 0 ]; then
-    docker builder prune -f --keep-storage 4GB >/dev/null 2>&1 || true
-  fi
-}
-
 # pf_check_entry SOURCE SLUG VERSION INSTALLABLE URL WANT_SHA
 # SOURCE is "served" (follow GET <served>/plugins/<slug>/tarball) or "main"
 # (the entry's own tarball URL from registry.json at main).
 pf_check_entry() {
   local source="$1" slug="$2" version="$3" installable="$4" url="$5" want="$6"
-  local route="" dl="" sha="" dir="$PF_WORK/x" manifest root kind mname mver missing m rc
+  local route="" dl="" sha="" dir="$PF_WORK/x" manifest root kind mname mver missing rc drift
+  drift=$(pf_drift "$source" "$slug" "$version" "$want")
   if [ "$installable" = false ]; then
     if [ "$url" = "-" ]; then
       pf_done pass "" "declared installable:false and carries no tarball: nothing to download by design"
@@ -270,20 +224,5 @@ pf_check_entry() {
     return 0
   fi
 
-  # Registry-to-registry drift: served vs registry.json at main.
-  if [ "$source" = served ]; then
-    m=$(awk -F'\t' -v s="$slug" '$1 == s {print $2 "\t" $5; exit}' "$PF_MAIN_TABLE")
-    if [ -z "$m" ]; then
-      pf_done fail drift "served registry lists $slug but registry.json at main does not"
-      return 0
-    fi
-    if [ "$m" != "$version	$want" ]; then
-      pf_done fail drift "served registry $version/$(printf '%s' "$want" | cut -c1-12) differs from main $(printf '%s' "$m" | awk -F'\t' '{print $1 "/" substr($2,1,12)}')"
-      return 0
-    fi
-  elif ! cut -f1 "$PF_SERVED_TABLE" | grep -qxF "$slug"; then
-    pf_done fail drift "registry.json at main lists $slug but the served registry does not"
-    return 0
-  fi
   pf_done pass "" "tarball downloaded (HTTP 200), sha256 equals the registry, extracted, manifest and fragment ok, docker build ok, no registry drift"
 }

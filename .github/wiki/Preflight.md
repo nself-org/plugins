@@ -38,8 +38,10 @@ jq -e '(.entries|length) == .summary.expected' "$TMPDIR/preflight.json"
 ```
 
 Needs `curl jq tar git docker`. It never writes to production and needs no
-licence key. A cold run takes one to two hours. Add `--strict` to exit 1 when
-the report is not a full pass, and `--log-dir DIR` to keep failing build logs.
+licence key. Docker work is scoped to the run: its own buildx builder and
+labelled images, no global prune. A cold run takes one to two hours. Exit status 0 means the report was written, not that it
+passes: gate on `--strict` (exit 1 unless `summary.pass`) or `summary.pass`,
+never on exit status alone. Use `--log-dir DIR` to keep failing build logs.
 Details: `scripts/preflight/README.md`.
 
 ## Read the report
@@ -53,8 +55,13 @@ Details: `scripts/preflight/README.md`.
 - The markdown summary names a follow-up per failing entry: served drift goes
   to P7-PLUG-35 (worker deploy), a plugin goes to its batch Ticket
   (P7-PLUG-40 to P7-PLUG-47), an unowned slug needs a new debt id.
+- An entry that drifts is always class `drift` (with any other failure kept in
+  the reason). A coverage problem (empty registry, fewer entries than the
+  registry counts) fails the run with exit 3 and `by_class.coverage`.
 - Two runs over the same served bytes are identical once `header` is removed
-  (`diff <(jq -S 'del(.header)' a.json) <(jq -S 'del(.header)' b.json)`).
+  (`diff <(jq -S 'del(.header)' a.json) <(jq -S 'del(.header)' b.json)`), as
+  long as upstream docker base-image tags resolve to the same content (reasons
+  quote docker output).
 
 The licensed tier is measured separately (P7-PLUG-39). The latest evidence is
 kept in the hq plan evidence folder (`PLUG-02-preflight.md`).
