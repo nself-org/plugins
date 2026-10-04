@@ -71,7 +71,8 @@ jobs:
           for gomod in $(find . -name go.mod -not -path '*/vendor/*' | sort); do
             dir=$(dirname "$gomod")
             echo "Checking: $dir"
-            if ! (cd "$dir" && go-licenses check ./... --allowed_licenses="$ALLOWED" $IGNORE_ARGS 2>&1); then
+            # Retries only transient proxy/network errors; real license failures fail at once.
+            if ! bash .github/scripts/go-licenses-check-retry.sh "$dir" "$ALLOWED" $IGNORE_ARGS; then
               echo "FAIL: Disallowed license in $dir"
               FAILED=1
             fi
