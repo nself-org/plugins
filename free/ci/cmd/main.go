@@ -11,7 +11,7 @@
 //	nself-ci [flags] [repo-root]              — single-repo gate
 //	nself-ci run [flags] [search-root]        — pipeline: discover .ci.yaml + run stages
 //	nself-ci build --artifact android [dir]   — local signed-APK build + gh release upload
-//	nself ci run --env staging                — via nself CLI proxy
+//	nself ci run --env local                  — via nself CLI proxy
 //	nself ci build --artifact android         — via nself CLI proxy
 //
 // SPORT: PLUGINS-CI-000
@@ -26,14 +26,6 @@ import (
 
 	"github.com/nself-org/plugins/free/ci/internal"
 )
-
-// gatewayBaseForEnv maps --env values to gateway base URLs.
-// Staging targets 167.235.233.65:3761 (E7 completion gate).
-// NEVER add production IP here (5.75.235.42 is deny-listed per destructive-deny-list.md).
-var gatewayBaseForEnv = map[string]string{
-	"staging": "http://167.235.233.65:3761",
-	"local":   "http://127.0.0.1:3761",
-}
 
 func main() {
 	// Check for "run"/"build" subcommands as first non-flag argument.
@@ -58,7 +50,7 @@ func main() {
 func runPipelineCmd(rawArgs []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	var (
-		env        = fs.String("env", "", "Target environment: staging|local — sets gateway base URL")
+		env        = fs.String("env", "", "Target environment: local")
 		gatewayURL = fs.String("gateway", "", "Explicit gateway base URL (e.g. http://host:3761)")
 		verbose    = fs.Bool("v", false, "Print each command before running")
 		timeout    = fs.Int("timeout", 300, "Per-step timeout in seconds")
@@ -74,17 +66,10 @@ func runPipelineCmd(rawArgs []string) {
 	}
 
 	// Resolve gateway base URL.
-	gatewayBase := *gatewayURL
-	if gatewayBase == "" && *env != "" {
-		base, ok := gatewayBaseForEnv[*env]
-		if !ok {
-			fmt.Fprintf(os.Stderr, "error: unknown --env %q (valid: staging, local)\n", *env)
-			os.Exit(1)
-		}
-		gatewayBase = base
-	}
-	if v := os.Getenv("NSELF_CI_GATEWAY"); v != "" && gatewayBase == "" {
-		gatewayBase = v
+	gatewayBase, err := resolveGatewayBase(*env, *gatewayURL, os.Getenv("NSELF_CI_GATEWAY"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("nself-ci pipeline — searching %s\n", searchRoot)
@@ -228,7 +213,7 @@ func runSingleRepoCmd(rawArgs []string) {
 		owner        = fs.String("owner", "", "GitHub owner (default: from git remote)")
 		repo         = fs.String("repo", "", "GitHub repo name (default: from git remote)")
 		checkOnly    = fs.Bool("check", false, "Check mode: run gates, print result, exit 0/1. No status posted.")
-		env          = fs.String("env", "", "Target environment for gateway routing check: staging|local (SPORT: PLUGINS-CI-005)")
+		env          = fs.String("env", "", "Target environment: local (SPORT: PLUGINS-CI-005)")
 		gatewayURL   = fs.String("gateway", "", "Explicit gateway base URL override (e.g. http://host:3761)")
 		filesystem   = fs.Bool("filesystem", false, "Force gitleaks filesystem scan (--no-git) even inside a git checkout; opt-in for non-checkout source trees such as an exported tarball")
 	)
@@ -247,17 +232,10 @@ func runSingleRepoCmd(rawArgs []string) {
 	}
 
 	// Resolve gateway base URL.
-	gatewayBase := *gatewayURL
-	if gatewayBase == "" && *env != "" {
-		if base, ok := gatewayBaseForEnv[*env]; ok {
-			gatewayBase = base
-		} else {
-			fmt.Fprintf(os.Stderr, "error: unknown --env %q (valid: staging, local)\n", *env)
-			os.Exit(1)
-		}
-	}
-	if v := os.Getenv("NSELF_CI_GATEWAY"); v != "" && gatewayBase == "" {
-		gatewayBase = v
+	gatewayBase, err := resolveGatewayBase(*env, *gatewayURL, os.Getenv("NSELF_CI_GATEWAY"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 
 	cfg := internal.Config{

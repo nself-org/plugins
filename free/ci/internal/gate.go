@@ -33,7 +33,7 @@ type Config struct {
 	Verbose bool
 	// GatewayBase is the base URL for the gateway routing check stage.
 	// If non-empty, a gateway-routing-check stage is appended after all stack gates.
-	// Example: "http://167.235.233.65:3761"
+	// Example: "http://127.0.0.1:3761"
 	// SPORT: PLUGINS-CI-005
 	GatewayBase string
 	// EvalGateURL is the nself-eval-gate plugin base URL.
