@@ -4,7 +4,7 @@ package internal
 //
 // Purpose: Discover .ci.yaml plugin manifests under a search root and run their
 //   declared gate stages as named GateResult entries in the CI pipeline.
-//   Enables "nself ci run --env staging" to locate E7 plugin stages
+//   Enables "nself ci run --env local" to locate E7 plugin stages
 //   (plugin-retrieval → plugin-gauth → plugin-clawde-pty) and run in order.
 //
 // Inputs:  searchRoot string — directory tree to scan (e.g. plugins-pro/)

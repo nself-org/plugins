@@ -1,9 +1,9 @@
 # plugin-pty PTY Pool Verification Plan
 
 **Ticket:** P4-E7-W3-S21-T10  
-**Target:** 167.235.233.65:3760 (staging)  
+**Target:** http://127.0.0.1:3760 (local stack)  
 **Date:** 2026-06-25  
-**Status:** PLAN — execute after T09 deploy confirms health 200
+**Status:** PLAN — execute against a local stack once health returns 200
 
 ---
 
@@ -28,8 +28,9 @@ Note: T10 spec mentions `POST /relay` (SSE). Actual implementation uses `POST /s
 # Install websocat (WebSocket CLI client)
 brew install websocat
 
-# Verify staging is up (T09 must be done first)
-curl -s http://167.235.233.65:3760/health
+# Start a local stack with the plugin enabled, on port 3760
+nself start   # with PTY_PORT=3760 PTY_SESSION_TIMEOUT_SECS=300 in the plugin env
+curl -s http://127.0.0.1:3760/health
 # Expected: {"status":"ok"}  HTTP 200
 ```
 
@@ -37,7 +38,7 @@ curl -s http://167.235.233.65:3760/health
 
 ## Verification Script
 
-Save as `verify-pty-pool.sh` and run from any machine with network access to staging.
+Save as `verify-pty-pool.sh` and run from any machine with network access to the local stack.
 
 ```bash
 #!/usr/bin/env bash
@@ -45,8 +46,8 @@ Save as `verify-pty-pool.sh` and run from any machine with network access to sta
 # Usage: ./verify-pty-pool.sh
 set -euo pipefail
 
-BASE="http://167.235.233.65:3760"
-ACCOUNT="staging-verify-$$"
+BASE="http://127.0.0.1:3760"
+ACCOUNT="local-verify-$$"
 PASS=0
 FAIL=0
 
@@ -90,7 +91,7 @@ OVER=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/sessions" \
 
 # ── Test 4: Cross-tenant isolation ───────────────────────────────────────────
 echo "=== Test 4: Cross-tenant isolation ==="
-OTHER_ACCOUNT="staging-other-$$"
+OTHER_ACCOUNT="local-other-$$"
 # Try to close a session belonging to $ACCOUNT using $OTHER_ACCOUNT
 if [ ${#SESSION_IDS[@]} -gt 0 ]; then
   FIRST_SID="${SESSION_IDS[0]}"
@@ -110,10 +111,10 @@ done
 # ── Test 6: Timeout enforcement ───────────────────────────────────────────────
 echo "=== Test 6: Timeout enforcement ==="
 # Create a session and verify PTY_SESSION_TIMEOUT_SECS is respected.
-# staging.yaml sets PTY_SESSION_TIMEOUT_SECS=300; full timeout test requires
+# The local stack sets PTY_SESSION_TIMEOUT_SECS=300 (plugin default is 3600); full timeout test requires
 # waiting 300s — impractical in CI. Instead: verify env is set correctly.
-TIMEOUT_CHECK=$(nself env get PTY_SESSION_TIMEOUT_SECS --env staging 2>/dev/null || echo "300")
-[ "$TIMEOUT_CHECK" = "300" ] && pass "PTY_SESSION_TIMEOUT_SECS=300 set on staging" || fail "PTY_SESSION_TIMEOUT_SECS unexpected: $TIMEOUT_CHECK"
+TIMEOUT_CHECK="${PTY_SESSION_TIMEOUT_SECS:-unset}"
+[ "$TIMEOUT_CHECK" = "300" ] && pass "PTY_SESSION_TIMEOUT_SECS=300 set on the local stack" || fail "PTY_SESSION_TIMEOUT_SECS unexpected: $TIMEOUT_CHECK"
 # Manual full-timeout test: set PTY_SESSION_TIMEOUT_SECS=5 temporarily,
 # create a session, wait 6s, confirm GET /sessions/{id}/ws returns 404/410.
 
@@ -137,7 +138,7 @@ exit $FAIL
 | 3 | 6th POST /sessions same tenant | 429 Too Many Requests | HTTP 429 |
 | 4 | Cross-tenant DELETE | 403 Forbidden | HTTP 403 |
 | 5 | DELETE /sessions/{id} ×5 | 204 No Content each | All 204 |
-| 6 | PTY_SESSION_TIMEOUT_SECS | 300 set on staging | Env var present |
+| 6 | PTY_SESSION_TIMEOUT_SECS | 300 set on the local stack | Env var present |
 
 ---
 
@@ -149,7 +150,7 @@ After running smoke tests, verify DB state:
 -- All closed sessions should have ended_at set
 SELECT session_id, source_account_id, ended_at
 FROM np_pty_sessions
-WHERE source_account_id LIKE 'staging-verify-%'
+WHERE source_account_id LIKE 'local-verify-%'
 ORDER BY created_at DESC;
 
 -- Expected: ended_at IS NOT NULL for all rows
@@ -158,11 +159,11 @@ ORDER BY created_at DESC;
 -- Audit log should show spawn + close events
 SELECT session_id, event_type, detail, created_at
 FROM np_pty_audit_log
-WHERE source_account_id LIKE 'staging-verify-%'
+WHERE source_account_id LIKE 'local-verify-%'
 ORDER BY created_at;
 ```
 
-Run via: `nself db query --env staging --file check-sessions.sql`
+Run via: `nself db query --file check-sessions.sql`
 
 ---
 

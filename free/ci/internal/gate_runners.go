@@ -108,13 +108,13 @@ func runRustGates(root string, timeout int, verbose bool) []GateResult {
 	return gates
 }
 
-// runGatewayRoutingCheck verifies that the nself-ai-gateway on staging responds
+// runGatewayRoutingCheck verifies that the nself-ai-gateway responds
 // to /retrieval and /pty-relay routes (E7 completion check).
 //
-// Purpose: Confirm gateway routing is live for E7 plugins on staging.
-// Inputs:  gatewayBase string — base URL of the gateway (e.g. http://167.235.233.65:3761)
+// Purpose: Confirm gateway routing is live for E7 plugins.
+// Inputs:  gatewayBase string — base URL of the gateway (e.g. http://127.0.0.1:3761)
 // Outputs: []GateResult — one per route checked
-// Constraints: curl -f; targets staging ONLY (never production); SPORT PLUGINS-CI-005
+// Constraints: curl -f; never targets production; SPORT PLUGINS-CI-005
 func runGatewayRoutingCheck(gatewayBase string, timeout int, verbose bool) []GateResult {
 	routes := []struct {
 		name   string

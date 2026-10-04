@@ -76,7 +76,7 @@ func Run(cfg Config) (*Result, error) {
 	}
 
 	// 4. Gateway routing check (E7 completion gate — runs after all stack gates).
-	// Targets staging only; never production. SPORT: PLUGINS-CI-005
+	// Targets the gateway only; never production. SPORT: PLUGINS-CI-005
 	if cfg.GatewayBase != "" {
 		gwGates := runGatewayRoutingCheck(cfg.GatewayBase, timeout, cfg.Verbose)
 		res.Gates = append(res.Gates, gwGates...)
