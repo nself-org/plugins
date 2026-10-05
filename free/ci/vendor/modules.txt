@@ -1,0 +1,6 @@
+# github.com/nself-org/cli/sdk/go/v2 v2.0.0-20261005215931-48582f0a28b6
+## explicit; go 1.25.0
+github.com/nself-org/cli/sdk/go/v2/remote
+# gopkg.in/yaml.v3 v3.0.1
+## explicit
+gopkg.in/yaml.v3

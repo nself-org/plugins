@@ -1,0 +1,31 @@
+Install the declarative dependency set (internal/runner/manifest.yaml),
+create the runner service user with passwordless sudo, ensure the shared
+work directory is a real directory (never a symlink — a symlinked _work
+silently breaks actions/checkout's credential injection), and register
+--instances runner instances as systemd services.
+
+Every step is idempotent: safe to re-run against a host that's already
+partially provisioned.
+
+Examples:
+  nself ci nodes provision --github-url https://github.com/nself-org/cli
+  nself ci nodes provision --host ci@167.235.x.x --instances 2 --labels nself-ci
+  GITHUB_RUNNER_TOKEN=... nself ci nodes provision --github-url https://github.com/nself-org/web
+
+Usage:
+  nself ci nodes provision [flags]
+
+Flags:
+      --github-url string     Repo or org URL runners register against, e.g. https://github.com/nself-org/cli
+  -h, --help                  help for provision
+      --host strings          SSH target(s) user@host to provision (repeatable). Default: this machine.
+      --install-root string   Base install directory (default: /opt/actions-runner)
+      --instances int         Number of runner instances to install on this host (default 1)
+      --labels strings        Extra labels appended after self-hosted,Linux,X64
+      --ssh-key string        SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)
+      --token string          GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged.
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

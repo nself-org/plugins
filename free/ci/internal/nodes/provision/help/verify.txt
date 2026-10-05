@@ -1,0 +1,29 @@
+Check one or more hosts against internal/runner/manifest.yaml's declarative
+dependency set: every required package/binary, whether the shared work
+directory is a real directory (not a symlink), and whether any cached
+Chromium resolves its shared libraries (the exact failure that hid for
+hours as a misleading "Target page, context or browser has been closed"
+on 2026-09-11).
+
+Pass multiple --host flags to check several hosts in one run and print a
+parity matrix — this is how two hosts advertising identical GitHub Actions
+labels but different installed tools gets caught before it causes a job
+to pass or fail depending on luck.
+
+Examples:
+  nself ci nodes verify
+  nself ci nodes verify --host ci@167.235.x.x --host ci@167.233.x.x
+  nself ci nodes verify --host ci@167.235.x.x --json
+
+Usage:
+  nself ci nodes verify [flags]
+
+Flags:
+  -h, --help             help for verify
+      --host strings     SSH target(s) user@host to verify (repeatable). Default: this machine.
+      --json             Print raw JSON ([]runner.HostReport) instead of the text parity matrix
+      --ssh-key string   SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)
+
+Global Flags:
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection
