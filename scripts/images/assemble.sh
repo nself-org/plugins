@@ -22,18 +22,22 @@ done
 VALIDATE='
 def bad:
   if type != "object" then "entry is not an object"
+  elif ([.. | strings | select(explode | any(. < 32 or . == 127))] | length) > 0 then "control character or newline in a value"
   elif ((.name | type) != "string") or (.name | test("^[A-Za-z0-9][A-Za-z0-9._/-]*$") | not) then "name must be a non-empty string of [A-Za-z0-9._/-]"
   elif ((.kind | type) != "string") or ((.kind | IN("plugin", "upstream", "ci")) | not) then "unknown kind \(.kind | tojson) (plugin|upstream|ci)"
-  elif ((.image | type) != "string") or (.image | test("^[^@[:space:]]+:[^@:/[:space:]]+@sha256:[0-9a-f]{64}$") | not) then "image \(.image | tojson) must be <repository>:<tag>@sha256:<64 hex>"
+  elif ((.image | type) != "string") or (.image | test("^[a-z0-9][^@[:space:]]*:[^@:/[:space:]]+@sha256:[0-9a-f]{64}$") | not) then "image \(.image | tojson) must be <repository>:<tag>@sha256:<64 hex> (repository starts with a letter or digit)"
   elif ((.platforms | type) != "array") or (.platforms | length) == 0 or (.platforms | all(type == "string" and test("^[a-z0-9]+/[a-z0-9]+(/[a-z0-9]+)?$")) | not) then "platforms must be a non-empty list like linux/amd64"
   elif ((.owner | type) != "string") or .owner == "" then "owner must be a non-empty string"
   else empty end;
-(if type == "array" then .[] else . end) | (bad // "") as $b | if $b != "" then {f: $f, err: (.name? // "?" | tostring) + ": " + $b} else {f: $f, e: .} end'
+(if type == "array" then .[] else . end) | (bad // "") as $b | if $b != "" then {f: $f, err: ((.name? // "?" | tostring | explode | map(select(. >= 32 and . != 127)) | implode) + ": " + $b)} else {f: $f, e: .} end'
 
 assemble() {
   local f lines all="" rc=0 errs res
   for f in "$dir"/*.json; do
     [ -e "$f" ] || continue
+    if [ "$(jq -c --stream -n '[inputs | select(length == 2) | .[0]] | group_by(.) | any(length > 1)' "$f" 2>/dev/null)" = true ]; then
+      echo "assemble: $(basename "$f"): duplicate key in fragment" >&2; rc=1; continue
+    fi
     if ! lines=$(jq -c --arg f "$(basename "$f")" "$VALIDATE" "$f" 2>/dev/null); then
       echo "assemble: $(basename "$f"): not valid JSON" >&2; rc=1; continue
     fi
@@ -78,6 +82,14 @@ if [ "$fixtures" = 1 ]; then
   neg unknown-kind kind.json "{\"name\":\"y\",\"image\":\"nself/y:1@$dig\",\"kind\":\"weird\",\"platforms\":[\"linux/amd64\"],\"owner\":\"o\"}" 'kind.json: y: unknown kind'
   neg missing-owner owner.json "{\"name\":\"y\",\"image\":\"nself/y:1@$dig\",\"kind\":\"ci\",\"platforms\":[\"linux/amd64\"]}" 'owner.json: y: owner'
   neg malformed-json broken.json '{not json' 'broken.json'
+  ctl() { # id raw-json-escaped-value-for-name
+    neg "$1" "ctl-$1.json" "{\"name\":\"n$2\",\"image\":\"nself/y:1@$dig\",$good}" "ctl-$1.json: .*control character"
+  }
+  ctl trailing-newline '\n'; ctl cr '\r'; ctl tab '\t'; ctl nul '\u0000'
+  neg newline-in-image img.json "{\"name\":\"n\",\"image\":\"nself/y:1@$dig\\n\",$good}" 'img.json: n: control'
+  neg newline-in-platform plat.json "{\"name\":\"n\",\"image\":\"nself/y:1@$dig\",\"kind\":\"ci\",\"platforms\":[\"linux/amd64\\n\"],\"owner\":\"o\"}" 'plat.json: n: control'
+  neg duplicate-key dupkey.json "{\"name\":\"n\",\"name\":\"m\",\"image\":\"nself/y:1@$dig\",$good}" 'dupkey.json: duplicate key'
+  neg leading-dash-repo dash.json "{\"name\":\"n\",\"image\":\"--help:1@$dig\",$good}" 'dash.json: n: image'
   # stale lock: change a fragment without re-assembling
   rm -rf "$t/s"; mkdir -p "$t/s"; cp "$td"/ok/*.json "$t/s/"; cp "$t/images.json" "$t/s.json"
   sed -i.bak 's/P7-TEST-CI/P7-TEST-CI-2/' "$t/s/ci.json"; rm -f "$t/s/ci.json.bak"

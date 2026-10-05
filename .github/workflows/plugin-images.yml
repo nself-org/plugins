@@ -7,12 +7,13 @@ name: Plugin Images
 # First-publish gate (final gate G8): nothing is pushed unless the repository variable
 # NSELF_PUBLISH_PLUGIN_IMAGES is "true". The owner-named Ticket P7-PLUG-65 sets it together with the Docker Hub
 # token. Until then every tag builds the whole matrix, pushes nothing and logs the skip.
+# Only release tags (vX.Y.Z) trigger it; pre-release tags such as v1.2.0-rc1 do not, so they never move :latest.
 # Triggers on tag push only: there is no manual dispatch.
 
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: read

@@ -33,11 +33,11 @@ Consumers read images from the lock, never from a floating tag. The weekly bump 
 `scripts/images/probe.sh` pulls each entry's index anonymously (empty Docker config, no credential), requires the bytes
 to hash to the pinned digest and to list every platform. Calls are time-limited and retried. A definite failure
 (image gone, unpullable, wrong digest, missing platform) fails the job and, on the schedule, opens or updates one
-`image-probe` issue. A rate limit, outage or timeout is inconclusive: it warns and never blocks a pull request.
+`image-probe` issue. A broken probe tool or an unrecognised registry error also fails; a definite registry answer always wins over transient words in the same message. Only a rate limit, outage or timeout is inconclusive: it warns, never blocks a pull request, and the third inconclusive scheduled run in a row opens the issue too.
 
 ## Publishing
 
-`plugin-images.yml` runs on a release tag. It builds the matrix and pushes only when the repository variable
+`plugin-images.yml` runs on a release tag (vX.Y.Z; pre-release tags and versions never move `:latest`). It builds the matrix and pushes only when the repository variable
 `NSELF_PUBLISH_PLUGIN_IMAGES` is `true`; otherwise it builds, pushes nothing and logs
 `skipped push: NSELF_PUBLISH_PLUGIN_IMAGES != true`. A push also needs `DOCKERHUB_TOKEN` and `DOCKERHUB_USERNAME`
 (variable). The workflow then writes only `images.d/plugins.json` and the re-assembled `images.json`, and opens a PR.

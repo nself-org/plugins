@@ -44,7 +44,9 @@ for slug in $(printf '%s' "$plugins" | tr ',' ' '); do
     --label "org.opencontainers.image.source=$IMG_SOURCE_URL" \
     --label "org.opencontainers.image.revision=$revision" \
     --label "org.opencontainers.image.version=$version" \
-    -t "$repo:$version" -t "$repo:latest" -f "$dir/Dockerfile"
+    -t "$repo:$version" -f "$dir/Dockerfile"
+  # A pre-release version (1.2.0-rc1) never moves :latest.
+  case $version in *-*) echo "build: $version is a pre-release; :latest not tagged" ;; *) set -- "$@" -t "$repo:latest" ;; esac
   if [ "$push" = true ]; then
     echo "build: $repo:$version pushing"
     docker buildx build "$@" --push --metadata-file "$out/$slug/metadata.json" "$dir"
