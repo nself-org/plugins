@@ -1,17 +1,9 @@
 name: Hygiene
 
-# Consolidates trivial, single-checkout, no-toolchain gates that were
-# previously separate workflows: clean-root, clean-working-tree,
-# multi-arch-check, nself-first-check, attribution-guard, hadolint,
-# api-contract-check, deprecation-check, doc-sync, compose-password-urls.
-#
-# Every check below ran before this consolidation and still runs here —
-# nothing was dropped, only regrouped into one job/one checkout. PR-context
-# checks (nself-first, api-contract, deprecation, doc-sync) and the
-# commit-message attribution check are guarded to their original event
-# requirements. Trigger is the union of the originals' triggers (push to any
-# branch not under stash-archive/**, any tag, any PR, manual dispatch) so no
-# individual check's coverage is narrowed by the merge.
+# Single-checkout, no-toolchain gates consolidated from separate workflows (clean-root,
+# clean-working-tree, multi-arch, nself-first, attribution, hadolint, api-contract, deprecation,
+# doc-sync, compose-password-urls, tracked-binaries). PR-context and commit-message checks keep
+# their original event guards; the trigger is the union of the originals', so none narrowed.
 
 on:
   push:
@@ -183,6 +175,11 @@ jobs:
         id: compose_password_urls
         if: always()
         run: bash scripts/lint-compose-password-urls.sh
+
+      - name: "tracked-binaries: no compiled binary in the index (P7-HYG-32, G6)"
+        id: tracked_binaries
+        if: always()
+        run: python3 -m unittest discover -s scripts/ci/tests && python3 scripts/ci/check-tracked-binaries.py
 
       # --- attribution-guard.yml ---
       - name: "attribution-guard: tracked content"
@@ -457,8 +454,8 @@ jobs:
             fi
           fi
           if matches '(^cli/VERSION$|pubspec\.yaml$|homebrew-nself/.*\.rb$|plugins-pro/VERSION$|^Cargo\.toml$)'; then
-            if ! matches '(\.claude/docs/MASTER-VERSIONS\.md|\.claude/docs/sport/F01-MASTER-VERSIONS\.md|web/org/content/changelog|homebrew-nself/Formula/)'; then
-              rows="${rows}- version files changed without MASTER-VERSIONS.md or F01 update\n"; missing=1
+            if ! matches '(web/org/content/changelog|homebrew-nself/Formula/)'; then
+              rows="${rows}- version files changed without a changelog or homebrew formula update\n"; missing=1
             fi
           fi
 
@@ -483,6 +480,7 @@ jobs:
             [cwt_root]="${{ steps.cwt_root.outcome }}"
             [nself_first]="${{ steps.nself_first.outcome }}"
             [compose_password_urls]="${{ steps.compose_password_urls.outcome }}"
+            [tracked_binaries]="${{ steps.tracked_binaries.outcome }}"
             [attribution_content]="${{ steps.attribution_content.outcome }}"
             [attribution_commits]="${{ steps.attribution_commits.outcome }}"
             [hadolint_run]="${{ steps.hadolint_run.outcome }}"

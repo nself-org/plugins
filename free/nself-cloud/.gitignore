@@ -1,0 +1,2 @@
+# Compiled plugin binary (go build -o nself-cloud .; see Makefile). Never commit it.
+/nself-cloud
