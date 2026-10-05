@@ -16,7 +16,7 @@
 # pinned cli source), CONF_TODAY (test date). Exit: 0 ok, 1 an unlisted block or a bad exceptions file, 2 usage.
 set -u
 . "$(dirname "$0")/../conformance/lib.sh"
-root=$CONF_ROOT/free; exc=$CONF_ROOT/tests/conformance/exceptions.yaml; out=
+root=$CONF_ROOT/free; exc=$CONF_DIR/exceptions.yaml; out=
 while [ $# -gt 0 ]; do case $1 in
   --root) root=$2; shift;; --exceptions) exc=$2; shift;; --out) out=$2; shift;;
   *) echo "usage: cli-targets-gate.sh [--root DIR] [--exceptions FILE] --out DIR" >&2; exit 2;; esac; shift; done

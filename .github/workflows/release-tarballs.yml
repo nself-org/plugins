@@ -67,7 +67,7 @@ jobs:
 
       # Decides which plugins may ship a binary. A plugin whose commands collide with a core verb or
       # another plugin, or that the normalizer refuses, is blocked; each needs an unexpired entry in
-      # tests/conformance/exceptions.yaml or this step fails. Blocked plugins go to the job summary.
+      # scripts/conformance/exceptions.yaml or this step fails. Blocked plugins go to the job summary.
       - name: Compute binary targets
         run: bash scripts/release/cli-targets-gate.sh --out "${GITHUB_WORKSPACE}/cli-targets"
 
