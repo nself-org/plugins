@@ -1,0 +1,385 @@
+{
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64",
+    "darwin-x86_64"
+  ],
+  "author": "nself",
+  "binaryName": "nself-plugin-dev",
+  "category": "development",
+  "cliCommands": [
+    {
+      "description": "Plugin author tools: init, new, dev, debug, link, unlink, test",
+      "name": "plugin-dev"
+    }
+  ],
+  "commands": {
+    "binary": "nself-plugin-dev",
+    "command": "plugin-dev",
+    "json": "none",
+    "output": "document",
+    "side_effect": "write",
+    "subcommands": [
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "name": "author",
+            "type": "string",
+            "usage": "Plugin author name"
+          },
+          {
+            "name": "bundle",
+            "type": "string",
+            "usage": "Bundle display name (e.g. nClaw) — pro plugins only"
+          },
+          {
+            "default": "custom",
+            "name": "category",
+            "type": "string",
+            "usage": "Plugin category (see F04-PLUGIN-INVENTORY-PRO)"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "usage": "Short description of the plugin"
+          },
+          {
+            "default": "false",
+            "name": "force",
+            "type": "bool",
+            "usage": "Overwrite files if the output directory already exists"
+          },
+          {
+            "default": "1.0.9",
+            "name": "min-cli",
+            "type": "string",
+            "usage": "Minimum nSelf CLI version required"
+          },
+          {
+            "default": "0.1.0",
+            "name": "min-sdk",
+            "type": "string",
+            "usage": "Minimum plugin-sdk-go version required"
+          },
+          {
+            "default": "false",
+            "name": "no-interactive",
+            "type": "bool",
+            "usage": "Skip interactive prompts; use --tenancy default (none)"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "usage": "Output directory (default ./<name>)"
+          },
+          {
+            "default": "8080",
+            "name": "port",
+            "type": "int",
+            "usage": "Default listen port"
+          },
+          {
+            "default": "go",
+            "name": "template",
+            "type": "string",
+            "usage": "Plugin template: go, rust, node, static"
+          },
+          {
+            "name": "tenancy",
+            "type": "string",
+            "usage": "Multi-tenancy mode: app-isolation, cloud-tenant, both, none"
+          },
+          {
+            "default": "free",
+            "name": "tier",
+            "type": "string",
+            "usage": "Plugin tier: free or pro"
+          }
+        ],
+        "json": "none",
+        "name": "init",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Scaffold a new plugin project"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "name": "author",
+            "type": "string",
+            "usage": "Plugin author name"
+          },
+          {
+            "name": "bundle",
+            "type": "string",
+            "usage": "Bundle display name (e.g. nClaw) — pro plugins only"
+          },
+          {
+            "default": "custom",
+            "name": "category",
+            "type": "string",
+            "usage": "Plugin category (see F04-PLUGIN-INVENTORY-PRO)"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "usage": "Short description of the plugin"
+          },
+          {
+            "default": "false",
+            "name": "force",
+            "type": "bool",
+            "usage": "Overwrite files if the output directory already exists"
+          },
+          {
+            "default": "1.0.9",
+            "name": "min-cli",
+            "type": "string",
+            "usage": "Minimum nSelf CLI version required"
+          },
+          {
+            "default": "0.1.0",
+            "name": "min-sdk",
+            "type": "string",
+            "usage": "Minimum plugin-sdk-go version required"
+          },
+          {
+            "default": "false",
+            "name": "no-interactive",
+            "type": "bool",
+            "usage": "Skip interactive prompts; use --tenancy default (none)"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "usage": "Output directory (default ./<name>)"
+          },
+          {
+            "default": "8080",
+            "name": "port",
+            "type": "int",
+            "usage": "Default listen port"
+          },
+          {
+            "default": "go",
+            "name": "template",
+            "type": "string",
+            "usage": "Plugin template: go, rust, node, static"
+          },
+          {
+            "name": "tenancy",
+            "type": "string",
+            "usage": "Multi-tenancy mode: app-isolation, cloud-tenant, both, none"
+          },
+          {
+            "default": "free",
+            "name": "tier",
+            "type": "string",
+            "usage": "Plugin tier: free or pro"
+          }
+        ],
+        "json": "none",
+        "name": "new",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Scaffold a new plugin project (deprecated: use 'init')"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "default": "false",
+            "name": "debug",
+            "type": "bool",
+            "usage": "Attach dlv debugger (delegates to nself plugin debug)"
+          },
+          {
+            "default": "./cmd",
+            "name": "entrypoint",
+            "type": "string",
+            "usage": "Plugin entrypoint directory passed to dev-watch.sh"
+          },
+          {
+            "default": "false",
+            "name": "no-link",
+            "type": "bool",
+            "usage": "Skip auto-linking the plugin before starting dev mode"
+          }
+        ],
+        "json": "none",
+        "name": "dev",
+        "output": "stream",
+        "side_effect": "write",
+        "summary": "Start a plugin in development mode with hot-reload"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "default": "0",
+            "name": "port",
+            "type": "int",
+            "usage": "Debugger listen port (0 = auto-allocate from 2345-2399)"
+          },
+          {
+            "default": "false",
+            "name": "port-only",
+            "type": "bool",
+            "usage": "Print the allocated port and exit (for scripting)"
+          }
+        ],
+        "json": "none",
+        "name": "debug",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Attach a dlv debugger to a running plugin process"
+      },
+      {
+        "args": [
+          {
+            "name": "local-path",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "default": "false",
+            "name": "host",
+            "type": "bool",
+            "usage": "Use host-process mode instead of container-mount (macOS recommended for faster I/O)"
+          },
+          {
+            "default": "false",
+            "name": "list",
+            "type": "bool",
+            "usage": "List currently linked plugins"
+          }
+        ],
+        "json": "none",
+        "name": "link",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Register a local plugin directory as a shadow override"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "json": "none",
+        "name": "unlink",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Remove a local plugin shadow, restoring the registry version"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "default": "false",
+            "name": "host",
+            "type": "bool",
+            "usage": "Run tests in host-process mode instead of container"
+          },
+          {
+            "default": "false",
+            "name": "no-cleanup",
+            "type": "bool",
+            "usage": "Skip cleanup after smoke test (useful for debugging)"
+          },
+          {
+            "default": "both",
+            "name": "phase",
+            "type": "string",
+            "usage": "Test phase to run: unit, smoke, or both"
+          }
+        ],
+        "json": "none",
+        "name": "test",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Run a plugin's test suite (unit + smoke install/uninstall)"
+      }
+    ],
+    "summary": "Plugin author tools: init, new, dev, debug, link, unlink, test"
+  },
+  "description": "Plugin author tools: scaffold a plugin (init, new), link and unlink a local plugin directory, run it with hot reload (dev), attach a debugger (debug) and run its tests (test). Broken out of the core nself plugin command.",
+  "entryPoint": "cmd/",
+  "envVars": [
+    {
+      "description": "Base URL the smoke test polls for /healthz (default http://localhost:8080)",
+      "name": "NSELF_LOCAL_URL",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "supported": false
+  },
+  "name": "plugin-dev",
+  "permissions": {
+    "database": [],
+    "filesystem": [
+      "read",
+      "write"
+    ],
+    "network": []
+  },
+  "pluginType": "cli",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
+  "tags": [
+    "plugin",
+    "author",
+    "scaffold",
+    "dev",
+    "debug",
+    "test",
+    "link"
+  ],
+  "tier": "free",
+  "version": "1.2.7"
+}

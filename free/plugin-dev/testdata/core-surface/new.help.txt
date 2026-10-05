@@ -1,0 +1,25 @@
+Deprecated alias for 'nself plugin init'. Use 'nself plugin init' instead.
+
+Usage:
+  nself plugin new <name> [flags]
+
+Flags:
+      --author string        Plugin author name
+      --bundle string        Bundle display name (e.g. nClaw) — pro plugins only
+      --category string      Plugin category (see F04-PLUGIN-INVENTORY-PRO) (default "custom")
+      --description string   Short description of the plugin
+      --force                Overwrite files if the output directory already exists
+  -h, --help                 help for new
+      --min-cli string       Minimum nSelf CLI version required (default "1.0.9")
+      --min-sdk string       Minimum plugin-sdk-go version required (default "0.1.0")
+      --no-interactive       Skip interactive prompts; use --tenancy default (none)
+      --out string           Output directory (default ./<name>)
+      --port int             Default listen port (default 8080)
+      --template string      Plugin template: go, rust, node, static (default "go")
+      --tenancy string       Multi-tenancy mode: app-isolation, cloud-tenant, both, none
+      --tier string          Plugin tier: free or pro (default "free")
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

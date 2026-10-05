@@ -1,0 +1,25 @@
+Register a local directory as a plugin shadow, making nself build prefer it
+over the registry version.
+
+The link is recorded in ~/.nself/plugin-links.json and persists across CLI
+invocations until you run nself plugin unlink <name>.
+
+Modes:
+  Default  Container-mount + air inside container (closer to production)
+  --host   Run plugin process on host (faster but networking may differ)
+
+Security: the local path must be readable and must contain a valid plugin.yaml.
+Path traversal (e.g. ../../etc) is rejected.
+
+Usage:
+  nself plugin link <local-path> [flags]
+
+Flags:
+  -h, --help   help for link
+      --host   Use host-process mode instead of container-mount (macOS recommended for faster I/O)
+      --list   List currently linked plugins
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

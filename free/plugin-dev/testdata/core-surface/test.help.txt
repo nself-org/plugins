@@ -1,0 +1,25 @@
+Run a composite test suite against a linked plugin:
+
+  Phase 1 — Unit:          go test ./... inside the plugin source
+  Phase 2 — Smoke install:  nself plugin install <name> then verify /health
+  Phase 3 — Smoke uninstall: nself plugin remove <name> then verify clean state
+
+Use --phase to run only specific phases when iterating:
+
+  nself plugin test myplugin --phase=unit
+  nself plugin test myplugin --phase=smoke
+  nself plugin test myplugin --phase=both    (default)
+
+Usage:
+  nself plugin test <name> [flags]
+
+Flags:
+  -h, --help           help for test
+      --host           Run tests in host-process mode instead of container
+      --no-cleanup     Skip cleanup after smoke test (useful for debugging)
+      --phase string   Test phase to run: unit, smoke, or both (default "both")
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection
