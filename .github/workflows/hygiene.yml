@@ -2,7 +2,7 @@ name: Hygiene
 
 # Single-checkout, no-toolchain gates consolidated from separate workflows (clean-root,
 # clean-working-tree, multi-arch, nself-first, attribution, hadolint, api-contract, deprecation,
-# doc-sync, compose-password-urls, tracked-binaries). PR-context and commit-message checks keep
+# doc-sync, compose-password-urls, tracked-binaries, file-size). PR-context and commit-message checks keep
 # their original event guards; the trigger is the union of the originals', so none narrowed.
 
 on:
@@ -180,6 +180,11 @@ jobs:
         id: tracked_binaries
         if: always()
         run: python3 -m unittest discover -s scripts/ci/tests && python3 scripts/ci/check-tracked-binaries.py
+
+      - name: "file-size: at most 300 lines per source file, falling budget (P7-HYG-42, G11)"
+        id: file_size
+        if: always()
+        run: python3 scripts/ci/check-file-size.py
 
       # --- attribution-guard.yml ---
       - name: "attribution-guard: tracked content"
@@ -481,6 +486,7 @@ jobs:
             [nself_first]="${{ steps.nself_first.outcome }}"
             [compose_password_urls]="${{ steps.compose_password_urls.outcome }}"
             [tracked_binaries]="${{ steps.tracked_binaries.outcome }}"
+            [file_size]="${{ steps.file_size.outcome }}"
             [attribution_content]="${{ steps.attribution_content.outcome }}"
             [attribution_commits]="${{ steps.attribution_commits.outcome }}"
             [hadolint_run]="${{ steps.hadolint_run.outcome }}"
