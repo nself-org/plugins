@@ -1,0 +1,28 @@
+{
+  "binaryName": "nself-cli-fixture",
+  "category": "infrastructure",
+  "cliCommands": [
+    {
+      "description": "Fixture command",
+      "name": "cli-fixture"
+    }
+  ],
+  "commands": {
+    "binary": "nself-cli-fixture",
+    "command": "cli-fixture",
+    "summary": "Fixture command"
+  },
+  "description": "Fixture: v1 manifest with a CLI command (P7-PLUG-55).",
+  "license": "free",
+  "licenseType": "free",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "name": "cli-fixture",
+  "pluginType": "cli",
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
+  "tier": "free",
+  "version": "1.0.0"
+}

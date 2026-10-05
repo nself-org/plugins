@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Resolve release tag
         id: tag
@@ -53,10 +53,17 @@ jobs:
       # Needed since this job started compiling: a cli plugin's package has to
       # contain a binary, and one per platform. Version matches the other
       # workflows in this repo.
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.26.4'
           cache: false
+
+      # Binary targets come from the pinned cli tool (scripts/cli-tools.version), built once
+      # here so the parallel plugin builds below share it (P7-PLUG-55).
+      - name: Build the pinned manifest tool
+        run: |
+          . scripts/conformance/lib.sh
+          echo "CLI_TARGETS_TOOL=$(cli_tool manifestv2migrate)" >> "$GITHUB_ENV"
 
       - name: Build tarballs for all free plugins (max 10 parallel)
         run: |
@@ -92,27 +99,16 @@ jobs:
             # source, found no binary, and left the command dead — silently,
             # until the CLI was changed to fail on it. Every command extracted
             # under CLI-R11 was affected.
-            # Which plugins need compiling: any that ships a command binary.
-            # Keying on pluginType == "cli" missed the hybrids — webhooks is
-            # both a delivery service and the `nself webhooks` command, so its
-            # pluginType is unset while it still has a binary to build.
-            # binaryName is the honest question: does this plugin provide a
-            # command?
-            local bin_name
-            bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${plugin_dir}/plugin.json")"
-            if [ -z "$bin_name" ]; then
+            # Which plugins need compiling, and which commands each ships, come from
+            # scripts/release/cli-targets.sh: the pinned cli tool applies the installer's own
+            # rule to the normalized manifest (v2 `commands`, v1 `cliCommands`), so the
+            # release builds exactly the binaries `nself add` will look for. Lines are
+            # binary<TAB>command; a plugin with none ships no binary.
+            local targets
+            targets="$(bash scripts/release/cli-targets.sh "$plugin_dir")" || { echo "ERROR $plugin_name: cli-targets.sh failed"; return 1; }
+            if [ -z "$targets" ]; then
               return
             fi
-
-            # A plugin may provide more than one command; cliCommands lists them
-            # and the CLI publishes one binary per entry, so every one has to be
-            # built or the command it names is dead on arrival.
-            local commands
-            commands="$(jq -r 'if (.cliCommands // []) | length > 0 then (.cliCommands[].name) else "" end' "${plugin_dir}/plugin.json")"
-            if [ -z "$commands" ]; then
-              commands="${bin_name#nself-}"
-            fi
-            commands="$(echo "$commands" | tr '\n' ' ')"
 
             # The platform strings must match internal/plugin/arch.go's
             # PlatformArch(), and the asset filename must match
@@ -130,10 +126,10 @@ jobs:
               cp -R "${plugin_dir}/." "$stage/${plugin_name}/"
 
               local failed=0
-              # Word-split rather than a heredoc: this whole step is a YAML
-              # block scalar, and a heredoc terminator has to sit at column 0,
-              # which ends the block.
-              for command in $commands; do
+              # One line per target, read with a here-string: a command can hold a
+              # space (retro-gaming declares "roms list"), so it must not be word-split,
+              # and a heredoc terminator would sit at column 0 and end this YAML block.
+              while IFS=$'\t' read -r binary command; do
                 # A plugin providing several commands keeps each under
                 # cmd/<command>/; one providing a single command may put it at
                 # cmd/ directly.
@@ -142,12 +138,12 @@ jobs:
 
                 if ! (cd "${plugin_dir}" && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
                       go build -trimpath -ldflags="-s -w" \
-                      -o "${GITHUB_WORKSPACE}/${stage}/${plugin_name}/nself-${command}${exe}" "$pkg"); then
-                  echo "ERROR $plugin_name failed to build nself-${command} for $platform"
+                      -o "${GITHUB_WORKSPACE}/${stage}/${plugin_name}/${binary}${exe}" "$pkg"); then
+                  echo "ERROR $plugin_name failed to build ${binary} for $platform"
                   failed=1
                   break
                 fi
-              done
+              done <<< "$targets"
 
               if [ "$failed" -ne 0 ]; then
                 rm -rf "$stage"
@@ -167,7 +163,7 @@ jobs:
           }
 
           export -f build_plugin
-          export DIST_DIR VERSION
+          export DIST_DIR VERSION CLI_TARGETS_TOOL
 
           # Process in batches of 10 (parallel) per risk guidance
           mapfile -t PLUGIN_DIRS < <(find free -maxdepth 1 -mindepth 1 -type d | sort)
@@ -211,8 +207,7 @@ jobs:
               fail=1
               continue
             fi
-            bname="$(jq -r '.binaryName // .implementation.binaryName // ""' "${dir}/plugin.json" 2>/dev/null)"
-            [ -n "$bname" ] || continue
+            [ -n "$(bash scripts/release/cli-targets.sh "$dir")" ] || continue
             for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
               if [ ! -f "dist/${name}-${VERSION}-${platform}.tar.gz" ]; then
                 echo "MISSING $platform build for cli plugin $name"

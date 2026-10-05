@@ -1,0 +1,11 @@
+{
+  "name": "cli-fixture",
+  "version": "1.0.0",
+  "description": "Fixture: v1 manifest with a CLI command (P7-PLUG-55).",
+  "category": "infrastructure",
+  "pluginType": "cli",
+  "binaryName": "nself-cli-fixture",
+  "cliCommands": [
+    { "name": "cli-fixture", "description": "Fixture command" }
+  ]
+}
