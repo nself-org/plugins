@@ -14,6 +14,11 @@ exceptions:
     owner_ref: P7-PLUG-58
     expires: 2026-12-31
   - rule: cli-targets
+    plugin: ci
+    reason: "core still registers ci until the break-out ships"
+    owner_ref: P7-SHIP-09
+    expires: 2026-12-31
+  - rule: cli-targets
     plugin: content-acquisition
     reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
     owner_ref: P7-PLUG-41
