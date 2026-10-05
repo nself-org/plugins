@@ -22,8 +22,9 @@ Category: `infrastructure`. Current version: `1.0.0`.
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `HETZNER_NSELF_TOKEN` | — | Optional. |
-| `HCLOUD_TOKEN` | — | Optional. |
+| `HETZNER_NSELF_TOKEN` | — | Optional. Process environment only: default token for `server` commands. |
+| `HCLOUD_TOKEN` | — | Optional. Process environment only: Terraform provider token and `server` fallback. |
+| `NSELF_INFRA_TERRAFORM_HCLOUD_TOKEN` | — | Optional. The only variable filled from the project `.env`; plan, apply and destroy only, never `server`. |
 
 ## Commands
 
@@ -39,7 +40,7 @@ Category: `infrastructure`. Current version: `1.0.0`.
 `nself infra server destroy` refuses, sending nothing to Hetzner, unless `--snapshot` or `--force-no-backup` is given
 (also with `--json`; `--release-ip` does not waive it). With `--snapshot` the server is only deleted after the snapshot
 reaches `available`; its primary IP(s) are set to `auto_delete=false` first (unless `--release-ip`), and a failure in any
-step stops before the delete. The token comes from `--token`, `--token-env` (default `HETZNER_NSELF_TOKEN`) or `HCLOUD_TOKEN`.
+step stops before the delete. The token comes from `--token`, `--token-env` (default `HETZNER_NSELF_TOKEN`) or `HCLOUD_TOKEN` in the process environment only, never from a project `.env` file.
 
 ## Examples
 

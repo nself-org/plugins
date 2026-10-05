@@ -81,6 +81,7 @@ The plan shows what infrastructure will be created without making any changes.`,
 			Domain:      domain,
 			StateBucket: stateBucket,
 		}
+		applyTerraformTokenEnv()
 		ui.Info(fmt.Sprintf("Planning nSelf infrastructure on %s for %s...", providerStr, domain))
 		return infra.Plan(cmd.Context(), opts)
 	},
@@ -121,6 +122,7 @@ terraform against real infrastructure (requires UD-12 minor release approval).`,
 			return fmt.Errorf("unknown provider %q; supported: aws, gcp, azure, hetzner, do, linode", providerStr)
 		}
 
+		applyTerraformTokenEnv()
 		// Passthrough: HETZNER_NSELF_TOKEN → HCLOUD_TOKEN so the Hetzner Terraform
 		// provider can authenticate without requiring users to export a second var.
 		if tok := os.Getenv("HETZNER_NSELF_TOKEN"); tok != "" && os.Getenv("HCLOUD_TOKEN") == "" {
@@ -177,6 +179,7 @@ unless you have taken a backup via 'nself backup'.`,
 			ui.Warn("This will destroy all cloud resources. Use --auto-approve to confirm, or run 'nself backup' first.")
 			return fmt.Errorf("requires --auto-approve to proceed")
 		}
+		applyTerraformTokenEnv()
 		ui.Info(fmt.Sprintf("Destroying nSelf infrastructure on %s...", providerStr))
 		return infra.Destroy(cmd.Context(), provider, domain, "", true)
 	},

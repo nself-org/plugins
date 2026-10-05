@@ -220,9 +220,7 @@
       },
       {
         "confirm": {
-          "flags": [
-            "upgrade-disk"
-          ]
+          "flags": []
         },
         "flags": [
           {
@@ -270,8 +268,7 @@
       {
         "confirm": {
           "flags": [
-            "snapshot",
-            "force-no-backup"
+            "snapshot"
           ]
         },
         "flags": [
@@ -337,13 +334,8 @@
   "entryPoint": "cmd/",
   "envVars": [
     {
-      "description": "",
-      "name": "HETZNER_NSELF_TOKEN",
-      "required": false
-    },
-    {
-      "description": "",
-      "name": "HCLOUD_TOKEN",
+      "description": "Hetzner token for the Terraform commands only (plan, apply, destroy); never read by nself infra server",
+      "name": "NSELF_INFRA_TERRAFORM_HCLOUD_TOKEN",
       "required": false
     }
   ],
