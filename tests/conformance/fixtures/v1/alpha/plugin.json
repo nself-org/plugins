@@ -1,0 +1,78 @@
+{
+  "name": "alpha",
+  "version": "1.0.0",
+  "description": "Fixture plugin alpha for the conformance suite.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins-pro",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tags": [
+    "fixture"
+  ],
+  "tables": [
+    "np_alpha_items"
+  ],
+  "dependencies": [
+    "beta"
+  ],
+  "optionalDependencies": [
+    "gamma"
+  ],
+  "envVars": [
+    {
+      "name": "DATABASE_URL",
+      "required": true,
+      "description": "Postgres connection string"
+    },
+    {
+      "name": "PORT",
+      "required": false,
+      "description": "HTTP port",
+      "default": "3901"
+    }
+  ],
+  "config": {
+    "defaultPort": 3901,
+    "timeoutSecs": 30
+  },
+  "hooks": {
+    "postInstall": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3901,
+  "status": "stable",
+  "binary_name": "nself-alpha",
+  "actions": {
+    "ping": "Ping alpha"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health"
+    }
+  ],
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64"
+  ],
+  "min_memory_mb": 32,
+  "tier": "free"
+}

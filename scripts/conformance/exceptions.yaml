@@ -1,0 +1,14 @@
+# Conformance gate exceptions (PLUG epic D13). One entry per rule and plugin.
+# Fields: rule, plugin, reason, owner_ref, expires (YYYY-MM-DD, at or before the v1.5.0 release).
+# An expired entry fails the gate. Remove an entry when its owner Ticket lands.
+exceptions:
+  - rule: docker-socket
+    plugin: forgejo
+    reason: "forgejo runner mounts the Docker socket until runner isolation lands (ADR 0027)"
+    owner_ref: P7-TRUST-21
+    expires: 2026-12-31
+  - rule: docker-socket
+    plugin: monitoring
+    reason: "cadvisor and the log shipper mount the Docker socket until the monitoring rework (ADR 0027)"
+    owner_ref: P7-PLUG-58
+    expires: 2026-12-31

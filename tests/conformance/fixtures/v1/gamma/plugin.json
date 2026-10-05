@@ -1,0 +1,72 @@
+{
+  "name": "gamma",
+  "version": "1.0.0",
+  "description": "Fixture plugin gamma for the conformance suite.",
+  "author": "nself",
+  "license": "Proprietary",
+  "isCommercial": true,
+  "licenseType": "pro",
+  "requiredEntitlements": [
+    "gamma"
+  ],
+  "requires_license": true,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/bundles",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tags": [
+    "fixture"
+  ],
+  "tables": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "optionalDependencies": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PORT"
+    ]
+  },
+  "config": {
+    "defaultPort": 3903,
+    "timeoutSecs": 30
+  },
+  "hooks": {
+    "postInstall": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3903,
+  "status": "stable",
+  "binary_name": "nself-gamma",
+  "actions": {
+    "ping": "Ping gamma"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health"
+    }
+  ],
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64"
+  ],
+  "min_memory_mb": 32,
+  "tier": "pro"
+}

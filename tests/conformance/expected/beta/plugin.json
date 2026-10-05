@@ -1,0 +1,65 @@
+{
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64"
+  ],
+  "author": "nself",
+  "category": "infrastructure",
+  "description": "Fixture plugin beta for the conformance suite.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "name": "beta",
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "filesystem": [],
+    "network": [
+      "outbound"
+    ]
+  },
+  "port": 3902,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "summary": "Health"
+    }
+  ],
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3902
+  },
+  "status": "stable",
+  "tags": [
+    "fixture"
+  ],
+  "tier": "free",
+  "version": "1.0.0"
+}

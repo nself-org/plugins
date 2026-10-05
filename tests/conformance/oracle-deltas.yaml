@@ -1,0 +1,42 @@
+# Intentional differences the v1.4.12 oracle accepts between a v1 original and its converted twin.
+# Fields: slug (the plugin under test the row belongs to), file (the oracle output file), key, from, to,
+# owner_ref, expires (YYYY-MM-DD, at or before the v1.5.0 cap fixed in scripts/conformance/lib.sh).
+# Matching is literal and per file; a row that matches nothing while its slug is under test is stale and fails;
+# an expired row fails. See scripts/conformance/oracle/deltas.sh.
+#   from "-": key is the exact whole line the converted output has and the original lacks.
+#   otherwise: in `file`, lines containing the literal key have `to` replaced by `from` on the converted side.
+deltas:
+  # The two port defaults below are fixed by P7-PLUG-44, which owns these plugins; it refines the file/key
+  # to the line its real run produces.
+  - slug: nself-cloud
+    file: docker-compose.yml
+    key: nself-cloud
+    from: "3845"
+    to: "3855"
+    owner_ref: P7-PLUG-44
+    expires: 2026-12-31
+  - slug: nself-sync
+    file: docker-compose.yml
+    key: nself-sync
+    from: "3844"
+    to: "3853"
+    owner_ref: P7-PLUG-44
+    expires: 2026-12-31
+  # v1.4.12 reads dependencies as a JSON array only. The object form {required, optional} that 115 free manifests
+  # use makes it drop the whole plugin when it wires PLUGIN_<DEP>_INTERNAL_URL, so a v1 original with the object
+  # form never gets the line and its converted twin (array form) does. Batches that convert a depended-on plugin
+  # add the same row for it (owner: that batch Ticket).
+  - slug: beta
+    file: compose-env-urls.txt
+    key: "PLUGIN_BETA_INTERNAL_URL=http://plugin-beta:3902"
+    from: "-"
+    to: "http://plugin-beta:3902"
+    owner_ref: P7-PLUG-03
+    expires: 2026-12-31
+  - slug: gamma
+    file: compose-env-urls.txt
+    key: "PLUGIN_GAMMA_INTERNAL_URL=http://plugin-gamma:3903"
+    from: "-"
+    to: "http://plugin-gamma:3903"
+    owner_ref: P7-PLUG-03
+    expires: 2026-12-31
