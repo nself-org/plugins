@@ -1,0 +1,82 @@
+name: Images Probe
+
+# Daily anonymous pull probe of every image in images.json (ADR 0030, P7-PLUG-61). No credential is used
+# or available: the probe runs with an empty Docker config. Also runs on pull requests that touch the lock,
+# its fragments or the tools, where it checks that images.json is assembled from images.d and probes it.
+#
+# A definite failure (image gone, unpullable anonymously, wrong digest, missing platform) fails the job.
+# A rate limit, registry outage or timeout is inconclusive (exit 3): it warns and never blocks a pull request.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  pull_request:
+    paths:
+      - "images.d/**"
+      - "images.json"
+      - "scripts/images/**"
+      - ".github/workflows/images-probe.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Lock is assembled and every image pulls
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      status: ${{ steps.probe.outputs.status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Lock matches its fragments
+        run: bash scripts/images/assemble.sh --check
+      - name: Tool fixtures (offline)
+        run: |
+          bash scripts/images/matrix.sh --fixtures
+          bash scripts/images/assemble.sh --fixtures
+          bash scripts/images/record.sh --fixtures
+          PROBE_FIXTURES_OFFLINE=1 bash scripts/images/probe.sh --fixtures
+      - name: Probe every entry anonymously
+        id: probe
+        run: |
+          set +e
+          bash scripts/images/probe.sh
+          rc=$?
+          case "${rc}" in
+            0) echo "status=ok" >> "$GITHUB_OUTPUT" ;;
+            3) echo "status=inconclusive" >> "$GITHUB_OUTPUT"
+               echo "::warning title=Image probe inconclusive::registry rate limit or outage; not a verdict" ;;
+            *) echo "status=fail" >> "$GITHUB_OUTPUT"; exit 1 ;;
+          esac
+
+  report:
+    name: Open or update the image-probe issue
+    needs: probe
+    if: always() && github.event_name == 'schedule' && needs.probe.outputs.status == 'fail'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update one issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create image-probe --color B60205 --description "Daily image availability probe" 2>/dev/null || true
+          body="The daily anonymous image probe failed: ${RUN_URL}"
+          n=$(gh issue list --label image-probe --state open --json number --jq '.[0].number // empty')
+          if [ -n "${n}" ]; then
+            gh issue comment "${n}" --body "${body}"
+          else
+            gh issue create --label image-probe --title "Plugin image probe failing" --body "${body}"
+          fi

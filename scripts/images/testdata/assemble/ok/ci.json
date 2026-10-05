@@ -1,0 +1,1 @@
+{"name": "runner-base", "kind": "ci", "image": "nself/ci-base:2@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "platforms": ["linux/amd64"], "owner": "P7-TEST-CI"}

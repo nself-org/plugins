@@ -1,0 +1,135 @@
+name: Plugin Images
+
+# On a release tag: build a linux/amd64 + linux/arm64 image for every conformant free compose plugin
+# (scripts/images/matrix.sh) as nself/nself-<slug>:<version> and :latest, then record the digests in
+# images.d/plugins.json and the re-assembled images.json through a pull request (P7-PLUG-61, EPIC D12/D12a).
+#
+# First-publish gate (final gate G8): nothing is pushed unless the repository variable
+# NSELF_PUBLISH_PLUGIN_IMAGES is "true". The owner-named Ticket P7-PLUG-65 sets it together with the Docker Hub
+# token. Until then every tag builds the whole matrix, pushes nothing and logs the skip.
+# Triggers on tag push only: there is no manual dispatch.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: Eligible plugins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      plugins: ${{ steps.m.outputs.plugins }}
+      any: ${{ steps.m.outputs.any }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: m
+        run: |
+          plugins=$(bash scripts/images/matrix.sh --json)
+          echo "plugins=${plugins}" >> "$GITHUB_OUTPUT"
+          echo "any=$(echo "${plugins}" | jq 'length > 0')" >> "$GITHUB_OUTPUT"
+          echo "eligible: ${plugins}"
+
+  build:
+    name: Build ${{ matrix.slug }}
+    needs: matrix
+    if: needs.matrix.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        slug: ${{ fromJSON(needs.matrix.outputs.plugins) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: amd64,arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build only (publish gate closed)
+        if: vars.NSELF_PUBLISH_PLUGIN_IMAGES != 'true'
+        env:
+          SLUG: ${{ matrix.slug }}
+        run: |
+          bash scripts/images/build.sh --plugins "${SLUG}" --push=false --out "${RUNNER_TEMP}/img"
+          echo "skipped push: NSELF_PUBLISH_PLUGIN_IMAGES != true"
+
+      - name: Log in to Docker Hub
+        if: vars.NSELF_PUBLISH_PLUGIN_IMAGES == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        if: vars.NSELF_PUBLISH_PLUGIN_IMAGES == 'true'
+        env:
+          SLUG: ${{ matrix.slug }}
+          NSELF_PUBLISH_PLUGIN_IMAGES: "true"
+        run: bash scripts/images/build.sh --plugins "${SLUG}" --push=true --out "${RUNNER_TEMP}/img"
+
+      - name: Keep the digest
+        if: vars.NSELF_PUBLISH_PLUGIN_IMAGES == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-meta-${{ matrix.slug }}
+          path: ${{ runner.temp }}/img/${{ matrix.slug }}/metadata.json
+          if-no-files-found: error
+
+  record:
+    name: Record digests (release-data PR)
+    needs: build
+    if: vars.NSELF_PUBLISH_PLUGIN_IMAGES == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: image-meta-*
+          path: ${{ runner.temp }}/meta-raw
+      - name: Write images.d/plugins.json and re-assemble images.json
+        run: |
+          # artifact image-meta-<slug>/metadata.json -> meta/<slug>/metadata.json
+          mkdir -p "${RUNNER_TEMP}/meta"
+          for d in "${RUNNER_TEMP}"/meta-raw/image-meta-*; do
+            slug=${d##*/image-meta-}
+            mkdir -p "${RUNNER_TEMP}/meta/${slug}"
+            cp "${d}/metadata.json" "${RUNNER_TEMP}/meta/${slug}/metadata.json"
+          done
+          bash scripts/images/record.sh --meta "${RUNNER_TEMP}/meta"
+      - name: Open the release-data PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          branch="release-data/plugin-images-${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${branch}"
+          git add images.d/plugins.json images.json
+          if git diff --cached --quiet; then echo "no image change to record"; exit 0; fi
+          git commit -m "chore(images): record plugin image digests for ${TAG}"
+          git push --force-with-lease origin "${branch}"
+          gh pr create --base main --head "${branch}" \
+            --title "chore(images): plugin image digests for ${TAG}" \
+            --body "Generated by plugin-images.yml. Writes images.d/plugins.json and re-assembles images.json only." \
+            || gh pr edit "${branch}" --body "Generated by plugin-images.yml (re-run for ${TAG})."
