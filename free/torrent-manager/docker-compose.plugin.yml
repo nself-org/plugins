@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:3201:3201"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - TORRENT_MANAGER_PORT=3201
       - VPN_MANAGER_URL=${VPN_MANAGER_URL}
     depends_on:

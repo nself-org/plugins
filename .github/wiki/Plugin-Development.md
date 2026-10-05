@@ -55,6 +55,21 @@ The `go.mod` pre-pins `github.com/nself-org/plugin-sdk-go` so the SDK is ready t
 
 Before writing code, read `.claude/docs/doctrines/plugin-scope.md`. One domain per plugin, one schema (`np_my_notifier`), one Docker image, mandatory `/healthz` + `/readyz` + `/metrics` + `/version` endpoints. Violations are rejected at code review.
 
+### Connection URLs in compose fragments
+
+A password that sits inside a URL in `docker-compose.plugin.yml` must use the URL-encoded twin that `nself build` writes to `.nself/compose.env`. Compose can substitute a variable but cannot encode it, so a password containing `/ @ : ? # %` breaks a raw `${POSTGRES_PASSWORD}` in a URL.
+
+```yaml
+environment:
+  - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
+  - REDIS_URL=redis://:${REDIS_PASSWORD_URLENC:-${REDIS_PASSWORD}}@redis:6379
+```
+
+- Use the nested form exactly. The fallback keeps a `compose.env` written by an older CLI rendering the raw value.
+- The twin is already encoded once. Never encode it again, and never add a literal default for a password.
+- Where a plugin expects the raw password (for example `POSTGRES_PASSWORD` itself, or `redis-cli -a`), keep the raw variable. `redis-cli -u` does not decode percent escapes, so use the raw value there.
+- `scripts/lint-compose-password-urls.sh` (in the hygiene workflow) rejects a raw password variable inside a URL. `scripts/ci/fragment-urlenc-smoke.sh` renders every fragment with `docker compose config` under reserved-character passwords and checks each URL decodes to the password.
+
 ---
 
 ## 3. Use the SDK

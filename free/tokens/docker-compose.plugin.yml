@@ -14,7 +14,7 @@ services:
     ports:
       - "127.0.0.1:3107:3107"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - TOKENS_PLUGIN_PORT=3107
       - TOKENS_ENCRYPTION_KEY=${TOKENS_ENCRYPTION_KEY}
     depends_on:

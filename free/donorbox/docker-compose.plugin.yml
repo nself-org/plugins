@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:3074:3074"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       PORT: "3074"
       DONORBOX_API_KEY: ${DONORBOX_API_KEY:-}
       DONORBOX_EMAIL: ${DONORBOX_EMAIL:-}

@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:3202:3202"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - CONTENT_ACQUISITION_PORT=3202
     depends_on:
       postgres:

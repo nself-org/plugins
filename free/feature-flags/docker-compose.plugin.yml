@@ -14,7 +14,7 @@ services:
     ports:
       - "127.0.0.1:3305:3305"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - FF_PLUGIN_PORT=3305
     depends_on:
       postgres:
