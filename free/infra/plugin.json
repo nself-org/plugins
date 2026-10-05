@@ -1,21 +1,382 @@
 {
-  "name": "infra",
-  "version": "1.2.6",
-  "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64",
+    "darwin-x86_64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.2.8",
-  "language": "go",
-  "pluginType": "cli",
-  "entryPoint": "cmd/",
   "binaryName": "nself-infra",
   "category": "infrastructure",
+  "cliCommands": [
+    {
+      "description": "Provision nSelf infrastructure with Terraform and manage Hetzner Cloud servers",
+      "name": "infra"
+    }
+  ],
+  "commands": {
+    "binary": "nself-infra",
+    "command": "infra",
+    "json": "none",
+    "output": "document",
+    "side_effect": "remote",
+    "subcommands": [
+      {
+        "flags": [
+          {
+            "name": "domain",
+            "type": "string",
+            "usage": "Domain for the nSelf deployment"
+          },
+          {
+            "name": "provider",
+            "type": "string",
+            "usage": "Cloud provider (aws, gcp, azure, hetzner, do, linode)"
+          },
+          {
+            "name": "state-bucket",
+            "type": "string",
+            "usage": "S3/GCS bucket for Terraform state (optional)"
+          }
+        ],
+        "json": "none",
+        "name": "plan",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the Terraform plan for the given provider"
+      },
+      {
+        "flags": [
+          {
+            "default": "false",
+            "name": "auto-approve",
+            "type": "bool",
+            "usage": "Skip interactive approval"
+          },
+          {
+            "name": "deploy-pubkey",
+            "type": "string",
+            "usage": "SSH public key content for the nself deploy user's authorized_keys - passed as TF var deploy_ssh_pubkey"
+          },
+          {
+            "name": "domain",
+            "type": "string",
+            "usage": "Domain for the nSelf deployment"
+          },
+          {
+            "default": "false",
+            "name": "force",
+            "type": "bool",
+            "usage": "Bypass the PLANNED gate and run terraform against real infrastructure"
+          },
+          {
+            "name": "location",
+            "type": "string",
+            "usage": "Hetzner datacenter location (e.g. nbg1, fsn1, hel1) - passed as TF var"
+          },
+          {
+            "name": "provider",
+            "type": "string",
+            "usage": "Cloud provider (aws, gcp, azure, hetzner, do, linode)"
+          },
+          {
+            "name": "server-type",
+            "type": "string",
+            "usage": "Hetzner server type (e.g. cpx21, cx22) - passed as TF var"
+          },
+          {
+            "name": "state-bucket",
+            "type": "string",
+            "usage": "S3/GCS bucket for Terraform state (optional)"
+          }
+        ],
+        "json": "none",
+        "name": "apply",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Provision nSelf infrastructure via Terraform"
+      },
+      {
+        "confirm": {
+          "flags": [
+            "auto-approve"
+          ]
+        },
+        "flags": [
+          {
+            "default": "false",
+            "name": "auto-approve",
+            "type": "bool",
+            "usage": "Confirm destruction without prompt"
+          },
+          {
+            "name": "domain",
+            "type": "string",
+            "usage": "Domain for the nSelf deployment"
+          },
+          {
+            "name": "provider",
+            "type": "string",
+            "usage": "Cloud provider (aws, gcp, azure, hetzner, do, linode)"
+          }
+        ],
+        "json": "none",
+        "name": "destroy",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Destroy nSelf infrastructure",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "name": "image",
+            "type": "string",
+            "usage": "OS image, e.g. ubuntu-24.04 (required)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "output as JSON"
+          },
+          {
+            "name": "label",
+            "type": "string",
+            "usage": "label as key=value (repeatable)"
+          },
+          {
+            "name": "location",
+            "type": "string",
+            "usage": "datacenter location, e.g. fsn1 (required)"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "usage": "server name (required)"
+          },
+          {
+            "name": "ssh-key",
+            "type": "string",
+            "usage": "Hetzner SSH key name to authorize (repeatable)"
+          },
+          {
+            "name": "token",
+            "secret": true,
+            "type": "string",
+            "usage": "Hetzner Cloud API token (overrides --token-env)"
+          },
+          {
+            "default": "HETZNER_NSELF_TOKEN",
+            "name": "token-env",
+            "type": "string",
+            "usage": "env var to read the API token from"
+          },
+          {
+            "name": "type",
+            "type": "string",
+            "usage": "server type, e.g. cx22 (required)"
+          }
+        ],
+        "json": "none",
+        "name": "server provision",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Create a new Hetzner Cloud server",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "output as JSON"
+          },
+          {
+            "name": "label-selector",
+            "type": "string",
+            "usage": "filter by Hetzner label selector, e.g. managed-by=nself-cli"
+          },
+          {
+            "name": "token",
+            "secret": true,
+            "type": "string",
+            "usage": "Hetzner Cloud API token (overrides --token-env)"
+          },
+          {
+            "default": "HETZNER_NSELF_TOKEN",
+            "name": "token-env",
+            "type": "string",
+            "usage": "env var to read the API token from"
+          }
+        ],
+        "json": "none",
+        "name": "server list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List Hetzner Cloud servers",
+        "surface": "cli-only"
+      },
+      {
+        "confirm": {
+          "flags": [
+            "upgrade-disk"
+          ]
+        },
+        "flags": [
+          {
+            "name": "id",
+            "type": "int",
+            "usage": "server ID (required)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "output as JSON"
+          },
+          {
+            "name": "token",
+            "secret": true,
+            "type": "string",
+            "usage": "Hetzner Cloud API token (overrides --token-env)"
+          },
+          {
+            "default": "HETZNER_NSELF_TOKEN",
+            "name": "token-env",
+            "type": "string",
+            "usage": "env var to read the API token from"
+          },
+          {
+            "name": "type",
+            "type": "string",
+            "usage": "target server type, e.g. cx41 (required)"
+          },
+          {
+            "default": "false",
+            "name": "upgrade-disk",
+            "type": "bool",
+            "usage": "also grow the disk to match the new type (irreversible)"
+          }
+        ],
+        "json": "none",
+        "name": "server resize",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Change a server's type (CPU/RAM/disk)",
+        "surface": "cli-only"
+      },
+      {
+        "confirm": {
+          "flags": [
+            "snapshot",
+            "force-no-backup"
+          ]
+        },
+        "flags": [
+          {
+            "default": "false",
+            "name": "force-no-backup",
+            "type": "bool",
+            "usage": "proceed without any backup (explicit acknowledgment)"
+          },
+          {
+            "name": "id",
+            "type": "int",
+            "usage": "server ID (required)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "output as JSON"
+          },
+          {
+            "default": "false",
+            "name": "release-ip",
+            "type": "bool",
+            "usage": "let the server's primary IP(s) be released with it, instead of retaining them"
+          },
+          {
+            "default": "false",
+            "name": "snapshot",
+            "type": "bool",
+            "usage": "take a snapshot and verify it before deleting"
+          },
+          {
+            "default": "10m0s",
+            "name": "snapshot-timeout",
+            "type": "string",
+            "usage": "how long to wait for the snapshot to become available"
+          },
+          {
+            "name": "token",
+            "secret": true,
+            "type": "string",
+            "usage": "Hetzner Cloud API token (overrides --token-env)"
+          },
+          {
+            "default": "HETZNER_NSELF_TOKEN",
+            "name": "token-env",
+            "type": "string",
+            "usage": "env var to read the API token from"
+          }
+        ],
+        "json": "none",
+        "name": "server destroy",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Delete a Hetzner Cloud server (refuses without --snapshot or --force-no-backup)",
+        "surface": "cli-only"
+      }
+    ],
+    "summary": "Provision nSelf infrastructure with Terraform and manage Hetzner Cloud servers"
+  },
+  "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
+  "entryPoint": "cmd/",
+  "envVars": [
+    {
+      "description": "",
+      "name": "HETZNER_NSELF_TOKEN",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HCLOUD_TOKEN",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.2.8",
+  "multiApp": {
+    "supported": false
+  },
+  "name": "infra",
+  "permissions": {
+    "database": [],
+    "filesystem": [
+      "read"
+    ],
+    "network": [
+      "api.hetzner.cloud"
+    ]
+  },
+  "pluginType": "cli",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.2.8"
+  },
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
   "tags": [
     "infra",
     "terraform",
@@ -24,32 +385,10 @@
     "hetzner",
     "aws",
     "gcp",
-    "azure"
+    "azure",
+    "server",
+    "snapshot"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {
-    "plan": "Show the Terraform plan for a provider without changing anything",
-    "apply": "Provision infrastructure (gated: requires --force)",
-    "destroy": "Destroy provisioned infrastructure (requires --auto-approve)"
-  },
-  "envVars": {
-    "required": [],
-    "optional": [
-      "HETZNER_NSELF_TOKEN",
-      "HCLOUD_TOKEN"
-    ]
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "status": "planned",
   "tier": "free",
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install infra` must place the built nself-infra binary at ~/.nself/plugins/bin/nself-infra, where internal/plugin/router.go's ProxyCommand execs it for `nself infra <args>` with stdio inherited. Extracted from cli/cmd/commands/infra.go and cli/internal/infra/ under CLI-R11. Requires terraform on PATH at run time; the plugin does not bundle it."
+  "version": "1.2.6"
 }

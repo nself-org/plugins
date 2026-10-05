@@ -25,6 +25,39 @@ nself infra destroy --provider hetzner --auto-approve
 
 Providers: `aws`, `gcp`, `azure`, `hetzner`, `do`, `linode`.
 
+### Hetzner Cloud servers: `nself infra server`
+
+Provision, list, resize and destroy single Hetzner Cloud servers (the former
+core `nself server`, same flags and messages).
+
+```bash
+nself infra server provision --name ci-runner-3 --type cx22 --location fsn1 --image ubuntu-24.04 --ssh-key deploy
+nself infra server list [--label-selector managed-by=nself-cli] [--json]
+nself infra server resize  --id 12345 --type cx41 [--upgrade-disk]
+nself infra server destroy --id 12345 --snapshot [--snapshot-timeout 20m] [--release-ip]
+nself infra server destroy --id 12345 --force-no-backup
+```
+
+`destroy` is safe by default and the order of its steps never changes:
+
+1. It refuses to run at all (exit 1, nothing sent to the provider) unless you pass
+   `--snapshot` or `--force-no-backup`. `--release-ip` does not waive this.
+2. With `--snapshot` it takes a snapshot and waits for it to reach `available`;
+   if that fails or times out, the server is NOT deleted.
+3. It sets `auto_delete=false` on the server's primary IP(s) so they survive,
+   unless `--release-ip` is passed. If that step fails, the server is NOT deleted.
+4. Only then does it send the delete.
+
+The same refusals apply with `--json` and in non-interactive runs: there is no
+prompt to bypass and no flag that skips a step. `resize` refuses to shrink a disk.
+
+The Hetzner token is read from `--token`, else the variable named by
+`--token-env` (default `HETZNER_NSELF_TOKEN`), else `HCLOUD_TOKEN`. It is never
+logged.
+
+Parity with core is checked by `scripts/parity-server.sh` (builds core `nself`
+from cli origin/main and diffs help, refusals and exit codes).
+
 ## Requirements
 
 Terraform must be on your `PATH`. This plugin does not bundle it — see

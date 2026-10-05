@@ -32,6 +32,14 @@ Category: `infrastructure`. Current version: `1.0.0`.
 - `nself-infra plan`
 - `nself-infra apply`
 - `nself-infra destroy`
+- `nself-infra server provision|list|resize|destroy` (`nself infra server ...`): Hetzner Cloud server lifecycle.
+
+### Server destroy safety
+
+`nself infra server destroy` refuses, sending nothing to Hetzner, unless `--snapshot` or `--force-no-backup` is given
+(also with `--json`; `--release-ip` does not waive it). With `--snapshot` the server is only deleted after the snapshot
+reaches `available`; its primary IP(s) are set to `auto_delete=false` first (unless `--release-ip`), and a failure in any
+step stops before the delete. The token comes from `--token`, `--token-env` (default `HETZNER_NSELF_TOKEN`) or `HCLOUD_TOKEN`.
 
 ## Examples
 
