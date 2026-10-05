@@ -1,0 +1,33 @@
+Build a signed release artifact on this machine instead of a GitHub-hosted runner.
+
+Only "android" is supported today. Mirrors the exact keystore-signing steps
+nchat's own workflows already use (build-react-native.yml,
+deploy-mobile-android.yml): base64-decode a keystore from
+ANDROID_KEYSTORE_BASE64, run "./gradlew assembleRelease" with the standard
+ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD env
+vars, then locate the produced signed APK.
+
+macOS, Windows, TV, and Wear OS artifacts are explicitly out of scope — they
+stay on GitHub-hosted runners; see .claude/docs/doctrines/nself-ci-runner-ceiling.md.
+
+Examples:
+  nself ci build --artifact android frontend/platforms/react-native/android
+  nself ci build --artifact android --upload --tag v1.2.3 frontend/platforms/react-native/android
+
+Usage:
+  nself ci build [android-project-dir] [flags]
+
+Flags:
+      --artifact string            Artifact type to build (only "android" is supported) (default "android")
+  -h, --help                       help for build
+      --owner string               GitHub owner for --upload (default: from git remote)
+      --repo string                GitHub repo for --upload (default: from git remote)
+      --tag string                 Release tag to upload to (required with --upload)
+      --timeout int                Build step timeout in seconds (release builds are slow) (default 900)
+      --upload gh release upload   Attach the built artifact to a GitHub release via gh release upload
+  -v, --verbose                    Print each command before running
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

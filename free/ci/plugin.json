@@ -1,20 +1,258 @@
 {
-  "name": "ci",
-  "version": "1.2.6",
-  "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64",
+    "darwin-x86_64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.0",
+  "binaryName": "nself-ci",
   "category": "development",
+  "cliCommands": [
+    {
+      "description": "Run the nself-ci gate suite and post a GitHub commit status",
+      "name": "ci"
+    }
+  ],
+  "commands": {
+    "binary": "nself-ci",
+    "command": "ci",
+    "json": "none",
+    "output": "document",
+    "side_effect": "remote",
+    "subcommands": [
+      {
+        "args": [
+          {
+            "name": "android-project-dir"
+          }
+        ],
+        "flags": [
+          {
+            "default": "android",
+            "name": "artifact",
+            "type": "string",
+            "usage": "Artifact type to build (only \"android\" is supported)"
+          },
+          {
+            "name": "owner",
+            "type": "string",
+            "usage": "GitHub owner for --upload (default: from git remote)"
+          },
+          {
+            "name": "repo",
+            "type": "string",
+            "usage": "GitHub repo for --upload (default: from git remote)"
+          },
+          {
+            "name": "tag",
+            "type": "string",
+            "usage": "Release tag to upload to (required with --upload)"
+          },
+          {
+            "default": "900",
+            "name": "timeout",
+            "type": "int",
+            "usage": "Build step timeout in seconds (release builds are slow)"
+          },
+          {
+            "default": "false",
+            "name": "upload",
+            "side_effect": "remote",
+            "type": "bool",
+            "usage": "Attach the built artifact to a GitHub release via `gh release upload`"
+          },
+          {
+            "default": "false",
+            "name": "verbose",
+            "shorthand": "v",
+            "type": "bool",
+            "usage": "Print each command before running"
+          }
+        ],
+        "json": "none",
+        "name": "build",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Build a signed release artifact locally (Android only)"
+      },
+      {
+        "flags": [
+          {
+            "name": "runner",
+            "type": "string",
+            "usage": "Runner container name (default: <PROJECT>_forgejo_runner)"
+          },
+          {
+            "default": "http://localhost:3844",
+            "name": "url",
+            "type": "string",
+            "usage": "Forgejo base URL"
+          }
+        ],
+        "json": "none",
+        "name": "forgejo",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show Forgejo server + runner health (ops profile)"
+      },
+      {
+        "flags": [
+          {
+            "default": ":3845",
+            "name": "addr",
+            "type": "string",
+            "usage": "Listen address (host:port). Port 3845 = nself-ci-serve per F10 port registry"
+          },
+          {
+            "default": "false",
+            "name": "allow-unsandboxed",
+            "side_effect": "destructive",
+            "type": "bool",
+            "usage": "DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job. Default: refuse."
+          },
+          {
+            "default": "[]",
+            "name": "allowed-repos",
+            "type": "stringSlice",
+            "usage": "Comma-separated or repeatable \"owner/repo\" allowlist. Default: empty, which rejects every job (fail-closed, no \"allow all\")."
+          },
+          {
+            "default": "2",
+            "name": "concurrency",
+            "type": "int",
+            "usage": "Max concurrent CI jobs"
+          },
+          {
+            "default": "false",
+            "name": "insecure",
+            "type": "bool",
+            "usage": "DANGEROUS: start without a webhook secret (disables signature verification). Default: refuse to start when no secret is configured."
+          },
+          {
+            "name": "secret",
+            "secret": true,
+            "type": "string",
+            "usage": "HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)"
+          },
+          {
+            "default": "600",
+            "name": "timeout",
+            "type": "int",
+            "usage": "Per-job timeout in seconds"
+          },
+          {
+            "default": "false",
+            "name": "verbose",
+            "shorthand": "v",
+            "type": "bool",
+            "usage": "Verbose gate output"
+          },
+          {
+            "default": "/tmp/nself-ci-workdirs",
+            "name": "workdir",
+            "type": "string",
+            "usage": "Base directory for ephemeral checkout workdirs"
+          }
+        ],
+        "json": "none",
+        "name": "serve",
+        "output": "stream",
+        "side_effect": "write",
+        "summary": "Start the nself-ci webhook listener daemon (port 3845)"
+      },
+      {
+        "args": [
+          {
+            "name": "search-root"
+          }
+        ],
+        "flags": [
+          {
+            "name": "env",
+            "type": "string",
+            "usage": "Target environment: local"
+          },
+          {
+            "name": "gateway",
+            "type": "string",
+            "usage": "Explicit gateway base URL (e.g. http://host:3761)"
+          },
+          {
+            "name": "v",
+            "type": "bool",
+            "usage": "Print each command before running"
+          },
+          {
+            "default": "300",
+            "name": "timeout",
+            "type": "int",
+            "usage": "Per-step timeout in seconds"
+          }
+        ],
+        "json": "none",
+        "name": "run",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Discover .ci.yaml manifests and run their stages (pipeline)"
+      }
+    ],
+    "summary": "Run the nself-ci gate suite and post a GitHub commit status"
+  },
+  "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
+  "entryPoint": "cmd/",
+  "envVars": [
+    {
+      "description": "",
+      "name": "NSELF_CI_REPO",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_CI_SHA",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_CI_SKIP_STATUS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_CI_TIMEOUT",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
   "language": "go",
-  "entryPoint": "cmd/main.go",
-  "tier": "free",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "supported": false
+  },
+  "name": "ci",
+  "permissions": {
+    "database": [],
+    "filesystem": [
+      "read"
+    ],
+    "network": [
+      "api.github.com"
+    ]
+  },
+  "pluginType": "cli",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
   "tags": [
     "ci",
     "cd",
@@ -25,52 +263,6 @@
     "gitleaks",
     "devops"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {
-    "run": "Run the gate suite for a repo and post nself-ci commit status",
-    "check": "Run the gate suite locally without posting a commit status",
-    "status": "Show the last nself-ci result for a repo"
-  },
-  "envVars": {
-    "required": [],
-    "optional": [
-      "NSELF_CI_REPO",
-      "NSELF_CI_SHA",
-      "NSELF_CI_SKIP_STATUS",
-      "NSELF_CI_TIMEOUT"
-    ]
-  },
-  "config": {
-    "contextName": "nself-ci",
-    "defaultTimeout": 300
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": false,
-    "isolationColumn": null,
-    "pkStrategy": null,
-    "defaultValue": null
-  },
-  "permissions": {
-    "database": [],
-    "network": [
-      "api.github.com"
-    ],
-    "filesystem": [
-      "read"
-    ]
-  },
-  "port": 0,
-  "status": "stable",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64",
-    "darwin-x86_64"
-  ]
+  "tier": "free",
+  "version": "1.2.6"
 }
