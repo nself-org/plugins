@@ -13,7 +13,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       PORT: "3060"
       PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
       WEBHOOKS_MAX_ATTEMPTS: ${WEBHOOKS_MAX_ATTEMPTS:-5}

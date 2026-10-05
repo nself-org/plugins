@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:3105:3105"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - JOBS_PORT=3105
       - JOBS_POLL_INTERVAL_MS=${JOBS_POLL_INTERVAL_MS:-1000}
       - JOBS_RETRY_ATTEMPTS=${JOBS_RETRY_ATTEMPTS:-3}

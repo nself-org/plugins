@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:3204:3204"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - SUBTITLE_MANAGER_PORT=3204
       - OPENSUBTITLES_API_KEY=${OPENSUBTITLES_API_KEY}
       - SUBTITLE_STORAGE_PATH=/data/subtitles

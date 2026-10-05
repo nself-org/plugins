@@ -9,7 +9,7 @@ services:
     ports:
       - "127.0.0.1:3003:3003"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
       - PROGRESS_PLUGIN_PORT=3003
     depends_on:
       postgres:

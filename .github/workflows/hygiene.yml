@@ -3,7 +3,7 @@ name: Hygiene
 # Consolidates trivial, single-checkout, no-toolchain gates that were
 # previously separate workflows: clean-root, clean-working-tree,
 # multi-arch-check, nself-first-check, attribution-guard, hadolint,
-# api-contract-check, deprecation-check, doc-sync.
+# api-contract-check, deprecation-check, doc-sync, compose-password-urls.
 #
 # Every check below ran before this consolidation and still runs here —
 # nothing was dropped, only regrouped into one job/one checkout. PR-context
@@ -177,6 +177,12 @@ jobs:
             FAIL=1
           done
           exit $FAIL
+
+      # --- P7-PROD-33: password variables inside URLs must be URL-encoded ---
+      - name: "compose-password-urls: no raw password variable in a fragment URL"
+        id: compose_password_urls
+        if: always()
+        run: bash scripts/lint-compose-password-urls.sh
 
       # --- attribution-guard.yml ---
       - name: "attribution-guard: tracked content"
@@ -476,6 +482,7 @@ jobs:
             [cwt_env]="${{ steps.cwt_env.outcome }}"
             [cwt_root]="${{ steps.cwt_root.outcome }}"
             [nself_first]="${{ steps.nself_first.outcome }}"
+            [compose_password_urls]="${{ steps.compose_password_urls.outcome }}"
             [attribution_content]="${{ steps.attribution_content.outcome }}"
             [attribution_commits]="${{ steps.attribution_commits.outcome }}"
             [hadolint_run]="${{ steps.hadolint_run.outcome }}"
