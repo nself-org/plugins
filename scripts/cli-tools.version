@@ -6,4 +6,4 @@
 # tool from its committed vendor/ directory. Change the sha, then run
 # scripts/conformance/sync-schema.sh to pull the matching schema.
 repo=https://github.com/nself-org/cli
-sha=c22935b8daf958512bf4a2908700c5993aa5607c
+sha=dc3a000bbbc7e59be54305dd3a0babd172466bae

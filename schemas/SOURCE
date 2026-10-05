@@ -1,5 +1,5 @@
 # Written by scripts/conformance/sync-schema.sh. Do not edit.
 repo=https://github.com/nself-org/cli
-sha=c22935b8daf958512bf4a2908700c5993aa5607c
+sha=dc3a000bbbc7e59be54305dd3a0babd172466bae
 path=schemas/plugin-manifest.v2.schema.json
 sha256=3483b86e90c878fcb27d91dd856c466b788440f88ec1a639026aad19ec221ecf

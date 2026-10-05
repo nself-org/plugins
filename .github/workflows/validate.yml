@@ -309,15 +309,27 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26'
+          go-version: '1.26.6'   # >= the go directive of the cli commit in scripts/cli-tools.version
 
       - name: Pinned schema matches the cli commit
         run: bash scripts/conformance/sync-schema.sh --check
 
       - name: Conformance gate on changed plugins
         run: bash scripts/conformance/check.sh --changed
+
+      # P7-PLUG-55: the release's binary targets, computed on every PR (no release side effects).
+      - name: CLI binary targets gate and v1/v2 fixture parity
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          bash scripts/release/cli-targets-gate.sh --out "$RUNNER_TEMP/cli-targets"
+          export CLI_TARGETS_TOOL
+          CLI_TARGETS_TOOL=$(. scripts/conformance/lib.sh; cli_tool manifestv2migrate)
+          out1=$(bash scripts/release/cli-targets.sh tests/fixtures/manifest-v1-cli)
+          out2=$(bash scripts/release/cli-targets.sh tests/fixtures/manifest-v2-cli)
+          [ -n "$out1" ] && [ "$out1" = "$out2" ] || { echo "v1 and v2 fixtures differ or print nothing"; exit 1; }
 
       - name: Gate fixtures (converted pass, planted defects fail)
         run: bash scripts/conformance/check.sh --fixtures

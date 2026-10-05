@@ -1,4 +1,5 @@
 # Conformance gate exceptions (PLUG epic D13). One entry per rule and plugin.
+# Rule cli-targets (P7-PLUG-55): the release builds no binary for the plugin until the Ticket in owner_ref fixes its manifest.
 # Fields: rule, plugin, reason, owner_ref, expires (YYYY-MM-DD, at or before the v1.5.0 release).
 # An expired entry fails the gate. Remove an entry when its owner Ticket lands.
 exceptions:
@@ -11,4 +12,44 @@ exceptions:
     plugin: monitoring
     reason: "cadvisor and the log shipper mount the Docker socket until the monitoring rework (ADR 0027)"
     owner_ref: P7-PLUG-58
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: content-acquisition
+    reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
+    owner_ref: P7-PLUG-41
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: monitoring
+    reason: "plugin.json refused by the normalizer (language not in enum)"
+    owner_ref: P7-PLUG-44
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: ollama
+    reason: "plugin.json refused by the normalizer (language not in enum)"
+    owner_ref: P7-PLUG-45
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: retro-gaming
+    reason: "declares subcommands (roms list, server, ...) as cliCommands: spaced names and core-verb binaries"
+    owner_ref: P7-PLUG-46
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: subtitle-manager
+    reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
+    owner_ref: P7-PLUG-46
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: tenant-controller
+    reason: "plugin.json refused by the normalizer (table without np_ prefix)"
+    owner_ref: P7-PLUG-47
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: torrent-manager
+    reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
+    owner_ref: P7-PLUG-47
+    expires: 2026-12-31
+  - rule: cli-targets
+    plugin: vpn
+    reason: "declares subcommands (init, status, ...) as cliCommands: would ship core-verb binaries"
+    owner_ref: P7-PLUG-47
     expires: 2026-12-31
