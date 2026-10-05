@@ -54,7 +54,7 @@ prompt to bypass and no flag that skips a step. `resize` refuses to shrink a dis
 The Hetzner token for `server` commands is read from `--token`, else the
 variable named by `--token-env` (default `HETZNER_NSELF_TOKEN`), else
 `HCLOUD_TOKEN`, in the process environment only, exactly as core did. It is
-never read from a project `.env` file and never logged. `--json` works on every
+never read from a project `.env` file (`--token-env NSELF_INFRA_TERRAFORM_HCLOUD_TOKEN`, the one variable the CLI fills from `.env`, is refused with an error) and never logged. `--json` works on every
 `server` subcommand (the manifest's `json: none` marks the machine-surface
 envelope, which is not wired yet).
 

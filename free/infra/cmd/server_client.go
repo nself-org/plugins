@@ -31,6 +31,12 @@ func buildServerClient(cmd *cobra.Command) (server.Client, error) {
 	explicit, _ := cmd.Flags().GetString("token")
 	envVar, _ := cmd.Flags().GetString("token-env")
 
+	// The proxy fills TerraformTokenEnvVar from the project .env cascade; a server
+	// command must never take a cloud token from a project file (P7-CANON-12).
+	if envVar == TerraformTokenEnvVar {
+		return nil, fmt.Errorf("nself infra server: --token-env %s is refused: that variable is filled from the project .env file and is for the Terraform commands only; export the token in your shell or pass --token", TerraformTokenEnvVar)
+	}
+
 	token, err := server.ResolveToken(explicit, envVar)
 	if err != nil {
 		return nil, fmt.Errorf("nself infra server: %w", err)
