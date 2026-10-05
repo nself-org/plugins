@@ -1,0 +1,4 @@
+[
+  {"name": "notify", "kind": "plugin", "image": "nself/nself-notify:1.2.6@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "platforms": ["linux/amd64", "linux/arm64"], "owner": "plugin-images"},
+  {"name": "backup", "kind": "plugin", "image": "nself/nself-backup:1.0.0@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "platforms": ["linux/amd64", "linux/arm64"], "owner": "plugin-images"}
+]

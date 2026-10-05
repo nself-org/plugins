@@ -1,0 +1,102 @@
+name: Images Probe
+
+# Daily anonymous pull probe of every image in images.json (ADR 0030, P7-PLUG-61). No credential is used
+# or available: the probe runs with an empty Docker config. Also runs on pull requests that touch the lock,
+# its fragments or the tools, where it checks that images.json is assembled from images.d and probes it.
+#
+# A definite failure (image gone, unpullable anonymously, wrong digest, missing platform) fails the job.
+# A rate limit, registry outage or timeout is inconclusive (exit 3): it warns and never blocks a pull request.
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  pull_request:
+    paths:
+      - "images.d/**"
+      - "images.json"
+      - "scripts/images/**"
+      - ".github/workflows/images-probe.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Lock is assembled and every image pulls
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      status: ${{ steps.probe.outputs.status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Lock matches its fragments
+        run: bash scripts/images/assemble.sh --check
+      - name: Tool fixtures (offline)
+        run: |
+          bash scripts/images/matrix.sh --fixtures
+          bash scripts/images/assemble.sh --fixtures
+          bash scripts/images/record.sh --fixtures
+          PROBE_FIXTURES_OFFLINE=1 bash scripts/images/probe.sh --fixtures
+      - name: Probe every entry anonymously
+        id: probe
+        run: |
+          set +e
+          bash scripts/images/probe.sh
+          rc=$?
+          case "${rc}" in
+            0) echo "status=ok" >> "$GITHUB_OUTPUT" ;;
+            3) echo "status=inconclusive" >> "$GITHUB_OUTPUT"
+               echo "::warning title=Image probe inconclusive::registry rate limit or outage; not a verdict" ;;
+            *) echo "status=fail" >> "$GITHUB_OUTPUT"; exit 1 ;;
+          esac
+
+  report:
+    name: Open or update the image-probe issue
+    needs: probe
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # fail (or the probe job itself failing, e.g. lock drift): open or update the image-probe issue.
+      # inconclusive: count it on a tracking issue; the third run in a row also opens image-probe.
+      # ok: close the tracking issue, which resets the count.
+      - name: Open, update or close issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS: ${{ needs.probe.outputs.status }}
+          RESULT: ${{ needs.probe.result }}
+        run: |
+          set -eu
+          gh label create image-probe --color B60205 --description "Daily image availability probe" 2>/dev/null || true
+          gh label create image-probe-inconclusive --color FBCA04 --description "Probe could not reach the registry" 2>/dev/null || true
+          raise() {
+            n=$(gh issue list --label image-probe --state open --json number --jq '.[0].number // empty')
+            if [ -n "${n}" ]; then gh issue comment "${n}" --body "$1: ${RUN_URL}"
+            else gh issue create --label image-probe --title "Plugin image probe failing" --body "$1: ${RUN_URL}"; fi
+          }
+          track=$(gh issue list --label image-probe-inconclusive --state open --json number --jq '.[0].number // empty')
+          if [ "${RESULT}" != success ] || [ "${STATUS}" = fail ]; then
+            raise "The daily anonymous image probe or lock check failed (job ${RESULT}, status ${STATUS:-none})"
+          elif [ "${STATUS}" = inconclusive ]; then
+            if [ -z "${track}" ]; then
+              gh issue create --label image-probe-inconclusive --title "Plugin image probe inconclusive" --body "Inconclusive runs are counted here: ${RUN_URL}"
+              count=1
+            else
+              gh issue comment "${track}" --body "Inconclusive again: ${RUN_URL}"
+              count=$(( $(gh issue view "${track}" --json comments --jq '.comments | length') + 1 ))
+            fi
+            if [ "${count}" -ge 3 ]; then raise "The probe was inconclusive ${count} runs in a row"; fi
+          elif [ "${STATUS}" = ok ] && [ -n "${track}" ]; then
+            gh issue close "${track}" --comment "Probe ok again: ${RUN_URL}"
+          fi
