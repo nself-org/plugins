@@ -1,0 +1,9 @@
+# Pinned nself-org/cli commit for the conformance gate and the codemods (P7-PLUG-03).
+# It holds tools/manifestv2migrate, schemas/plugin-manifest.v2.schema.json and
+# sdk/go/migrate. A plain `go run github.com/nself-org/cli/tools/manifestv2migrate@<sha>`
+# is refused by the go command because cli's go.mod carries a replace directive,
+# so scripts/conformance/lib.sh fetches this commit (git, depth 1) and builds the
+# tool from its committed vendor/ directory. Change the sha, then run
+# scripts/conformance/sync-schema.sh to pull the matching schema.
+repo=https://github.com/nself-org/cli
+sha=c22935b8daf958512bf4a2908700c5993aa5607c

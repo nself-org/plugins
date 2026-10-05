@@ -1,0 +1,16 @@
+# Core and fabric ports no plugin may use (final gate G10). Port 0 means no listener.
+reserved:
+  - port: 3844
+    owner: "forgejo (core)"
+  - port: 3845
+    owner: "nself ci serve (P7-NODE-10)"
+  - port: 3857
+    owner: "admin API"
+  - port: 3864
+    owner: "ci agent listener"
+  - port: 3865
+    owner: "ci user listener"
+  - port: 3866
+    owner: "ci enrollment listener"
+  - port: 8333
+    owner: "SeaweedFS S3"

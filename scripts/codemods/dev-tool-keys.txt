@@ -1,0 +1,16 @@
+# v1 plugin.json keys that plugins dev tools still read. manifest-v2.sh KEEPS them by default, so a manifest that
+# carries one is reported "blocked: <key>" (manifestv2migrate refuses unmapped keys) and nothing is written.
+# --drop-dev-tool-keys removes them. Pass it only from a Ticket whose scope also updates the readers:
+#   scripts/generate-wiki-plugin-page.py still reads config.defaultPort, env_required, env_optional, binary_name
+#   and actions from the v1 manifest (verified on main, lines 118-184); it must read the v2 fields (rest_routes,
+#   env, service.port, commands.binary, commands.subcommands) first.
+#   A health-check matrix reader (scripts/health-check-matrix.sh in the pack text) does not exist on main; the
+#   defaultPort / config.port reader there is to be located by that Ticket.
+# Future Ticket: the first conversion batch (P7-PLUG-40..47) that adds those readers to its write_scope.
+# One key per line; comments after a space.
+actions        # wiki generator: quick-start steps (v2: commands.subcommands)
+config         # wiki generator (v2: service.port)
+binary_name    # wiki generator fallback (v2: commands.binary)
+env_required   # wiki generator (plugin-gauth only)
+env_optional   # wiki generator (plugin-gauth only)
+defaultPort    # claw-web only (v2: service.port)

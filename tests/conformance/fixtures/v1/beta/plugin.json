@@ -1,0 +1,70 @@
+{
+  "name": "beta",
+  "version": "1.0.0",
+  "description": "Fixture plugin beta for the conformance suite.",
+  "author": "nself",
+  "license": "MIT",
+  "isCommercial": false,
+  "licenseType": "free",
+  "requiredEntitlements": [],
+  "requires_license": false,
+  "homepage": "https://nself.org/plugins",
+  "repository": "https://github.com/nself-org/plugins",
+  "minNselfVersion": "1.0.0",
+  "category": "infrastructure",
+  "language": "go",
+  "tags": [
+    "fixture"
+  ],
+  "tables": [],
+  "dependencies": {
+    "required": [],
+    "optional": []
+  },
+  "optionalDependencies": [],
+  "envVars": {
+    "required": [
+      "DATABASE_URL"
+    ],
+    "optional": [
+      "PORT"
+    ]
+  },
+  "config": {
+    "defaultPort": 3902,
+    "timeoutSecs": 30
+  },
+  "hooks": {
+    "postInstall": null
+  },
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "network": [
+      "outbound"
+    ],
+    "filesystem": []
+  },
+  "port": 3902,
+  "status": "stable",
+  "binary_name": "nself-beta",
+  "actions": {
+    "ping": "Ping beta"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health"
+    }
+  ],
+  "health_endpoint": "/health",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64"
+  ],
+  "min_memory_mb": 32,
+  "tier": "free"
+}

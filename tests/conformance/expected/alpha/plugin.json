@@ -1,0 +1,80 @@
+{
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64"
+  ],
+  "author": "nself",
+  "category": "infrastructure",
+  "dependencies": [
+    "beta"
+  ],
+  "description": "Fixture plugin alpha for the conformance suite.",
+  "envVars": [
+    {
+      "description": "Postgres connection string",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "default": "3901",
+      "description": "HTTP port",
+      "name": "PORT",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "alpha",
+  "optionalDependencies": [
+    "gamma"
+  ],
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "filesystem": [],
+    "network": [
+      "outbound"
+    ]
+  },
+  "port": 3901,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "summary": "Health"
+    }
+  ],
+  "schema": "np_alpha",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3901
+  },
+  "status": "stable",
+  "tables": [
+    "np_alpha_items"
+  ],
+  "tags": [
+    "fixture"
+  ],
+  "tier": "free",
+  "version": "1.0.0"
+}

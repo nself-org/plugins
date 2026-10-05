@@ -212,7 +212,7 @@ jobs:
             printf "ERROR: Duplicate ports found:\n"
             echo "$dupes" | while read -r port; do
               echo "$ports" | grep "^$port " | while read -r line; do
-                printf "  Port %s used by: %s\n" "$line"
+                printf "  Port %s used by: %s\n" "${line%% *}" "${line#* }"
               done
             done
             exit 1
@@ -295,3 +295,47 @@ jobs:
           fi
 
           echo "All changed plugins passed validation."
+
+  # P7-PLUG-03: the conformance gate for manifest v2 plugins, plus the proofs that the gate,
+  # the codemods and the released-CLI oracle themselves still work. Actions are pinned by SHA.
+  conformance:
+    name: Plugin Conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26'
+
+      - name: Pinned schema matches the cli commit
+        run: bash scripts/conformance/sync-schema.sh --check
+
+      - name: Conformance gate on changed plugins
+        run: bash scripts/conformance/check.sh --changed
+
+      - name: Gate fixtures (converted pass, planted defects fail)
+        run: bash scripts/conformance/check.sh --fixtures
+
+      - name: Codemod fixtures and idempotence
+        run: bash scripts/codemods/run.sh --fixtures --twice
+
+      - name: Port uniqueness fixtures
+        run: bash scripts/conformance/ports.sh --fixtures
+
+      - name: Fresh-database boot kit
+        run: bash tests/boot/run.sh --fixtures
+
+      - name: Oracle delta mechanism (negative proofs)
+        run: bash tests/conformance/oracle-deltas-test.sh
+
+      - name: Codemods are idempotent on real plugins
+        run: bash tests/conformance/realtree.sh --drop-dev-tool-keys --plugins github-runner,nself-vault,family-ancestry,audit-log
+
+      - name: Released CLI v1.4.12 oracle
+        run: bash scripts/conformance/v14-oracle.sh --fixtures

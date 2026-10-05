@@ -1,0 +1,20 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
+services:
+  plugin-alpha:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/alpha
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_plugin_alpha
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3901:3901"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
+      - PORT=3901
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3901/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ${DOCKER_NETWORK}
