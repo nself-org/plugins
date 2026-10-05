@@ -4,8 +4,9 @@
 # OUT/<plugin>.tsv (empty file: builds nothing). P7-PLUG-55.
 # A plugin is BLOCKED, and ships no binary, when
 #   - the pinned normalizer refuses its plugin.json,
-#   - a command is a core verb or an existing top-level command of the pinned cli (read from that
-#     commit's .github/command-registry.json: .verbs plus every command whose parent is "nself"),
+#   - a command is a core verb, an existing top-level command or one of their aliases (rm, up, down, ...)
+#     of the pinned cli (read from that commit's .github/command-registry.json: .verbs plus every
+#     command whose parent is "nself", with its aliases),
 #   - a command is outside ^[a-z][a-z0-9-]*$ (the binary is nself-<command>), or
 #   - another plugin yields the same binary.
 # Every blocked plugin needs an unexpired entry (rule cli-targets, plugin, reason, owner_ref naming
@@ -22,11 +23,16 @@ while [ $# -gt 0 ]; do case $1 in
   *) echo "usage: cli-targets-gate.sh [--root DIR] [--exceptions FILE] --out DIR" >&2; exit 2;; esac; shift; done
 [ -n "$out" ] || { echo "cli-targets-gate: --out is required" >&2; exit 2; }
 mkdir -p "$out"; work=$(mktemp -d); rc=0
+# The runner's Go must be at least the pinned cli's go.mod directive (GOTOOLCHAIN=local forbids a
+# silent toolchain download), or the tool build below fails with an unclear message.
+need=$(sed -n 's/^go //p' "$(cli_src)/go.mod" | head -1); have=$(cd "$(cli_src)" && go env GOVERSION 2>/dev/null | sed 's/^go//')
+[ -n "$need" ] && [ -n "$have" ] && [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1)" = "$need" ] \
+  || { echo "cli-targets-gate: Go $have is older than the pinned cli go.mod needs ($need)" >&2; exit 1; }
 [ -n "${CLI_TARGETS_TOOL:-}" ] || CLI_TARGETS_TOOL=$(cli_tool manifestv2migrate) || exit 1
 export CLI_TARGETS_TOOL
 reg=${CLI_CORE_REGISTRY:-$(cli_src)/.github/command-registry.json}
 [ -f "$reg" ] || { echo "cli-targets-gate: core command registry missing: $reg" >&2; exit 1; }
-jq -r '[(.verbs // [])[], (.commands // [])[] | select(type == "string" or .parent == "nself") | if type == "string" then . else .name end] | unique[]' "$reg" > "$work/core"
+jq -r '[(.verbs // [])[], ((.commands // [])[] | select(.parent == "nself") | .name, (.aliases // [])[])] | unique[]' "$reg" > "$work/core"
 [ -s "$work/core" ] || { echo "cli-targets-gate: no core verbs read from $reg (a gate that checks nothing)" >&2; exit 1; }
 bash "$CONF_DIR/rules/exceptions.sh" "$exc" || rc=1
 tab=$(printf '\t')

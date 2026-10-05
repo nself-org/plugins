@@ -53,14 +53,16 @@ jobs:
       # Needed since this job started compiling: a cli plugin's package has to
       # contain a binary, and one per platform. Version matches the other
       # workflows in this repo.
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26.4'
+          go-version: '1.26.6'   # >= the go directive of the cli commit in scripts/cli-tools.version
           cache: false
 
       # Binary targets come from the pinned cli tool (scripts/cli-tools.version), built once
       # here so the parallel plugin builds below share it (P7-PLUG-55).
       - name: Build the pinned manifest tool
+        env:
+          GOTOOLCHAIN: local
         run: |
           . scripts/conformance/lib.sh
           echo "CLI_TARGETS_TOOL=$(cli_tool manifestv2migrate)" >> "$GITHUB_ENV"
@@ -69,6 +71,8 @@ jobs:
       # another plugin, or that the normalizer refuses, is blocked; each needs an unexpired entry in
       # scripts/conformance/exceptions.yaml or this step fails. Blocked plugins go to the job summary.
       - name: Compute binary targets
+        env:
+          GOTOOLCHAIN: local
         run: bash scripts/release/cli-targets-gate.sh --out "${GITHUB_WORKSPACE}/cli-targets"
 
       - name: Build tarballs for all free plugins (max 10 parallel)
