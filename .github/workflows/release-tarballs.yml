@@ -65,6 +65,12 @@ jobs:
           . scripts/conformance/lib.sh
           echo "CLI_TARGETS_TOOL=$(cli_tool manifestv2migrate)" >> "$GITHUB_ENV"
 
+      # Decides which plugins may ship a binary. A plugin whose commands collide with a core verb or
+      # another plugin, or that the normalizer refuses, is blocked; each needs an unexpired entry in
+      # tests/conformance/exceptions.yaml or this step fails. Blocked plugins go to the job summary.
+      - name: Compute binary targets
+        run: bash scripts/release/cli-targets-gate.sh --out "${GITHUB_WORKSPACE}/cli-targets"
+
       - name: Build tarballs for all free plugins (max 10 parallel)
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
@@ -100,12 +106,12 @@ jobs:
             # until the CLI was changed to fail on it. Every command extracted
             # under CLI-R11 was affected.
             # Which plugins need compiling, and which commands each ships, come from
-            # scripts/release/cli-targets.sh: the pinned cli tool applies the installer's own
+            # scripts/release/cli-targets-gate.sh (over cli-targets.sh): the pinned cli tool applies the installer's own
             # rule to the normalized manifest (v2 `commands`, v1 `cliCommands`), so the
             # release builds exactly the binaries `nself add` will look for. Lines are
             # binary<TAB>command; a plugin with none ships no binary.
             local targets
-            targets="$(bash scripts/release/cli-targets.sh "$plugin_dir")" || { echo "ERROR $plugin_name: cli-targets.sh failed"; return 1; }
+            targets="$(cat "${GITHUB_WORKSPACE}/cli-targets/${plugin_name}.tsv" 2>/dev/null)" || { echo "ERROR $plugin_name: no computed targets"; return 1; }
             if [ -z "$targets" ]; then
               return
             fi
@@ -207,7 +213,7 @@ jobs:
               fail=1
               continue
             fi
-            [ -n "$(bash scripts/release/cli-targets.sh "$dir")" ] || continue
+            [ -s "cli-targets/${name}.tsv" ] || continue
             for platform in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
               if [ ! -f "dist/${name}-${VERSION}-${platform}.tar.gz" ]; then
                 echo "MISSING $platform build for cli plugin $name"
