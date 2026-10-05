@@ -1,0 +1,15 @@
+Remove a plugin link registered with nself plugin link.
+
+After unlinking, nself build will use the registry version again.
+Unlinking an already-unlinked plugin returns success with a no-op message.
+
+Usage:
+  nself plugin unlink <name> [flags]
+
+Flags:
+  -h, --help   help for unlink
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

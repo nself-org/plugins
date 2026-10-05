@@ -1,0 +1,22 @@
+Start a plugin in development mode using air (preferred) or fswatch polling.
+
+Wraps the plugin SDK's dev-watch.sh script with auto-link support so you can
+iterate on plugin source and see changes reflected immediately.
+
+  nself plugin dev myplugin              # auto-link + hot-reload
+  nself plugin dev myplugin --no-link    # skip auto-link step
+  nself plugin dev myplugin --debug      # attach dlv debugger
+
+Usage:
+  nself plugin dev <name> [flags]
+
+Flags:
+      --debug               Attach dlv debugger (delegates to nself plugin debug)
+      --entrypoint string   Plugin entrypoint directory passed to dev-watch.sh (default "./cmd")
+  -h, --help                help for dev
+      --no-link             Skip auto-linking the plugin before starting dev mode
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

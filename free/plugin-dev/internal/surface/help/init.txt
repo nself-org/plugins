@@ -1,0 +1,48 @@
+Create a new plugin project with all required files.
+
+This command uses the canonical shared scaffold package so that output is
+identical to the standalone new-plugin binary shipped with plugin-sdk-go.
+
+Templates: go (default), rust, node, static
+
+  nself plugin init my-plugin                          # Go plugin (free tier)
+  nself plugin init my-plugin --tier pro               # Pro Go plugin
+  nself plugin init my-plugin --template rust          # Rust plugin
+  nself plugin init my-plugin --template node          # Node.js plugin
+  nself plugin init my-plugin --bundle nClaw --tier pro
+
+Multi-tenancy (--tenancy):
+  app-isolation  Emit source_account_id column (per-app isolation within one deploy)
+  cloud-tenant   Emit tenant_id column + Hasura row filter (Cloud SaaS tenancy)
+  both           Emit both columns; remove the unused one before production
+  none           No tenancy columns (default)
+
+When --tenancy is omitted, an interactive prompt guides the choice.
+Pass --no-interactive to skip the prompt and default to none.
+
+Usage:
+  nself plugin init <name> [flags]
+
+Aliases:
+  init, scaffold
+
+Flags:
+      --author string        Plugin author name
+      --bundle string        Bundle display name (e.g. nClaw) — pro plugins only
+      --category string      Plugin category (see F04-PLUGIN-INVENTORY-PRO) (default "custom")
+      --description string   Short description of the plugin
+      --force                Overwrite files if the output directory already exists
+  -h, --help                 help for init
+      --min-cli string       Minimum nSelf CLI version required (default "1.0.9")
+      --min-sdk string       Minimum plugin-sdk-go version required (default "0.1.0")
+      --no-interactive       Skip interactive prompts; use --tenancy default (none)
+      --out string           Output directory (default ./<name>)
+      --port int             Default listen port (default 8080)
+      --template string      Plugin template: go, rust, node, static (default "go")
+      --tenancy string       Multi-tenancy mode: app-isolation, cloud-tenant, both, none
+      --tier string          Plugin tier: free or pro (default "free")
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

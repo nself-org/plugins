@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0.0",
   "generated_at": "2026-09-21T21:11:03.046357Z",
-  "plugins_count": 129,
+  "plugins_count": 130,
   "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
@@ -4065,6 +4065,39 @@
         "sha256": "5c963a4cf53208601bd3680cbe4bd2facbb02445f4f07a0c21a23384684dbc56"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-clawde-1.2.6.tar.gz"
+    },
+    "plugin-dev": {
+      "version": "1.2.7",
+      "description": "Plugin author tools: scaffold a plugin (init, new), link and unlink a local plugin directory, run it with hot reload (dev), attach a debugger (debug) and run its tests (test). Broken out of the core nself plugin command.",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/plugin-dev-1.2.7.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/plugin-dev/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "plugin",
+        "author",
+        "scaffold",
+        "dev",
+        "debug",
+        "test",
+        "link"
+      ],
+      "dependencies": [],
+      "name": "plugin-dev",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/main.go"
+      },
+      "releaseTag": "v1.2.7",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/plugin-dev-1.2.7.tar.gz"
     },
     "plugin-gauth": {
       "version": "1.2.6",
