@@ -1,0 +1,42 @@
+Run the local CI gate suite for a repository.
+
+Detects the repo stack (Go, Node/TS, Flutter) and runs the appropriate
+lint, test, and build checks plus a gitleaks secret scan. Posts a
+"nself-ci" GitHub commit status via gh OAuth so branch protection can
+require nself-ci instead of billing-blocked GitHub Actions checks.
+
+Examples:
+  nself ci                        # gate current directory, post status
+  nself ci --check                # gate only, no status posted
+  nself ci --no-gitleaks .        # skip secret scan
+  nself ci --sha abc1234 .        # override commit SHA
+  nself ci --filesystem /tmp/x    # force filesystem scan (non-checkout source, e.g. a tarball)
+  nself ci /path/to/repo          # gate a specific repo
+
+Usage:
+  nself ci [repo-root] [flags]
+  nself ci [command]
+
+Available Commands:
+  build       Build a signed release artifact locally (Android only)
+  eval        Run eval-gate suite or validate an eval-set YAML
+  forgejo     Show Forgejo server + runner health (ops profile)
+  serve       Start the nself-ci webhook listener daemon (port 3845)
+
+Flags:
+      --check          Run gates only; do not post a GitHub commit status
+      --filesystem     Force gitleaks filesystem scan (--no-git) even inside a git checkout; opt-in for non-checkout source trees such as an exported tarball
+  -h, --help           help for ci
+      --no-gitleaks    Skip the gitleaks secret scan
+      --no-status      Alias for --check
+      --owner string   GitHub owner (default: from git remote)
+      --repo string    GitHub repo name (default: from git remote)
+      --sha string     Commit SHA to report on (default: HEAD)
+  -v, --verbose        Print each gate command before running
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection
+
+Use "nself ci [command] --help" for more information about a command.

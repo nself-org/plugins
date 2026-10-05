@@ -19,7 +19,6 @@ free/auth-enterprise/go/sso/saml.go	385
 free/byok/go/handlers/byok.go	483
 free/cdc/go/replication/engine.go	312
 free/cdn/internal/handlers.go	813
-free/ci/cmd/main.go	374
 free/ci/internal/pipeline.go	313
 free/ci/scripts/disk-prune.sh	332
 free/claw-cli/cmd/claw_pair.go	301

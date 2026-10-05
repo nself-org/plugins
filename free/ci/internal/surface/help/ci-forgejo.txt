@@ -1,0 +1,26 @@
+Query the Forgejo server health endpoint and the forgejo-runner
+container status. Designed for the ops profile where Forgejo provides
+offline CI that runs .github/workflows/*.yml with zero GitHub Actions
+quota consumption.
+
+Env vars used (optional — for API queue depth):
+  NSELF_FORGEJO_ADMIN_USER      Forgejo admin username
+  NSELF_FORGEJO_ADMIN_PASSWORD  Forgejo admin password
+
+Examples:
+  nself ci forgejo
+  nself ci forgejo --url http://ci.example.com:3844
+  nself ci forgejo --runner nself_forgejo_runner
+
+Usage:
+  nself ci forgejo [flags]
+
+Flags:
+  -h, --help            help for forgejo
+      --runner string   Runner container name (default: <PROJECT>_forgejo_runner)
+      --url string      Forgejo base URL (default "http://localhost:3844")
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

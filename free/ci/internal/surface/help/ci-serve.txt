@@ -1,0 +1,56 @@
+Start an HTTP server that receives GitHub push and pull_request webhooks,
+verifies the HMAC-SHA256 signature, and runs the nself-ci gate suite for each
+event in an ephemeral Docker container.
+
+GitHub webhooks are free — only Actions compute minutes are billed. This daemon
+moves the compute to your own ops box while keeping GitHub as the SCM and
+commit-status target.
+
+The server posts a "nself-ci" GitHub commit status (pending → success/failure)
+via gh OAuth, identical to the nself ci one-shot command.
+
+Fail-closed defaults (T32): this daemon clones and executes attacker-
+influenced repo content on inbound webhooks, so three things are required,
+not optional, unless explicitly overridden:
+  - a webhook secret must be configured (--secret / GITHUB_WEBHOOK_SECRET),
+    or the server refuses to start. --insecure overrides this (NOT
+    recommended: disables signature verification entirely).
+  - the triggering repo must be in --allowed-repos / NSELF_CI_ALLOWED_REPOS,
+    or the job is rejected with 403 before any clone happens. An empty
+    allowlist rejects every job — there is no "allow all" override.
+  - Docker must be available to sandbox the job, or the run refuses, unless
+    --allow-unsandboxed is passed (NOT recommended: the cloned repo's gate
+    commands then execute directly on this host with the daemon's own
+    privileges).
+
+Environment variables:
+  GITHUB_WEBHOOK_SECRET     HMAC secret (same value configured in GitHub webhook settings)
+  NSELF_CI_ALLOWED_REPOS    Comma-separated "owner/repo" allowlist (merged with --allowed-repos)
+  NSELF_CI_ALLOW_UNSANDBOXED  "true" to allow running the gate outside Docker (same as --allow-unsandboxed)
+  NSELF_CI_EVENT_SINK       Optional URL to POST completion events (JSON) to — seam for
+                            the nself-cron-monitor plugin on port 3839.
+
+Examples:
+  nself ci serve --secret "$GITHUB_WEBHOOK_SECRET" --allowed-repos nself-org/cli
+  nself ci serve --addr :3845 --concurrency 4 --allowed-repos nself-org/cli,nself-org/web
+  nself ci serve --secret "$GITHUB_WEBHOOK_SECRET" --workdir /var/ci/workdirs --allowed-repos nself-org/cli
+
+Usage:
+  nself ci serve [flags]
+
+Flags:
+      --addr string             Listen address (host:port). Port 3845 = nself-ci-serve per F10 port registry (default ":3845")
+      --allow-unsandboxed       DANGEROUS: run the gate directly on this host when Docker is unavailable, instead of refusing the job. Default: refuse.
+      --allowed-repos strings   Comma-separated or repeatable "owner/repo" allowlist. Default: empty, which rejects every job (fail-closed, no "allow all").
+      --concurrency int         Max concurrent CI jobs (default 2)
+  -h, --help                    help for serve
+      --insecure                DANGEROUS: start without a webhook secret (disables signature verification). Default: refuse to start when no secret is configured.
+      --secret string           HMAC-SHA256 webhook secret (overrides GITHUB_WEBHOOK_SECRET env)
+      --timeout int             Per-job timeout in seconds (default 600)
+  -v, --verbose                 Verbose gate output
+      --workdir string          Base directory for ephemeral checkout workdirs (default "/tmp/nself-ci-workdirs")
+
+Global Flags:
+      --json                      Machine-readable output: one JSON document on stdout (see JSON-Output)
+      --no-deprecation-warnings   Suppress deprecation warnings (for scripted use)
+      --no-monorepo               Disable automatic monorepo backend detection

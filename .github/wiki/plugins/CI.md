@@ -35,6 +35,20 @@ Category: `development`. Current version: `1.0.1`.
 nself-ci
 ```
 
+## Commands
+
+The `nself-ci` binary accepts the exact argv of core `nself ci`:
+
+| Command | Description |
+|---------|-------------|
+| `nself-ci [flags] [repo-root]` | Run the gate. Flags: `--check`, `--no-status`, `--no-gitleaks`, `--sha`, `--owner`, `--repo`, `-v`, `--filesystem`. |
+| `nself-ci build [flags] [dir]` | Build a signed Android release artifact locally; `--upload --tag T` attaches it to a GitHub release. |
+| `nself-ci forgejo [--url U] [--runner R]` | Forgejo server and runner health (ops profile). |
+| `nself-ci serve [flags]` | Webhook listener daemon on port 3845; fail-closed (secret, allowlist, Docker). |
+| `nself-ci run [flags] [search-root]` | Run the `.ci.yaml` pipeline. |
+
+The manifest is v2 with a `commands` block (`command: ci`, `binary: nself-ci`). `ci eval` is not part of this plugin.
+
 ## Source
 
 [`plugins/ci/`](https://github.com/nself-org/plugins/tree/main/ci)

@@ -3,372 +3,49 @@
 // Purpose: Run the gate suite for a repo (lint/test/build + gitleaks) and
 //
 //	optionally post a GitHub commit status so branch protection can require
-//	the "nself-ci" check instead of billing-blocked GitHub Actions.
-//	Subcommand "run" discovers .ci.yaml plugin manifests and runs their stages.
+//	the "nself-ci" check instead of billing-blocked GitHub Actions. The binary
+//	also carries the core `nself ci` surface (build, forgejo, serve) ported
+//	from the CLI (P7-CANON-09), so `nself ci …` and `nself-ci …` take the same
+//	argv. Subcommand "run" discovers .ci.yaml plugin manifests and runs their stages.
 //
 // Usage:
 //
 //	nself-ci [flags] [repo-root]              — single-repo gate
 //	nself-ci run [flags] [search-root]        — pipeline: discover .ci.yaml + run stages
 //	nself-ci build --artifact android [dir]   — local signed-APK build + gh release upload
+//	nself-ci forgejo [--url U] [--runner R]   — Forgejo server + runner health
+//	nself-ci serve [flags]                    — webhook listener daemon (port 3845)
 //	nself ci run --env local                  — via nself CLI proxy
-//	nself ci build --artifact android         — via nself CLI proxy
+//
+// Gate flags: --check --no-status --no-gitleaks --filesystem -v/--verbose
+// --sha --owner --repo --env --gateway (flags and the repo-root may be mixed).
 //
 // SPORT: PLUGINS-CI-000
 package main
 
 import (
-	"flag"
-	"fmt"
 	"os"
-	"strings"
-	"time"
-
-	"github.com/nself-org/plugins/free/ci/internal"
 )
 
 func main() {
-	// Check for "run"/"build" subcommands as first non-flag argument.
-	args := os.Args[1:]
-	if len(args) > 0 && args[0] == "run" {
-		runPipelineCmd(args[1:])
-		return
-	}
-	if len(args) > 0 && args[0] == "build" {
-		runArtifactBuildCmd(args[1:])
-		return
-	}
-
-	// Default: single-repo gate (legacy behaviour, unchanged).
-	runSingleRepoCmd(args)
+	os.Exit(run(os.Args[1:]))
 }
 
-// runPipelineCmd implements "nself-ci run [flags] [search-root]".
-// Discovers .ci.yaml manifests under search-root and runs all stages in canonical order.
-// Adds a gateway routing check stage when --env or --gateway is provided.
-// Size-cap exception: 54L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
-func runPipelineCmd(rawArgs []string) {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	var (
-		env        = fs.String("env", "", "Target environment: local")
-		gatewayURL = fs.String("gateway", "", "Explicit gateway base URL (e.g. http://host:3761)")
-		verbose    = fs.Bool("v", false, "Print each command before running")
-		timeout    = fs.Int("timeout", 300, "Per-step timeout in seconds")
-	)
-	_ = fs.Parse(rawArgs)
-
-	searchRoot := "."
-	if fs.NArg() > 0 {
-		searchRoot = fs.Arg(0)
-	}
-	if v := os.Getenv("NSELF_CI_SEARCH_ROOT"); v != "" && searchRoot == "." {
-		searchRoot = v
-	}
-
-	// Resolve gateway base URL.
-	gatewayBase, err := resolveGatewayBase(*env, *gatewayURL, os.Getenv("NSELF_CI_GATEWAY"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("nself-ci pipeline — searching %s\n", searchRoot)
-	if gatewayBase != "" {
-		fmt.Printf("gateway routing check: %s\n", gatewayBase)
-	}
-	fmt.Println(strings.Repeat("─", 60))
-
-	gates, err := internal.DiscoverAndRunPipeline(searchRoot, gatewayBase, *timeout, *verbose)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
-
-	if len(gates) == 0 {
-		fmt.Println("No .ci.yaml manifests found under", searchRoot)
-		os.Exit(0)
-	}
-
-	passed := printPipelineResults(gates)
-	if !passed {
-		os.Exit(1)
-	}
-}
-
-// printPipelineResults prints a gate table and returns true if all passed.
-func printPipelineResults(gates []internal.GateResult) bool {
-	allPassed := true
-	for _, g := range gates {
-		mark := "PASS"
-		if !g.Passed {
-			mark = "FAIL"
-			allPassed = false
-		}
-		fmt.Printf("  %-45s  %s  (%s)\n", g.Name, mark, g.Elapsed.Round(time.Millisecond))
-		if !g.Passed && g.Output != "" {
-			for _, line := range strings.SplitAfter(g.Output, "\n") {
-				fmt.Print("    ", line)
-			}
-			fmt.Println()
-		}
-	}
-	fmt.Println(strings.Repeat("─", 60))
-	overall := "PASSED"
-	if !allPassed {
-		overall = "FAILED"
-	}
-	fmt.Printf("  Pipeline: %s\n\n", overall)
-	return allPassed
-}
-
-// runArtifactBuildCmd implements "nself-ci build --artifact android [dir]".
-// Local artifact-build lane (P6-E11-W2-S1-T6): private repos need a signed
-// release artifact without a GitHub-hosted runner or a third nSelf server.
-// Android only — macOS/Windows/TV/WearOS stay on GitHub-hosted runners.
-func runArtifactBuildCmd(rawArgs []string) {
-	fs := flag.NewFlagSet("build", flag.ExitOnError)
-	var (
-		artifact = fs.String("artifact", "", "Artifact type to build (only \"android\" is supported)")
-		upload   = fs.Bool("upload", false, "Attach the built artifact to a GitHub release via `gh release upload`")
-		tag      = fs.String("tag", "", "Release tag to upload to (required with --upload)")
-		owner    = fs.String("owner", "", "GitHub owner for --upload (default: from git remote)")
-		repo     = fs.String("repo", "", "GitHub repo for --upload (default: from git remote)")
-		verbose  = fs.Bool("v", false, "Print each command before running")
-		timeout  = fs.Int("timeout", 900, "Build step timeout in seconds (release builds are slow)")
-	)
-	_ = fs.Parse(rawArgs)
-
-	if *artifact != "android" {
-		fmt.Fprintf(os.Stderr, "error: --artifact %q not supported (only \"android\" — macOS/Windows/TV/WearOS stay on GitHub-hosted runners)\n", *artifact)
-		os.Exit(1)
-	}
-
-	androidDir := "."
-	if fs.NArg() > 0 {
-		androidDir = fs.Arg(0)
-	}
-
-	fmt.Printf("nself-ci build --artifact android — %s\n", androidDir)
-	fmt.Println(strings.Repeat("─", 60))
-
-	result := internal.BuildAndroidArtifact(androidDir, *timeout, *verbose)
-	mark := "PASS"
-	if !result.Gate.Passed {
-		mark = "FAIL"
-	}
-	fmt.Printf("  %-30s  %s  (%s)\n", result.Gate.Name, mark, result.Gate.Elapsed.Round(time.Millisecond))
-	if result.Gate.Output != "" {
-		for _, line := range strings.SplitAfter(result.Gate.Output, "\n") {
-			fmt.Print("    ", line)
-		}
-		fmt.Println()
-	}
-	fmt.Println(strings.Repeat("─", 60))
-
-	if !result.Gate.Passed {
-		os.Exit(1)
-	}
-
-	if !*upload {
-		return
-	}
-
-	resolvedOwner, resolvedRepo := *owner, *repo
-	if resolvedOwner == "" || resolvedRepo == "" {
-		o, r, err := internal.RepoOwnerName(androidDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: cannot resolve GitHub remote for --upload: %v\n", err)
-			fmt.Fprintf(os.Stderr, "hint: pass --owner and --repo\n")
-			os.Exit(1)
-		}
-		if resolvedOwner == "" {
-			resolvedOwner = o
-		}
-		if resolvedRepo == "" {
-			resolvedRepo = r
-		}
-	}
-	if *tag == "" {
-		fmt.Fprintln(os.Stderr, "error: --tag is required with --upload")
-		os.Exit(1)
-	}
-
-	out, err := internal.UploadArtifact(resolvedOwner, resolvedRepo, *tag, result.APKPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("✓ Uploaded %s to %s/%s@%s\n%s\n", result.APKPath, resolvedOwner, resolvedRepo, *tag, out)
-}
-
-// runSingleRepoCmd implements the original gate behaviour for a single repo root.
-// Size-cap exception: 134L — single-responsibility operation; splitting would create artificial fragmentation without structural or maintainability gain.
-func runSingleRepoCmd(rawArgs []string) {
-	fs := flag.NewFlagSet("nself-ci", flag.ExitOnError)
-	var (
-		skipStatus   = fs.Bool("no-status", false, "Run gates but do not post a GitHub commit status")
-		skipGitleaks = fs.Bool("no-gitleaks", false, "Skip gitleaks secret scan")
-		verbose      = fs.Bool("v", false, "Print each gate command before running")
-		sha          = fs.String("sha", "", "Commit SHA to report on (default: HEAD)")
-		owner        = fs.String("owner", "", "GitHub owner (default: from git remote)")
-		repo         = fs.String("repo", "", "GitHub repo name (default: from git remote)")
-		checkOnly    = fs.Bool("check", false, "Check mode: run gates, print result, exit 0/1. No status posted.")
-		env          = fs.String("env", "", "Target environment: local (SPORT: PLUGINS-CI-005)")
-		gatewayURL   = fs.String("gateway", "", "Explicit gateway base URL override (e.g. http://host:3761)")
-		filesystem   = fs.Bool("filesystem", false, "Force gitleaks filesystem scan (--no-git) even inside a git checkout; opt-in for non-checkout source trees such as an exported tarball")
-	)
-	_ = fs.Parse(rawArgs)
-
-	// repo-root is the optional positional argument.
-	repoRoot := "."
-	if fs.NArg() > 0 {
-		repoRoot = fs.Arg(0)
-	}
-	if v := os.Getenv("NSELF_CI_REPO"); v != "" && repoRoot == "." {
-		repoRoot = v
-	}
-	if v := os.Getenv("NSELF_CI_SKIP_STATUS"); v == "1" {
-		*skipStatus = true
-	}
-
-	// Resolve gateway base URL.
-	gatewayBase, err := resolveGatewayBase(*env, *gatewayURL, os.Getenv("NSELF_CI_GATEWAY"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-
-	cfg := internal.Config{
-		RepoRoot:        repoRoot,
-		SkipGitleaks:    *skipGitleaks,
-		Verbose:         *verbose,
-		GatewayBase:     gatewayBase,
-		ForceFilesystem: *filesystem,
-	}
-
-	// Determine SHA and remote before running gates (fail early on config errors).
-	resolvedSHA := *sha
-	if v := os.Getenv("NSELF_CI_SHA"); v != "" && resolvedSHA == "" {
-		resolvedSHA = v
-	}
-
-	resolvedOwner := *owner
-	resolvedRepo := *repo
-
-	postStatus := !*skipStatus && !*checkOnly
-	if postStatus {
-		if resolvedSHA == "" {
-			var err error
-			resolvedSHA, err = internal.HeadSHA(repoRoot)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error: cannot resolve HEAD SHA: %v\n", err)
-				fmt.Fprintf(os.Stderr, "hint: pass --sha <sha> or use --no-status / --check\n")
-				os.Exit(1)
+// run dispatches argv and returns the exit code. A bare -h/--help in front of
+// a command that has captured core help prints that text; the first token
+// that is not a flag selects a registered subcommand, otherwise the argv is
+// the single-repo gate.
+func run(args []string) int {
+	if h, key, rest, ok := resolve(args); ok {
+		if wantsHelp(rest) {
+			if printHelp(key) {
+				return 0
 			}
 		}
-
-		if resolvedOwner == "" || resolvedRepo == "" {
-			o, r, err := internal.RepoOwnerName(repoRoot)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error: cannot resolve GitHub remote: %v\n", err)
-				fmt.Fprintf(os.Stderr, "hint: pass --owner and --repo, or use --no-status / --check\n")
-				os.Exit(1)
-			}
-			if resolvedOwner == "" {
-				resolvedOwner = o
-			}
-			if resolvedRepo == "" {
-				resolvedRepo = r
-			}
-		}
-
-		_ = internal.PostCommitStatus(internal.StatusConfig{
-			Owner:       resolvedOwner,
-			Repo:        resolvedRepo,
-			SHA:         resolvedSHA,
-			State:       "pending",
-			Description: "nself-ci gate running…",
-		})
+		return h(rest)
 	}
-
-	result, err := internal.Run(cfg)
-	if err != nil {
-		msg := fmt.Sprintf("gate error: %v", err)
-		if postStatus {
-			_ = internal.PostCommitStatus(internal.StatusConfig{
-				Owner:       resolvedOwner,
-				Repo:        resolvedRepo,
-				SHA:         resolvedSHA,
-				State:       "error",
-				Description: msg,
-			})
-		}
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+	if wantsHelp(args) && printHelp("") {
+		return 0
 	}
-
-	printResults(result)
-
-	if postStatus {
-		state := "success"
-		if !result.Passed {
-			state = "failure"
-		}
-		if err := internal.PostCommitStatus(internal.StatusConfig{
-			Owner:       resolvedOwner,
-			Repo:        resolvedRepo,
-			SHA:         resolvedSHA,
-			State:       state,
-			Description: result.Summary(),
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not post commit status: %v\n", err)
-		} else {
-			fmt.Printf("\n✓ Posted nself-ci status %q to %s/%s@%s\n",
-				state, resolvedOwner, resolvedRepo, resolvedSHA[:min(7, len(resolvedSHA))])
-		}
-	}
-
-	if !result.Passed {
-		os.Exit(1)
-	}
-}
-
-// printResults prints a human-readable gate summary table.
-func printResults(r *internal.Result) {
-	fmt.Printf("\nnself-ci gate results — %s\n", r.RepoRoot)
-	fmt.Printf("Stacks: %s\n", strings.Join(r.Stack, ", "))
-	fmt.Println(strings.Repeat("─", 60))
-
-	for _, g := range r.Gates {
-		mark := "PASS"
-		switch {
-		case g.Skipped:
-			mark = "SKIP"
-		case !g.Passed:
-			mark = "FAIL"
-		}
-		fmt.Printf("  %-30s  %s  (%s)\n", g.Name, mark, g.Elapsed.Round(time.Millisecond))
-		// Always show WHY for a skip or a failure — a silent SKIP/PASS line
-		// is exactly the shape of the G-015 bug this gate now refuses to be.
-		if (g.Skipped || !g.Passed) && g.Output != "" {
-			for _, line := range strings.SplitAfter(g.Output, "\n") {
-				fmt.Print("    ", line)
-			}
-			fmt.Println()
-		}
-	}
-
-	fmt.Println(strings.Repeat("─", 60))
-	overall := "PASSED"
-	if !r.Passed {
-		overall = "FAILED"
-	}
-	fmt.Printf("  Overall: %s  (%s)\n\n", overall, r.Elapsed.Round(time.Second))
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return gateCmd(args)
 }
