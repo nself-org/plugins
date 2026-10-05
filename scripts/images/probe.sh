@@ -21,7 +21,7 @@ done
 T=${PROBE_TIMEOUT:-60}; A=${PROBE_ATTEMPTS:-3}; B=${PROBE_BACKOFF:-5}; DL=${PROBE_DEADLINE:-900}
 sha256_stdin() { if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -d' ' -f1; else shasum -a 256 | cut -d' ' -f1; fi; }
 
-registry_inspect() { DOCKER_CONFIG=$anon docker buildx imagetools inspect --raw "$1"; }
+registry_inspect() { env -u BUILDX_BUILDER DOCKER_CONFIG=$anon docker buildx imagetools inspect --raw "$1"; }
 
 # run_bounded SECS OUT ERR CMD...: run CMD with a hard time limit (no coreutils timeout on macOS).
 run_bounded() {
@@ -40,7 +40,7 @@ is_transient() {
 }
 # is_definite FILE: the registry answered and the image is not there for an anonymous caller.
 is_definite() {
-  grep -Eiq 'not found|unknown flag|unknown command|is not a docker command|usage: +docker|manifest unknown|name unknown|no such manifest|denied|unauthorized|authentication required|requested access|does not exist' "$1"
+  grep -Eiq 'not found|unknown flag|no builder|unknown command|is not a docker command|usage: +docker|manifest unknown|name unknown|no such manifest|denied|unauthorized|authentication required|requested access|does not exist' "$1"
 }
 
 # probe_one NAME IMAGE PLATFORMS-CSV prints "ok|FAIL|TRANSIENT <name> <detail>" and returns 0/1/3.
