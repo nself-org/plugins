@@ -23,7 +23,7 @@ jobs:
 
       - name: Install OpenTofu
         run: |
-          TOFU_VERSION=$(cat ../.opentofu-version)
+          TOFU_VERSION=$(cat ../../.opentofu-version)
           curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" -o tofu.tar.gz
           curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" -o tofu_SHA256SUMS
           grep "tofu_${TOFU_VERSION}_linux_amd64.tar.gz" tofu_SHA256SUMS > tofu_SHA256SUM
