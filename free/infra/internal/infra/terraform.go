@@ -8,6 +8,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"github.com/nself-org/nself-infra"
 	"os"
 	"os/exec"
 )
@@ -26,12 +27,7 @@ const (
 
 // ValidProviders is the set of supported providers.
 var ValidProviders = map[Provider]bool{
-	ProviderAWS:          true,
-	ProviderGCP:          true,
-	ProviderAzure:        true,
-	ProviderHetzner:      true,
-	ProviderDigitalOcean: true,
-	ProviderLinode:       true,
+	ProviderHetzner: true,
 }
 
 // ErrTerraformNotFound is returned when the terraform binary is not in PATH.
@@ -56,7 +52,11 @@ type ApplyOptions struct {
 }
 
 func terraformBinary() (string, error) {
-	path, err := exec.LookPath("terraform")
+	path, err := exec.LookPath("tofu")
+	if err == nil {
+		return path, nil
+	}
+	path, err = exec.LookPath("terraform")
 	if err != nil {
 		return "", ErrTerraformNotFound
 	}
@@ -67,7 +67,12 @@ func modulePath(opts PlanOptions) string {
 	if opts.ModulesDir != "" {
 		return opts.ModulesDir
 	}
-	return fmt.Sprintf("terraform/modules/%s", opts.Provider)
+	extracted, err := infra.ExtractModules()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "infra: failed to extract module: %v\n", err)
+		return ""
+	}
+	return extracted
 }
 
 // Plan runs `terraform plan` for the given provider module.
@@ -80,6 +85,9 @@ func Plan(ctx context.Context, opts PlanOptions) error {
 		return fmt.Errorf("infra: unknown provider %q", opts.Provider)
 	}
 	dir := modulePath(opts)
+	if dir == "" {
+		return fmt.Errorf("infra: missing module directory")
+	}
 	if err := tfInit(ctx, tf, dir); err != nil {
 		return err
 	}
@@ -92,8 +100,7 @@ func Plan(ctx context.Context, opts PlanOptions) error {
 			fmt.Sprintf("-backend-config=bucket=%s", opts.StateBucket),
 		)
 	}
-	cmd := exec.CommandContext(ctx, tf, args...)
-	cmd.Dir = dir
+	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -112,6 +119,9 @@ func Apply(ctx context.Context, opts ApplyOptions) error {
 		return fmt.Errorf("infra: unknown provider %q", opts.Provider)
 	}
 	dir := modulePath(opts.PlanOptions)
+	if dir == "" {
+		return fmt.Errorf("infra: missing module directory")
+	}
 	if err := tfInit(ctx, tf, dir); err != nil {
 		return err
 	}
@@ -130,8 +140,7 @@ func Apply(ctx context.Context, opts ApplyOptions) error {
 	for k, v := range opts.Vars {
 		args = append(args, fmt.Sprintf("-var=%s=%s", k, v))
 	}
-	cmd := exec.CommandContext(ctx, tf, args...)
-	cmd.Dir = dir
+	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -151,12 +160,14 @@ func Destroy(ctx context.Context, provider Provider, domain, modulesDir string, 
 	}
 	opts := PlanOptions{Provider: provider, Domain: domain, ModulesDir: modulesDir}
 	dir := modulePath(opts)
+	if dir == "" {
+		return fmt.Errorf("infra: missing module directory")
+	}
 	args := []string{"destroy", fmt.Sprintf("-var=domain=%s", domain)}
 	if autoApprove {
 		args = append(args, "-auto-approve")
 	}
-	cmd := exec.CommandContext(ctx, tf, args...)
-	cmd.Dir = dir
+	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -167,12 +178,36 @@ func Destroy(ctx context.Context, provider Provider, domain, modulesDir string, 
 
 // tfInit runs terraform init inside the module directory.
 func tfInit(ctx context.Context, tf, dir string) error {
-	cmd := exec.CommandContext(ctx, tf, "init", "-input=false")
-	cmd.Dir = dir
+	cmd := exec.CommandContext(ctx, tf, "-chdir="+dir, "init", "-input=false")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("infra: terraform init: %w", err)
+	}
+	return nil
+}
+
+// Validate runs `terraform validate` for the given provider module.
+func Validate(ctx context.Context, opts PlanOptions) error {
+	tf, err := terraformBinary()
+	if err != nil {
+		return err
+	}
+	if !ValidProviders[opts.Provider] {
+		return fmt.Errorf("infra: unknown provider %q", opts.Provider)
+	}
+	dir := modulePath(opts)
+	if dir == "" {
+		return fmt.Errorf("infra: missing module directory")
+	}
+	if err := tfInit(ctx, tf, dir); err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, tf, "-chdir="+dir, "validate")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("infra: terraform validate: %w", err)
 	}
 	return nil
 }

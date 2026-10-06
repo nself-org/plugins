@@ -1,6 +1,6 @@
 # Infra Plugin
 
-> Provisions nSelf infrastructure on AWS, GCP, Azure, Hetzner, DigitalOcean or Linode via Terraform. **Free — MIT licensed.**
+> Provisions nSelf infrastructure on Hetzner Cloud via OpenTofu/Terraform. **Free — MIT licensed.**
 
 ## Install
 
@@ -12,27 +12,41 @@ No license key required.
 
 ## Description
 
-Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.
+Provision nSelf infrastructure with OpenTofu/Terraform: plan, apply and destroy modules for hetzner (others are deferred, DEF-005).
 
 This is a CLI plugin: it installs the `nself-infra` binary into your plugin path and runs as a command, not a background service.
 
-Category: `infrastructure`. Current version: `1.0.0`.
+Category: `infrastructure`. Current version: `1.2.6`.
 
 ## Configuration
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
 | `HETZNER_NSELF_TOKEN` | — | Optional. Process environment only: default token for `server` commands. |
-| `HCLOUD_TOKEN` | — | Optional. Process environment only: Terraform provider token and `server` fallback. |
+| `HCLOUD_TOKEN` | — | Optional. Process environment only: OpenTofu/Terraform provider token and `server` fallback. |
 | `NSELF_INFRA_TERRAFORM_HCLOUD_TOKEN` | — | Optional. The only variable filled from the project `.env`; plan, apply and destroy only, never `server`. |
 
+
+
+### Maturity: Experimental
+
+This plugin is currently experimental. Commands and behavior may change.
+
+### OpenTofu First
+
+Commands `validate`, `plan`, `apply`, and `destroy` prefer OpenTofu (`tofu`) if installed in PATH, and fall back to `terraform`.
+
+### Spend Guard
+
+The `apply` and `destroy` commands incur cloud spend or delete infrastructure. They require the `--i-accept-cloud-spend` flag and must be run in an interactive TTY to proceed.
 ## Commands
 
 `nself-infra` subcommands (installed alongside the plugin):
 
-- `nself-infra plan`
-- `nself-infra apply`
-- `nself-infra destroy`
+- `nself infra validate`
+- `nself infra plan`
+- `nself infra apply`
+- `nself infra destroy`
 - `nself-infra server provision|list|resize|destroy` (`nself infra server ...`): Hetzner Cloud server lifecycle.
 
 ### Server destroy safety
