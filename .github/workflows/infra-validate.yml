@@ -24,13 +24,14 @@ jobs:
       - name: Install OpenTofu
         run: |
           TOFU_VERSION=$(cat ../../.opentofu-version)
-          curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" -o tofu.tar.gz
+          FILE_NAME="tofu_${TOFU_VERSION}_linux_amd64.tar.gz"
+          curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/${FILE_NAME}" -o "${FILE_NAME}"
           curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" -o tofu_SHA256SUMS
-          grep "tofu_${TOFU_VERSION}_linux_amd64.tar.gz" tofu_SHA256SUMS > tofu_SHA256SUM
+          grep "${FILE_NAME}" tofu_SHA256SUMS > tofu_SHA256SUM
           sha256sum -c tofu_SHA256SUM
-          tar -xzf tofu.tar.gz tofu
+          tar -xzf "${FILE_NAME}" tofu
           sudo mv tofu /usr/local/bin/
-          rm tofu.tar.gz tofu_SHA256SUMS tofu_SHA256SUM
+          rm "${FILE_NAME}" tofu_SHA256SUMS tofu_SHA256SUM
 
       - name: OpenTofu Format
         run: tofu fmt -check -recursive
