@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"github.com/spf13/cobra"
 	"github.com/nself-org/nself-infra/internal/infra"
 	"github.com/nself-org/nself-infra/internal/ui"
+	"github.com/spf13/cobra"
+	"os"
 )
 
 func init() {
@@ -24,7 +24,7 @@ func init() {
 			ui.Warn("nself infra apply will incur cloud spend. Pass --i-accept-cloud-spend to proceed.")
 			os.Exit(4)
 		}
-		
+
 		stat, _ := os.Stdin.Stat()
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
 			ui.Warn("nself infra apply requires a TTY to confirm spend.")
@@ -35,8 +35,8 @@ func init() {
 			return fmt.Errorf("--provider is required (hetzner)")
 		}
 		if providerStr == "aws" || providerStr == "gcp" || providerStr == "azure" || providerStr == "do" || providerStr == "linode" {
-		    fmt.Fprintf(os.Stderr, "not shipped (DEF-005)\n")
-		    os.Exit(1)
+			fmt.Fprintf(os.Stderr, "not shipped (DEF-005)\n")
+			os.Exit(1)
 		}
 		if domain == "" {
 			return fmt.Errorf("--domain is required")

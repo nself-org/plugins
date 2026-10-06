@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"github.com/nself-org/nself-infra/internal/infra"
 	"github.com/nself-org/nself-infra/internal/ui"
+	"github.com/spf13/cobra"
 )
 
 var infraValidateCmd = &cobra.Command{
@@ -18,12 +18,12 @@ var infraValidateCmd = &cobra.Command{
 		if providerStr != "hetzner" {
 			return fmt.Errorf("unknown provider %q; supported: hetzner", providerStr)
 		}
-		
+
 		provider := infra.Provider(providerStr)
 		opts := infra.PlanOptions{
 			Provider: provider,
 		}
-		
+
 		applyTerraformTokenEnv()
 		ui.Info(fmt.Sprintf("Validating nSelf infrastructure module on %s...", providerStr))
 		return infra.Validate(cmd.Context(), opts)

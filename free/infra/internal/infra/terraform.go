@@ -8,9 +8,9 @@ package infra
 import (
 	"context"
 	"fmt"
+	"github.com/nself-org/nself-infra"
 	"os"
 	"os/exec"
-	"github.com/nself-org/nself-infra"
 )
 
 // Provider is a cloud provider supported by the Terraform modules.
@@ -101,7 +101,7 @@ func Plan(ctx context.Context, opts PlanOptions) error {
 		)
 	}
 	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
-		cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("infra: terraform plan: %w", err)
@@ -141,7 +141,7 @@ func Apply(ctx context.Context, opts ApplyOptions) error {
 		args = append(args, fmt.Sprintf("-var=%s=%s", k, v))
 	}
 	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
-		cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("infra: terraform apply: %w", err)
@@ -168,7 +168,7 @@ func Destroy(ctx context.Context, provider Provider, domain, modulesDir string, 
 		args = append(args, "-auto-approve")
 	}
 	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
-		cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("infra: terraform destroy: %w", err)
@@ -179,7 +179,7 @@ func Destroy(ctx context.Context, provider Provider, domain, modulesDir string, 
 // tfInit runs terraform init inside the module directory.
 func tfInit(ctx context.Context, tf, dir string) error {
 	cmd := exec.CommandContext(ctx, tf, "-chdir="+dir, "init", "-input=false")
-		cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("infra: terraform init: %w", err)

@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"github.com/nself-org/nself-infra/internal/infra"
 	"github.com/nself-org/nself-infra/internal/ui"
+	"github.com/spf13/cobra"
 )
 
 func init() {
