@@ -195,6 +195,82 @@
         "output": "document",
         "side_effect": "remote",
         "summary": "Discover .ci.yaml manifests and run their stages (pipeline)"
+      },
+      {
+        "flags": [
+          {
+            "name": "github-url",
+            "type": "string",
+            "usage": "Repo or org URL runners register against, e.g. https://github.com/nself-org/cli"
+          },
+          {
+            "default": "[]",
+            "name": "host",
+            "type": "stringSlice",
+            "usage": "SSH target(s) user@host to provision (repeatable). Default: this machine."
+          },
+          {
+            "name": "install-root",
+            "type": "string",
+            "usage": "Base install directory (default: /opt/actions-runner)"
+          },
+          {
+            "default": "1",
+            "name": "instances",
+            "type": "int",
+            "usage": "Number of runner instances to install on this host"
+          },
+          {
+            "default": "[]",
+            "name": "labels",
+            "type": "stringSlice",
+            "usage": "Extra labels appended after self-hosted,Linux,X64"
+          },
+          {
+            "name": "ssh-key",
+            "type": "string",
+            "usage": "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"
+          },
+          {
+            "name": "token",
+            "secret": true,
+            "type": "string",
+            "usage": "GitHub Actions runner registration token (overrides GITHUB_RUNNER_TOKEN env). Never logged."
+          }
+        ],
+        "json": "none",
+        "name": "nodes provision",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Install runner dependencies, user, sudoers, and N runner instances",
+        "surface": "cli-only"
+      },
+      {
+        "flags": [
+          {
+            "default": "[]",
+            "name": "host",
+            "type": "stringSlice",
+            "usage": "SSH target(s) user@host to verify (repeatable). Default: this machine."
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print raw JSON ([]runner.HostReport) instead of the text parity matrix"
+          },
+          {
+            "name": "ssh-key",
+            "type": "string",
+            "usage": "SSH private key path (default: NSELF_DEPLOY_KEY_PATH or ~/.ssh/id_ed25519)"
+          }
+        ],
+        "json": "none",
+        "name": "nodes verify",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Check host(s) against the dependency manifest and report drift",
+        "surface": "cli-only"
       }
     ],
     "summary": "Run the nself-ci gate suite and post a GitHub commit status"
