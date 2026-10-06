@@ -1,0 +1,64 @@
+{
+  "author": "nself",
+  "binaryName": "nself-functions",
+  "category": "utilities",
+  "cliCommands": [
+    {
+      "description": "",
+      "name": "functions"
+    }
+  ],
+  "commands": {
+    "binary": "nself-functions",
+    "command": "functions",
+    "subcommands": [
+      {
+        "name": "deploy",
+        "side_effect": "write"
+      },
+      {
+        "name": "invoke",
+        "side_effect": "write"
+      },
+      {
+        "name": "list",
+        "side_effect": "read"
+      },
+      {
+        "flags": [
+          {
+            "name": "follow",
+            "type": "bool"
+          }
+        ],
+        "name": "logs",
+        "side_effect": "read"
+      },
+      {
+        "name": "delete",
+        "side_effect": "destructive"
+      }
+    ]
+  },
+  "description": "Deploy and manage nself serverless functions",
+  "entryPoint": "cmd/",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.4.12",
+  "name": "functions",
+  "pluginType": "cli",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.4.12"
+  },
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
+  "tier": "free",
+  "version": "1.2.7"
+}

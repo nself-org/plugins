@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0.0",
   "generated_at": "2026-09-21T21:11:03.046357Z",
-  "plugins_count": 130,
+  "plugins_count": 131,
   "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
@@ -3361,6 +3361,37 @@
         "sha256": "f41d96107b4d2ec593dea3e2116b8dc7cf89f0b1c57c0b67161611eda16e1522"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/family-wikitree-1.2.6.tar.gz"
+    },
+    "functions": {
+      "version": "1.2.7",
+      "description": "Deploy and manage nself serverless functions",
+      "category": "development",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.0.0",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/functions/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "functions",
+        "serverless",
+        "deploy",
+        "invoke",
+        "logs"
+      ],
+      "dependencies": [],
+      "name": "functions",
+      "author": "nself",
+      "minNselfVersion": "1.0.0",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/main.go"
+      },
+      "releaseTag": "v1.2.7",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz"
     },
     "functions-v8": {
       "version": "1.2.6",
