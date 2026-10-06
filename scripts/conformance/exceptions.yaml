@@ -58,3 +58,8 @@ exceptions:
     reason: "declares subcommands (init, status, ...) as cliCommands: would ship core-verb binaries"
     owner_ref: P7-PLUG-47
     expires: 2026-12-31
+  - rule: cli-targets
+    plugin: functions
+    reason: "core still registers functions until the break-out ships"
+    owner_ref: P7-SHIP-09
+    expires: 2026-12-31
