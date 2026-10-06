@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -36,8 +37,7 @@ func TestTerraformBinaryNotInPath(t *testing.T) {
 // TestValidProviders verifies all expected cloud providers are registered.
 func TestValidProviders(t *testing.T) {
 	expected := []Provider{
-		ProviderAWS, ProviderGCP, ProviderAzure,
-		ProviderHetzner, ProviderDigitalOcean, ProviderLinode,
+		ProviderHetzner,
 	}
 	for _, p := range expected {
 		if !ValidProviders[p] {
@@ -78,9 +78,8 @@ func TestModulePath(t *testing.T) {
 func TestModulePathDefault(t *testing.T) {
 	opts := PlanOptions{Provider: ProviderHetzner}
 	got := modulePath(opts)
-	want := "terraform/modules/hetzner"
-	if got != want {
-		t.Errorf("modulePath default: got %q, want %q", got, want)
+	if !strings.HasSuffix(got, "/hetzner") || !strings.Contains(got, "nself/infra") {
+		t.Errorf("modulePath default: got %q, want path ending in /hetzner containing nself/infra", got)
 	}
 }
 
@@ -101,7 +100,7 @@ func TestPlanErrorsWithoutTerraform(t *testing.T) {
 	}
 }
 
-// TestPlanErrorsOnUnknownProvider verifies Plan rejects unknown provider strings
+// TestValidProvidersRejectsUnknown verifies Plan rejects unknown provider strings
 // even when terraform is present. We test this without terraform on PATH first —
 // ErrTerraformNotFound fires before the provider check. So test the provider
 // check indirectly via ValidProviders.

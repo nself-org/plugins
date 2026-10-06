@@ -10,7 +10,7 @@
   "category": "infrastructure",
   "cliCommands": [
     {
-      "description": "Provision nSelf infrastructure with Terraform and manage Hetzner Cloud servers",
+      "description": "Provision nSelf infrastructure with OpenTofu/Terraform and manage Hetzner Cloud servers",
       "name": "infra"
     }
   ],
@@ -24,6 +24,20 @@
       {
         "flags": [
           {
+            "name": "provider",
+            "type": "string",
+            "usage": "Cloud provider (hetzner)"
+          }
+        ],
+        "json": "none",
+        "name": "validate",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Validate the Terraform module configuration"
+      },
+      {
+        "flags": [
+          {
             "name": "domain",
             "type": "string",
             "usage": "Domain for the nSelf deployment"
@@ -31,7 +45,7 @@
           {
             "name": "provider",
             "type": "string",
-            "usage": "Cloud provider (aws, gcp, azure, hetzner, do, linode)"
+            "usage": "Cloud provider (hetzner)"
           },
           {
             "name": "state-bucket",
@@ -43,7 +57,7 @@
         "name": "plan",
         "output": "document",
         "side_effect": "read",
-        "summary": "Show the Terraform plan for the given provider"
+        "summary": "Show the OpenTofu/Terraform plan for the given provider"
       },
       {
         "flags": [
@@ -65,9 +79,9 @@
           },
           {
             "default": "false",
-            "name": "force",
+            "name": "i-accept-cloud-spend",
             "type": "bool",
-            "usage": "Bypass the PLANNED gate and run terraform against real infrastructure"
+            "usage": "Accept that this command provisions real cloud resources and incurs cost"
           },
           {
             "name": "location",
@@ -77,7 +91,7 @@
           {
             "name": "provider",
             "type": "string",
-            "usage": "Cloud provider (aws, gcp, azure, hetzner, do, linode)"
+            "usage": "Cloud provider (hetzner)"
           },
           {
             "name": "server-type",
@@ -94,7 +108,7 @@
         "name": "apply",
         "output": "document",
         "side_effect": "remote",
-        "summary": "Provision nSelf infrastructure via Terraform"
+        "summary": "Provision nSelf infrastructure via OpenTofu/Terraform"
       },
       {
         "confirm": {
@@ -117,15 +131,20 @@
           {
             "name": "provider",
             "type": "string",
-            "usage": "Cloud provider (aws, gcp, azure, hetzner, do, linode)"
+            "usage": "Cloud provider (hetzner)"
+          },
+          {
+            "default": "false",
+            "name": "i-accept-cloud-spend",
+            "type": "bool",
+            "usage": "Accept that this command destroys real cloud resources and affects running systems"
           }
         ],
         "json": "none",
         "name": "destroy",
         "output": "document",
         "side_effect": "destructive",
-        "summary": "Destroy nSelf infrastructure",
-        "surface": "cli-only"
+        "summary": "Destroy nSelf infrastructure"
       },
       {
         "flags": [
@@ -328,9 +347,9 @@
         "surface": "cli-only"
       }
     ],
-    "summary": "Provision nSelf infrastructure with Terraform and manage Hetzner Cloud servers"
+    "summary": "Provision nSelf infrastructure with OpenTofu/Terraform and manage Hetzner Cloud servers"
   },
-  "description": "Provision nSelf infrastructure with Terraform: plan, apply and destroy modules for aws, gcp, azure, hetzner, do and linode.",
+  "description": "Provision nSelf infrastructure with OpenTofu/Terraform: plan, apply and destroy modules for hetzner.",
   "entryPoint": "cmd/",
   "envVars": [
     {
@@ -345,7 +364,7 @@
   "licenseType": "free",
   "license_spdx": "MIT",
   "manifest_version": 2,
-  "maturity": "implemented",
+  "maturity": "experimental",
   "minNselfVersion": "1.2.8",
   "multiApp": {
     "supported": false
@@ -368,16 +387,13 @@
   "service": {
     "kind": "cli"
   },
-  "status": "stable",
+  "status": "experimental",
   "tags": [
     "infra",
     "terraform",
     "provisioning",
     "deploy",
     "hetzner",
-    "aws",
-    "gcp",
-    "azure",
     "server",
     "snapshot"
   ],

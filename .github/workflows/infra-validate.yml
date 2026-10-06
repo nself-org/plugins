@@ -1,0 +1,45 @@
+name: "Infra Validate"
+
+on:
+  push:
+    paths:
+      - 'free/infra/**'
+      - '.github/workflows/infra-validate.yml'
+  pull_request:
+    paths:
+      - 'free/infra/**'
+      - '.github/workflows/infra-validate.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: free/infra/modules/hetzner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.1
+
+      - name: Install OpenTofu
+        run: |
+          TOFU_VERSION=$(cat ../.opentofu-version)
+          curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.tar.gz" -o tofu.tar.gz
+          curl -sL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_SHA256SUMS" -o tofu_SHA256SUMS
+          grep "tofu_${TOFU_VERSION}_linux_amd64.tar.gz" tofu_SHA256SUMS > tofu_SHA256SUM
+          sha256sum -c tofu_SHA256SUM
+          tar -xzf tofu.tar.gz tofu
+          sudo mv tofu /usr/local/bin/
+          rm tofu.tar.gz tofu_SHA256SUMS tofu_SHA256SUM
+
+      - name: OpenTofu Format
+        run: tofu fmt -check -recursive
+
+      - name: OpenTofu Init
+        run: tofu init -backend=false
+
+      - name: OpenTofu Validate
+        run: tofu validate
+
+      - name: OpenTofu Test
+        run: tofu test
