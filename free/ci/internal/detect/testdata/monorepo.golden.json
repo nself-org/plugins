@@ -1,0 +1,83 @@
+[
+  {
+    "kind": "lint_tool",
+    "name": "tsc",
+    "path": "package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "lint_tool",
+    "name": "eslint",
+    "path": "packages/web/package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "lockfile",
+    "name": "pnpm",
+    "path": "pnpm-lock.yaml",
+    "confidence": "certain",
+    "sha256": "f0bcde463fa201480015b9caa7db2017d3c1b6ca9c7e133df955038c54333d48"
+  },
+  {
+    "kind": "package_manager",
+    "name": "pnpm",
+    "path": "package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "package_manager",
+    "name": "unknown",
+    "path": "packages/api/package.json",
+    "confidence": "unknown",
+    "reason": "ambiguous or unsupported package manager"
+  },
+  {
+    "kind": "package_manager",
+    "name": "unknown",
+    "path": "packages/web/package.json",
+    "confidence": "unknown",
+    "reason": "ambiguous or unsupported package manager"
+  },
+  {
+    "kind": "stack",
+    "name": "node",
+    "path": "package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "node",
+    "path": "packages/api/package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "node",
+    "path": "packages/web/package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "jest",
+    "path": "packages/api/package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "vitest",
+    "path": "packages/web/package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "workspace_member",
+    "name": "packages/api",
+    "path": "packages/api/package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "workspace_member",
+    "name": "packages/web",
+    "path": "packages/web/package.json",
+    "confidence": "certain"
+  }
+]

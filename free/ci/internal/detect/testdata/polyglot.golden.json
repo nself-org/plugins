@@ -1,0 +1,39 @@
+[
+  {
+    "kind": "container",
+    "name": "dockerfile",
+    "path": "Dockerfile",
+    "confidence": "certain"
+  },
+  {
+    "kind": "lint_tool",
+    "name": "tsc",
+    "path": "package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "package_manager",
+    "name": "unknown",
+    "path": "package.json",
+    "confidence": "unknown",
+    "reason": "ambiguous or unsupported package manager"
+  },
+  {
+    "kind": "stack",
+    "name": "rust",
+    "path": "Cargo.toml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "node",
+    "path": "package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "test_framework",
+    "name": "cargo test",
+    "path": "Cargo.toml",
+    "confidence": "certain"
+  }
+]

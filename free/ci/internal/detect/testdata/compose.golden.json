@@ -1,0 +1,26 @@
+[
+  {
+    "kind": "container",
+    "name": "compose",
+    "path": "compose.yaml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "service",
+    "name": "postgres",
+    "path": "compose.yaml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "service",
+    "name": "valkey",
+    "path": "compose.yaml",
+    "confidence": "certain"
+  },
+  {
+    "kind": "stack",
+    "name": "no_stack",
+    "path": ".",
+    "confidence": "certain"
+  }
+]
