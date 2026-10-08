@@ -94,6 +94,12 @@ func TestCoverageFloor(t *testing.T) {
 	if c.Result != "fail" {
 		t.Fatal(c)
 	}
+	node := model.Check{Result: "pass"}
+	np := PlannedCheck{Def: CheckDef{ID: "node.coverage"}}
+	applyCoverage(&node, "", np, model.PipelineConfig{Checks: map[string]model.CheckDef{"node.coverage": {CoverageFloor: &floor}}}, invocation{output: "TN:\nSF:index.js\nLF:10\nLH:7\nend_of_record\n"})
+	if node.Result != "fail" {
+		t.Fatal(node)
+	}
 }
 
 func TestAdvisoryFindings(t *testing.T) {

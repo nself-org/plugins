@@ -168,7 +168,7 @@ func present(c model.PipelineConfig, key string) bool {
 	}
 	switch field {
 	case "rules":
-		return len(def.Rules) > 0
+		return def.Rules != nil
 	case "required":
 		return def.Required != nil
 	case "coverage_floor":

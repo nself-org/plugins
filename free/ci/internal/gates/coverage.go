@@ -2,8 +2,6 @@ package gates
 
 import (
 	"bufio"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,7 +32,7 @@ func applyCoverage(c *model.Check, root string, p PlannedCheck, cfg model.Pipeli
 		}
 	}
 	if p.Def.ID == "node.coverage" {
-		percent, found = lcov(filepath.Join(root, filepath.FromSlash(p.Workdir), "coverage", "lcov.info"))
+		percent, found = lcov(res.output)
 	}
 	if !found {
 		c.Result = "error"
@@ -48,14 +46,9 @@ func applyCoverage(c *model.Check, root string, p PlannedCheck, cfg model.Pipeli
 	}
 }
 
-func lcov(name string) (float64, bool) {
-	f, err := os.Open(name)
-	if err != nil {
-		return 0, false
-	}
-	defer func() { _ = f.Close() }()
+func lcov(output string) (float64, bool) {
 	var found, hits int
-	s := bufio.NewScanner(f)
+	s := bufio.NewScanner(strings.NewReader(output))
 	for s.Scan() {
 		line := s.Text()
 		if strings.HasPrefix(line, "LF:") {

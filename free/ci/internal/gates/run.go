@@ -47,6 +47,14 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 			return unavailable(c, d.Remediation)
 		}
 	}
+	probeTool := c.Tool
+	if d.ID == "node.coverage" {
+		if runtime.GOOS == "windows" {
+			argv = []string{"cmd", "/C", probeTool + " run test -- --coverage && type coverage\\lcov.info"}
+		} else {
+			argv = []string{"sh", "-c", probeTool + " run test -- --coverage && cat coverage/lcov.info"}
+		}
+	}
 	if d.ID == "secrets.gitleaks" {
 		argv = gitleaksCommand(root)
 	}
@@ -59,7 +67,7 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 	}
 	probe := d.VersionProbe
 	if strings.HasPrefix(d.ID, "node.") {
-		probe = []string{argv[0], "--version"}
+		probe = []string{probeTool, "--version"}
 	}
 	version := r.invoke(ctx, root, probe, ".", 30*time.Second)
 	if version.err == nil && version.exit == 0 {

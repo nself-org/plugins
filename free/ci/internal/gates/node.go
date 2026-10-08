@@ -46,6 +46,11 @@ func nodeCommand(root string, p PlannedCheck, cfg model.PipelineConfig) ([]strin
 	if pm == "" {
 		pm = "npm"
 	}
+	switch pm {
+	case "npm", "pnpm", "yarn", "bun":
+	default:
+		return nil, "unsupported package manager"
+	}
 	if p.Def.ID == "node.coverage" {
 		return []string{pm, "run", "test", "--", "--coverage"}, ""
 	}
