@@ -24,10 +24,22 @@
 package main
 
 import (
+	"fmt"
 	"os"
+
+	"github.com/nself-org/cli/sdk/go/v2/compat"
+	"github.com/nself-org/plugins/free/ci/internal/compatcheck"
 )
 
 func main() {
+	if err := compatcheck.Check(os.Getenv, compatcheck.RequiresNself); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	// compat.V15(P7-CI-30): v1.4 gate dispatch -> v1.5 fabric dispatch.
+	if compat.V15() {
+		os.Exit(runV15(os.Args[1:]))
+	}
 	os.Exit(run(os.Args[1:]))
 }
 

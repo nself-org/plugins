@@ -1,0 +1,47 @@
+{
+  "cache": {
+    "disable": false
+  },
+  "jobs": {
+    "build": {
+      "artifacts": [
+        {
+          "kind": "binary",
+          "path": "out.bin"
+        }
+      ],
+      "cache": {
+        "keys": [
+          "go"
+        ],
+        "paths": [
+          ".cache"
+        ]
+      },
+      "kind": "build",
+      "requires": {
+        "accelerators": [
+          "tpu"
+        ],
+        "cpu": 4,
+        "labels": [
+          "xcode",
+          "arch=arm64"
+        ],
+        "mem_mb": 8192,
+        "tools": [
+          "xcode"
+        ]
+      },
+      "run": [
+        "go",
+        "test",
+        "./..."
+      ],
+      "secrets": [
+        "project/token"
+      ]
+    }
+  },
+  "version": 1
+}

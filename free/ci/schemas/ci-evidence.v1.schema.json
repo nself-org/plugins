@@ -1,0 +1,862 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ci.evidence/v1"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$"
+    },
+    "repo_id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "pipeline": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "default",
+            "named",
+            "drill",
+            "adhoc"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "job": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "attempt": {
+      "type": [
+        "null",
+        "object"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "n"
+      ],
+      "additionalProperties": false
+    },
+    "trigger": {
+      "type": "string",
+      "enum": [
+        "push",
+        "pull_request",
+        "tag",
+        "manual",
+        "schedule",
+        "api",
+        "local"
+      ]
+    },
+    "source_trust": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "collaborator",
+        "internal",
+        "untrusted"
+      ]
+    },
+    "policy_digest": {
+      "type": "string"
+    },
+    "input_digests": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "type": "string"
+        },
+        "lockfiles": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "generated": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "config",
+        "lockfiles",
+        "generated"
+      ],
+      "additionalProperties": false
+    },
+    "worktree_state": {
+      "type": "string",
+      "enum": [
+        "clean",
+        "dirty"
+      ]
+    },
+    "tracked_changes_digest": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "bound",
+            "unbound"
+          ]
+        },
+        "reason": {
+          "type": [
+            "null",
+            "string"
+          ],
+          "enum": [
+            null,
+            "dirty",
+            "sha_mismatch"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "runner": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "isolation": {
+          "type": "string",
+          "enum": [
+            "process",
+            "container",
+            "sandboxed-container",
+            "vm",
+            "ephemeral-vm",
+            "hosted-disposable"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "platform",
+        "isolation"
+      ],
+      "additionalProperties": false
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "coordinator-recorded",
+            "signed-remote",
+            "self-reported"
+          ]
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "timings": {
+      "type": "object",
+      "properties": {
+        "queued_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "finished_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "duration_ms": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "queued_at",
+        "started_at",
+        "finished_at",
+        "duration_ms"
+      ],
+      "additionalProperties": false
+    },
+    "tool_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "tool_version": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "substantive": {
+            "type": "boolean"
+          },
+          "allow_failure": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "skip",
+              "error"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "pipeline.excluded",
+              "selection.no_base",
+              "selection.full_required",
+              "selection.affected",
+              "when.branch",
+              "when.paths",
+              "when.trigger",
+              "when.env_missing",
+              "dep.failed",
+              "fail_fast.cancelled",
+              "unplaceable.platform",
+              "unplaceable.docker",
+              "unplaceable.tool",
+              "unplaceable.service",
+              "unplaceable.label",
+              "unplaceable.resources",
+              "admission.battery",
+              "admission.reservation",
+              "advisory.tool_missing",
+              "advisory.data_offline"
+            ]
+          },
+          "failure_class": {
+            "type": "string",
+            "enum": [
+              "code",
+              "infra",
+              "timeout",
+              "cancelled",
+              "lost"
+            ]
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "excerpt": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "log_ref": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "job_id",
+          "kind",
+          "tool",
+          "tool_version",
+          "required",
+          "substantive",
+          "result",
+          "findings",
+          "excerpt",
+          "log_ref"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "artifacts": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "committed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "size",
+          "committed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "retries": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "class": {
+            "type": "string",
+            "enum": [
+              "code",
+              "infra",
+              "timeout",
+              "cancelled",
+              "lost"
+            ]
+          }
+        },
+        "required": [
+          "job_id",
+          "attempt",
+          "class"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "selection": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "full",
+            "affected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "pipeline.excluded",
+            "selection.no_base",
+            "selection.full_required",
+            "selection.affected",
+            "when.branch",
+            "when.paths",
+            "when.trigger",
+            "when.env_missing",
+            "dep.failed",
+            "fail_fast.cancelled",
+            "unplaceable.platform",
+            "unplaceable.docker",
+            "unplaceable.tool",
+            "unplaceable.service",
+            "unplaceable.label",
+            "unplaceable.resources",
+            "admission.battery",
+            "admission.reservation",
+            "advisory.tool_missing",
+            "advisory.data_offline"
+          ]
+        },
+        "digest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "reason",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "placement_ref": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "error",
+        "cancelled"
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "pass": {
+          "type": "integer"
+        },
+        "fail": {
+          "type": "integer"
+        },
+        "skip": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pass",
+        "fail",
+        "skip",
+        "error",
+        "total"
+      ],
+      "additionalProperties": false
+    },
+    "freshness": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "current",
+            "stale",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "signature": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "coordinator-recorded",
+            "runner-ed25519"
+          ]
+        },
+        "key_id": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "value": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "provider_attestation": {
+      "type": [
+        "null",
+        "object"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "run_attempt": {
+          "type": "integer"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "workflow_path": {
+          "type": "string"
+        },
+        "workflow_sha": {
+          "type": "string"
+        },
+        "workflow_digest": {
+          "type": "string"
+        },
+        "template_version": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "artifact_id": {
+          "type": "string"
+        },
+        "artifact_sha256": {
+          "type": "string"
+        },
+        "verified_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "run_id",
+        "run_attempt",
+        "ref",
+        "workflow_path",
+        "workflow_sha",
+        "workflow_digest",
+        "template_version",
+        "nonce",
+        "artifact_id",
+        "artifact_sha256",
+        "verified_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://nself.org/schemas/ci-evidence.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "schema",
+    "revision",
+    "repo_id",
+    "run_id",
+    "pipeline",
+    "trigger",
+    "source_trust",
+    "policy_digest",
+    "input_digests",
+    "worktree_state",
+    "tracked_changes_digest",
+    "binding",
+    "runner",
+    "producer",
+    "timings",
+    "tool_versions",
+    "checks",
+    "artifacts",
+    "retries",
+    "selection",
+    "result",
+    "counts",
+    "freshness",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "worktree_state": {
+            "const": "dirty"
+          }
+        },
+        "required": [
+          "worktree_state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "binding": {
+            "properties": {
+              "state": {
+                "const": "unbound"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "binding": {
+            "properties": {
+              "state": {
+                "const": "unbound"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          }
+        },
+        "required": [
+          "binding"
+        ]
+      },
+      "then": {
+        "properties": {
+          "freshness": {
+            "properties": {
+              "state": {
+                "not": {
+                  "const": "current"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "worktree_state": {
+            "const": "clean"
+          }
+        },
+        "required": [
+          "worktree_state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tracked_changes_digest": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "result": {
+            "const": "pass"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "contains": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "pass",
+                    "fail"
+                  ]
+                },
+                "substantive": {
+                  "const": true
+                }
+              },
+              "required": [
+                "substantive",
+                "result"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checks": {
+            "contains": {
+              "properties": {
+                "required": {
+                  "const": true
+                }
+              },
+              "required": [
+                "required"
+              ],
+              "anyOf": [
+                {
+                  "properties": {
+                    "result": {
+                      "enum": [
+                        "skip",
+                        "error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ]
+                },
+                {
+                  "properties": {
+                    "result": {
+                      "const": "fail"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "not": {
+                    "properties": {
+                      "allow_failure": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "allow_failure"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "not": {
+              "const": "pass"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

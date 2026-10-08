@@ -1,0 +1,62 @@
+{
+  "cache": {
+    "disable": false
+  },
+  "jobs": {
+    "build": {
+      "artifacts": [
+        {
+          "kind": "binary",
+          "path": "out.bin"
+        }
+      ],
+      "cache": {
+        "keys": [
+          "go"
+        ],
+        "paths": [
+          ".cache"
+        ]
+      },
+      "kind": "build",
+      "requires": {
+        "accelerators": [
+          "gpu"
+        ],
+        "cpu": 4,
+        "labels": [
+          "label0",
+          "label1",
+          "label2",
+          "label3",
+          "label4",
+          "label5",
+          "label6",
+          "label7",
+          "label8",
+          "label9",
+          "label10",
+          "label11",
+          "label12",
+          "label13",
+          "label14",
+          "label15",
+          "label16"
+        ],
+        "mem_mb": 8192,
+        "tools": [
+          "xcode"
+        ]
+      },
+      "run": [
+        "go",
+        "test",
+        "./..."
+      ],
+      "secrets": [
+        "project/token"
+      ]
+    }
+  },
+  "version": 1
+}

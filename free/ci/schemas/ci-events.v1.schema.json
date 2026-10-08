@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ci.events/v1"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ts": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "planned",
+        "leased",
+        "started",
+        "log",
+        "check_result",
+        "retrying",
+        "cancelled",
+        "needs_operator",
+        "finished",
+        "evidence"
+      ]
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "pipeline_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "attempt_id": {
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$id": "https://nself.org/schemas/ci-events.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "schema",
+    "seq",
+    "ts",
+    "type",
+    "run_id",
+    "pipeline_id",
+    "data"
+  ],
+  "additionalProperties": false
+}
