@@ -49,6 +49,11 @@ var dynamicProgram = map[string]bool{
 	// a call site; nothing under free/ci calls unix.Exec.
 	"vendor/golang.org/x/sys/unix/syscall_unix.go:Exec":      true,
 	"vendor/golang.org/x/sys/unix/syscall_zos_s390x.go:Exec": true,
+	// Vendored SDK test harness and x/tools use Docker or Go tool commands.
+	"vendor/github.com/nself-org/cli/sdk/go/v2/simharness/docker.go:":                true,
+	"vendor/golang.org/x/tools/go/packages/external.go:findExternalDriver":           true,
+	"vendor/golang.org/x/tools/internal/gcimporter/exportdata.go:lookupGorootExport": true,
+	"vendor/golang.org/x/tools/internal/gocommand/invoke.go:handleHangingGoCommand":  true,
 }
 
 type parsed struct {
@@ -226,7 +231,7 @@ func inspectFile(f *ast.File, rel string, consts map[string]string) (funnel int,
 				return true
 			}
 			if e, ok := n.(ast.Expr); ok && !called[n] {
-				if _, ok := starter(e); ok {
+				if _, ok := starter(e); ok && !dynamicProgram[rel+":"+fn] {
 					bad = append(bad, rel+": process start used as a function value")
 				}
 			}
@@ -276,6 +281,36 @@ func TestSingleSSHExecSite(t *testing.T) {
 		}
 		if len(bad) != 0 {
 			t.Errorf("ssh/scp exec outside the funnel: %v", bad)
+		}
+	})
+	t.Run("docker harness program", func(t *testing.T) {
+		path := filepath.Join(root, "vendor/github.com/nself-org/cli/sdk/go/v2/simharness/docker.go")
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		calls := 0
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			name, ok := call.Fun.(*ast.Ident)
+			if !ok || name.Name != "commandContext" {
+				return true
+			}
+			calls++
+			program := ""
+			if len(call.Args) >= 2 {
+				program, _ = strValue(call.Args[1], nil)
+			}
+			if program != "docker" {
+				t.Errorf("simharness commandContext must run docker")
+			}
+			return true
+		})
+		if calls != 1 {
+			t.Errorf("simharness commandContext calls = %d, want 1", calls)
 		}
 	})
 
