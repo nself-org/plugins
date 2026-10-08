@@ -1,0 +1,15 @@
+[
+  {
+    "kind": "package_manager",
+    "name": "unknown",
+    "path": "package.json",
+    "confidence": "unknown",
+    "reason": "ambiguous or unsupported package manager"
+  },
+  {
+    "kind": "stack",
+    "name": "node",
+    "path": "package.json",
+    "confidence": "certain"
+  }
+]

@@ -1,0 +1,4 @@
+name: polyglot
+dependencies:
+  flutter:
+    sdk: flutter
