@@ -312,6 +312,21 @@ func TestSingleSSHExecSite(t *testing.T) {
 		if calls != 1 {
 			t.Errorf("simharness commandContext calls = %d, want 1", calls)
 		}
+		// The file-level exemption covers package-level process-start values, so
+		// exactly one may exist: commandContext.
+		if got := packageLevelStarters(file); len(got) != 1 || got[0] != "commandContext" {
+			t.Errorf("simharness package-level process starters = %v, want [commandContext]", got)
+		}
+	})
+	t.Run("package-level starter count catches a second alias", func(t *testing.T) {
+		src := "package x\nimport \"os/exec\"\nvar commandContext = exec.CommandContext\nvar second = exec.Command\n"
+		file, err := parser.ParseFile(token.NewFileSet(), "docker.go", src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := packageLevelStarters(file); len(got) != 2 {
+			t.Errorf("packageLevelStarters = %v, want two names", got)
+		}
 	})
 
 	write := func(t *testing.T, dir, rel, src string) {
@@ -373,4 +388,31 @@ func TestSingleSSHExecSite(t *testing.T) {
 			t.Fatalf("funnel = %d, want 2", funnel)
 		}
 	})
+}
+
+// packageLevelStarters returns the names of package-level variables in f whose
+// value is an os/exec process start (exec.Command or exec.CommandContext).
+func packageLevelStarters(f *ast.File) []string {
+	execN, _, _, _ := importNames(f)
+	var names []string
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.VAR {
+			continue
+		}
+		for _, sp := range gd.Specs {
+			vs := sp.(*ast.ValueSpec)
+			for i, v := range vs.Values {
+				sel, ok := v.(*ast.SelectorExpr)
+				if !ok || i >= len(vs.Names) {
+					continue
+				}
+				id, ok := sel.X.(*ast.Ident)
+				if ok && execN != "" && id.Name == execN && (sel.Sel.Name == "Command" || sel.Sel.Name == "CommandContext") {
+					names = append(names, vs.Names[i].Name)
+				}
+			}
+		}
+	}
+	return names
 }
