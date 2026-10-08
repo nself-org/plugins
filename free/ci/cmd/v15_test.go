@@ -10,7 +10,7 @@ func TestV15OnlyFixture(t *testing.T) {
 	const key = "run"
 	old := subcommands[key]
 	subcommands[key] = func([]string) int { return 14 }
-	v15Subcommands[key] = subcommandEntry{Handler: func([]string) int { return 15 }, V15Only: true}
+	registerV15(key, subcommandEntry{Handler: func([]string) int { return 15 }, V15Only: true})
 	defer func() { delete(v15Subcommands, key); subcommands[key] = old }()
 	t.Setenv("NSELF_V15", "1")
 	if !compat.V15() {
