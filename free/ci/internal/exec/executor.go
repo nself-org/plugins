@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -39,18 +40,29 @@ type AttemptResult struct {
 
 // Executor runs each local job through one process or Docker funnel.
 type Executor struct {
-	Env       EnvPolicy
-	Redactor  Redactor
-	Secrets   SecretSource
-	Isolation Isolator
-	Stale     StaleChecker
-	Grace     time.Duration
+	Env      EnvPolicy
+	Redactor Redactor
+	// NewRedactor returns fresh streaming state for each concurrent attempt.
+	NewRedactor func() Redactor
+	Secrets     SecretSource
+	Isolation   Isolator
+	Stale       StaleChecker
+	Grace       time.Duration
+	redactorMu  sync.Mutex
 }
 
 // Run confines a job to a fresh private workspace and removes it on every exit.
 func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
-	local := *e
+	if e.NewRedactor == nil && e.Redactor != nil {
+		// Legacy direct hooks are serialized because their state may span chunks.
+		e.redactorMu.Lock()
+		defer e.redactorMu.Unlock()
+	}
+	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
 	e = &local
+	if e.NewRedactor != nil {
+		e.Redactor = e.NewRedactor()
+	}
 	result.Attempt = model.Attempt{ID: s.AttemptID, State: "failed"}
 	result.Started = time.Now()
 	defer func() { result.Finished = time.Now() }()
@@ -111,7 +123,13 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		result.Err = err
 		return
 	}
-	defer func() { _ = os.RemoveAll(workspace) }()
+	defer func() {
+		if err := os.RemoveAll(workspace); err != nil {
+			result.Err = coded("E610", "workspace cleanup failed: "+err.Error())
+			result.Attempt.State = "failed"
+			result.Attempt.FailureClass = "infra"
+		}
+	}()
 	if s.SourceDir != "" {
 		if err := copyTree(s.SourceDir, workspace); err != nil {
 			result.Err = err

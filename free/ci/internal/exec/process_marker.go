@@ -69,30 +69,46 @@ func (e *Executor) sweepProcesses(ctx context.Context, home, current string) err
 		if !safeID.MatchString(attempt) {
 			continue
 		}
-		data, err := os.ReadFile(markerPath(home, attempt))
-		if err != nil {
+		if err := e.sweepProcessMarker(ctx, home, current, attempt); err != nil {
 			return err
 		}
-		var marker processMarker
-		if json.Unmarshal(data, &marker) != nil || !safeID.MatchString(marker.Coordinator) || marker.PID <= 0 {
-			continue
+	}
+	return nil
+}
+
+func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attempt string) error {
+	data, err := os.ReadFile(markerPath(home, attempt))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var marker processMarker
+	if json.Unmarshal(data, &marker) != nil || !safeID.MatchString(marker.Coordinator) || marker.PID <= 0 {
+		return nil
+	}
+	if marker.Coordinator == current {
+		return nil
+	}
+	stale, err := e.Stale.Stale(ctx, marker.Coordinator)
+	if err != nil {
+		return err
+	}
+	if !stale {
+		return nil
+	}
+	identity, err := processIdentity(marker.PID)
+	if groupAlive(marker.PID) {
+		if err != nil || identity == "" {
+			// The leader exited; retain the marker for a later verified sweep.
+			return nil
 		}
-		if marker.Coordinator == current {
-			continue
-		}
-		stale, err := e.Stale.Stale(ctx, marker.Coordinator)
-		if err != nil {
-			return err
-		}
-		if !stale {
-			continue
-		}
-		identity, err := processIdentity(marker.PID)
-		if err == nil && identity == marker.Identity && groupAlive(marker.PID) {
+		if identity == marker.Identity {
 			_ = killPID(marker.PID)
 		}
-		removeProcessMarker(home, attempt)
-		_ = os.RemoveAll(filepath.Join(home, "work", attempt))
 	}
+	removeProcessMarker(home, attempt)
+	_ = os.RemoveAll(filepath.Join(home, "work", attempt))
 	return nil
 }

@@ -4,9 +4,12 @@ package exec
 
 import (
 	"context"
+	"os"
 	osexec "os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -108,5 +111,59 @@ func TestTimeoutGrandchildren(t *testing.T) {
 	}
 	if groupAlive(pid) {
 		t.Fatalf("timed out process group %d survived", pid)
+	}
+}
+
+func TestVanishedProcessMarkerIsSuccess(t *testing.T) {
+	e := &Executor{Stale: staleChecker{"old": true}}
+	if err := e.sweepProcessMarker(context.Background(), t.TempDir(), "current", "vanished"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExitedLeaderKeepsLiveGroupMarker(t *testing.T) {
+	home := t.TempDir()
+	cmd := osexec.Command("sh", "-c", "sleep 0.2; sleep 30 &")
+	if err := prepareProcess(cmd); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := cmd.Process.Pid
+	defer killGroup(pid)
+	if err := writeProcessMarker(home, "orphan", "old", pid); err != nil {
+		t.Fatal(err)
+	}
+	_ = cmd.Wait()
+	if !groupAlive(pid) {
+		t.Fatal("shell's child did not retain its process group")
+	}
+	e := &Executor{Stale: staleChecker{"old": true}}
+	if err := e.sweepProcessMarker(context.Background(), home, "current", "orphan"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "processes", "orphan.json")); err != nil {
+		t.Fatalf("lost live group marker: %v", err)
+	}
+}
+
+func TestDetachedGrandchildCancellationBound(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var child int
+	start := time.Now()
+	script := "import os,time; p=os.fork(); (os.setsid(),time.sleep(30),os._exit(0)) if p==0 else (print(p,flush=True),time.sleep(30))"
+	r := (&Executor{Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "detached", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", script}, Output: func(p []byte) {
+		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
+			child = n
+			cancel()
+		}
+	}})
+	if child > 0 {
+		defer syscall.Kill(child, syscall.SIGKILL)
+	}
+	if child <= 0 || r.Attempt.FailureClass != "cancelled" || time.Since(start) > 2100*time.Millisecond {
+		t.Fatalf("detached run=%+v child=%d elapsed=%s", r, child, time.Since(start))
 	}
 }

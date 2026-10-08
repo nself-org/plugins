@@ -2,6 +2,7 @@ package exec
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,5 +93,48 @@ func TestTimeout(t *testing.T) {
 	r := e.Run(context.Background(), JobSpec{AttemptID: "timeout", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 50 * time.Millisecond, Command: []string{"sh", "-c", "sleep 30"}})
 	if r.Attempt.FailureClass != "timeout" {
 		t.Fatalf("timeout: %+v", r)
+	}
+}
+
+func TestForegroundLowMemoryGuaranteedSlot(t *testing.T) {
+	d := Admit(model.Job{}, Foreground, Capacity{CPUs: 2, MemoryMB: 2048, FreeMemoryMB: 128, Interactive: true}, AdmissionPolicy{})
+	if !d.Allowed || d.Slots != 1 {
+		t.Fatalf("foreground slot lost: %+v", d)
+	}
+}
+
+func TestPerRunRedactorFactory(t *testing.T) {
+	var mu sync.Mutex
+	count := 0
+	e := &Executor{NewRedactor: func() Redactor { mu.Lock(); count++; mu.Unlock(); return &splitRedactor{} }}
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			var out []byte
+			r := e.Run(context.Background(), JobSpec{AttemptID: fmt.Sprintf("factory-%d", i), CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"sh", "-c", "printf sec; sleep .1; printf ret"}, Output: func(p []byte) { out = append(out, p...) }})
+			if r.Err != nil || strings.Contains(string(out), "secret") || !strings.Contains(string(out), "[redacted]") {
+				t.Errorf("run=%+v output=%q", r, out)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if count != 2 {
+		t.Fatalf("redactors=%d", count)
+	}
+}
+
+func TestWorkspaceCleanupFailureIsInfra(t *testing.T) {
+	home := t.TempDir()
+	workspace := filepath.Join(home, "work", "cleanup")
+	r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "cleanup", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "mkdir trapped; echo secret > trapped/file; chmod 000 trapped"}})
+	if _, err := os.Stat(workspace); err == nil {
+		defer func() { _ = os.Chmod(filepath.Join(workspace, "trapped"), 0700); _ = os.RemoveAll(workspace) }()
+		if r.Err == nil || r.Attempt.FailureClass != "infra" || r.Attempt.State == "passed" {
+			t.Fatalf("cleanup silently passed: %+v", r)
+		}
+	} else if r.Err != nil {
+		t.Fatalf("cleanup succeeded but run failed: %+v", r)
 	}
 }

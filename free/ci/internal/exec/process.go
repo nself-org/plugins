@@ -84,7 +84,7 @@ func (e *Executor) runCommand(ctx context.Context, argv []string, dir string, en
 	case runErr = <-wait:
 	case <-ctx.Done():
 		if onCancel != nil {
-			onCancel()
+			go onCancel()
 		}
 		_ = terminateGroup(cmd.Process.Pid)
 		timer := time.NewTimer(e.Grace)
@@ -92,12 +92,18 @@ func (e *Executor) runCommand(ctx context.Context, argv []string, dir string, en
 		case runErr = <-wait:
 		case <-timer.C:
 			_ = killGroup(cmd.Process.Pid)
-			runErr = <-wait
+			select {
+			case runErr = <-wait:
+			case <-time.After(2 * time.Second):
+				runErr = ctx.Err()
+			}
 		}
 		timer.Stop()
 	}
-	// Children can keep the pipe open after the leader exits. Reap the group.
+	// A descendant may create a new session and retain the output pipe. Closing
+	// our read end bounds Run; a fully detached daemon cannot be reached by PGID.
 	_ = killGroup(cmd.Process.Pid)
+	_ = reader.Close()
 	wg.Wait()
 	if tail := e.Redactor.Flush(); len(tail) > 0 && sink != nil {
 		sink(tail)

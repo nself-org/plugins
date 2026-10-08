@@ -70,7 +70,7 @@ func Admit(job model.Job, mode Mode, capacity Capacity, policy AdmissionPolicy) 
 		freeMB = capacity.MemoryMB
 	}
 	freeMB -= capacity.MemoryMB * d.ReserveMemoryPercent / 100
-	if freeMB < 256 {
+	if freeMB < 256 && mode != Foreground {
 		d.Reason = "admission.reservation"
 		return d
 	}
@@ -83,7 +83,7 @@ func Admit(job model.Job, mode Mode, capacity Capacity, policy AdmissionPolicy) 
 		return d
 	}
 	d.Slots = available / need
-	if job.Requirements != nil && job.Requirements.MemMB > 0 {
+	if job.Requirements != nil && job.Requirements.MemMB > 0 && mode != Foreground {
 		memorySlots := freeMB / job.Requirements.MemMB
 		if memorySlots < d.Slots {
 			d.Slots = memorySlots

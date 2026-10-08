@@ -55,9 +55,17 @@ func (e *Executor) sweep(ctx context.Context, current, home string) error {
 		if !stale {
 			continue
 		}
-		if err := osexec.CommandContext(ctx, "docker", "rm", "-f", parts[0]).Run(); err != nil {
+		if err := removeStaleContainer(ctx, parts[0]); err != nil {
 			return coded("E613", "docker orphan removal failed")
 		}
 	}
 	return nil
+}
+
+func removeStaleContainer(ctx context.Context, id string) error {
+	out, err := osexec.CommandContext(ctx, "docker", "rm", "-f", id).CombinedOutput()
+	if err != nil && strings.Contains(strings.ToLower(string(out)), "no such container") {
+		return nil
+	}
+	return err
 }
