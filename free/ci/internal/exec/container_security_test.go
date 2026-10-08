@@ -23,10 +23,16 @@ func fakeDocker(t *testing.T, body string) string {
 }
 
 func TestContainerRejectsOptionShapedImage(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "invoked")
+	fakeDocker(t, fmt.Sprintf("touch %q\nexit 0\n", marker))
 	for _, image := range []string{"--privileged", "--pid=host", "bad image", "../evil"} {
 		r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "image", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: image}}, Command: []string{"true"}})
 		if r.Err == nil {
 			t.Fatalf("accepted image %q", image)
+		}
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("docker invoked for invalid image %q", image)
 		}
 	}
 }
