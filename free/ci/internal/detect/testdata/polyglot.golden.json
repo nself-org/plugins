@@ -18,12 +18,6 @@
     "confidence": "certain"
   },
   {
-    "kind": "stack",
-    "name": "flutter",
-    "path": "pubspec.yaml",
-    "confidence": "certain"
-  },
-  {
     "kind": "test_framework",
     "name": "cargo test",
     "path": "Cargo.toml",
@@ -33,12 +27,6 @@
     "kind": "test_framework",
     "name": "go test",
     "path": "go.mod",
-    "confidence": "certain"
-  },
-  {
-    "kind": "test_framework",
-    "name": "flutter test",
-    "path": "pubspec.yaml",
     "confidence": "certain"
   }
 ]
