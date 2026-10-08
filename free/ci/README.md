@@ -122,10 +122,10 @@ See the project's CI-LOCAL.md for the exact `gh api` command to configure branch
 
 ## Sentry-box operational scripts
 
-These scripts live in `scripts/` and are deployed to `/opt/nself-ops/bin/` on each sentry box. Copy and make executable once:
+These scripts live in the repo-root `.github/scripts/ops/` (not shipped in the ci tarball) and are deployed to `/opt/nself-ops/bin/` on each sentry box. Copy and make executable once:
 
 ```bash
-cp scripts/db-watchdog.sh scripts/disk-prune.sh /opt/nself-ops/bin/
+cp .github/scripts/ops/db-watchdog.sh .github/scripts/ops/disk-prune.sh /opt/nself-ops/bin/
 chmod +x /opt/nself-ops/bin/db-watchdog.sh /opt/nself-ops/bin/disk-prune.sh
 ```
 

@@ -12,7 +12,7 @@ they run **different copies** of this script:
 | Launcher | Copy executed | Interval |
 |---|---|---|
 | Cascade daemon (`cascaded`), config `~/.cascade/nsentry-sync.yaml`, one `ci` stream per project (nself, unyeco, ummeco, acamarata) | `~/.cascade/nsentry/scripts/gh-ci-failures-to-reports.sh`, **rewritten from a string embedded in the daemon binary at every daemon start** (`include_str!` of `cascade-v1/crates/cascade-daemon/assets/nsentry/gh-ci-failures-to-reports.sh`) | 900 s |
-| launchd `com.acamarata.ghci-bridge` via `~/bin/acamarata-stopgap/acamarata-ghci-bridge.sh` (acamarata only) | this repo's working-tree file, `plugins/free/ci/scripts/gh-ci-failures-to-reports.sh`, directly | 300 s |
+| launchd `com.acamarata.ghci-bridge` via `~/bin/acamarata-stopgap/acamarata-ghci-bridge.sh` (acamarata only) | this repo's working-tree file, `plugins/.github/scripts/ops/gh-ci-failures-to-reports.sh`, directly | 300 s |
 
 Both write to the same project inbox and share its `.gh-seen`, so they dedup
 against each other. Output goes straight to `.claude/inbox`; rsync only carries
@@ -31,7 +31,7 @@ gap, not by design.
 
 ```bash
 diff ~/.cascade/nsentry/scripts/gh-ci-failures-to-reports.sh \
-     plugins/free/ci/scripts/gh-ci-failures-to-reports.sh
+     plugins/.github/scripts/ops/gh-ci-failures-to-reports.sh
 ```
 
 A report written by the daemon copy currently has no `jobs_failed` /
