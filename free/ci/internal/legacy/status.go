@@ -8,7 +8,7 @@
 // Outputs: error
 // Constraints: Requires gh CLI with repo scope. Never embeds tokens.
 // SPORT: PLUGINS-CI-002
-package internal
+package legacy
 
 import (
 	"bytes"

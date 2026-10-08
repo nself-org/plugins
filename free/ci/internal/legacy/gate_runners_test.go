@@ -8,7 +8,7 @@
 // repo cannot be a required status check, which is exactly what nself ci exists to be.
 //
 // This package had no tests, so nothing caught it.
-package internal
+package legacy
 
 import (
 	"os"

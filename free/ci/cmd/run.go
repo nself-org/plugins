@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal"
+	"github.com/nself-org/plugins/free/ci/internal/legacy"
 )
 
 func init() {
@@ -55,7 +55,7 @@ func runPipelineCmd(rawArgs []string) int {
 	}
 	fmt.Println(strings.Repeat("─", 60))
 
-	gates, err := internal.DiscoverAndRunPipeline(searchRoot, gatewayBase, *timeout, *verbose)
+	gates, err := legacy.DiscoverAndRunPipeline(searchRoot, gatewayBase, *timeout, *verbose)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
@@ -73,7 +73,7 @@ func runPipelineCmd(rawArgs []string) int {
 }
 
 // printPipelineResults prints a gate table and returns true if all passed.
-func printPipelineResults(gates []internal.GateResult) bool {
+func printPipelineResults(gates []legacy.GateResult) bool {
 	allPassed := true
 	for _, g := range gates {
 		mark := "PASS"

@@ -1,4 +1,4 @@
-package internal
+package legacy
 
 // Package internal — gate_runners_node.go
 //

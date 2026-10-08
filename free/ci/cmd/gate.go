@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal"
+	"github.com/nself-org/plugins/free/ci/internal/legacy"
 )
 
 // gateCmd implements "nself-ci [flags] [repo-root]" and returns the exit code.
@@ -42,7 +42,7 @@ func runGate(o gateOpts) int {
 		return 1
 	}
 
-	cfg := internal.Config{
+	cfg := legacy.Config{
 		RepoRoot:        o.repoRoot,
 		SkipGitleaks:    o.skipGitleaks,
 		Verbose:         o.verbose,
@@ -64,7 +64,7 @@ func runGate(o gateOpts) int {
 		if rc != 0 {
 			return rc
 		}
-		_ = internal.PostCommitStatus(internal.StatusConfig{
+		_ = legacy.PostCommitStatus(legacy.StatusConfig{
 			Owner:       resolvedOwner,
 			Repo:        resolvedRepo,
 			SHA:         resolvedSHA,
@@ -73,10 +73,10 @@ func runGate(o gateOpts) int {
 		})
 	}
 
-	result, err := internal.Run(cfg)
+	result, err := legacy.Run(cfg)
 	if err != nil {
 		if post {
-			_ = internal.PostCommitStatus(internal.StatusConfig{
+			_ = legacy.PostCommitStatus(legacy.StatusConfig{
 				Owner:       resolvedOwner,
 				Repo:        resolvedRepo,
 				SHA:         resolvedSHA,
@@ -95,7 +95,7 @@ func runGate(o gateOpts) int {
 		if !result.Passed {
 			state = "failure"
 		}
-		if err := internal.PostCommitStatus(internal.StatusConfig{
+		if err := legacy.PostCommitStatus(legacy.StatusConfig{
 			Owner:       resolvedOwner,
 			Repo:        resolvedRepo,
 			SHA:         resolvedSHA,
@@ -120,7 +120,7 @@ func runGate(o gateOpts) int {
 func resolveStatusTarget(o gateOpts, sha, owner, repo string) (string, string, string, int) {
 	if sha == "" {
 		var err error
-		sha, err = internal.HeadSHA(o.repoRoot)
+		sha, err = legacy.HeadSHA(o.repoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: cannot resolve HEAD SHA: %v\n", err)
 			fmt.Fprintf(os.Stderr, "hint: pass --sha <sha> or use --no-status / --check\n")
@@ -128,7 +128,7 @@ func resolveStatusTarget(o gateOpts, sha, owner, repo string) (string, string, s
 		}
 	}
 	if owner == "" || repo == "" {
-		ro, rr, err := internal.RepoOwnerName(o.repoRoot)
+		ro, rr, err := legacy.RepoOwnerName(o.repoRoot)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: cannot resolve GitHub remote: %v\n", err)
 			fmt.Fprintf(os.Stderr, "hint: pass --owner and --repo, or use --no-status / --check\n")
@@ -145,7 +145,7 @@ func resolveStatusTarget(o gateOpts, sha, owner, repo string) (string, string, s
 }
 
 // printResults prints a human-readable gate summary table.
-func printResults(r *internal.Result) {
+func printResults(r *legacy.Result) {
 	fmt.Printf("\nnself-ci gate results — %s\n", r.RepoRoot)
 	fmt.Printf("Stacks: %s\n", strings.Join(r.Stack, ", "))
 	fmt.Println(strings.Repeat("─", 60))

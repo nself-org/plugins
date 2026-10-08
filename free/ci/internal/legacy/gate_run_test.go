@@ -14,7 +14,7 @@
 // gates that actually verified something (Substantive && !Skipped) and must
 // refuse to report an unqualified pass when that count is zero, however many
 // non-substantive gates ran alongside it.
-package internal
+package legacy
 
 import (
 	"os"

@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nself-org/plugins/free/ci/internal"
+	"github.com/nself-org/plugins/free/ci/internal/legacy"
 )
 
 // TestStackDetection_Go verifies that a directory with go.mod is detected as a Go repo.
@@ -25,13 +25,13 @@ func TestStackDetection_Go(t *testing.T) {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	cfg := internal.Config{
+	cfg := legacy.Config{
 		RepoRoot:     dir,
 		SkipGitleaks: true, // gitleaks not required for this test
 		StepTimeout:  5,
 	}
 
-	result, err := internal.Run(cfg)
+	result, err := legacy.Run(cfg)
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -54,13 +54,13 @@ func TestStackDetection_Node(t *testing.T) {
 		t.Fatalf("write package.json: %v", err)
 	}
 
-	cfg := internal.Config{
+	cfg := legacy.Config{
 		RepoRoot:     dir,
 		SkipGitleaks: true,
 		StepTimeout:  5,
 	}
 
-	result, err := internal.Run(cfg)
+	result, err := legacy.Run(cfg)
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
@@ -83,13 +83,13 @@ func TestGitleaksSkipped(t *testing.T) {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	cfg := internal.Config{
+	cfg := legacy.Config{
 		RepoRoot:     dir,
 		SkipGitleaks: true,
 		StepTimeout:  5,
 	}
 
-	result, err := internal.Run(cfg)
+	result, err := legacy.Run(cfg)
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
