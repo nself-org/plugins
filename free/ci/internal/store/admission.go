@@ -67,7 +67,7 @@ func (s *Store) CreateAttempt(ctx context.Context, a AttemptRow, keyDigest strin
 					return coded("E609", "at-most-once job needs operator decision")
 				}
 				var approvals int
-				err = tx.QueryRowContext(ctx, "SELECT count(*) FROM audit WHERE action='operator-retry' AND target=?", a.JobID).Scan(&approvals)
+				err = tx.QueryRowContext(ctx, "SELECT count(*) FROM audit WHERE action='operator-retry' AND target=?", previousID).Scan(&approvals)
 				if err != nil {
 					return err
 				}
@@ -104,8 +104,17 @@ func (s *Store) CreateAttempt(ctx context.Context, a AttemptRow, keyDigest strin
 	})
 }
 
-func (s *Store) OperatorRetry(ctx context.Context, actor, jobID, reason string) error {
-	return s.AppendAudit(ctx, actor, "operator-retry", jobID, reason)
+func (s *Store) OperatorRetry(ctx context.Context, actor, attemptID, reason string) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		var state string
+		if err := tx.QueryRowContext(ctx, "SELECT state FROM attempt WHERE id=?", attemptID).Scan(&state); err != nil {
+			return err
+		}
+		if state != "needs-operator" {
+			return coded("E609", "attempt does not need an operator decision")
+		}
+		return s.appendAudit(ctx, tx, actor, "operator-retry", attemptID, reason)
+	})
 }
 
 type Demand struct {

@@ -243,11 +243,22 @@ func TestAtMostOnceNeedsOperator(t *testing.T) {
 	if err := s.CreateAttempt(ctx, AttemptRow{ID: "b", JobID: "j", N: 2}, "new-digest"); !codeIs(err, "E609") {
 		t.Fatalf("retry without audit: %v", err)
 	}
-	if err := s.OperatorRetry(ctx, "operator", "j", "approved"); err != nil {
+	if err := s.OperatorRetry(ctx, "operator", "a", "approved"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.CreateAttempt(ctx, AttemptRow{ID: "b", JobID: "j", N: 2}, "new-digest"); err != nil {
 		t.Fatal(err)
+	}
+	for _, step := range []struct {
+		from, to model.JobState
+		epoch    int64
+	}{{"queued", "leased", 0}, {"leased", "lost", 1}, {"lost", "needs-operator", 2}} {
+		if err := s.Transition(ctx, "b", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.CreateAttempt(ctx, AttemptRow{ID: "c", JobID: "j", N: 3}, "third-digest"); !codeIs(err, "E609") {
+		t.Fatalf("old approval reused: %v", err)
 	}
 }
 
