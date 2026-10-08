@@ -43,6 +43,7 @@ var dynamicProgram = map[string]bool{
 	"internal/legacy/gate_runners.go:runStep":   true,
 	"internal/serve/serve_job_report.go:runCmd": true,
 	"internal/serve/serve_job.go:runGateDirect": true,
+	"internal/exec/process.go:runCommand":       true,
 	// golang.org/x/sys/unix (vendored for the pure-Go SQLite driver, P7-CI-30):
 	// the exported Exec wrapper around syscall.Exec. A library entry point, not
 	// a call site; nothing under free/ci calls unix.Exec.

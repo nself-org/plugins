@@ -9,9 +9,17 @@ import (
 	"strings"
 	"testing"
 
+	_ "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	_ "github.com/nself-org/plugins/free/ci/internal/store"
 )
+
+// notYetLinked lists code fragments imported above (blank) because cmd does not
+// link them until the V15 engine is wired in (P7-CI-37).
+var notYetLinked = map[string]bool{
+	"github.com/nself-org/plugins/free/ci/internal/exec":  true,
+	"github.com/nself-org/plugins/free/ci/internal/store": true,
+}
 
 type listedPackage struct {
 	ImportPath string
@@ -56,9 +64,10 @@ func TestCodeRegistry(t *testing.T) {
 		for _, file := range p.GoFiles {
 			if filepath.Base(file) == "codes.go" {
 				fragments++
-				// Store is linked when the V15 engine is wired into cmd. Its codes
-				// are imported above so this test still checks their registrations.
-				if !linked[p.ImportPath] && p.ImportPath != "github.com/nself-org/plugins/free/ci/internal/store" {
+				// Store and executor are linked when the V15 engine is wired into cmd
+				// (P7-CI-37). Their codes are imported above so this test still checks
+				// their registrations.
+				if !linked[p.ImportPath] && !notYetLinked[p.ImportPath] {
 					t.Errorf("code fragment %s is not linked into cmd", p.ImportPath)
 				}
 			}
