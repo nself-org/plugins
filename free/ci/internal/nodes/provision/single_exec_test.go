@@ -4,8 +4,8 @@ package provision
 //   place only: the vendored cli sdk/go/remote funnel (R-AR-16). A second copy
 //   of an ssh exec would bypass the sdk's path validation, option allowlist
 //   and pinned host keys.
-// Inputs: every non-test .go file under free/ci and the vendored remote
-//   funnel, parsed with go/parser. Other vendored dependencies are excluded.
+// Inputs:  every non-test .go file under free/ci, vendor included, parsed
+//   with go/parser.
 // Outputs: pass when the funnel package holds exactly one os/exec reference
 //   and nothing else starts a process unsafely. Outside the funnel, every
 //   call to exec.Command, exec.CommandContext (also through an alias, a dot
@@ -43,6 +43,11 @@ var dynamicProgram = map[string]bool{
 	"internal/legacy/gate_runners.go:runStep":   true,
 	"internal/serve/serve_job_report.go:runCmd": true,
 	"internal/serve/serve_job.go:runGateDirect": true,
+	// golang.org/x/sys/unix (vendored for the pure-Go SQLite driver, P7-CI-30):
+	// the exported Exec wrapper around syscall.Exec. A library entry point, not
+	// a call site; nothing under free/ci calls unix.Exec.
+	"vendor/golang.org/x/sys/unix/syscall_unix.go:Exec":      true,
+	"vendor/golang.org/x/sys/unix/syscall_zos_s390x.go:Exec": true,
 }
 
 type parsed struct {
@@ -60,17 +65,11 @@ func scanSites(t *testing.T, root string) (funnel int, bad []string) {
 		if err != nil {
 			return err
 		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			if strings.HasPrefix(rel, "vendor/") && rel != funnelDir && !strings.HasPrefix(funnelDir, rel+"/") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
 		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if perr != nil {
 			return perr
