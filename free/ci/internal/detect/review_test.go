@@ -111,13 +111,17 @@ func TestLegacyFixtureStackCoverage(t *testing.T) {
 	for _, name := range []string{"go", "node-npm-workspace", "node-pnpm-workspace", "flutter", "rust", "polyglot", "monorepo"} {
 		t.Run(name, func(t *testing.T) {
 			root := filepath.Join("testdata", name)
-			if name == "go" {
+			if name == "go" || name == "flutter" {
 				root = t.TempDir()
-				b, err := os.ReadFile(filepath.Join("testdata", name, "go.mod.fixture"))
+				manifest := "go.mod"
+				if name == "flutter" {
+					manifest = "pubspec.yaml"
+				}
+				b, err := os.ReadFile(filepath.Join("testdata", name, manifest+".fixture"))
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(filepath.Join(root, "go.mod"), b, 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(root, manifest), b, 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
