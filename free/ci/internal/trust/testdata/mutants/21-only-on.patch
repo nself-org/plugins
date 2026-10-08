@@ -1,0 +1,5 @@
+--- a/internal/trust/merge.go
++++ b/internal/trust/merge.go
+@@ -78 +78 @@
+-		return ao && bo && (!a || b)
++		return ao && bo && (a || b)

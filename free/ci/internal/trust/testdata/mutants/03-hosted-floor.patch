@@ -1,0 +1,5 @@
+--- a/internal/trust/derive.go
++++ b/internal/trust/derive.go
+@@ -43 +43 @@
+-			return "hosted-disposable"
++			return "sandboxed-container"

@@ -1,0 +1,5 @@
+--- a/internal/trust/order.go
++++ b/internal/trust/order.go
+@@ -8 +8 @@
+-var privacyOrder = []string{"local-only", "private-infrastructure", "provider-allowlist", "hosted-allowed"}
++var privacyOrder = []string{"local-only", "provider-allowlist", "private-infrastructure", "hosted-allowed"}

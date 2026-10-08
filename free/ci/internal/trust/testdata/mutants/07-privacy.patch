@@ -1,0 +1,5 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -126 +126 @@
+-		return []Reason{PrivacyHostedNotAuthorized}
++		return nil

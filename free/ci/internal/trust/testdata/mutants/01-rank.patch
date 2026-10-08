@@ -1,0 +1,5 @@
+--- a/internal/trust/order.go
++++ b/internal/trust/order.go
+@@ -6 +6 @@
+-var isolationOrder = []string{"process", "container", "sandboxed-container", "vm", "ephemeral-vm"}
++var isolationOrder = []string{"process", "sandboxed-container", "container", "vm", "ephemeral-vm"}
