@@ -52,6 +52,74 @@ func TestTransitionTableExhaustive(t *testing.T) {
 	}
 }
 
+func TestFinalizingAutomatic(t *testing.T) {
+	ctx := context.Background()
+	advance := func(t *testing.T, s *Store) {
+		t.Helper()
+		for _, step := range []struct {
+			from, to model.JobState
+			epoch    int64
+		}{{"queued", "leased", 0}, {"leased", "running", 1}, {"running", "finalizing", 2}} {
+			if err := s.Transition(ctx, "a", step.from, step.to, TransitionDetail{Epoch: step.epoch}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	t.Run("no declared artifacts pass without operator", func(t *testing.T) {
+		s := testStore(t)
+		seed(t, s, "a")
+		advance(t, s)
+		if err := s.Transition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+			t.Fatal(err)
+		}
+		state, _, err := s.AttemptStateEpoch(ctx, "a")
+		if err != nil || state != "passed" {
+			t.Fatalf("state = %s, err = %v", state, err)
+		}
+	})
+	t.Run("uncommitted artifact fails infra without operator", func(t *testing.T) {
+		s := testStore(t)
+		seed(t, s, "a")
+		if err := s.DeclareArtifacts(ctx, "a", []model.ArtifactDecl{{Name: "out@sha256:" + strings.Repeat("a", 64), Path: "out"}}); err != nil {
+			t.Fatal(err)
+		}
+		advance(t, s)
+		if err := s.Transition(ctx, "a", "finalizing", "passed", TransitionDetail{Epoch: 3}); err != nil {
+			t.Fatal(err)
+		}
+		var state, class string
+		if err := s.readers.QueryRowContext(ctx, "SELECT state,failure_class FROM attempt WHERE id='a'").Scan(&state, &class); err != nil || state != "failed" || class != "infra" {
+			t.Fatalf("state = %s, class = %s, err = %v", state, class, err)
+		}
+	})
+	t.Run("needs operator requires authority and audit", func(t *testing.T) {
+		s := testStore(t)
+		seed(t, s, "a")
+		if err := s.Transition(ctx, "a", "queued", "leased", TransitionDetail{Epoch: 0}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Transition(ctx, "a", "leased", "lost", TransitionDetail{Epoch: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Transition(ctx, "a", "lost", "needs-operator", TransitionDetail{Epoch: 2}); err != nil {
+			t.Fatal(err)
+		}
+		var before, after int
+		if err := s.readers.QueryRowContext(ctx, "SELECT count(*) FROM audit").Scan(&before); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Transition(ctx, "a", "needs-operator", "failed", TransitionDetail{Epoch: 3}); !codeIs(err, "E609") {
+			t.Fatalf("without operator = %v", err)
+		}
+		if err := s.Transition(ctx, "a", "needs-operator", "failed", TransitionDetail{Epoch: 3, Operator: true, Actor: "operator"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.readers.QueryRowContext(ctx, "SELECT count(*) FROM audit").Scan(&after); err != nil || after != before+1 {
+			t.Fatalf("audit rows before = %d, after = %d, err = %v", before, after, err)
+		}
+	})
+}
+
 func TestTransitionCASAndCancel(t *testing.T) {
 	s := testStore(t)
 	seed(t, s, "a")

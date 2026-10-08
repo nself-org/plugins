@@ -66,9 +66,6 @@ func (s *Store) apply(ctx context.Context, tx *sql.Tx, id string, from, to model
 	if from == "needs-operator" && !d.Operator {
 		return coded("E609", "operator action required")
 	}
-	if from == "finalizing" && !d.Operator {
-		return coded("E609", "finalization requires operator action")
-	}
 	if from == "finalizing" && to == "passed" {
 		var missing int
 		err = tx.QueryRowContext(ctx, `SELECT count(*) FROM declared_artifact WHERE attempt_id=? AND (committed=0 OR committed_sha256!=expected_sha256)`, id).Scan(&missing)
