@@ -65,13 +65,16 @@ func (r *Registry) Detect(source fs.FS, checkRegistered func(string) bool) ([]Fa
 		}
 		facts = append(facts, d.Detect(s)...)
 	}
-	stack := false
+	stack, uncertainStack := false, false
 	for _, f := range facts {
 		if f.Kind == "stack" && f.Confidence == Certain {
 			stack = true
 		}
+		if f.Kind == "manifest" && f.Confidence == Unknown {
+			uncertainStack = true
+		}
 	}
-	if !stack {
+	if !stack && !uncertainStack {
 		facts = append(facts, Fact{Kind: "stack", Name: "no_stack", Path: ".", Confidence: Certain})
 	}
 	sort.Slice(facts, func(i, j int) bool {

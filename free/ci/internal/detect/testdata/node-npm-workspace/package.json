@@ -1,0 +1,7 @@
+{
+  "name": "npm-workspace-fixture",
+  "private": true,
+  "packageManager": "npm@11.0.0",
+  "workspaces": ["packages/*"],
+  "scripts": {"test": "npm run test --workspaces"}
+}

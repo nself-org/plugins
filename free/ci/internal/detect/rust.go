@@ -7,12 +7,16 @@ import (
 func detectRust(s Snapshot) []Fact {
 	var out []Fact
 	for _, p := range s.Paths("Cargo.toml") {
-		out = append(out, fact("stack", "rust", p), fact("test_framework", "cargo test", p))
 		b, err := s.read(p)
-		if err != nil || (!strings.Contains(string(b), "[package]") && !strings.Contains(string(b), "[workspace]")) {
-			out = append(out, unknown("manifest", p, "invalid Cargo.toml"))
+		if err != nil {
+			out = append(out, unknown("manifest", p, "unreadable Cargo.toml"))
 			continue
 		}
+		if !validCargo(b) {
+			out = append(out, unknown("manifest", p, "invalid Cargo.toml: missing [package] or [workspace]"))
+			continue
+		}
+		out = append(out, fact("stack", "rust", p), fact("test_framework", "cargo test", p))
 		if strings.Contains(string(b), "nextest") {
 			out = append(out, fact("test_framework", "cargo nextest", p))
 		}
@@ -26,4 +30,14 @@ func detectRust(s Snapshot) []Fact {
 		}
 	}
 	return out
+}
+
+func validCargo(b []byte) bool {
+	for _, line := range strings.Split(string(b), "\n") {
+		switch strings.TrimSpace(line) {
+		case "[package]", "[workspace]":
+			return true
+		}
+	}
+	return false
 }

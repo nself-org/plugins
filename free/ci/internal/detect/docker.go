@@ -10,6 +10,10 @@ func detectDocker(s Snapshot) []Fact {
 			base = p[i+1:]
 		}
 		if base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.") || strings.HasSuffix(base, ".Dockerfile") {
+			if _, err := s.read(p); err != nil {
+				out = append(out, unknown("container", p, "unreadable Dockerfile"))
+				continue
+			}
 			out = append(out, fact("container", "dockerfile", p))
 		}
 	}

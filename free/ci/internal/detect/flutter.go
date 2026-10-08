@@ -15,11 +15,12 @@ func detectFlutter(s Snapshot) []Fact {
 			continue
 		}
 		var manifest struct {
+			Name            string         `yaml:"name"`
 			Dependencies    map[string]any `yaml:"dependencies"`
 			DevDependencies map[string]any `yaml:"dev_dependencies"`
 		}
-		if yaml.Unmarshal(b, &manifest) != nil {
-			out = append(out, unknown("manifest", p, "invalid pubspec.yaml"))
+		if yaml.Unmarshal(b, &manifest) != nil || manifest.Name == "" {
+			out = append(out, unknown("manifest", p, "invalid pubspec.yaml: missing name or malformed YAML"))
 			continue
 		}
 		name := "dart"

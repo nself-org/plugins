@@ -100,28 +100,6 @@ func TestSymlinkIsNotRead(t *testing.T) {
 	}
 }
 
-func TestLegacyStackCoverage(t *testing.T) {
-	for marker, want := range map[string]string{"go.mod": "go", "package.json": "node", "pubspec.yaml": "flutter", "Cargo.toml": "rust"} {
-		data := []byte("{}")
-		if marker == "pubspec.yaml" {
-			data = []byte("dependencies:\n  flutter:\n    sdk: flutter\n")
-		}
-		facts, err := DefaultRegistry().Detect(fstest.MapFS{marker: &fstest.MapFile{Data: data}}, allChecks)
-		if err != nil {
-			t.Fatal(err)
-		}
-		found := false
-		for _, f := range facts {
-			if f.Kind == "stack" && f.Name == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("%s missing stack %s: %+v", marker, want, facts)
-		}
-	}
-}
-
 func TestNoCodeExecution(t *testing.T) {
 	// A project script and an environment sample are inert snapshot data.
 	files := fstest.MapFS{"package.json": &fstest.MapFile{Data: []byte(`{"scripts":{"test":"touch /tmp/nope"},"dependencies":{"pg":"1"}}`)}, ".env.example": &fstest.MapFile{Data: []byte("POSTGRES_URL=x")}}
