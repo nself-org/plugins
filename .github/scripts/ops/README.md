@@ -112,7 +112,7 @@ WantedBy=multi-user.target
 | `disk-prune.sh` | `*/10 * * * *` | Docker + builder prune, runner `_work`/tool-cache cleanup, Go/cargo build-cache sweep, regenerable-artifact sweep under `OPS_REPOS_DIR` |
 | `db-watchdog.sh` | `*/2 * * * *` | Restart postgres/redis on failure; emits alert |
 
-All three MUST be installed on any sentry box running CI. Install to `/opt/nself-ops/bin/` (symlink from the checked-out `free/ci/scripts/`).
+All three MUST be installed on any sentry box running CI. Install to `/opt/nself-ops/bin/` (symlink from the checked-out `.github/scripts/ops/`).
 
 **Hard rule: disk-guard.sh MUST NEVER stop, pause, or otherwise touch the runner
 service.** A prior version paused the GitHub Actions runner at the critical

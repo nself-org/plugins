@@ -1,3 +1,4 @@
+.github/scripts/ops/disk-prune.sh	332
 .workers/plugins-registry/deploy.sh	316
 .workers/plugins-registry/src/index.js	1043
 .workers/plugins-registry/src/index.ts	876
@@ -20,7 +21,6 @@ free/byok/go/handlers/byok.go	483
 free/cdc/go/replication/engine.go	312
 free/cdn/internal/handlers.go	813
 free/ci/internal/pipeline.go	313
-free/ci/scripts/disk-prune.sh	332
 free/claw-cli/cmd/claw_pair.go	301
 free/cloudflare/internal/handlers.go	614
 free/compliance/internal/handlers.go	796
