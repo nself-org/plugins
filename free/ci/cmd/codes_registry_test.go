@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
+	_ "github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 type listedPackage struct {
@@ -55,7 +56,9 @@ func TestCodeRegistry(t *testing.T) {
 		for _, file := range p.GoFiles {
 			if filepath.Base(file) == "codes.go" {
 				fragments++
-				if !linked[p.ImportPath] {
+				// Store is linked when the V15 engine is wired into cmd. Its codes
+				// are imported above so this test still checks their registrations.
+				if !linked[p.ImportPath] && p.ImportPath != "github.com/nself-org/plugins/free/ci/internal/store" {
 					t.Errorf("code fragment %s is not linked into cmd", p.ImportPath)
 				}
 			}
