@@ -71,9 +71,6 @@ paths = [
   '''\.github/wiki/.*''',
   '''README\.md$''',
   '''\.workers/.*''',
-  # Machine-transpiled SQLite C source (vendored modernc.org/sqlite, P7-CI-30): Windows API
-  # constant names such as BCRYPT_*_KEY_BLOB match generic-api-key. Third-party, never edited.
-  '''free/ci/vendor/modernc\.org/sqlite/lib/.*\.go''',
 ]
 regexes = [
   '''sk_live_FAKE_TEST_FOR_CI_GATE''',
