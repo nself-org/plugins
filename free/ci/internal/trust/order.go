@@ -37,7 +37,7 @@ func DecodeIsolation(v string) model.Isolation {
 		return model.Isolation(v)
 	}
 	if rank(isolationOrder, v) < 0 {
-		return "process"
+		return "ephemeral-vm"
 	}
 	return model.Isolation(v)
 }

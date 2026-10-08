@@ -1,6 +1,7 @@
 package invariants
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -12,6 +13,10 @@ import (
 )
 
 func TestCatalogCoverage(t *testing.T) {
+	expected := map[string]bool{}
+	for i := 1; i <= 19; i++ {
+		expected[fmt.Sprintf("I%02d", i)] = true
+	}
 	known := map[string]Invariant{}
 	for _, row := range Catalog {
 		if row.ID == "" || row.Owner == "" || row.Test != "TestInvariant_"+row.ID {
@@ -20,10 +25,15 @@ func TestCatalogCoverage(t *testing.T) {
 		if _, ok := known[row.ID]; ok {
 			t.Fatalf("duplicate %s", row.ID)
 		}
+		if !expected[row.ID] {
+			t.Fatalf("unexpected catalogue id %s", row.ID)
+		}
 		known[row.ID] = row
 	}
-	if len(known) != 19 {
-		t.Fatalf("catalogue has %d entries", len(known))
+	for id := range expected {
+		if _, ok := known[id]; !ok {
+			t.Fatalf("missing catalogue id %s", id)
+		}
 	}
 	root := "../.."
 	found := map[string]bool{}

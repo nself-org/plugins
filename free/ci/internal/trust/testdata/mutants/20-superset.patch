@@ -1,5 +1,5 @@
 --- a/internal/trust/merge.go
 +++ b/internal/trust/merge.go
-@@ -104 +104 @@
+@@ -111 +111 @@
 -			if !b[x] {
 +			if b[x] {

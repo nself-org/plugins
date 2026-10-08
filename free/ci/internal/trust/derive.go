@@ -30,7 +30,7 @@ func hasSecret(classes []model.SecretClass) bool {
 }
 func releaseSecret(classes []model.SecretClass) bool {
 	for _, c := range classes {
-		if c == "release" || c == "deploy" {
+		if c == "release" || c == "deploy" || c != "none" && c != "project" && c != "environment" && c != "team" {
 			return true
 		}
 	}

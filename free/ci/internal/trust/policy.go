@@ -47,7 +47,7 @@ func NewRegistry(specs ...KeySpec) (Registry, error) {
 }
 func (r Registry) Find(key string) (KeySpec, bool) {
 	for _, s := range r.specs {
-		if s.Key == key || strings.HasSuffix(s.Key, ".*") && strings.HasPrefix(key, strings.TrimSuffix(s.Key, "*")) {
+		if s.Key == key || strings.HasSuffix(s.Key, ".*") && strings.HasPrefix(key, strings.TrimSuffix(s.Key, "*")) && !strings.Contains(strings.TrimPrefix(key, strings.TrimSuffix(s.Key, "*")), ".") && key != strings.TrimSuffix(s.Key, "*") {
 			return s, true
 		}
 	}

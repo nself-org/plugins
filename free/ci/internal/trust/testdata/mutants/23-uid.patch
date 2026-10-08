@@ -1,5 +1,5 @@
 --- a/internal/trust/admissible.go
 +++ b/internal/trust/admissible.go
-@@ -150 +150 @@
+@@ -154 +154 @@
 -		out = append(out, IsolationUIDSeparation)
 +		out = append(out)

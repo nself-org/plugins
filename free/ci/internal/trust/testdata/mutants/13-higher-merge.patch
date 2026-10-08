@@ -1,5 +1,5 @@
 --- a/internal/trust/merge.go
 +++ b/internal/trust/merge.go
-@@ -92 +92 @@
+@@ -99 +99 @@
 -		return y >= x
 +		return y <= x

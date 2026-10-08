@@ -35,7 +35,7 @@ func TestAdmissibleOrdersAndDecode(t *testing.T) {
 			t.Fatalf("privacy %s", v)
 		}
 	}
-	if trust.DecodeTrust("alien") != "untrusted" || trust.DecodeIsolation("alien") != "process" || trust.DecodeNetwork("alien") != "none" || trust.DecodePrivacy("alien") != "local-only" {
+	if trust.DecodeTrust("alien") != "untrusted" || trust.DecodeIsolation("alien") != "ephemeral-vm" || trust.DecodeNetwork("alien") != "none" || trust.DecodePrivacy("alien") != "local-only" {
 		t.Fatal("unknown values not restrictive")
 	}
 	for _, x := range []struct {

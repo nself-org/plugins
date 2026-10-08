@@ -1,5 +1,5 @@
 --- a/internal/trust/admissible.go
 +++ b/internal/trust/admissible.go
-@@ -147 +147 @@
+@@ -150 +150 @@
 -		out = append(out, IsolationBelowMinimum)
 +		out = append(out)

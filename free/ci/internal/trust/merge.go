@@ -30,8 +30,15 @@ func decodeValue(spec KeySpec, raw json.RawMessage) (any, error) {
 	switch spec.Kind {
 	case TightenLower, TightenHigher:
 		s, ok := v.(string)
-		if !ok || rank(spec.Order, s) < 0 {
+		if !ok || len(spec.Order) == 0 {
 			return nil, fmt.Errorf("value outside order")
+		}
+		if rank(spec.Order, s) < 0 {
+			if spec.Kind == TightenLower {
+				v = spec.Order[0]
+			} else {
+				v = spec.Order[len(spec.Order)-1]
+			}
 		}
 	case TightenSubset, TightenSuperset:
 		list, ok := v.([]any)
@@ -127,7 +134,7 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 		}
 	}
 	for _, scope := range scopes {
-		if scope.PinnedCommit != "" {
+		if scope.Kind == SourceProtectedBranch && scope.PinnedCommit != "" {
 			pinnedCommit = scope.PinnedCommit
 		}
 		keys := make([]string, 0, len(scope.Values))
@@ -157,8 +164,10 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 				return Effective{}, "", fmt.Errorf("E670 %s loosens %s from %s", scope.Kind, key, old.source)
 			}
 			if scope.Kind == SourceRevision && !exists {
-				e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision cannot introduce a key"})
-				continue
+				if spec.Default == nil || !stricter(spec, spec.Default, v) || spec.Kind == TightenAny && !reflect.DeepEqual(spec.Default, v) {
+					e.ignored = append(e.ignored, Ignored{key, scope.Kind, "E671 revision key not stricter than registered default"})
+					continue
+				}
 			}
 			e.values[key] = entry{v, scope.Kind}
 		}

@@ -104,8 +104,8 @@ func admitAuthorization(job JobFacts, d Declaration, _ Effective) []Reason {
 }
 func admitPrivacy(job JobFacts, d Declaration, e Effective) []Reason {
 	zone := DecodePrivacy(policyString(e, "trust.privacy_zone"))
-	if policyString(e, "trust.privacy_zone") == "" {
-		zone = DecodePrivacy(string(d.PrivacyZone))
+	if _, _, ok := e.Value("trust.privacy_zone"); !ok {
+		zone = "private-infrastructure"
 	}
 	if zone == "local-only" && !d.PersonalOwnNode {
 		return []Reason{PrivacyLocalOnly}
@@ -160,7 +160,7 @@ func admitIsolation(job JobFacts, d Declaration, e Effective) []Reason {
 }
 func admitNetwork(job JobFacts, d Declaration, e Effective) []Reason {
 	var out []Reason
-	if RankNetwork(job.Network) > RankNetwork(d.Network) {
+	if RankNetwork(job.Network) < 0 || RankNetwork(job.Network) > RankNetwork(d.Network) {
 		out = append(out, NetworkScopeNotOffered)
 	}
 	if v := policyString(e, "trust.network"); v != "" && RankNetwork(job.Network) > RankNetwork(DecodeNetwork(v)) {
