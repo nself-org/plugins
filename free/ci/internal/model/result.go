@@ -12,7 +12,7 @@ func Verdict(checks []Check) Result {
 		if check.Substantive && check.Result != "skip" {
 			substantive = true
 		}
-		if check.Required && !check.AllowFailure && check.Result != "pass" {
+		if check.Required && check.Result != "pass" && (!check.AllowFailure || check.Result != "fail") {
 			return "fail"
 		}
 	}

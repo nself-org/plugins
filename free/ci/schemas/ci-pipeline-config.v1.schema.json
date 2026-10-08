@@ -195,7 +195,8 @@
             ]
           },
           "timeout": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[+-]?(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$"
           },
           "retry": {
             "type": [
@@ -516,7 +517,8 @@
             "type": "string"
           },
           "max_age": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[+-]?(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$"
           },
           "jobs": {
             "type": [

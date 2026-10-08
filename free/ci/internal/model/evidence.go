@@ -119,7 +119,7 @@ type Check struct {
 	ToolVersion  *string      `json:"tool_version"`
 	Required     bool         `json:"required"`
 	Substantive  bool         `json:"substantive"`
-	AllowFailure bool         `json:"-"`
+	AllowFailure bool         `json:"allow_failure,omitempty"`
 	Result       CheckResult  `json:"result"`
 	Reason       Reason       `json:"reason,omitempty"`
 	FailureClass FailureClass `json:"failure_class,omitempty"`

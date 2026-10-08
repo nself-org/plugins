@@ -26,32 +26,50 @@ func Check(env func(string) string, requires string) error {
 	if err != nil {
 		return fmt.Errorf("E600: invalid nself requirement: %w", err)
 	}
-	for i := range actual {
-		if actual[i] > minimum[i] {
+	for i := range actual.parts {
+		if actual.parts[i] > minimum.parts[i] {
 			return nil
 		}
-		if actual[i] < minimum[i] {
+		if actual.parts[i] < minimum.parts[i] {
 			return fmt.Errorf("E600: nself %s requires %s; run nself update", version, requires)
 		}
+	}
+	if actual.prerelease && !minimum.prerelease {
+		return fmt.Errorf("E600: nself %s requires %s; run nself update", version, requires)
 	}
 	return nil
 }
 
-func semver(s string) ([3]int, error) {
-	var out [3]int
-	if n := strings.IndexAny(s, "-+"); n >= 0 {
+type parsedVersion struct {
+	parts      [3]int
+	prerelease bool
+}
+
+func semver(s string) (parsedVersion, error) {
+	var out parsedVersion
+	if n := strings.IndexByte(s, '+'); n >= 0 {
+		if n == len(s)-1 {
+			return out, fmt.Errorf("empty build metadata")
+		}
+		s = s[:n]
+	}
+	if n := strings.IndexByte(s, '-'); n >= 0 {
+		if n == len(s)-1 {
+			return out, fmt.Errorf("empty prerelease")
+		}
+		out.prerelease = true
 		s = s[:n]
 	}
 	parts := strings.Split(strings.TrimPrefix(s, "v"), ".")
-	if len(parts) < 1 || len(parts) > 3 {
-		return out, fmt.Errorf("expected major[.minor[.patch]]")
+	if len(parts) != 3 {
+		return out, fmt.Errorf("expected major.minor.patch")
 	}
 	for i, part := range parts {
 		n, err := strconv.Atoi(part)
 		if err != nil || n < 0 {
 			return out, fmt.Errorf("invalid semver component %q", part)
 		}
-		out[i] = n
+		out.parts[i] = n
 	}
 	return out, nil
 }

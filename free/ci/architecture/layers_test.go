@@ -61,12 +61,15 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	if kind == "" {
 		return fmt.Errorf("package %s has no layers row", pkg)
 	}
-	if kind == "preexisting" {
-		return nil // existing pre-fabric code keeps its original checks
-	}
 	local := strings.TrimPrefix(imported, module)
 	isLocal := imported != local
 	if imported == "os/exec" && pkg != "internal/exec" && pkg != "internal/legacy" {
+		// These frozen pre-fabric sites are tracked by the single-exec-site test.
+		for _, old := range []struct{ pkg, file string }{{"internal/forgejo", "forgejo.go"}, {"internal/nodes/provision", "exec.go"}, {"internal/serve", "serve_job.go"}, {"internal/serve", "serve_job_report.go"}} {
+			if pkg == old.pkg && file == old.file && kind == "preexisting" {
+				return nil
+			}
+		}
 		return fmt.Errorf("%s imports os/exec", pkg)
 	}
 	if (imported == "database/sql" || imported == "modernc.org/sqlite") && pkg != "internal/store" {
@@ -83,6 +86,9 @@ func checkImport(m layerMap, pkg, file, imported string) error {
 	}
 	if local == "internal/legacy" && pkg != "cmd" {
 		return fmt.Errorf("%s imports legacy", pkg)
+	}
+	if kind == "preexisting" {
+		return nil // existing code retains its other import edges
 	}
 	if pkg == "internal/legacy" && strings.HasPrefix(local, "internal/") && local != "internal/legacy" {
 		return fmt.Errorf("legacy imports new package %s", local)
@@ -197,7 +203,7 @@ func TestRequiredRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scan := bufio.NewScanner(f)
 	count := 0
 	for scan.Scan() {

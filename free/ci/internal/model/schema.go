@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -115,6 +116,7 @@ func decorateConfig(s *jsonschema.Schema) {
 	job := s.Properties["jobs"].AdditionalProperties
 	job.Properties["kind"].Enum = choices("static", "build", "test", "quality", "advanced", "release", "drill")
 	job.Properties["run"].MinItems = intPtr(1)
+	job.Properties["timeout"].Pattern = `^[+-]?(0|([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$`
 	job.Properties["priority"].Enum = choices("low", "normal", "high")
 	job.Properties["path"].Enum = choices("fast", "deep")
 	job.Properties["isolation"].Enum = choices("process", "container")
@@ -135,6 +137,7 @@ func decorateConfig(s *jsonschema.Schema) {
 	req.Properties["cpu"].Minimum = floatPtr(1)
 	req.Properties["mem_mb"].Minimum = floatPtr(1)
 	s.Properties["pipelines"].AdditionalProperties.Properties["triggers"].Items.Enum = choices("push", "pull_request", "tag", "manual", "schedule", "api")
+	s.Properties["pipelines"].AdditionalProperties.Properties["max_age"].Pattern = job.Properties["timeout"].Pattern
 	// Policy is intentionally opaque: the protected policy loader owns it.
 }
 
@@ -153,12 +156,22 @@ func decorateEvidence(s *jsonschema.Schema) {
 	s.Properties["freshness"].Properties["state"].Enum = choices("current", "stale", "unknown")
 	s.Properties["selection"].Properties["mode"].Enum = choices("full", "affected")
 	s.Properties["checks"].Items.Properties["excerpt"].MaxLength = intPtr(4096)
+	allowedFailure := &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"allow_failure": {Const: anyPtr(true)}}, Required: []string{"allow_failure"}}
+	badCheck := &jsonschema.Schema{
+		Properties: map[string]*jsonschema.Schema{"required": {Const: anyPtr(true)}},
+		Required:   []string{"required"},
+		AnyOf: []*jsonschema.Schema{
+			{Properties: map[string]*jsonschema.Schema{"result": {Enum: choices("skip", "error")}}, Required: []string{"result"}},
+			{Properties: map[string]*jsonschema.Schema{"result": {Const: anyPtr("fail")}}, Required: []string{"result"}, Not: allowedFailure},
+		},
+	}
 	// A dirty tree is never bound; an unbound document is never current.
 	s.AllOf = []*jsonschema.Schema{
 		{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"worktree_state": {Const: anyPtr("dirty")}}, Required: []string{"worktree_state"}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"binding": {Properties: map[string]*jsonschema.Schema{"state": {Const: anyPtr("unbound")}}}}}},
 		{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"binding": {Properties: map[string]*jsonschema.Schema{"state": {Const: anyPtr("unbound")}}, Required: []string{"state"}}}, Required: []string{"binding"}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"freshness": {Properties: map[string]*jsonschema.Schema{"state": {Not: &jsonschema.Schema{Const: anyPtr("current")}}}}}}},
 		{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"worktree_state": {Const: anyPtr("clean")}}, Required: []string{"worktree_state"}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"tracked_changes_digest": {Const: anyPtr(nil)}}}},
-		{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"checks": {Contains: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"required": {Const: anyPtr(true)}, "result": {Enum: choices("skip", "fail", "error")}}, Required: []string{"required", "result"}}}}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"result": {Not: &jsonschema.Schema{Const: anyPtr("pass")}}}}},
+		{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"result": {Const: anyPtr("pass")}}, Required: []string{"result"}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"checks": {Contains: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"substantive": {Const: anyPtr(true)}, "result": {Enum: choices("pass", "fail")}}, Required: []string{"substantive", "result"}}}}}},
+		{If: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"checks": {Contains: badCheck}}}, Then: &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"result": {Not: &jsonschema.Schema{Const: anyPtr("pass")}}}}},
 	}
 }
 
@@ -189,8 +202,28 @@ func ValidateJSON(schemaBytes, document []byte) error {
 	if err := dec.Decode(&value); err != nil {
 		return err
 	}
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("schema validation at /: trailing JSON value")
+		}
+		return fmt.Errorf("schema validation at /: trailing JSON: %w", err)
+	}
 	if err := r.Validate(value); err != nil {
 		return fmt.Errorf("schema validation at %s", err)
+	}
+	if schema.ID == "https://nself.org/schemas/ci-evidence.v1.schema.json" {
+		if doc, ok := value.(map[string]any); ok {
+			if checks, ok := doc["checks"].([]any); ok {
+				for i, raw := range checks {
+					if check, ok := raw.(map[string]any); ok {
+						if excerpt, ok := check["excerpt"].(string); ok && len(excerpt) > 4096 {
+							return fmt.Errorf("schema validation at /checks/%d/excerpt: exceeds 4096 UTF-8 bytes", i)
+						}
+					}
+				}
+			}
+		}
 	}
 	return nil
 }

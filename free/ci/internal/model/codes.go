@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,9 +26,10 @@ var codes []registration
 
 // Register records a code without panicking, leaving conflicts for CodeProblems.
 func Register(code Code) {
+	_, file, line, _ := runtime.Caller(1)
 	codeMu.Lock()
 	defer codeMu.Unlock()
-	codes = append(codes, registration{code, code.Summary})
+	codes = append(codes, registration{code, fmt.Sprintf("%s:%d", file, line)})
 }
 
 // CodeProblems reports every duplicate and out-of-range registration with its owner.

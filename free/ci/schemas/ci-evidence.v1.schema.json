@@ -316,6 +316,9 @@
           "substantive": {
             "type": "boolean"
           },
+          "allow_failure": {
+            "type": "boolean"
+          },
           "result": {
             "type": "string",
             "enum": [
@@ -761,23 +764,85 @@
     {
       "if": {
         "properties": {
+          "result": {
+            "const": "pass"
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "contains": {
+              "properties": {
+                "result": {
+                  "enum": [
+                    "pass",
+                    "fail"
+                  ]
+                },
+                "substantive": {
+                  "const": true
+                }
+              },
+              "required": [
+                "substantive",
+                "result"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "checks": {
             "contains": {
               "properties": {
                 "required": {
                   "const": true
-                },
-                "result": {
-                  "enum": [
-                    "skip",
-                    "fail",
-                    "error"
-                  ]
                 }
               },
               "required": [
-                "required",
-                "result"
+                "required"
+              ],
+              "anyOf": [
+                {
+                  "properties": {
+                    "result": {
+                      "enum": [
+                        "skip",
+                        "error"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ]
+                },
+                {
+                  "properties": {
+                    "result": {
+                      "const": "fail"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "not": {
+                    "properties": {
+                      "allow_failure": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "allow_failure"
+                    ]
+                  }
+                }
               ]
             }
           }

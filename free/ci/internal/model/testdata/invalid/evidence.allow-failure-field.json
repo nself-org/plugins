@@ -14,7 +14,7 @@
       "kind": "quality",
       "log_ref": null,
       "required": true,
-      "result": "pass",
+      "result": "skip",
       "substantive": true,
       "tool": "go",
       "tool_version": null
