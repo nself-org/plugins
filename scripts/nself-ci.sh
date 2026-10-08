@@ -21,9 +21,9 @@ if [ ! -f "$BINARY" ]; then
   needs_build=1
 elif [ "$PLUGIN_DIR/cmd/main.go" -nt "$BINARY" ] 2>/dev/null; then
   needs_build=1
-elif [ "$PLUGIN_DIR/internal/gate.go" -nt "$BINARY" ] 2>/dev/null; then
+elif [ "$PLUGIN_DIR/internal/legacy/gate.go" -nt "$BINARY" ] 2>/dev/null; then
   needs_build=1
-elif [ "$PLUGIN_DIR/internal/status.go" -nt "$BINARY" ] 2>/dev/null; then
+elif [ "$PLUGIN_DIR/internal/legacy/status.go" -nt "$BINARY" ] 2>/dev/null; then
   needs_build=1
 fi
 

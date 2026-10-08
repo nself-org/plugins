@@ -1,6 +1,6 @@
 // Regression tests for the local Android artifact-build lane
 // (P6-E11-W2-S1-T6, msg-2026-08-21-nself-ci-local-artifact-builds.md).
-package internal
+package legacy
 
 import (
 	"encoding/base64"

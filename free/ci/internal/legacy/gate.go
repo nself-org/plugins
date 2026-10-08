@@ -8,7 +8,7 @@
 // Outputs: Result (passed bool, gate results, log)
 // Constraints: No network calls; pure subprocess execution.
 // SPORT: PLUGINS-CI-001
-package internal
+package legacy
 
 import (
 	"time"

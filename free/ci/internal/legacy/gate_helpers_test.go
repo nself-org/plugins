@@ -9,7 +9,7 @@
 // package.json "workspaces" field path, which the old code referenced via
 // loadPackageJSON(root)["workspaces"] — a type assertion that could never
 // succeed, because loadPackageJSON only ever returns the "scripts" object.
-package internal
+package legacy
 
 import (
 	"os"

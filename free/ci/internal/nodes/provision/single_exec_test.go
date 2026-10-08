@@ -40,7 +40,7 @@ var sshWord = regexp.MustCompile(`(^|[\s/])(ssh|scp|rsync|ssh-keyscan)(\s|$)`)
 // resolve to a literal (file relative to free/ci : enclosing function). Each
 // runs a gate command picked by name, never ssh.
 var dynamicProgram = map[string]bool{
-	"internal/gate_runners.go:runStep":          true,
+	"internal/legacy/gate_runners.go:runStep":   true,
 	"internal/serve/serve_job_report.go:runCmd": true,
 	"internal/serve/serve_job.go:runGateDirect": true,
 }

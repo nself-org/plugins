@@ -22,7 +22,7 @@ import (
 )
 
 // postCommitStatus posts a nself-ci GitHub commit status via `gh api` (OAuth).
-// Mirrors the logic in plugins/free/ci/internal/status.go without importing it
+// Mirrors the logic in plugins/free/ci/internal/legacy/status.go without importing it
 // (different Go module — invoked as a binary, not a library).
 func postCommitStatus(owner, repo, sha, state, description string) error {
 	if owner == "" || repo == "" || sha == "" {

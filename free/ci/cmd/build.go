@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/plugins/free/ci/internal"
+	"github.com/nself-org/plugins/free/ci/internal/legacy"
 )
 
 func init() {
@@ -87,7 +87,7 @@ func runArtifactBuildCmd(rawArgs []string) int {
 	fmt.Printf("nself-ci build --artifact android — %s\n", androidDir)
 	fmt.Println(strings.Repeat("─", 60))
 
-	result := internal.BuildAndroidArtifact(androidDir, o.timeout, o.verbose)
+	result := legacy.BuildAndroidArtifact(androidDir, o.timeout, o.verbose)
 	mark := "PASS"
 	if !result.Gate.Passed {
 		mark = "FAIL"
@@ -114,7 +114,7 @@ func runArtifactBuildCmd(rawArgs []string) int {
 func uploadBuilt(o buildOpts, androidDir, apk string) int {
 	resolvedOwner, resolvedRepo := o.owner, o.repo
 	if resolvedOwner == "" || resolvedRepo == "" {
-		ro, rr, err := internal.RepoOwnerName(androidDir)
+		ro, rr, err := legacy.RepoOwnerName(androidDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: cannot resolve GitHub remote for --upload: %v\n", err)
 			fmt.Fprintf(os.Stderr, "hint: pass --owner and --repo\n")
@@ -127,7 +127,7 @@ func uploadBuilt(o buildOpts, androidDir, apk string) int {
 			resolvedRepo = rr
 		}
 	}
-	out, err := internal.UploadArtifact(resolvedOwner, resolvedRepo, o.tag, apk)
+	out, err := legacy.UploadArtifact(resolvedOwner, resolvedRepo, o.tag, apk)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 1

@@ -1,4 +1,4 @@
-package internal
+package legacy
 
 // gate_artifact.go — local Android release-artifact build lane.
 //
