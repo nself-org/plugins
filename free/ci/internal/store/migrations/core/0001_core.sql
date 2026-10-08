@@ -1,0 +1,16 @@
+CREATE TABLE coordinator (id TEXT PRIMARY KEY, pid INTEGER NOT NULL, process_start TEXT NOT NULL, boot_id TEXT NOT NULL, incarnation INTEGER NOT NULL, heartbeat_at INTEGER NOT NULL);
+CREATE TABLE pipeline (id TEXT PRIMARY KEY, project TEXT NOT NULL, revision TEXT NOT NULL, trigger TEXT NOT NULL, source_trust TEXT NOT NULL, privacy_zone TEXT NOT NULL, policy_digest TEXT NOT NULL, input_digest TEXT NOT NULL, selection_mode TEXT NOT NULL, selection_reason TEXT NOT NULL, selection_digest TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL, finished_at INTEGER);
+CREATE INDEX pipeline_revision ON pipeline(revision, created_at DESC);
+CREATE TABLE job (id TEXT PRIMARY KEY, pipeline_id TEXT NOT NULL REFERENCES pipeline(id), name TEXT NOT NULL, kind TEXT NOT NULL, idempotent INTEGER NOT NULL, infra_max INTEGER NOT NULL, input_digest TEXT NOT NULL, required INTEGER NOT NULL, status TEXT NOT NULL);
+CREATE TABLE attempt (id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES job(id), n INTEGER NOT NULL, coordinator_id TEXT REFERENCES coordinator(id), runner_id TEXT, lease_id TEXT, state TEXT NOT NULL, epoch INTEGER NOT NULL DEFAULT 0, failure_class TEXT, result_digest TEXT, started_at INTEGER, ended_at INTEGER, UNIQUE(job_id,n));
+CREATE INDEX attempt_job ON attempt(job_id,n);
+CREATE TABLE lease (id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL UNIQUE REFERENCES attempt(id), host TEXT NOT NULL, runner_id TEXT NOT NULL, expires_at INTEGER NOT NULL, heartbeat_at INTEGER NOT NULL, token_digest TEXT NOT NULL);
+CREATE TABLE host_reservation (host TEXT NOT NULL, lease_id TEXT NOT NULL UNIQUE REFERENCES lease(id), cpu INTEGER NOT NULL, mem_mb INTEGER NOT NULL, PRIMARY KEY(host,lease_id));
+CREATE TABLE runner_ref (id TEXT PRIMARY KEY, provider TEXT NOT NULL, platform TEXT NOT NULL, isolation TEXT NOT NULL);
+CREATE TABLE evidence (id TEXT PRIMARY KEY, pipeline_id TEXT NOT NULL REFERENCES pipeline(id), attempt_id TEXT REFERENCES attempt(id), revision TEXT NOT NULL, input_digest TEXT NOT NULL, body BLOB NOT NULL, created_at INTEGER NOT NULL);
+CREATE INDEX evidence_lookup ON evidence(revision,input_digest,created_at DESC);
+CREATE TABLE event_index (run_id TEXT NOT NULL, seq INTEGER NOT NULL, event_type TEXT NOT NULL, ref TEXT NOT NULL, PRIMARY KEY(run_id,seq));
+CREATE TABLE cancel_intent (attempt_id TEXT PRIMARY KEY REFERENCES attempt(id), epoch INTEGER NOT NULL, requested_at INTEGER NOT NULL, reason TEXT NOT NULL);
+CREATE TABLE idempotency_key (key_digest TEXT PRIMARY KEY, attempt_id TEXT NOT NULL UNIQUE REFERENCES attempt(id));
+CREATE TABLE audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL, prev_head BLOB, head BLOB, signature BLOB);
+CREATE TABLE declared_artifact (attempt_id TEXT NOT NULL REFERENCES attempt(id), name TEXT NOT NULL, path TEXT NOT NULL, expected_sha256 TEXT NOT NULL, committed_sha256 TEXT, size INTEGER, committed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(attempt_id,name));
