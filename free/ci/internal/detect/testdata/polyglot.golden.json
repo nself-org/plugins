@@ -6,6 +6,19 @@
     "confidence": "certain"
   },
   {
+    "kind": "lint_tool",
+    "name": "tsc",
+    "path": "package.json",
+    "confidence": "certain"
+  },
+  {
+    "kind": "package_manager",
+    "name": "unknown",
+    "path": "package.json",
+    "confidence": "unknown",
+    "reason": "ambiguous or unsupported package manager"
+  },
+  {
     "kind": "stack",
     "name": "rust",
     "path": "Cargo.toml",
@@ -13,20 +26,14 @@
   },
   {
     "kind": "stack",
-    "name": "go",
-    "path": "go.mod",
+    "name": "node",
+    "path": "package.json",
     "confidence": "certain"
   },
   {
     "kind": "test_framework",
     "name": "cargo test",
     "path": "Cargo.toml",
-    "confidence": "certain"
-  },
-  {
-    "kind": "test_framework",
-    "name": "go test",
-    "path": "go.mod",
     "confidence": "certain"
   }
 ]
