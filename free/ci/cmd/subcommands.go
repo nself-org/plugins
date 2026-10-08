@@ -11,6 +11,7 @@ package main
 // registered once (a duplicate is a programming error and panics at init).
 
 import (
+	"flag"
 	"strings"
 )
 
@@ -20,6 +21,16 @@ type handler func(args []string) int
 
 // subcommands maps a space-joined key to its handler.
 var subcommands = map[string]handler{}
+
+// subcommandEntry carries v1.5-only metadata without changing the v1.4 table.
+type subcommandEntry struct {
+	Handler handler
+	V15Only bool
+	Hidden  bool
+	Flags   func() *flag.FlagSet
+}
+
+var v15Subcommands = map[string]subcommandEntry{}
 
 // maxKeyTokens is the longest registered key, in tokens.
 var maxKeyTokens = 1
@@ -33,6 +44,17 @@ func register(key string, h handler) {
 	if n := len(strings.Fields(key)); n > maxKeyTokens {
 		maxKeyTokens = n
 	}
+}
+
+// registerV15 makes a command reachable only from the v1.5 dispatcher.
+func registerV15(key string, entry subcommandEntry) {
+	if _, dup := v15Subcommands[key]; dup {
+		panic("nself-ci: duplicate v1.5 subcommand " + key)
+	}
+	if !entry.V15Only || entry.Handler == nil {
+		panic("nself-ci: invalid v1.5 subcommand " + key)
+	}
+	v15Subcommands[key] = entry
 }
 
 // resolve finds the handler for argv by longest match over the leading

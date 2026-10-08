@@ -1,0 +1,563 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "support": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+/[a-z0-9_]+$"
+      }
+    },
+    "detect": {
+      "type": [
+        "null",
+        "object"
+      ],
+      "properties": {
+        "disable": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "roots": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "presets": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "string",
+        "enum": [
+          "default",
+          "strict"
+        ]
+      }
+    },
+    "services": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "component": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "required": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "coverage_floor": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "minimum": 0,
+            "maximum": 100
+          },
+          "rules": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "static",
+              "build",
+              "test",
+              "quality",
+              "advanced",
+              "release",
+              "drill"
+            ]
+          },
+          "run": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "workdir": {
+            "type": "string"
+          },
+          "deps": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "needs_services": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "matrix": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "platform": {
+                "oneOf": [
+                  {
+                    "const": "support"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]+/[a-z0-9_]+$"
+                    }
+                  }
+                ]
+              }
+            },
+            "required": [
+              "platform"
+            ],
+            "additionalProperties": false
+          },
+          "required": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "allow_failure": {
+            "type": "boolean"
+          },
+          "idempotent": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "timeout": {
+            "type": "string"
+          },
+          "retry": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "infra_max": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3
+              }
+            },
+            "additionalProperties": false
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "deep"
+            ]
+          },
+          "when": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "branches": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "paths": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "triggers": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "push",
+                    "pull_request",
+                    "tag",
+                    "manual",
+                    "schedule",
+                    "api",
+                    "local"
+                  ]
+                }
+              },
+              "env_present": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "secrets": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^(none|project|environment|team|release|deploy)/[A-Za-z_][A-Za-z0-9_.-]*(/[A-Za-z_][A-Za-z0-9_.-]*)?$"
+            }
+          },
+          "isolation": {
+            "type": "string",
+            "enum": [
+              "process",
+              "container"
+            ]
+          },
+          "container": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "image": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "image"
+            ],
+            "additionalProperties": false
+          },
+          "artifacts": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "package",
+                    "binary",
+                    "archive",
+                    "image",
+                    "report",
+                    "coverage",
+                    "log",
+                    "benchmark",
+                    "sbom",
+                    "other"
+                  ]
+                },
+                "retention": {
+                  "type": "string",
+                  "pattern": "^(keep|[1-9][0-9]*(s|m|h|d))$"
+                },
+                "visibility": {
+                  "type": "string",
+                  "enum": [
+                    "project",
+                    "restricted"
+                  ]
+                },
+                "image": {
+                  "type": [
+                    "null",
+                    "object"
+                  ],
+                  "properties": {
+                    "ref": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ref"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "image": true
+                    },
+                    "required": [
+                      "image"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "kind": {
+                        "const": "image"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "cache": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "disable": {
+                "type": "boolean"
+              },
+              "keys": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "paths": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "requires": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "labels": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_.-]{0,62}(=[A-Za-z0-9_.-]{0,63})?$"
+                },
+                "maxItems": 16
+              },
+              "tools": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 16
+              },
+              "accelerators": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "gpu"
+                  ]
+                }
+              },
+              "cpu": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "mem_mb": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "run"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "pipelines": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "triggers": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "push",
+                "pull_request",
+                "tag",
+                "manual",
+                "schedule",
+                "api"
+              ]
+            }
+          },
+          "schedule": {
+            "type": "string"
+          },
+          "max_age": {
+            "type": "string"
+          },
+          "jobs": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "drills_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "triggers"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "cache": {
+      "type": [
+        "null",
+        "object"
+      ],
+      "properties": {
+        "disable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://nself.org/schemas/ci-pipeline-config.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false
+}

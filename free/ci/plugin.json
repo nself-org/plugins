@@ -323,7 +323,7 @@
   "pluginType": "cli",
   "repository": "https://github.com/nself-org/plugins",
   "requires": {
-    "nself": ">=1.0.0"
+    "nself": ">=1.4.12"
   },
   "service": {
     "kind": "cli"
