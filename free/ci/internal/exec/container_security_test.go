@@ -80,6 +80,20 @@ func TestContainerHonorsWorkdir(t *testing.T) {
 	}
 }
 
+func TestContainerDotWorkdirUsesRepo(t *testing.T) {
+	for _, dir := range []string{"", "."} {
+		t.Run(fmt.Sprintf("workdir=%q", dir), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "args")
+			fakeDocker(t, fmt.Sprintf("printf '%%s\\n' \"$@\" > %q\n", path))
+			r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "dot-container", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Isolation: "container", Workdir: dir, Container: &model.ContainerConfig{Image: "alpine:3.19"}}, Command: []string{"pwd"}})
+			args, err := os.ReadFile(path)
+			if r.Err != nil || err != nil || !strings.Contains(string(args), "--workdir=/repo\n") {
+				t.Fatalf("run=%+v args=%q read=%v", r, args, err)
+			}
+		})
+	}
+}
+
 func TestDockerStopBoundedByGrace(t *testing.T) {
 	fakeDocker(t, "if [ \"$1\" = run ]; then sleep 30; fi\nif [ \"$1\" = stop ]; then sleep 30; fi\n")
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)

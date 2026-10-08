@@ -88,6 +88,62 @@ func TestRejectWorkdirEscape(t *testing.T) {
 	}
 }
 
+func TestDotWorkdirUsesWorkspace(t *testing.T) {
+	for _, dir := range []string{"", "."} {
+		t.Run(fmt.Sprintf("workdir=%q", dir), func(t *testing.T) {
+			var output []byte
+			result := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "dot-workdir", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: dir}, Command: []string{"sh", "-c", "pwd"}, Output: func(p []byte) { output = append(output, p...) }})
+			if result.Err != nil || !strings.Contains(string(output), "/work/dot-workdir") {
+				t.Fatalf("run=%+v output=%q", result, output)
+			}
+		})
+	}
+}
+
+func TestAbsoluteWorkdirRejected(t *testing.T) {
+	for _, dir := range []string{"/tmp", "../outside"} {
+		r := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "workdir-escape", CoordinatorID: "coord", Home: t.TempDir(), Job: model.Job{Workdir: dir}, Command: []string{"true"}})
+		if r.Err == nil {
+			t.Fatalf("accepted workdir %q", dir)
+		}
+	}
+}
+
+func TestSharedRedactorWaitRespectsCancellation(t *testing.T) {
+	e := &Executor{Redactor: &splitRedactor{}}
+	home := t.TempDir()
+	firstDone := make(chan AttemptResult, 1)
+	started := make(chan struct{}, 1)
+	go func() {
+		firstDone <- e.Run(context.Background(), JobSpec{AttemptID: "first", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "echo started; sleep 2"}, Output: func([]byte) {
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+		}})
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("first run did not start")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	secondDone := make(chan AttemptResult, 1)
+	go func() {
+		secondDone <- e.Run(ctx, JobSpec{AttemptID: "second", CoordinatorID: "coord", Home: home, Command: []string{"sh", "-c", "true"}})
+	}()
+	cancel()
+	select {
+	case r := <-secondDone:
+		if r.Err != context.Canceled {
+			t.Fatalf("waiting run=%+v", r)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("waiting run ignored cancellation")
+	}
+	<-firstDone
+}
+
 func TestTimeout(t *testing.T) {
 	e := &Executor{Grace: 100 * time.Millisecond}
 	r := e.Run(context.Background(), JobSpec{AttemptID: "timeout", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 50 * time.Millisecond, Command: []string{"sh", "-c", "sleep 30"}})

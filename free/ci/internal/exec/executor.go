@@ -43,20 +43,30 @@ type Executor struct {
 	Env      EnvPolicy
 	Redactor Redactor
 	// NewRedactor returns fresh streaming state for each concurrent attempt.
-	NewRedactor func() Redactor
-	Secrets     SecretSource
-	Isolation   Isolator
-	Stale       StaleChecker
-	Grace       time.Duration
-	redactorMu  sync.Mutex
+	NewRedactor  func() Redactor
+	Secrets      SecretSource
+	Isolation    Isolator
+	Stale        StaleChecker
+	Grace        time.Duration
+	redactorOnce sync.Once
+	redactorSlot chan struct{}
 }
 
 // Run confines a job to a fresh private workspace and removes it on every exit.
 func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	if e.NewRedactor == nil && e.Redactor != nil {
 		// Legacy direct hooks are serialized because their state may span chunks.
-		e.redactorMu.Lock()
-		defer e.redactorMu.Unlock()
+		e.redactorOnce.Do(func() { e.redactorSlot = make(chan struct{}, 1); e.redactorSlot <- struct{}{} })
+		slot := e.redactorSlot
+		select {
+		case <-ctx.Done():
+			return AttemptResult{Attempt: model.Attempt{ID: s.AttemptID, State: "cancelled", FailureClass: "cancelled"}, Err: ctx.Err()}
+		case <-slot:
+		}
+		defer func() { slot <- struct{}{} }()
+		if err := ctx.Err(); err != nil {
+			return AttemptResult{Attempt: model.Attempt{ID: s.AttemptID, State: "cancelled", FailureClass: "cancelled"}, Err: err}
+		}
 	}
 	local := Executor{Env: e.Env, Redactor: e.Redactor, NewRedactor: e.NewRedactor, Secrets: e.Secrets, Isolation: e.Isolation, Stale: e.Stale, Grace: e.Grace}
 	e = &local

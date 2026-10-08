@@ -30,9 +30,9 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 		return -1, coded("E613", "invalid container image")
 	}
 	workdir := "/repo"
-	if s.Job.Workdir != "" {
+	if s.Job.Workdir != "" && s.Job.Workdir != "." {
 		rel := filepath.Clean(s.Job.Workdir)
-		if filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, "../") || rel == "." {
+		if filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, "../") {
 			return -1, coded("E612", "workdir escapes workspace")
 		}
 		workdir = "/repo/" + filepath.ToSlash(rel)
@@ -41,8 +41,8 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 	if err != nil {
 		return -1, err
 	}
-	defer os.Remove(file.Name())
-	defer file.Close()
+	defer func() { _ = os.Remove(file.Name()) }()
+	defer func() { _ = file.Close() }()
 	if err := file.Chmod(0600); err != nil {
 		return -1, err
 	}
@@ -90,7 +90,7 @@ func (e *Executor) runContainer(ctx context.Context, s JobSpec, workspace string
 			}
 		})
 	}
-	code, err := e.runCommand(ctx, append([]string{"docker"}, args...), workspace, dockerHostEnv(), s.Output, stop, nil)
+	code, err := e.runCommand(ctx, append([]string{"docker"}, args...), workspace, dockerHostEnv(), s.Output, stop, nil, "")
 	if err != nil {
 		stop()
 		return code, fmt.Errorf("%w: %v", coded("E613", "docker run"), err)

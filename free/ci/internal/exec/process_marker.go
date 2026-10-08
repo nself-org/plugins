@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type processMarker struct {
@@ -100,12 +101,19 @@ func (e *Executor) sweepProcessMarker(ctx context.Context, home, current, attemp
 	}
 	identity, err := processIdentity(marker.PID)
 	if groupAlive(marker.PID) {
-		if err != nil || identity == "" {
-			// The leader exited; retain the marker for a later verified sweep.
-			return nil
+		if err == nil && identity != "" && identity != marker.Identity {
+			// A different process has reused the leader PID. Do not kill its group.
+			return coded("E610", "stale group identity changed")
 		}
-		if identity == marker.Identity {
-			_ = killPID(marker.PID)
+		if err := killGroup(marker.PID); err != nil && groupAlive(marker.PID) {
+			return coded("E610", "stale process group survived")
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for groupAlive(marker.PID) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if groupAlive(marker.PID) {
+			return coded("E610", "stale process group survived")
 		}
 	}
 	removeProcessMarker(home, attempt)

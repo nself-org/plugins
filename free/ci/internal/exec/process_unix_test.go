@@ -16,6 +16,8 @@ import (
 
 type staleChecker map[string]bool
 
+const detachedScript = "import os,time,signal; r,w=os.pipe(); p=os.fork(); (os.close(r),os.setsid(),signal.signal(signal.SIGTERM,signal.SIG_IGN),os.write(w,b'1'),time.sleep(30),os._exit(0)) if p==0 else (os.close(w),os.read(r,1),print(p,flush=True),time.sleep(30))"
+
 func (s staleChecker) Stale(_ context.Context, id string) (bool, error) { return s[id], nil }
 
 func TestCancelGrandchildren(t *testing.T) {
@@ -121,7 +123,7 @@ func TestVanishedProcessMarkerIsSuccess(t *testing.T) {
 	}
 }
 
-func TestExitedLeaderKeepsLiveGroupMarker(t *testing.T) {
+func TestExitedLeaderKillsLiveGroupMarker(t *testing.T) {
 	home := t.TempDir()
 	cmd := osexec.Command("sh", "-c", "sleep 0.2; sleep 30 &")
 	if err := prepareProcess(cmd); err != nil {
@@ -131,7 +133,7 @@ func TestExitedLeaderKeepsLiveGroupMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	pid := cmd.Process.Pid
-	defer killGroup(pid)
+	defer func() { _ = killGroup(pid) }()
 	if err := writeProcessMarker(home, "orphan", "old", pid); err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +145,11 @@ func TestExitedLeaderKeepsLiveGroupMarker(t *testing.T) {
 	if err := e.sweepProcessMarker(context.Background(), home, "current", "orphan"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(home, "processes", "orphan.json")); err != nil {
-		t.Fatalf("lost live group marker: %v", err)
+	if groupAlive(pid) {
+		t.Fatal("stale process group survived sweep")
+	}
+	if _, err := os.Stat(filepath.Join(home, "processes", "orphan.json")); !os.IsNotExist(err) {
+		t.Fatalf("stale marker retained: %v", err)
 	}
 }
 
@@ -153,17 +158,37 @@ func TestDetachedGrandchildCancellationBound(t *testing.T) {
 	defer cancel()
 	var child int
 	start := time.Now()
-	script := "import os,time; p=os.fork(); (os.setsid(),time.sleep(30),os._exit(0)) if p==0 else (print(p,flush=True),time.sleep(30))"
-	r := (&Executor{Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "detached", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", script}, Output: func(p []byte) {
+	r := (&Executor{Grace: 100 * time.Millisecond}).Run(ctx, JobSpec{AttemptID: "detached", CoordinatorID: "coord", Home: t.TempDir(), Command: []string{"python3", "-c", detachedScript}, Output: func(p []byte) {
 		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
 			child = n
 			cancel()
 		}
 	}})
 	if child > 0 {
-		defer syscall.Kill(child, syscall.SIGKILL)
+		defer func() { _ = syscall.Kill(child, syscall.SIGKILL) }()
 	}
 	if child <= 0 || r.Attempt.FailureClass != "cancelled" || time.Since(start) > 2100*time.Millisecond {
 		t.Fatalf("detached run=%+v child=%d elapsed=%s", r, child, time.Since(start))
+	}
+	if err := syscall.Kill(child, 0); err == nil {
+		t.Fatalf("detached grandchild %d survived cancellation", child)
+	}
+}
+
+func TestDetachedGrandchildTimeoutKillsTree(t *testing.T) {
+	var child int
+	r := (&Executor{Grace: 100 * time.Millisecond}).Run(context.Background(), JobSpec{AttemptID: "detached-timeout", CoordinatorID: "coord", Home: t.TempDir(), Timeout: 200 * time.Millisecond, Command: []string{"python3", "-c", detachedScript}, Output: func(p []byte) {
+		if n, err := strconv.Atoi(strings.TrimSpace(string(p))); err == nil {
+			child = n
+		}
+	}})
+	if child > 0 {
+		defer func() { _ = syscall.Kill(child, syscall.SIGKILL) }()
+	}
+	if child <= 0 || r.Attempt.FailureClass != "timeout" {
+		t.Fatalf("timeout run=%+v child=%d", r, child)
+	}
+	if err := syscall.Kill(child, 0); err == nil {
+		t.Fatalf("detached grandchild %d survived timeout", child)
 	}
 }

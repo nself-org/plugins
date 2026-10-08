@@ -3,7 +3,6 @@
 package exec
 
 import (
-	"os"
 	osexec "os/exec"
 	"runtime"
 	"strconv"
@@ -12,19 +11,14 @@ import (
 )
 
 func prepareProcess(cmd *osexec.Cmd) error {
+	if err := ensureSubreaper(); err != nil {
+		return err
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	return nil
 }
 func terminateGroup(pid int) error { return syscall.Kill(-pid, syscall.SIGTERM) }
 func killGroup(pid int) error      { return syscall.Kill(-pid, syscall.SIGKILL) }
-func groupAlive(pid int) bool      { return syscall.Kill(-pid, 0) == nil }
-func killPID(pid int) error {
-	if pid <= 0 {
-		return os.ErrInvalid
-	}
-	_ = terminateGroup(pid)
-	return killGroup(pid)
-}
 func isTerminal() bool {
 	var st syscall.Stat_t
 	return syscall.Fstat(0, &st) == nil && st.Mode&syscall.S_IFMT == syscall.S_IFCHR
