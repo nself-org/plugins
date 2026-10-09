@@ -118,7 +118,12 @@ func TestProbeFixedReadOnlyCommands(t *testing.T) {
 func TestProbeLocalCapacityAndUnknown(t *testing.T) {
 	r := setupProbe(t, "01J00000000000000000000000")
 	var calls atomic.Int32
-	p := &LocalProber{Registry: r, runner: fixtureRunner, capacity: func() ciexec.Capacity {
+	p := &LocalProber{Registry: r, runner: func(ctx context.Context, command string) (string, error) {
+		if command == cmdNproc {
+			t.Fatal("local probe ran a second CPU probe")
+		}
+		return fixtureRunner(ctx, command)
+	}, capacity: func() ciexec.Capacity {
 		calls.Add(1)
 		return ciexec.Capacity{CPUs: 4, MemoryMB: 2048, BatteryPercent: -1}
 	}}

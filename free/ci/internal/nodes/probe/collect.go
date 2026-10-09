@@ -35,6 +35,9 @@ func collect(ctx context.Context, c *model.Capability, runner commandRunner, exp
 		if command == cmdUname {
 			continue
 		}
+		if local && command == cmdNproc {
+			continue // local CPU comes only from exec.Probe
+		}
 		out, runErr := runner(ctx, command)
 		if ctx.Err() != nil {
 			return ctx.Err()
