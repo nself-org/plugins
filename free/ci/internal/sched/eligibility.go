@@ -72,13 +72,16 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	if c.Lifecycle.RevokedAt != nil || c.Availability.State.Value != nil && *c.Availability.State.Value == "revoked" {
 		add(model.NodeRevoked, "revoked")
 	}
-	if c.Lifecycle.Discovered || !c.Lifecycle.Eligible && c.Schema != "" {
+	// Hosted authorization comes from the job's effective trust grants; enrolled
+	// nodes require explicit project membership in their capability snapshot.
+	hosted := r.Location == "hosted" || c.Location.Kind.Value != nil && *c.Location.Kind.Value == "hosted" || r.Decl.Hosted
+	if c.Schema != "ci.runner-capability/v1" || c.Lifecycle.Discovered || j.Project == "" || !hosted && !has(c.Lifecycle.AuthorizedProjects, j.Project) {
 		add(model.NodeDiscovered, "not authorized")
 	}
 	if c.DeployHost.Matched && !c.DeployHost.Override {
 		add(model.NodeDeployHost, "deploy host")
 	}
-	if c.Protocol.Min > 1 && !hasInt(c.Protocol.Versions, 1) {
+	if c.Protocol.Min > 1 || !hasInt(c.Protocol.Versions, 1) {
 		add(model.NodeProtocol, "unsupported protocol")
 	}
 	if s := c.Availability.State.Value; s != nil {
@@ -107,6 +110,7 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	}
 	d.CoordinatorHost = r.CoordinatorHost
 	d.CoordinatorMode = r.CoordinatorMode
+	d.Hosted = hosted
 	jf := trust.JobFacts{Trust: j.Trust, SecretClasses: j.SecretClasses, Network: j.Network, PersonalOwnRun: j.PersonalOwnRun, Release: j.Pipeline.Release}
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {
 		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: string(tr)})

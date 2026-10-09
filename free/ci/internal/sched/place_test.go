@@ -11,8 +11,16 @@ import (
 )
 
 func ptr[T any](v T) *T { return &v }
+func fixtureCapability(project string) model.Capability {
+	c := model.Capability{Schema: "ci.runner-capability/v1"}
+	c.Lifecycle.AuthorizedProjects = []string{project}
+	c.Lifecycle.Eligible = true
+	c.Protocol.Versions = []int{1}
+	c.Protocol.Min = 1
+	return c
+}
 func fixtureRunner(id, loc string) Runner {
-	c := model.Capability{}
+	c := fixtureCapability("project")
 	c.Platform.OS.Value = ptr("linux")
 	c.Platform.Arch.Value = ptr("amd64")
 	c.Resources.CPU.Value = ptr(float64(8))
@@ -23,7 +31,7 @@ func fixtureRunner(id, loc string) Runner {
 		Decl: trust.Declaration{Accepts: []model.TrustClass{"owner", "internal", "collaborator", "untrusted"}, Isolation: "vm", Network: "privileged", UIDSeparation: true, Ownership: "operator", PersonalOwnNode: loc == "local", NoLANRoute: true}}
 }
 func fixtureJob(key string) Job {
-	return Job{Key: key, ID: key, Pipeline: Pipeline{ID: "pipe", Support: []string{"linux/amd64"}}, Requirements: model.PlacementRequirements{Platform: "linux/amd64", CPU: 1, MemMB: 128}, Trust: "owner", Network: "lan", TimeoutMs: 60000, PersonalOwnRun: true}
+	return Job{Key: key, ID: key, Project: "project", Pipeline: Pipeline{ID: "pipe", Support: []string{"linux/amd64"}}, Requirements: model.PlacementRequirements{Platform: "linux/amd64", CPU: 1, MemMB: 128}, Trust: "owner", Network: "lan", TimeoutMs: 60000, PersonalOwnRun: true}
 }
 func fixtureWorld(rs ...Runner) World {
 	return World{Runners: rs, Policy: Policy{Preset: "balanced"}, Costs: map[string]Cost{}, Previous: map[string]string{}}
