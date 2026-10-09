@@ -184,6 +184,11 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 	for key, value := range e.values {
 		plain[key] = value.value
 	}
+	// The hosted authorization decision is part of the effective policy, so the
+	// digest binds it; "_authorization" cannot collide with a registered key.
+	if e.hostedPublic || e.hostedProject {
+		plain["_authorization"] = map[string]any{"hosted_public": e.hostedPublic, "hosted_project": e.hostedProject}
+	}
 	encoded, err := Canonical(plain)
 	if err != nil {
 		return Effective{}, "", err

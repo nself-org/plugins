@@ -182,3 +182,25 @@ func TestReviewPersonalReleaseAndWildcard(t *testing.T) {
 		t.Fatalf("unknown key: %v", err)
 	}
 }
+
+func TestReviewDigestBindsHostedAuthorization(t *testing.T) {
+	r, err := trust.NewRegistry(trust.KeySpec{Key: "trust.privacy_zone", Owner: "trust", Kind: trust.TightenLower, Order: []string{"local-only", "private-infrastructure", "provider-allowlist", "hosted-allowed"}, Default: "hosted-allowed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, none, err := r.Merge("pin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, project, err := r.Merge("pin", trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"hosted-allowed"`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := trust.Declaration{Accepts: []model.TrustClass{"untrusted"}, Isolation: "hosted-disposable", Network: "restricted", Hosted: true, UIDSeparation: true}
+	if includes(trust.Admissible(trust.JobFacts{Trust: "untrusted", Network: "restricted"}, d, e), trust.PrivacyHostedNotAuthorized) {
+		t.Fatal("project scope did not authorize hosting")
+	}
+	if none == project {
+		t.Fatalf("digest %s does not distinguish an unauthorized policy from a project-authorized one", none)
+	}
+}
