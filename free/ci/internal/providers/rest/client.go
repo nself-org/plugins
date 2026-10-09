@@ -26,6 +26,7 @@ const (
 )
 
 var errPrivate = errors.New("ssrf.private")
+var errTooLarge = errors.New("response too large")
 
 // Client sends provider requests through one guarded transport.
 type Client struct {
@@ -79,6 +80,10 @@ func (c *Client) Do(ctx context.Context, method, pathTemplate string, params map
 	}
 	path := pathTemplate
 	for key, value := range params {
+		if value == "." || value == ".." {
+			finalErr = config("request.path")
+			return response, finalErr
+		}
 		path = strings.ReplaceAll(path, "{"+key+"}", url.PathEscape(value))
 	}
 	if strings.ContainsAny(path, "?#") || strings.Contains(path, "{") || !strings.HasPrefix(path, "/") {
@@ -133,7 +138,7 @@ func (c *Client) Do(ctx context.Context, method, pathTemplate string, params map
 	response.Status = resp.StatusCode
 	limited, err := readLimited(resp.Body, apiCap)
 	if err != nil {
-		finalErr = config("response.too_large")
+		finalErr = classifyRead(err, "response.too_large")
 		return response, finalErr
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -173,7 +178,7 @@ func (c *Client) download(ctx context.Context, rawURL string, maxBytes int64, w 
 		return response, finalErr
 	}
 	req.Header.Set("User-Agent", c.userAgent())
-	if strings.EqualFold(u.Hostname(), c.baseHost()) && c.Auth != nil {
+	if sameAuthority(u, c.BaseURL) && c.Auth != nil {
 		token, authErr := c.Auth(ctx)
 		if authErr != nil {
 			finalErr = authErr
@@ -193,16 +198,19 @@ func (c *Client) download(ctx context.Context, rawURL string, maxBytes int64, w 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		limited, readErr := readLimited(resp.Body, apiCap)
 		if readErr != nil {
-			finalErr = config("response.too_large")
+			finalErr = classifyRead(readErr, "response.too_large")
 		} else {
 			finalErr = classify(resp.StatusCode, resp.Header, limited, time.Now())
+			if pe, ok := finalErr.(*providers.Error); ok {
+				response.RetryAt = pe.RetryAt
+			}
 		}
 		return response, finalErr
 	}
 	// Buffer before writing, so an oversized artifact leaves no partial output.
 	data, readErr := readLimited(resp.Body, maxBytes)
 	if readErr != nil {
-		finalErr = config("download.too_large")
+		finalErr = classifyRead(readErr, "download.too_large")
 		return response, finalErr
 	}
 	if _, err = w.Write(data); err != nil {
@@ -224,7 +232,14 @@ func readLimited(reader io.Reader, cap int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(data)) > cap {
-		return nil, errors.New("size")
+		return nil, errTooLarge
 	}
 	return data, nil
+}
+
+func classifyRead(err error, sizeReason string) *providers.Error {
+	if errors.Is(err, errTooLarge) {
+		return config(sizeReason)
+	}
+	return providers.NewError(providers.Transient, "E704", "network", 0, time.Time{})
 }

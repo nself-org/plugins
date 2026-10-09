@@ -15,7 +15,21 @@ func hostMatch(host, permitted string) bool {
 		permitted = permitted[2:]
 		return strings.HasSuffix(host, "."+permitted)
 	}
-	return host == permitted || strings.HasSuffix(host, "."+permitted)
+	return host == permitted
+}
+
+func sameAuthority(target *url.URL, rawBase string) bool {
+	base, err := url.Parse(rawBase)
+	if err != nil || target == nil || target.Scheme != "https" || base.Scheme != "https" {
+		return false
+	}
+	port := func(u *url.URL) string {
+		if u.Port() != "" {
+			return u.Port()
+		}
+		return "443"
+	}
+	return strings.EqualFold(target.Hostname(), base.Hostname()) && port(target) == port(base)
 }
 
 func (c *Client) allowedURL(u *url.URL, includeBase bool) bool {
@@ -34,6 +48,9 @@ func (c *Client) allowedURL(u *url.URL, includeBase bool) bool {
 }
 
 func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		return config("redirect.method")
+	}
 	if len(via) >= 4 || !c.allowedURL(req.URL, false) {
 		return config("redirect.host")
 	}

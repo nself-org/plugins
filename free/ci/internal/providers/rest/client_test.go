@@ -68,7 +68,7 @@ func TestRedirectRules(t *testing.T) {
 	if c.allowedURL(mustURL(t, "https://other.example/artifact"), true) {
 		t.Fatal("accepted foreign download")
 	}
-	if !hostMatch("child.target.example.com", "target.example.com") || hostMatch("eviltarget.example.com", "target.example.com") {
+	if !hostMatch("child.target.example.com", "*.target.example.com") || hostMatch("eviltarget.example.com", "target.example.com") {
 		t.Fatal("host suffix boundary failed")
 	}
 	targetSeen := false

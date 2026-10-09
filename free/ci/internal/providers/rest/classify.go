@@ -40,10 +40,16 @@ func classify(status int, header http.Header, body []byte, now time.Time) *provi
 		class, code, reason = providers.Quota, "E703", "rate_limit"
 	case status == 403:
 		class, code, reason = providers.Auth, "E701", "permission"
-		if scope := header.Get("X-Accepted-OAuth-Scopes"); scope != "" {
-			reason = "missing_scope:" + strings.TrimSpace(strings.Split(scope, ",")[0])
-		} else if scope := header.Get("X-OAuth-Scopes"); scope != "" {
-			reason = "scope:" + strings.TrimSpace(strings.Split(scope, ",")[0])
+		granted := make(map[string]bool)
+		for _, scope := range strings.Split(header.Get("X-OAuth-Scopes"), ",") {
+			granted[strings.TrimSpace(scope)] = true
+		}
+		for _, scope := range strings.Split(header.Get("X-Accepted-OAuth-Scopes"), ",") {
+			scope = strings.TrimSpace(scope)
+			if scope != "" && !granted[scope] {
+				reason = "missing_scope:" + scope
+				break
+			}
 		}
 	case status == 429:
 		class, code, reason = providers.Quota, "E703", "rate_limit"
