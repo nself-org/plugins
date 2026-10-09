@@ -313,7 +313,7 @@ func TestReviewSweepWalkAndPruneErrors(t *testing.T) {
 	}
 	want := errors.New("injected prune failure")
 	prior := removeFile
-	removeFile = func(*Store, string) error { return want }
+	removeFile = func(*Store, string, func() error) error { return want }
 	if err := s.Sweep(context.Background(), "cache", func(Realm, string) bool { return false }, time.Now()); !errors.Is(err, want) {
 		t.Fatalf("prune failure hidden: %v", err)
 	}

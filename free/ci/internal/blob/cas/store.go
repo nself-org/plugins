@@ -24,6 +24,7 @@ type Store struct {
 	beforeQuarantineRename func() error
 	afterQuarantineRename  func()
 	afterTempReadDir       func()
+	afterWalkReadDir       func(string)
 }
 
 var lstat = os.Lstat

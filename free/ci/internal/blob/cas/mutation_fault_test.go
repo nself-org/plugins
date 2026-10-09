@@ -85,11 +85,11 @@ func TestSweepTempInfoAndRemoveFailures(t *testing.T) {
 				}
 			} else {
 				prior := removeFile
-				removeFile = func(_ *Store, path string) error {
+				removeFile = func(_ *Store, path string, remove func() error) error {
 					if path == p {
 						return want
 					}
-					return prior(s, path)
+					return prior(s, path, remove)
 				}
 				t.Cleanup(func() { removeFile = prior })
 			}

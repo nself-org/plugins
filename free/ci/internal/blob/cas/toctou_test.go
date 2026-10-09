@@ -1,12 +1,152 @@
 package cas
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestSweepTempSwappedWalkRootRefusesPublishedBlob(t *testing.T) {
+	s := testStore(t)
+	r := CacheRealm("swapped-temp-walk-root")
+	d, _, err := s.Put(context.Background(), r, strings.NewReader("published"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, _ := s.blobPath(r, d)
+	now := time.Now()
+	old := now.Add(-25 * time.Hour)
+	if err := os.Chtimes(blob, old, old); err != nil {
+		t.Fatal(err)
+	}
+	tmpRealm := filepath.Join(s.blobs(), "tmp", string(r))
+	if err := s.secureDir(tmpRealm); err != nil {
+		t.Fatal(err)
+	}
+	s.afterTempReadDir = func() {
+		if err := os.Rename(tmpRealm, tmpRealm+"-saved"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join("..", string(r), "sha256"), tmpRealm); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = s.Sweep(context.Background(), "cache", func(Realm, string) bool { return true }, now)
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("swapped temp walk root accepted: %v", err)
+	}
+	if _, err := os.Stat(blob); err != nil {
+		t.Fatalf("published blob deleted: %v", err)
+	}
+}
+
+func TestSweepTempNestedSymlinkRefusesPublishedBlob(t *testing.T) {
+	s := testStore(t)
+	r := CacheRealm("nested-temp-walk-link")
+	d, _, err := s.Put(context.Background(), r, strings.NewReader("published"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, _ := s.blobPath(r, d)
+	now := time.Now()
+	old := now.Add(-25 * time.Hour)
+	if err := os.Chtimes(blob, old, old); err != nil {
+		t.Fatal(err)
+	}
+	tmpRealm := filepath.Join(s.blobs(), "tmp", string(r))
+	if err := s.secureDir(tmpRealm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "..", string(r), "sha256"), filepath.Join(tmpRealm, "nested")); err != nil {
+		t.Fatal(err)
+	}
+	err = s.Sweep(context.Background(), "cache", func(Realm, string) bool { return true }, now)
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("nested temp link accepted: %v", err)
+	}
+	if _, err := os.Stat(blob); err != nil {
+		t.Fatalf("published blob deleted: %v", err)
+	}
+}
+
+func TestSweepTempSwappedNestedEntryRefusesPublishedBlob(t *testing.T) {
+	s := testStore(t)
+	r := CacheRealm("swapped-nested-temp-entry")
+	d, _, err := s.Put(context.Background(), r, strings.NewReader("published"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, _ := s.blobPath(r, d)
+	now := time.Now()
+	old := now.Add(-25 * time.Hour)
+	if err := os.Chtimes(blob, old, old); err != nil {
+		t.Fatal(err)
+	}
+	tmpRealm := filepath.Join(s.blobs(), "tmp", string(r))
+	nested := filepath.Join(tmpRealm, "nested")
+	if err := s.secureDir(nested); err != nil {
+		t.Fatal(err)
+	}
+	s.afterWalkReadDir = func(path string) {
+		if path != tmpRealm {
+			return
+		}
+		if err := os.Rename(nested, nested+"-saved"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join("..", "..", string(r), "sha256"), nested); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = s.Sweep(context.Background(), "cache", func(Realm, string) bool { return true }, now)
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("swapped nested entry accepted: %v", err)
+	}
+	if _, err := os.Stat(blob); err != nil {
+		t.Fatalf("published blob deleted: %v", err)
+	}
+}
+
+func TestSweepTempSwappedAncestorRefusesPrune(t *testing.T) {
+	s := testStore(t)
+	r := CacheRealm("swapped-temp-ancestor")
+	tmpRealm := filepath.Join(s.blobs(), "tmp", string(r))
+	nested := filepath.Join(tmpRealm, "nested")
+	if err := s.secureDir(nested); err != nil {
+		t.Fatal(err)
+	}
+	oldFile := filepath.Join(nested, "orphan")
+	if err := os.WriteFile(oldFile, []byte("must survive"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	old := now.Add(-25 * time.Hour)
+	if err := os.Chtimes(oldFile, old, old); err != nil {
+		t.Fatal(err)
+	}
+	s.afterWalkReadDir = func(path string) {
+		if path != tmpRealm {
+			return
+		}
+		if err := os.Rename(tmpRealm, tmpRealm+"-saved"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Base(tmpRealm)+"-saved", tmpRealm); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := s.Sweep(context.Background(), "cache", func(Realm, string) bool { return false }, now)
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("swapped walk ancestor accepted: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(tmpRealm+"-saved", "nested", "orphan")); err != nil || string(b) != "must survive" {
+		t.Fatalf("orphan outside requested walk removed: %q, %v", b, err)
+	}
+}
 
 func TestLockSwapRefusesSymlink(t *testing.T) {
 	s := testStore(t)

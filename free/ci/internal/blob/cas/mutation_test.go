@@ -148,6 +148,44 @@ func TestSweepContinuesAfterMissingRealmData(t *testing.T) {
 	}
 }
 
+func TestRemoveStoreRejectsInvalidPathAndMissingRoot(t *testing.T) {
+	s := testStore(t)
+	if err := s.removeStore(filepath.Join(t.TempDir(), "outside")); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("outside path: %v", err)
+	}
+	if err := s.removeStore(filepath.Join(s.blobs(), "missing")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing store root: %v", err)
+	}
+}
+
+func TestSweepReportsRemoveHookFailure(t *testing.T) {
+	s := testStore(t)
+	r := CacheRealm("remove-hook-failure")
+	d, _, err := s.Put(context.Background(), r, strings.NewReader("old"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := s.blobPath(r, d)
+	now := time.Now()
+	old := now.Add(-2 * time.Hour)
+	if err := os.Chtimes(p, old, old); err != nil {
+		t.Fatal(err)
+	}
+	want := errors.New("injected remove failure")
+	s.beforeRemove = func(path string) error {
+		if path == p {
+			return want
+		}
+		return nil
+	}
+	if err := s.Sweep(context.Background(), "cache", func(Realm, string) bool { return false }, now); !errors.Is(err, want) {
+		t.Fatalf("remove failure hidden: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatalf("failed remove deleted blob: %v", err)
+	}
+}
+
 func TestBlobRootSymlinkRefused(t *testing.T) {
 	s := testStore(t)
 	outside := t.TempDir()
