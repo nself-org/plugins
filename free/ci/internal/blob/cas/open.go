@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // Stat reports a blob without reading it; Open is required before trusting bytes.
@@ -18,7 +19,7 @@ func (s *Store) Stat(realm Realm, digest string) (os.FileInfo, error) {
 	if err = s.checkDir(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(s.blobs())
+	root, err := s.storeRoot()
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(s.blobs())
+	root, err := s.storeRoot()
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
 	if !entry.Mode().IsRegular() {
 		return nil, ErrInvalid
 	}
-	f, err := root.Open(rel)
+	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,8 @@ func (s *Store) Open(realm Realm, digest string) (io.ReadCloser, error) {
 		if n != info.Size() {
 			mismatch = ErrSizeMismatch
 		}
-		if err := s.locked(func() error { return s.quarantine(path, info) }); err != nil {
+		err := s.locked(func() error { return s.quarantine(path, info) })
+		if err != nil {
 			return nil, err
 		}
 		return nil, mismatch
@@ -150,7 +152,7 @@ func (s *Store) snapshot() (*os.File, error) {
 }
 
 func verifyPath(root *os.Root, rel, digest string) error {
-	f, err := root.Open(rel)
+	f, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return err
 	}
@@ -160,6 +162,10 @@ func verifyPath(root *os.Root, rel, digest string) error {
 		return err
 	}
 	if !info.Mode().IsRegular() {
+		return ErrInvalid
+	}
+	current, err := root.Lstat(rel)
+	if err != nil || !current.Mode().IsRegular() || !os.SameFile(current, info) {
 		return ErrInvalid
 	}
 	h := sha256.New()
@@ -197,7 +203,7 @@ func (s *Store) quarantine(path string, observed os.FileInfo) error {
 	if err != nil {
 		return err
 	}
-	root, err := os.OpenRoot(s.blobs())
+	root, err := s.storeRoot()
 	if err != nil {
 		return err
 	}
@@ -207,11 +213,19 @@ func (s *Store) quarantine(path string, observed os.FileInfo) error {
 		return err
 	}
 	to := filepath.Join("corrupt", name)
+	if s.beforeQuarantineRename != nil {
+		if err := s.beforeQuarantineRename(); err != nil {
+			return err
+		}
+	}
 	if err = root.Rename(from, to); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if s.afterQuarantineRename != nil {
+		s.afterQuarantineRename()
 	}
 	moved, err := root.Lstat(to)
 	if err != nil {
@@ -224,5 +238,5 @@ func (s *Store) quarantine(path string, observed os.FileInfo) error {
 		}
 		return ErrInvalid
 	}
-	return syncDir(dir)
+	return s.syncStoreDir(dir)
 }

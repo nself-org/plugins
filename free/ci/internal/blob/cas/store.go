@@ -13,10 +13,17 @@ import (
 
 // Store owns one on-disk content-addressed tree under NSELF_CI_HOME.
 type Store struct {
-	home         string
-	mu           sync.Mutex
-	beforeRename func() error
-	beforeHash   func()
+	home                   string
+	mu                     sync.Mutex
+	beforeRename           func() error
+	beforeHash             func()
+	afterLockStat          func()
+	afterPartialStat       func()
+	beforeOffsetRename     func() error
+	beforeRemove           func(string) error
+	beforeQuarantineRename func() error
+	afterQuarantineRename  func()
+	afterTempReadDir       func()
 }
 
 var lstat = os.Lstat
@@ -41,7 +48,7 @@ func (s *Store) secureDir(path string) error {
 		if err := os.MkdirAll(s.home, 0700); err != nil {
 			return err
 		}
-		if err := os.Mkdir(path, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+		if err := mkdirBlobDir(path, 0700); err != nil && !errors.Is(err, os.ErrExist) {
 			return err
 		}
 		return s.checkDir(path)
@@ -55,12 +62,21 @@ func (s *Store) secureDir(path string) error {
 			return err
 		}
 	}
-	info, err := os.Lstat(path)
+	root, err := s.storeRoot()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	rel, err := s.storeRel(path)
+	if err != nil {
+		return err
+	}
+	info, err := root.Lstat(rel)
 	if errors.Is(err, os.ErrNotExist) {
-		if err = os.Mkdir(path, 0700); errors.Is(err, os.ErrExist) {
-			info, err = os.Lstat(path)
+		if err = root.Mkdir(rel, 0700); errors.Is(err, os.ErrExist) {
+			info, err = root.Lstat(rel)
 		} else if err == nil {
-			return nil
+			return s.checkDir(path)
 		}
 	}
 	if err != nil {
@@ -69,7 +85,7 @@ func (s *Store) secureDir(path string) error {
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return ErrInvalid
 	}
-	return nil
+	return s.checkDir(path)
 }
 
 func (s *Store) checkDir(path string) error {
@@ -101,26 +117,15 @@ func (s *Store) blobPath(r Realm, digest string) (string, error) {
 	return filepath.Join(s.blobs(), string(r), "sha256", digest[:2], digest), nil
 }
 
-func syncDir(path string) error {
-	d, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	err = d.Sync()
-	closeErr := d.Close()
-	if err != nil {
-		return err
-	}
-	return closeErr
-}
-
-func randomName() (string, error) {
+var randomName = func() (string, error) {
 	var b [16]byte
 	if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(b[:]), nil
 }
+
+var mkdirBlobDir = os.Mkdir
 
 func (s *Store) tmpRoot() (*os.Root, error) {
 	dir := filepath.Join(s.blobs(), "tmp")
@@ -131,7 +136,7 @@ func (s *Store) tmpRoot() (*os.Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(s.blobs())
+	root, err := s.storeRoot()
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +189,7 @@ func (s *Store) publish(tmp string, r Realm, digest string) error {
 	}
 	// Keep the root handle across the hook and rename. Root.Rename cannot
 	// traverse a swapped symlink outside blobs, even if the pathname changes.
-	root, err := os.OpenRoot(s.blobs())
+	root, err := s.storeRoot()
 	if err != nil {
 		return err
 	}
@@ -225,7 +230,7 @@ func (s *Store) publish(tmp string, r Realm, digest string) error {
 		_ = root.Remove(dstRel)
 		return ErrInvalid
 	}
-	return syncDir(filepath.Dir(dst))
+	return s.syncStoreDir(filepath.Dir(dst))
 }
 
 func validKind(kind string) bool             { return kind == "cache" || kind == "artifacts" }

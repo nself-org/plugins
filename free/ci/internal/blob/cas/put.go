@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-	"os"
 )
 
 // Put streams bytes into an exclusive temporary file, then publishes by digest.
@@ -20,17 +19,26 @@ func (s *Store) Put(ctx context.Context, realm Realm, src io.Reader) (string, in
 	if err != nil {
 		return "", 0, err
 	}
-	defer func() { _ = os.Remove(tempPath) }()
+	defer func() { _ = s.removeStore(tempPath) }()
 	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	buf := make([]byte, 32*1024)
 	var size int64
+	emptyReads := 0
 	for {
 		if err = ctx.Err(); err != nil {
 			return "", 0, err
 		}
 		n, e := src.Read(buf)
-		if n > 0 {
+		if n == 0 && e == nil {
+			emptyReads++
+			if emptyReads >= 100 {
+				return "", 0, io.ErrNoProgress
+			}
+		} else {
+			emptyReads = 0
+		}
+		if n != 0 {
 			k, werr := f.Write(buf[:n])
 			if werr != nil {
 				return "", 0, werr
@@ -55,7 +63,8 @@ func (s *Store) Put(ctx context.Context, realm Realm, src io.Reader) (string, in
 		return "", 0, err
 	}
 	digest := hex.EncodeToString(h.Sum(nil))
-	if err = s.locked(func() error { return s.publish(tempPath, realm, digest) }); err != nil {
+	err = s.locked(func() error { return s.publish(tempPath, realm, digest) })
+	if err != nil {
 		return "", 0, err
 	}
 	return digest, size, nil

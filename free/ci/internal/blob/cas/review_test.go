@@ -261,7 +261,7 @@ func TestReviewRestartTruncationFailureReturned(t *testing.T) {
 	}
 	want := errors.New("injected truncate failure")
 	old := truncateFile
-	truncateFile = func(string, int64) error { return want }
+	truncateFile = func(*os.File, int64) error { return want }
 	t.Cleanup(func() { truncateFile = old })
 	if _, err := s.Partial(r, d, "writer"); !errors.Is(err, want) {
 		t.Fatalf("truncate failure hidden: %v", err)
@@ -276,7 +276,7 @@ func TestReviewEmptyPartialResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := truncateFile
-	truncateFile = func(string, int64) error { return errors.New("unnecessary truncate") }
+	truncateFile = func(*os.File, int64) error { return errors.New("unnecessary truncate") }
 	t.Cleanup(func() { truncateFile = old })
 	p, err := s.Partial(r, d, "writer")
 	if err != nil || p.Offset() != 0 {
@@ -313,7 +313,7 @@ func TestReviewSweepWalkAndPruneErrors(t *testing.T) {
 	}
 	want := errors.New("injected prune failure")
 	prior := removeFile
-	removeFile = func(string) error { return want }
+	removeFile = func(*Store, string) error { return want }
 	if err := s.Sweep(context.Background(), "cache", func(Realm, string) bool { return false }, time.Now()); !errors.Is(err, want) {
 		t.Fatalf("prune failure hidden: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestReviewExactSweepExpiryBoundaries(t *testing.T) {
 		age     time.Duration
 		expired bool
 	}{
-		{"young", partialTTL - time.Nanosecond, false}, {"exact", partialTTL, true},
+		{"young", 24*time.Hour - time.Nanosecond, false}, {"exact", 24 * time.Hour, true},
 	} {
 		p, err := s.Partial(r, digestOf([]byte(tc.name)), tc.name)
 		if err != nil {
@@ -394,7 +394,7 @@ func TestReviewExactSweepExpiryBoundaries(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		age  time.Duration
-	}{{"young", corruptTTL - time.Nanosecond}, {"exact", corruptTTL}} {
+	}{{"young", 7*24*time.Hour - time.Nanosecond}, {"exact", 7 * 24 * time.Hour}} {
 		p := filepath.Join(corrupt, tc.name)
 		if err := os.WriteFile(p, []byte(tc.name), 0600); err != nil {
 			t.Fatal(err)

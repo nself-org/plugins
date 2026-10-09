@@ -18,7 +18,7 @@ type Partial struct {
 	offset                   int64
 }
 
-var truncateFile = os.Truncate
+var truncateFile = (*os.File).Truncate
 
 // Partial opens or creates a transfer keyed by realm, digest and writer ID.
 func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) {
@@ -39,7 +39,7 @@ func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) 
 	meta := data + ".offset"
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, err := os.OpenFile(data, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := s.openStoreFile(data, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err == nil {
 		if err := f.Close(); err != nil {
 			return nil, err
@@ -60,7 +60,7 @@ func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) 
 	} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	b, err := os.ReadFile(meta)
+	b, err := s.readStoreFile(meta)
 	if errors.Is(err, os.ErrNotExist) {
 		if info.Size() != 0 {
 			return nil, ErrPartialConflict
@@ -78,7 +78,23 @@ func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) 
 		return nil, ErrPartialConflict
 	}
 	if info.Size() > p.offset {
-		if err = truncateFile(data, p.offset); err != nil {
+		if s.afterPartialStat != nil {
+			s.afterPartialStat()
+		}
+		f, openErr := s.openStoreFile(data, os.O_WRONLY, 0)
+		if openErr != nil {
+			return nil, openErr
+		}
+		current, statErr := f.Stat()
+		if statErr != nil || !os.SameFile(info, current) || current.Size() != info.Size() {
+			_ = f.Close()
+			return nil, ErrPartialConflict
+		}
+		if err = truncateFile(f, p.offset); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+		if err = f.Close(); err != nil {
 			return nil, err
 		}
 	}
@@ -109,16 +125,24 @@ func (p *Partial) Write(b []byte) (int, error) {
 	if !info.Mode().IsRegular() || info.Size() != p.offset {
 		return 0, ErrPartialConflict
 	}
-	f, err := os.OpenFile(p.data, os.O_WRONLY|os.O_APPEND, 0)
+	if p.store.afterPartialStat != nil {
+		p.store.afterPartialStat()
+	}
+	f, err := p.store.openStoreFile(p.data, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		return 0, err
 	}
-	n, err := f.Write(b)
+	current, err := f.Stat()
+	if err != nil || !os.SameFile(info, current) || current.Size() != p.offset {
+		_ = f.Close()
+		return 0, ErrPartialConflict
+	}
+	n, err := writePartialFile(f, b)
 	if err == nil && n != len(b) {
 		err = io.ErrShortWrite
 	}
 	if err == nil {
-		err = f.Sync()
+		err = syncPartialFile(f)
 	}
 	closeErr := f.Close()
 	if err == nil {
@@ -140,14 +164,14 @@ func (p *Partial) commitOffset(offset int64) error {
 		return err
 	}
 	tmp := p.offsetPath + "." + name
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := p.store.openStoreFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(tmp) }()
-	_, err = f.WriteString(strconv.FormatInt(offset, 10))
+	defer func() { _ = p.store.removeStore(tmp) }()
+	_, err = writeOffsetFile(f, strconv.FormatInt(offset, 10))
 	if err == nil {
-		err = f.Sync()
+		err = syncOffsetFile(f)
 	}
 	closeErr := f.Close()
 	if err != nil {
@@ -156,11 +180,21 @@ func (p *Partial) commitOffset(offset int64) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	if err = os.Rename(tmp, p.offsetPath); err != nil {
+	if p.store.beforeOffsetRename != nil {
+		if err := p.store.beforeOffsetRename(); err != nil {
+			return err
+		}
+	}
+	if err = p.store.renameStore(tmp, p.offsetPath); err != nil {
 		return err
 	}
-	return syncDir(filepath.Dir(p.offsetPath))
+	return p.store.syncStoreDir(filepath.Dir(p.offsetPath))
 }
+
+var writePartialFile = (*os.File).Write
+var syncPartialFile = (*os.File).Sync
+var writeOffsetFile = (*os.File).WriteString
+var syncOffsetFile = (*os.File).Sync
 
 // Finalize verifies all bytes and publishes only an exact digest match.
 func (p *Partial) Finalize() error {
@@ -176,7 +210,7 @@ func (p *Partial) Finalize() error {
 	if !info.Mode().IsRegular() || info.Size() != p.offset {
 		return ErrPartialConflict
 	}
-	f, err := os.Open(p.data)
+	f, err := p.store.openStoreFile(p.data, os.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
@@ -190,16 +224,17 @@ func (p *Partial) Finalize() error {
 		return closeErr
 	}
 	if hex.EncodeToString(h.Sum(nil)) != p.digest {
-		if err := os.Remove(p.data); err != nil {
+		if err := p.store.removeStore(p.data); err != nil {
 			return errors.Join(ErrPartialConflict, err)
 		}
-		if err := os.Remove(p.offsetPath); err != nil {
+		if err := p.store.removeStore(p.offsetPath); err != nil {
 			return errors.Join(ErrPartialConflict, err)
 		}
 		return ErrPartialConflict
 	}
-	if err = p.store.locked(func() error { return p.store.publish(p.data, p.realm, p.digest) }); err != nil {
+	err = p.store.locked(func() error { return p.store.publish(p.data, p.realm, p.digest) })
+	if err != nil {
 		return err
 	}
-	return os.Remove(p.offsetPath)
+	return p.store.removeStore(p.offsetPath)
 }

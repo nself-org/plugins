@@ -11,7 +11,7 @@ func (s *Store) locked(fn func() error) error {
 	if err := s.secureDir(s.blobs()); err != nil {
 		return err
 	}
-	root, err := os.OpenRoot(s.blobs())
+	root, err := s.storeRoot()
 	if err != nil {
 		return err
 	}
@@ -25,12 +25,23 @@ func (s *Store) locked(fn func() error) error {
 		if !info.Mode().IsRegular() {
 			return ErrInvalid
 		}
-		f, err = root.OpenFile(".lock", os.O_RDWR, 0)
+		if s.afterLockStat != nil {
+			s.afterLockStat()
+		}
+		f, err = root.OpenFile(".lock", os.O_RDWR|syscall.O_NOFOLLOW, 0)
 	}
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
+	opened, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	current, err := root.Lstat(".lock")
+	if err != nil || !current.Mode().IsRegular() || !os.SameFile(current, opened) {
+		return ErrInvalid
+	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		return err
 	}

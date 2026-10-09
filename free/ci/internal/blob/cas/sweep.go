@@ -3,16 +3,18 @@ package cas
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
 )
 
 const blobGrace = time.Hour
-const partialTTL = 24 * time.Hour
-const corruptTTL = 7 * 24 * time.Hour
 
-var removeFile = os.Remove
+func partialTTL() time.Duration { return 24 * time.Hour }
+func corruptTTL() time.Duration { return 7 * 24 * time.Hour }
+
+var removeFile = func(s *Store, path string) error { return s.removeStore(path) }
 
 // Sweep removes unreferenced old blobs in one kind, stale partials, and old corrupt files.
 func (s *Store) Sweep(ctx context.Context, kind string, keep func(Realm, string) bool, now time.Time) error {
@@ -29,7 +31,7 @@ func (s *Store) sweepLocked(ctx context.Context, kind string, keep func(Realm, s
 	} else if err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(root)
+	entries, err := s.readStoreDir(root)
 	if err != nil {
 		return err
 	}
@@ -48,7 +50,7 @@ func (s *Store) sweepLocked(ctx context.Context, kind string, keep func(Realm, s
 			return ErrInvalid
 		}
 		base := filepath.Join(root, e.Name(), "sha256")
-		if err = walkFiles(base, func(path string, info os.FileInfo) error {
+		walkErr := s.walkFiles(base, func(path string, info os.FileInfo) error {
 			digest := filepath.Base(path)
 			if err := validateDigest(digest); err != nil {
 				return err
@@ -59,17 +61,31 @@ func (s *Store) sweepLocked(ctx context.Context, kind string, keep func(Realm, s
 			if now.Sub(info.ModTime()) < blobGrace || keep(r, digest) {
 				return nil
 			}
-			return removeFile(path)
-		}); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			return removeFile(s, path)
+		})
+		if walkErr != nil && !errors.Is(walkErr, os.ErrNotExist) {
+			return walkErr
 		}
 	}
 	tempErr := s.sweepTemp(ctx, kind, now)
 	return errors.Join(tempErr, s.sweepCorrupt(ctx, now))
 }
 
-func walkFiles(root string, fn func(string, os.FileInfo) error) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+func (s *Store) walkFiles(path string, fn func(string, os.FileInfo) error) error {
+	rel, err := s.storeRel(path)
+	if err != nil {
+		return err
+	}
+	root, err := s.storeRoot()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	return fs.WalkDir(root.FS(), rel, func(name string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
@@ -82,7 +98,7 @@ func walkFiles(root string, fn func(string, os.FileInfo) error) error {
 		if !info.Mode().IsRegular() {
 			return ErrInvalid
 		}
-		return fn(path, info)
+		return fn(filepath.Join(s.blobs(), name), info)
 	})
 }
 
@@ -97,14 +113,17 @@ func (s *Store) sweepTemp(ctx context.Context, kind string, now time.Time) error
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if now.Sub(info.ModTime()) < partialTTL {
+		if now.Sub(info.ModTime()) < partialTTL() {
 			return nil
 		}
-		return removeFile(path)
+		return removeFile(s, path)
 	}
-	entries, err := os.ReadDir(dir)
+	entries, err := s.readStoreDir(dir)
 	if err != nil {
 		return err
+	}
+	if s.afterTempReadDir != nil {
+		s.afterTempReadDir()
 	}
 	var unknown error
 	for _, e := range entries {
@@ -118,7 +137,7 @@ func (s *Store) sweepTemp(ctx context.Context, kind string, now time.Time) error
 				unknown = errors.Join(unknown, errors.New("cas: skipped unknown temp entry: "+e.Name()))
 				continue
 			}
-			if err := walkFiles(path, prune); err != nil {
+			if err := s.walkFiles(path, prune); err != nil {
 				return err
 			}
 			continue
@@ -144,14 +163,14 @@ func (s *Store) sweepCorrupt(ctx context.Context, now time.Time) error {
 	} else if err != nil {
 		return err
 	}
-	return walkFiles(dir, func(path string, info os.FileInfo) error {
+	return s.walkFiles(dir, func(path string, info os.FileInfo) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if now.Sub(info.ModTime()) < corruptTTL {
+		if now.Sub(info.ModTime()) < corruptTTL() {
 			return nil
 		}
-		return removeFile(path)
+		return removeFile(s, path)
 	})
 }
 
@@ -167,6 +186,6 @@ func (s *Store) Usage(realm Realm) (int64, error) {
 		return 0, err
 	}
 	var size int64
-	err := walkFiles(root, func(_ string, info os.FileInfo) error { size += info.Size(); return nil })
+	err := s.walkFiles(root, func(_ string, info os.FileInfo) error { size += info.Size(); return nil })
 	return size, err
 }
