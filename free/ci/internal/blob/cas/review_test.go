@@ -204,7 +204,8 @@ func TestReviewQuarantineChecksInode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(p); err != nil {
+	// Keep the old inode allocated; Linux may reuse it after Remove.
+	if err := os.Rename(p, p+".old"); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(p, []byte("replacement"), 0600); err != nil {
