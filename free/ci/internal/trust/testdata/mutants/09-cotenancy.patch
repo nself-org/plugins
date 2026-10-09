@@ -1,0 +1,5 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -157 +157 @@
+-		out = append(out, IsolationCotenancy)
++		out = append(out)

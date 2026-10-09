@@ -1,0 +1,5 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -101 +101 @@
+-		return []Reason{TrustNotAccepted}
++		return nil

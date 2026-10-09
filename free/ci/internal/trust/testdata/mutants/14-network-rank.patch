@@ -1,0 +1,5 @@
+--- a/internal/trust/order.go
++++ b/internal/trust/order.go
+@@ -7 +7 @@
+-var networkOrder = []string{"none", "restricted", "internet", "lan", "privileged"}
++var networkOrder = []string{"none", "internet", "restricted", "lan", "privileged"}

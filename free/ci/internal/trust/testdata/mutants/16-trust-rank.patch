@@ -1,0 +1,5 @@
+--- a/internal/trust/order.go
++++ b/internal/trust/order.go
+@@ -5 +5 @@
+-var trustOrder = []string{"untrusted", "collaborator", "internal", "owner"}
++var trustOrder = []string{"untrusted", "internal", "collaborator", "owner"}

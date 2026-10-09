@@ -1,0 +1,5 @@
+--- a/internal/trust/merge.go
++++ b/internal/trust/merge.go
+@@ -81 +81 @@
+-		return reflect.DeepEqual(old, next)
++		return true

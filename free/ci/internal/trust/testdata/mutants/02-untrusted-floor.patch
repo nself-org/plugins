@@ -1,0 +1,5 @@
+--- a/internal/trust/derive.go
++++ b/internal/trust/derive.go
+@@ -45 +45 @@
+-		return "sandboxed-container"
++		return "container"

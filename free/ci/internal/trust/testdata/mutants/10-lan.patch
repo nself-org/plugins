@@ -1,0 +1,5 @@
+--- a/internal/trust/admissible.go
++++ b/internal/trust/admissible.go
+@@ -170 +170 @@
+-		out = append(out, NetworkLANForUntrusted)
++		out = append(out)

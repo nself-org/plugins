@@ -36,7 +36,7 @@ var enumValues = map[string][]string{
 	"Isolation":          {"process", "container", "sandboxed-container", "vm", "ephemeral-vm", "hosted-disposable"},
 	"NetworkScope":       {"none", "internet", "restricted", "lan", "privileged"},
 	"SecretClass":        {"none", "project", "environment", "team", "release", "deploy"},
-	"PrivacyZone":        {"local-only", "private-infrastructure", "hosted-allowed"},
+	"PrivacyZone":        {"local-only", "private-infrastructure", "provider-allowlist", "hosted-allowed"},
 	"SelectionMode":      {"full", "affected"},
 	"CheckResult":        {"pass", "fail", "skip", "error"},
 	"Result":             {"pass", "fail", "error", "cancelled"},

@@ -1,0 +1,5 @@
+--- a/internal/trust/derive.go
++++ b/internal/trust/derive.go
+@@ -56 +56 @@
+-	return "container"
++	return "process"

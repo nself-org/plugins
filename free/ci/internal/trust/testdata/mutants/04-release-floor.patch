@@ -1,0 +1,5 @@
+--- a/internal/trust/derive.go
++++ b/internal/trust/derive.go
+@@ -48 +48 @@
+-		return "vm"
++		return "container"
