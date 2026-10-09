@@ -49,7 +49,10 @@ func parseOSRelease(s string) *string {
 		if !strings.HasPrefix(line, "VERSION_ID=") {
 			continue
 		}
-		v := strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), `"`)
+		v := strings.TrimPrefix(line, "VERSION_ID=")
+		if len(v) >= 2 && (v[0] == '\'' || v[0] == '"') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
+		}
 		if versionRE.MatchString(v) {
 			return &v
 		}
@@ -117,6 +120,9 @@ func parseXcode(version, path string) *string {
 }
 
 func parseNvidia(s string) *[]string {
+	if strings.TrimSpace(s) == "" || strings.TrimSpace(s) == "No devices were found" {
+		return ptr([]string{})
+	}
 	for _, line := range strings.Split(strings.TrimSpace(s), "\n") {
 		if strings.HasPrefix(line, "GPU ") && strings.Contains(line, ":") {
 			return ptr([]string{"gpu"})
@@ -129,8 +135,11 @@ func parseDisplays(s string) *[]string {
 	var doc struct {
 		Displays []json.RawMessage `json:"SPDisplaysDataType"`
 	}
-	if json.Unmarshal([]byte(s), &doc) != nil || len(doc.Displays) == 0 {
+	if json.Unmarshal([]byte(s), &doc) != nil || doc.Displays == nil {
 		return nil
+	}
+	if len(doc.Displays) == 0 {
+		return ptr([]string{})
 	}
 	return ptr([]string{"gpu"})
 }
@@ -155,7 +164,11 @@ func applyToolFacts(c *model.Capability, outputs map[string]string, osName strin
 	if osName == "darwin" && parseVersion(outputs[cmdTart]) == nil {
 		c.Tools.Tart = observed[bool](nil, now)
 	}
-	c.Tools.Toolchains = map[string]model.Fact[string]{}
+	toolchains := make(map[string]model.Fact[string], len(c.Tools.Toolchains)+8)
+	for name, fact := range c.Tools.Toolchains {
+		toolchains[name] = fact
+	}
+	c.Tools.Toolchains = toolchains
 	for _, name := range []string{"go", "node", "pnpm", "cargo", "rustc"} {
 		// A path proves presence; the fixed argv set does not reveal the version.
 		if paths[name] {
@@ -176,9 +189,13 @@ func applyToolFacts(c *model.Capability, outputs map[string]string, osName strin
 	c.Tools.Browsers = observed[[]string](nil, now)
 	c.Resources.Accelerators = observed[[]string](nil, now)
 	if osName == "linux" {
-		c.Resources.Accelerators = observed(parseNvidia(outputs[cmdNvidia]), now)
+		if output, ran := outputs[cmdNvidia]; ran {
+			c.Resources.Accelerators = observed(parseNvidia(output), now)
+		}
 	}
 	if osName == "darwin" {
-		c.Resources.Accelerators = observed(parseDisplays(outputs[cmdDisplays]), now)
+		if output, ran := outputs[cmdDisplays]; ran {
+			c.Resources.Accelerators = observed(parseDisplays(output), now)
+		}
 	}
 }

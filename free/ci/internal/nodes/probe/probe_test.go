@@ -84,7 +84,7 @@ func TestProbeParsers(t *testing.T) {
 		{"swift", func(s string) bool { return parseVersion(s) != nil }, "Apple Swift version 6.0.1", "", "garbage"},
 		{"python3", func(s string) bool { return parseVersion(s) != nil }, "Python 3.11.2", "", "garbage"},
 		{"tart", func(s string) bool { return parseVersion(s) != nil }, "tart 2.13.0", "", "garbage"},
-		{"nvidia-smi", func(s string) bool { return parseNvidia(s) != nil }, "GPU 0: NVIDIA A100 (UUID: GPU-123)", "", "garbage"},
+		{"nvidia-smi", func(s string) bool { return parseNvidia(s) != nil }, "GPU 0: NVIDIA A100 (UUID: GPU-123)", "unavailable", "garbage"},
 		{"system-profiler", func(s string) bool { return parseDisplays(s) != nil }, `{"SPDisplaysDataType":[{"_name":"Apple M4"}]}`, "", "garbage"},
 	}
 	for _, tc := range tests {

@@ -22,18 +22,15 @@ type commandRunner func(context.Context, string) (string, error)
 
 // Shared limits cover every prober instance in this process.
 var slots = make(chan struct{}, 8)
-var hosts = struct {
-	sync.Mutex
-	byID map[string]*sync.Mutex
-}{byID: make(map[string]*sync.Mutex)}
+var hosts [256]sync.Mutex
 
 func hostLock(id string) *sync.Mutex {
-	hosts.Lock()
-	defer hosts.Unlock()
-	if hosts.byID[id] == nil {
-		hosts.byID[id] = &sync.Mutex{}
+	var hash uint32 = 2166136261
+	for i := 0; i < len(id); i++ {
+		hash ^= uint32(id[i])
+		hash *= 16777619
 	}
-	return hosts.byID[id]
+	return &hosts[hash%uint32(len(hosts))]
 }
 
 func observed[T any](v *T, now time.Time) model.Fact[T] {

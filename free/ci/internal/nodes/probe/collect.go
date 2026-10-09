@@ -54,11 +54,14 @@ func collect(ctx context.Context, c *model.Capability, runner commandRunner, exp
 	applyToolFacts(c, outputs, *osName, now)
 	// This is an offered isolation ceiling. Registry.UpdateCapability may only lower it.
 	ceiling := model.Isolation("process")
-	if c.Tools.Docker.Value != nil && *c.Tools.Docker.Value {
+	if c.Tools.Docker.Value != nil && *c.Tools.Docker.Value || c.Tools.Podman.Value != nil && *c.Tools.Podman.Value {
 		ceiling = "container"
 	}
 	if c.Tools.GVisor.Value != nil && *c.Tools.GVisor.Value {
 		ceiling = "sandboxed-container"
+	}
+	if c.Tools.Tart.Value != nil && *c.Tools.Tart.Value {
+		ceiling = "vm"
 	}
 	c.Trust.Isolation = value(ceiling, now)
 	c.Trust.Isolation.Source = "assigned"

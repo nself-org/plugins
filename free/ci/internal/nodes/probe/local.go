@@ -50,9 +50,11 @@ func localCommand(ctx context.Context, command string) (string, error) {
 		return "", err
 	}
 	defer func() { _ = r.Close() }()
-	proc, err := os.StartProcess("/bin/sh", []string{"sh", "-c", command}, &os.ProcAttr{
-		Files: []*os.File{nil, w, w},
-		Env:   []string{"PATH=" + os.Getenv("PATH"), "LANG=C"},
+	proc, err := startLocalProcess(ctx, func() (*os.Process, error) {
+		return os.StartProcess("/bin/sh", []string{"sh", "-c", command}, &os.ProcAttr{
+			Files: []*os.File{nil, w, w},
+			Env:   []string{"PATH=" + os.Getenv("PATH"), "LANG=C"},
+		})
 	})
 	_ = w.Close()
 	if err != nil {
@@ -85,6 +87,13 @@ func localCommand(ctx context.Context, command string) (string, error) {
 		return string(out), fmt.Errorf("probe command exited %s", state.String())
 	}
 	return string(out), nil
+}
+
+func startLocalProcess(ctx context.Context, start func() (*os.Process, error)) (*os.Process, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return start()
 }
 
 func applyCapacity(c *model.Capability, cap ciexec.Capacity, now time.Time) {
