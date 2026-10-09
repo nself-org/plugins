@@ -1,0 +1,1127 @@
+{
+  "$id": "https://nself.org/schemas/runner-protocol.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ack"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "ack_seq": {
+                "type": "integer"
+              },
+              "lease_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ack_seq"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "artifact-ref"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "lease_id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "lease_id",
+              "path",
+              "sha256",
+              "size"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "epoch",
+          "lease_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "cache-ref"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "blobs": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "sha256",
+                    "size"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "key": {
+                "type": "string"
+              },
+              "lease_id": {
+                "type": "string"
+              },
+              "spec": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "lease_id",
+              "spec",
+              "key",
+              "blobs"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "epoch",
+          "lease_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "cancel"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "lease_id": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "lease_id",
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "epoch",
+          "lease_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "chunk"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "stream": {
+                      "enum": [
+                        "artifact",
+                        "cache"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "stream"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "digest": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "digest"
+                  ]
+                }
+              }
+            ],
+            "properties": {
+              "data": {
+                "type": "string"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "final": {
+                "type": "boolean"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "stream": {
+                "enum": [
+                  "checkout",
+                  "artifact",
+                  "cache"
+                ]
+              }
+            },
+            "required": [
+              "stream",
+              "offset",
+              "data",
+              "final"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "digest"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "sha256": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "stream": {
+                "enum": [
+                  "checkout",
+                  "artifact",
+                  "cache"
+                ]
+              }
+            },
+            "required": [
+              "stream",
+              "sha256",
+              "size"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "drain"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "deadline": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "deadline"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "heartbeat"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "battery": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "interactive": {
+                "type": "boolean"
+              },
+              "leases": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "epoch": {
+                      "type": "integer"
+                    },
+                    "lease_id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "lease_id",
+                    "epoch",
+                    "state"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "slots": {
+                "additionalProperties": false,
+                "properties": {
+                  "total": {
+                    "type": "integer"
+                  },
+                  "used": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "used"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "leases",
+              "slots",
+              "battery",
+              "interactive"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "hello"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "age_recipient": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "agent_version": {
+                "type": "string"
+              },
+              "capability_digest": {
+                "type": "string"
+              },
+              "compat_mode_supported": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "identity": {
+                "additionalProperties": false,
+                "properties": {
+                  "host_key_fingerprints": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "machine_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "machine_id",
+                  "host_key_fingerprints"
+                ],
+                "type": "object"
+              },
+              "node_key": {
+                "additionalProperties": false,
+                "properties": {
+                  "alg": {
+                    "type": "string"
+                  },
+                  "key_id": {
+                    "type": "string"
+                  },
+                  "public": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "alg",
+                  "key_id",
+                  "public"
+                ],
+                "type": "object"
+              },
+              "slots": {
+                "additionalProperties": false,
+                "properties": {
+                  "total": {
+                    "type": "integer"
+                  },
+                  "used": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "total",
+                  "used"
+                ],
+                "type": "object"
+              },
+              "versions": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "versions",
+              "agent_version",
+              "age_recipient",
+              "node_key",
+              "capability_digest",
+              "identity",
+              "compat_mode_supported",
+              "slots"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "lease"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "attempt_id": {
+                "type": "string"
+              },
+              "cache": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "access": {
+                        "type": "string"
+                      },
+                      "namespace": {
+                        "type": "string"
+                      },
+                      "restore": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "blobs": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "sha256": {
+                                    "type": "string"
+                                  },
+                                  "size": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "sha256",
+                                  "size"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "dir": {
+                              "type": "string"
+                            },
+                            "key": {
+                              "type": "string"
+                            },
+                            "spec": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "spec",
+                            "key",
+                            "dir",
+                            "blobs"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "save": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "dirs": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "key": {
+                              "type": "string"
+                            },
+                            "spec": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "spec",
+                            "key",
+                            "dirs"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "namespace",
+                      "access",
+                      "restore",
+                      "save"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "checkout": {
+                "additionalProperties": false,
+                "properties": {
+                  "bundle_digest": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "revision",
+                  "bundle_digest",
+                  "size"
+                ],
+                "type": "object"
+              },
+              "compat_mode": {
+                "enum": [
+                  "v1.4",
+                  "v1.5"
+                ]
+              },
+              "epoch": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "expires_at": {
+                "type": "string"
+              },
+              "job": {
+                "type": "object"
+              },
+              "lease_id": {
+                "type": "string"
+              },
+              "runner_credential": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "expires_at": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value",
+                      "expires_at"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "secrets": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "class": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ref",
+                    "class"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "token": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "lease_id",
+              "attempt_id",
+              "epoch",
+              "token",
+              "compat_mode",
+              "job",
+              "checkout",
+              "secrets",
+              "expires_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "epoch",
+          "lease_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "log"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "lease_id": {
+                "type": "string"
+              },
+              "line_seq": {
+                "type": "integer"
+              },
+              "stream": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "lease_id",
+              "line_seq",
+              "stream",
+              "text"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "epoch",
+          "lease_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "offset"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "offset": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "stream": {
+                "enum": [
+                  "checkout",
+                  "artifact",
+                  "cache"
+                ]
+              }
+            },
+            "required": [
+              "stream",
+              "sha256",
+              "offset"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "reject"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "min_agent_version": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "reason",
+              "min_agent_version"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "result"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "epoch": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "evidence": {},
+              "lease_id": {
+                "type": "string"
+              },
+              "signature": {
+                "additionalProperties": false,
+                "properties": {
+                  "key_id": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key_id",
+                  "value"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "lease_id",
+              "epoch",
+              "evidence",
+              "signature"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "epoch",
+          "lease_id"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "resume"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "last_seq": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "last_seq"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "secrets"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "lease_id": {
+                "type": "string"
+              },
+              "values": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "ref": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ref",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "lease_id",
+              "values"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "upgrade"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "manifest_url": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "manifest_url"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "welcome"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "agent_ttl_ms": {
+                "type": "integer"
+              },
+              "heartbeat_ms": {
+                "type": "integer"
+              },
+              "min_agent_version": {
+                "type": "string"
+              },
+              "session_id": {
+                "type": "string"
+              },
+              "version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "version",
+              "min_agent_version",
+              "session_id",
+              "heartbeat_ms",
+              "agent_ttl_ms"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "ack": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "body": {
+      "type": "object"
+    },
+    "epoch": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "lease_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "seq": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "type": {
+      "enum": [
+        "ack",
+        "artifact-ref",
+        "cache-ref",
+        "cancel",
+        "chunk",
+        "digest",
+        "drain",
+        "heartbeat",
+        "hello",
+        "lease",
+        "log",
+        "offset",
+        "reject",
+        "result",
+        "resume",
+        "secrets",
+        "upgrade",
+        "welcome"
+      ]
+    },
+    "v": {
+      "const": 1
+    }
+  },
+  "required": [
+    "v",
+    "type",
+    "seq",
+    "body"
+  ],
+  "type": "object"
+}

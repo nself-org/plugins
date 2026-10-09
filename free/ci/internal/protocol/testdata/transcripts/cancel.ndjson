@@ -1,0 +1,2 @@
+{"body":{"lease_id":"l1","reason":"operator"},"epoch":2,"lease_id":"l1","seq":1,"type":"cancel","v":1}
+{"body":{"ack_seq":1,"lease_id":"l1"},"seq":1,"type":"ack","v":1}

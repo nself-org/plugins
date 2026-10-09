@@ -1,0 +1,2 @@
+{"body":{"age_recipient":null,"agent_version":"1.4.0","capability_digest":"sha","compat_mode_supported":["v1.4"],"identity":{"host_key_fingerprints":[],"machine_id":"m1"},"node_key":{"alg":"ed25519","key_id":"k1","public":"pub"},"slots":{"total":2,"used":0},"versions":[1]},"seq":1,"type":"hello","v":1}
+{"body":{"agent_ttl_ms":30000,"heartbeat_ms":10000,"min_agent_version":"1.4.0","session_id":"s-old","version":1},"seq":1,"type":"welcome","v":1}

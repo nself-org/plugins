@@ -1,0 +1,2 @@
+{"body":{"last_seq":44},"seq":1,"type":"resume","v":1}
+{"body":{"offset":10,"sha256":"abc","stream":"artifact"},"seq":2,"type":"offset","v":1}

@@ -1,0 +1,4 @@
+{"body":{"sha256":"abc","size":2,"stream":"cache"},"seq":1,"type":"digest","v":1}
+{"body":{"offset":0,"sha256":"abc","stream":"cache"},"seq":2,"type":"offset","v":1}
+{"body":{"data":"YQ==","digest":"abc","final":true,"offset":0,"stream":"cache"},"seq":3,"type":"chunk","v":1}
+{"body":{"blobs":[{"path":"p","sha256":"abc","size":1}],"key":"k","lease_id":"l1","spec":"s"},"epoch":2,"lease_id":"l1","seq":1,"type":"cache-ref","v":1}
