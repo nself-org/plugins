@@ -38,6 +38,9 @@ func TestGoldenFixtures(t *testing.T) {
 	}
 	seen := map[string]int{}
 	for _, path := range paths {
+		if strings.Contains(path, "/trigger_facts/") {
+			continue // Provider facts have their own byte-stable golden test.
+		}
 		parts := strings.Split(filepath.Base(path), ".")
 		if len(parts) < 2 {
 			t.Fatalf("bad fixture name: %s", path)
