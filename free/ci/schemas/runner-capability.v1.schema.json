@@ -3833,6 +3833,7 @@
                 null,
                 "local-only",
                 "private-infrastructure",
+                "provider-allowlist",
                 "hosted-allowed"
               ]
             },
