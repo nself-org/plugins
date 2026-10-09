@@ -127,15 +127,21 @@ func TestSizeCaps(t *testing.T) {
 	c := testClient(s)
 	_, err := c.Do(context.Background(), "GET", "/api", nil, nil, nil)
 	assertError(t, err, "E702", "too_large")
-	_, err = readLimited(strings.NewReader(strings.Repeat("x", 17<<20)), downloadCap)
-	if err == nil {
-		t.Fatal("17 MiB artifact passed 16 MiB cap")
+	c.RedirectHosts = []string{"artifact.example.com"}
+	transport := s.Client().Transport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if address == "artifact.example.com:443" {
+			address = s.Listener.Addr().String()
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, address)
 	}
+	defer transport.CloseIdleConnections()
 	var output bytes.Buffer
-	_, err = c.Download(context.Background(), s.URL+"/artifact", 17<<20, &output)
-	assertError(t, err, "E702", "download.host")
+	_, err = c.download(context.Background(), "https://artifact.example.com/artifact", 17<<20, &output, &http.Client{Transport: transport, CheckRedirect: c.checkRedirect})
+	assertError(t, err, "E702", "download.too_large")
 	if output.Len() != 0 {
-		t.Fatal("untrusted artifact was written")
+		t.Fatal("oversized artifact was written")
 	}
 }
 

@@ -151,6 +151,10 @@ func (c *Client) Do(ctx context.Context, method, pathTemplate string, params map
 
 // Download copies at most maxBytes, never exceeding the global artifact cap.
 func (c *Client) Download(ctx context.Context, rawURL string, maxBytes int64, w io.Writer) (Response, error) {
+	return c.download(ctx, rawURL, maxBytes, w, c.httpClient(downloadTimeout))
+}
+
+func (c *Client) download(ctx context.Context, rawURL string, maxBytes int64, w io.Writer, httpClient *http.Client) (Response, error) {
 	start := time.Now()
 	var response Response
 	var finalErr error
@@ -179,7 +183,7 @@ func (c *Client) Download(ctx context.Context, rawURL string, maxBytes int64, w 
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 	}
-	resp, err := c.httpClient(downloadTimeout).Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		finalErr = classifyNetwork(err)
 		return response, finalErr
