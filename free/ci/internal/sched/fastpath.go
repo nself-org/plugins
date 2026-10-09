@@ -2,9 +2,9 @@ package sched
 
 import "github.com/nself-org/plugins/free/ci/internal/model"
 
+// fastPath compares list-scheduled completion times over each runner's free slots.
 func fastPath(w World, jobs []Job, runners []Runner) model.FastPath {
-	local := false
-	remote := false
+	local, remote := false, false
 	for _, j := range jobs {
 		for _, r := range runners {
 			if len(eligibility(w, j, r, false)) != 0 {
@@ -23,40 +23,8 @@ func fastPath(w World, jobs []Job, runners []Runner) model.FastPath {
 	if !remote {
 		return model.FastPath{Taken: true, Reason: "no_remote"}
 	}
-	var allLocal, hybrid int64
-	known := true
-	for _, j := range jobs {
-		bestLocal := int64(0)
-		bestHybrid := int64(0)
-		for _, r := range runners {
-			if len(eligibility(w, j, r, false)) != 0 {
-				continue
-			}
-			s := sample(w, j, r)
-			if s.RuntimeMs == nil {
-				known = false
-			}
-			run, _ := runtime(w, j, r)
-			if location(r) == "local" {
-				if bestLocal == 0 || run < bestLocal {
-					bestLocal = run
-				}
-			} else {
-				n, _ := Add(run, coldStart(r))
-				n, _ = Add(n, transfer(w, j, r))
-				if bestHybrid == 0 || n < bestHybrid {
-					bestHybrid = n
-				}
-			}
-		}
-		if bestLocal > 0 {
-			allLocal, _ = Add(allLocal, bestLocal)
-		}
-		if bestHybrid == 0 || bestLocal > 0 && bestLocal < bestHybrid {
-			bestHybrid = bestLocal
-		}
-		hybrid, _ = Add(hybrid, bestHybrid)
-	}
+	allLocal, _ := planMakespan(w, jobs, runners, true)
+	hybrid, known := planMakespan(w, jobs, runners, false)
 	if !known {
 		return model.FastPath{Taken: true, Reason: "unknown_estimates"}
 	}
@@ -69,4 +37,88 @@ func fastPath(w World, jobs []Job, runners []Runner) model.FastPath {
 		return model.FastPath{Taken: true, Reason: "overhead_exceeds_gain"}
 	}
 	return model.FastPath{Reason: "none"}
+}
+
+// planMakespan schedules ready jobs in caller order on the earliest finishing slot.
+func planMakespan(w World, jobs []Job, runners []Runner, localOnly bool) (int64, bool) {
+	slots := make(map[string][]int64, len(runners))
+	for _, r := range runners {
+		if r.Avail.Slots > 0 {
+			slots[r.ID] = make([]int64, r.Avail.Slots)
+		}
+	}
+	finish := make(map[string]int64, len(jobs))
+	done := make([]bool, len(jobs))
+	known := true
+	var makespan int64
+	for remaining := len(jobs); remaining > 0; {
+		progress := false
+		for i, j := range jobs {
+			if done[i] {
+				continue
+			}
+			ready := int64(0)
+			blocked := false
+			for _, dep := range j.Deps {
+				if _, ok := finish[dep]; !ok && jobInPlan(jobs, dep) {
+					blocked = true
+					break
+				}
+				if finish[dep] > ready {
+					ready = finish[dep]
+				}
+			}
+			if blocked {
+				continue
+			}
+			bestID, bestSlot, bestEnd := "", 0, int64(0)
+			for _, r := range runners {
+				if localOnly && location(r) != "local" || len(eligibility(w, j, r, false)) != 0 {
+					continue
+				}
+				s := sample(w, j, r)
+				if s.RuntimeMs == nil {
+					known = false
+				}
+				duration, _ := runtime(w, j, r)
+				if location(r) != "local" {
+					duration, _ = Add(duration, coldStart(r))
+					duration, _ = Add(duration, transfer(w, j, r))
+				}
+				for slot, free := range slots[r.ID] {
+					start := free
+					if ready > start {
+						start = ready
+					}
+					end, _ := Add(start, duration)
+					if bestID == "" || end < bestEnd || end == bestEnd && r.ID < bestID {
+						bestID, bestSlot, bestEnd = r.ID, slot, end
+					}
+				}
+			}
+			if bestID != "" {
+				slots[bestID][bestSlot] = bestEnd
+				finish[j.Key] = bestEnd
+				if bestEnd > makespan {
+					makespan = bestEnd
+				}
+			} else {
+				finish[j.Key] = ready
+			}
+			done[i], remaining, progress = true, remaining-1, true
+		}
+		if !progress {
+			return makespan, false
+		}
+	}
+	return makespan, known
+}
+
+func jobInPlan(jobs []Job, key string) bool {
+	for _, j := range jobs {
+		if j.Key == key {
+			return true
+		}
+	}
+	return false
 }

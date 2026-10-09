@@ -50,7 +50,7 @@ func limits(w World, j Job, r Runner) []model.PlacementReasonDetail {
 		code      model.PlacementReason
 	}{
 		{w.Policy.Limits.Pipeline, w.Counts.Pipeline, model.LimitPipeline}, {w.Policy.Limits.Job, w.Counts.Job, model.LimitJob},
-		{w.Policy.Limits.Runner, w.Counts.Runner, model.LimitRunner}, {w.Policy.Limits.Provider, w.Counts.Provider, model.LimitProvider},
+		{w.Policy.Limits.Runner, w.Counts.Runners[r.ID], model.LimitRunner}, {w.Policy.Limits.Provider, w.Counts.Providers[r.Provider], model.LimitProvider},
 		{w.Policy.Limits.Project, w.Counts.Project, model.LimitProject}, {w.Policy.Limits.User, w.Counts.User, model.LimitUser},
 		{w.Policy.Limits.Team, w.Counts.Team, model.LimitTeam}, {w.Policy.Limits.Global, w.Counts.Global, model.LimitGlobal},
 	}
@@ -61,7 +61,6 @@ func limits(w World, j Job, r Runner) []model.PlacementReasonDetail {
 		}
 	}
 	_ = j
-	_ = r
 	return out
 }
 
@@ -111,6 +110,9 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 	for _, tr := range trust.Admissible(jf, d, w.Policy.Trust) {
 		out = append(out, model.PlacementReasonDetail{Code: string(tr), Detail: string(tr)})
 	}
+	if j.Requirements.IsolationMin != "" && trust.RankIsolation(d.Isolation) < trust.RankIsolation(trust.DecodeIsolation(string(j.Requirements.IsolationMin))) {
+		out = append(out, model.PlacementReasonDetail{Code: string(trust.IsolationBelowMinimum), Detail: "job isolation minimum"})
+	}
 	if previous := w.PreviousIsolation[j.Key]; previous != "" && trust.RankIsolation(d.Isolation) < trust.RankIsolation(trust.RetryIsolation(previous, d.Isolation)) {
 		out = append(out, model.PlacementReasonDetail{Code: string(trust.IsolationBelowMinimum), Detail: "retry isolation floor"})
 	}
@@ -123,7 +125,7 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 			add(model.ToolsMissing, t)
 		}
 	}
-	if j.Requirements.CPU > 0 && c.Resources.CPU.Value != nil && int64(*c.Resources.CPU.Value) < j.Requirements.CPU || j.Requirements.MemMB > 0 && c.Resources.MemMB.Value != nil && *c.Resources.MemMB.Value < j.Requirements.MemMB {
+	if j.Requirements.CPU > 0 && (c.Resources.CPU.Value == nil || int64(*c.Resources.CPU.Value) < j.Requirements.CPU) || j.Requirements.MemMB > 0 && (c.Resources.MemMB.Value == nil || *c.Resources.MemMB.Value < j.Requirements.MemMB) {
 		add(model.ResourcesInsufficient, "cpu or memory")
 	}
 	for _, a := range j.Accelerators {
@@ -193,8 +195,11 @@ func economics(w World, j Job, r Runner) []model.PlacementReasonDetail {
 	if class == "" {
 		class = c.Class
 	}
-	paid := class == "metered" || class == "ephemeral"
+	paid := class != "owned" && class != "local" && class != "included"
 	cost, overflow := worstCost(j.TimeoutMs, c)
+	if class == "owned" || class == "local" {
+		cost, overflow = 0, false
+	}
 	if paid {
 		if c.RateMicro <= 0 {
 			add(model.CostUnknownRate, "missing or nonpositive rate")
@@ -251,6 +256,9 @@ func economics(w World, j Job, r Runner) []model.PlacementReasonDetail {
 }
 
 func worstCost(timeout int64, c Cost) (int64, bool) {
+	if c.RateMicro <= 0 {
+		return int64(^uint64(0) >> 1), true
+	}
 	if timeout < 0 {
 		timeout = 0
 	}

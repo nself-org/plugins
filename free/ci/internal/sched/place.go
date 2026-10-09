@@ -7,6 +7,8 @@ import (
 
 // Place selects runners in caller job order, reserving each selected slot privately.
 func Place(w World, jobs []Job) Result {
+	w.Counts.Runners = copyCounts(w.Counts.Runners)
+	w.Counts.Providers = copyCounts(w.Counts.Providers)
 	runners := append(append([]Runner(nil), w.Runners...), w.Hosted...)
 	sort.Slice(runners, func(i, j int) bool { return runners[i].ID < runners[j].ID })
 	result := Result{Placements: []Placement{}, Explanations: []Explanation{}, FastPath: fastPath(w, jobs, runners)}
@@ -46,10 +48,22 @@ func Place(w World, jobs []Job) Result {
 				sc, comps := score(w, j, r)
 				alt.Score = &sc
 				alt.Components = comps
-				if !result.FastPath.Taken || location(r) == "local" {
+				localEligible := false
+				if result.FastPath.Taken {
+					for _, candidate := range runners {
+						if location(candidate) == "local" && len(eligibility(w, j, candidate, anti)) == 0 {
+							localEligible = true
+							break
+						}
+					}
+				}
+				if !result.FastPath.Taken || !localEligible || location(r) == "local" {
 					if best == nil || sc < bestScore {
 						p := Placement{JobKey: j.Key, RunnerID: r.ID, CPU: j.Requirements.CPU, MemMB: j.Requirements.MemMB}
 						cost, _ := worstCost(j.TimeoutMs, w.Costs[r.ID])
+						if r.Class == "owned" || r.Class == "local" {
+							cost = 0
+						}
 						p.CostMicro = cost
 						best = &p
 						bestScore = sc
@@ -84,6 +98,14 @@ func Place(w World, jobs []Job) Result {
 			w.Counts.Job++
 			w.Counts.Runner++
 			w.Counts.Provider++
+			if w.Counts.Runners == nil {
+				w.Counts.Runners = make(map[string]int)
+			}
+			if w.Counts.Providers == nil {
+				w.Counts.Providers = make(map[string]int)
+			}
+			w.Counts.Runners[runners[bestIndex].ID]++
+			w.Counts.Providers[runners[bestIndex].Provider]++
 			w.Counts.Project++
 			w.Counts.User++
 			w.Counts.Team++
@@ -104,4 +126,12 @@ func Place(w World, jobs []Job) Result {
 		result.Explanations = append(result.Explanations, x)
 	}
 	return result
+}
+
+func copyCounts(source map[string]int) map[string]int {
+	out := make(map[string]int, len(source))
+	for k, v := range source {
+		out[k] = v
+	}
+	return out
 }

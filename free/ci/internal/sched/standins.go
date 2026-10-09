@@ -76,7 +76,8 @@ func transfer(w World, j Job, r Runner) int64 {
 	if location(r) == "lan" {
 		rate = 12500000
 	}
-	return b * 1000 / rate
+	n, _ := Mul(b, 1000)
+	return n / rate
 }
 func cacheValue(w World, j Job, r Runner) (int64, string) {
 	if m := w.Cache[r.ID]; m != nil {
@@ -85,7 +86,8 @@ func cacheValue(w World, j Job, r Runner) (int64, string) {
 			if location(r) == "lan" {
 				rate = 12500000
 			}
-			return *fact.MissBytes * 1000 / rate, confidence(fact.Confidence)
+			n, _ := Mul(*fact.MissBytes, 1000)
+			return n / rate, confidence(fact.Confidence)
 		}
 	}
 	return 0, "unknown"

@@ -104,7 +104,12 @@ type Pending struct {
 type Limits struct {
 	Pipeline, Job, Runner, Provider, Project, User, Team, Global int
 }
-type Counts struct{ Pipeline, Job, Runner, Provider, Project, User, Team, Global int }
+type Counts struct {
+	Pipeline, Job, Project, User, Team, Global int
+	Runner, Provider                           int // Legacy aggregate snapshot counts; scoped counts below control admission.
+	Runners                                    map[string]int
+	Providers                                  map[string]int
+}
 type Overrides struct {
 	LocalOnly, LANOnly, PrivateOnly bool
 	ProvidersAllow, ProvidersDeny   []string
