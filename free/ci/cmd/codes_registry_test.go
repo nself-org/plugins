@@ -13,6 +13,7 @@ import (
 	_ "github.com/nself-org/plugins/free/ci/internal/gates"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	_ "github.com/nself-org/plugins/free/ci/internal/nodes/registry"
+	_ "github.com/nself-org/plugins/free/ci/internal/protocol"
 	_ "github.com/nself-org/plugins/free/ci/internal/store"
 	_ "github.com/nself-org/plugins/free/ci/internal/trust"
 )
@@ -23,6 +24,7 @@ var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/exec":           true,
 	"github.com/nself-org/plugins/free/ci/internal/gates":          true,
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry": true,
+	"github.com/nself-org/plugins/free/ci/internal/protocol":       true,
 	"github.com/nself-org/plugins/free/ci/internal/store":          true,
 	"github.com/nself-org/plugins/free/ci/internal/trust":          true,
 }

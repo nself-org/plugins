@@ -1,0 +1,2 @@
+{"body":{"lease_id":"l1","line_seq":1,"stream":"stdout","text":"started"},"seq":1,"type":"log","v":1}
+{"body":{"code":"E653","min_agent_version":"","reason":"ssh_session_lost"},"seq":2,"type":"reject","v":1}

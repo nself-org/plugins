@@ -1,0 +1,125 @@
+{
+  "$id": "https://nself.org/schemas/runner-protocol.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "hello"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "body": {
+            "additionalProperties": false,
+            "properties": {
+              "age_recipient": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "agent_version": {
+                "type": "string"
+              },
+              "capability_digest": {
+                "type": "string"
+              },
+              "compat_mode_supported": {
+                "items": {
+                  "enum": [
+                    "v1.4",
+                    "v1.5"
+                  ]
+                },
+                "type": "array"
+              },
+              "identity": {
+                "type": "object"
+              },
+              "node_key": {
+                "type": "object"
+              },
+              "slots": {
+                "type": "object"
+              },
+              "versions": {
+                "items": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "versions",
+              "agent_version",
+              "age_recipient",
+              "node_key",
+              "capability_digest",
+              "identity",
+              "compat_mode_supported",
+              "slots"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "ack": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "body": {
+      "type": "object"
+    },
+    "epoch": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "lease_id": {
+      "type": "string"
+    },
+    "seq": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "type": {
+      "enum": [
+        "hello",
+        "welcome",
+        "reject",
+        "heartbeat",
+        "lease",
+        "secrets",
+        "chunk",
+        "log",
+        "artifact-ref",
+        "result",
+        "cancel",
+        "drain",
+        "upgrade",
+        "ack",
+        "digest",
+        "offset",
+        "resume",
+        "cache-ref"
+      ]
+    },
+    "v": {
+      "const": 1
+    }
+  },
+  "required": [
+    "v",
+    "type",
+    "seq",
+    "body"
+  ],
+  "type": "object"
+}
