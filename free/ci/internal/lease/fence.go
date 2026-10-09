@@ -30,18 +30,26 @@ func NewAgentFence(wall func() time.Time, mono func() time.Duration, coordinator
 	if f.TTL <= 0 {
 		f.TTL = time.Nanosecond
 	}
-	f.Ack()
+	f.lastWall, f.lastMono = f.Wall(), f.Mono()
 	return f
 }
 
 // Ack records a coordinator heartbeat acknowledgement.
 func (f *AgentFence) Ack() {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.selfFenced {
-		return
+	wall, mono := f.Wall(), f.Mono()
+	first := !f.selfFenced && (wall.Sub(f.lastWall) >= f.TTL || mono-f.lastMono >= f.TTL)
+	if first {
+		f.selfFenced = true
 	}
-	f.lastWall, f.lastMono = f.Wall(), f.Mono()
+	if !f.selfFenced {
+		f.lastWall, f.lastMono = wall, mono
+	}
+	callback := f.OnFence
+	f.mu.Unlock()
+	if first && callback != nil {
+		callback()
+	}
 }
 
 // Check revalidates on every wake and latches a self-fence before job work resumes.

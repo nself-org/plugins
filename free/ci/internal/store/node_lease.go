@@ -159,7 +159,7 @@ func (s *Store) LeaseExpired(ctx context.Context, now time.Time) ([]RemoteLease,
 func (s *Store) LeaseGrace(ctx context.Context, currentID string, incarnation int64, now time.Time, ttl time.Duration) (int64, error) {
 	var changed int64
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE lease SET expires_at=max(expires_at,?) WHERE attempt_id IN (SELECT id FROM attempt WHERE state IN ('leased','running') AND (coordinator_id IS NULL OR coordinator_id!=?)) OR (epoch>0 AND epoch<?)`, now.Add(ttl).UnixNano(), currentID, incarnation<<32)
+		res, err := tx.ExecContext(ctx, `UPDATE lease SET expires_at=max(expires_at,?) WHERE attempt_id IN (SELECT id FROM attempt WHERE state IN ('leased','running') AND ((coordinator_id IS NULL OR coordinator_id!=?) OR (epoch>0 AND epoch<?)))`, now.Add(ttl).UnixNano(), currentID, incarnation<<32)
 		if err != nil {
 			return err
 		}
@@ -245,6 +245,16 @@ func (s *Store) LeaseFailure(ctx context.Context, nodeID string, infra bool, thr
 		if !infra {
 			return tx.QueryRowContext(ctx, "SELECT failures,tripped FROM node_failure_streak WHERE node_id=?", nodeID).Scan(&count, &tripped)
 		}
+		var state string
+		nodeErr := tx.QueryRowContext(ctx, "SELECT state FROM node WHERE id=?", nodeID).Scan(&state)
+		if nodeErr != nil && !errors.Is(nodeErr, sql.ErrNoRows) {
+			return nodeErr
+		}
+		if nodeErr == nil && state == "online" {
+			if _, err := tx.ExecContext(ctx, "UPDATE node_failure_streak SET failures=0,tripped=0 WHERE node_id=? AND tripped=1", nodeID); err != nil {
+				return err
+			}
+		}
 		_, err := tx.ExecContext(ctx, "INSERT INTO node_failure_streak(node_id,failures) VALUES (?,1) ON CONFLICT(node_id) DO UPDATE SET failures=failures+1", nodeID)
 		if err != nil {
 			return err
@@ -252,13 +262,25 @@ func (s *Store) LeaseFailure(ctx context.Context, nodeID string, infra bool, thr
 		if err = tx.QueryRowContext(ctx, "SELECT failures,tripped FROM node_failure_streak WHERE node_id=?", nodeID).Scan(&count, &tripped); err != nil {
 			return err
 		}
-		if count >= threshold && tripped == 0 {
-			_, err = tx.ExecContext(ctx, "UPDATE node_failure_streak SET tripped=1 WHERE node_id=?", nodeID)
-		}
-		return err
+		return nil
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}
 	return count, err == nil && infra && count >= threshold && tripped == 0, err
+}
+
+// LeaseBreakerTripped records a successful maintenance transition. Failed transitions remain retryable.
+func (s *Store) LeaseBreakerTripped(ctx context.Context, nodeID string) error {
+	return s.write(ctx, func(tx *sql.Tx) error {
+		var state string
+		if err := tx.QueryRowContext(ctx, "SELECT state FROM node WHERE id=?", nodeID).Scan(&state); err != nil {
+			return err
+		}
+		if state != "maintenance" {
+			return coded("E605", "breaker maintenance transition lost")
+		}
+		_, err := tx.ExecContext(ctx, "UPDATE node_failure_streak SET tripped=1 WHERE node_id=?", nodeID)
+		return err
+	})
 }

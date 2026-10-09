@@ -62,6 +62,37 @@ func TestNodeLeaseStore(t *testing.T) {
 	}
 }
 
+func TestGraceSkipsFinalizing(t *testing.T) {
+	ctx := context.Background()
+	now := time.Unix(100, 0)
+	s := testStore(t)
+	s.now = func() time.Time { return now }
+	seed(t, s, "finalizing-attempt")
+	epoch, err := s.LeaseGrant(ctx, "host", Demand{AttemptID: "finalizing-attempt", LeaseID: "finalizing-lease", RunnerID: "runner", CPU: 1, MemMB: 1, CapacityCPU: 2, CapacityMemMB: 2, TTL: 45 * time.Second}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Transition(ctx, "finalizing-attempt", "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LeaseResult(ctx, "finalizing-lease", epoch); err != nil {
+		t.Fatal(err)
+	}
+	before, err := s.LeaseGet(ctx, "finalizing-lease")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(20 * time.Second)
+	changed, err := s.LeaseGrace(ctx, "new", 2, now, 45*time.Second)
+	if err != nil || changed != 0 {
+		t.Fatalf("finalizing lease extended: %d %v", changed, err)
+	}
+	after, err := s.LeaseGet(ctx, "finalizing-lease")
+	if err != nil || after.ExpiresAt != before.ExpiresAt {
+		t.Fatalf("deadline changed: %d to %d: %v", before.ExpiresAt, after.ExpiresAt, err)
+	}
+}
+
 func TestNodeLeaseGraceAndBreaker(t *testing.T) {
 	ctx := context.Background()
 	now := time.Unix(100, 0)
@@ -90,7 +121,7 @@ func TestNodeLeaseGraceAndBreaker(t *testing.T) {
 	}
 	for i := 1; i <= 4; i++ {
 		n, trip, err := s.LeaseFailure(ctx, "node", true, 3)
-		if err != nil || n != i || trip != (i == 3) {
+		if err != nil || n != i || trip != (i >= 3) {
 			t.Fatalf("breaker %d: %d %t %v", i, n, trip, err)
 		}
 	}

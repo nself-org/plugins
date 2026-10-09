@@ -4,14 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
-	"testing/quick"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -56,56 +52,101 @@ func fixture(t *testing.T, count int, release bool) (*Engine, *[]time.Time) {
 	return e, &now
 }
 
-func TestProperty(t *testing.T) {
-	seed := int64(20261009)
-	checks, err := strconv.Atoi(flag.Lookup("quickchecks").Value.String())
-	if err != nil || checks < 10000 {
-		checks = 10000
+func TestLateAckCannotReviveFence(t *testing.T) {
+	wall, mono := time.Unix(100, 0), time.Duration(0)
+	f := NewAgentFence(func() time.Time { return wall }, func() time.Duration { return mono }, 45*time.Second, 10*time.Second)
+	kills := 0
+	f.OnFence = func() { kills++ }
+	wall = wall.Add(10 * time.Minute)
+	mono += 10 * time.Minute
+	f.Ack()
+	if !f.Check() || kills != 1 {
+		t.Fatalf("late acknowledgement revived lease: fenced=%t kills=%d", f.Check(), kills)
 	}
-	// Each sample is an event sequence: grant, heartbeat, silence, cancel, result,
-	// restart, restore and wake. The pure epoch law is checked for every step.
-	check := func(events []byte) bool {
-		previous := int64(0)
-		incarnation := int64(1)
-		live, cancelled, deterministic, audited := false, false, false, false
-		for _, event := range events {
-			switch event % 8 {
-			case 0: // grant
-				if !live && !cancelled && !deterministic {
-					next := store.LeaseEpoch(incarnation, previous)
-					if next <= previous {
-						return false
-					}
-					previous, live = next, true
-				}
-			case 1: // heartbeat
-				if live && previous == 0 {
-					return false
-				}
-			case 2: // silence
-				live = false
-			case 3: // cancel
-				cancelled, live = true, false
-			case 4: // result
-				if live {
-					deterministic, live = true, false
-				}
-			case 5, 6: // restart, restore
-				incarnation++
-			case 7: // wake
-				if live && cancelled {
-					return false
-				}
-			}
-			if deterministic && live || !audited && cancelled && live {
-				return false
-			}
+}
+
+func registeredNode(t *testing.T, e *Engine) string {
+	t.Helper()
+	body, err := os.ReadFile("../model/testdata/capability/valid/laptop.valid.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var capability model.Capability
+	if err := json.Unmarshal(body, &capability); err != nil {
+		t.Fatal(err)
+	}
+	e.Nodes = registry.New(e.Store)
+	node, err := e.Nodes.Register(context.Background(), capability, "operator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return node.Record.ID
+}
+
+func TestBreakerRetriesFailedMaintenance(t *testing.T) {
+	e, _ := fixture(t, 0, false)
+	ctx := context.Background()
+	id := registeredNode(t, e)
+	audits := 0
+	e.Store.SetAuditSealer(func(_ []byte, row store.AuditRow) (store.AuditChain, error) {
+		if row.Action == "node.state" {
+			audits++
 		}
-		return true
+		return store.AuditChain{}, nil
+	})
+	e.Nodes = nil
+	for i := 1; i <= 3; i++ {
+		_, err := e.Breaker(ctx, id, true)
+		if i == 3 && err == nil {
+			t.Fatal("missing registry did not fail")
+		}
+		if i < 3 && err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := quick.Check(check, &quick.Config{MaxCount: checks, Rand: rand.New(rand.NewSource(seed))}); err != nil {
-		t.Fatalf("seed=%d checks=%d: %v", seed, checks, err)
+	node, err := registry.New(e.Store).Get(ctx, id)
+	if err != nil || node.Record.State == "maintenance" {
+		t.Fatalf("premature maintenance: %+v %v", node.Record, err)
 	}
+	e.Nodes = registry.New(e.Store)
+	if count, err := e.Breaker(ctx, id, true); err != nil || count != 4 {
+		t.Fatalf("retry: %d %v", count, err)
+	}
+	node, err = e.Nodes.Get(ctx, id)
+	if err != nil || node.Record.State != "maintenance" {
+		t.Fatalf("maintenance lost: %+v %v", node.Record, err)
+	}
+	if _, err := e.Breaker(ctx, id, true); err != nil || audits != 1 {
+		t.Fatalf("duplicate maintenance audit: count=%d err=%v", audits, err)
+	}
+}
+
+func TestBreakerResetsAfterReenable(t *testing.T) {
+	e, _ := fixture(t, 0, false)
+	ctx := context.Background()
+	id := registeredNode(t, e)
+	for i := 0; i < 3; i++ {
+		if _, err := e.Breaker(ctx, id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.Nodes.SetState(ctx, id, "online", "reenabled", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 3; i++ {
+		count, err := e.Breaker(ctx, id, true)
+		if err != nil || count != i {
+			t.Fatalf("new streak %d: %d %v", i, count, err)
+		}
+	}
+	node, err := e.Nodes.Get(ctx, id)
+	if err != nil || node.Record.State != "maintenance" {
+		t.Fatalf("second trip: %+v %v", node.Record, err)
+	}
+}
+
+func TestProperty(t *testing.T) {
+	runPropertySequences(t)
 
 	t.Run("stale epoch and cancel race", func(t *testing.T) {
 		e, _ := fixture(t, 1, false)

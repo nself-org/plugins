@@ -160,6 +160,8 @@ func (e *Engine) StaleCount() int64 { return e.stale.Load() }
 
 // Breaker records infra streaks and changes node state once at the threshold.
 func (e *Engine) Breaker(ctx context.Context, nodeID string, infra bool) (int, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	count, trip, err := e.Store.LeaseFailure(ctx, nodeID, infra, e.Config.BreakerK)
 	if err != nil || !trip {
 		return count, err
@@ -167,6 +169,16 @@ func (e *Engine) Breaker(ctx context.Context, nodeID string, infra bool) (int, e
 	if e.Nodes == nil {
 		return count, fmt.Errorf("node registry required for breaker")
 	}
+	node, err := e.Nodes.Get(ctx, nodeID)
+	if err != nil {
+		return count, err
+	}
+	if node.Record.State == "maintenance" {
+		return count, e.Store.LeaseBreakerTripped(ctx, nodeID)
+	}
 	_, err = e.Nodes.SetState(ctx, nodeID, "maintenance", "three consecutive infra failures", "coordinator")
-	return count, err
+	if err != nil {
+		return count, err
+	}
+	return count, e.Store.LeaseBreakerTripped(ctx, nodeID)
 }
