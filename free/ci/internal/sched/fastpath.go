@@ -71,9 +71,18 @@ func planMakespan(w World, jobs []Job, runners []Runner, localOnly bool) (int64,
 			if blocked {
 				continue
 			}
+			localEligible := false
+			if localOnly {
+				for _, r := range runners {
+					if location(r) == "local" && len(eligibility(w, j, r, false)) == 0 {
+						localEligible = true
+						break
+					}
+				}
+			}
 			bestID, bestSlot, bestEnd := "", 0, int64(0)
 			for _, r := range runners {
-				if localOnly && location(r) != "local" || len(eligibility(w, j, r, false)) != 0 {
+				if localEligible && location(r) != "local" || len(eligibility(w, j, r, false)) != 0 {
 					continue
 				}
 				s := sample(w, j, r)

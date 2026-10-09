@@ -130,3 +130,19 @@ func TestReviewFastPathHonorsDependencies(t *testing.T) {
 		t.Fatalf("dependency omitted from makespan: %+v", got.FastPath)
 	}
 }
+
+func TestReviewFastPathSchedulesRemoteOnlyDependency(t *testing.T) {
+	local, remote := fixtureRunner("a", "local"), fixtureRunner("b", "lan")
+	first, second := fixtureJob("one"), fixtureJob("two")
+	first.RemoteOnly = true
+	second.Deps = []string{"one"}
+	w := fixtureWorld(local, remote)
+	w.Estimates = map[string]map[string]Sample{
+		"a": {"two": {RuntimeMs: ptr(int64(60000)), Confidence: "known"}},
+		"b": {"one": {RuntimeMs: ptr(int64(40000)), Confidence: "known"}, "two": {RuntimeMs: ptr(int64(40000)), Confidence: "known"}},
+	}
+	end, known := planMakespan(w, []Job{first, second}, []Runner{local, remote}, true)
+	if !known || end <= 60000 {
+		t.Fatalf("remote-only predecessor omitted from local plan: end=%d known=%v", end, known)
+	}
+}
