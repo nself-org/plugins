@@ -6,7 +6,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-// DefaultPolicy applies the untrusted preset only when the job class is supplied.
+// DefaultPolicy treats an omitted or unknown class as untrusted.
 func DefaultPolicy(visibility string, classes ...model.TrustClass) Scope {
 	zone := "private-infrastructure"
 	if visibility == "public" {
@@ -15,7 +15,7 @@ func DefaultPolicy(visibility string, classes ...model.TrustClass) Scope {
 	values := map[string]json.RawMessage{
 		"trust.privacy_zone": json.RawMessage(`"` + zone + `"`),
 	}
-	if len(classes) > 0 && DecodeTrust(string(classes[0])) == "untrusted" {
+	if len(classes) == 0 || DecodeTrust(string(classes[0])) == "untrusted" {
 		values["trust.isolation_min"] = json.RawMessage(`"sandboxed-container"`)
 		values["trust.network"] = json.RawMessage(`"restricted"`)
 		values["trust.secrets"] = json.RawMessage(`[]`)
@@ -23,5 +23,5 @@ func DefaultPolicy(visibility string, classes ...model.TrustClass) Scope {
 			values["trust.approval.first_time"] = json.RawMessage(`true`)
 		}
 	}
-	return Scope{Kind: SourceDefault, Values: values}
+	return Scope{Kind: SourceDefault, Values: values, publicVisibility: visibility == "public"}
 }

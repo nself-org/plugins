@@ -113,11 +113,9 @@ func admitPrivacy(job JobFacts, d Declaration, e Effective) []Reason {
 	if !d.Hosted {
 		return nil
 	}
-	if zone == "hosted-allowed" {
-		_, source, ok := e.Value("trust.privacy_zone")
-		if ok && source == SourceDefault && DecodeTrust(string(job.Trust)) != "untrusted" {
-			return []Reason{PrivacyHostedNotAuthorized}
-		}
+	authorized := e.hostedProject || e.hostedPublic && DecodeTrust(string(job.Trust)) == "untrusted"
+	if !authorized {
+		return []Reason{PrivacyHostedNotAuthorized}
 	}
 	switch zone {
 	case "local-only":

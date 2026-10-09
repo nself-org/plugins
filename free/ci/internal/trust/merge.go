@@ -130,7 +130,7 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 	sort.SliceStable(scopes, func(i, j int) bool { return order[scopes[i].Kind] < order[scopes[j].Kind] })
 	for _, spec := range r.specs {
 		if !strings.HasSuffix(spec.Key, ".*") && spec.Default != nil {
-			e.values[spec.Key] = entry{spec.Default, SourceDefault}
+			e.values[spec.Key] = entry{value: spec.Default, source: SourceDefault}
 		}
 	}
 	for _, scope := range scopes {
@@ -169,7 +169,15 @@ func (r Registry) Merge(pinnedCommit string, scopes ...Scope) (Effective, Digest
 					continue
 				}
 			}
-			e.values[key] = entry{v, scope.Kind}
+			e.values[key] = entry{value: v, source: scope.Kind}
+			if key == "trust.privacy_zone" && (v == "hosted-allowed" || v == "provider-allowlist") {
+				switch scope.Kind {
+				case SourceDefault:
+					e.hostedPublic = scope.publicVisibility && v == "hosted-allowed"
+				case SourceUser, SourceTeam, SourceProject, SourceProtectedBranch:
+					e.hostedProject = true
+				}
+			}
 		}
 	}
 	plain := map[string]any{}

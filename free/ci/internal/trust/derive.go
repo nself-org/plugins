@@ -58,6 +58,8 @@ func MinIsolation(job JobFacts, runner RunnerFacts) model.Isolation {
 
 // RetryIsolation keeps the previous attempt's floor during replacement.
 func RetryIsolation(previous, required model.Isolation) model.Isolation {
+	previous = DecodeIsolation(string(previous))
+	required = DecodeIsolation(string(required))
 	if RankIsolation(previous) >= RankIsolation(required) {
 		return previous
 	}

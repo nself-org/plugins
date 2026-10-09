@@ -68,9 +68,10 @@ const (
 )
 
 type Scope struct {
-	Kind         Source
-	Values       map[string]json.RawMessage
-	PinnedCommit string
+	Kind             Source
+	Values           map[string]json.RawMessage
+	PinnedCommit     string
+	publicVisibility bool
 }
 type Ignored struct {
 	Key    string
@@ -82,8 +83,10 @@ type entry struct {
 	source Source
 }
 type Effective struct {
-	values  map[string]entry
-	ignored []Ignored
+	values        map[string]entry
+	ignored       []Ignored
+	hostedPublic  bool
+	hostedProject bool
 }
 
 func (e Effective) Value(key string) (any, Source, bool) {

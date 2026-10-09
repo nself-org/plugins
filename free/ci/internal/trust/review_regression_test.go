@@ -32,6 +32,67 @@ func TestReviewHostedRequiresProjectAuthorization(t *testing.T) {
 	}
 }
 
+func TestReviewRegistryDefaultNeverAuthorizesHosted(t *testing.T) {
+	r, err := trust.NewRegistry(trust.KeySpec{Key: "trust.privacy_zone", Owner: "trust", Kind: trust.TightenLower, Order: []string{"local-only", "private-infrastructure", "provider-allowlist", "hosted-allowed"}, Default: "hosted-allowed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := trust.Declaration{Accepts: []model.TrustClass{"untrusted", "collaborator", "internal", "owner"}, Isolation: "hosted-disposable", Network: "restricted", Hosted: true, UIDSeparation: true}
+	for _, class := range d.Accepts {
+		e, _, err := r.Merge("pin")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !includes(trust.Admissible(trust.JobFacts{Trust: class, Network: "restricted"}, d, e), trust.PrivacyHostedNotAuthorized) {
+			t.Fatalf("registry default authorized hosted %s", class)
+		}
+	}
+	for _, source := range []trust.Source{trust.SourceDefault, trust.SourcePipeline, trust.SourceJob, trust.SourceRevision} {
+		e, _, err := r.Merge("pin", trust.Scope{Kind: source, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"hosted-allowed"`)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !includes(trust.Admissible(trust.JobFacts{Trust: "untrusted", Network: "restricted"}, d, e), trust.PrivacyHostedNotAuthorized) {
+			t.Fatalf("%s scope authorized hosted without project or public visibility", source)
+		}
+	}
+	publicScope := trust.DefaultPolicy("public", "untrusted")
+	publicScope.Values = map[string]json.RawMessage{"trust.privacy_zone": publicScope.Values["trust.privacy_zone"]}
+	public, _, err := r.Merge("pin", publicScope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if includes(trust.Admissible(trust.JobFacts{Trust: "untrusted", Network: "restricted"}, d, public), trust.PrivacyHostedNotAuthorized) {
+		t.Fatal("public visibility failed to authorize untrusted hosted")
+	}
+	project, _, err := r.Merge("pin", trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"trust.privacy_zone": json.RawMessage(`"hosted-allowed"`)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if includes(trust.Admissible(trust.JobFacts{Trust: "owner", Network: "restricted"}, d, project), trust.PrivacyHostedNotAuthorized) {
+		t.Fatal("explicit project authorization rejected owner hosted")
+	}
+}
+
+func TestReviewDefaultPolicyOmittedClassIsUntrusted(t *testing.T) {
+	want := map[string]string{"trust.isolation_min": `"sandboxed-container"`, "trust.network": `"restricted"`, "trust.secrets": `[]`, "trust.approval.first_time": `true`}
+	for key, value := range want {
+		if got := string(trust.DefaultPolicy("public").Values[key]); got != value {
+			t.Errorf("omitted class %s = %q, want %q", key, got, value)
+		}
+	}
+}
+
+func TestReviewRetryUnknownPriorNeverLowers(t *testing.T) {
+	for _, previous := range []model.Isolation{"future-isolation", ""} {
+		for _, required := range []model.Isolation{"process", "container", "vm"} {
+			if got := trust.RetryIsolation(previous, required); got != "ephemeral-vm" {
+				t.Errorf("retry %q -> %q lowered to %q", previous, required, got)
+			}
+		}
+	}
+}
+
 func TestReviewRevisionPinAndMissingKey(t *testing.T) {
 	r, _ := trust.NewRegistry(trust.KeySpec{Key: "trust.network", Owner: "trust", Kind: trust.TightenLower, Order: []string{"none", "restricted", "lan"}, Default: "lan"}, trust.KeySpec{Key: "trust.providers", Owner: "trust", Kind: trust.TightenSubset, Default: []string{"a", "b"}})
 	_, digest, err := r.Merge("pin", trust.Scope{Kind: trust.SourceProtectedBranch, Values: map[string]json.RawMessage{"trust.network": json.RawMessage(`"restricted"`)}})
@@ -78,13 +139,13 @@ func TestReviewRevisionPinAndMissingKey(t *testing.T) {
 
 func TestReviewDefaultPolicyTrustedJobs(t *testing.T) {
 	r, _ := trust.NewRegistry(trust.KeySpec{Key: "trust.secrets", Owner: "trust", Kind: trust.TightenSubset, Default: []string{"project"}}, trust.KeySpec{Key: "trust.privacy_zone", Owner: "trust", Kind: trust.TightenLower, Order: []string{"local-only", "private-infrastructure", "provider-allowlist", "hosted-allowed"}, Default: "hosted-allowed"}, trust.KeySpec{Key: "trust.approval.first_time", Owner: "trust", Kind: trust.TightenOnlyOn, Default: false})
-	_, _, err := r.Merge("pin", trust.DefaultPolicy("public"), trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"trust.secrets": json.RawMessage(`["project"]`)}})
+	_, _, err := r.Merge("pin", trust.DefaultPolicy("public", "owner"), trust.Scope{Kind: trust.SourceProject, Values: map[string]json.RawMessage{"trust.secrets": json.RawMessage(`["project"]`)}})
 	if err != nil {
 		t.Fatalf("default blocked trusted project secret: %v", err)
 	}
 	for _, key := range []string{"trust.isolation_min", "trust.network", "trust.secrets"} {
-		if _, ok := trust.DefaultPolicy("public").Values[key]; ok {
-			t.Fatalf("global untrusted preset: %s", key)
+		if _, ok := trust.DefaultPolicy("public").Values[key]; !ok {
+			t.Fatalf("omitted class missing untrusted preset: %s", key)
 		}
 		if _, ok := trust.DefaultPolicy("public", "owner").Values[key]; ok {
 			t.Fatalf("owner received untrusted preset: %s", key)

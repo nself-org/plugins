@@ -36,6 +36,14 @@ func TestInvariant_I01(t *testing.T) {
 	})
 }
 func TestInvariant_I03(t *testing.T) {
+	r, err := trust.NewRegistry(trust.KeySpec{Key: "trust.privacy_zone", Owner: "trust", Kind: trust.TightenLower, Order: []string{"local-only", "private-infrastructure", "provider-allowlist", "hosted-allowed"}, Default: "hosted-allowed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registryDefault, _, err := r.Merge("pin")
+	if err != nil {
+		t.Fatal(err)
+	}
 	invariants.Check(t, func(w invariants.World) error {
 		d := declaration(w)
 		d.Hosted = true
@@ -50,6 +58,9 @@ func TestInvariant_I03(t *testing.T) {
 		}
 		if w.Privacy == "provider-allowlist" && !includes(rs, trust.PrivacyProviderNotAllowlisted) {
 			return fmt.Errorf("unlisted provider")
+		}
+		if w.Privacy == "hosted-allowed" && !includes(trust.Admissible(job(w), d, registryDefault), trust.PrivacyHostedNotAuthorized) {
+			return fmt.Errorf("registry default authorized hosted job")
 		}
 		return nil
 	})
