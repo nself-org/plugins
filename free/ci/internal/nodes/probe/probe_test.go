@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -112,6 +113,23 @@ func TestProbeFixedReadOnlyCommands(t *testing.T) {
 		if strings.ContainsAny(command, ";|`$\\\n") {
 			t.Fatalf("shell control in command: %q", command)
 		}
+	}
+}
+
+func TestProbeLocalProcessFixedOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX local probe")
+	}
+	if _, err := localCommand(context.Background(), "uname -srm; touch /tmp/unwanted"); err == nil {
+		t.Fatal("nonconstant local command was accepted")
+	}
+	if _, err := localCommand(context.Background(), cmdUname); err != nil {
+		t.Fatal("fixed local uname failed:", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := localCommand(ctx, cmdUname); err == nil {
+		t.Fatal("cancelled command was accepted")
 	}
 }
 

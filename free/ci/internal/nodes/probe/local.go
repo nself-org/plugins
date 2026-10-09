@@ -2,7 +2,10 @@ package probe
 
 import (
 	"context"
-	"os/exec"
+	"fmt"
+	"io"
+	"os"
+	"runtime"
 	"time"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
@@ -34,9 +37,54 @@ func (p *LocalProber) Probe(ctx context.Context, id string) (registry.Node, erro
 }
 
 func localCommand(ctx context.Context, command string) (string, error) {
-	// The caller selects command solely from the constants in commands.go.
-	out, err := exec.CommandContext(ctx, "sh", "-c", command).CombinedOutput()
-	return string(out), err
+	if runtime.GOOS == "windows" {
+		return "", fmt.Errorf("local POSIX probe is unavailable on Windows")
+	}
+	if !fixedCommand(command) {
+		return "", fmt.Errorf("probe command is not in the fixed read-only set")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = r.Close() }()
+	proc, err := os.StartProcess("/bin/sh", []string{"sh", "-c", command}, &os.ProcAttr{
+		Files: []*os.File{nil, w, w},
+		Env:   []string{"PATH=" + os.Getenv("PATH"), "LANG=C"},
+	})
+	_ = w.Close()
+	if err != nil {
+		return "", err
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = proc.Kill()
+		case <-done:
+		}
+	}()
+	out, readErr := io.ReadAll(io.LimitReader(r, 64<<10))
+	if _, err := io.Copy(io.Discard, r); readErr == nil {
+		readErr = err
+	}
+	state, waitErr := proc.Wait()
+	close(done)
+	if ctx.Err() != nil {
+		return string(out), ctx.Err()
+	}
+	if readErr != nil {
+		return string(out), readErr
+	}
+	if waitErr != nil {
+		return string(out), waitErr
+	}
+	if !state.Success() {
+		return string(out), fmt.Errorf("probe command exited %s", state.String())
+	}
+	return string(out), nil
 }
 
 func applyCapacity(c *model.Capability, cap ciexec.Capacity, now time.Time) {

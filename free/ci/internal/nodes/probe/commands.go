@@ -19,3 +19,17 @@ const (
 
 var linuxCommands = []string{cmdUname, cmdOSRelease, cmdNproc, cmdDisk, cmdTools, cmdDocker, cmdPython, cmdNvidia}
 var darwinCommands = []string{cmdUname, cmdNproc, cmdDisk, cmdTools, cmdDocker, cmdXcode, cmdXcodePath, cmdSwift, cmdPython, cmdTart, cmdDisplays}
+
+func fixedCommand(command string) bool {
+	for _, candidate := range linuxCommands {
+		if command == candidate {
+			return true
+		}
+	}
+	for _, candidate := range darwinCommands {
+		if command == candidate {
+			return true
+		}
+	}
+	return false
+}
