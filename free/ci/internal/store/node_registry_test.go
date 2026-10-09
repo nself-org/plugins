@@ -32,12 +32,20 @@ func TestNodeAggregateAudit(t *testing.T) {
 	if err = s.NodeSetState(ctx, n, "admin", n.Reason); err == nil {
 		t.Fatal("stale version accepted")
 	}
+	n, err = s.NodeGet(ctx, n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.Reason = "SECRET_FIXTURE_DO_NOT_STORE_IN_AUDIT"
+	if err = s.NodeSetState(ctx, n, "admin", n.Reason); err != nil {
+		t.Fatal(err)
+	}
 	var count int
 	var details string
 	if err = s.readers.QueryRowContext(ctx, `SELECT count(*),group_concat(detail) FROM audit WHERE target=?`, n.ID).Scan(&count, &details); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 || details != "registered,age_recipient_changed" {
+	if count != 3 || details != "registered,age_recipient_changed,state changed" {
 		t.Fatalf("audit count/details: %d %s", count, details)
 	}
 	if err = s.readers.QueryRowContext(ctx, `SELECT count(*) FROM audit WHERE detail LIKE '%SECRET_FIXTURE%'`).Scan(&count); err != nil {

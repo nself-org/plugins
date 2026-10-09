@@ -113,6 +113,9 @@ func (s *Store) NodeSetTrust(ctx context.Context, n NodeRecord, actor string) er
 	return s.nodeCAS(ctx, n, actor, "node.trust", "trust assigned", true)
 }
 func (s *Store) NodeSetState(ctx context.Context, n NodeRecord, actor, detail string) error {
+	if detail != "age_recipient_changed" {
+		detail = "state changed"
+	}
 	return s.nodeCAS(ctx, n, actor, "node.state", detail, true)
 }
 func (s *Store) NodeSetAuthorization(ctx context.Context, n NodeRecord, actor string) error {
