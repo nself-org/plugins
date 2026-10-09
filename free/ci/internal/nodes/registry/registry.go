@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"reflect"
 	"time"
 
@@ -47,7 +46,7 @@ func (r *Registry) Register(ctx context.Context, c model.Capability, actor strin
 		return Node{}, invalid("/identity/id")
 	}
 	c.Trust = safeTrust()
-	c.AgeRecipient = model.Fact[string]{Source: "self", ObservedAt: time.Now().UTC(), Confidence: "unknown"}
+	c.Identity.AgeRecipient = model.Fact[string]{Source: "self", ObservedAt: time.Now().UTC(), Confidence: "unknown"}
 	c.Lifecycle = model.CapabilityLifecycle{Discovered: true, AuthorizedProjects: []string{}, Eligible: false}
 	c.SecretsEligible = eligible(c)
 	if err := model.ValidateCapability(c); err != nil {
@@ -143,7 +142,7 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 		in.Trust = old.Trust
 		in.Lifecycle = old.Lifecycle
 		in.DeployHost = old.DeployHost
-		in.AgeRecipient = old.AgeRecipient
+		in.Identity.AgeRecipient = old.Identity.AgeRecipient
 		in.Identity.Ownership = old.Identity.Ownership
 		in.SecretsEligible = eligible(in)
 		if reportedIsolation.Value != nil && old.Trust.Isolation.Value != nil && isolationRank(*reportedIsolation.Value) < isolationRank(*old.Trust.Isolation.Value) {
@@ -233,7 +232,7 @@ func (r *Registry) AgeRecipient(ctx context.Context, id string) (*string, error)
 	if err != nil {
 		return nil, err
 	}
-	return n.Capability.AgeRecipient.Value, nil
+	return n.Capability.Identity.AgeRecipient.Value, nil
 }
 
 // CheckAgeRecipient pins once, then flags a changed recipient without replacing it.
@@ -245,25 +244,32 @@ func (r *Registry) CheckAgeRecipient(ctx context.Context, id, presented, actor s
 	if err != nil {
 		return err
 	}
-	if n.Capability.AgeRecipient.Value != nil && *n.Capability.AgeRecipient.Value != presented {
+	if n.Capability.Identity.AgeRecipient.Value != nil && *n.Capability.Identity.AgeRecipient.Value != presented {
 		_, err = r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
 		if err != nil {
 			return err
 		}
 		return &Error{Code: "E660", Reason: "age_recipient_changed"}
 	}
-	if n.Capability.AgeRecipient.Value != nil {
+	if n.Capability.Identity.AgeRecipient.Value != nil {
 		return nil
 	}
 	_, err = r.mutate(ctx, id, actor, "capability", func(n *Node) error {
-		if n.Capability.AgeRecipient.Value != nil {
-			if *n.Capability.AgeRecipient.Value != presented {
-				return fmt.Errorf("age_recipient_changed")
+		if n.Capability.Identity.AgeRecipient.Value != nil {
+			if *n.Capability.Identity.AgeRecipient.Value != presented {
+				return &Error{Code: "E660", Reason: "age_recipient_changed"}
 			}
 			return nil
 		}
-		n.Capability.AgeRecipient = model.Fact[string]{Value: &presented, Source: "self", ObservedAt: time.Now().UTC(), Confidence: "known"}
+		n.Capability.Identity.AgeRecipient = model.Fact[string]{Value: &presented, Source: "self", ObservedAt: time.Now().UTC(), Confidence: "known"}
 		return nil
 	})
+	var changed *Error
+	if errors.As(err, &changed) && changed.Code == "E660" {
+		_, flagErr := r.SetState(ctx, id, "maintenance", "age_recipient_changed", actor)
+		if flagErr != nil {
+			return flagErr
+		}
+	}
 	return err
 }

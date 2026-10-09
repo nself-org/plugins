@@ -19,7 +19,6 @@ type Capability struct {
 	Separation      CapabilitySeparation   `json:"separation"`
 	Trust           CapabilityTrust        `json:"trust"`
 	Verified        CapabilityVerified     `json:"verified"`
-	AgeRecipient    Fact[string]           `json:"age_recipient"`
 	SecretsEligible bool                   `json:"secrets_eligible"`
 	Protocol        CapabilityProtocol     `json:"protocol"`
 	DeployHost      CapabilityDeployHost   `json:"deploy_host"`
@@ -34,6 +33,7 @@ type CapabilityIdentity struct {
 	Ownership           Fact[string]   `json:"ownership"`
 	Labels              []string       `json:"labels"`
 	MachineID           Fact[string]   `json:"machine_id"`
+	AgeRecipient        Fact[string]   `json:"age_recipient"`
 	HostKeyFingerprints []string       `json:"host_key_fingerprints"`
 	SSH                 *CapabilitySSH `json:"ssh"`
 }

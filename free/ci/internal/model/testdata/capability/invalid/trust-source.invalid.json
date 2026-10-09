@@ -21,7 +21,13 @@
       "confidence": "known"
     },
     "host_key_fingerprints": [],
-    "ssh": null
+    "ssh": null,
+    "age_recipient": {
+      "value": null,
+      "source": "self",
+      "observed_at": "2026-10-08T12:00:00Z",
+      "confidence": "unknown"
+    }
   },
   "platform": {
     "os": {
@@ -301,12 +307,6 @@
   "verified": {
     "by": "self",
     "at": "2026-10-08T12:00:00Z"
-  },
-  "age_recipient": {
-    "value": null,
-    "source": "self",
-    "observed_at": "2026-10-08T12:00:00Z",
-    "confidence": "unknown"
   },
   "secrets_eligible": true,
   "protocol": {

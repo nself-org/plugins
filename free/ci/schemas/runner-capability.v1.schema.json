@@ -206,6 +206,84 @@
             }
           ]
         },
+        "age_recipient": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
         "host_key_fingerprints": {
           "type": [
             "null",
@@ -251,6 +329,7 @@
         "ownership",
         "labels",
         "machine_id",
+        "age_recipient",
         "host_key_fingerprints",
         "ssh"
       ],
@@ -3854,84 +3933,6 @@
       ],
       "additionalProperties": false
     },
-    "age_recipient": {
-      "type": "object",
-      "properties": {
-        "value": {
-          "type": [
-            "null",
-            "string"
-          ]
-        },
-        "source": {
-          "type": "string",
-          "enum": [
-            "self",
-            "probe",
-            "provider",
-            "assigned"
-          ]
-        },
-        "observed_at": {
-          "type": "string",
-          "minLength": 1
-        },
-        "confidence": {
-          "type": "string",
-          "enum": [
-            "known",
-            "estimated",
-            "unknown"
-          ]
-        }
-      },
-      "required": [
-        "value",
-        "source",
-        "observed_at",
-        "confidence"
-      ],
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "confidence": {
-                "const": "unknown"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "value": {
-                "const": null
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "confidence": {
-                "enum": [
-                  "known",
-                  "estimated"
-                ]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "value": {
-                "not": {
-                  "const": null
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
     "secrets_eligible": {
       "type": "boolean"
     },
@@ -4038,7 +4039,6 @@
     "separation",
     "trust",
     "verified",
-    "age_recipient",
     "secrets_eligible",
     "protocol",
     "deploy_host",
