@@ -119,11 +119,14 @@ func (s *Store) NodeList(ctx context.Context) ([]NodeRecord, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail string) error {
+func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail string, isolationLowered bool) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		query := `UPDATE node SET name=?,version=version+1,updated_at=? WHERE id=? AND version=?`
 		args := []any{n.Name, s.now().UnixNano(), n.ID, n.Version}
-		if action != "node.capability" {
+		if action == "node.capability" && isolationLowered {
+			query = `UPDATE node SET name=?,version=version+1,trust_json=?,updated_at=? WHERE id=? AND version=?`
+			args = []any{n.Name, string(n.Trust), s.now().UnixNano(), n.ID, n.Version}
+		} else if action != "node.capability" {
 			query = `UPDATE node SET name=?,version=version+1,lifecycle=?,trust_json=?,deploy_host_json=?,state=?,reason=?,updated_at=? WHERE id=? AND version=?`
 			args = []any{n.Name, string(n.Lifecycle), string(n.Trust), string(n.DeployHost), n.State, n.Reason, s.now().UnixNano(), n.ID, n.Version}
 		}
@@ -188,12 +191,14 @@ func (s *Store) NodeUpdateCapability(ctx context.Context, n NodeRecord, actor st
 	incoming.Identity.Ownership = previous.Identity.Ownership
 	reportedIsolation := incoming.Trust.Isolation
 	incoming.Trust = previous.Trust
+	isolationLowered := false
 	if reportedIsolation.Value != nil && previous.Trust.Isolation.Value != nil {
 		values := model.EnumValues("Isolation")
 		reportedRank := slices.Index(values, string(*reportedIsolation.Value))
 		if reportedRank >= 0 && reportedRank < slices.Index(values, string(*previous.Trust.Isolation.Value)) {
 			incoming.Trust.Isolation = reportedIsolation
 			incoming.Trust.Isolation.Source = "assigned"
+			isolationLowered = true
 		}
 	}
 	incoming.Lifecycle = previous.Lifecycle
@@ -211,7 +216,7 @@ func (s *Store) NodeUpdateCapability(ctx context.Context, n NodeRecord, actor st
 		return err
 	}
 	old.ObservedAt, old.Name = n.ObservedAt, incoming.Identity.Name
-	return s.nodeCAS(ctx, old, actor, "node.capability", "capability updated")
+	return s.nodeCAS(ctx, old, actor, "node.capability", "capability updated", isolationLowered)
 }
 func (s *Store) NodeSetTrust(ctx context.Context, n NodeRecord, authority AdminAuthority) error {
 	if !authority.valid() {
@@ -232,7 +237,7 @@ func (s *Store) NodeSetTrust(ctx context.Context, n NodeRecord, authority AdminA
 	if err := nodeDocument(&old, previous); err != nil {
 		return err
 	}
-	return s.nodeCAS(ctx, old, authority.actor, "node.trust", "trust assigned")
+	return s.nodeCAS(ctx, old, authority.actor, "node.trust", "trust assigned", false)
 }
 func (s *Store) NodeSetState(ctx context.Context, n NodeRecord, actor, detail string) error {
 	old, c, err := s.nodeEdit(ctx, n)
@@ -255,7 +260,7 @@ func (s *Store) NodeSetState(ctx context.Context, n NodeRecord, actor, detail st
 	if detail != "age_recipient_changed" {
 		detail = "state changed"
 	}
-	return s.nodeCAS(ctx, old, actor, "node.state", detail)
+	return s.nodeCAS(ctx, old, actor, "node.state", detail, false)
 }
 
 func (s *Store) NodeRecover(ctx context.Context, n NodeRecord, authority AdminAuthority) error {
@@ -278,7 +283,7 @@ func (s *Store) NodeRecover(ctx context.Context, n NodeRecord, authority AdminAu
 		return err
 	}
 	old.State, old.Reason = n.State, "admin recovery"
-	return s.nodeCAS(ctx, old, authority.actor, "node.recover", "admin recovery")
+	return s.nodeCAS(ctx, old, authority.actor, "node.recover", "admin recovery", false)
 }
 func (s *Store) NodeSetAuthorization(ctx context.Context, n NodeRecord, actor string) error {
 	old, previous, err := s.nodeEdit(ctx, n)
@@ -293,5 +298,5 @@ func (s *Store) NodeSetAuthorization(ctx context.Context, n NodeRecord, actor st
 	if err := nodeDocument(&old, previous); err != nil {
 		return err
 	}
-	return s.nodeCAS(ctx, old, actor, "node.authorization", "project authorization changed")
+	return s.nodeCAS(ctx, old, actor, "node.authorization", "project authorization changed", false)
 }

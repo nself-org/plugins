@@ -126,6 +126,104 @@ func TestNodeCapabilityStoreAuthority(t *testing.T) {
 	}
 }
 
+func TestCapabilityLowersStoredIsolation(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(filepath.Join(t.TempDir(), "state.db"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	fixture, err := os.ReadFile("../model/testdata/capability/valid/laptop.valid.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c model.Capability
+	if err := json.Unmarshal(fixture, &c); err != nil {
+		t.Fatal(err)
+	}
+	n := NodeRecord{ID: c.Identity.ID, Name: c.Identity.Name, State: "offline", Capability: fixture}
+	if err := s.NodePut(ctx, n, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	n, err = s.NodeGet(ctx, n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(n.Capability, &c); err != nil {
+		t.Fatal(err)
+	}
+	vm := model.Isolation("vm")
+	c.Trust.Isolation.Value, c.Trust.Isolation.Confidence = &vm, "known"
+	n.Capability, err = json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := NewAdminAuthority("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.NodeSetTrust(ctx, n, admin); err != nil {
+		t.Fatal(err)
+	}
+	n, err = s.NodeGet(ctx, n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before model.CapabilityTrust
+	if err := json.Unmarshal(n.Trust, &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(n.Capability, &c); err != nil {
+		t.Fatal(err)
+	}
+	container := model.Isolation("container")
+	c.Trust.Isolation.Value = &container
+	c.Trust.Accepts.Value = &[]model.TrustClass{"untrusted"}
+	n.Capability, err = json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.NodeUpdateCapability(ctx, n, "agent"); err != nil {
+		t.Fatal(err)
+	}
+	check := func(want model.Isolation) NodeRecord {
+		t.Helper()
+		got, err := s.NodeGet(ctx, n.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var stored model.CapabilityTrust
+		var snapshot model.Capability
+		if err := json.Unmarshal(got.Trust, &stored); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(got.Capability, &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		if stored.Isolation.Value == nil || *stored.Isolation.Value != want || !reflect.DeepEqual(stored, snapshot.Trust) {
+			t.Fatalf("node trust and snapshot differ: stored=%+v snapshot=%+v want=%s", stored, snapshot.Trust, want)
+		}
+		stored.Isolation = before.Isolation
+		if !reflect.DeepEqual(stored, before) {
+			t.Fatal("capability update changed another trust field")
+		}
+		return got
+	}
+	n = check(container)
+	if err := json.Unmarshal(n.Capability, &c); err != nil {
+		t.Fatal(err)
+	}
+	c.Trust.Isolation.Value = &vm
+	n.Capability, err = json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.NodeUpdateCapability(ctx, n, "agent"); err != nil {
+		t.Fatal(err)
+	}
+	check(container)
+}
+
 func TestNodeRecoveryAudit(t *testing.T) {
 	ctx := context.Background()
 	s, err := Open(filepath.Join(t.TempDir(), "state.db"), Options{})
