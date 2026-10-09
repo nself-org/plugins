@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	_ "github.com/nself-org/plugins/free/ci/internal/exec"
+	_ "github.com/nself-org/plugins/free/ci/internal/gates"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	_ "github.com/nself-org/plugins/free/ci/internal/store"
 	_ "github.com/nself-org/plugins/free/ci/internal/trust"
@@ -19,6 +20,7 @@ import (
 // link them until the V15 engine is wired in (P7-CI-37).
 var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/exec":  true,
+	"github.com/nself-org/plugins/free/ci/internal/gates": true,
 	"github.com/nself-org/plugins/free/ci/internal/store": true,
 	"github.com/nself-org/plugins/free/ci/internal/trust": true,
 }
