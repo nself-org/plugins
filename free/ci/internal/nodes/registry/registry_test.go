@@ -103,6 +103,29 @@ func TestTrustAndDrift(t *testing.T) {
 	if *n.Capability.Trust.Isolation.Value != "process" {
 		t.Fatal("probe raised isolation")
 	}
+	baseTrust := n.Capability.Trust
+	baseOwnership := n.Capability.Identity.Ownership
+	for _, tc := range []struct {
+		name   string
+		change func(*model.Capability)
+	}{
+		{"accepts", func(c *model.Capability) { v := []model.TrustClass{"untrusted"}; c.Trust.Accepts.Value = &v }},
+		{"secret_classes", func(c *model.Capability) { v := []model.SecretClass{"release"}; c.Trust.SecretClasses.Value = &v }},
+		{"privacy_zone", func(c *model.Capability) { v := model.PrivacyZone("hosted-allowed"); c.Trust.PrivacyZone.Value = &v }},
+		{"ownership", func(c *model.Capability) { v := "team"; c.Identity.Ownership.Value = &v }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := c
+			tc.change(&payload)
+			got, _, e := r.UpdateCapability(ctx, id, payload, "agent")
+			if e != nil {
+				t.Fatal(e)
+			}
+			if !reflect.DeepEqual(got.Capability.Trust, baseTrust) || !reflect.DeepEqual(got.Capability.Identity.Ownership, baseOwnership) {
+				t.Fatal("node payload changed coordinator-assigned fields")
+			}
+		})
+	}
 }
 
 // TestAgeRecipientPin proves the first hello pin, mismatch E660, unchanged pin and maintenance flag.

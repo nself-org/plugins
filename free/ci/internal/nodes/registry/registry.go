@@ -144,6 +144,10 @@ func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Cap
 		in.DeployHost = old.DeployHost
 		in.Identity.AgeRecipient = old.Identity.AgeRecipient
 		in.Identity.Ownership = old.Identity.Ownership
+		in.Resources.Reserved = old.Resources.Reserved
+		in.Availability.Persistence = old.Availability.Persistence
+		in.Availability.OnBattery = old.Availability.OnBattery
+		in.Availability.InteractivePolicy = old.Availability.InteractivePolicy
 		in.SecretsEligible = eligible(in)
 		if reportedIsolation.Value != nil && old.Trust.Isolation.Value != nil && isolationRank(*reportedIsolation.Value) < isolationRank(*old.Trust.Isolation.Value) {
 			in.Trust.Isolation = reportedIsolation
@@ -218,6 +222,7 @@ func (r *Registry) SetState(ctx context.Context, id, state, reason, actor string
 	return r.mutate(ctx, id, actor, "state", func(n *Node) error {
 		n.Record.State = state
 		n.Record.Reason = reason
+		n.Capability.Availability.State = model.Fact[string]{Value: &state, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
 		if state == "revoked" {
 			now := time.Now().UTC()
 			n.Capability.Lifecycle.RevokedAt = &now
