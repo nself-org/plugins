@@ -115,16 +115,24 @@ func (e *Engine) Sweep(ctx context.Context) (int, error) {
 }
 
 func (e *Engine) lose(ctx context.Context, l store.RemoteLease, reason string, expired bool) error {
-	return e.Store.LeaseFail(ctx, l, e.Config.Clock(), reason, expired)
+	err := e.Store.LeaseFail(ctx, l, e.Config.Clock(), reason, expired)
+	if err == nil || hasCode(err, "E605") {
+		e.prune(l.ID)
+	}
+	return err
 }
 
 // Reconnect applies the agent's authoritative self-fence report after restart grace.
 func (e *Engine) Reconnect(ctx context.Context, leaseID string, epoch int64, status string) error {
 	l, err := e.Store.LeaseGet(ctx, leaseID)
 	if err != nil {
+		if hasCode(err, "E662") {
+			e.prune(leaseID)
+		}
 		return e.countStale(err)
 	}
 	if l.Epoch != epoch {
+		e.prune(leaseID)
 		return e.countStale(&store.Error{Code: "E662", Message: "stale lease epoch; stop the job and clean its workspace"})
 	}
 	switch status {
@@ -139,12 +147,33 @@ func (e *Engine) Reconnect(ctx context.Context, leaseID string, epoch int64, sta
 
 // Result accepts a carrier result only for the current epoch and state.
 func (e *Engine) Result(ctx context.Context, leaseID string, epoch int64) error {
-	return e.countStale(e.Store.LeaseResult(ctx, leaseID, epoch))
+	err := e.countStale(e.Store.LeaseResult(ctx, leaseID, epoch))
+	if err == nil || hasCode(err, "E662") {
+		e.prune(leaseID)
+	}
+	return err
 }
 
 // Fence validates a log or other carrier action against the durable epoch.
 func (e *Engine) Fence(ctx context.Context, leaseID string, epoch int64) error {
-	return e.countStale(e.Store.LeaseFence(ctx, leaseID, epoch))
+	err := e.countStale(e.Store.LeaseFence(ctx, leaseID, epoch))
+	if hasCode(err, "E662") {
+		e.prune(leaseID)
+	}
+	return err
+}
+
+func hasCode(err error, code string) bool {
+	var coded *store.Error
+	return errors.As(err, &coded) && coded.Code == code
+}
+
+func (e *Engine) prune(leaseID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.last, leaseID)
+	delete(e.polled, leaseID)
+	delete(e.gone, leaseID)
 }
 
 func (e *Engine) countStale(err error) error {

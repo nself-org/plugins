@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // LiveState is the provider's current view of a hosted attempt.
@@ -65,6 +67,18 @@ func (e *Engine) PollHosted(ctx context.Context, provider, leaseID, attemptID st
 		e.mu.Unlock()
 		return state, e.Renew(ctx, leaseID, epoch, p.TTL)
 	case LiveFinished:
+		lease, err := e.Store.LeaseGet(ctx, leaseID)
+		if err != nil {
+			return state, e.countStale(err)
+		}
+		if lease.Epoch != epoch {
+			return state, e.Fence(ctx, leaseID, epoch)
+		}
+		if lease.State == "leased" {
+			if err := e.Store.Transition(ctx, lease.AttemptID, "leased", "running", store.TransitionDetail{Epoch: lease.AttemptEpoch}); err != nil {
+				return state, err
+			}
+		}
 		return state, e.Result(ctx, leaseID, epoch)
 	case LiveVanished:
 		e.mu.Lock()

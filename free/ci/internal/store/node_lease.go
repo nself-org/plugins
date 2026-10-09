@@ -155,11 +155,11 @@ func (s *Store) LeaseExpired(ctx context.Context, now time.Time) ([]RemoteLease,
 	return out, rows.Err()
 }
 
-// LeaseGrace extends old coordinator leases on restart without shortening them.
+// LeaseGrace extends leases owned by another coordinator or older lease incarnation.
 func (s *Store) LeaseGrace(ctx context.Context, currentID string, incarnation int64, now time.Time, ttl time.Duration) (int64, error) {
 	var changed int64
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE lease SET expires_at=max(expires_at,?) WHERE attempt_id IN (SELECT id FROM attempt WHERE state IN ('leased','running') AND ((coordinator_id IS NULL OR coordinator_id!=?) OR (epoch>0 AND epoch<?)))`, now.Add(ttl).UnixNano(), currentID, incarnation<<32)
+		res, err := tx.ExecContext(ctx, `UPDATE lease AS l SET expires_at=max(expires_at,?) WHERE EXISTS (SELECT 1 FROM attempt a WHERE a.id=l.attempt_id AND a.state IN ('leased','running') AND ((a.coordinator_id IS NULL OR a.coordinator_id!=?) OR (l.epoch>0 AND l.epoch<?)))`, now.Add(ttl).UnixNano(), currentID, incarnation<<32)
 		if err != nil {
 			return err
 		}
@@ -219,9 +219,9 @@ func (s *Store) LeasePreviousRunner(ctx context.Context, attemptID string) (stri
 // LeaseResult rejects stale carrier results and lets the transition CAS decide cancel races.
 func (s *Store) LeaseResult(ctx context.Context, id string, epoch int64) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		var attemptID string
+		var attemptID, runnerID string
 		var current, attemptEpoch, expires int64
-		err := tx.QueryRowContext(ctx, `SELECT l.attempt_id,l.epoch,a.epoch,l.expires_at FROM lease l JOIN attempt a ON a.id=l.attempt_id WHERE l.id=?`, id).Scan(&attemptID, &current, &attemptEpoch, &expires)
+		err := tx.QueryRowContext(ctx, `SELECT l.attempt_id,l.runner_id,l.epoch,a.epoch,l.expires_at FROM lease l JOIN attempt a ON a.id=l.attempt_id WHERE l.id=?`, id).Scan(&attemptID, &runnerID, &current, &attemptEpoch, &expires)
 		if errors.Is(err, sql.ErrNoRows) {
 			return coded("E662", "stale lease epoch; stop the job and clean its workspace")
 		}
@@ -231,7 +231,11 @@ func (s *Store) LeaseResult(ctx context.Context, id string, epoch int64) error {
 		if current != epoch || expires <= s.now().UnixNano() {
 			return coded("E662", "stale lease epoch; stop the job and clean its workspace")
 		}
-		return s.apply(ctx, tx, attemptID, "running", "finalizing", TransitionDetail{Epoch: attemptEpoch})
+		if err := s.apply(ctx, tx, attemptID, "running", "finalizing", TransitionDetail{Epoch: attemptEpoch}); err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, "UPDATE node_failure_streak SET failures=0 WHERE node_id=? AND tripped=0", runnerID)
+		return err
 	})
 }
 

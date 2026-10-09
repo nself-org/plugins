@@ -2,9 +2,76 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
+
+func TestSuccessResetsUntrippedBreakerStreak(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	s.now = func() time.Time { return time.Unix(100, 0) }
+	for i, success := range []bool{false, true, false, true, false} {
+		if success {
+			id := fmt.Sprintf("success-%d", i)
+			seed(t, s, id)
+			epoch, err := s.LeaseGrant(ctx, "host", Demand{AttemptID: id, LeaseID: "lease-" + id, RunnerID: "node", CPU: 1, MemMB: 1, CapacityCPU: 10, CapacityMemMB: 10, TTL: time.Minute}, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Transition(ctx, id, "leased", "running", TransitionDetail{Epoch: 1}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.LeaseResult(ctx, "lease-"+id, epoch); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		count, trip, err := s.LeaseFailure(ctx, "node", true, 3)
+		if err != nil || trip || count != 1 {
+			t.Fatalf("event %d: count=%d trip=%t err=%v", i, count, trip, err)
+		}
+		unchanged, codeTrip, err := s.LeaseFailure(ctx, "node", false, 3)
+		if err != nil || unchanged != 1 || codeTrip {
+			t.Fatalf("code failure changed streak: count=%d trip=%t err=%v", unchanged, codeTrip, err)
+		}
+	}
+}
+
+func TestGraceUsesLeaseFence(t *testing.T) {
+	ctx := context.Background()
+	now := time.Unix(100, 0)
+	s := testStore(t)
+	s.now = func() time.Time { return now }
+	seed(t, s, "grace-fence")
+	if _, err := s.LeaseGrant(ctx, "host", Demand{AttemptID: "grace-fence", LeaseID: "grace-fence-lease", RunnerID: "runner", CPU: 1, MemMB: 1, CapacityCPU: 2, CapacityMemMB: 2, TTL: 45 * time.Second}, 2); err != nil {
+		t.Fatal(err)
+	}
+	// The attempt transition epoch is 1, while the lease fence belongs to incarnation 2.
+	coordinator, err := s.RegisterCoordinator(ctx, 1, "start", "boot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.writer.ExecContext(ctx, "UPDATE attempt SET coordinator_id=? WHERE id=?", coordinator.ID, "grace-fence"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(20 * time.Second)
+	changed, err := s.LeaseGrace(ctx, coordinator.ID, 2, now, 45*time.Second)
+	if err != nil || changed != 0 {
+		t.Fatalf("current fence extended: %d %v", changed, err)
+	}
+	seed(t, s, "old-fence")
+	if _, err := s.LeaseGrant(ctx, "host", Demand{AttemptID: "old-fence", LeaseID: "old-fence-lease", RunnerID: "runner", CPU: 1, MemMB: 1, CapacityCPU: 2, CapacityMemMB: 2, TTL: 45 * time.Second}, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.writer.ExecContext(ctx, "UPDATE attempt SET coordinator_id=? WHERE id=?", coordinator.ID, "old-fence"); err != nil {
+		t.Fatal(err)
+	}
+	changed, err = s.LeaseGrace(ctx, coordinator.ID, 2, now.Add(30*time.Second), 45*time.Second)
+	if err != nil || changed != 1 {
+		t.Fatalf("old fence not extended: %d %v", changed, err)
+	}
+}
 
 func TestNodeLeaseStore(t *testing.T) {
 	ctx := context.Background()

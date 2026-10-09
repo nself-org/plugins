@@ -145,6 +145,69 @@ func TestBreakerResetsAfterReenable(t *testing.T) {
 	}
 }
 
+func TestHostedFinishedBeforeRunning(t *testing.T) {
+	e, now := fixture(t, 0, false)
+	ctx := context.Background()
+	p := store.PipelineRow{ID: "hosted-p", Project: "p", Revision: "r", Trigger: "local", SourceTrust: "owner", PrivacyZone: "local-only", PolicyDigest: "p", InputDigest: "i", SelectionMode: "full", Status: "queued"}
+	if err := e.Store.CreatePipeline(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Store.CreateJob(ctx, store.JobRow{ID: "hosted-j", PipelineID: p.ID, Name: "hosted", Kind: "test", Idempotent: true, InfraMax: 1, InputDigest: "i"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Store.CreateAttempt(ctx, store.AttemptRow{ID: "hosted-a", JobID: "hosted-j", N: 1}, ""); err != nil {
+		t.Fatal(err)
+	}
+	epoch, err := e.Grant(ctx, "host", store.Demand{AttemptID: "hosted-a", LeaseID: "hosted-l", RunnerID: "hosted-r", CPU: 1, MemMB: 1, CapacityCPU: 2, CapacityMemMB: 2}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.RegisterProfile("hosted", LeaseProfile{Liveness: func(context.Context, string) (LiveState, error) { return LiveFinished, nil }}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := e.PollHosted(ctx, "hosted", "hosted-l", "hosted-a", epoch)
+	if err != nil || state != LiveFinished {
+		t.Fatalf("finished poll: %s %v", state, err)
+	}
+	(*now)[0] = (*now)[0].Add(time.Minute)
+	if n, err := e.Sweep(ctx); err != nil || n != 0 {
+		t.Fatalf("finished job retried: %d %v", n, err)
+	}
+	rows, err := e.Store.AttemptsByJob(ctx, "hosted-j")
+	if err != nil || len(rows) != 1 || rows[0].State != "finalizing" {
+		t.Fatalf("finished attempt: %+v %v", rows, err)
+	}
+}
+
+func TestTerminalLeasePrunesEngineState(t *testing.T) {
+	e, _ := fixture(t, 3, false)
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		id := fmt.Sprintf("l%d", i)
+		if err := e.Renew(ctx, id, 1<<32|1, 0); err != nil {
+			t.Fatal(err)
+		}
+		e.mu.Lock()
+		e.polled[id] = e.Config.Clock()
+		e.gone[id] = e.Config.Clock()
+		e.mu.Unlock()
+	}
+	if err := e.Result(ctx, "l0", 1<<32|1); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Reconnect(ctx, "l1", 1<<32|1, "self_fenced"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Fence(ctx, "l2", 1); !code(err, "E662") {
+		t.Fatalf("expected stale fence: %v", err)
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.last) != 0 || len(e.polled) != 0 || len(e.gone) != 0 {
+		t.Fatalf("terminal cache entries remain: last=%v polled=%v gone=%v", e.last, e.polled, e.gone)
+	}
+}
+
 func TestProperty(t *testing.T) {
 	runPropertySequences(t)
 
