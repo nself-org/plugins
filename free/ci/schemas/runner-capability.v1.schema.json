@@ -1,0 +1,4049 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ci.runner-capability/v1"
+    },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "local",
+            "ssh",
+            "agent",
+            "github-hosted",
+            "github-jit",
+            "gitlab",
+            "ephemeral"
+          ]
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "local",
+            "ssh",
+            "agent",
+            "provider"
+          ]
+        },
+        "ownership": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "operator",
+                "team",
+                "provider"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "labels": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "machine_id": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "age_recipient": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "host_key_fingerprints": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "ssh": {
+          "type": [
+            "null",
+            "object"
+          ],
+          "properties": {
+            "alias": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "user": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "alias",
+            "hostname",
+            "port",
+            "user"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "provider",
+        "transport",
+        "ownership",
+        "labels",
+        "machine_id",
+        "age_recipient",
+        "host_key_fingerprints",
+        "ssh"
+      ],
+      "additionalProperties": false
+    },
+    "platform": {
+      "type": "object",
+      "properties": {
+        "os": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "arch": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "kernel": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "os_version": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "virtualization": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "none",
+                "container",
+                "vm",
+                "unknown"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "os",
+        "arch",
+        "kernel",
+        "os_version",
+        "virtualization"
+      ],
+      "additionalProperties": false
+    },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "number"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "mem_mb": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "disk_free_mb": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "accelerators": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reserved": {
+          "type": "object",
+          "properties": {
+            "cpu": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "null",
+                    "number"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "probe",
+                    "provider",
+                    "assigned"
+                  ]
+                },
+                "observed_at": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "known",
+                    "estimated",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "source",
+                "observed_at",
+                "confidence"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "const": "unknown"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "const": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "enum": [
+                          "known",
+                          "estimated"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": null
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "mem_mb": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "null",
+                    "integer"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "probe",
+                    "provider",
+                    "assigned"
+                  ]
+                },
+                "observed_at": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "known",
+                    "estimated",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "source",
+                "observed_at",
+                "confidence"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "const": "unknown"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "const": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "enum": [
+                          "known",
+                          "estimated"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": null
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "cpu",
+            "mem_mb"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "cpu",
+        "mem_mb",
+        "disk_free_mb",
+        "accelerators",
+        "reserved"
+      ],
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "object",
+      "properties": {
+        "docker": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "podman": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "gvisor": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "tart": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "toolchains": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "self",
+                  "probe",
+                  "provider",
+                  "assigned"
+                ]
+              },
+              "observed_at": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "known",
+                  "estimated",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "source",
+              "observed_at",
+              "confidence"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "confidence": {
+                      "const": "unknown"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "const": null
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "confidence": {
+                      "enum": [
+                        "known",
+                        "estimated"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "not": {
+                        "const": null
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "browsers": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "services": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "custom": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "self",
+                  "probe",
+                  "provider",
+                  "assigned"
+                ]
+              },
+              "observed_at": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "known",
+                  "estimated",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "source",
+              "observed_at",
+              "confidence"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "confidence": {
+                      "const": "unknown"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "const": null
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "confidence": {
+                      "enum": [
+                        "known",
+                        "estimated"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "value": {
+                      "not": {
+                        "const": null
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "docker",
+        "podman",
+        "gvisor",
+        "tart",
+        "toolchains",
+        "browsers",
+        "services",
+        "custom"
+      ],
+      "additionalProperties": false
+    },
+    "availability": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "online",
+                "offline",
+                "draining",
+                "maintenance",
+                "revoked"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "slots": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "running": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "battery_pct": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "plugged_in": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "interactive": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "active",
+                "idle",
+                "unknown"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "on_battery": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "interactive_policy": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "state",
+        "slots",
+        "running",
+        "battery_pct",
+        "plugged_in",
+        "interactive",
+        "persistence",
+        "on_battery",
+        "interactive_policy"
+      ],
+      "additionalProperties": false
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "local",
+                "lan",
+                "remote",
+                "hosted"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "region": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "region"
+      ],
+      "additionalProperties": false
+    },
+    "economics": {
+      "type": "object",
+      "properties": {
+        "class": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "local",
+                "owned",
+                "included",
+                "metered",
+                "ephemeral"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "marginal_cost_per_min": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "number"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "allowance": {
+          "type": "object",
+          "properties": {
+            "known_remaining": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "null",
+                    "number"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "probe",
+                    "provider",
+                    "assigned"
+                  ]
+                },
+                "observed_at": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "known",
+                    "estimated",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "source",
+                "observed_at",
+                "confidence"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "const": "unknown"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "const": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "enum": [
+                          "known",
+                          "estimated"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": null
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "reset_at": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "probe",
+                    "provider",
+                    "assigned"
+                  ]
+                },
+                "observed_at": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "known",
+                    "estimated",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "source",
+                "observed_at",
+                "confidence"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "const": "unknown"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "const": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "enum": [
+                          "known",
+                          "estimated"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": null
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "confidence": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "probe",
+                    "provider",
+                    "assigned"
+                  ]
+                },
+                "observed_at": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "known",
+                    "estimated",
+                    "unknown"
+                  ]
+                }
+              },
+              "required": [
+                "value",
+                "source",
+                "observed_at",
+                "confidence"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "const": "unknown"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "const": null
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "confidence": {
+                        "enum": [
+                          "known",
+                          "estimated"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "value": {
+                        "not": {
+                          "const": null
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "known_remaining",
+            "reset_at",
+            "confidence"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "class",
+        "marginal_cost_per_min",
+        "allowance"
+      ],
+      "additionalProperties": false
+    },
+    "separation": {
+      "type": "object",
+      "properties": {
+        "uid_separation": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "userns": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "signing_eligible": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "self",
+                "probe",
+                "provider",
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "uid_separation",
+        "userns",
+        "signing_eligible"
+      ],
+      "additionalProperties": false
+    },
+    "trust": {
+      "type": "object",
+      "properties": {
+        "accepts": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "owner",
+                  "collaborator",
+                  "internal",
+                  "untrusted"
+                ]
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "assigned",
+                "provider"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "source": {
+                    "const": "provider"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "isolation": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "process",
+                "container",
+                "sandboxed-container",
+                "vm",
+                "ephemeral-vm",
+                "hosted-disposable"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "internet",
+                  "restricted",
+                  "lan",
+                  "privileged"
+                ]
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "secret_classes": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "array"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "project",
+                  "environment",
+                  "team",
+                  "release",
+                  "deploy"
+                ]
+              }
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "privacy_zone": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                null,
+                "local-only",
+                "private-infrastructure",
+                "provider-allowlist",
+                "hosted-allowed"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "assigned"
+              ]
+            },
+            "observed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "known",
+                "estimated",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "value",
+            "source",
+            "observed_at",
+            "confidence"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "const": null
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "confidence": {
+                    "enum": [
+                      "known",
+                      "estimated"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "not": {
+                      "const": null
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "accepts",
+        "isolation",
+        "network",
+        "secret_classes",
+        "privacy_zone"
+      ],
+      "additionalProperties": false
+    },
+    "verified": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "string",
+          "enum": [
+            "self",
+            "probe",
+            "provider"
+          ]
+        },
+        "at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "by",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "secrets_eligible": {
+      "type": "boolean"
+    },
+    "protocol": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "integer"
+          }
+        },
+        "min": {
+          "type": "integer"
+        },
+        "agent_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "versions",
+        "min",
+        "agent_version"
+      ],
+      "additionalProperties": false
+    },
+    "deploy_host": {
+      "type": "object",
+      "properties": {
+        "matched": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": [
+            "null",
+            "string"
+          ],
+          "enum": [
+            null,
+            "inventory",
+            "never-list",
+            "marker"
+          ]
+        },
+        "override": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "matched",
+        "source",
+        "override"
+      ],
+      "additionalProperties": false
+    },
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "discovered": {
+          "type": "boolean"
+        },
+        "authorized_projects": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "eligible": {
+          "type": "boolean"
+        },
+        "revoked_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "discovered",
+        "authorized_projects",
+        "eligible",
+        "revoked_at"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$id": "https://nself.org/schemas/runner-capability.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "schema",
+    "identity",
+    "platform",
+    "resources",
+    "tools",
+    "availability",
+    "location",
+    "economics",
+    "separation",
+    "trust",
+    "verified",
+    "secrets_eligible",
+    "protocol",
+    "deploy_host",
+    "lifecycle"
+  ],
+  "additionalProperties": false
+}
