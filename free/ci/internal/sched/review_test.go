@@ -146,3 +146,130 @@ func TestReviewFastPathSchedulesRemoteOnlyDependency(t *testing.T) {
 		t.Fatalf("remote-only predecessor omitted from local plan: end=%d known=%v", end, known)
 	}
 }
+
+func TestReviewIncludedAllowanceAcrossJobs(t *testing.T) {
+	a, b := fixtureRunner("a", "lan"), fixtureRunner("b", "lan")
+	a.Class, b.Class = "included", "included"
+	a.Provider, b.Provider = "shared", "shared"
+	w := fixtureWorld(a, b)
+	w.Costs = map[string]Cost{
+		"a": {Class: "included", RateMicro: 1, BillingIncrementMs: 60000},
+		"b": {Class: "included", RateMicro: 1, BillingIncrementMs: 60000},
+	}
+	w.Allowances = map[string]Allowance{"shared": {Known: true, CeilingKnown: true, RemainingEstimated: 100000}}
+	got := Place(w, []Job{fixtureJob("first"), fixtureJob("second")})
+	if len(got.Placements) != 1 || !containsCode(got.Explanations[1].Alternatives[1].Reasons, string(model.AllowanceBelowMargin)) {
+		t.Fatalf("allowance overcommitted: %+v", got)
+	}
+	if w.Allowances["shared"].RemainingEstimated != 100000 {
+		t.Fatal("Place mutated caller allowance")
+	}
+}
+
+func TestReviewPaidBudgetAcrossJobs(t *testing.T) {
+	a, b := fixtureRunner("a", "lan"), fixtureRunner("b", "lan")
+	a.Class, b.Class = "metered", "metered"
+	w := fixtureWorld(a, b)
+	w.Policy.PaidEnabled = true
+	w.Costs = map[string]Cost{
+		"a": {Class: "metered", RateMicro: 1, BillingIncrementMs: 60000},
+		"b": {Class: "metered", RateMicro: 1, BillingIncrementMs: 60000},
+	}
+	w.Budgets.Day = Budget{Set: true, Remaining: 100000}
+	got := Place(w, []Job{fixtureJob("first"), fixtureJob("second")})
+	if len(got.Placements) != 1 || !containsCode(got.Explanations[1].Alternatives[1].Reasons, string(model.BudgetExceeded)) {
+		t.Fatalf("budget overcommitted: %+v", got)
+	}
+	if w.Budgets.Day.Remaining != 100000 {
+		t.Fatal("Place mutated caller budget")
+	}
+}
+
+func TestReviewApplyPersistsLimits(t *testing.T) {
+	cases := []struct {
+		name  string
+		code  model.PlacementReason
+		limit func(*Limits)
+	}{
+		{"pipeline", model.LimitPipeline, func(l *Limits) { l.Pipeline = 1 }},
+		{"job", model.LimitJob, func(l *Limits) { l.Job = 1 }},
+		{"runner", model.LimitRunner, func(l *Limits) { l.Runner = 1 }},
+		{"provider", model.LimitProvider, func(l *Limits) { l.Provider = 1 }},
+		{"project", model.LimitProject, func(l *Limits) { l.Project = 1 }},
+		{"user", model.LimitUser, func(l *Limits) { l.User = 1 }},
+		{"team", model.LimitTeam, func(l *Limits) { l.Team = 1 }},
+		{"global", model.LimitGlobal, func(l *Limits) { l.Global = 1 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := fixtureRunner("r", "lan")
+			r.Avail.Slots = 2
+			w := fixtureWorld(r)
+			tc.limit(&w.Policy.Limits)
+			w.Apply(Placement{RunnerID: "r", CPU: 1, MemMB: 128})
+			got := Place(w, []Job{fixtureJob("second")})
+			if len(got.Placements) != 0 || !containsCode(got.Explanations[0].Alternatives[0].Reasons, string(tc.code)) {
+				t.Fatalf("Apply lost %s count: %+v", tc.name, got)
+			}
+		})
+	}
+}
+
+func TestReviewBackgroundUnknownActivity(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		plug        *bool
+		interactive *string
+		code        model.PlacementReason
+	}{
+		{"unplugged", ptr(false), ptr("idle"), model.NodeOnBattery},
+		{"unknown-plug", nil, ptr("idle"), model.NodeOnBattery},
+		{"active", ptr(true), ptr("active"), model.NodeInteractive},
+		{"unknown-interactive", ptr(true), nil, model.NodeInteractive},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := fixtureRunner("r", "local")
+			r.Capability.Availability.PluggedIn.Value = tc.plug
+			r.Capability.Availability.Interactive.Value = tc.interactive
+			j := fixtureJob("j")
+			j.Pipeline.Band = "background"
+			got := Place(fixtureWorld(r), []Job{j})
+			if len(got.Placements) != 0 || !containsCode(got.Explanations[0].Alternatives[0].Reasons, string(tc.code)) {
+				t.Fatalf("unknown operator activity admitted: %+v", got)
+			}
+		})
+	}
+}
+
+func TestReviewBackgroundOwnershipSources(t *testing.T) {
+	job := fixtureJob("j")
+	job.Pipeline.Band = "background"
+	operator := fixtureRunner("r", "lan")
+	operator.Decl.Ownership = ""
+	operator.Capability.Identity.Ownership.Value = ptr("operator")
+	got := Place(fixtureWorld(operator), []Job{job})
+	if len(got.Placements) != 0 || !containsCode(got.Explanations[0].Alternatives[0].Reasons, string(model.NodeOnBattery)) || !containsCode(got.Explanations[0].Alternatives[0].Reasons, string(model.NodeInteractive)) {
+		t.Fatalf("capability operator ownership ignored: %+v", got)
+	}
+	operator.Capability.Availability.PluggedIn.Value = ptr(true)
+	operator.Capability.Availability.Interactive.Value = ptr("idle")
+	got = Place(fixtureWorld(operator), []Job{job})
+	if len(got.Placements) != 1 {
+		t.Fatalf("idle plugged operator refused: %+v", got)
+	}
+
+	shared := fixtureRunner("r", "lan")
+	shared.Decl.Ownership = "shared"
+	shared.Capability.Identity.Ownership.Value = ptr("shared")
+	shared.Capability.Availability.PluggedIn.Value = ptr(true)
+	shared.Capability.Availability.Interactive.Value = ptr("active")
+	got = Place(fixtureWorld(shared), []Job{job})
+	if len(got.Placements) != 0 || !containsCode(got.Explanations[0].Alternatives[0].Reasons, string(model.NodeInteractive)) {
+		t.Fatalf("known active use admitted: %+v", got)
+	}
+	shared.Capability.Availability.Interactive.Value = ptr("idle")
+	got = Place(fixtureWorld(shared), []Job{job})
+	if len(got.Placements) != 1 {
+		t.Fatalf("idle shared runner refused: %+v", got)
+	}
+}

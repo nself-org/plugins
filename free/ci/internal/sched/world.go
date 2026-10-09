@@ -171,15 +171,62 @@ type Result struct {
 func (w *World) Apply(p Placement) {
 	for i := range w.Runners {
 		if w.Runners[i].ID == p.RunnerID {
-			reserve(&w.Runners[i], p)
+			w.reservePlacement(&w.Runners[i], p)
 			return
 		}
 	}
 	for i := range w.Hosted {
 		if w.Hosted[i].ID == p.RunnerID {
-			reserve(&w.Hosted[i], p)
+			w.reservePlacement(&w.Hosted[i], p)
 			return
 		}
+	}
+}
+
+func (w *World) reservePlacement(r *Runner, p Placement) {
+	reserve(r, p)
+	w.Counts.Pipeline++
+	w.Counts.Job++
+	w.Counts.Runner++
+	w.Counts.Provider++
+	if w.Counts.Runners == nil {
+		w.Counts.Runners = make(map[string]int)
+	}
+	if w.Counts.Providers == nil {
+		w.Counts.Providers = make(map[string]int)
+	}
+	w.Counts.Runners[r.ID]++
+	w.Counts.Providers[r.Provider]++
+	w.Counts.Project++
+	w.Counts.User++
+	w.Counts.Team++
+	w.Counts.Global++
+
+	class := r.Class
+	if class == "" {
+		class = w.Costs[r.ID].Class
+	}
+	if class == "included" && !labelMatches(r.Capability.Identity.Labels, "nself.visibility=public") {
+		if a, ok := w.Allowances[r.Provider]; ok {
+			a.RemainingEstimated, _ = Add(a.RemainingEstimated, -p.CostMicro)
+			w.Allowances[r.Provider] = a
+		}
+	}
+	if class != "local" && class != "owned" && class != "included" {
+		debitBudget(&w.Budgets.Job, p.CostMicro)
+		debitBudget(&w.Budgets.Pipeline, p.CostMicro)
+		debitBudget(&w.Budgets.Day, p.CostMicro)
+		debitBudget(&w.Budgets.Month, p.CostMicro)
+		if b, ok := w.Budgets.Providers[r.Provider]; ok {
+			debitBudget(&b, p.CostMicro)
+			w.Budgets.Providers[r.Provider] = b
+		}
+	}
+}
+
+func debitBudget(b *Budget, cost int64) {
+	if b.Set {
+		b.Remaining, _ = Add(b.Remaining, -cost)
 	}
 }
 func reserve(r *Runner, p Placement) {

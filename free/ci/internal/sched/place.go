@@ -9,6 +9,8 @@ import (
 func Place(w World, jobs []Job) Result {
 	w.Counts.Runners = copyCounts(w.Counts.Runners)
 	w.Counts.Providers = copyCounts(w.Counts.Providers)
+	w.Allowances = copyAllowances(w.Allowances)
+	w.Budgets.Providers = copyBudgets(w.Budgets.Providers)
 	runners := append(append([]Runner(nil), w.Runners...), w.Hosted...)
 	sort.Slice(runners, func(i, j int) bool { return runners[i].ID < runners[j].ID })
 	result := Result{Placements: []Placement{}, Explanations: []Explanation{}, FastPath: fastPath(w, jobs, runners)}
@@ -93,23 +95,7 @@ func Place(w World, jobs []Job) Result {
 		if best != nil {
 			x.Status = "placed"
 			result.Placements = append(result.Placements, *best)
-			reserve(&runners[bestIndex], *best)
-			w.Counts.Pipeline++
-			w.Counts.Job++
-			w.Counts.Runner++
-			w.Counts.Provider++
-			if w.Counts.Runners == nil {
-				w.Counts.Runners = make(map[string]int)
-			}
-			if w.Counts.Providers == nil {
-				w.Counts.Providers = make(map[string]int)
-			}
-			w.Counts.Runners[runners[bestIndex].ID]++
-			w.Counts.Providers[runners[bestIndex].Provider]++
-			w.Counts.Project++
-			w.Counts.User++
-			w.Counts.Team++
-			w.Counts.Global++
+			w.reservePlacement(&runners[bestIndex], *best)
 		} else if approvalOnly {
 			x.Status = "awaiting-approval"
 		} else if w.OpenRegistry && noStaticCandidate {
@@ -126,6 +112,22 @@ func Place(w World, jobs []Job) Result {
 		result.Explanations = append(result.Explanations, x)
 	}
 	return result
+}
+
+func copyAllowances(source map[string]Allowance) map[string]Allowance {
+	out := make(map[string]Allowance, len(source))
+	for k, v := range source {
+		out[k] = v
+	}
+	return out
+}
+
+func copyBudgets(source map[string]Budget) map[string]Budget {
+	out := make(map[string]Budget, len(source))
+	for k, v := range source {
+		out[k] = v
+	}
+	return out
 }
 
 func copyCounts(source map[string]int) map[string]int {

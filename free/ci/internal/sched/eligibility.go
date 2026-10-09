@@ -91,10 +91,11 @@ func eligibility(w World, j Job, r Runner, antiAffinity bool) []model.PlacementR
 			add(model.NodeMaintenance, "maintenance")
 		}
 	}
-	if c.Availability.PluggedIn.Value != nil && !*c.Availability.PluggedIn.Value {
+	operatorOwned := r.Decl.Ownership == "operator" || c.Identity.Ownership.Value != nil && *c.Identity.Ownership.Value == "operator"
+	if c.Availability.PluggedIn.Value != nil && !*c.Availability.PluggedIn.Value || j.Pipeline.Band == "background" && operatorOwned && c.Availability.PluggedIn.Value == nil {
 		add(model.NodeOnBattery, "unplugged")
 	}
-	if c.Availability.Interactive.Value != nil && *c.Availability.Interactive.Value == "active" && j.Pipeline.Band == "background" {
+	if j.Pipeline.Band == "background" && (c.Availability.Interactive.Value != nil && *c.Availability.Interactive.Value == "active" || operatorOwned && (c.Availability.Interactive.Value == nil || *c.Availability.Interactive.Value != "idle")) {
 		add(model.NodeInteractive, "active use")
 	}
 	if c.Resources.Reserved.CPU.Value != nil && *c.Resources.Reserved.CPU.Value > 0 && r.Avail.CPU <= 0 {
