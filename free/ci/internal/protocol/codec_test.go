@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -93,6 +94,17 @@ func TestStrictSeqCarrierAndPreamble(t *testing.T) {
 			t.Fatalf("accepted %s", raw)
 		}
 	}
+	for _, bad := range []uint64{1, 3} {
+		raw := `{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n" +
+			`{"v":1,"type":"ack","seq":` + strconv.FormatUint(bad, 10) + `,"body":{"ack_seq":1}}` + "\n"
+		d := NewDecoder(strings.NewReader(raw), CarrierPolicy{})
+		if _, err := d.Decode(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Decode(); err == nil {
+			t.Fatalf("accepted repeated or gapped seq %d", bad)
+		}
+	}
 	secret := `{"v":1,"type":"secrets","seq":1,"body":{"lease_id":"l","values":[{"ref":"project/x","value":"s"}]}}` + "\n"
 	for _, p := range []CarrierPolicy{{Carrier: "B", Personal: true, OperatorOwned: true}, {Carrier: "A", Personal: false, OperatorOwned: true}, {Carrier: "A", Personal: true, OperatorOwned: false}} {
 		if _, err := NewDecoder(strings.NewReader(secret), p).Decode(); err == nil {
@@ -135,17 +147,25 @@ func TestNegotiationAndAgePin(t *testing.T) {
 func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n"))
 	f.Add([]byte(`{"v":1,"type":"ack","seq":2,"body":{"ack_seq":1}}` + "\n"))
+	f.Add([]byte(`{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n" + `{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n"))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > MaxFrame+1 {
 			return
 		}
 		d := NewDecoder(bytes.NewReader(data), CarrierPolicy{Carrier: "B"})
-		m, err := d.Decode()
-		if err == nil && m.Seq != 1 {
-			t.Fatalf("accepted seq %d", m.Seq)
-		}
-		if err != nil && !errors.Is(err, io.EOF) {
-			_ = err
+		var previous uint64
+		for {
+			m, err := d.Decode()
+			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					_ = err
+				}
+				return
+			}
+			if m.Seq != previous+1 {
+				t.Fatalf("accepted seq %d after %d", m.Seq, previous)
+			}
+			previous = m.Seq
 		}
 	})
 }

@@ -91,7 +91,7 @@ func (d *Decoder) Decode() (Message, error) {
 	if err := strict(line, &w); err != nil {
 		return Message{}, invalid("decode")
 	}
-	if w.V != 1 || w.Seq != d.seq+1 || len(w.Body) == 0 {
+	if w.V != 1 || w.Seq == 0 || w.Seq != d.seq+1 || len(w.Body) == 0 {
 		return Message{}, invalid("version_seq_or_body")
 	}
 	body, err := decodeBody(w.Type, w.Body, d.policy)
