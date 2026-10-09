@@ -52,6 +52,26 @@ func TestCapabilityFixtures(t *testing.T) {
 	}
 }
 
+func TestCapabilityUnknownFieldGoPath(t *testing.T) {
+	body, err := os.ReadFile("testdata/capability/valid/laptop.valid.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatal(err)
+	}
+	raw["future_trust_override"] = true
+	body, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var c Capability
+	if err := json.Unmarshal(body, &c); err == nil || !strings.Contains(err.Error(), "future_trust_override") {
+		t.Fatalf("unknown field accepted: %v", err)
+	}
+}
+
 func TestCapabilitySchemaCurrent(t *testing.T) {
 	want, err := CapabilitySchema()
 	if err != nil {

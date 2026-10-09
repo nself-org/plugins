@@ -25,6 +25,24 @@ type Capability struct {
 	Lifecycle       CapabilityLifecycle    `json:"lifecycle"`
 }
 
+// UnmarshalJSON validates the original document before any unknown fields can be dropped.
+func (c *Capability) UnmarshalJSON(raw []byte) error {
+	schema, err := CapabilitySchema()
+	if err != nil {
+		return err
+	}
+	if err := ValidateJSON(schema, raw); err != nil {
+		return err
+	}
+	type plain Capability
+	var decoded plain
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	*c = Capability(decoded)
+	return nil
+}
+
 type CapabilityIdentity struct {
 	ID                  string         `json:"id"`
 	Name                string         `json:"name"`

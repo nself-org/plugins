@@ -76,7 +76,11 @@ func TestTrustAndDrift(t *testing.T) {
 	strong := model.Isolation("vm")
 	trust := n.Capability.Trust
 	trust.Isolation = model.Fact[model.Isolation]{Value: &strong, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
-	if _, err = r.SetTrust(ctx, id, trust, "admin"); err != nil {
+	admin, err := store.NewAdminAuthority("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = r.SetTrust(ctx, id, trust, admin); err != nil {
 		t.Fatal(err)
 	}
 	in := c
@@ -223,5 +227,63 @@ func TestInvalidCapability(t *testing.T) {
 	_, _, err := r.UpdateCapability(context.Background(), c.Identity.ID, c, "probe")
 	if err == nil || !strings.Contains(err.Error(), "/properties/identity/properties/provider") {
 		t.Fatalf("expected pointer error: %v", err)
+	}
+}
+
+func TestRegistrationClearsOwnership(t *testing.T) {
+	r, c := setup(t)
+	n, err := r.Get(context.Background(), c.Identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Capability.Identity.Ownership.Value != nil || n.Capability.Identity.Ownership.Source != "assigned" {
+		t.Fatalf("caller ownership persisted: %+v", n.Capability.Identity.Ownership)
+	}
+}
+
+func TestRevokedNodeRequiresAdminRecovery(t *testing.T) {
+	r, c := setup(t)
+	ctx := context.Background()
+	id := c.Identity.ID
+	if _, err := r.SetState(ctx, id, "revoked", "operator decision", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.SetState(ctx, id, "online", "hello", "agent"); err == nil {
+		t.Fatal("agent resurrected node")
+	}
+	n, err := r.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Record.State != "revoked" || n.Capability.Lifecycle.RevokedAt == nil {
+		t.Fatal("revocation lost")
+	}
+	admin, err := store.NewAdminAuthority("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err = r.Recover(ctx, id, "offline", admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Record.State != "offline" || n.Capability.Lifecycle.RevokedAt != nil {
+		t.Fatal("recovery did not clear revocation")
+	}
+}
+
+func TestTrustRequiresAdminAuthority(t *testing.T) {
+	r, c := setup(t)
+	n, err := r.Get(context.Background(), c.Identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.NewAdminAuthority("agent"); err == nil {
+		t.Fatal("agent acquired admin authority")
+	}
+	if _, err := r.SetTrust(context.Background(), c.Identity.ID, n.Capability.Trust, store.AdminAuthority{}); err == nil {
+		t.Fatal("zero authority assigned trust")
+	}
+	if err := r.Store.NodeSetTrust(context.Background(), n.Record, store.AdminAuthority{}); err == nil {
+		t.Fatal("store accepted zero authority")
 	}
 }

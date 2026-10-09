@@ -8,6 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
 //go:embed migrations/node-registry/*.sql
@@ -19,7 +23,6 @@ func init() {
 	}
 }
 
-// NodeRecord is the store aggregate; JSON columns are opaque to SQL.
 type NodeRecord struct {
 	ID, Name, State, Reason                  string
 	Version                                  int64
@@ -28,12 +31,55 @@ type NodeRecord struct {
 	ObservedAt, CreatedAt, UpdatedAt         int64
 }
 
+// AdminAuthority is an explicit coordinator decision for trust and recovery.
+type AdminAuthority struct{ actor string }
+
+func NewAdminAuthority(actor string) (AdminAuthority, error) {
+	if actor == "" || actor == "agent" || actor == "probe" {
+		return AdminAuthority{}, coded("E651", "admin authority required")
+	}
+	return AdminAuthority{actor: actor}, nil
+}
+func (a AdminAuthority) valid() bool {
+	return a.actor != "" && a.actor != "agent" && a.actor != "probe"
+}
+func (a AdminAuthority) Actor() string { return a.actor }
+func unknownNodeFact[T any](now time.Time) model.Fact[T] {
+	return model.Fact[T]{Source: "assigned", ObservedAt: now, Confidence: "unknown"}
+}
+func initialNodeTrust(now time.Time) model.CapabilityTrust {
+	empty := []model.TrustClass{}
+	accepts := model.Fact[[]model.TrustClass]{Value: &empty, Source: "assigned", ObservedAt: now, Confidence: "known"}
+	return model.CapabilityTrust{Accepts: accepts, Isolation: unknownNodeFact[model.Isolation](now), Network: unknownNodeFact[[]model.NetworkScope](now), SecretClasses: unknownNodeFact[[]model.SecretClass](now), PrivacyZone: unknownNodeFact[model.PrivacyZone](now)}
+}
 func digestNode(doc []byte) string { sum := sha256.Sum256(doc); return hex.EncodeToString(sum[:]) }
 
 // NodePut registers a node and its first snapshot in one audited transaction.
 func (s *Store) NodePut(ctx context.Context, n NodeRecord, actor string) error {
 	if n.ID == "" || n.Name == "" || len(n.Capability) == 0 {
 		return coded("E607", "invalid node")
+	}
+	var c model.Capability
+	if json.Unmarshal(n.Capability, &c) == nil && c.Schema == "ci.runner-capability/v1" {
+		c.Identity.Ownership = model.Fact[string]{Source: "assigned", ObservedAt: s.now().UTC(), Confidence: "unknown"}
+		c.Trust = initialNodeTrust(s.now().UTC())
+		var err error
+		n.Capability, err = json.Marshal(c)
+		if err != nil {
+			return err
+		}
+		n.Trust, err = json.Marshal(c.Trust)
+		if err != nil {
+			return err
+		}
+		n.Lifecycle, err = json.Marshal(c.Lifecycle)
+		if err != nil {
+			return err
+		}
+		n.DeployHost, err = json.Marshal(c.DeployHost)
+		if err != nil {
+			return err
+		}
 	}
 	return s.write(ctx, func(tx *sql.Tx) error {
 		now := s.now().UnixNano()
@@ -48,7 +94,6 @@ func (s *Store) NodePut(ctx context.Context, n NodeRecord, actor string) error {
 		return s.appendAudit(ctx, tx, actor, "node.register", n.ID, "registered")
 	})
 }
-
 func scanNode(row interface{ Scan(...any) error }) (NodeRecord, error) {
 	var n NodeRecord
 	var lifecycle, trust, host, doc string
@@ -83,8 +128,7 @@ func (s *Store) NodeList(ctx context.Context) ([]NodeRecord, error) {
 	return out, rows.Err()
 }
 
-// nodeCAS commits an aggregate replacement and one audit row, or E605 on a stale version.
-func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail string, updateSnapshot bool) error {
+func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `UPDATE node SET name=?,version=version+1,lifecycle=?,trust_json=?,deploy_host_json=?,state=?,reason=?,updated_at=? WHERE id=? AND version=?`, n.Name, string(n.Lifecycle), string(n.Trust), string(n.DeployHost), n.State, n.Reason, s.now().UnixNano(), n.ID, n.Version)
 		if err != nil {
@@ -97,27 +141,160 @@ func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail
 		if changed != 1 {
 			return coded("E605", "node version changed")
 		}
-		if updateSnapshot {
-			_, err = tx.ExecContext(ctx, `UPDATE capability_snapshot SET digest=?,doc_json=?,observed_at=? WHERE node_id=?`, digestNode(n.Capability), string(n.Capability), n.ObservedAt, n.ID)
-			if err != nil {
-				return err
-			}
+		_, err = tx.ExecContext(ctx, `UPDATE capability_snapshot SET digest=?,doc_json=?,observed_at=? WHERE node_id=?`, digestNode(n.Capability), string(n.Capability), n.ObservedAt, n.ID)
+		if err != nil {
+			return err
 		}
 		return s.appendAudit(ctx, tx, actor, action, n.ID, detail)
 	})
 }
-func (s *Store) NodeUpdateCapability(ctx context.Context, n NodeRecord, actor string) error {
-	return s.nodeCAS(ctx, n, actor, "node.capability", "capability updated", true)
+func (s *Store) nodeEdit(ctx context.Context, proposed NodeRecord) (NodeRecord, model.Capability, error) {
+	old, err := s.NodeGet(ctx, proposed.ID)
+	if err != nil {
+		return old, model.Capability{}, err
+	}
+	if old.Version != proposed.Version {
+		return old, model.Capability{}, coded("E605", "node version changed")
+	}
+	var c model.Capability
+	err = json.Unmarshal(old.Capability, &c)
+	return old, c, err
 }
-func (s *Store) NodeSetTrust(ctx context.Context, n NodeRecord, actor string) error {
-	return s.nodeCAS(ctx, n, actor, "node.trust", "trust assigned", true)
+func nodeDocument(n *NodeRecord, c model.Capability) error {
+	var err error
+	n.Capability, err = json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	n.Lifecycle, err = json.Marshal(c.Lifecycle)
+	if err != nil {
+		return err
+	}
+	n.Trust, err = json.Marshal(c.Trust)
+	return err
+}
+func (s *Store) NodeUpdateCapability(ctx context.Context, n NodeRecord, actor string) error {
+	old, previous, err := s.nodeEdit(ctx, n)
+	if err != nil {
+		return err
+	}
+	var incoming model.Capability
+	if err := json.Unmarshal(n.Capability, &incoming); err != nil {
+		return err
+	}
+	if incoming.Identity.ID != old.ID {
+		return coded("E651", "node identity changed")
+	}
+	if previous.Identity.AgeRecipient.Value != nil {
+		incoming.Identity.AgeRecipient = previous.Identity.AgeRecipient
+	}
+	incoming.Identity.Ownership = previous.Identity.Ownership
+	reportedIsolation := incoming.Trust.Isolation
+	incoming.Trust = previous.Trust
+	if reportedIsolation.Value != nil && previous.Trust.Isolation.Value != nil {
+		values := model.EnumValues("Isolation")
+		reportedRank := slices.Index(values, string(*reportedIsolation.Value))
+		if reportedRank >= 0 && reportedRank < slices.Index(values, string(*previous.Trust.Isolation.Value)) {
+			incoming.Trust.Isolation = reportedIsolation
+			incoming.Trust.Isolation.Source = "assigned"
+		}
+	}
+	incoming.Lifecycle = previous.Lifecycle
+	incoming.DeployHost = previous.DeployHost
+	incoming.Resources.Reserved = previous.Resources.Reserved
+	incoming.Availability.Persistence = previous.Availability.Persistence
+	incoming.Availability.OnBattery = previous.Availability.OnBattery
+	incoming.Availability.InteractivePolicy = previous.Availability.InteractivePolicy
+	incoming.Availability.State = previous.Availability.State
+	incoming.SecretsEligible = incoming.Separation.UIDSeparation.Value != nil && *incoming.Separation.UIDSeparation.Value
+	if err := model.ValidateCapability(incoming); err != nil {
+		return err
+	}
+	if err := nodeDocument(&old, incoming); err != nil {
+		return err
+	}
+	old.ObservedAt, old.Name = n.ObservedAt, incoming.Identity.Name
+	return s.nodeCAS(ctx, old, actor, "node.capability", "capability updated")
+}
+func (s *Store) NodeSetTrust(ctx context.Context, n NodeRecord, authority AdminAuthority) error {
+	if !authority.valid() {
+		return coded("E651", "admin authority required")
+	}
+	old, previous, err := s.nodeEdit(ctx, n)
+	if err != nil {
+		return err
+	}
+	var incoming model.Capability
+	if err := json.Unmarshal(n.Capability, &incoming); err != nil {
+		return err
+	}
+	previous.Trust = incoming.Trust
+	if err := model.ValidateCapability(previous); err != nil {
+		return err
+	}
+	if err := nodeDocument(&old, previous); err != nil {
+		return err
+	}
+	return s.nodeCAS(ctx, old, authority.actor, "node.trust", "trust assigned")
 }
 func (s *Store) NodeSetState(ctx context.Context, n NodeRecord, actor, detail string) error {
+	old, c, err := s.nodeEdit(ctx, n)
+	if err == nil {
+		if c.Lifecycle.RevokedAt != nil && n.State != "revoked" {
+			return coded("E651", "revoked node requires admin recovery")
+		}
+		c.Availability.State = model.Fact[string]{Value: &n.State, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
+		if n.State == "revoked" && c.Lifecycle.RevokedAt == nil {
+			now := time.Now().UTC()
+			c.Lifecycle.RevokedAt = &now
+		}
+		if err := nodeDocument(&old, c); err != nil {
+			return err
+		}
+	} else if old.Version != n.Version || old.ID != n.ID {
+		return err
+	}
+	old.State, old.Reason = n.State, n.Reason
 	if detail != "age_recipient_changed" {
 		detail = "state changed"
 	}
-	return s.nodeCAS(ctx, n, actor, "node.state", detail, true)
+	return s.nodeCAS(ctx, old, actor, "node.state", detail)
+}
+
+func (s *Store) NodeRecover(ctx context.Context, n NodeRecord, authority AdminAuthority) error {
+	if !authority.valid() {
+		return coded("E651", "admin authority required")
+	}
+	if n.State != "offline" && n.State != "maintenance" {
+		return coded("E651", "invalid recovery state")
+	}
+	old, c, err := s.nodeEdit(ctx, n)
+	if err != nil {
+		return err
+	}
+	if c.Lifecycle.RevokedAt == nil {
+		return coded("E651", "node is not revoked")
+	}
+	c.Lifecycle.RevokedAt = nil
+	c.Availability.State = model.Fact[string]{Value: &n.State, Source: "assigned", ObservedAt: time.Now().UTC(), Confidence: "known"}
+	if err := nodeDocument(&old, c); err != nil {
+		return err
+	}
+	old.State, old.Reason = n.State, "admin recovery"
+	return s.nodeCAS(ctx, old, authority.actor, "node.recover", "admin recovery")
 }
 func (s *Store) NodeSetAuthorization(ctx context.Context, n NodeRecord, actor string) error {
-	return s.nodeCAS(ctx, n, actor, "node.authorization", "project authorization changed", true)
+	old, previous, err := s.nodeEdit(ctx, n)
+	if err != nil {
+		return err
+	}
+	var incoming model.Capability
+	if err := json.Unmarshal(n.Capability, &incoming); err != nil {
+		return err
+	}
+	previous.Lifecycle.AuthorizedProjects = incoming.Lifecycle.AuthorizedProjects
+	if err := nodeDocument(&old, previous); err != nil {
+		return err
+	}
+	return s.nodeCAS(ctx, old, actor, "node.authorization", "project authorization changed")
 }

@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"reflect"
-	"time"
-
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
+	"reflect"
+	"time"
 )
 
 // Registry owns node decisions; SQL remains in the store package.
@@ -46,6 +45,7 @@ func (r *Registry) Register(ctx context.Context, c model.Capability, actor strin
 		return Node{}, invalid("/identity/id")
 	}
 	c.Trust = safeTrust()
+	c.Identity.Ownership = assigned[string](nil)
 	c.Identity.AgeRecipient = model.Fact[string]{Source: "self", ObservedAt: time.Now().UTC(), Confidence: "unknown"}
 	c.Lifecycle = model.CapabilityLifecycle{Discovered: true, AuthorizedProjects: []string{}, Eligible: false}
 	c.SecretsEligible = eligible(c)
@@ -102,7 +102,11 @@ func (r *Registry) mutate(ctx context.Context, id, actor, kind string, fn func(*
 		case "capability":
 			err = r.Store.NodeUpdateCapability(ctx, n.Record, actor)
 		case "trust":
-			err = r.Store.NodeSetTrust(ctx, n.Record, actor)
+			admin, e := store.NewAdminAuthority(actor)
+			if e != nil {
+				return Node{}, e
+			}
+			err = r.Store.NodeSetTrust(ctx, n.Record, admin)
 		case "authorization":
 			err = r.Store.NodeSetAuthorization(ctx, n.Record, actor)
 		default:
@@ -121,7 +125,6 @@ func (r *Registry) mutate(ctx context.Context, id, actor, kind string, fn func(*
 }
 
 // UpdateCapability discards all node-supplied trust, identity pin and lifecycle fields.
-// Isolation can only move down the strength ladder.
 func (r *Registry) UpdateCapability(ctx context.Context, id string, in model.Capability, actor string) (Node, []string, error) {
 	var drift []string
 	payload := in
@@ -172,11 +175,8 @@ func isolationRank(i model.Isolation) int {
 }
 
 // SetTrust is the only authority for coordinator-assigned trust fields.
-func (r *Registry) SetTrust(ctx context.Context, id string, t model.CapabilityTrust, actor string) (Node, error) {
-	if actor == "" {
-		return Node{}, invalid("admin actor required")
-	}
-	return r.mutate(ctx, id, actor, "trust", func(n *Node) error {
+func (r *Registry) SetTrust(ctx context.Context, id string, t model.CapabilityTrust, authority store.AdminAuthority) (Node, error) {
+	return r.mutate(ctx, id, authority.Actor(), "trust", func(n *Node) error {
 		t.Accepts.Source = "assigned"
 		t.Isolation.Source = "assigned"
 		t.Network.Source = "assigned"
@@ -185,6 +185,26 @@ func (r *Registry) SetTrust(ctx context.Context, id string, t model.CapabilityTr
 		n.Capability.Trust = t
 		return model.ValidateCapability(n.Capability)
 	})
+}
+
+func (r *Registry) Recover(ctx context.Context, id, state string, authority store.AdminAuthority) (Node, error) {
+	for i := 0; i < 256; i++ {
+		n, err := r.Get(ctx, id)
+		if err != nil {
+			return Node{}, err
+		}
+		n.Record.State = state
+		err = r.Store.NodeRecover(ctx, n.Record, authority)
+		var conflict *store.Error
+		if errors.As(err, &conflict) && conflict.Code == "E605" {
+			continue
+		}
+		if err != nil {
+			return Node{}, err
+		}
+		return r.Get(ctx, id)
+	}
+	return Node{}, &store.Error{Code: "E605", Message: "node contention"}
 }
 func (r *Registry) Authorize(ctx context.Context, id, project, actor string) (Node, error) {
 	if project == "" {
