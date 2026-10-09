@@ -16,6 +16,22 @@ import (
 
 func TestOfflineGoFixture(t *testing.T) {
 	root := t.TempDir()
+	bin := t.TempDir()
+	// sh and ps are the executor's host process utilities, not check tools.
+	for _, name := range []string{"go", "gofmt", "git", "gitleaks", "sh", "ps"} {
+		tool, err := findTool(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(tool, filepath.Join(bin, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("GOFLAGS", "-mod=vendor")
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOSUMDB", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
 	writeFixture(t, root, "go.mod", "module example.org/fixture\n\ngo 1.22\n")
 	writeFixture(t, root, "main.go", "package fixture\n\nfunc Add(a, b int) int { return a + b }\n")
 	writeFixture(t, root, "main_test.go", "package fixture\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {\n\tif Add(1, 2) != 3 {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n")
@@ -44,6 +60,11 @@ func TestOfflineGoFixture(t *testing.T) {
 	for _, id := range []string{"go.fmt", "go.vet", "go.test", "go.coverage", "secrets.gitleaks", "go.govulncheck", "security.trivy.fs"} {
 		if !seen[id] {
 			t.Fatalf("missing %s", id)
+		}
+	}
+	for _, c := range checks {
+		if (c.ID == "go.govulncheck" || c.ID == "security.trivy.fs") && (c.Result != "skip" || c.Reason != "advisory.tool_missing") {
+			t.Fatal(c)
 		}
 	}
 	if model.Verdict(checks) != "pass" {

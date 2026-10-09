@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/detect"
@@ -38,9 +39,6 @@ func required(d CheckDef, o Options) bool {
 	if d.RequiredDefault {
 		return true
 	}
-	if c, ok := o.Config.Checks[d.ID]; ok && c.Required != nil {
-		return *c.Required
-	}
 	if o.Container || o.Kind == "release" {
 		return true
 	}
@@ -48,6 +46,9 @@ func required(d CheckDef, o Options) bool {
 		if p == "strict" {
 			return true
 		}
+	}
+	if c, ok := o.Config.Checks[d.ID]; ok && c.Required != nil {
+		return *c.Required
 	}
 	return false
 }
@@ -95,10 +96,10 @@ func (r *Registry) Plan(facts []detect.Fact, o Options) []PlannedCheck {
 			add("rust.clippy", dir, "")
 			add("rust.test", dir, "")
 		case f.Kind == "container" && f.Name == "dockerfile":
-			add("container.hadolint", dir, f.Path)
-			add("container.trivy.config", dir, f.Path)
+			add("container.hadolint", dir, path.Base(f.Path))
+			add("container.trivy.config", dir, path.Base(f.Path))
 		case f.Kind == "container" && f.Name == "compose":
-			add("container.trivy.config", dir, f.Path)
+			add("container.trivy.config", dir, path.Base(f.Path))
 		}
 	}
 	if len(facts) > 0 {
@@ -147,7 +148,13 @@ func (r *Registry) ImpliedJobs(c model.PipelineConfig) map[string]model.Job {
 			name = name[:i]
 		}
 		if _, exists := jobs[name]; exists {
-			continue
+			name = "check-" + strings.ReplaceAll(d.ID, ".", "-")
+			for n := 2; ; n++ {
+				if _, taken := jobs[name]; !taken {
+					break
+				}
+				name = "check-" + strings.ReplaceAll(d.ID, ".", "-") + "-" + strconv.Itoa(n)
+			}
 		}
 		jobs[name] = model.Job{Kind: "quality", Run: []string{d.ID}, Required: boolPtr(true), Path: d.Path}
 	}

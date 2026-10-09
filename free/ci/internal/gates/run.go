@@ -26,9 +26,6 @@ type Runner struct {
 func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.PipelineConfig) model.Check {
 	d := p.Def
 	c := model.Check{ID: d.ID, JobID: d.ID, Kind: d.Kind, Tool: d.Tool, Required: p.Required, Substantive: d.Substantive}
-	if !available(d.Tool) {
-		return unavailable(c, d.Remediation)
-	}
 	argv := append([]string(nil), d.Argv...)
 	for i, a := range argv {
 		argv[i] = strings.ReplaceAll(a, "{target}", p.Target)
@@ -37,6 +34,12 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		var reason string
 		argv, reason = nodeCommand(root, p, cfg)
 		if reason != "" {
+			if reason == "unsupported package manager" {
+				c.Result = "error"
+				c.FailureClass = "infra"
+				c.Excerpt = "E614: " + reason + "; " + d.Remediation
+				return c
+			}
 			c.Result = "skip"
 			c.Required = false
 			c.Excerpt = reason
@@ -46,6 +49,8 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		if !available(argv[0]) {
 			return unavailable(c, d.Remediation)
 		}
+	} else if !available(d.Tool) {
+		return unavailable(c, d.Remediation)
 	}
 	probeTool := c.Tool
 	if d.ID == "node.coverage" {
@@ -88,7 +93,7 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		c.Excerpt = res.err.Error()
 		return c
 	}
-	if advisoryOffline(d.ID, res.output) {
+	if advisoryOffline(d.ID, res.output, res.exit) {
 		if !p.Required {
 			c.Result = "skip"
 			c.Reason = "advisory.data_offline"

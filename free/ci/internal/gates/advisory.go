@@ -5,12 +5,17 @@ import (
 	"strings"
 )
 
-func advisoryOffline(id, output string) bool {
-	if !strings.Contains(id, "trivy") {
+func advisoryOffline(id, output string, exit int) bool {
+	if !strings.Contains(id, "trivy") || exit == 0 || json.Valid([]byte(output)) {
 		return false
 	}
-	s := strings.ToLower(output)
-	return strings.Contains(s, "offline") || strings.Contains(s, "database") && (strings.Contains(s, "not found") || strings.Contains(s, "download"))
+	for _, line := range strings.Split(output, "\n") {
+		s := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(s, "database download failed:") || strings.HasPrefix(s, "database not found:") || strings.HasPrefix(s, "fatal ") && strings.Contains(s, "database") && strings.Contains(s, "failed to download") {
+			return true
+		}
+	}
+	return false
 }
 
 func findings(id, output string) int {
