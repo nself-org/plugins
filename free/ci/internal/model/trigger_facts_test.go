@@ -54,3 +54,17 @@ func TestTriggerFactsGolden(t *testing.T) {
 		}
 	}
 }
+
+func TestTriggerFactsRequiresFactSource(t *testing.T) {
+	actor := "reviewer"
+	f := TriggerFacts{Schema: "ci.trigger-facts/v1", Kind: "push", Auth: "per-repo", Actor: Fact[string]{Value: &actor}}
+	if err := f.Validate(); err == nil {
+		t.Fatal("populated actor without provenance accepted")
+	}
+	truth := false
+	f.Actor = Fact[string]{}
+	f.Fork = Fact[bool]{Value: &truth}
+	if err := f.Validate(); err == nil {
+		t.Fatal("populated false fact without provenance accepted")
+	}
+}

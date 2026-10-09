@@ -68,10 +68,20 @@ func (f TriggerFacts) Validate() error {
 	if f.RevisionSource != "" && !oneOf(string(f.RevisionSource), "payload", "caller") {
 		return fmt.Errorf("trigger facts: unknown revision source")
 	}
-	for _, source := range []string{f.Actor.Source, f.ActorPermission.Source, f.AuthorAssociation.Source, f.HeadRepo.Source, f.Fork.Source, f.FirstTime.Source, f.Bot.Source, f.ProtectedRef.Source, f.Visibility.Source, f.SHAReachable.Source, f.HeadCurrent.Source, f.ChangedFiles.Source, f.GroupProtectedOnly.Source, f.RunEvent.Source, f.RunnerLabels.Source, f.ProviderJobID.Source, f.ProviderRunID.Source} {
-		if source != "" && !oneOf(source, "payload", "api", "caller", "local") {
-			return fmt.Errorf("trigger facts: unknown fact source %q", source)
+	for _, err := range []error{validateFact(f.Actor), validateFact(f.ActorPermission), validateFact(f.AuthorAssociation), validateFact(f.HeadRepo), validateFact(f.Fork), validateFact(f.FirstTime), validateFact(f.Bot), validateFact(f.ProtectedRef), validateFact(f.Visibility), validateFact(f.SHAReachable), validateFact(f.HeadCurrent), validateFact(f.ChangedFiles), validateFact(f.GroupProtectedOnly), validateFact(f.RunEvent), validateFact(f.RunnerLabels), validateFact(f.ProviderJobID), validateFact(f.ProviderRunID)} {
+		if err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+func validateFact[T any](f Fact[T]) error {
+	if f.Value != nil && f.Source == "" {
+		return fmt.Errorf("trigger facts: populated fact missing source")
+	}
+	if f.Source != "" && !oneOf(f.Source, "payload", "api", "caller", "local") {
+		return fmt.Errorf("trigger facts: unknown fact source %q", f.Source)
 	}
 	return nil
 }

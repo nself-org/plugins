@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -120,21 +121,78 @@ func Record(dir, name string, req Request, resp Response) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	for key := range req.HeadersWithoutAuth {
-		if sensitive(key) {
-			req.HeadersWithoutAuth[key] = []string{"REDACTED"}
-		}
-	}
-	for key := range resp.Headers {
-		if sensitive(key) {
-			resp.Headers[key] = []string{"REDACTED"}
-		}
-	}
+	req.HeadersWithoutAuth = redactedHeaders(req.HeadersWithoutAuth)
+	resp.Headers = redactedHeaders(resp.Headers)
+	req.Path = redactCredential(req.Path)
+	req.Query = redactCredential(req.Query)
+	resp.Body = redactBody(resp.Body)
 	b, err := json.MarshalIndent(Exchange{req, resp}, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, name+".json"), append(b, '\n'), 0600)
+}
+
+var credentialPattern = regexp.MustCompile(`(?i)(?:bearer[[:space:]]+[a-z0-9._~+/-]+=*|[a-z0-9]+[-_](?:secret|token|key|password|credential)[-_][a-z0-9._-]+|(?:ghp|gho|ghu|ghs|ghr|glpat)_[a-z0-9_-]{12,}|[a-z0-9_-]{12,}\.[a-z0-9_-]{12,}\.[a-z0-9_-]{12,})`)
+
+func redactCredential(value string) string {
+	return credentialPattern.ReplaceAllString(value, "REDACTED")
+}
+
+func redactKnownSecrets(value string, secrets [][]byte) (string, bool) {
+	leaked := false
+	for _, secret := range secrets {
+		if len(secret) > 0 && strings.Contains(value, string(secret)) {
+			value = strings.ReplaceAll(value, string(secret), "REDACTED")
+			leaked = true
+		}
+	}
+	return value, leaked
+}
+
+func redactedHeaders(headers http.Header) http.Header {
+	out := headers.Clone()
+	for key, values := range out {
+		if sensitive(key) {
+			out[key] = []string{"REDACTED"}
+			continue
+		}
+		for i, value := range values {
+			values[i] = redactCredential(value)
+		}
+	}
+	return out
+}
+
+func redactBody(body string) string {
+	var value any
+	if json.Unmarshal([]byte(body), &value) == nil {
+		redactJSON(&value)
+		if encoded, err := json.Marshal(value); err == nil {
+			return string(encoded)
+		}
+	}
+	return redactCredential(body)
+}
+
+func redactJSON(value *any) {
+	switch v := (*value).(type) {
+	case map[string]any:
+		for key, child := range v {
+			if sensitive(key) {
+				v[key] = "REDACTED"
+				continue
+			}
+			redactJSON(&child)
+			v[key] = child
+		}
+	case []any:
+		for i := range v {
+			redactJSON(&v[i])
+		}
+	case string:
+		*value = redactCredential(v)
+	}
 }
 func sensitive(key string) bool {
 	k := strings.ToLower(key)

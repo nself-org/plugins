@@ -3,8 +3,10 @@ package conformance_test
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/providers"
 	"github.com/nself-org/plugins/free/ci/internal/providers/conformance"
 	"github.com/nself-org/plugins/free/ci/internal/providers/fake"
@@ -46,7 +49,7 @@ func TestKitCatchesBroken(t *testing.T) {
 		})
 	}
 	conformance.Run(t, conformance.Subject{Name: "fake", New: func(_ string, _ conformance.Clock) providers.Provider {
-		return fake.New(fake.Options{Token: string(secret), States: []providers.LiveState{providers.Queued, providers.Running, providers.Finished}})
+		return fake.New(fake.Options{Token: string(secret), States: []providers.LiveState{providers.Queued, providers.Running, providers.Finished, providers.Vanished}})
 	}, Secrets: [][]byte{secret}})
 }
 
@@ -100,6 +103,81 @@ func TestReplayAndRecord(t *testing.T) {
 	if got.StatusCode != 202 || len(r.Requests()) != 1 || len(r.Problems()) != 0 {
 		t.Fatalf("replay failed: status=%d problems=%v", got.StatusCode, r.Problems())
 	}
+}
+
+func TestCheckRedactsProviderError(t *testing.T) {
+	secret := []byte("reviewer-secret-token")
+	p := &errorProvider{Fake: fake.New(fake.Options{Token: string(secret)}), err: fmt.Errorf("upstream: %s", secret)}
+	issues := conformance.Check(p, [][]byte{secret}, nil)
+	if !containsIssue(issues, "secret in provider error") || strings.Contains(strings.Join(issues, " "), string(secret)) {
+		t.Fatalf("provider error leaked or was not detected: %v", issues)
+	}
+}
+
+type errorProvider struct {
+	*fake.Fake
+	err error
+}
+
+func (p *errorProvider) Describe(context.Context, providers.Query) ([]model.Capability, error) {
+	return nil, p.err
+}
+
+func TestRecordRedactsCredentialValues(t *testing.T) {
+	dir := t.TempDir()
+	secret := "reviewer-secret-token"
+	req := conformance.Request{Method: "POST", Path: "/", HeadersWithoutAuth: http.Header{"X-Trace": {secret}}}
+	resp := conformance.Response{Status: 200, Headers: http.Header{"X-Trace": {secret}}, Body: `{"trace":"reviewer-secret-token","nested":{"access_token":"short"}}`}
+	if err := conformance.Record(dir, "001", req, resp); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "001.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(b, []byte(secret)) || bytes.Contains(b, []byte("short")) || !bytes.Contains(b, []byte("REDACTED")) {
+		t.Fatalf("credential persisted: %s", b)
+	}
+}
+
+func TestLivenessMapping(t *testing.T) {
+	for _, states := range [][]providers.LiveState{{providers.Queued}, {providers.Queued, providers.Running, providers.Finished, providers.Vanished}} {
+		issues := conformance.Check(fake.New(fake.Options{States: states}), nil, nil)
+		if len(states) == 1 && !containsIssue(issues, "liveness mapping") {
+			t.Fatalf("stuck provider accepted: %v", issues)
+		}
+		if len(states) == 4 && containsIssue(issues, "liveness mapping") {
+			t.Fatalf("valid provider rejected: %v", issues)
+		}
+	}
+}
+
+func TestTriggerSignatureVerification(t *testing.T) {
+	issues := conformance.Check(fake.New(fake.Options{}), nil, nil)
+	if containsIssue(issues, "trigger verify") {
+		t.Fatalf("signed trigger rejected: %v", issues)
+	}
+	body := []byte(`{"event":"push"}`)
+	req, _ := http.NewRequest("POST", "http://example.invalid/trigger", bytes.NewReader(body))
+	mac := hmac.New(sha256.New, []byte("fake-trigger-secret"))
+	_, _ = mac.Write(body)
+	req.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	if _, err := fake.New(fake.Options{}).Verify(context.Background(), req, body); err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Del("X-Hub-Signature-256")
+	if _, err := fake.New(fake.Options{}).Verify(context.Background(), req, body); err == nil {
+		t.Fatal("unsigned trigger accepted")
+	}
+}
+
+func containsIssue(issues []string, want string) bool {
+	for _, issue := range issues {
+		if strings.Contains(issue, want) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestFaultClassification proves generated HTTP and timeout cases map to contract classes.

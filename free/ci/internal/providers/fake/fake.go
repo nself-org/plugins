@@ -2,6 +2,9 @@ package fake
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -61,7 +64,7 @@ func (f *Fake) Liveness(context.Context, providers.Handle) (providers.LiveState,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.opts.States) == 0 {
-		return providers.Finished, nil
+		f.opts.States = []providers.LiveState{providers.Queued, providers.Running, providers.Finished, providers.Vanished}
 	}
 	i := f.states
 	if i >= len(f.opts.States) {
@@ -125,8 +128,30 @@ func (f *Fake) Restriction(context.Context, providers.RunnerScope, int64) (provi
 }
 func (f *Fake) Name() string             { return f.ID() }
 func (f *Fake) Match(*http.Request) bool { return true }
-func (f *Fake) Verify(_ context.Context, _ *http.Request, _ []byte) (model.TriggerFacts, error) {
+func (f *Fake) Verify(_ context.Context, req *http.Request, body []byte) (model.TriggerFacts, error) {
+	if req == nil {
+		return model.TriggerFacts{}, fmt.Errorf("missing trigger request")
+	}
+	mac := hmac.New(sha256.New, []byte("fake-trigger-secret"))
+	_, _ = mac.Write(body)
+	want := mac.Sum(nil)
+	header := req.Header.Get("X-Hub-Signature-256")
+	if len(header) < 7 || header[:7] != "sha256=" {
+		return model.TriggerFacts{}, fmt.Errorf("missing trigger signature")
+	}
+	got, err := hex.DecodeString(header[7:])
+	if err != nil || !hmac.Equal(got, want) {
+		return model.TriggerFacts{}, fmt.Errorf("invalid trigger signature")
+	}
 	return model.TriggerFacts{Schema: "ci.trigger-facts/v1", Source: f.ID(), Kind: "push", Auth: "per-repo"}, nil
+}
+func (f *Fake) SignedTriggerFixture() (*http.Request, []byte) {
+	body := []byte(`{"event":"push"}`)
+	req, _ := http.NewRequest("POST", "http://example.invalid/trigger", nil)
+	mac := hmac.New(sha256.New, []byte("fake-trigger-secret"))
+	_, _ = mac.Write(body)
+	req.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	return req, body
 }
 func (f *Fake) Refetch(_ context.Context, facts model.TriggerFacts) (model.TriggerFacts, error) {
 	if v, ok := f.opts.Facts[facts.Repo]; ok {

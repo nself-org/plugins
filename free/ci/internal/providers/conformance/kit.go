@@ -65,7 +65,11 @@ func Check(p providers.Provider, secrets [][]byte, logs *bytes.Buffer) []string 
 		issues = append(issues, "provider id")
 	}
 	if _, err := p.Describe(ctx, providers.Query{}); err != nil {
-		issues = append(issues, "describe: "+err.Error())
+		clean, leaked := redactKnownSecrets(err.Error(), secrets)
+		issues = append(issues, "describe: "+redactCredential(clean))
+		if leaked || clean != redactCredential(clean) {
+			issues = append(issues, "secret in provider error")
+		}
 	}
 	if d, ok := p.(providers.Dispatcher); ok {
 		a := providers.Attempt{ID: "attempt-1", N: 2, Revision: "revision-1"}
@@ -76,8 +80,12 @@ func Check(p providers.Provider, secrets [][]byte, logs *bytes.Buffer) []string 
 			if d.Profile().TTL <= 0 || d.Profile().Poll <= 0 {
 				issues = append(issues, "profile missing")
 			}
-			if state, e := d.Liveness(ctx, h); e != nil || !validState(state) {
-				issues = append(issues, "liveness invalid")
+			for _, want := range []providers.LiveState{providers.Queued, providers.Running, providers.Finished, providers.Vanished} {
+				state, e := d.Liveness(ctx, h)
+				if e != nil || state != want {
+					issues = append(issues, "liveness mapping")
+					break
+				}
 			}
 			if e := d.Cancel(ctx, h); e != nil {
 				issues = append(issues, "cancel failed")
@@ -117,8 +125,21 @@ func Check(p providers.Provider, secrets [][]byte, logs *bytes.Buffer) []string 
 		if source.Name() == "" || !source.Match(req) {
 			issues = append(issues, "trigger match")
 		}
-		if _, err := source.Verify(ctx, req, nil); err != nil {
-			issues = append(issues, "trigger verify")
+		if _, err := source.Verify(ctx, req, nil); err == nil {
+			issues = append(issues, "trigger verify: unsigned accepted")
+		}
+		fixture, ok := p.(interface {
+			SignedTriggerFixture() (*http.Request, []byte)
+		})
+		if !ok {
+			issues = append(issues, "trigger verify: signed fixture missing")
+		} else {
+			signed, body := fixture.SignedTriggerFixture()
+			if signed == nil {
+				issues = append(issues, "trigger verify: signed fixture missing")
+			} else if _, err := source.Verify(ctx, signed, body); err != nil {
+				issues = append(issues, "trigger verify: signed rejected")
+			}
 		}
 	}
 	if facts, ok := p.(providers.TrustFacts); ok {
@@ -151,9 +172,6 @@ func Check(p providers.Provider, secrets [][]byte, logs *bytes.Buffer) []string 
 		}
 	}
 	return issues
-}
-func validState(s providers.LiveState) bool {
-	return s == providers.Queued || s == providers.Running || s == providers.Finished || s == providers.Vanished
 }
 func oneHealth(s string) bool { return s == "up" || s == "degraded" || s == "down" }
 func bindingOK(c providers.Collected, a providers.Attempt, h providers.Handle) bool {
