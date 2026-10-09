@@ -118,7 +118,6 @@ func (s *Store) NodeList(ctx context.Context) ([]NodeRecord, error) {
 	}
 	return out, rows.Err()
 }
-
 func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail string, isolationLowered bool) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
 		query := `UPDATE node SET name=?,version=version+1,updated_at=? WHERE id=? AND version=?`
@@ -262,7 +261,6 @@ func (s *Store) NodeSetState(ctx context.Context, n NodeRecord, actor, detail st
 	}
 	return s.nodeCAS(ctx, old, actor, "node.state", detail, false)
 }
-
 func (s *Store) NodeRecover(ctx context.Context, n NodeRecord, authority AdminAuthority) error {
 	if !authority.valid() {
 		return coded("E651", "admin authority required")
