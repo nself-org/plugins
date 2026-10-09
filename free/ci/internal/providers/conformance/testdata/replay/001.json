@@ -1,0 +1,1 @@
+{"request":{"method":"GET","path":"/health","query":"","headers_without_auth":{},"body_sha256":""},"response":{"status":200,"headers":{"Content-Type":["application/json"]},"body":"{\"state\":\"up\"}"}}
