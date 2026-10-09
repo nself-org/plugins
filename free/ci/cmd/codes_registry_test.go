@@ -35,6 +35,7 @@ var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/sched":          true,
 	"github.com/nself-org/plugins/free/ci/internal/store":          true,
 	"github.com/nself-org/plugins/free/ci/internal/trust":          true,
+	"github.com/nself-org/plugins/free/ci/internal/world":          true,
 }
 
 type listedPackage struct {

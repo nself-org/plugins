@@ -1,0 +1,1597 @@
+{
+  "NowMs": 100000,
+  "Runners": [
+    {
+      "ID": "01J00000000000000000000001",
+      "Capability": {
+        "schema": "ci.runner-capability/v1",
+        "identity": {
+          "id": "01J00000000000000000000001",
+          "name": "laptop",
+          "provider": "local",
+          "transport": "local",
+          "ownership": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "labels": [
+            "dev"
+          ],
+          "machine_id": {
+            "value": "machine-1",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "age_recipient": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "host_key_fingerprints": [],
+          "ssh": null
+        },
+        "platform": {
+          "os": {
+            "value": "darwin",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "arch": {
+            "value": "arm64",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "kernel": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "os_version": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "virtualization": {
+            "value": "none",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "resources": {
+          "cpu": {
+            "value": 8,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "mem_mb": {
+            "value": 16384,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "disk_free_mb": {
+            "value": 81920,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "accelerators": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "reserved": {
+            "cpu": {
+              "value": 2,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            },
+            "mem_mb": {
+              "value": 4096,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          }
+        },
+        "tools": {
+          "docker": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "podman": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "gvisor": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "tart": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "toolchains": {
+            "go": {
+              "value": "1.25",
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          },
+          "browsers": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "services": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "custom": {}
+        },
+        "availability": {
+          "state": {
+            "value": "revoked",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "slots": {
+            "value": 2,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "running": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "battery_pct": {
+            "value": 80,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "plugged_in": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive": {
+            "value": "idle",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "persistence": {
+            "value": true,
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "on_battery": {
+            "value": "avoid",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive_policy": {
+            "value": "reserve",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "location": {
+          "kind": {
+            "value": "local",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "region": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          }
+        },
+        "economics": {
+          "class": {
+            "value": "local",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "marginal_cost_per_min": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "allowance": {
+            "known_remaining": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "reset_at": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "confidence": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            }
+          }
+        },
+        "separation": {
+          "uid_separation": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "userns": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "signing_eligible": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "trust": {
+          "accepts": {
+            "value": [],
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "known"
+          },
+          "isolation": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "network": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "secret_classes": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "privacy_zone": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          }
+        },
+        "verified": {
+          "by": "self",
+          "at": "2026-10-08T12:00:00Z"
+        },
+        "secrets_eligible": true,
+        "protocol": {
+          "versions": [
+            1
+          ],
+          "min": 1,
+          "agent_version": "1.5.0"
+        },
+        "deploy_host": {
+          "matched": false,
+          "source": null,
+          "override": false
+        },
+        "lifecycle": {
+          "discovered": true,
+          "authorized_projects": [],
+          "eligible": false,
+          "revoked_at": null
+        }
+      },
+      "Decl": {
+        "Accepts": null,
+        "Isolation": "",
+        "Network": "",
+        "SecretClasses": null,
+        "PrivacyZone": "",
+        "Ownership": "",
+        "Dedicated": false,
+        "NoLANRoute": false,
+        "Hosted": false,
+        "Provider": "local",
+        "UIDSeparation": true,
+        "Running": {
+          "Untrusted": false,
+          "SecretBearing": false
+        },
+        "DeployHost": {
+          "Matched": false,
+          "Override": false
+        },
+        "CoordinatorHost": false,
+        "CoordinatorMode": "",
+        "Source": "",
+        "Projects": 0,
+        "Shared": false,
+        "PersonalOwnNode": false,
+        "PersonalOwnRun": false,
+        "ReleaseJob": false
+      },
+      "Class": "local",
+      "Location": "local",
+      "Provider": "local",
+      "Ephemeral": false,
+      "Used": false,
+      "Avail": {
+        "Slots": 2,
+        "CPU": 8,
+        "MemMB": 16384
+      },
+      "CoordinatorHost": false,
+      "CoordinatorMode": "",
+      "ProviderDown": false,
+      "QueuedAhead": 0,
+      "Active": false
+    },
+    {
+      "ID": "01J00000000000000000000002",
+      "Capability": {
+        "schema": "ci.runner-capability/v1",
+        "identity": {
+          "id": "01J00000000000000000000002",
+          "name": "lan-mac",
+          "provider": "ssh",
+          "transport": "ssh",
+          "ownership": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "labels": [
+            "dev"
+          ],
+          "machine_id": {
+            "value": "machine-1",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "age_recipient": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "host_key_fingerprints": [],
+          "ssh": {
+            "alias": "lan-mac",
+            "hostname": "lan-mac",
+            "port": 22,
+            "user": "ci"
+          }
+        },
+        "platform": {
+          "os": {
+            "value": "darwin",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "arch": {
+            "value": "arm64",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "kernel": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "os_version": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "virtualization": {
+            "value": "none",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "resources": {
+          "cpu": {
+            "value": 8,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "mem_mb": {
+            "value": 16384,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "disk_free_mb": {
+            "value": 81920,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "accelerators": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "reserved": {
+            "cpu": {
+              "value": 2,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            },
+            "mem_mb": {
+              "value": 4096,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          }
+        },
+        "tools": {
+          "docker": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "podman": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "gvisor": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "tart": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "toolchains": {
+            "go": {
+              "value": "1.25",
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          },
+          "browsers": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "services": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "custom": {}
+        },
+        "availability": {
+          "state": {
+            "value": "online",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "slots": {
+            "value": 2,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "running": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "battery_pct": {
+            "value": 80,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "plugged_in": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive": {
+            "value": "idle",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "persistence": {
+            "value": true,
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "on_battery": {
+            "value": "avoid",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive_policy": {
+            "value": "reserve",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "location": {
+          "kind": {
+            "value": "lan",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "region": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          }
+        },
+        "economics": {
+          "class": {
+            "value": "local",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "marginal_cost_per_min": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "allowance": {
+            "known_remaining": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "reset_at": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "confidence": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            }
+          }
+        },
+        "separation": {
+          "uid_separation": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "userns": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "signing_eligible": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "trust": {
+          "accepts": {
+            "value": [],
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "known"
+          },
+          "isolation": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "network": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "secret_classes": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "privacy_zone": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          }
+        },
+        "verified": {
+          "by": "self",
+          "at": "2026-10-08T12:00:00Z"
+        },
+        "secrets_eligible": true,
+        "protocol": {
+          "versions": [
+            1
+          ],
+          "min": 1,
+          "agent_version": "1.5.0"
+        },
+        "deploy_host": {
+          "matched": false,
+          "source": null,
+          "override": false
+        },
+        "lifecycle": {
+          "discovered": true,
+          "authorized_projects": [],
+          "eligible": false,
+          "revoked_at": null
+        }
+      },
+      "Decl": {
+        "Accepts": null,
+        "Isolation": "",
+        "Network": "",
+        "SecretClasses": null,
+        "PrivacyZone": "",
+        "Ownership": "",
+        "Dedicated": false,
+        "NoLANRoute": false,
+        "Hosted": false,
+        "Provider": "ssh",
+        "UIDSeparation": true,
+        "Running": {
+          "Untrusted": false,
+          "SecretBearing": false
+        },
+        "DeployHost": {
+          "Matched": false,
+          "Override": false
+        },
+        "CoordinatorHost": false,
+        "CoordinatorMode": "",
+        "Source": "",
+        "Projects": 0,
+        "Shared": false,
+        "PersonalOwnNode": false,
+        "PersonalOwnRun": false,
+        "ReleaseJob": false
+      },
+      "Class": "local",
+      "Location": "lan",
+      "Provider": "ssh",
+      "Ephemeral": false,
+      "Used": false,
+      "Avail": {
+        "Slots": 2,
+        "CPU": 8,
+        "MemMB": 16384
+      },
+      "CoordinatorHost": false,
+      "CoordinatorMode": "",
+      "ProviderDown": false,
+      "QueuedAhead": 0,
+      "Active": true
+    },
+    {
+      "ID": "01J00000000000000000000003",
+      "Capability": {
+        "schema": "ci.runner-capability/v1",
+        "identity": {
+          "id": "01J00000000000000000000003",
+          "name": "vps",
+          "provider": "ssh",
+          "transport": "ssh",
+          "ownership": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "labels": [
+            "dev"
+          ],
+          "machine_id": {
+            "value": "machine-1",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "age_recipient": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "host_key_fingerprints": [],
+          "ssh": null
+        },
+        "platform": {
+          "os": {
+            "value": "linux",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "arch": {
+            "value": "arm64",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "kernel": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "os_version": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "virtualization": {
+            "value": "none",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "resources": {
+          "cpu": {
+            "value": 8,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "mem_mb": {
+            "value": 16384,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "disk_free_mb": {
+            "value": 81920,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "accelerators": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "reserved": {
+            "cpu": {
+              "value": 2,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            },
+            "mem_mb": {
+              "value": 4096,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          }
+        },
+        "tools": {
+          "docker": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "podman": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "gvisor": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "tart": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "toolchains": {
+            "go": {
+              "value": "1.25",
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          },
+          "browsers": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "services": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "custom": {}
+        },
+        "availability": {
+          "state": {
+            "value": "online",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "slots": {
+            "value": 2,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "running": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "battery_pct": {
+            "value": 80,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "plugged_in": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive": {
+            "value": "idle",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "persistence": {
+            "value": true,
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "on_battery": {
+            "value": "avoid",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive_policy": {
+            "value": "reserve",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "location": {
+          "kind": {
+            "value": "remote",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "region": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          }
+        },
+        "economics": {
+          "class": {
+            "value": "owned",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "marginal_cost_per_min": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "allowance": {
+            "known_remaining": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "reset_at": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "confidence": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            }
+          }
+        },
+        "separation": {
+          "uid_separation": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "userns": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "signing_eligible": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "trust": {
+          "accepts": {
+            "value": [],
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "known"
+          },
+          "isolation": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "network": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "secret_classes": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          },
+          "privacy_zone": {
+            "value": null,
+            "source": "assigned",
+            "observed_at": "1970-01-01T00:01:40Z",
+            "confidence": "unknown"
+          }
+        },
+        "verified": {
+          "by": "self",
+          "at": "2026-10-08T12:00:00Z"
+        },
+        "secrets_eligible": true,
+        "protocol": {
+          "versions": [
+            1
+          ],
+          "min": 1,
+          "agent_version": "1.5.0"
+        },
+        "deploy_host": {
+          "matched": true,
+          "source": "inventory",
+          "override": false
+        },
+        "lifecycle": {
+          "discovered": true,
+          "authorized_projects": [],
+          "eligible": false,
+          "revoked_at": null
+        }
+      },
+      "Decl": {
+        "Accepts": null,
+        "Isolation": "",
+        "Network": "",
+        "SecretClasses": null,
+        "PrivacyZone": "",
+        "Ownership": "",
+        "Dedicated": false,
+        "NoLANRoute": false,
+        "Hosted": false,
+        "Provider": "ssh",
+        "UIDSeparation": true,
+        "Running": {
+          "Untrusted": false,
+          "SecretBearing": false
+        },
+        "DeployHost": {
+          "Matched": true,
+          "Override": false
+        },
+        "CoordinatorHost": false,
+        "CoordinatorMode": "",
+        "Source": "",
+        "Projects": 0,
+        "Shared": false,
+        "PersonalOwnNode": false,
+        "PersonalOwnRun": false,
+        "ReleaseJob": false
+      },
+      "Class": "owned",
+      "Location": "remote",
+      "Provider": "ssh",
+      "Ephemeral": false,
+      "Used": false,
+      "Avail": {
+        "Slots": 2,
+        "CPU": 8,
+        "MemMB": 16384
+      },
+      "CoordinatorHost": false,
+      "CoordinatorMode": "",
+      "ProviderDown": false,
+      "QueuedAhead": 0,
+      "Active": true
+    },
+    {
+      "ID": "local",
+      "Capability": {
+        "schema": "ci.runner-capability/v1",
+        "identity": {
+          "id": "local",
+          "name": "laptop",
+          "provider": "local",
+          "transport": "local",
+          "ownership": {
+            "value": "operator",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "labels": [
+            "dev"
+          ],
+          "machine_id": {
+            "value": "machine-1",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "age_recipient": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "host_key_fingerprints": [],
+          "ssh": null
+        },
+        "platform": {
+          "os": {
+            "value": "darwin",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "arch": {
+            "value": "arm64",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "kernel": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "os_version": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          },
+          "virtualization": {
+            "value": "none",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "resources": {
+          "cpu": {
+            "value": 8,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "mem_mb": {
+            "value": 16384,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "disk_free_mb": {
+            "value": 81920,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "accelerators": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "reserved": {
+            "cpu": {
+              "value": 2,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            },
+            "mem_mb": {
+              "value": 4096,
+              "source": "assigned",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          }
+        },
+        "tools": {
+          "docker": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "podman": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "gvisor": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "tart": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "toolchains": {
+            "go": {
+              "value": "1.25",
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "known"
+            }
+          },
+          "browsers": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "services": {
+            "value": [],
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "custom": {}
+        },
+        "availability": {
+          "state": {
+            "value": "online",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "slots": {
+            "value": 2,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "running": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "battery_pct": {
+            "value": 80,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "plugged_in": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive": {
+            "value": "idle",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "persistence": {
+            "value": true,
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "on_battery": {
+            "value": "avoid",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "interactive_policy": {
+            "value": "reserve",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "location": {
+          "kind": {
+            "value": "local",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "region": {
+            "value": null,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "unknown"
+          }
+        },
+        "economics": {
+          "class": {
+            "value": "local",
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "marginal_cost_per_min": {
+            "value": 0,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "allowance": {
+            "known_remaining": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "reset_at": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            },
+            "confidence": {
+              "value": null,
+              "source": "self",
+              "observed_at": "2026-10-08T12:00:00Z",
+              "confidence": "unknown"
+            }
+          }
+        },
+        "separation": {
+          "uid_separation": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "userns": {
+            "value": false,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "signing_eligible": {
+            "value": true,
+            "source": "self",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "trust": {
+          "accepts": {
+            "value": [],
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "isolation": {
+            "value": "process",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "network": {
+            "value": [],
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "secret_classes": {
+            "value": [],
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          },
+          "privacy_zone": {
+            "value": "local-only",
+            "source": "assigned",
+            "observed_at": "2026-10-08T12:00:00Z",
+            "confidence": "known"
+          }
+        },
+        "verified": {
+          "by": "self",
+          "at": "2026-10-08T12:00:00Z"
+        },
+        "secrets_eligible": true,
+        "protocol": {
+          "versions": [
+            1
+          ],
+          "min": 1,
+          "agent_version": "1.5.0"
+        },
+        "deploy_host": {
+          "matched": false,
+          "source": null,
+          "override": false
+        },
+        "lifecycle": {
+          "discovered": true,
+          "authorized_projects": [],
+          "eligible": false,
+          "revoked_at": null
+        }
+      },
+      "Decl": {
+        "Accepts": null,
+        "Isolation": "process",
+        "Network": "",
+        "SecretClasses": null,
+        "PrivacyZone": "local-only",
+        "Ownership": "operator",
+        "Dedicated": false,
+        "NoLANRoute": false,
+        "Hosted": false,
+        "Provider": "local",
+        "UIDSeparation": true,
+        "Running": {
+          "Untrusted": false,
+          "SecretBearing": false
+        },
+        "DeployHost": {
+          "Matched": false,
+          "Override": false
+        },
+        "CoordinatorHost": false,
+        "CoordinatorMode": "",
+        "Source": "",
+        "Projects": 0,
+        "Shared": false,
+        "PersonalOwnNode": false,
+        "PersonalOwnRun": false,
+        "ReleaseJob": false
+      },
+      "Class": "local",
+      "Location": "local",
+      "Provider": "local",
+      "Ephemeral": false,
+      "Used": false,
+      "Avail": {
+        "Slots": 0,
+        "CPU": 6,
+        "MemMB": 16382
+      },
+      "CoordinatorHost": false,
+      "CoordinatorMode": "",
+      "ProviderDown": false,
+      "QueuedAhead": 0,
+      "Active": true
+    }
+  ],
+  "Hosted": null,
+  "Policy": {
+    "Preset": "",
+    "Trust": {},
+    "PaidEnabled": false,
+    "CoordinatorID": "",
+    "MaxPaidTimeoutMs": 0,
+    "ApprovalThresholdMicro": 0,
+    "FastPathMarginMs": 0,
+    "Overrides": {
+      "LocalOnly": false,
+      "LANOnly": false,
+      "PrivateOnly": false,
+      "ProvidersAllow": null,
+      "ProvidersDeny": null,
+      "Runner": "",
+      "OS": "",
+      "Arch": "",
+      "Labels": null,
+      "MaxCostMicro": 0,
+      "MaxQueueMs": 0,
+      "MinIsolation": ""
+    },
+    "Limits": {
+      "Pipeline": 0,
+      "Job": 0,
+      "Runner": 0,
+      "Provider": 0,
+      "Project": 0,
+      "User": 0,
+      "Team": 0,
+      "Global": 0
+    }
+  },
+  "Estimates": null,
+  "Costs": null,
+  "Allowances": null,
+  "Budgets": {
+    "Job": {
+      "Remaining": 0,
+      "Set": false
+    },
+    "Pipeline": {
+      "Remaining": 0,
+      "Set": false
+    },
+    "Day": {
+      "Remaining": 0,
+      "Set": false
+    },
+    "Month": {
+      "Remaining": 0,
+      "Set": false
+    },
+    "Providers": null
+  },
+  "Pending": null,
+  "Cache": null,
+  "Previous": {},
+  "PreviousIsolation": null,
+  "Approvals": null,
+  "Counts": {
+    "Pipeline": 5,
+    "Job": 5,
+    "Project": 5,
+    "User": 5,
+    "Team": 5,
+    "Global": 5,
+    "Runner": 5,
+    "Provider": 5,
+    "Runners": {
+      "local": 5
+    },
+    "Providers": {
+      "local": 5
+    }
+  },
+  "OpenRegistry": false,
+  "InteractiveQueued": {}
+}
