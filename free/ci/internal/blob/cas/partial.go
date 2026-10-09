@@ -18,6 +18,8 @@ type Partial struct {
 	offset                   int64
 }
 
+var truncateFile = os.Truncate
+
 // Partial opens or creates a transfer keyed by realm, digest and writer ID.
 func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) {
 	if err := realm.Validate(); err != nil {
@@ -30,7 +32,7 @@ func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) 
 		return nil, ErrInvalid
 	}
 	dir := filepath.Join(s.blobs(), "tmp", string(realm))
-	if err := secureDir(dir); err != nil {
+	if err := s.secureDir(dir); err != nil {
 		return nil, err
 	}
 	data := filepath.Join(dir, digest+"."+writerID+".partial")
@@ -76,7 +78,7 @@ func (s *Store) Partial(realm Realm, digest, writerID string) (*Partial, error) 
 		return nil, ErrPartialConflict
 	}
 	if info.Size() > p.offset {
-		if err = os.Truncate(data, p.offset); err != nil {
+		if err = truncateFile(data, p.offset); err != nil {
 			return nil, err
 		}
 	}
@@ -97,7 +99,7 @@ func (p *Partial) Resume(offset int64) error {
 func (p *Partial) Write(b []byte) (int, error) {
 	p.store.mu.Lock()
 	defer p.store.mu.Unlock()
-	if err := checkDir(filepath.Dir(p.data)); err != nil {
+	if err := p.store.checkDir(filepath.Dir(p.data)); err != nil {
 		return 0, err
 	}
 	info, err := os.Lstat(p.data)
@@ -164,7 +166,7 @@ func (p *Partial) commitOffset(offset int64) error {
 func (p *Partial) Finalize() error {
 	p.store.mu.Lock()
 	defer p.store.mu.Unlock()
-	if err := checkDir(filepath.Dir(p.data)); err != nil {
+	if err := p.store.checkDir(filepath.Dir(p.data)); err != nil {
 		return err
 	}
 	info, err := os.Lstat(p.data)
@@ -196,7 +198,7 @@ func (p *Partial) Finalize() error {
 		}
 		return ErrPartialConflict
 	}
-	if err = p.store.publish(p.data, p.realm, p.digest); err != nil {
+	if err = p.store.locked(func() error { return p.store.publish(p.data, p.realm, p.digest) }); err != nil {
 		return err
 	}
 	return os.Remove(p.offsetPath)

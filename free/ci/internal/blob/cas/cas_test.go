@@ -28,7 +28,11 @@ func digestOf(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToStrin
 func TestThousandBlobsAndCorruption(t *testing.T) {
 	s := testStore(t)
 	r := CacheRealm("namespace")
-	for i := 0; i < 1000; i++ {
+	count := 1000
+	if os.Getenv("CAS_MUTATION") == "1" {
+		count = 25
+	}
+	for i := 0; i < count; i++ {
 		b := make([]byte, 128)
 		if _, e := rand.Read(b); e != nil {
 			t.Fatal(e)
@@ -216,7 +220,7 @@ func TestSweepExpiryAndIdempotentPut(t *testing.T) {
 		}
 	}
 	corruptDir := filepath.Join(s.blobs(), "corrupt")
-	if e = secureDir(corruptDir); e != nil {
+	if e = s.secureDir(corruptDir); e != nil {
 		t.Fatal(e)
 	}
 	corrupt := filepath.Join(corruptDir, "expired")
@@ -273,7 +277,7 @@ func TestSymlinkRefused(t *testing.T) {
 	r := CacheRealm("links")
 	d := digestOf([]byte("data"))
 	p, _ := s.blobPath(r, d)
-	if e := secureDir(filepath.Dir(p)); e != nil {
+	if e := s.secureDir(filepath.Dir(p)); e != nil {
 		t.Fatal(e)
 	}
 	if e := os.Symlink("/etc/hosts", p); e != nil {

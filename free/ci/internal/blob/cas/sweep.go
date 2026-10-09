@@ -12,15 +12,19 @@ const blobGrace = time.Hour
 const partialTTL = 24 * time.Hour
 const corruptTTL = 7 * 24 * time.Hour
 
+var removeFile = os.Remove
+
 // Sweep removes unreferenced old blobs in one kind, stale partials, and old corrupt files.
 func (s *Store) Sweep(ctx context.Context, kind string, keep func(Realm, string) bool, now time.Time) error {
 	if !validKind(kind) || keep == nil {
 		return ErrInvalid
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	return s.locked(func() error { return s.sweepLocked(ctx, kind, keep, now) })
+}
+
+func (s *Store) sweepLocked(ctx context.Context, kind string, keep func(Realm, string) bool, now time.Time) error {
 	root := s.blobs()
-	if err := checkDir(root); errors.Is(err, os.ErrNotExist) {
+	if err := s.checkDir(root); errors.Is(err, os.ErrNotExist) {
 		return nil
 	} else if err != nil {
 		return err
@@ -55,15 +59,13 @@ func (s *Store) Sweep(ctx context.Context, kind string, keep func(Realm, string)
 			if now.Sub(info.ModTime()) < blobGrace || keep(r, digest) {
 				return nil
 			}
-			return os.Remove(path)
+			return removeFile(path)
 		}); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
 	}
-	if err = s.sweepTemp(ctx, kind, now); err != nil {
-		return err
-	}
-	return s.sweepCorrupt(ctx, now)
+	tempErr := s.sweepTemp(ctx, kind, now)
+	return errors.Join(tempErr, s.sweepCorrupt(ctx, now))
 }
 
 func walkFiles(root string, fn func(string, os.FileInfo) error) error {
@@ -86,7 +88,7 @@ func walkFiles(root string, fn func(string, os.FileInfo) error) error {
 
 func (s *Store) sweepTemp(ctx context.Context, kind string, now time.Time) error {
 	dir := filepath.Join(s.blobs(), "tmp")
-	if err := checkDir(dir); errors.Is(err, os.ErrNotExist) {
+	if err := s.checkDir(dir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	} else if err != nil {
 		return err
@@ -98,12 +100,13 @@ func (s *Store) sweepTemp(ctx context.Context, kind string, now time.Time) error
 		if now.Sub(info.ModTime()) < partialTTL {
 			return nil
 		}
-		return os.Remove(path)
+		return removeFile(path)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
+	var unknown error
 	for _, e := range entries {
 		path := filepath.Join(dir, e.Name())
 		if e.IsDir() {
@@ -112,7 +115,8 @@ func (s *Store) sweepTemp(ctx context.Context, kind string, now time.Time) error
 				continue
 			}
 			if err := r.Validate(); err != nil {
-				return err
+				unknown = errors.Join(unknown, errors.New("cas: skipped unknown temp entry: "+e.Name()))
+				continue
 			}
 			if err := walkFiles(path, prune); err != nil {
 				return err
@@ -130,12 +134,12 @@ func (s *Store) sweepTemp(ctx context.Context, kind string, now time.Time) error
 			return err
 		}
 	}
-	return nil
+	return unknown
 }
 
 func (s *Store) sweepCorrupt(ctx context.Context, now time.Time) error {
 	dir := filepath.Join(s.blobs(), "corrupt")
-	if err := checkDir(dir); errors.Is(err, os.ErrNotExist) {
+	if err := s.checkDir(dir); errors.Is(err, os.ErrNotExist) {
 		return nil
 	} else if err != nil {
 		return err
@@ -147,7 +151,7 @@ func (s *Store) sweepCorrupt(ctx context.Context, now time.Time) error {
 		if now.Sub(info.ModTime()) < corruptTTL {
 			return nil
 		}
-		return os.Remove(path)
+		return removeFile(path)
 	})
 }
 
@@ -157,7 +161,7 @@ func (s *Store) Usage(realm Realm) (int64, error) {
 		return 0, err
 	}
 	root := filepath.Join(s.blobs(), string(realm), "sha256")
-	if err := checkDir(root); errors.Is(err, os.ErrNotExist) {
+	if err := s.checkDir(root); errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	} else if err != nil {
 		return 0, err

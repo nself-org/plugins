@@ -16,6 +16,7 @@ type Store struct {
 	home         string
 	mu           sync.Mutex
 	beforeRename func() error
+	beforeHash   func()
 }
 
 var lstat = os.Lstat
@@ -33,12 +34,24 @@ func New(home string) (*Store, error) {
 
 func (s *Store) blobs() string { return filepath.Join(s.home, "blobs") }
 
-// secureDir creates each missing component and rejects symlinks in the tree.
-func secureDir(path string) error {
+// secureDir creates missing components below blobs and rejects links there.
+func (s *Store) secureDir(path string) error {
 	path = filepath.Clean(path)
+	if path == s.blobs() {
+		if err := os.MkdirAll(s.home, 0700); err != nil {
+			return err
+		}
+		if err := os.Mkdir(path, 0700); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		return s.checkDir(path)
+	}
+	if !strings.HasPrefix(path, s.blobs()+string(os.PathSeparator)) {
+		return ErrInvalid
+	}
 	parent := filepath.Dir(path)
 	if parent != path {
-		if err := secureDir(parent); err != nil {
+		if err := s.secureDir(parent); err != nil {
 			return err
 		}
 	}
@@ -59,8 +72,12 @@ func secureDir(path string) error {
 	return nil
 }
 
-func checkDir(path string) error {
-	for p := filepath.Clean(path); ; p = filepath.Dir(p) {
+func (s *Store) checkDir(path string) error {
+	path = filepath.Clean(path)
+	if path != s.blobs() && !strings.HasPrefix(path, s.blobs()+string(os.PathSeparator)) {
+		return ErrInvalid
+	}
+	for p := path; ; p = filepath.Dir(p) {
 		info, err := lstat(p)
 		if err != nil {
 			return err
@@ -68,7 +85,7 @@ func checkDir(path string) error {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return ErrInvalid
 		}
-		if filepath.Dir(p) == p {
+		if p == s.blobs() {
 			return nil
 		}
 	}
@@ -105,23 +122,56 @@ func randomName() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-func (s *Store) temp() (*os.File, error) {
+func (s *Store) tmpRoot() (*os.Root, error) {
 	dir := filepath.Join(s.blobs(), "tmp")
-	if err := secureDir(dir); err != nil {
+	if err := s.secureDir(dir); err != nil {
 		return nil, err
 	}
+	before, err := os.Lstat(dir)
+	if err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(s.blobs())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	tmp, err := root.OpenRoot("tmp")
+	if err != nil {
+		return nil, err
+	}
+	after, err := os.Lstat(dir)
+	if err != nil || !os.SameFile(before, after) || after.Mode()&os.ModeSymlink != 0 {
+		_ = tmp.Close()
+		return nil, ErrInvalid
+	}
+	actual, err := tmp.Stat(".")
+	if err != nil || !os.SameFile(before, actual) {
+		_ = tmp.Close()
+		return nil, ErrInvalid
+	}
+	return tmp, nil
+}
+
+func (s *Store) temp() (*os.File, string, error) {
+	dir := filepath.Join(s.blobs(), "tmp")
+	root, err := s.tmpRoot()
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = root.Close() }()
 	for i := 0; i < 3; i++ {
 		name, err := randomName()
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
-		f, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 		if errors.Is(err, os.ErrExist) {
 			continue
 		}
-		return f, err
+		return f, filepath.Join(dir, name), err
 	}
-	return nil, errors.New("cas: temporary name collision")
+	return nil, "", errors.New("cas: temporary name collision")
 }
 
 func (s *Store) publish(tmp string, r Realm, digest string) error {
@@ -129,7 +179,26 @@ func (s *Store) publish(tmp string, r Realm, digest string) error {
 	if err != nil {
 		return err
 	}
-	if err = secureDir(filepath.Dir(dst)); err != nil {
+	if err = s.secureDir(filepath.Dir(dst)); err != nil {
+		return err
+	}
+	// Keep the root handle across the hook and rename. Root.Rename cannot
+	// traverse a swapped symlink outside blobs, even if the pathname changes.
+	root, err := os.OpenRoot(s.blobs())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	dirBefore, err := os.Lstat(filepath.Dir(dst))
+	if err != nil {
+		return err
+	}
+	tmpRel, err := filepath.Rel(s.blobs(), tmp)
+	if err != nil {
+		return err
+	}
+	dstRel, err := filepath.Rel(s.blobs(), dst)
+	if err != nil {
 		return err
 	}
 	if s.beforeRename != nil {
@@ -137,8 +206,24 @@ func (s *Store) publish(tmp string, r Realm, digest string) error {
 			return err
 		}
 	}
-	if err = os.Rename(tmp, dst); err != nil {
+	if err = root.Rename(tmpRel, dstRel); err != nil {
 		return err
+	}
+	dirAfter, err := os.Lstat(filepath.Dir(dst))
+	if err != nil || !os.SameFile(dirBefore, dirAfter) {
+		// A directory swap cannot make a successful publication visible.
+		_ = root.Remove(dstRel)
+		return ErrInvalid
+	}
+	// Verify the published pathname, not the old temporary descriptor.
+	if err := verifyPath(root, dstRel, digest); err != nil {
+		_ = root.Remove(dstRel)
+		return err
+	}
+	dirAfter, err = os.Lstat(filepath.Dir(dst))
+	if err != nil || !os.SameFile(dirBefore, dirAfter) {
+		_ = root.Remove(dstRel)
+		return ErrInvalid
 	}
 	return syncDir(filepath.Dir(dst))
 }

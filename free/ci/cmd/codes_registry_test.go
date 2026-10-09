@@ -22,7 +22,7 @@ import (
 // notYetLinked lists code fragments imported above (blank) because cmd does not
 // link them until the V15 engine is wired in (P7-CI-37).
 var notYetLinked = map[string]bool{
-	"github.com/nself-org/plugins/free/ci/internal/blob/cas":      true,
+	"github.com/nself-org/plugins/free/ci/internal/blob/cas":       true,
 	"github.com/nself-org/plugins/free/ci/internal/exec":           true,
 	"github.com/nself-org/plugins/free/ci/internal/gates":          true,
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry": true,
