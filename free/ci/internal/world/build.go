@@ -87,7 +87,7 @@ func Build(ctx context.Context, d Deps, pipeline sched.Pipeline) (sched.World, s
 		cap.Availability.State.Source = "assigned"
 		host := false
 		if facts.Serving {
-			host, err = coordinatorNode(ctx, d, cap, localMachine, addresses)
+			host, err = coordinatorNode(ctx, d, cap, localMachine, addresses, facts.AgentPeers)
 			if err != nil {
 				return sched.World{}, "", failed("coordinator endpoint "+node.ID, err)
 			}

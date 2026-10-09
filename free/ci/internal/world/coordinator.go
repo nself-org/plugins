@@ -31,9 +31,20 @@ func localAddresses(ctx context.Context, d Deps) (map[string]bool, error) {
 	}
 	return result, nil
 }
-func coordinatorNode(ctx context.Context, d Deps, c model.Capability, machine string, local map[string]bool) (bool, error) {
+func coordinatorNode(ctx context.Context, d Deps, c model.Capability, machine string, local map[string]bool, peers map[string]string) (bool, error) {
 	if machine != "" && c.Identity.MachineID.Value != nil && *c.Identity.MachineID.Value == machine {
 		return true, nil
+	}
+	if c.Identity.Transport == "agent" {
+		peer := strings.TrimSpace(peers[c.Identity.ID])
+		if peer == "" {
+			return true, nil
+		} // Missing peer evidence fails closed.
+		ip := net.ParseIP(strings.Trim(peer, "[]"))
+		if ip == nil {
+			return true, nil
+		} // Invalid peer evidence is also unknown.
+		return ip.IsLoopback() || local[ip.String()], nil
 	}
 	if c.Identity.SSH == nil {
 		return false, nil

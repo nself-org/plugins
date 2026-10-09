@@ -51,7 +51,8 @@ func TestWorldRaceAdmissions(t *testing.T) {
 				return
 			}
 			local := w.Runners[len(w.Runners)-1]
-			if local.ID != "local" || local.Avail.Slots != 2010-2*w.Counts.Global {
+			// The base fixture has five active attempts and only two reservations.
+			if local.ID != "local" || local.Avail.Slots != 2013-2*w.Counts.Global {
 				select {
 				case fail <- fmt.Errorf("torn snapshot: count=%d slots=%d", w.Counts.Global, local.Avail.Slots):
 				default:

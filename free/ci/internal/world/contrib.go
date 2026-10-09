@@ -100,8 +100,9 @@ var hooks = struct {
 }{}
 
 type CoordinatorFacts struct {
-	Serving bool
-	Mode    string
+	Serving    bool
+	Mode       string
+	AgentPeers map[string]string // Node ID to last observed agent peer IP.
 }
 
 func RegisterLabelSource(fn func(context.Context, string) ([]string, error)) error {

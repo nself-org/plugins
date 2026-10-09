@@ -2,6 +2,7 @@ package world
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,9 +19,14 @@ import (
 )
 
 func worldFixture(t *testing.T) (Deps, sched.Pipeline) {
+	return worldFixtureWithAgent(t, false)
+}
+
+func worldFixtureWithAgent(t *testing.T, agent bool) (Deps, sched.Pipeline) {
 	t.Helper()
 	ctx := context.Background()
-	s, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{Clock: func() time.Time { return time.Unix(100, 0) }})
+	path := filepath.Join(t.TempDir(), "state.db")
+	s, err := store.Open(path, store.Options{Clock: func() time.Time { return time.Unix(100, 0) }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +53,11 @@ func worldFixture(t *testing.T) (Deps, sched.Pipeline) {
 			source := "inventory"
 			c.DeployHost.Matched = true
 			c.DeployHost.Source = &source
+			if agent {
+				c.Identity.Transport = "agent"
+				machine := "remote-machine"
+				c.Identity.MachineID.Value = &machine
+			}
 		}
 		doc, e := json.Marshal(c)
 		if e != nil {
@@ -73,12 +84,30 @@ func worldFixture(t *testing.T) (Deps, sched.Pipeline) {
 			t.Fatal(err)
 		}
 	}
+	// Keep five active leases but only two outstanding host reservations.
+	fixtureDB, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = fixtureDB.ExecContext(ctx, "DELETE FROM host_reservation WHERE lease_id IN ('leasec','leased','leasee')"); err != nil {
+		t.Fatal(err)
+	}
+	if err = fixtureDB.Close(); err != nil {
+		t.Fatal(err)
+	}
 	return Deps{Store: s, Local: &local, Policy: func(context.Context, string) (sched.Policy, error) { return sched.Policy{}, nil }, Clock: func() time.Time { return time.Unix(100, 0) }, LocalAddresses: func(context.Context) ([]string, error) { return []string{"127.0.0.1"}, nil }, ResolveHost: func(context.Context, string) ([]string, error) { return []string{"192.0.2.10"}, nil }}, sched.Pipeline{ID: "pipe"}
 }
 
 func TestWorldBuild(t *testing.T) {
 	d, p := worldFixture(t)
 	ctx := context.Background()
+	snapshot, err := d.Store.WorldSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := snapshot.Reservations["local"].Slots; got != 2 {
+		t.Fatalf("fixture reservations = %d, want 2", got)
+	}
 	w, digest, err := Build(ctx, d, p)
 	if err != nil {
 		t.Fatal(err)
@@ -93,12 +122,32 @@ func TestWorldBuild(t *testing.T) {
 	if local.CoordinatorHost || local.CoordinatorMode != "" {
 		t.Fatal("coordinator host inferred without provider")
 	}
-	const goldenDigest = "ca3343acf0baa8bd7275f9ab6973a5449507284a9b464948ba123765546f2a1a"
+	const goldenDigest = "82bf42516c68a10acbe4a5f596f4a1d03fa8f074c06edf828e7630ed28470dbe"
 	if digest != goldenDigest {
 		t.Fatalf("golden world digest: got %s want %s", digest, goldenDigest)
 	}
 	if w.Runners[0].Capability.Availability.State.Value == nil || *w.Runners[0].Capability.Availability.State.Value != "revoked" || !w.Runners[2].Decl.DeployHost.Matched {
 		t.Fatal("golden lifecycle/deploy host facts missing")
+	}
+	actualJSON, err := json.MarshalIndent(w, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goldenPath := filepath.Join("testdata", "world.golden.json")
+	if os.Getenv("P7_WORLD_UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll("testdata", 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(goldenPath, append(actualJSON, '\n'), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	goldenJSON, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(actualJSON)+"\n" != string(goldenJSON) {
+		t.Fatalf("full World JSON differs from golden:\n%s", actualJSON)
 	}
 	again, other, err := Build(ctx, d, p)
 	if err != nil || digest != other || !reflect.DeepEqual(w, again) {
@@ -155,6 +204,67 @@ func TestWorldBuild(t *testing.T) {
 	partial, _, err = Build(ctx, d, p)
 	if err == nil || !strings.Contains(err.Error(), "E699") || !strings.Contains(err.Error(), "E607") || len(partial.Runners) != 0 {
 		t.Fatalf("store error: %+v %v", partial, err)
+	}
+}
+
+func TestWorldBuildFractionalCapability(t *testing.T) {
+	d, p := worldFixture(t)
+	cpu, cost := 0.5, 0.25
+	d.Local.Resources.CPU.Value = &cpu
+	d.Local.Economics.MarginalCostPerMin.Value = &cost
+	if err := model.ValidateCapability(*d.Local); err != nil {
+		t.Fatalf("capability contract rejects fractions: %v", err)
+	}
+	canonical, err := canonicalWorld(map[string]any{"resources": map[string]any{"cpu": json.Number("0.5")}, "economics": map[string]any{"marginal_cost_per_min": json.Number("0.25")}})
+	if err != nil || string(canonical) != `{"economics":{"marginal_cost_per_min":0.25},"resources":{"cpu":0.5}}` {
+		t.Fatalf("fractional canonical bytes = %s: %v", canonical, err)
+	}
+	const goldenFractionalDigest = "a903efba736cc51c83ce965e636925355695b9a77fa0d434aa31cc0c5adfadf1"
+	var previous string
+	for i := 0; i < 3; i++ {
+		w, digest, err := Build(context.Background(), d, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(w.Runners) != 4 || digest == "" {
+			t.Fatalf("missing world or digest: %+v %s", w, digest)
+		}
+		if previous != "" && digest != previous {
+			t.Fatalf("unstable fractional digest: %s != %s", digest, previous)
+		}
+		if digest != goldenFractionalDigest {
+			t.Fatalf("fractional digest = %s, want %s", digest, goldenFractionalDigest)
+		}
+		previous = digest
+	}
+}
+
+func TestWorldBuildAgentPeers(t *testing.T) {
+	for _, tc := range []struct {
+		name, peer string
+		host       bool
+	}{
+		{"local", "127.0.0.1", true},
+		{"remote", "192.0.2.20", false},
+		{"unknown", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d, p := worldFixtureWithAgent(t, true)
+			// The vps fixture is an agent node with a distinct machine id.
+			hooks.Lock()
+			hooks.facts = func(context.Context) (CoordinatorFacts, error) {
+				return CoordinatorFacts{Serving: true, Mode: "team", AgentPeers: map[string]string{"01J00000000000000000000003": tc.peer}}, nil
+			}
+			hooks.Unlock()
+			t.Cleanup(func() { hooks.Lock(); hooks.facts = nil; hooks.Unlock() })
+			w, _, err := Build(context.Background(), d, p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := w.Runners[2].CoordinatorHost; got != tc.host {
+				t.Fatalf("agent peer %q host=%v, want %v", tc.peer, got, tc.host)
+			}
+		})
 	}
 }
 
@@ -251,7 +361,7 @@ func TestWorldContributors(t *testing.T) {
 		t.Fatalf("coordinator facts did not fail closed: %v", err)
 	}
 	endpoint := model.Capability{Identity: model.CapabilityIdentity{SSH: &model.CapabilitySSH{Hostname: "coordinator.example"}}}
-	matched, resolveErr := coordinatorNode(context.Background(), Deps{ResolveHost: func(context.Context, string) ([]string, error) { return []string{"127.0.0.1"}, nil }}, endpoint, "different-machine", map[string]bool{"127.0.0.1": true})
+	matched, resolveErr := coordinatorNode(context.Background(), Deps{ResolveHost: func(context.Context, string) ([]string, error) { return []string{"127.0.0.1"}, nil }}, endpoint, "different-machine", map[string]bool{"127.0.0.1": true}, nil)
 	if resolveErr != nil || !matched {
 		t.Fatal("loopback endpoint escaped coordinator host")
 	}
