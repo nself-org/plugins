@@ -16,6 +16,7 @@ import (
 	_ "github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	_ "github.com/nself-org/plugins/free/ci/internal/protocol"
 	_ "github.com/nself-org/plugins/free/ci/internal/providers"
+	_ "github.com/nself-org/plugins/free/ci/internal/sched"
 	_ "github.com/nself-org/plugins/free/ci/internal/store"
 	_ "github.com/nself-org/plugins/free/ci/internal/trust"
 )
@@ -29,6 +30,7 @@ var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry": true,
 	"github.com/nself-org/plugins/free/ci/internal/protocol":       true,
 	"github.com/nself-org/plugins/free/ci/internal/providers":      true,
+	"github.com/nself-org/plugins/free/ci/internal/sched":          true,
 	"github.com/nself-org/plugins/free/ci/internal/store":          true,
 	"github.com/nself-org/plugins/free/ci/internal/trust":          true,
 }
