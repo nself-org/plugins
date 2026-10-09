@@ -2,6 +2,8 @@
 // newline-delimited JSON frames no larger than 1 MiB including the newline.
 // Each direction starts at seq 1 and increments without gaps. Epoch and lease
 // ID fence lease-scoped work; an agent must reject a stale epoch.
+// A resumed direction starts at its validated last_seq plus one. Any malformed
+// or oversized frame poisons its decoder for the rest of the stream.
 //
 // Agent to coordinator: hello, log, artifact-ref, result, cache-ref. Coordinator
 // to agent: welcome, reject, lease, secrets, cancel, drain, upgrade. Both:

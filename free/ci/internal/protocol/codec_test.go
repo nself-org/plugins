@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,6 +21,8 @@ func goldenCases() map[string][]Message {
 	hello := Hello{Versions: []int{1}, AgentVersion: "1.5.0", AgeRecipient: &set, NodeKey: NodeKey{Alg: "ed25519", KeyID: "k1", Public: "pub"}, CapabilityDigest: "sha", Identity: Identity{MachineID: "m1", HostKeyFingerprints: []string{}}, CompatModeSupported: []CompatMode{Compat14, Compat15}, Slots: Slots{Total: 2}}
 	nullHello := hello
 	nullHello.AgeRecipient = nil
+	pin := "different"
+	answer, _ := AcceptHello(hello, &pin, []int{1}, "1.4.0", "s1", 10000, 30000)
 	lease := Lease{LeaseID: "l1", AttemptID: "a1", Epoch: 2, Token: "opaque", CompatMode: Compat15, Secrets: []SecretRef{}, ExpiresAt: "2026-10-08T20:00:00Z", Cache: &LeaseCache{Namespace: "n", Access: "rw", Restore: []CacheRestore{}, Save: []CacheSave{}}, RunnerCredential: &RunnerCredential{Kind: "github-jitconfig", Value: "YQ==", ExpiresAt: "2026-10-08T20:00:00Z"}}
 	lm := frame("lease", 3, lease)
 	e := uint64(2)
@@ -38,17 +41,31 @@ func goldenCases() map[string][]Message {
 		"resume":              {frame("resume", 1, Resume{LastSeq: 44}), frame("offset", 2, Offset{Stream: "artifact", SHA256: "abc", Offset: 10})},
 		"ssh-loss":            {frame("log", 1, Log{LeaseID: "l1", LineSeq: 1, Stream: "stdout", Text: "started"}), frame("reject", 2, Reject{Code: CodeInvalid, Reason: "ssh_session_lost"})},
 		"cache":               {frame("digest", 1, Digest{Stream: "cache", SHA256: "abc", Size: 2}), frame("offset", 2, Offset{Stream: "cache", SHA256: "abc", Offset: 0}), frame("chunk", 3, Chunk{Stream: "cache", Data: "YQ==", Digest: "abc", Final: true}), frame("cache-ref", 4, CacheRef{LeaseID: "l1", Spec: "s", Key: "k", Blobs: []CacheBlob{{Path: "p", SHA256: "abc", Size: 1}}})},
-		"age-mismatch":        {frame("hello", 1, hello), frame("reject", 2, Reject{Code: "E660", Reason: "age_recipient_changed"})},
+		"age-mismatch":        {frame("hello", 1, hello), frame("reject", 2, answer.(Reject))},
 	}
+}
+
+func fenceGolden(m *Message) {
+	if !leaseScoped(m.Type) {
+		return
+	}
+	e := uint64(2)
+	m.Epoch = &e
+	m.LeaseID = "l1"
 }
 
 func TestGoldenTranscripts(t *testing.T) {
 	for name, msgs := range goldenCases() {
 		t.Run(name, func(t *testing.T) {
 			var encoded bytes.Buffer
-			enc := NewEncoder(&encoded)
-			for _, m := range msgs {
-				if err := enc.Encode(m); err != nil {
+			enc := [2]*Encoder{NewEncoder(&encoded), NewEncoder(&encoded)}
+			seq := [2]uint64{}
+			for i, m := range msgs {
+				dir := transcriptDirection(name, i, m.Type)
+				seq[dir]++
+				m.Seq = seq[dir]
+				fenceGolden(&m)
+				if err := enc[dir].Encode(m); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -68,15 +85,22 @@ func TestGoldenTranscripts(t *testing.T) {
 			if !bytes.Equal(want, encoded.Bytes()) {
 				t.Fatal("golden changed")
 			}
-			dec := NewDecoder(bytes.NewReader(want), CarrierPolicy{Carrier: "A", Personal: true, OperatorOwned: true})
 			var round bytes.Buffer
-			re := NewEncoder(&round)
-			for range msgs {
+			re := [2]*Encoder{NewEncoder(&round), NewEncoder(&round)}
+			seq = [2]uint64{}
+			lines := bytes.SplitAfter(want, []byte("\n"))
+			for i, m := range msgs {
+				dir := transcriptDirection(name, i, m.Type)
+				dec, err := NewResumedDecoder(bytes.NewReader(lines[i]), CarrierPolicy{Carrier: "A", Personal: true, OperatorOwned: true}, seq[dir], seq[dir])
+				if err != nil {
+					t.Fatal(err)
+				}
 				got, err := dec.Decode()
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := re.Encode(got); err != nil {
+				seq[dir] = got.Seq
+				if err := re[dir].Encode(got); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -85,6 +109,23 @@ func TestGoldenTranscripts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func transcriptDirection(name string, index int, kind string) int {
+	switch kind {
+	case "hello", "result", "log", "artifact-ref", "cache-ref":
+		return 0
+	case "welcome", "reject", "lease", "cancel", "drain":
+		return 1
+	case "ack":
+		if name == "cancel" || name == "drain" {
+			return 0
+		}
+	}
+	if name == "cache" && index == 3 {
+		return 0
+	}
+	return 1
 }
 
 func TestStrictSeqCarrierAndPreamble(t *testing.T) {
@@ -148,19 +189,28 @@ func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n"))
 	f.Add([]byte(`{"v":1,"type":"ack","seq":2,"body":{"ack_seq":1}}` + "\n"))
 	f.Add([]byte(`{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n" + `{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}` + "\n"))
+	f.Add(append([]byte(strings.Repeat("x", MaxFrame+1)+"\n"), []byte(`{"v":1,"type":"ack","seq":1,"body":{"ack_seq":1}}`+"\n")...))
 	f.Fuzz(func(t *testing.T, data []byte) {
-		if len(data) > MaxFrame+1 {
-			return
+		if len(data) > 3*MaxFrame {
+			data = data[:3*MaxFrame]
 		}
 		d := NewDecoder(bytes.NewReader(data), CarrierPolicy{Carrier: "B"})
 		var previous uint64
-		for {
+		var first error
+		for i := 0; i < 4; i++ {
 			m, err := d.Decode()
 			if err != nil {
-				if !errors.Is(err, io.EOF) {
-					_ = err
+				if errors.Is(err, io.EOF) {
+					return
 				}
-				return
+				if first != nil && err != first {
+					t.Fatalf("poison changed: %v to %v", first, err)
+				}
+				first = err
+				continue
+			}
+			if first != nil {
+				t.Fatal("resynchronized after error")
 			}
 			if m.Seq != previous+1 {
 				t.Fatalf("accepted seq %d after %d", m.Seq, previous)
@@ -168,4 +218,18 @@ func FuzzDecode(f *testing.F) {
 			previous = m.Seq
 		}
 	})
+}
+
+func TestDecodeAllocationBound(t *testing.T) {
+	data := []byte(strings.Repeat("x", MaxFrame+1) + "\n")
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	for i := 0; i < 10; i++ {
+		_, _ = NewDecoder(bytes.NewReader(data), CarrierPolicy{}).Decode()
+	}
+	runtime.ReadMemStats(&after)
+	if after.TotalAlloc-before.TotalAlloc > 30*MaxFrame {
+		t.Fatalf("allocated %d bytes for ten oversized frames", after.TotalAlloc-before.TotalAlloc)
+	}
 }

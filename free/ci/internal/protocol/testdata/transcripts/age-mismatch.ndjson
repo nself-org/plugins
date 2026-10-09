@@ -1,2 +1,2 @@
 {"body":{"age_recipient":"age1","agent_version":"1.5.0","capability_digest":"sha","compat_mode_supported":["v1.4","v1.5"],"identity":{"host_key_fingerprints":[],"machine_id":"m1"},"node_key":{"alg":"ed25519","key_id":"k1","public":"pub"},"slots":{"total":2,"used":0},"versions":[1]},"seq":1,"type":"hello","v":1}
-{"body":{"code":"E660","min_agent_version":"","reason":"age_recipient_changed"},"seq":2,"type":"reject","v":1}
+{"body":{"code":"E660","min_agent_version":"","reason":"age_recipient_changed"},"seq":1,"type":"reject","v":1}

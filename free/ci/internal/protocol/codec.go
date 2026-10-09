@@ -5,9 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"strings"
+	"reflect"
 )
 
 const MaxFrame = 1 << 20
@@ -47,13 +46,42 @@ type Decoder struct {
 	r      *bufio.Reader
 	seq    uint64
 	policy CarrierPolicy
+	poison error
 }
 
 func NewDecoder(r io.Reader, policy CarrierPolicy) *Decoder {
 	return &Decoder{r: bufio.NewReaderSize(r, 4096), policy: policy}
 }
 
+// NewResumedDecoder starts one direction after a validated resume marker.
+func NewResumedDecoder(r io.Reader, policy CarrierPolicy, lastSeq, claimedLastSeq uint64) (*Decoder, error) {
+	if err := checkResumeSeq(lastSeq, claimedLastSeq); err != nil {
+		return nil, err
+	}
+	d := NewDecoder(r, policy)
+	d.seq = lastSeq
+	return d, nil
+}
+
+func checkResumeSeq(lastSeq, claimedLastSeq uint64) error {
+	if lastSeq != claimedLastSeq || lastSeq == ^uint64(0) {
+		return invalid("resume_seq")
+	}
+	return nil
+}
+
 func (d *Decoder) Decode() (Message, error) {
+	if d.poison != nil {
+		return Message{}, d.poison
+	}
+	m, err := d.decode()
+	if err != nil && !errors.Is(err, io.EOF) {
+		d.poison = err
+	}
+	return m, err
+}
+
+func (d *Decoder) decode() (Message, error) {
 	line := make([]byte, 0, 4096)
 	for {
 		frag, err := d.r.ReadSlice('\n')
@@ -105,18 +133,6 @@ func (d *Decoder) Decode() (Message, error) {
 	return Message{w.V, w.Type, w.Seq, w.Ack, w.Epoch, w.LeaseID, body}, nil
 }
 
-func strict(raw []byte, dst any) error {
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(dst); err != nil {
-		return err
-	}
-	if err := d.Decode(new(any)); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("trailing JSON")
-	}
-	return nil
-}
-
 func decodeBody(kind string, raw json.RawMessage, p CarrierPolicy) (any, error) {
 	var body any
 	switch kind {
@@ -162,6 +178,9 @@ func decodeBody(kind string, raw json.RawMessage, p CarrierPolicy) (any, error) 
 	if err := strict(raw, body); err != nil {
 		return nil, invalid("decode_body")
 	}
+	if err := requiredFields(raw, reflect.TypeOf(body).Elem()); err != nil {
+		return nil, invalid("required_body")
+	}
 	if s, ok := body.(*Secrets); ok && len(s.Values) > 0 {
 		if p.Carrier != "A" || !p.Personal || !p.OperatorOwned {
 			return nil, invalid("secrets_carrier")
@@ -175,70 +194,22 @@ func decodeBody(kind string, raw json.RawMessage, p CarrierPolicy) (any, error) 
 	return body, nil
 }
 
-func validate(kind string, body any, epoch *uint64, leaseID string) error {
-	switch v := body.(type) {
-	case *Chunk:
-		if v.Stream != "checkout" && v.Stream != "artifact" && v.Stream != "cache" {
-			return invalid("chunk_stream")
-		}
-		if (v.Stream == "artifact" || v.Stream == "cache") && v.Digest == "" {
-			return invalid("chunk_digest")
-		}
-	case *Digest:
-		if !validStream(v.Stream) || v.SHA256 == "" || v.Size < 0 {
-			return invalid("digest")
-		}
-	case *Offset:
-		if !validStream(v.Stream) || v.SHA256 == "" || v.Offset < 0 {
-			return invalid("offset")
-		}
-	case *Lease:
-		if v.Epoch == 0 || v.LeaseID == "" || (v.CompatMode != Compat14 && v.CompatMode != Compat15) {
-			return invalid("lease")
-		}
-		if epoch != nil && *epoch != v.Epoch || leaseID != "" && leaseID != v.LeaseID {
-			return invalid("fencing_fields")
-		}
-		if v.Cache != nil && v.Cache.Access != "rw" && v.Cache.Access != "ro" && v.Cache.Access != "none" {
-			return invalid("cache_access")
-		}
-		if v.RunnerCredential != nil && v.RunnerCredential.Kind != "github-jitconfig" && v.RunnerCredential.Kind != "gitlab-runner-token" {
-			return invalid("runner_credential")
-		}
-	case *Result:
-		if v.Epoch == 0 || v.LeaseID == "" {
-			return invalid("result_epoch")
-		}
-		if epoch != nil && *epoch != v.Epoch || leaseID != "" && leaseID != v.LeaseID {
-			return invalid("fencing_fields")
-		}
-	case *CacheRef:
-		if v.LeaseID == "" || v.Spec == "" || v.Key == "" {
-			return invalid("cache_ref")
-		}
-	}
-	if epoch != nil && *epoch == 0 {
-		return invalid("epoch")
-	}
-	if kind == "lease" || kind == "result" {
-		if epoch == nil || leaseID == "" {
-			return invalid("fencing_fields")
-		}
-	}
-	return nil
-}
-func validStream(s string) bool { return s == "checkout" || s == "artifact" || s == "cache" }
-func validSecretRef(ref string) bool {
-	return strings.HasPrefix(ref, "project/") && len(ref) > len("project/") || strings.HasPrefix(ref, "environment/") && len(ref) > len("environment/")
-}
-
-// Encoder writes canonical JSON keys using encoding/json's deterministic map order.
 type Encoder struct {
 	w   io.Writer
 	seq uint64
 }
 
 func NewEncoder(w io.Writer) *Encoder { return &Encoder{w: w} }
+
+// NewResumedEncoder continues one direction after a validated resume marker.
+func NewResumedEncoder(w io.Writer, lastSeq, claimedLastSeq uint64) (*Encoder, error) {
+	if err := checkResumeSeq(lastSeq, claimedLastSeq); err != nil {
+		return nil, err
+	}
+	e := NewEncoder(w)
+	e.seq = lastSeq
+	return e, nil
+}
 func (e *Encoder) Encode(m Message) error {
 	if m.V != 1 || m.Seq != e.seq+1 {
 		return invalid("version_seq")
