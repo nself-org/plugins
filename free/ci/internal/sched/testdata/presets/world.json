@@ -1,0 +1,8 @@
+{
+  "runners": [
+    {"id":"L","class":"local","location":"local","wait_ms":0,"runtime_ms":60000,"cold_start_ms":0,"transfer_ms":0,"contention_ms":30000,"cost_micro":0,"scarcity_ms":0},
+    {"id":"N","class":"owned","location":"lan","wait_ms":10000,"runtime_ms":40000,"cold_start_ms":2000,"transfer_ms":5000,"contention_ms":0,"cost_micro":0,"scarcity_ms":0},
+    {"id":"H","class":"included","location":"hosted","wait_ms":20000,"runtime_ms":50000,"cold_start_ms":15000,"transfer_ms":8000,"contention_ms":0,"cost_micro":0,"scarcity_ms":25000},
+    {"id":"E","class":"ephemeral","location":"remote","wait_ms":0,"runtime_ms":30000,"cold_start_ms":60000,"transfer_ms":8000,"contention_ms":0,"cost_micro":10000,"scarcity_ms":0}
+  ]
+}
