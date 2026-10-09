@@ -63,19 +63,10 @@ func (s *Store) NodePut(ctx context.Context, n NodeRecord, actor string) error {
 	if json.Unmarshal(n.Capability, &c) == nil && c.Schema == "ci.runner-capability/v1" {
 		c.Identity.Ownership = model.Fact[string]{Source: "assigned", ObservedAt: s.now().UTC(), Confidence: "unknown"}
 		c.Trust = initialNodeTrust(s.now().UTC())
+		if err := nodeDocument(&n, c); err != nil {
+			return err
+		}
 		var err error
-		n.Capability, err = json.Marshal(c)
-		if err != nil {
-			return err
-		}
-		n.Trust, err = json.Marshal(c.Trust)
-		if err != nil {
-			return err
-		}
-		n.Lifecycle, err = json.Marshal(c.Lifecycle)
-		if err != nil {
-			return err
-		}
 		n.DeployHost, err = json.Marshal(c.DeployHost)
 		if err != nil {
 			return err
@@ -130,7 +121,13 @@ func (s *Store) NodeList(ctx context.Context) ([]NodeRecord, error) {
 
 func (s *Store) nodeCAS(ctx context.Context, n NodeRecord, actor, action, detail string) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE node SET name=?,version=version+1,lifecycle=?,trust_json=?,deploy_host_json=?,state=?,reason=?,updated_at=? WHERE id=? AND version=?`, n.Name, string(n.Lifecycle), string(n.Trust), string(n.DeployHost), n.State, n.Reason, s.now().UnixNano(), n.ID, n.Version)
+		query := `UPDATE node SET name=?,version=version+1,updated_at=? WHERE id=? AND version=?`
+		args := []any{n.Name, s.now().UnixNano(), n.ID, n.Version}
+		if action != "node.capability" {
+			query = `UPDATE node SET name=?,version=version+1,lifecycle=?,trust_json=?,deploy_host_json=?,state=?,reason=?,updated_at=? WHERE id=? AND version=?`
+			args = []any{n.Name, string(n.Lifecycle), string(n.Trust), string(n.DeployHost), n.State, n.Reason, s.now().UnixNano(), n.ID, n.Version}
+		}
+		res, err := tx.ExecContext(ctx, query, args...)
 		if err != nil {
 			return err
 		}

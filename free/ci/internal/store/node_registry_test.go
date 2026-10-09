@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -86,6 +87,13 @@ func TestNodeCapabilityStoreAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := n
+	var initial model.Capability
+	if err := json.Unmarshal(before.Capability, &initial); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.writer.ExecContext(ctx, `CREATE TRIGGER capability_guard BEFORE UPDATE OF trust_json,lifecycle,state,reason,deploy_host_json ON node BEGIN SELECT RAISE(FAIL, 'capability updated authority column'); END`); err != nil {
+		t.Fatal(err)
+	}
 	n.Trust = []byte(`{"agent":"trusted"}`)
 	n.Lifecycle = []byte(`{"discovered":true,"authorized_projects":["secret"],"eligible":true,"revoked_at":null}`)
 	n.State = "online"
@@ -94,6 +102,7 @@ func TestNodeCapabilityStoreAuthority(t *testing.T) {
 	c.Lifecycle.Eligible = true
 	c.Identity.Ownership.Value = new(string)
 	*c.Identity.Ownership.Value = "team"
+	c.Trust.Accepts.Value = &[]model.TrustClass{"untrusted"}
 	n.Capability, err = json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +121,7 @@ func TestNodeCapabilityStoreAuthority(t *testing.T) {
 	if err := json.Unmarshal(got.Capability, &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved.Lifecycle.Eligible || len(saved.Lifecycle.AuthorizedProjects) != 0 || saved.Identity.Ownership.Value != nil {
+	if saved.Lifecycle.Eligible || len(saved.Lifecycle.AuthorizedProjects) != 0 || saved.Identity.Ownership.Value != nil || !reflect.DeepEqual(saved.Trust, initial.Trust) {
 		t.Fatal("capability document retained agent authority fields")
 	}
 }
