@@ -1,0 +1,5 @@
+ALTER TABLE lease ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE attempt ADD COLUMN previous_runner_id TEXT;
+ALTER TABLE attempt ADD COLUMN lease_epoch INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE node_failure_streak (node_id TEXT PRIMARY KEY, failures INTEGER NOT NULL DEFAULT 0, tripped INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX lease_expiry ON lease(expires_at);

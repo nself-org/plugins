@@ -12,6 +12,7 @@ import (
 	_ "github.com/nself-org/plugins/free/ci/internal/blob/cas"
 	_ "github.com/nself-org/plugins/free/ci/internal/exec"
 	_ "github.com/nself-org/plugins/free/ci/internal/gates"
+	_ "github.com/nself-org/plugins/free/ci/internal/lease"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	_ "github.com/nself-org/plugins/free/ci/internal/nodes/registry"
 	_ "github.com/nself-org/plugins/free/ci/internal/protocol"
@@ -26,6 +27,7 @@ var notYetLinked = map[string]bool{
 	"github.com/nself-org/plugins/free/ci/internal/blob/cas":       true,
 	"github.com/nself-org/plugins/free/ci/internal/exec":           true,
 	"github.com/nself-org/plugins/free/ci/internal/gates":          true,
+	"github.com/nself-org/plugins/free/ci/internal/lease":          true,
 	"github.com/nself-org/plugins/free/ci/internal/nodes/registry": true,
 	"github.com/nself-org/plugins/free/ci/internal/protocol":       true,
 	"github.com/nself-org/plugins/free/ci/internal/providers":      true,
