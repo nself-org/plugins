@@ -18,7 +18,8 @@
   "service": {
     "compose": "docker-compose.plugin.yml",
     "healthcheck": "traefik healthcheck --ping",
-    "kind": "compose"
+    "kind": "compose",
+    "port": 8082
   },
   "status": "experimental",
   "tier": "free",
