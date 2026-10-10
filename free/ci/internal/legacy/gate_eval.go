@@ -24,11 +24,11 @@ import (
 
 // evalResultSummary is a minimal decode of eval-results.json to determine passed flag.
 type evalResultSummary struct {
-	Passed     bool   `json:"passed"`
+	Passed     bool    `json:"passed"`
 	PassRate   float64 `json:"pass_rate"`
 	SuiteScore float64 `json:"suite_score"`
-	Status     string `json:"status"`
-	SuiteSlug  string `json:"suite_slug"`
+	Status     string  `json:"status"`
+	SuiteSlug  string  `json:"suite_slug"`
 }
 
 // runEvalGateStep runs `nself ci eval --all --output json --eval-url evalURL --repo root`.

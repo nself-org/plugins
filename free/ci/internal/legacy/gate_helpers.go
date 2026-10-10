@@ -122,7 +122,9 @@ func extractJSONStringArray(json, key string) []string {
 // isGitRepo reports whether root is inside a git checkout.
 //
 // Purpose:     Decide whether gitleaks can scan tracked content (respecting
-//              .gitignore) or must fall back to a raw filesystem walk.
+//
+//	.gitignore) or must fall back to a raw filesystem walk.
+//
 // Inputs:      root string — directory to test
 // Outputs:     bool
 // Constraints: Walks upward, so a subdirectory of a checkout still counts.
