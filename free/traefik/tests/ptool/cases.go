@@ -238,7 +238,17 @@ func rates(r *runner, m routes, get func(route, string) req) {
 				continue
 			}
 			done[key] = true
+			perSec := zoneRate(m, zoneOf(rt, l.path))
+			var spent [2]time.Duration
 			count := func(t target) (first int, ok, limited int) {
+				start := time.Now()
+				defer func() {
+					if t.name == r.n.name {
+						spent[0] = time.Since(start)
+					} else {
+						spent[1] = time.Since(start)
+					}
+				}()
 				for i := 0; i < l.burst+8; i++ {
 					res := t.do(get(rt, l.path))
 					if i == 0 {
@@ -258,8 +268,8 @@ func rates(r *runner, m routes, get func(route, string) req) {
 			switch {
 			case la == 0 || lb == 0:
 				r.fail(label, fmt.Sprintf("nginx first=%d ok=%d 429=%d; traefik first=%d ok=%d 429=%d", fa, oa, la, fb, ob, lb))
-			case oa > l.burst+3 || ob > l.burst+3:
-				r.fail(label, fmt.Sprintf("admitted before 429: nginx=%d traefik=%d, want at most %d", oa, ob, l.burst+3))
+			case oa > allowed(l.burst, perSec, spent[0]) || ob > allowed(l.burst, perSec, spent[1]):
+				r.fail(label, fmt.Sprintf("admitted before 429: nginx=%d (max %d) traefik=%d (max %d)", oa, allowed(l.burst, perSec, spent[0]), ob, allowed(l.burst, perSec, spent[1])))
 			default:
 				r.ok(fmt.Sprintf("%s (admitted nginx=%d traefik=%d, then 429)", label, oa, ob))
 			}
@@ -269,4 +279,40 @@ func rates(r *runner, m routes, get func(route, string) req) {
 	if len(done) == 0 {
 		r.fail("rate limits", "no limited location in the fixture")
 	}
+}
+
+// zoneOf returns the zone name limiting path on rt (location zone, else the server zone for "/").
+func zoneOf(rt route, path string) string {
+	for _, l := range rt.Locations {
+		if l.RateLimit != nil && sample(l.Path, l.Match) == path {
+			return l.RateLimit.Zone
+		}
+	}
+	if rt.RateLimit != nil {
+		return rt.RateLimit.Zone
+	}
+	return ""
+}
+
+// zoneRate is the zone's requests per second ("5r/s", "100r/m").
+func zoneRate(m routes, zone string) float64 {
+	for _, z := range m.Zones {
+		if z.Name == zone && z.Rate != nil {
+			var n float64
+			var unit string
+			if _, err := fmt.Sscanf(*z.Rate, "%fr/%1s", &n, &unit); err == nil {
+				if unit == "m" {
+					return n / 60
+				}
+				return n
+			}
+		}
+	}
+	return 0
+}
+
+// allowed is the most requests a limiter may admit in a burst of elapsed time: the burst allowance
+// (1 + burst) plus what the bucket refills meanwhile, plus 2 for scheduling jitter.
+func allowed(burst int, perSec float64, elapsed time.Duration) int {
+	return burst + 1 + int(perSec*elapsed.Seconds()+0.999) + 2
 }

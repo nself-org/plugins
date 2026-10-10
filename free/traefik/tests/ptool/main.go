@@ -39,6 +39,10 @@ type routes struct {
 	Defaults struct {
 		MaxBodyBytes int64 `json:"max_body_bytes"`
 	} `json:"defaults"`
+	Zones []struct {
+		Name string  `json:"name"`
+		Rate *string `json:"rate"`
+	} `json:"zones"`
 	Routes []route `json:"routes"`
 }
 
