@@ -8,7 +8,8 @@
 // file (mode 0600) written inside the private temp directory of the chart.
 //
 // Constraints: install and upgrade refuse (exit 1, "run nself k8s values")
-// when either generated file is missing. The overrides file is the only place
+// when either generated file is missing, and refuse a secrets.yaml that group
+// or others can read. The overrides file is the only place
 // the licence key is written; helm reads it with --values.
 package k8s
 
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"gopkg.in/yaml.v3"
 )
@@ -52,6 +54,10 @@ func ResolveValues(dir string) (ValuesFiles, error) {
 		if st, err := os.Stat(p); err != nil || !st.Mode().IsRegular() {
 			return ValuesFiles{}, fmt.Errorf("k8s: %w: %s: run nself k8s values", ErrValuesMissing, filepath.Join(GeneratedDir, filepath.Base(p)))
 		}
+	}
+	if st, err := os.Stat(vf.Secrets); err == nil && runtime.GOOS != "windows" && st.Mode().Perm()&0o077 != 0 {
+		return ValuesFiles{}, fmt.Errorf("k8s: %s is readable by group or others (mode %04o): chmod 600 it, or run nself k8s values again",
+			filepath.Join(GeneratedDir, "secrets.yaml"), st.Mode().Perm())
 	}
 	return vf, nil
 }

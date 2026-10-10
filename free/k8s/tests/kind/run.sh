@@ -127,6 +127,8 @@ cluster_up=1
 init_postgres() {
   local i=0 db user
   until kubectl get pod postgres-0 >/dev/null 2>&1; do
+    # Fail fast with the real cause when the install already exited.
+    kill -0 "$install_pid" 2>/dev/null || { echo "FAIL: nself k8s install exited before postgres-0 appeared" >&2; return 1; }
     i=$((i + 1)); [ "$i" -lt 120 ] || { echo "FAIL: postgres-0 never appeared" >&2; return 1; }
     sleep 2
   done
@@ -143,7 +145,11 @@ step "nself k8s install --wait (postgres init SQL applied meanwhile)"
 install_rc=0
 (cd "$project" && nself k8s install --domain example.test --cluster "$KUBECONFIG" --wait --timeout "${READY_TIMEOUT}s") &
 install_pid=$!
-init_postgres || { kill "$install_pid" 2>/dev/null || true; exit 1; }
+init_postgres || {
+  if kill -0 "$install_pid" 2>/dev/null; then kill "$install_pid" 2>/dev/null || true
+  else wait "$install_pid" || echo "nself k8s install exit code: $?" >&2; fi
+  exit 1
+}
 wait "$install_pid" || install_rc=$?
 if [ "$install_rc" -ne 0 ]; then echo "FAIL: nself k8s install exited $install_rc" >&2; exit 1; fi
 

@@ -35,8 +35,8 @@ nself k8s status
 nself k8s upgrade
 ```
 
-The official chart is published at https://charts.nself.org (source lives
-in `charts/nself/` in this repo).
+The chart is embedded in the plugin binary (source in `charts/nself/` in this
+repo); there is no chart repository.
 
 ## History
 

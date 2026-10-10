@@ -13,6 +13,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/nself-org/nself-k8s/internal/k8s"
@@ -26,12 +28,18 @@ var upgradeCmd = &cobra.Command{
 
 Run 'nself k8s values' first so the generated values match the compose model.
 The values are applied afresh (no --reuse-values): a service removed from the
-compose model leaves the release. Pass the same --domain and --plugins as at
-install time.`,
+compose model leaves the release. Pass the same --domain and --plugins (and the
+NSELF_PLUGIN_LICENSE_KEY env var) as at install time; the upgrade prints the
+values it is not passing. The embedded chart does not consume domain, plugins or
+the licence key yet (D-0311).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true // a missing values file is not a usage error
+		opts := installOptions(cmd)
+		if missing := k8s.NotPassed(opts); len(missing) > 0 {
+			tui.Warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
+		}
 		tui.Info("Upgrading nSelf Helm release...")
-		if err := k8s.Upgrade(cmd.Context(), installOptions(cmd)); err != nil {
+		if err := k8s.Upgrade(cmd.Context(), opts); err != nil {
 			return err
 		}
 		tui.Success("nSelf upgraded successfully.")
@@ -40,6 +48,6 @@ install time.`,
 }
 
 func init() {
-	upgradeCmd.Flags().String("domain", "", "Domain for the nSelf deployment")
+	upgradeCmd.Flags().String("domain", "", "Domain, recorded in the release values (the chart does not consume it yet, D-0311)")
 	addInstallFlags(upgradeCmd)
 }

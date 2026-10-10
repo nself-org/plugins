@@ -127,10 +127,10 @@ Both commands refuse (exit 1, `run nself k8s values`) when `values.yaml` or `sec
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--domain` | none | Domain of the deployment (required for install) |
+| `--domain` | none | Required for install. Recorded in the release values only: the chart does not read it yet (D-0311) |
 | `--cluster` | none | Path to a kubeconfig. Without it helm reads `KUBECONFIG` or `~/.kube/config` |
 | `--release` | `nself` | Helm release name |
-| `--plugins` | none | Comma-separated plugins the release installs (`plugins.install`) |
+| `--plugins` | none | Comma-separated plugins, recorded in the release values (`plugins.install`). The chart does not read them yet (D-0311) |
 | `--project-dir` | `.` | Project directory that holds `.nself/generated/k8s` |
 | `--wait` | on | Wait until every workload is ready |
 | `--timeout` | `10m` | How long helm waits |
@@ -139,7 +139,17 @@ What it passes to helm: `--values values.yaml --values secrets.yaml` and, when y
 `NSELF_PLUGIN_LICENSE_KEY`, a third `--values` file written to the same private directory. Secrets and the licence key travel
 in these files, never on the command line, and never through `--set`. `upgrade` applies the current values afresh (no
 `--reuse-values`), so a service you removed from the compose model leaves the release; pass the same `--domain` and `--plugins`
-as at install time.
+as at install time; `upgrade` prints one line naming the values it is not passing.
+
+**Not consumed yet.** The embedded chart reads none of `domain`, `license.key` and `plugins.install` (tracked as D-0311), so
+`--domain`, `--plugins` and `NSELF_PLUGIN_LICENSE_KEY` are recorded in the release values and change nothing in the cluster.
+The hosts the stack answers on come from the generated `ingress.rules`; the success line of `install` lists those hosts as
+URLs, or no URL when the project routes none.
+
+**Postgres init scripts are not carried yet.** `nself k8s values` lists the postgres init-script mount under `notMapped`
+(D-0308), so a plain install leaves hasura-auth crash-looping on `schema auth does not exist`. The kind proof applies
+`postgres/init/*.sql` by hand while it waits (`init_postgres` in `run.sh`). Until D-0308 closes, do not read the kind result as
+"nSelf on Kubernetes works".
 
 ## Try it on kind
 

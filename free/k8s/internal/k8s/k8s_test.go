@@ -49,17 +49,16 @@ func TestInstallUpgradeErrorWithoutHelm(t *testing.T) {
 // TestNoChartRepo pins that no remote chart repository survives: the package
 // has no ChartRepo/RepoAdd and the embedded chart is the only chart source.
 func TestNoChartRepo(t *testing.T) {
-	src, err := os.ReadFile("helm.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, banned := range []string{"charts.nself.org", "repo\", \"add", "nself/nself", "--set"} {
-		if strings.Contains(string(src), banned) {
-			t.Errorf("helm.go still contains %q", banned)
+	for _, file := range []string{"helm.go", "args.go", "values_files.go", "chart.go"} {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	if HelmReleaseName != "nself" {
-		t.Errorf("HelmReleaseName = %q", HelmReleaseName)
+		for _, banned := range []string{"charts.nself.org", "repo\", \"add", "nself/nself", "\"--set"} {
+			if strings.Contains(string(src), banned) {
+				t.Errorf("%s still contains %q", file, banned)
+			}
+		}
 	}
 }
 
@@ -100,7 +99,7 @@ func fakeHelm(t *testing.T) (out string) {
 printf '%s\n' "$@" > "$FAKE_HELM_OUT/argv"
 i=0; prev=""
 for a in "$@"; do
-  if [ "$prev" = "--values" ]; then cp "$a" "$FAKE_HELM_OUT/values-$i"; i=$((i+1)); fi
+  if [ "$prev" = "--values" ]; then cp "$a" "$FAKE_HELM_OUT/values-$i"; ls -l "$a" | cut -c1-10 > "$FAKE_HELM_OUT/mode-$i"; i=$((i+1)); fi
   prev="$a"
 done
 [ -f "$3/templates/_helpers.tpl" ] && echo yes > "$FAKE_HELM_OUT/helpers"

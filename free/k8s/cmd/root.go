@@ -26,7 +26,7 @@ var rootCmd = &cobra.Command{
 
 Requires helm to be installed: https://helm.sh
 
-The official chart is published at https://charts.nself.org.
+The chart is embedded in this plugin; there is no chart repository.
 
 Examples:
   nself k8s values

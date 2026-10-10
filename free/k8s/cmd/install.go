@@ -6,7 +6,8 @@
 // .nself/generated/k8s/values.yaml and secrets.yaml.
 //
 // Outputs: helm's own stdout/stderr (inherited), plus an Info/Success line
-// from the tui package around the helm invocation. Exit 1 when the generated
+// from the tui package around the helm invocation; the success line lists the
+// ingress hosts of the generated values, or no URL. Exit 1 when the generated
 // values are missing ("run nself k8s values").
 //
 // Constraints: no chart repository, no secret and no licence key on argv (they
@@ -36,6 +37,10 @@ directory with the values that 'nself k8s values' generated
 The licence key (NSELF_PLUGIN_LICENSE_KEY) and the secrets reach helm through
 values files, never on the command line.
 
+Not consumed yet: --domain, --plugins and the licence key are recorded in the
+release values, but the embedded chart does not read them (D-0311). The hosts
+the stack answers on come from the generated ingress rules.
+
 TLS is managed by cert-manager (must be pre-installed in the cluster).
 
 Example:
@@ -48,20 +53,35 @@ Example:
 		if opts.Domain == "" {
 			return fmt.Errorf("--domain is required")
 		}
-		tui.Info(fmt.Sprintf("Installing nSelf chart (domain=%s)...", opts.Domain))
+		tui.Info(fmt.Sprintf("Installing nSelf chart (domain=%s, recorded in the release values only)...", opts.Domain))
 		if err := k8s.Install(cmd.Context(), opts); err != nil {
 			return err
 		}
-		tui.Success(fmt.Sprintf("nSelf installed. Access your stack at https://%s", opts.Domain))
+		tui.Success(installedLine(opts.ProjectDir))
 		return nil
 	},
+}
+
+// installedLine is the success line: the ingress hosts of the generated
+// values, or no URL when the project routes none. --domain is not used here
+// because the chart does not consume it yet (D-0311).
+func installedLine(projectDir string) string {
+	hosts, err := k8s.IngressHosts(projectDir)
+	if err != nil || len(hosts) == 0 {
+		return "nSelf installed. The generated values route no ingress host."
+	}
+	urls := make([]string, len(hosts))
+	for i, h := range hosts {
+		urls[i] = "https://" + h
+	}
+	return "nSelf installed. Ingress hosts: " + strings.Join(urls, ", ")
 }
 
 // addInstallFlags registers the flags install and upgrade share.
 func addInstallFlags(c *cobra.Command) {
 	c.Flags().String("cluster", "", "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)")
 	c.Flags().String("release", k8s.HelmReleaseName, "Helm release name")
-	c.Flags().String("plugins", "", "Comma-separated list of plugins to install")
+	c.Flags().String("plugins", "", "Comma-separated plugins, recorded in the release values (the chart does not consume them yet, D-0311)")
 	c.Flags().String("project-dir", ".", "nSelf project directory (holds .nself/generated/k8s)")
 	c.Flags().Bool("wait", true, "Wait until every workload is ready")
 	c.Flags().String("timeout", k8s.DefaultTimeout, "How long helm waits for readiness")
@@ -97,6 +117,6 @@ func installOptions(cmd *cobra.Command) k8s.InstallOptions {
 }
 
 func init() {
-	installCmd.Flags().String("domain", "", "Domain for the nSelf deployment (required)")
+	installCmd.Flags().String("domain", "", "Domain, recorded in the release values (required; the chart does not consume it yet, D-0311)")
 	addInstallFlags(installCmd)
 }
