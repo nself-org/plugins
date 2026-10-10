@@ -219,8 +219,6 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 	return gr
 }
 
-// fileExists returns true if the path exists (file or dir).
-
 // dropVendored removes gofmt output lines (file paths or parse errors) that
 // point inside a vendor/ directory at any depth: `go mod vendor` output is
 // third-party code, matching cli scripts/ci/gofmt-check.sh (D-0286).
@@ -230,7 +228,8 @@ func dropVendored(out string) string {
 	}
 	var kept []string
 	for _, line := range strings.Split(out, "\n") {
-		p := filepath.ToSlash(strings.TrimSpace(line))
+		// Only the path counts: a parse error's message text may mention vendor/.
+		p, _, _ := strings.Cut(filepath.ToSlash(strings.TrimSpace(line)), ":")
 		if strings.HasPrefix(p, "vendor/") || strings.Contains(p, "/vendor/") {
 			continue
 		}

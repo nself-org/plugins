@@ -9,6 +9,8 @@ func TestDropVendored(t *testing.T) {
 		{"empty", "", ""},
 		{"only vendor", "vendor/github.com/google/uuid/dce.go\n", ""},
 		{"mixed", "vendor/a/b.go\ncmd/main.go\nsub/vendor/c.go\ninternal/y.go", "cmd/main.go\ninternal/y.go"},
+		{"vendored parse error", "vendor/a.go:1:1: expected 'package'", ""},
+		{"first-party error mentioning vendor kept", "cmd/a.go:3:1: see /vendor/x", "cmd/a.go:3:1: see /vendor/x"},
 		{"vendor-like name kept", "internal/vendored/a.go", "internal/vendored/a.go"},
 	}
 	for _, c := range cases {

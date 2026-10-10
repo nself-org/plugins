@@ -13,6 +13,7 @@ func TestDropVendored(t *testing.T) {
 		{"mixed", "vendor/a/b.go\ncmd/main.go\ninternal/x/vendor/c.go\ninternal/y.go", "cmd/main.go\ninternal/y.go"},
 		{"dot prefix", "./vendor/a.go\n./cmd/b.go", "./cmd/b.go"},
 		{"parse error in vendor", "vendor/a.go:1:1: expected 'package'", ""},
+		{"first-party error mentioning vendor kept", "cmd/a.go:3:1: import \"x/vendor/y\" invalid", "cmd/a.go:3:1: import \"x/vendor/y\" invalid"},
 		{"vendor-like name kept", "internal/vendored/a.go\nvendorlib/b.go", "internal/vendored/a.go\nvendorlib/b.go"},
 	}
 	for _, c := range cases {

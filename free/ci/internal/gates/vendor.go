@@ -15,7 +15,8 @@ func dropVendored(out string) string {
 	}
 	var kept []string
 	for _, line := range strings.Split(out, "\n") {
-		p := filepath.ToSlash(strings.TrimSpace(line))
+		// Only the path counts: a parse error's message text may mention vendor/.
+		p, _, _ := strings.Cut(filepath.ToSlash(strings.TrimSpace(line)), ":")
 		if strings.HasPrefix(p, "vendor/") || strings.Contains(p, "/vendor/") {
 			continue
 		}
