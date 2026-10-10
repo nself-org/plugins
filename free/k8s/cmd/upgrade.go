@@ -1,13 +1,15 @@
-// Purpose: `nself-k8s upgrade` — upgrades the nSelf Helm release with a
-// rolling update. Behavior is unchanged from the pre-extraction
-// `nself k8s upgrade`.
+// Purpose: `nself-k8s upgrade` upgrades the nSelf Helm release from the chart
+// embedded in this binary, applying the current generated values.
 //
-// Inputs: --cluster, --release.
+// Inputs: the install flags (see install.go), --domain optional, and the
+// project's .nself/generated/k8s/values.yaml and secrets.yaml.
 //
 // Outputs: helm's own stdout/stderr (inherited), plus an Info/Success line
-// from the tui package around the helm invocation.
+// from the tui package around the helm invocation. Exit 1 when the generated
+// values are missing ("run nself k8s values").
 //
-// Constraints: pure move from cli/cmd/commands/k8s.go's k8sUpgradeCmd.
+// Constraints: values are applied afresh, not with --reuse-values, so pass the
+// same --domain and --plugins as at install time.
 package main
 
 import (
@@ -20,16 +22,16 @@ import (
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
 	Short: "Upgrade the nSelf Helm release",
-	Long:  `Upgrade the nSelf Helm chart to the latest version with a rolling update.`,
+	Long: `Upgrade the nSelf Helm release from the embedded chart with a rolling update.
+
+Run 'nself k8s values' first so the generated values match the compose model.
+The values are applied afresh (no --reuse-values): a service removed from the
+compose model leaves the release. Pass the same --domain and --plugins as at
+install time.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cluster, _ := cmd.Flags().GetString("cluster")
-		release, _ := cmd.Flags().GetString("release")
-		opts := k8s.InstallOptions{
-			ReleaseName: release,
-			Kubeconfig:  cluster,
-		}
+		cmd.SilenceUsage = true // a missing values file is not a usage error
 		tui.Info("Upgrading nSelf Helm release...")
-		if err := k8s.Upgrade(cmd.Context(), opts); err != nil {
+		if err := k8s.Upgrade(cmd.Context(), installOptions(cmd)); err != nil {
 			return err
 		}
 		tui.Success("nSelf upgraded successfully.")
@@ -38,6 +40,6 @@ var upgradeCmd = &cobra.Command{
 }
 
 func init() {
-	upgradeCmd.Flags().String("cluster", "", "Path to kubeconfig")
-	upgradeCmd.Flags().String("release", k8s.HelmReleaseName, "Helm release name")
+	upgradeCmd.Flags().String("domain", "", "Domain for the nSelf deployment")
+	addInstallFlags(upgradeCmd)
 }

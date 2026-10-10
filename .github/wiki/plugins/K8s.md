@@ -106,27 +106,55 @@ The chart in `charts/nself` is generic over these keys. No image reference is ty
 `tests/template-check.sh` renders the chart with the generated values of two fixtures through `helm template` and validates
 every manifest with `kubeconform -strict`. Tool images are pinned by digest in `tests/tools.env`.
 
-## Examples
+## Install and upgrade
 
-### Install
+`nself k8s install` and `nself k8s upgrade` run the Helm chart that is embedded in the `nself-k8s` binary. They extract it to a
+private temporary directory (mode 0700), run `helm` against that directory and delete it afterwards. There is no chart
+repository and no `helm repo add`.
 
-```bash
-nself-k8s install
-```
-
-### Generate values
+Prerequisites: `helm` and `kubectl` on `PATH` (you install them), a reachable cluster, and a built project with generated
+values:
 
 ```bash
 nself build
-nself k8s values
-nself k8s values --check
+nself k8s values                      # writes .nself/generated/k8s/values.yaml and secrets.yaml
+nself k8s install --domain myapp.com  # waits until every workload is ready
+nself k8s status
+nself k8s upgrade --domain myapp.com  # after nself build and nself k8s values
 ```
 
-### Upgrade
+Both commands refuse (exit 1, `run nself k8s values`) when `values.yaml` or `secrets.yaml` is missing.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--domain` | none | Domain of the deployment (required for install) |
+| `--cluster` | none | Path to a kubeconfig. Without it helm reads `KUBECONFIG` or `~/.kube/config` |
+| `--release` | `nself` | Helm release name |
+| `--plugins` | none | Comma-separated plugins the release installs (`plugins.install`) |
+| `--project-dir` | `.` | Project directory that holds `.nself/generated/k8s` |
+| `--wait` | on | Wait until every workload is ready |
+| `--timeout` | `10m` | How long helm waits |
+
+What it passes to helm: `--values values.yaml --values secrets.yaml` and, when you set `--domain`, `--plugins` or
+`NSELF_PLUGIN_LICENSE_KEY`, a third `--values` file written to the same private directory. Secrets and the licence key travel
+in these files, never on the command line, and never through `--set`. `upgrade` applies the current values afresh (no
+`--reuse-values`), so a service you removed from the compose model leaves the release; pass the same `--domain` and `--plugins`
+as at install time.
+
+## Try it on kind
+
+`free/k8s/tests/kind/run.sh` is the proof the `k8s-kind` workflow runs: it builds `nself` from `nself-org/cli` at a pinned
+commit, lays this plugin out the way `nself add` does, builds a minimal fixture project, runs `nself k8s values`,
+`nself k8s install` and `nself k8s upgrade` on a kind cluster, waits for every pod to be Ready and POSTs `{__typename}` to
+Hasura through `kubectl port-forward`. It needs docker, go and git; it downloads kind, kubectl and helm at the versions and
+checksums pinned in `free/k8s/tests/kind/tools.env`.
 
 ```bash
-nself-k8s upgrade
+bash free/k8s/tests/kind/run.sh
 ```
+
+The workflow runs on pull requests that touch `free/k8s/**` and by `workflow_dispatch` with inputs `source` (`branch`, or
+`registry` once the registry leg exists), `cli_ref` and `leg` (`install`; `day2` follows with backup and restore).
 
 ## Source
 

@@ -1,15 +1,26 @@
-// Package k8s provides a thin wrapper around the Helm CLI for managing
-// nSelf Helm chart deployments (B50).
+// Package k8s runs the Helm CLI for the nSelf chart that the plugin embeds.
 //
-// Status: PLANNED — deferred. Requires UD-12 minor release approval.
-// The nSelf Helm chart lives in charts/nself/ at this plugin's repo root
-// (moved here from the core CLI's repo root under CLI-R11 — see
-// charts/nself/Chart.yaml's sources: field).
+// Purpose: install, upgrade and inspect the nSelf release. The chart is
+// extracted from the embedded filesystem to a private temp directory for each
+// call; the chart values come from `nself k8s values`
+// (.nself/generated/k8s/{values,secrets}.yaml) and are passed with --values.
+//
+// Inputs: InstallOptions (project dir, embedded chart, release, kubeconfig,
+// domain, licence key, plugins).
+//
+// Outputs: helm's stdout and stderr, inherited.
+//
+// Constraints: a secret value or the licence key never appears on argv: both
+// travel in values files. The kubeconfig is passed with --kubeconfig only when
+// the caller gives one (the --cluster flag); otherwise helm reads KUBECONFIG
+// itself. There is no remote chart repository. buildArgs (args.go) assembles the
+// argv so tests can check it without running helm.
 package k8s
 
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
@@ -18,11 +29,29 @@ import (
 // HelmReleaseName is the default Helm release name used by nself k8s install.
 const HelmReleaseName = "nself"
 
-// ChartRepo is the Helm repository URL for the nSelf chart.
-const ChartRepo = "https://charts.nself.org"
+// DefaultTimeout is the default `helm --timeout` for install and upgrade.
+const DefaultTimeout = "10m"
 
 // ErrHelmNotFound is returned when the helm binary is not in PATH.
 var ErrHelmNotFound = fmt.Errorf("k8s: helm binary not found; install from https://helm.sh")
+
+// InstallOptions holds parameters for helm install/upgrade.
+type InstallOptions struct {
+	ReleaseName string
+	Domain      string
+	Kubeconfig  string
+	LicenseKey  string
+	Plugins     []string
+	// ProjectDir holds .nself/generated/k8s (default ".").
+	ProjectDir string
+	// Chart is the filesystem holding the chart at ChartRoot (the embed.FS).
+	Chart fs.FS
+	// ChartRoot is the chart directory inside Chart.
+	ChartRoot string
+	// Wait makes helm wait until the release is ready; Timeout bounds it.
+	Wait    bool
+	Timeout string
+}
 
 // helmBinary locates the helm binary.
 func helmBinary() (string, error) {
@@ -33,62 +62,47 @@ func helmBinary() (string, error) {
 	return path, nil
 }
 
-// Install runs `helm install` for the nSelf chart.
+// Install runs `helm install` for the embedded nSelf chart.
 func Install(ctx context.Context, opts InstallOptions) error {
-	helm, err := helmBinary()
-	if err != nil {
-		return err
-	}
-	if opts.ReleaseName == "" {
-		opts.ReleaseName = HelmReleaseName
-	}
-	args := []string{
-		"install", opts.ReleaseName, "nself/nself",
-		"--set", fmt.Sprintf("domain=%s", opts.Domain),
-		"--wait",
-		"--timeout", "5m",
-	}
-	if opts.Kubeconfig != "" {
-		args = append(args, "--kubeconfig", opts.Kubeconfig)
-	}
-	if opts.LicenseKey != "" {
-		args = append(args, "--set", fmt.Sprintf("license.key=%s", opts.LicenseKey))
-	}
-	for _, plugin := range opts.Plugins {
-		args = append(args, "--set-string", fmt.Sprintf("plugins.install[%d]=%s", len(args), plugin))
-	}
-	cmd := exec.CommandContext(ctx, helm, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm install: %w", err)
-	}
-	return nil
+	return run(ctx, "install", opts)
 }
 
-// Upgrade runs `helm upgrade` for the nSelf chart with rolling update semantics.
+// Upgrade runs `helm upgrade` for the embedded nSelf chart. The generated
+// values are applied afresh (no --reuse-values), so a service removed from the
+// compose model disappears from the release.
 func Upgrade(ctx context.Context, opts InstallOptions) error {
+	return run(ctx, "upgrade", opts)
+}
+
+// run checks the generated values, extracts the chart and runs helm verb.
+func run(ctx context.Context, verb string, opts InstallOptions) error {
 	helm, err := helmBinary()
 	if err != nil {
 		return err
 	}
-	if opts.ReleaseName == "" {
-		opts.ReleaseName = HelmReleaseName
+	vf, err := ResolveValues(opts.ProjectDir)
+	if err != nil {
+		return err
 	}
-	args := []string{
-		"upgrade", opts.ReleaseName, "nself/nself",
-		"--reuse-values",
-		"--wait",
-		"--timeout", "5m",
+	root := opts.ChartRoot
+	if root == "" {
+		root = "charts/nself"
 	}
-	if opts.Kubeconfig != "" {
-		args = append(args, "--kubeconfig", opts.Kubeconfig)
+	chartDir, cleanup, err := ExtractChart(opts.Chart, root)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
+	overrides, err := writeOverrides(parentDir(chartDir), opts)
+	if err != nil {
+		return err
+	}
+	args := buildArgs(verb, opts, chartDir, vf, overrides)
 	cmd := exec.CommandContext(ctx, helm, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm upgrade: %w", err)
+		return fmt.Errorf("k8s: helm %s: %w", verb, err)
 	}
 	return nil
 }
@@ -112,34 +126,4 @@ func Status(ctx context.Context, releaseName, kubeconfig string) (string, error)
 		return "", fmt.Errorf("k8s: helm status: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// RepoAdd adds the nSelf Helm repository.
-func RepoAdd(ctx context.Context) error {
-	helm, err := helmBinary()
-	if err != nil {
-		return err
-	}
-	cmd := exec.CommandContext(ctx, helm, "repo", "add", "nself", ChartRepo)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm repo add: %w", err)
-	}
-	updateCmd := exec.CommandContext(ctx, helm, "repo", "update", "nself")
-	updateCmd.Stdout = os.Stdout
-	updateCmd.Stderr = os.Stderr
-	if err := updateCmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm repo update: %w", err)
-	}
-	return nil
-}
-
-// InstallOptions holds parameters for helm install/upgrade.
-type InstallOptions struct {
-	ReleaseName string
-	Domain      string
-	Kubeconfig  string
-	LicenseKey  string
-	Plugins     []string
 }
