@@ -1,28 +1,64 @@
-// Package k8s provides a thin wrapper around the Helm CLI for managing
-// nSelf Helm chart deployments (B50).
+// Package k8s runs the Helm CLI for the nSelf chart that the plugin embeds.
 //
-// Status: PLANNED — deferred. Requires UD-12 minor release approval.
-// The nSelf Helm chart lives in charts/nself/ at this plugin's repo root
-// (moved here from the core CLI's repo root under CLI-R11 — see
-// charts/nself/Chart.yaml's sources: field).
+// Purpose: install, upgrade and inspect the nSelf release. The chart is
+// extracted from the embedded filesystem to a private temp directory for each
+// call; the chart values come from `nself k8s values`
+// (.nself/generated/k8s/{values,secrets}.yaml) and are passed with --values.
+//
+// Inputs: InstallOptions (project dir, embedded chart, release, kubeconfig,
+// domain, licence key, plugins).
+//
+// Outputs: helm's stdout and stderr, inherited.
+//
+// Constraints: a secret value never appears on argv: secrets travel in the
+// generated secrets.yaml. The licence key is not given to helm at all until the
+// chart reads it (D-0311): helm stores every value in the release Secret.
+// The install overlay (domain, plugins) goes to helm on stdin (--values -), so
+// no overlay file exists to leave behind. helm runs with a cleaned environment
+// (env.go). The kubeconfig is passed with --kubeconfig only when the caller
+// gives one (the --cluster flag); otherwise helm reads KUBECONFIG itself. There
+// is no remote chart repository. buildArgs (args.go) assembles the argv so
+// tests can check it without running helm.
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 // HelmReleaseName is the default Helm release name used by nself k8s install.
 const HelmReleaseName = "nself"
 
-// ChartRepo is the Helm repository URL for the nSelf chart.
-const ChartRepo = "https://charts.nself.org"
+// DefaultTimeout is the default `helm --timeout` for install and upgrade.
+const DefaultTimeout = "10m"
 
 // ErrHelmNotFound is returned when the helm binary is not in PATH.
 var ErrHelmNotFound = fmt.Errorf("k8s: helm binary not found; install from https://helm.sh")
+
+// InstallOptions holds parameters for helm install/upgrade.
+type InstallOptions struct {
+	ReleaseName string
+	Domain      string
+	Kubeconfig  string
+	// LicenseKey is read from the environment but not passed to helm until the
+	// chart consumes it (D-0311); see HasUnusedLicence.
+	LicenseKey string
+	Plugins    []string
+	// ProjectDir holds .nself/generated/k8s (default ".").
+	ProjectDir string
+	// Chart is the filesystem holding the chart at ChartRoot (the embed.FS).
+	Chart fs.FS
+	// ChartRoot is the chart directory inside Chart.
+	ChartRoot string
+	// Wait makes helm wait until the release is ready; Timeout bounds it.
+	Wait    bool
+	Timeout string
+}
 
 // helmBinary locates the helm binary.
 func helmBinary() (string, error) {
@@ -33,113 +69,81 @@ func helmBinary() (string, error) {
 	return path, nil
 }
 
-// Install runs `helm install` for the nSelf chart.
+// Install runs `helm install` for the embedded nSelf chart.
 func Install(ctx context.Context, opts InstallOptions) error {
-	helm, err := helmBinary()
-	if err != nil {
-		return err
-	}
-	if opts.ReleaseName == "" {
-		opts.ReleaseName = HelmReleaseName
-	}
-	args := []string{
-		"install", opts.ReleaseName, "nself/nself",
-		"--set", fmt.Sprintf("domain=%s", opts.Domain),
-		"--wait",
-		"--timeout", "5m",
-	}
-	if opts.Kubeconfig != "" {
-		args = append(args, "--kubeconfig", opts.Kubeconfig)
-	}
-	if opts.LicenseKey != "" {
-		args = append(args, "--set", fmt.Sprintf("license.key=%s", opts.LicenseKey))
-	}
-	for _, plugin := range opts.Plugins {
-		args = append(args, "--set-string", fmt.Sprintf("plugins.install[%d]=%s", len(args), plugin))
-	}
-	cmd := exec.CommandContext(ctx, helm, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm install: %w", err)
-	}
-	return nil
+	return run(ctx, "install", opts)
 }
 
-// Upgrade runs `helm upgrade` for the nSelf chart with rolling update semantics.
+// Upgrade runs `helm upgrade` for the embedded nSelf chart. The generated
+// values are applied afresh (no --reuse-values), so a service removed from the
+// compose model disappears from the release.
 func Upgrade(ctx context.Context, opts InstallOptions) error {
+	return run(ctx, "upgrade", opts)
+}
+
+// run checks the generated values, extracts the chart and runs helm verb.
+func run(ctx context.Context, verb string, opts InstallOptions) error {
 	helm, err := helmBinary()
 	if err != nil {
 		return err
 	}
-	if opts.ReleaseName == "" {
-		opts.ReleaseName = HelmReleaseName
-	}
-	args := []string{
-		"upgrade", opts.ReleaseName, "nself/nself",
-		"--reuse-values",
-		"--wait",
-		"--timeout", "5m",
-	}
-	if opts.Kubeconfig != "" {
-		args = append(args, "--kubeconfig", opts.Kubeconfig)
-	}
-	cmd := exec.CommandContext(ctx, helm, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm upgrade: %w", err)
-	}
-	return nil
-}
-
-// Status returns the Helm release status summary.
-func Status(ctx context.Context, releaseName, kubeconfig string) (string, error) {
-	helm, err := helmBinary()
-	if err != nil {
-		return "", err
-	}
-	if releaseName == "" {
-		releaseName = HelmReleaseName
-	}
-	args := []string{"status", releaseName, "--output", "json"}
-	if kubeconfig != "" {
-		args = append(args, "--kubeconfig", kubeconfig)
-	}
-	cmd := exec.CommandContext(ctx, helm, args...)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("k8s: helm status: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// RepoAdd adds the nSelf Helm repository.
-func RepoAdd(ctx context.Context) error {
-	helm, err := helmBinary()
+	vf, err := ResolveValues(opts.ProjectDir)
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, helm, "repo", "add", "nself", ChartRepo)
+	root := opts.ChartRoot
+	if root == "" {
+		root = "charts/nself"
+	}
+	chartDir, cleanup, err := ExtractChart(opts.Chart, root)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	overlay, err := overridesYAML(opts)
+	if err != nil {
+		return err
+	}
+	args := buildArgs(verb, opts, chartDir, vf, len(overlay) > 0)
+	announceTarget(os.Stderr, opts.Kubeconfig)
+	cmd := exec.CommandContext(ctx, helm, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm repo add: %w", err)
+	cmd.Env = helmEnv(os.Environ())
+	if len(overlay) > 0 {
+		cmd.Stdin = bytes.NewReader(overlay)
 	}
-	updateCmd := exec.CommandContext(ctx, helm, "repo", "update", "nself")
-	updateCmd.Stdout = os.Stdout
-	updateCmd.Stderr = os.Stderr
-	if err := updateCmd.Run(); err != nil {
-		return fmt.Errorf("k8s: helm repo update: %w", err)
+	if err := cmd.Run(); err != nil {
+		return runError(verb, opts, err)
 	}
 	return nil
 }
 
-// InstallOptions holds parameters for helm install/upgrade.
-type InstallOptions struct {
-	ReleaseName string
-	Domain      string
-	Kubeconfig  string
-	LicenseKey  string
-	Plugins     []string
+// runError wraps a helm failure. A failed first install leaves the release in
+// state "failed": helm then refuses both install ("cannot re-use a name that is
+// still in use") and upgrade ("has no deployed releases"), so say how to leave it.
+func runError(verb string, opts InstallOptions, err error) error {
+	if verb != "install" {
+		return fmt.Errorf("k8s: helm %s: %w", verb, err)
+	}
+	release := opts.ReleaseName
+	if release == "" {
+		release = HelmReleaseName
+	}
+	return fmt.Errorf("k8s: helm install: %w\nIf the release was left in a failed state, remove it with 'helm uninstall %s' "+
+		"(add --kubeconfig for your cluster) and run 'nself k8s install' again; 'nself k8s upgrade' only works once a "+
+		"revision is deployed", err, release)
+}
+
+// announceTarget tells which kubeconfig helm will use, so a stale current
+// context that points at a real cluster is visible before anything is applied.
+func announceTarget(w io.Writer, kubeconfig string) {
+	switch {
+	case kubeconfig != "":
+		fmt.Fprintf(w, "k8s: target kubeconfig %s (--cluster)\n", kubeconfig)
+	case os.Getenv("KUBECONFIG") != "":
+		fmt.Fprintf(w, "k8s: target kubeconfig %s (KUBECONFIG)\n", os.Getenv("KUBECONFIG"))
+	default:
+		fmt.Fprintln(w, "k8s: target kubeconfig ~/.kube/config (current context)")
+	}
 }
