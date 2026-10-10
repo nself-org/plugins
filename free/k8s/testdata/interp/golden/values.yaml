@@ -1,0 +1,38 @@
+project: interp
+services:
+  api:
+    kind: deployment
+    image: hasura/graphql-engine
+    tag: v2.50.1
+    env:
+      - API_DB_URL
+    ports:
+      - port: 8080
+        protocol: TCP
+  db:
+    kind: statefulset
+    image: postgres
+    tag: 16-alpine
+    env:
+      - POSTGRES_DB
+      - POSTGRES_PASSWORD
+    mounts:
+      - volume: db_data
+        path: /var/lib/postgresql/data
+  demo:
+    kind: deployment
+    image: ghcr.io/example/demo
+    tag: 1.2.3
+    env:
+      - DEMO_GREETING
+      - DEMO_TOKEN
+    ports:
+      - port: 8090
+        protocol: TCP
+volumes:
+  db_data:
+    claim: db-data
+ingress:
+  rules: []
+unsupported: []
+unmappedRoutes: []

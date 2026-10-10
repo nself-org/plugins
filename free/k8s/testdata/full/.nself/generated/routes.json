@@ -1,0 +1,210 @@
+{
+  "schema_version": "1",
+  "project": "proxy-full",
+  "routes": [
+    {
+      "id": "core:auth",
+      "server_names": [
+        "auth.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "auth",
+            "port": 4000
+          }
+        }
+      ]
+    },
+    {
+      "id": "core:hasura",
+      "server_names": [
+        "api.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "hasura",
+            "port": 8080
+          }
+        }
+      ]
+    },
+    {
+      "id": "core:storage",
+      "server_names": [
+        "storage.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "minio",
+            "port": 9000
+          }
+        }
+      ]
+    },
+    {
+      "id": "core:storage-console",
+      "server_names": [
+        "storage-console.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "minio",
+            "port": 9001
+          }
+        }
+      ]
+    },
+    {
+      "id": "cs:1",
+      "server_names": [
+        "worker-one.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "worker-one",
+            "port": 9011
+          }
+        }
+      ]
+    },
+    {
+      "id": "cs:2",
+      "server_names": [
+        "worker-two.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "worker-two",
+            "port": 9012
+          }
+        }
+      ]
+    },
+    {
+      "id": "frontend:1",
+      "server_names": [
+        "web.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "host.docker.internal",
+            "port": 3000
+          }
+        }
+      ]
+    },
+    {
+      "id": "internal:1",
+      "server_names": [
+        "internal-one.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "worker-one",
+            "port": 9011
+          }
+        }
+      ]
+    },
+    {
+      "id": "internal:2",
+      "server_names": [
+        "internal-two.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "https",
+            "host": "worker-two",
+            "port": 9012
+          }
+        }
+      ]
+    },
+    {
+      "id": "optional:functions",
+      "server_names": [
+        "functions.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "functions",
+            "port": 3008
+          }
+        }
+      ]
+    },
+    {
+      "id": "optional:mail",
+      "server_names": [
+        "mail.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "mailpit",
+            "port": 8025
+          }
+        }
+      ]
+    },
+    {
+      "id": "optional:search",
+      "server_names": [
+        "search.example.test"
+      ],
+      "locations": [
+        {
+          "path": "/",
+          "match": "prefix",
+          "upstream": {
+            "scheme": "http",
+            "host": "meilisearch",
+            "port": 7700
+          }
+        }
+      ]
+    }
+  ]
+}

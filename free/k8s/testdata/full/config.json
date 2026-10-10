@@ -1,0 +1,1032 @@
+{
+  "name": "proxy-full",
+  "networks": {
+    "proxy-full_network": {
+      "driver": "bridge",
+      "ipam": {},
+      "name": "proxy-full_network"
+    }
+  },
+  "services": {
+    "auth": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_auth",
+      "depends_on": {
+        "hasura": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "postgres": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 0.25,
+            "memory": "268435456",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "AUTH_ACCESS_TOKEN_EXPIRES_IN": "900",
+        "AUTH_ALLOWED_REDIRECT_URLS": "https://example.test,https://*.example.test,http://localhost:3000,https://web.example.test",
+        "AUTH_CLIENT_URL": "http://localhost:3000",
+        "AUTH_DATABASE_URL": "fixture-database-url",
+        "AUTH_DB_HOST": "postgres",
+        "AUTH_DB_NAME": "nself",
+        "AUTH_DB_PASSWORD": "fixture-postgres-password",
+        "AUTH_DB_PORT": "5432",
+        "AUTH_DB_URL": "fixture-database-url",
+        "AUTH_DB_USER": "postgres",
+        "AUTH_EMAIL_SIGNIN_EMAIL_VERIFIED_REQUIRED": "false",
+        "AUTH_HOST": "0.0.0.0",
+        "AUTH_JWT_SECRET": "fixture-hasura-jwt-key",
+        "AUTH_JWT_TYPE": "HS256",
+        "AUTH_LOG_LEVEL": "info",
+        "AUTH_PORT": "4000",
+        "AUTH_REFRESH_TOKEN_EXPIRES_IN": "2592000",
+        "AUTH_SERVER_URL": "http://localhost:4000",
+        "AUTH_SMTP_HOST": "mailpit",
+        "AUTH_SMTP_PASS": "",
+        "AUTH_SMTP_PORT": "1025",
+        "AUTH_SMTP_SECURE": "false",
+        "AUTH_SMTP_SENDER": "noreply@example.test",
+        "AUTH_SMTP_USER": "",
+        "AUTH_WEBAUTHN_ENABLED": "false",
+        "DATABASE_URL": "fixture-database-url",
+        "HASURA_GRAPHQL_ADMIN_SECRET": "fixture-hasura-graphql-admin-secret",
+        "HASURA_GRAPHQL_DATABASE_URL": "fixture-database-url",
+        "HASURA_GRAPHQL_GRAPHQL_URL": "http://hasura:8080/v1/graphql",
+        "HASURA_GRAPHQL_JWT_SECRET": "{\"key\":\"fixture-hasura-jwt-key\",\"type\":\"HS256\"}",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PORT": "5432"
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "start_period": "30s",
+        "test": [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://localhost:4000/healthz"
+        ],
+        "timeout": "10s"
+      },
+      "image": "nhost/hasura-auth:0.36.0",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "4000",
+          "target": 4000
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ]
+    },
+    "functions": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_functions",
+      "depends_on": {
+        "hasura": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "postgres": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 0.5,
+            "memory": "268435456",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "DATABASE_URL": "postgres://postgres:fixture-postgres-password@postgres:5432/nself",
+        "HASURA_GRAPHQL_ADMIN_SECRET": "fixture-hasura-graphql-admin-secret",
+        "HASURA_GRAPHQL_ENDPOINT": "http://hasura:8080/v1/graphql",
+        "PORT": "3008"
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "start_period": "40s",
+        "test": [
+          "CMD-SHELL",
+          "curl -f http://localhost:3008/healthz"
+        ],
+        "timeout": "10s"
+      },
+      "image": "nhost/functions:latest",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "3008",
+          "target": 3008
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ],
+      "volumes": [
+        {
+          "bind": {},
+          "source": "/project/functions",
+          "target": "/opt/project",
+          "type": "bind"
+        }
+      ]
+    },
+    "hasura": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_hasura",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 1,
+            "memory": "1073741824",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "ACTION_HANDLER_URL": "http://functions:3008",
+        "HASURA_GRAPHQL_ADMIN_SECRET": "fixture-hasura-graphql-admin-secret",
+        "HASURA_GRAPHQL_CORS_DOMAIN": "http://localhost:*",
+        "HASURA_GRAPHQL_DATABASE_URL": "fixture-database-url",
+        "HASURA_GRAPHQL_DEV_MODE": "true",
+        "HASURA_GRAPHQL_ENABLE_CONSOLE": "true",
+        "HASURA_GRAPHQL_ENABLE_TELEMETRY": "false",
+        "HASURA_GRAPHQL_JWT_SECRET": "{\"key\":\"fixture-hasura-jwt-key\",\"type\":\"HS256\"}",
+        "HASURA_GRAPHQL_LOG_LEVEL": "warn",
+        "HASURA_GRAPHQL_UNAUTHORIZED_ROLE": "public"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 5,
+        "start_period": "15s",
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8080/healthz"
+        ],
+        "timeout": "5s"
+      },
+      "image": "hasura/graphql-engine:v2.44.0",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "8080",
+          "target": 8080
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ],
+      "user": "1001:1001"
+    },
+    "mailpit": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_mailpit",
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 1,
+            "memory": "536870912",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "MP_MAX_MESSAGES": "500",
+        "MP_SMTP_AUTH_ACCEPT_ANY": "1",
+        "MP_SMTP_AUTH_ALLOW_INSECURE": "1",
+        "MP_SMTP_BIND_ADDR": "0.0.0.0:1025",
+        "MP_UI_BIND_ADDR": "0.0.0.0:8025"
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "test": [
+          "CMD",
+          "nc",
+          "-z",
+          "localhost",
+          "8025"
+        ],
+        "timeout": "10s"
+      },
+      "image": "axllent/mailpit:latest",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "1025",
+          "target": 1025
+        },
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "8025",
+          "target": 8025
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ],
+      "user": "1000:1000"
+    },
+    "meilisearch": {
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "meilisearch",
+        "--db-path=/meili_data"
+      ],
+      "container_name": "proxy-full_meilisearch",
+      "depends_on": {
+        "meilisearch-init": {
+          "condition": "service_completed_successfully",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 1,
+            "memory": "536870912",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "MEILI_ENV": "development",
+        "MEILI_MASTER_KEY": ""
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:7700/health"
+        ],
+        "timeout": "10s"
+      },
+      "image": "getmeili/meilisearch:v1.6",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "7700",
+          "target": 7700
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ],
+      "user": "1000:1000",
+      "volumes": [
+        {
+          "source": "meilisearch_data",
+          "target": "/meili_data",
+          "type": "volume",
+          "volume": {}
+        }
+      ]
+    },
+    "meilisearch-init": {
+      "cap_add": [
+        "CHOWN",
+        "FOWNER",
+        "DAC_READ_SEARCH"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "sh",
+        "-c",
+        "chown -R 1000:1000 /data; chmod -R 755 /data"
+      ],
+      "container_name": "proxy-full_meilisearch_init",
+      "entrypoint": null,
+      "image": "busybox:1.36",
+      "labels": {
+        "nself.auto-remove": "true",
+        "nself.service": "meilisearch",
+        "nself.type": "init-container"
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "read_only": true,
+      "restart": "no",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ],
+      "user": "root",
+      "volumes": [
+        {
+          "source": "meilisearch_data",
+          "target": "/data",
+          "type": "volume",
+          "volume": {}
+        }
+      ]
+    },
+    "minio": {
+      "cap_add": [
+        "CHOWN",
+        "SETUID",
+        "SETGID"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "server",
+        "/data",
+        "--console-address",
+        ":9001"
+      ],
+      "container_name": "proxy-full_minio",
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 1,
+            "memory": "536870912",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "MINIO_DEFAULT_BUCKETS": "uploads,public,private,temp",
+        "MINIO_DISABLE_XATTR": "on",
+        "MINIO_ROOT_PASSWORD": "minioadmin",
+        "MINIO_ROOT_USER": "minioadmin"
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 5,
+        "start_period": "30s",
+        "test": [
+          "CMD",
+          "mc",
+          "ready",
+          "local"
+        ],
+        "timeout": "10s"
+      },
+      "image": "docker.io/pgsty/minio:latest",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "9000",
+          "target": 9000
+        },
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "9001",
+          "target": 9001
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ],
+      "volumes": [
+        {
+          "source": "minio_data",
+          "target": "/data",
+          "type": "volume",
+          "volume": {}
+        }
+      ]
+    },
+    "nginx": {
+      "cap_add": [
+        "NET_BIND_SERVICE",
+        "DAC_READ_SEARCH",
+        "CHOWN",
+        "SETUID",
+        "SETGID"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_nginx",
+      "depends_on": {
+        "auth": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "hasura": {
+          "condition": "service_healthy",
+          "required": true
+        },
+        "worker-one": {
+          "condition": "service_started",
+          "required": true
+        },
+        "worker-two": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 0.5,
+            "memory": "268435456",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "BASE_DOMAIN": "example.test",
+        "ENV": "dev",
+        "PROJECT_NAME": "proxy-full"
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "start_period": "10s",
+        "test": [
+          "CMD-SHELL",
+          "wget --no-check-certificate --no-verbose --tries=1 -O /dev/null https://127.0.0.1/health 2>/dev/null || exit 1"
+        ],
+        "timeout": "5s"
+      },
+      "image": "nginx:alpine",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "80",
+          "target": 80
+        },
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "443",
+          "target": 443
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/var/cache/nginx:uid=101,gid=101,mode=0777",
+        "/var/run:uid=101,gid=101,mode=0777"
+      ],
+      "volumes": [
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/nginx/nginx.conf",
+          "target": "/etc/nginx/nginx.conf",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/nginx/conf.d",
+          "target": "/etc/nginx/conf.d",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/nginx/conf.d-dev",
+          "target": "/etc/nginx/conf.d-dev",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/nginx/sites",
+          "target": "/etc/nginx/sites",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/nginx/includes",
+          "target": "/etc/nginx/includes",
+          "type": "bind"
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/ssl",
+          "target": "/etc/nginx/ssl",
+          "type": "bind"
+        }
+      ]
+    },
+    "postgres": {
+      "cap_add": [
+        "CHOWN",
+        "SETUID",
+        "SETGID",
+        "IPC_LOCK"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": [
+        "postgres",
+        "-c",
+        "max_connections=200",
+        "-c",
+        "shared_buffers=256MB"
+      ],
+      "container_name": "proxy-full_postgres",
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 2,
+            "memory": "2147483648",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "POSTGRES_DB": "nself",
+        "POSTGRES_HOST_AUTH_METHOD": "scram-sha-256",
+        "POSTGRES_PASSWORD": "fixture-postgres-password",
+        "POSTGRES_USER": "postgres"
+      },
+      "healthcheck": {
+        "interval": "10s",
+        "retries": 5,
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U postgres"
+        ],
+        "timeout": "5s"
+      },
+      "image": "postgres:16-alpine",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "5432",
+          "target": 5432
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "shm_size": "268435456",
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run/postgresql"
+      ],
+      "user": "70:70",
+      "volumes": [
+        {
+          "source": "postgres_data",
+          "target": "/var/lib/postgresql/data",
+          "type": "volume",
+          "volume": {}
+        },
+        {
+          "bind": {},
+          "read_only": true,
+          "source": "/project/postgres/init",
+          "target": "/docker-entrypoint-initdb.d",
+          "type": "bind"
+        }
+      ]
+    },
+    "worker-one": {
+      "build": {
+        "context": "/project/services/worker-one",
+        "dockerfile": "Dockerfile"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_worker-one",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 0.5,
+            "memory": "268435456",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "AUTH_CLIENT_URL": "http://localhost:3000",
+        "AUTH_SERVER_URL": "http://auth:4000",
+        "BASE_DOMAIN": "example.test",
+        "DATABASE_URL": "fixture-database-url",
+        "ENV": "dev",
+        "HASURA_GRAPHQL_ADMIN_SECRET": "fixture-hasura-graphql-admin-secret",
+        "HASURA_GRAPHQL_ENDPOINT": "http://hasura:8080/v1/graphql",
+        "POSTGRES_DB": "nself",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PASSWORD": "fixture-postgres-password",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_USER": "postgres",
+        "PROJECT_NAME": "proxy-full",
+        "S3_ACCESS_KEY": "minioadmin",
+        "S3_BUCKET": "uploads,public,private,temp",
+        "S3_ENDPOINT": "http://minio:9000",
+        "S3_SECRET_KEY": "minioadmin",
+        "SERVICE_NAME": "worker-one",
+        "SERVICE_PORT": "9011",
+        "SERVICE_ROUTE": "worker-one",
+        "TABLE_PREFIX": ""
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "start_period": "1m0s",
+        "test": [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:9011/health"
+        ],
+        "timeout": "10s"
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "9011",
+          "target": 9011
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ]
+    },
+    "worker-two": {
+      "build": {
+        "context": "/project/services/worker-two",
+        "dockerfile": "Dockerfile"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "container_name": "proxy-full_worker-two",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy",
+          "required": true
+        }
+      },
+      "deploy": {
+        "placement": {},
+        "resources": {
+          "limits": {
+            "cpus": 0.5,
+            "memory": "268435456",
+            "pids": 100
+          },
+          "reservations": {
+            "memory": "268435456"
+          }
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "AUTH_CLIENT_URL": "http://localhost:3000",
+        "AUTH_SERVER_URL": "http://auth:4000",
+        "BASE_DOMAIN": "example.test",
+        "DATABASE_URL": "fixture-database-url",
+        "ENV": "dev",
+        "HASURA_GRAPHQL_ADMIN_SECRET": "fixture-hasura-graphql-admin-secret",
+        "HASURA_GRAPHQL_ENDPOINT": "http://hasura:8080/v1/graphql",
+        "POSTGRES_DB": "nself",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PASSWORD": "fixture-postgres-password",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_USER": "postgres",
+        "PROJECT_NAME": "proxy-full",
+        "S3_ACCESS_KEY": "minioadmin",
+        "S3_BUCKET": "uploads,public,private,temp",
+        "S3_ENDPOINT": "http://minio:9000",
+        "S3_SECRET_KEY": "minioadmin",
+        "SERVICE_NAME": "worker-two",
+        "SERVICE_PORT": "9012",
+        "SERVICE_ROUTE": "worker-two",
+        "TABLE_PREFIX": ""
+      },
+      "healthcheck": {
+        "interval": "30s",
+        "retries": 3,
+        "start_period": "1m0s",
+        "test": [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:9012/health"
+        ],
+        "timeout": "10s"
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "3",
+          "max-size": "10m"
+        }
+      },
+      "networks": {
+        "proxy-full_network": null
+      },
+      "ports": [
+        {
+          "host_ip": "127.0.0.1",
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "9012",
+          "target": 9012
+        }
+      ],
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "stop_grace_period": "30s",
+      "tmpfs": [
+        "/tmp",
+        "/run"
+      ]
+    }
+  },
+  "volumes": {
+    "meilisearch_data": {
+      "name": "proxy-full_meilisearch_data"
+    },
+    "minio_data": {
+      "name": "proxy-full_minio_data"
+    },
+    "postgres_data": {
+      "name": "proxy-full_postgres_data"
+    }
+  }
+}

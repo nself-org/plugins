@@ -1,20 +1,25 @@
-nSelf has been installed!
+nSelf has been installed.
 
-Your stack will be available at:
-  https://{{ .Values.domain }}
+{{- if .Values.ingress.rules }}
 
-GraphQL endpoint:
-  https://{{ .Values.domain }}/v1/graphql
+Routes:
+{{- range .Values.ingress.rules }}
+  {{ if $.Values.tls.enabled }}https{{ else }}http{{ end }}://{{ .host }}  ->  {{ .service }}:{{ .port }}
+{{- end }}
+{{- else }}
 
-Auth endpoint:
-  https://{{ .Values.domain }}/v1/auth
+No Ingress rules were generated (the project has no nginx routes that map to a workload).
+{{- end }}
+{{- if .Values.unsupported }}
 
-Next steps:
-  1. Ensure cert-manager is installed and a ClusterIssuer named "{{ .Values.tls.issuerName }}" exists.
-  2. Point your domain DNS to the cluster's ingress IP.
-  3. Run 'nself k8s status' to check the release status.
+Not deployed (no Kubernetes mapping):
+{{- range .Values.unsupported }}
+  {{ .name }}: {{ .reason }}
+{{- end }}
+{{- end }}
+{{- if .Values.tls.certManager }}
 
-To install plugins:
-  Set NSELF_PLUGIN_LICENSE_KEY and re-install with --plugins.
+cert-manager must be installed and a ClusterIssuer named "{{ .Values.tls.issuerName }}" must exist.
+{{- end }}
 
-Docs: https://nself.org/docs/guides/kubernetes
+Run 'nself k8s status' to check the release.

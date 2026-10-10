@@ -1,0 +1,10 @@
+Fixture: output of `nself build` for the cli fixture internal/build/testdata/proxy/full.
+cli sha:   165953ef (nself-org/cli main, 2026-10-10)
+Recorded:  2026-10-10, docker-compose 5.6.0
+Steps:
+  1. go build ./cmd/nself at 165953ef; copy internal/build/testdata/proxy/full/project.env.fixture to a new dir as .env; run `nself build`.
+  2. config.json = `docker-compose --env-file .env --env-file .nself/compose.env -f docker-compose.yml config --format json` (sorted keys).
+  3. .nself/generated/routes.json = the build's routes.json reduced to id, server_names and the "/" location of each route.
+  4. Scrub: the build directory became /project; every generated secret (admin secret, JWT key, postgres password, database URLs, internal secrets) became fixture-<key-name>.
+  5. golden/*.yaml = `UPDATE_GOLDEN=1 go test ./internal/values/` output, reviewed by hand.
+.nself/compose-files.txt and compose-env-files.txt hold the relative lines `nself build` wrote as absolute paths.
