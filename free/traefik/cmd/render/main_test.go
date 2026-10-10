@@ -49,3 +49,29 @@ func TestRunExitCodesAndNoPartialFile(t *testing.T) {
 		t.Fatalf("invalid input: exit %d", rc)
 	}
 }
+
+// TestUnknownFieldIsRefusedAndNothingIsWritten: an unknown restriction field
+// exits 1, names the field, and leaves the output directory empty.
+func TestUnknownFieldIsRefusedAndNothingIsWritten(t *testing.T) {
+	src, err := os.ReadFile(fx("http-full"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := strings.Replace(string(src), `"deny_all":`, `"allow_cidrs": ["10.0.0.0/8"], "deny_all":`, 1)
+	if patched == string(src) {
+		t.Fatal("fixture has no deny_all to patch")
+	}
+	in := filepath.Join(t.TempDir(), "routes.json")
+	if err := os.WriteFile(in, []byte(patched), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := t.TempDir()
+	var errb bytes.Buffer
+	rc := run([]string{"--routes", in, "--out", out, "--ssl", t.TempDir()}, &errb)
+	if rc != 1 || !strings.Contains(errb.String(), "allow_cidrs") {
+		t.Fatalf("exit %d, stderr %q", rc, errb.String())
+	}
+	if ents, _ := os.ReadDir(out); len(ents) != 0 {
+		t.Fatalf("a refusal wrote files: %v", ents)
+	}
+}

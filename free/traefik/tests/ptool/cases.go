@@ -256,21 +256,22 @@ func rates(r *runner, m routes, get func(route, string) req) {
 					}
 					if res.status == 429 {
 						limited++
-					} else if res.status == 200 {
-						ok++
+					} else {
+						ok++ // admitted: any answer that is not the limiter's 429
 					}
 				}
 				return
 			}
+			// earlier matrix requests drained this bucket: let both fill again so the burst is comparable
+			time.Sleep(refillWait(l.burst, perSec))
 			fa, oa, la := count(r.n)
 			fb, ob, lb := count(r.t)
 			label := fmt.Sprintf("%s rate %s burst %d", rt.ID, l.path, l.burst)
-			switch {
-			case la == 0 || lb == 0:
-				r.fail(label, fmt.Sprintf("nginx first=%d ok=%d 429=%d; traefik first=%d ok=%d 429=%d", fa, oa, la, fb, ob, lb))
-			case oa > allowed(l.burst, perSec, spent[0]) || ob > allowed(l.burst, perSec, spent[1]):
-				r.fail(label, fmt.Sprintf("admitted before 429: nginx=%d (max %d) traefik=%d (max %d)", oa, allowed(l.burst, perSec, spent[0]), ob, allowed(l.burst, perSec, spent[1])))
-			default:
+			a := burstRun{first: fa, admitted: oa, limited: la, max: allowed(l.burst, perSec, spent[0])}
+			b := burstRun{first: fb, admitted: ob, limited: lb, max: allowed(l.burst, perSec, spent[1])}
+			if msg := judgeBurst(l.burst, a, b); msg != "" {
+				r.fail(label, msg)
+			} else {
 				r.ok(fmt.Sprintf("%s (admitted nginx=%d traefik=%d, then 429)", label, oa, ob))
 			}
 			time.Sleep(2 * time.Second)

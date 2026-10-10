@@ -28,11 +28,11 @@ Rendered from the model: routers per (route, location) with nginx longest-prefix
 
 ## Refusals
 
-The renderer exits 1, names the route id and field, and writes nothing when the model holds something it cannot express: a route with `unmodelled` or `shadowed_by`, a non-empty `unmodelled_global`, an unknown rate zone key, `limit_req` without `nodelay`, a send timeout, a header value holding an nginx variable, a redirect target other than `https://$host$request_uri`, or a certificate lineage that is missing. The previous `dynamic.yml` stays in place.
+The renderer exits 1, names the route id and field, and writes nothing when the model holds something it cannot express: a route with `unmodelled` or `shadowed_by`, a non-empty `unmodelled_global`, an unknown rate zone key, `limit_req` without `nodelay`, a send timeout, a header value holding an nginx variable, a redirect target other than `https://$host$request_uri`, a certificate lineage that is missing, or any `routes.json` field the renderer does not model (a new restriction must never render as an unrestricted route, so the plugin is updated together with the contract). The previous `dynamic.yml` stays in place, so a running Traefik keeps serving the last good configuration after a refusal; watch the `traefik-config` exit code.
 
 ## No Docker socket, certificates from core
 
-No service mounts `/var/run/docker.sock` or sets `DOCKER_HOST`; there is no Docker provider and no `certificatesResolvers` section. Certificates stay core-issued (ADR 0026): `dynamic.yml` points each `certFile` and `keyFile` at the resolved generation directory of the lineage (`ssl/certificates/.<dir>.gen-<n>/`), so a renewal changes the parsed configuration and the file provider reloads. `ssl/` is mounted read-only in every service.
+No service mounts `/var/run/docker.sock` or sets `DOCKER_HOST`; there is no Docker provider and no `certificatesResolvers` section. Certificates stay core-issued (ADR 0026): `dynamic.yml` points each `certFile` and `keyFile` at the resolved generation directory of the lineage (`ssl/certificates/.<dir>.gen-<n>/`), so a renewal changes the parsed configuration and the file provider reloads. `ssl/` is mounted read-only in every service. The renderer only resolves the generation link and checks that `fullchain.pem` and `privkey.pem` exist (it never reads key bytes); Traefik reads them itself.
 
 ## Known differences from nginx
 

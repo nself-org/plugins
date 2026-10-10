@@ -161,6 +161,9 @@ func TestRefusesInexpressibleValues(t *testing.T) {
 			}{301, &to}
 		}},
 		{"blocked regex", "blocked_paths[0].regex", func(m *contract.Model) { m.Routes[0].BlockedPaths[0].Regex = "(?!x)" }},
+		{"upstream host query", ".upstream", func(m *contract.Model) { m.Routes[0].Locations[0].Upstream.Host = "api?x=1" }},
+		{"upstream host fragment", ".upstream", func(m *contract.Model) { m.Routes[0].Locations[0].Upstream.Host = "api#x" }},
+		{"upstream host backtick", ".upstream", func(m *contract.Model) { m.Routes[0].Locations[0].Upstream.Host = "api`x" }},
 		{"cipher", "tls.ciphers", func(m *contract.Model) { c := "RC4-MD5"; m.Routes[len(m.Routes)-1].TLS.Ciphers = &c }},
 	}
 	for _, c := range cases {
@@ -239,4 +242,15 @@ func splitHeader(b []byte) (string, []byte) {
 		i += j + 1
 	}
 	return string(b[:i]), b[i:]
+}
+
+// TestBadDefaultActionRefusedWithoutTLS: the https action is checked even when
+// no route has TLS (an HTTP-only model must not hide a bad action).
+func TestBadDefaultActionRefusedWithoutTLS(t *testing.T) {
+	m := fixture(t, "http-full")
+	m.DefaultServer.HTTPS.Action = "teapot"
+	_, err := Render(m, Options{})
+	if err == nil || !strings.Contains(err.Error(), "default_server.https.action") {
+		t.Fatalf("want a default_server.https.action refusal, got %v", err)
+	}
 }

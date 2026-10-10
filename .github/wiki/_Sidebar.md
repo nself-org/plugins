@@ -162,6 +162,7 @@
 - [[TMDB|plugins/TMDB]]
 - [[Tokens|plugins/Tokens]]
 - [[Torrent-Manager|plugins/Torrent-Manager]]
+- [[Traefik|plugins/Traefik]]
 - [[Transactional-Email|plugins/Transactional-Email]]
 - [[VPN|plugins/VPN]]
 - [[WAF|plugins/WAF]]

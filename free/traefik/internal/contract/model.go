@@ -3,14 +3,16 @@
 // packages: it reads this file and nothing else (ADR 0027).
 //
 // Inputs: a routes.json byte stream. Outputs: Model. Constraints: field names
-// and meaning follow the contract; additive v1 fields the renderer does not know
-// are ignored by Load, and every field below is either rendered or refused.
+// and meaning follow the contract. Load fails closed on any field the renderer
+// does not know (a new restriction would otherwise render as an unrestricted
+// route), and every field below is either rendered or refused.
 package contract
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Marker is the first key's value of every routes.json.
@@ -135,8 +137,16 @@ type Location struct {
 // Load decodes and sanity-checks a routes.json.
 func Load(r io.Reader) (*Model, error) {
 	var m Model
-	if err := json.NewDecoder(r).Decode(&m); err != nil {
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&m); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return nil, fmt.Errorf("routes.json: %w (a field this renderer does not model; update the plugin with the contract instead of dropping it)", err)
+		}
 		return nil, fmt.Errorf("routes.json: %w", err)
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, fmt.Errorf("routes.json: trailing data after the JSON value")
 	}
 	if m.Generated != Marker {
 		return nil, fmt.Errorf("routes.json: missing the generated marker")

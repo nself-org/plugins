@@ -2,7 +2,7 @@ package render
 
 import (
 	"fmt"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/nself-org/plugins/free/traefik/internal/contract"
@@ -15,12 +15,16 @@ const (
 	wsReadS     = 86400
 )
 
+// upstreamHostRE is a compose service name or DNS name (underscore allowed). It
+// keeps ?, #, backticks and other URL syntax out of the service URL.
+var upstreamHostRE = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
 // service registers the load balancer for one upstream and returns its name.
 // The serversTransport carries the timeouts; https upstreams are not verified,
 // which is nginx's default for proxy_pass https.
 func (b *builder) service(route, field string, l contract.Location, passHost bool) string {
 	u := l.Upstream
-	if u.Scheme != "http" && u.Scheme != "https" || u.Host == "" || u.Port <= 0 || strings.ContainsAny(u.Host, "/@ ") {
+	if u.Scheme != "http" && u.Scheme != "https" || u.Host == "" || u.Port <= 0 || !upstreamHostRE.MatchString(u.Host) {
 		b.refuse(route, field+".upstream", fmt.Sprintf("%s://%s:%d is not a plain upstream", u.Scheme, u.Host, u.Port))
 		return ""
 	}
