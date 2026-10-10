@@ -1,0 +1,73 @@
+{
+  "name": "interp",
+  "networks": {
+    "default": {
+      "ipam": {},
+      "name": "interp_default"
+    }
+  },
+  "services": {
+    "api": {
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "API_DB_URL": "postgres://postgres:fixture-db-password@db:5432/app"
+      },
+      "image": "hasura/graphql-engine:v2.50.1",
+      "networks": {
+        "default": null
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "protocol": "tcp",
+          "published": "8080",
+          "target": 8080
+        }
+      ],
+      "restart": "unless-stopped"
+    },
+    "db": {
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "POSTGRES_DB": "app",
+        "POSTGRES_PASSWORD": "fixture-db-password"
+      },
+      "image": "postgres:16-alpine",
+      "networks": {
+        "default": null
+      },
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "source": "db_data",
+          "target": "/var/lib/postgresql/data",
+          "type": "volume",
+          "volume": {}
+        }
+      ]
+    },
+    "demo": {
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "DEMO_GREETING": "hello",
+        "DEMO_TOKEN": "fixture-demo-token"
+      },
+      "expose": [
+        "8090"
+      ],
+      "image": "ghcr.io/example/demo:1.2.3",
+      "networks": {
+        "default": null
+      },
+      "restart": "unless-stopped"
+    }
+  },
+  "volumes": {
+    "db_data": {
+      "name": "interp_db_data"
+    }
+  }
+}

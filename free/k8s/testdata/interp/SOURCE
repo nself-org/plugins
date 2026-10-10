@@ -1,0 +1,7 @@
+Fixture: hand-written compose project that exercises ${VAR:-default} in core services and a plugin
+fragment (plugins/demo/compose.yml) interpolating from its own env file (plugins/demo/demo.vars).
+Recorded: 2026-10-10, docker-compose 5.6.0
+config.json = `docker-compose --env-file .nself/interp.vars --env-file plugins/demo/demo.vars \
+  -f docker-compose.yml -f plugins/demo/compose.yml config --format json` (sorted keys), run in this directory.
+TestRealComposeMatchesRecording re-runs real compose over this directory (skipped when compose is absent)
+and requires the same values and secrets as the recording gives. Env files avoid the name `.env` (gitignored).

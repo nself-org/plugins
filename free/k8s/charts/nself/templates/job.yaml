@@ -1,0 +1,23 @@
+{{- /* Compose services with restart "no" run once, after the workloads exist. */ -}}
+{{- range $name, $svc := .Values.services }}
+{{- if eq $svc.kind "job" }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    {{- include "nself.labels" (dict "root" $ "name" $name) | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "nself.labels" (dict "root" $ "name" $name) | nindent 8 }}
+    spec:
+      {{- include "nself.pod" (dict "root" $ "name" $name "svc" $svc "restart" "Never") | nindent 6 }}
+{{- end }}
+{{- end }}

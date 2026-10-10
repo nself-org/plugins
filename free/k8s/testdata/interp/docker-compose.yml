@@ -1,0 +1,19 @@
+name: interp
+services:
+  db:
+    image: postgres:${PG_TAG:-16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme-default}
+      POSTGRES_DB: ${DB_NAME:-app}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+  api:
+    image: ${API_IMAGE:-hasura/graphql-engine}:${API_TAG:-v2.44.0}
+    restart: unless-stopped
+    environment:
+      API_DB_URL: postgres://postgres:${DB_PASSWORD:-changeme-default}@${DB_HOST:-db}:5432/${DB_NAME:-app}
+    ports:
+      - "${API_PORT:-8080}:8080"
+volumes:
+  db_data:

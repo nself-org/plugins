@@ -1,0 +1,2 @@
+docker-compose.yml
+plugins/demo/compose.yml

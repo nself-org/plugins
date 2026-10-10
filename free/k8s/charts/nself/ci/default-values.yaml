@@ -1,7 +1,6 @@
-# CI test values for 'helm lint' and 'helm template' validation.
+# CI values for 'helm lint': the generic chart with no services renders no
+# workloads. tests/template-check.sh renders the generated fixtures instead.
 domain: test.nself.example.com
 tls:
   enabled: false
   certManager: false
-postgres:
-  storage: 1Gi

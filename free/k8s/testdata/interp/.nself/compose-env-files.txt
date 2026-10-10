@@ -1,0 +1,2 @@
+.nself/interp.vars
+plugins/demo/demo.vars

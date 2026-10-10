@@ -1,0 +1,25 @@
+{{- /* One Service per workload with ports. The name equals the compose service name, so in-stack addresses such as postgres:5432 keep working. */ -}}
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.ports (ne $svc.kind "job") (ne $svc.kind "ingress") }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "nself.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  {{- if eq $svc.kind "statefulset" }}
+  clusterIP: None
+  {{- end }}
+  selector:
+    {{- include "nself.selector" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    {{- range $svc.ports }}
+    - name: p{{ .port }}-{{ lower .protocol }}
+      port: {{ .port }}
+      targetPort: {{ .port }}
+      protocol: {{ .protocol }}
+    {{- end }}
+{{- end }}
+{{- end }}

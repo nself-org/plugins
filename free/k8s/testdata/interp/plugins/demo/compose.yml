@@ -1,0 +1,9 @@
+services:
+  demo:
+    image: ghcr.io/example/demo:${DEMO_TAG}
+    restart: unless-stopped
+    environment:
+      DEMO_TOKEN: ${DEMO_TOKEN}
+      DEMO_GREETING: ${DEMO_GREETING:-hello}
+    expose:
+      - "8090"
