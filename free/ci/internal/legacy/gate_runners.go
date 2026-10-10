@@ -70,12 +70,27 @@ func markSubstantive(gates []GateResult) {
 	}
 }
 
+// goTestMinTimeout is the floor for `go test -timeout`. The flag is a
+// per-package-binary limit, not a step limit, so the 120 s step default made
+// one large package (cli cmd/commands, ~121 s) fail the gate with a panic
+// while every test in it passed. 600 s is go test's own default (D-0286).
+const goTestMinTimeout = 600
+
+// goTestTimeout returns the -timeout seconds for go test: the step timeout,
+// raised to goTestMinTimeout.
+func goTestTimeout(stepTimeout int) int {
+	if stepTimeout < goTestMinTimeout {
+		return goTestMinTimeout
+	}
+	return stepTimeout
+}
+
 // runGoGates runs gofmt, go vet, and go test for a Go repo.
 func runGoGates(root string, timeout int, verbose bool) []GateResult {
 	gates := []GateResult{
 		runStep("go:fmt", root, timeout, verbose, "gofmt", "-l", "."),
 		runStep("go:vet", root, timeout, verbose, "go", "vet", "./..."),
-		runStep("go:test", root, timeout, verbose, "go", "test", "-count=1", "-timeout", fmt.Sprintf("%ds", timeout), "./..."),
+		runStep("go:test", root, timeout, verbose, "go", "test", "-count=1", "-timeout", fmt.Sprintf("%ds", goTestTimeout(timeout)), "./..."),
 	}
 	markSubstantive(gates)
 	return gates
@@ -188,7 +203,9 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 	gr.Elapsed = time.Since(start)
 
 	// gofmt: non-empty output means files need formatting → fail.
+	// Vendored modules are third-party code the repo does not format.
 	if name == "go:fmt" {
+		gr.Output = dropVendored(gr.Output)
 		if gr.Output != "" {
 			gr.Passed = false
 			gr.Output = "Files need gofmt:\n" + gr.Output
@@ -203,3 +220,21 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 }
 
 // fileExists returns true if the path exists (file or dir).
+
+// dropVendored removes gofmt output lines (file paths or parse errors) that
+// point inside a vendor/ directory at any depth: `go mod vendor` output is
+// third-party code, matching cli scripts/ci/gofmt-check.sh (D-0286).
+func dropVendored(out string) string {
+	if out == "" {
+		return out
+	}
+	var kept []string
+	for _, line := range strings.Split(out, "\n") {
+		p := filepath.ToSlash(strings.TrimSpace(line))
+		if strings.HasPrefix(p, "vendor/") || strings.Contains(p, "/vendor/") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
+}

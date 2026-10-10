@@ -83,6 +83,9 @@ func (r Runner) Run(ctx context.Context, root string, p PlannedCheck, cfg model.
 		c.ToolVersion = &v
 	}
 	res := r.invoke(ctx, root, argv, p.Workdir, 0)
+	if d.ID == "go.fmt" {
+		res.output = dropVendored(res.output)
+	}
 	c.Excerpt = strings.TrimSpace(res.output)
 	if len(c.Excerpt) > 1024 {
 		c.Excerpt = c.Excerpt[:1024]
