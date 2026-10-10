@@ -42,6 +42,9 @@ mkdir -p "$KIND_WORK"
 bin="$KIND_WORK/bin"
 fixhome="$KIND_WORK/home"
 project="$KIND_WORK/project"
+# A caller-supplied KIND_WORK may hold an earlier run: start from a fresh fixture, or the
+# "refuses without generated values" check would see stale values.
+rm -rf "$project" "$fixhome"
 export KUBECONFIG="$KIND_WORK/kubeconfig"
 cluster="nself-k8s-$$"
 pf_pid=""
@@ -135,9 +138,20 @@ init_postgres() {
   kubectl wait --for=condition=Ready pod/postgres-0 --timeout="${READY_TIMEOUT}s"
   db="$(kubectl get secret nself-postgres -o jsonpath='{.data.POSTGRES_DB}' | base64 -d)"
   user="$(kubectl get secret nself-postgres -o jsonpath='{.data.POSTGRES_USER}' | base64 -d)"
+  # The postgres image first runs a temporary server that listens on the unix socket
+  # only, stops it and starts the real one. Wait for the real server (TCP), or the
+  # first script hits "connection ... failed" between the two.
+  i=0
+  until kubectl exec postgres-0 -- pg_isready -q -h 127.0.0.1 -U "$user" -d "$db" >/dev/null 2>&1; do
+    i=$((i + 1)); [ "$i" -lt 120 ] || { echo "FAIL: postgres never accepted TCP connections" >&2; return 1; }
+    kill -0 "$install_pid" 2>/dev/null || { echo "FAIL: nself k8s install exited before postgres was ready" >&2; return 1; }
+    sleep 2
+  done
+  # This function runs under "||", so set -e is off here: every step reports its own failure.
   for f in "$project"/postgres/init/*.sql; do
     echo "init sql: $(basename "$f")"
-    kubectl exec -i postgres-0 -- psql -q -v ON_ERROR_STOP=1 -U "$user" -d "$db" <"$f"
+    kubectl exec -i postgres-0 -- psql -q -v ON_ERROR_STOP=1 -U "$user" -d "$db" <"$f" ||
+      { echo "FAIL: init sql $(basename "$f") failed" >&2; return 1; }
   done
 }
 
