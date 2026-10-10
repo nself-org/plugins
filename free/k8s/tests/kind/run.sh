@@ -157,7 +157,8 @@ init_postgres() {
 
 step "nself k8s install --wait (postgres init SQL applied meanwhile)"
 install_rc=0
-(cd "$project" && nself k8s install --domain example.test --cluster "$KUBECONFIG" --wait --timeout "${READY_TIMEOUT}s") &
+# exec (with the same env as the nself function): $! is the nself process itself, so the kill below reaches it, not a wrapper subshell.
+(cd "$project" && HOME="$fixhome" DOCKER_CONFIG="${DOCKER_CONFIG:-$real_home/.docker}" exec "$bin/nself" k8s install --domain example.test --cluster "$KUBECONFIG" --wait --timeout "${READY_TIMEOUT}s") &
 install_pid=$!
 init_postgres || {
   if kill -0 "$install_pid" 2>/dev/null; then kill "$install_pid" 2>/dev/null || true

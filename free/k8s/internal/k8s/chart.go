@@ -8,7 +8,7 @@
 //
 // Constraints: the directory is created by os.MkdirTemp (mode 0700) and the
 // extracted files are written 0600 (directories 0700), so no other user can
-// read the chart or the install overrides written next to it. Paths are taken
+// read the chart. The install overlay never touches disk (stdin). Paths are taken
 // from fs.WalkDir, which never yields ".." or absolute names.
 package k8s
 

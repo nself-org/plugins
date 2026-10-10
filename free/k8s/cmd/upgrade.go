@@ -28,13 +28,14 @@ var upgradeCmd = &cobra.Command{
 
 Run 'nself k8s values' first so the generated values match the compose model.
 The values are applied afresh (no --reuse-values): a service removed from the
-compose model leaves the release. Pass the same --domain and --plugins (and the
-NSELF_PLUGIN_LICENSE_KEY env var) as at install time; the upgrade prints the
-values it is not passing. The embedded chart does not consume domain, plugins or
-the licence key yet (D-0311).`,
+compose model leaves the release. Pass the same --domain and --plugins as at
+install time; the upgrade prints the
+values it is not passing. The embedded chart does not consume domain or plugins
+yet (D-0311), and the licence key is not written to the release at all until it does.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true // a missing values file is not a usage error
 		opts := installOptions(cmd)
+		warnUnusedLicence(opts)
 		if missing := k8s.NotPassed(opts); len(missing) > 0 {
 			tui.Warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
 		}

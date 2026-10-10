@@ -11,7 +11,8 @@
 // values are missing ("run nself k8s values").
 //
 // Constraints: no chart repository, no secret and no licence key on argv (they
-// travel in values files); the shared flag helpers also serve upgrade.go.
+// travel in values files or helm's stdin; the licence key is not passed until
+// the chart reads it, D-0311); the shared flag helpers also serve upgrade.go.
 package main
 
 import (
@@ -37,8 +38,10 @@ directory with the values that 'nself k8s values' generated
 The licence key (NSELF_PLUGIN_LICENSE_KEY) and the secrets reach helm through
 values files, never on the command line.
 
-Not consumed yet: --domain, --plugins and the licence key are recorded in the
-release values, but the embedded chart does not read them (D-0311). The hosts
+Not consumed yet: --domain and --plugins are recorded in the release values,
+but the embedded chart does not read them (D-0311). The licence key
+(NSELF_PLUGIN_LICENSE_KEY) is not written to the release at all until the chart
+reads it: helm keeps every value in the release Secret. The hosts
 the stack answers on come from the generated ingress rules.
 
 TLS is managed by cert-manager (must be pre-installed in the cluster).
@@ -53,6 +56,7 @@ Example:
 		if opts.Domain == "" {
 			return fmt.Errorf("--domain is required")
 		}
+		warnUnusedLicence(opts)
 		tui.Info(fmt.Sprintf("Installing nSelf chart (domain=%s, recorded in the release values only)...", opts.Domain))
 		if err := k8s.Install(cmd.Context(), opts); err != nil {
 			return err
@@ -75,6 +79,13 @@ func installedLine(projectDir string) string {
 		urls[i] = "https://" + h
 	}
 	return "nSelf installed. Ingress hosts: " + strings.Join(urls, ", ")
+}
+
+// warnUnusedLicence says that a licence key in the environment is not passed.
+func warnUnusedLicence(opts k8s.InstallOptions) {
+	if k8s.HasUnusedLicence(opts) {
+		tui.Warn("NSELF_PLUGIN_LICENSE_KEY is set but not written to the release: the chart does not read it yet (D-0311)")
+	}
 }
 
 // addInstallFlags registers the flags install and upgrade share.

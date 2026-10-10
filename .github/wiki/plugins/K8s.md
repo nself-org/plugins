@@ -22,7 +22,7 @@ Category: `infrastructure`. Current version: `1.0.0`.
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `NSELF_PLUGIN_LICENSE_KEY` | — | Optional. |
+| `NSELF_PLUGIN_LICENSE_KEY` | — | Optional. Not written to the release until the chart reads it (D-0311) |
 | `KUBECONFIG` | *(see plugin.json)* | Optional. |
 
 ## Commands
@@ -135,14 +135,23 @@ Both commands refuse (exit 1, `run nself k8s values`) when `values.yaml` or `sec
 | `--wait` | on | Wait until every workload is ready |
 | `--timeout` | `10m` | How long helm waits |
 
-What it passes to helm: `--values values.yaml --values secrets.yaml` and, when you set `--domain`, `--plugins` or
-`NSELF_PLUGIN_LICENSE_KEY`, a third `--values` file written to the same private directory. Secrets and the licence key travel
-in these files, never on the command line, and never through `--set`. `upgrade` applies the current values afresh (no
-`--reuse-values`), so a service you removed from the compose model leaves the release; pass the same `--domain` and `--plugins`
-as at install time; `upgrade` prints one line naming the values it is not passing.
+What it passes to helm: `--values values.yaml --values secrets.yaml` and, when you set `--domain` or `--plugins`, a third
+overlay that goes to helm on stdin (`--values -`), so it is never written to disk. Secrets travel in `secrets.yaml`, never on
+the command line, and never through `--set`. helm runs with a cleaned environment: every `NSELF_*` variable is removed and
+`HELM_DEBUG` is forced to `false` (with it set, helm prints every value and rendered Secret to the log). Before it runs, the
+command prints which kubeconfig helm will use. `upgrade` applies the current values afresh (no `--reuse-values`), so a service
+you removed from the compose model leaves the release; pass the same `--domain` and `--plugins` as at install time; `upgrade`
+prints one line naming the values it is not passing.
+
+`nself k8s status` prints only the release name, namespace, revision, chart version and status. It never prints helm's release
+config or manifest, which hold every secret of the stack.
 
 **Not consumed yet.** The embedded chart reads none of `domain`, `license.key` and `plugins.install` (tracked as D-0311), so
-`--domain`, `--plugins` and `NSELF_PLUGIN_LICENSE_KEY` are recorded in the release values and change nothing in the cluster.
+`--domain` and `--plugins` are recorded in the release values and change nothing in the cluster. `NSELF_PLUGIN_LICENSE_KEY` is
+**not written to the release at all** until the chart reads it: helm stores every value in the release Secret
+(`sh.helm.release.v1.<release>.vN`, one per revision), so anyone who can read Secrets in the namespace could read the key,
+and the key would buy nothing. When the variable is set, install and upgrade say so. The licence key returns to the overlay
+with D-0311.
 The hosts the stack answers on come from the generated `ingress.rules`; the success line of `install` lists those hosts as
 URLs, or no URL when the project routes none.
 
@@ -150,6 +159,14 @@ URLs, or no URL when the project routes none.
 (D-0308), so a plain install leaves hasura-auth crash-looping on `schema auth does not exist`. The kind proof applies
 `postgres/init/*.sql` by hand while it waits (`init_postgres` in `run.sh`). Until D-0308 closes, do not read the kind result as
 "nSelf on Kubernetes works".
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+|---------|---------------|
+| `cannot re-use a name that is still in use` on install, or `has no deployed releases` on upgrade | An earlier install failed or timed out and left the release in state `failed`. Run `helm uninstall nself` (use your `--release` name and `--kubeconfig`), then `nself k8s install` again. `upgrade` works only after a revision has deployed. A failed install prints this hint |
+| `run nself k8s values` | `values.yaml` or `secrets.yaml` is missing. Run `nself build` then `nself k8s values` |
+| `readable by group or others` | `chmod 600 .nself/generated/k8s/secrets.yaml`, or run `nself k8s values` again |
 
 ## Try it on kind
 

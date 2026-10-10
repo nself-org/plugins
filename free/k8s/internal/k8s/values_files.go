@@ -4,18 +4,20 @@
 // Inputs: the project directory (holds .nself/generated/k8s), the domain,
 // licence key and plugin list of an install.
 //
-// Outputs: absolute paths of values.yaml and secrets.yaml, and an overrides
-// file (mode 0600) written inside the private temp directory of the chart.
+// Outputs: absolute paths of values.yaml and secrets.yaml, and the install
+// overlay as YAML bytes (piped to helm on stdin, never written to disk).
 //
 // Constraints: install and upgrade refuse (exit 1, "run nself k8s values")
 // when either generated file is missing, and refuse a secrets.yaml that group
-// or others can read. The overrides file is the only place
-// the licence key is written; helm reads it with --values.
+// or others can read. Any other stat error (permissions) is reported as is. The
+// licence key is not part of the overlay: the chart does not read it yet
+// (D-0311) and helm would store it in every release revision Secret.
 package k8s
 
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -51,7 +53,11 @@ func ResolveValues(dir string) (ValuesFiles, error) {
 		Secrets: filepath.Join(abs, filepath.FromSlash(GeneratedDir), "secrets.yaml"),
 	}
 	for _, p := range []string{vf.Values, vf.Secrets} {
-		if st, err := os.Stat(p); err != nil || !st.Mode().IsRegular() {
+		st, err := os.Stat(p)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return ValuesFiles{}, fmt.Errorf("k8s: cannot read %s: %w", filepath.Join(GeneratedDir, filepath.Base(p)), err)
+		}
+		if err != nil || !st.Mode().IsRegular() {
 			return ValuesFiles{}, fmt.Errorf("k8s: %w: %s: run nself k8s values", ErrValuesMissing, filepath.Join(GeneratedDir, filepath.Base(p)))
 		}
 	}
@@ -63,42 +69,30 @@ func ResolveValues(dir string) (ValuesFiles, error) {
 }
 
 // overrides is the install-time values overlay. Field names follow the chart
-// keys domain, license.key and plugins.install.
+// keys domain and plugins.install. There is no licence key field on purpose.
 type overrides struct {
 	Domain  string          `yaml:"domain,omitempty"`
-	License *overrideLicKey `yaml:"license,omitempty"`
 	Plugins *overridePlugin `yaml:"plugins,omitempty"`
-}
-
-type overrideLicKey struct {
-	Key string `yaml:"key"`
 }
 
 type overridePlugin struct {
 	Install []string `yaml:"install"`
 }
 
-// writeOverrides writes the overlay into dir (mode 0600) and returns its
-// path, or "" when there is nothing to override. plugins.install is a YAML
-// list, so its indices are 0..n-1 by construction.
-func writeOverrides(dir string, opts InstallOptions) (string, error) {
+// overridesYAML returns the overlay for helm's stdin, or nil when there is
+// nothing to override. plugins.install is a YAML list, so its indices are
+// 0..n-1 by construction.
+func overridesYAML(opts InstallOptions) ([]byte, error) {
 	o := overrides{Domain: opts.Domain}
-	if opts.LicenseKey != "" {
-		o.License = &overrideLicKey{Key: opts.LicenseKey}
-	}
 	if len(opts.Plugins) > 0 {
 		o.Plugins = &overridePlugin{Install: opts.Plugins}
 	}
-	if o.Domain == "" && o.License == nil && o.Plugins == nil {
-		return "", nil
+	if o.Domain == "" && o.Plugins == nil {
+		return nil, nil
 	}
 	data, err := yaml.Marshal(o)
 	if err != nil {
-		return "", fmt.Errorf("k8s: encode overrides: %w", err)
+		return nil, fmt.Errorf("k8s: encode overrides: %w", err)
 	}
-	p := filepath.Join(dir, "install-overrides.yaml")
-	if err := os.WriteFile(p, data, 0o600); err != nil {
-		return "", fmt.Errorf("k8s: write overrides: %w", err)
-	}
-	return p, nil
+	return data, nil
 }

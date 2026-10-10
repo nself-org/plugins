@@ -96,14 +96,21 @@ func fakeHelm(t *testing.T) (out string) {
 	}
 	bin, out := t.TempDir(), t.TempDir()
 	script := `#!/bin/sh
+env > "$FAKE_HELM_OUT/env"
+if [ "$1" = status ]; then cat "$FAKE_HELM_OUT/status.json"; exit 0; fi
 printf '%s\n' "$@" > "$FAKE_HELM_OUT/argv"
 i=0; prev=""
 for a in "$@"; do
-  if [ "$prev" = "--values" ]; then cp "$a" "$FAKE_HELM_OUT/values-$i"; ls -l "$a" | cut -c1-10 > "$FAKE_HELM_OUT/mode-$i"; i=$((i+1)); fi
+  if [ "$prev" = "--values" ]; then
+    if [ "$a" = "-" ]; then cat > "$FAKE_HELM_OUT/stdin"
+    else cp "$a" "$FAKE_HELM_OUT/values-$i"; ls -l "$a" | cut -c1-10 > "$FAKE_HELM_OUT/mode-$i"; i=$((i+1)); fi
+  fi
   prev="$a"
 done
 [ -f "$3/templates/_helpers.tpl" ] && echo yes > "$FAKE_HELM_OUT/helpers"
 echo "$3" > "$FAKE_HELM_OUT/chartdir"
+ls "$(dirname "$3")" > "$FAKE_HELM_OUT/chartparent"
+[ -n "$FAKE_HELM_FAIL" ] && { echo "Error: cannot re-use a name that is still in use" >&2; exit 1; }
 exit 0
 `
 	writeFile(t, filepath.Join(bin, "helm"), script, 0o755)
@@ -130,7 +137,7 @@ func argvOf(t *testing.T, out string) []string {
 
 // TestInstallArgvHasNoSecretOrLicence is the secrets-on-argv guard: neither a
 // value of secrets.yaml nor the licence key appears in any argument, no --set
-// is used, and the licence reaches helm through the overrides file.
+// is used, and the licence key does not reach helm at all (D-0311).
 func TestInstallArgvHasNoSecretOrLicence(t *testing.T) {
 	out := fakeHelm(t)
 	opts := baseOpts(project(t, true, true))
@@ -155,23 +162,28 @@ func TestInstallArgvHasNoSecretOrLicence(t *testing.T) {
 		!strings.Contains(got, "--wait --timeout 9m") || strings.Contains(got, "--kubeconfig") {
 		t.Errorf("argv tail = %q", got)
 	}
-	// values.yaml, secrets.yaml, overrides in that order.
+	// values.yaml, secrets.yaml, then the overlay on stdin ("--values -").
 	if b, _ := os.ReadFile(filepath.Join(out, "values-1")); !strings.Contains(string(b), needleValue) {
 		t.Errorf("second --values is not secrets.yaml: %q", b)
 	}
-	b, err := os.ReadFile(filepath.Join(out, "values-2"))
+	if argv[len(argv)-5] != "--values" || argv[len(argv)-4] != "-" {
+		t.Errorf("overlay is not read from stdin: %v", argv)
+	}
+	b, err := os.ReadFile(filepath.Join(out, "stdin"))
 	if err != nil {
-		t.Fatalf("no overrides file passed: %v", err)
+		t.Fatalf("no overlay on stdin: %v", err)
+	}
+	if strings.Contains(string(b), needleLicence) || strings.Contains(string(b), "license") {
+		t.Errorf("licence key reached helm: %q", b)
 	}
 	var got struct {
 		Domain  string
-		License struct{ Key string }
 		Plugins struct{ Install []string }
 	}
 	if err := yaml.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Domain != "example.test" || got.License.Key != needleLicence {
+	if got.Domain != "example.test" {
 		t.Errorf("overrides = %+v", got)
 	}
 	if want := []string{"ai", "mux", "cron"}; strings.Join(got.Plugins.Install, ",") != strings.Join(want, ",") {

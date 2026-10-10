@@ -52,15 +52,18 @@ func IngressHosts(dir string) ([]string, error) {
 	return hosts, nil
 }
 
+// HasUnusedLicence reports that a licence key is set although it is not passed
+// to helm: the chart does not read license.key yet (D-0311), and helm would
+// store the key in every release revision Secret.
+func HasUnusedLicence(opts InstallOptions) bool { return opts.LicenseKey != "" }
+
 // NotPassed names the install-time values that opts leaves empty. An upgrade
-// applies values afresh, so these are not passed to helm.
+// applies values afresh, so these are not passed to helm. The licence key is
+// never passed (HasUnusedLicence), so it is not listed here.
 func NotPassed(opts InstallOptions) []string {
 	var out []string
 	if opts.Domain == "" {
 		out = append(out, "domain")
-	}
-	if opts.LicenseKey == "" {
-		out = append(out, "licence key (NSELF_PLUGIN_LICENSE_KEY)")
 	}
 	if len(opts.Plugins) == 0 {
 		out = append(out, "plugins")

@@ -41,25 +41,22 @@ func TestIngressHosts(t *testing.T) {
 
 // TestNotPassed names exactly the empty install-time values.
 func TestNotPassed(t *testing.T) {
-	if got := NotPassed(InstallOptions{}); len(got) != 3 {
-		t.Errorf("empty options: %v, want domain, licence key and plugins", got)
+	if got := NotPassed(InstallOptions{}); len(got) != 2 {
+		t.Errorf("empty options: %v, want domain and plugins", got)
 	}
 	full := InstallOptions{Domain: "d", LicenseKey: "k", Plugins: []string{"ai"}}
 	if got := NotPassed(full); len(got) != 0 {
 		t.Errorf("full options: %v, want none", got)
 	}
-	if got := NotPassed(InstallOptions{Domain: "d", Plugins: []string{"ai"}}); len(got) != 1 || !strings.Contains(got[0], "licence") {
-		t.Errorf("only the licence missing: %v", got)
+	if got := NotPassed(InstallOptions{Domain: "d", Plugins: []string{"ai"}}); len(got) != 0 {
+		t.Errorf("the licence key is never passed, so it is not listed: %v", got)
 	}
 }
 
-// TestOverridesFileMode0600: the overrides file helm reads (it holds the
-// licence key) is mode 0600 for install and upgrade, and upgrade keeps the
-// secret and the licence off argv like install does.
-func TestOverridesFileMode0600(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file modes")
-	}
+// TestOverlayNeverOnDisk: the install overlay reaches helm on stdin, no
+// overlay file is written next to the chart, and the licence key and secrets
+// stay off argv for install and upgrade alike.
+func TestOverlayNeverOnDisk(t *testing.T) {
 	for name, fn := range map[string]func(context.Context, InstallOptions) error{"install": Install, "upgrade": Upgrade} {
 		t.Run(name, func(t *testing.T) {
 			out := fakeHelm(t)
@@ -68,12 +65,12 @@ func TestOverridesFileMode0600(t *testing.T) {
 			if err := fn(context.Background(), opts); err != nil {
 				t.Fatal(err)
 			}
-			mode, err := os.ReadFile(filepath.Join(out, "mode-2"))
-			if err != nil {
-				t.Fatalf("no overrides file passed: %v", err)
+			if b, err := os.ReadFile(filepath.Join(out, "stdin")); err != nil || !strings.Contains(string(b), "example.test") {
+				t.Errorf("overlay not on stdin: %q, %v", b, err)
 			}
-			if got := strings.TrimSpace(string(mode)); got != "-rw-------" {
-				t.Errorf("overrides mode = %q, want -rw-------", got)
+			parent, _ := os.ReadFile(filepath.Join(out, "chartparent"))
+			if got := strings.TrimSpace(string(parent)); got != "nself" {
+				t.Errorf("chart temp dir holds %q, want only the chart", got)
 			}
 			for _, a := range argvOf(t, out) {
 				if strings.Contains(a, needleValue) || strings.Contains(a, needleLicence) || strings.HasPrefix(a, "--set") {
@@ -101,5 +98,13 @@ func TestRefusesGroupReadableSecrets(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(out, "argv")); statErr == nil {
 		t.Error("helm ran with a group-readable secrets.yaml")
+	}
+}
+
+// TestHasUnusedLicence (S3): a licence key in the environment is reported as
+// not passed, and its absence is not.
+func TestHasUnusedLicence(t *testing.T) {
+	if !HasUnusedLicence(InstallOptions{LicenseKey: "k"}) || HasUnusedLicence(InstallOptions{}) {
+		t.Error("HasUnusedLicence must be true exactly when a key is set")
 	}
 }
