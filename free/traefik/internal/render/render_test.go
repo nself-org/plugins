@@ -1,0 +1,222 @@
+package render
+
+import (
+	"bytes"
+	"errors"
+	"flag"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/nself-org/plugins/free/traefik/internal/contract"
+)
+
+var update = flag.Bool("update", false, "rewrite the golden dynamic.yml files")
+
+func fixture(t *testing.T, name string) *contract.Model {
+	t.Helper()
+	f, err := os.Open(filepath.Join("..", "..", "testdata", "fixtures", name, "routes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	m, err := contract.Load(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+// sslTree writes ssl/certificates/<dir>/ for every TLS route; lineage dirs are
+// generation links like P7-LIVE-15 writes them (<dir> -> .<dir>.gen-1).
+func sslTree(t *testing.T, m *contract.Model) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, r := range m.Routes {
+		if r.TLS == nil {
+			continue
+		}
+		base := filepath.Join(root, "certificates")
+		gen := "." + r.TLS.SSLDir + ".gen-1"
+		if _, err := os.Stat(filepath.Join(base, gen)); err == nil {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Join(base, gen), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range []string{"fullchain.pem", "privkey.pem"} {
+			if err := os.WriteFile(filepath.Join(base, gen, f), []byte("x\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.Symlink(gen, filepath.Join(base, r.TLS.SSLDir)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func renderFixture(t *testing.T, name string) ([]byte, error) {
+	m := fixture(t, name)
+	return Render(m, Options{SSLRoot: sslTree(t, m), CertRoot: "/nself/ssl"})
+}
+
+func TestGoldens(t *testing.T) {
+	for _, name := range []string{"http-full", "tls-full", "plugin-modelled", "plugin-tls-server"} {
+		t.Run(name, func(t *testing.T) {
+			got, err := renderFixture(t, name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			again, _ := renderFixture(t, name)
+			if !bytes.Equal(got, again) {
+				t.Fatal("render is not deterministic")
+			}
+			var doc map[string]any
+			if err := yaml.Unmarshal(got, &doc); err != nil {
+				t.Fatalf("output is not YAML: %v", err)
+			}
+			golden := filepath.Join("..", "..", "testdata", "golden", name+".dynamic.yml")
+			if *update {
+				_ = os.MkdirAll(filepath.Dir(golden), 0o755)
+				if err := os.WriteFile(golden, got, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want, err := os.ReadFile(golden)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Fatalf("%s differs from the golden (run go test ./internal/render -update)", name)
+			}
+		})
+	}
+}
+
+func TestRefusesUnmodelledAndShadowed(t *testing.T) {
+	cases := map[string][]string{
+		"plugin-unmodelled": {"plugin:idme/idme.conf#2", "unmodelled", "weird_thing on;", "unmodelled_global"},
+		"hand":              {"unmodelled_global", "map $http_upgrade"},
+	}
+	for name, wants := range cases {
+		out, err := renderFixture(t, name)
+		var ref *RefusalError
+		if !errors.As(err, &ref) || out != nil {
+			t.Fatalf("%s: want a refusal and no output, got %v / %d bytes", name, err, len(out))
+		}
+		for _, w := range wants {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("%s: refusal lacks %q:\n%s", name, w, err)
+			}
+		}
+	}
+	m := fixture(t, "http-full")
+	s := "nginx/conf.d/custom.conf"
+	m.Routes[0].ShadowedBy = &s
+	if _, err := Render(m, Options{}); err == nil || !strings.Contains(err.Error(), "route "+m.Routes[0].ID+": shadowed_by") {
+		t.Fatalf("shadowed_by not refused by id and field: %v", err)
+	}
+}
+
+// TestRefusesInexpressibleValues mutates one field per case and expects the refusal to name it.
+func TestRefusesInexpressibleValues(t *testing.T) {
+	two := 2
+	cases := []struct {
+		name, want string
+		mut        func(m *contract.Model)
+	}{
+		{"nodelay false", "limit_req without nodelay", func(m *contract.Model) {
+			m.Routes[0].Locations[0].RateLimit = &struct {
+				Zone    string `json:"zone"`
+				Burst   int    `json:"burst"`
+				Nodelay bool   `json:"nodelay"`
+			}{"api", 1, false}
+		}},
+		{"send timeout", "send_s", func(m *contract.Model) { m.Routes[0].Locations[0].Timeouts.SendS = &two }},
+		{"header variable", "headers_set.X-Req", func(m *contract.Model) { m.Routes[0].Locations[0].HeadersSet["X-Req"] = "$request_id" }},
+		{"regex server name", "server_names", func(m *contract.Model) { m.Routes[0].ServerNames = []string{"~^a.+$"} }},
+		{"unknown zone key", "zone key", func(m *contract.Model) {
+			for i := range m.Zones {
+				if m.Zones[i].Name == "auth_strict" {
+					m.Zones[i].Key = "$server_name"
+				}
+			}
+		}},
+		{"no action", "no upstream, return", func(m *contract.Model) { m.Routes[0].Locations[0].Upstream = nil }},
+		{"return target", "return.to", func(m *contract.Model) {
+			to := "https://elsewhere.example/"
+			m.Routes[0].Locations[0].Upstream = nil
+			m.Routes[0].Locations[0].Return = &struct {
+				Status int     `json:"status"`
+				To     *string `json:"to"`
+			}{301, &to}
+		}},
+		{"blocked regex", "blocked_paths[0].regex", func(m *contract.Model) { m.Routes[0].BlockedPaths[0].Regex = "(?!x)" }},
+		{"cipher", "tls.ciphers", func(m *contract.Model) { c := "RC4-MD5"; m.Routes[len(m.Routes)-1].TLS.Ciphers = &c }},
+	}
+	for _, c := range cases {
+		m := fixture(t, "tls-full")
+		root := sslTree(t, m)
+		c.mut(m)
+		out, err := Render(m, Options{SSLRoot: root})
+		if err == nil || out != nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: want refusal containing %q, got %v", c.name, c.want, err)
+		}
+	}
+}
+
+func TestCertGenerationChangesParsedConfig(t *testing.T) {
+	m := fixture(t, "tls-full")
+	root := sslTree(t, m)
+	opt := Options{SSLRoot: root, CertRoot: "/nself/ssl"}
+	first, err := Render(m, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certs := func(b []byte) []any {
+		var doc map[string]map[string]any
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			t.Fatal(err)
+		}
+		return doc["tls"]["certificates"].([]any)
+	}
+	if !strings.Contains(string(first), "/nself/ssl/certificates/.example-org.gen-1/fullchain.pem") {
+		t.Fatalf("first render does not point at gen-1:\n%s", first)
+	}
+	base := filepath.Join(root, "certificates")
+	gen2 := ".example-org.gen-2"
+	if err := os.MkdirAll(filepath.Join(base, gen2), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"fullchain.pem", "privkey.pem"} {
+		_ = os.WriteFile(filepath.Join(base, gen2, f), []byte("y\n"), 0o600)
+	}
+	_ = os.Remove(filepath.Join(base, "example-org"))
+	if err := os.Symlink(gen2, filepath.Join(base, "example-org")); err != nil {
+		t.Fatal(err)
+	}
+	second, err := Render(m, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := certs(first), certs(second)
+	if len(a) == 0 {
+		t.Fatal("no certificates")
+	}
+	ja, _ := yaml.Marshal(a)
+	jb, _ := yaml.Marshal(b)
+	if bytes.Equal(ja, jb) || !strings.Contains(string(jb), ".example-org.gen-2") {
+		t.Fatalf("a new generation did not change the parsed certificates:\n%s\n%s", ja, jb)
+	}
+}
+
+func TestMissingCertificateIsRefused(t *testing.T) {
+	m := fixture(t, "tls-full")
+	if _, err := Render(m, Options{SSLRoot: t.TempDir()}); err == nil || !strings.Contains(err.Error(), "certificate lineage") {
+		t.Fatalf("missing lineage not refused: %v", err)
+	}
+}

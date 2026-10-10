@@ -1,0 +1,23 @@
+# TEST-ONLY static configuration: the shipped one plus api.insecure so the parity and golden tests can read /api/rawdata.
+# No Docker provider, no socket, no certificatesResolvers (certificates are core-issued and read from ssl/).
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+  traefik:
+    address: ":8082"
+ping:
+  entryPoint: traefik
+providers:
+  file:
+    directory: /dynamic
+    watch: true
+log:
+  level: DEBUG
+accessLog: {}
+api:
+  insecure: true
