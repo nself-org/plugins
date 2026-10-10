@@ -1,0 +1,8 @@
+# pnpm 11+ reads build-script approval from here; the "pnpm" field in
+# package.json is ignored from pnpm 11 on (pnpm 9/10 still read that field).
+# Only esbuild's postinstall (it fetches its platform binary) is allowed (D-0286).
+# `packages` lists the root alone: pnpm 9 refuses a workspace file without it.
+packages:
+  - "."
+allowBuilds:
+  esbuild: true
