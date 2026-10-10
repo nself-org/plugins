@@ -11,7 +11,6 @@ package values
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -151,15 +150,8 @@ func TestRealComposeMatchesRecording(t *testing.T) {
 	}
 	vb, _ := MarshalValues(v)
 	sb, _ := MarshalSecrets(s)
-	for file, got := range map[string][]byte{"values.yaml": vb, "secrets.yaml": sb} {
-		want, err := os.ReadFile(filepath.Join(fixtureDir("interp"), "golden", file))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if string(want) != string(got) {
-			t.Errorf("real compose %s differs from golden:\n%s", file, got)
-		}
-	}
+	compareGolden(t, "interp", "values.yaml", vb)
+	compareGolden(t, "interp", "secrets.yaml", sb)
 }
 
 func composeAvailable() bool {

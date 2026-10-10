@@ -13,6 +13,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,8 +53,16 @@ func mapFixture(t *testing.T, name string) (*Model, *Values, *Secrets) {
 	return m, v, s
 }
 
+// compareGolden requires got to open with the GENERATED marker line and
+// compares the rest with the golden. Goldens are stored without the marker:
+// the repo's generated-file gate refuses any committed file that carries it.
 func compareGolden(t *testing.T, name, file string, got []byte) {
 	t.Helper()
+	body, ok := strings.CutPrefix(string(got), GeneratedMarker+"\n")
+	if !ok {
+		t.Fatalf("%s/%s does not open with the GENERATED marker line", name, file)
+	}
+	got = []byte(body)
 	path := filepath.Join(fixtureDir(name), "golden", file)
 	if os.Getenv("UPDATE_GOLDEN") == "1" {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

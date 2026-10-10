@@ -50,11 +50,11 @@ func TestRunWritesBothFiles(t *testing.T) {
 	if err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("secrets.yaml: %v %v", err, st)
 	}
-	want, _ := os.ReadFile(filepath.Join(fixtureDir("full"), "golden", "values.yaml"))
-	got, _ := os.ReadFile(filepath.Join(gen, ValuesFile))
-	if string(want) != string(got) {
-		t.Error("values.yaml differs from the golden")
+	got, err := os.ReadFile(filepath.Join(gen, ValuesFile))
+	if err != nil {
+		t.Fatal(err)
 	}
+	compareGolden(t, "full", "values.yaml", got)
 	if !strings.Contains(out, "unsupported: worker-one") {
 		t.Errorf("output should list unsupported services:\n%s", out)
 	}
