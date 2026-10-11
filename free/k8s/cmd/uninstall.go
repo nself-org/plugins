@@ -9,8 +9,9 @@
 // helm command; on a terminal it asks for the release name instead.
 //
 // Constraints: destructive, so the refusal happens before helm is looked up.
-// A refusal is exit 4 in human mode too. Persistent volumes the chart created
-// may outlive the release (helm does not delete them); the help text says so.
+// A refusal is exit 4 in human mode too. The chart marks every
+// PersistentVolumeClaim helm.sh/resource-policy: keep, so helm leaves the
+// claims (and the data) in place; the help text says how to delete them.
 package main
 
 import (
@@ -30,8 +31,15 @@ var uninstallCmd = &cobra.Command{
 
 This is destructive. Pass --yes to confirm. Without --yes, a terminal is asked to
 type the release name; a script (no terminal) or --json is refused with exit
-status 4 and nothing is removed. Persistent volumes that the chart created can
-outlive the release: check the cluster before reusing the namespace.
+status 4 and nothing is removed.
+
+The PersistentVolumeClaims of the release (database and storage data) are kept:
+the chart marks them helm.sh/resource-policy: keep. A later install with the same
+release name adopts them and finds the data again. To delete the data for good,
+remove the claims by hand:
+  kubectl delete pvc -l app.kubernetes.io/instance=<release>
+With a Delete reclaim policy (the default of most storage classes) that also
+deletes the volumes.
 
 Example:
   nself k8s uninstall --yes
