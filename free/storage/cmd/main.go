@@ -48,15 +48,17 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 
-	var store *s3store.Store
+	var store internal.ObjectStore // stays a nil interface when S3 is not configured
 	if cfg.AccessKey != "" && cfg.SecretKey != "" {
-		store, err = s3store.New(s3store.Config{
+		st, err := s3store.New(s3store.Config{
 			Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
 			AccessKey: cfg.AccessKey, SecretKey: cfg.SecretKey, UseSSL: cfg.UseSSL,
+			MaxLargeUploads: cfg.MaxLargeUploads,
 		})
 		if err != nil {
 			log.Fatalf("s3 config error: %v", err)
 		}
+		store = st
 		log.Printf("s3: endpoint %s region %s (path-style)", cfg.S3Endpoint, cfg.S3Region)
 	} else if cfg.AccessKey != "" || cfg.SecretKey != "" {
 		log.Fatalf("s3 config error: set both S3_ACCESS_KEY and S3_SECRET_KEY, or neither")

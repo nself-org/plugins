@@ -14,9 +14,9 @@ import (
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
 
-// fakeStore is an objectStore that fails EnsureBucket on demand; every other method panics if reached.
+// fakeStore is an ObjectStore that fails EnsureBucket on demand; every other method panics if reached.
 type fakeStore struct {
-	objectStore
+	ObjectStore
 	ensureErr error
 	ensured   []string
 }
@@ -88,7 +88,7 @@ func TestValidateKey_limits(t *testing.T) {
 func TestCreateBucket_validationAndStoreStates(t *testing.T) {
 	cases := []struct {
 		name  string
-		store objectStore
+		store ObjectStore
 		body  string
 		code  int
 		want  string
@@ -124,5 +124,76 @@ func TestObjectRoutes_invalidKey(t *testing.T) {
 		if rr.Code != 400 {
 			t.Errorf("%s long key: %d", m, rr.Code)
 		}
+	}
+}
+
+func TestValidAccountID(t *testing.T) {
+	for _, id := range []string{"primary", "tenant-a", "a/b", "ümlaut", "x.y", "..a", "a.."} {
+		if !validAccountID(id) {
+			t.Errorf("%q should be valid", id)
+		}
+	}
+	for _, id := range []string{"", " ", "\t", ".", "..", "a\nb", "a\x00b", "a\x7fb", "\x1f"} {
+		if validAccountID(id) {
+			t.Errorf("%q should be invalid", id)
+		}
+	}
+}
+
+func TestRoutes_rejectInvalidAccountHeader(t *testing.T) {
+	h := newRouter(&Server{store: &fakeStore{}})
+	for _, id := range []string{"..", ".", "  ", "a\x01b"} {
+		for _, target := range []struct{ method, path string }{
+			{http.MethodPost, "/storage/buckets"},
+			{http.MethodPut, "/storage/buckets/bkt/objects/k"},
+			{http.MethodGet, "/storage/buckets/bkt/objects/k"},
+			{http.MethodDelete, "/storage/buckets/bkt/objects/k"},
+		} {
+			req := httptest.NewRequest(target.method, target.path, strings.NewReader(`{"name":"good-name"}`))
+			req.Header["X-Hasura-Source-Account-Id"] = []string{id}
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid source account id") {
+				t.Errorf("%s %s with id %q: %d %s", target.method, target.path, id, rr.Code, rr.Body.String())
+			}
+		}
+	}
+}
+
+func TestObjectKey_dotAccountsAreRejectedNotEscaped(t *testing.T) {
+	// "." and ".." survive url.PathEscape unchanged, which is why validAccountID must refuse them.
+	if objectKey("..", "k") != "../k" {
+		t.Fatal("test premise changed: PathEscape now escapes dots")
+	}
+	if validAccountID("..") {
+		t.Fatal("..  must be refused as an account id")
+	}
+}
+
+func TestValidateKey_dotKeys(t *testing.T) {
+	for _, k := range []string{".", "a/.", "dir/sub/."} {
+		if validateKey(k) != ErrInvalidKey {
+			t.Errorf("key %q must be rejected", k)
+		}
+	}
+	for _, k := range []string{".hidden", "a/.hidden", "a.b", "a/b."} {
+		if validateKey(k) != nil {
+			t.Errorf("key %q must be accepted", k)
+		}
+	}
+}
+
+func TestSetObjectHeaders(t *testing.T) {
+	rr := httptest.NewRecorder()
+	setObjectHeaders(rr, "text/html", 12, `"abc"`)
+	h := rr.Header()
+	if h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Content-Security-Policy") != "sandbox" ||
+		h.Get("Content-Type") != "text/html" || h.Get("Content-Length") != "12" || h.Get("ETag") != `"abc"` {
+		t.Fatalf("headers = %v", h)
+	}
+	rr = httptest.NewRecorder()
+	setObjectHeaders(rr, "text/plain", -1, "")
+	if rr.Header().Get("Content-Length") != "" || rr.Header().Get("ETag") != "" {
+		t.Fatalf("unknown size / etag must be omitted: %v", rr.Header())
 	}
 }

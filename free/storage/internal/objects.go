@@ -113,13 +113,26 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer o.Body.Close()
-	w.Header().Set("Content-Type", obj.ContentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(o.Size, 10))
-	if o.ETag != "" {
-		w.Header().Set("ETag", o.ETag)
-	}
+	setObjectHeaders(w, obj.ContentType, o.Size, o.ETag)
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, o.Body)
+	if _, err := io.Copy(w, o.Body); err != nil {
+		log.Printf("storage: get %s/%s: copy to client: %v", bucket, key, err)
+	}
+}
+
+// setObjectHeaders sets the response headers of an object download. Stored HTML/SVG must not run script from the
+// plugin's origin, hence nosniff and a sandboxing CSP. Content-Length is omitted when S3 did not report a size.
+func setObjectHeaders(w http.ResponseWriter, contentType string, size int64, etag string) {
+	h := w.Header()
+	h.Set("Content-Type", contentType)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "sandbox")
+	if size >= 0 {
+		h.Set("Content-Length", strconv.FormatInt(size, 10))
+	}
+	if etag != "" {
+		h.Set("ETag", etag)
+	}
 }
 
 // handleDeleteObject deletes the object from S3, then its metadata row. An unknown bucket answers 204.
@@ -149,7 +162,8 @@ func (s *Server) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errNoStore, http.StatusServiceUnavailable)
 		return
 	}
-	if err := s.store.Delete(r.Context(), bucket, objectKey(sai, key)); err != nil {
+	// A key (or whole physical bucket) that is already gone counts as deleted.
+	if err := s.store.Delete(r.Context(), bucket, objectKey(sai, key)); err != nil && !errors.Is(err, s3store.ErrNotFound) {
 		log.Printf("storage: delete %s/%s: %v", bucket, key, err)
 		http.Error(w, errStoreFailed, http.StatusBadGateway)
 		return

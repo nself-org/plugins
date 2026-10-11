@@ -39,6 +39,8 @@ type Config struct {
 	SecretKey  string
 	UseSSL     bool
 	HTTPClient s3.HTTPClient // optional; tests inject a counting client
+	// MaxLargeUploads caps concurrent uploads larger than 1 MiB (each holds a 16 MiB buffer); 0 means 8.
+	MaxLargeUploads int
 }
 
 // api is the subset of *s3.Client the store uses; unit tests replace it with a fake.
@@ -61,6 +63,7 @@ type Store struct {
 	api    api
 	pre    *s3.PresignClient
 	region string
+	slots  chan struct{} // upload slots for large bodies; nil = unlimited
 }
 
 // normalizeEndpoint returns a base URL with an explicit http:// or https:// scheme.
@@ -113,10 +116,23 @@ func New(cfg Config) (*Store, error) {
 	if cfg.HTTPClient != nil {
 		opts.HTTPClient = cfg.HTTPClient
 	} else {
-		opts.HTTPClient = &http.Client{}
+		opts.HTTPClient = defaultHTTPClient()
+	}
+	maxLarge := cfg.MaxLargeUploads
+	if maxLarge <= 0 {
+		maxLarge = DefaultMaxLargeUploads
 	}
 	c := s3.New(opts)
-	return &Store{api: c, pre: s3.NewPresignClient(c), region: region}, nil
+	return &Store{api: c, pre: s3.NewPresignClient(c), region: region, slots: make(chan struct{}, maxLarge)}, nil
+}
+
+// defaultHTTPClient is the default transport: a clone of http.DefaultTransport with more idle connections per host
+// (concurrent uploads reuse connections) and a bound on the wait for response headers.
+func defaultHTTPClient() *http.Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.MaxIdleConnsPerHost = 32
+	tr.ResponseHeaderTimeout = 60 * time.Second
+	return &http.Client{Transport: tr}
 }
 
 // mapErr turns "missing" S3 errors into ErrNotFound and leaves every other error as is.
@@ -141,7 +157,7 @@ func mapErr(err error) error {
 // Object is an open object body plus its headers; the caller closes Body.
 type Object struct {
 	Body        io.ReadCloser
-	Size        int64
+	Size        int64 // -1 when unknown
 	ContentType string
 	ETag        string
 }
@@ -160,7 +176,11 @@ func (s *Store) Get(ctx context.Context, bucket, key string) (*Object, error) {
 	if err != nil {
 		return nil, mapErr(err)
 	}
-	return &Object{Body: out.Body, Size: aws.ToInt64(out.ContentLength), ContentType: aws.ToString(out.ContentType), ETag: aws.ToString(out.ETag)}, nil
+	size := int64(-1) // -1: the endpoint did not report a length
+	if out.ContentLength != nil {
+		size = *out.ContentLength
+	}
+	return &Object{Body: out.Body, Size: size, ContentType: aws.ToString(out.ContentType), ETag: aws.ToString(out.ETag)}, nil
 }
 
 // Head returns object metadata without the body.

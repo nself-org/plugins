@@ -1,7 +1,6 @@
 package s3store
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -28,27 +27,54 @@ type PutResult struct {
 	Multipart bool
 }
 
-// Put streams body into bucket/key. Memory is bounded by one PartSize buffer; the body is never fully buffered.
-// On any multipart failure the upload is aborted (with a context that survives cancellation of ctx).
-func (s *Store) Put(ctx context.Context, bucket, key string, body io.Reader, contentType string) (PutResult, error) {
-	br := bufio.NewReader(body)
-	buf := make([]byte, PartSize)
-	n, err := io.ReadFull(br, buf)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return PutResult{}, fmt.Errorf("s3store: read body: %w", err)
+// firstChunk is how much of the body Put reads into a small, growable buffer before it decides whether the
+// full PartSize buffer (and an upload slot) is needed. Bodies up to this size never touch the pool.
+const firstChunk = 1 << 20
+
+// Put streams body into bucket/key. A body of firstChunk bytes or fewer is read into a small buffer and sent with
+// one PutObject. A longer body takes an upload slot (bounded by Config.MaxLargeUploads, waiting honours ctx) and one
+// pooled PartSize buffer; it goes up as one PutObject when it ends within PartSize bytes, otherwise as a multipart
+// upload that is aborted (with a context that survives cancellation of ctx) on any failure.
+func (s *Store) Put(ctx context.Context, bucket, key string, body io.Reader, contentType string) (res PutResult, err error) {
+	head, rerr := io.ReadAll(io.LimitReader(body, firstChunk+1))
+	if rerr != nil {
+		return PutResult{}, fmt.Errorf("s3store: read body: %w", rerr)
 	}
-	short := err != nil // fewer than PartSize bytes: the stream ended
-	if !short {
-		if _, perr := br.Peek(1); errors.Is(perr, io.EOF) {
-			short = true
-		} else if perr != nil {
-			return PutResult{}, fmt.Errorf("s3store: read body: %w", perr)
+	if len(head) <= firstChunk {
+		return s.putSingle(ctx, bucket, key, head, contentType)
+	}
+
+	release, aerr := s.acquire(ctx)
+	if aerr != nil {
+		return PutResult{}, aerr
+	}
+	defer release()
+	bp := getBuf()
+	defer func() {
+		// After a failure the transport may still hold a slice of the buffer; only a clean run recycles it.
+		if err == nil {
+			putBuf(bp)
 		}
+	}()
+	buf := *bp
+	n := copy(buf, head)
+	m, rerr := io.ReadFull(body, buf[n:])
+	n += m
+	if rerr != nil && !errors.Is(rerr, io.EOF) && !errors.Is(rerr, io.ErrUnexpectedEOF) {
+		return PutResult{}, fmt.Errorf("s3store: read body: %w", rerr)
 	}
-	if short {
+	if rerr != nil { // the stream ended within PartSize bytes
 		return s.putSingle(ctx, bucket, key, buf[:n], contentType)
 	}
-	return s.putMultipart(ctx, bucket, key, br, buf, contentType)
+	// The buffer is full: peek one more byte to tell "exactly PartSize" (single PutObject) from "more follows".
+	var one [1]byte
+	if _, perr := io.ReadFull(body, one[:]); perr != nil {
+		if errors.Is(perr, io.EOF) {
+			return s.putSingle(ctx, bucket, key, buf[:n], contentType)
+		}
+		return PutResult{}, fmt.Errorf("s3store: read body: %w", perr)
+	}
+	return s.putMultipart(ctx, bucket, key, io.MultiReader(bytes.NewReader(one[:]), body), buf, contentType)
 }
 
 // putSingle uploads data with one PutObject call.
@@ -70,7 +96,7 @@ func (s *Store) putSingle(ctx context.Context, bucket, key string, data []byte, 
 }
 
 // putMultipart uploads first (a full buf) and the rest of br as sequential PartSize parts.
-func (s *Store) putMultipart(ctx context.Context, bucket, key string, br *bufio.Reader, buf []byte, contentType string) (res PutResult, err error) {
+func (s *Store) putMultipart(ctx context.Context, bucket, key string, br io.Reader, buf []byte, contentType string) (res PutResult, err error) {
 	in := &s3.CreateMultipartUploadInput{Bucket: aws.String(bucket), Key: aws.String(key)}
 	if contentType != "" {
 		in.ContentType = aws.String(contentType)

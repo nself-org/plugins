@@ -20,24 +20,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/nself-org/plugin-storage/internal/s3store"
 )
 
 // Server holds handler dependencies.
 type Server struct {
 	db    *pgxpool.Pool
 	cfg   *Config
-	store objectStore // nil when S3 is not configured
+	store ObjectStore // nil when S3 is not configured
 }
 
 // NewServer creates a new Server instance. A nil store means S3 is not configured: object routes answer 503.
-func NewServer(db *pgxpool.Pool, cfg *Config, store *s3store.Store) *Server {
-	s := &Server{db: db, cfg: cfg}
-	if store != nil {
-		s.store = store
-	}
-	return s
+// Callers holding a *s3store.Store must check it for nil before passing it (a nil pointer in the interface is not nil).
+func NewServer(db *pgxpool.Pool, cfg *Config, store ObjectStore) *Server {
+	return &Server{db: db, cfg: cfg, store: store}
 }
 
 // Routes registers all storage routes on r.
@@ -45,6 +40,7 @@ func (s *Server) Routes(r chi.Router) {
 	r.Get("/health", s.handleHealth)
 
 	r.Route("/storage", func(r chi.Router) {
+		r.Use(requireValidAccount)
 		// Bucket operations
 		r.Post("/buckets", s.handleCreateBucket)
 		r.Get("/buckets", s.handleListBuckets)
@@ -55,6 +51,32 @@ func (s *Server) Routes(r chi.Router) {
 		r.Get("/buckets/{bucket}/objects/{key}", s.handleGetObject)
 		r.Delete("/buckets/{bucket}/objects/{key}", s.handleDeleteObject)
 		r.Get("/buckets/{bucket}/objects", s.handleListObjects)
+	})
+}
+
+// validAccountID reports whether a source account id may become the first segment of a physical S3 key:
+// not blank, not "." or "..", no control characters.
+func validAccountID(id string) bool {
+	if strings.TrimSpace(id) == "" || id == "." || id == ".." {
+		return false
+	}
+	for _, c := range id {
+		if c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// requireValidAccount answers 400 when the account header is present but unusable. An absent or empty header
+// still means the default account "primary".
+func requireValidAccount(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if id := r.Header.Get("X-Hasura-Source-Account-Id"); id != "" && !validAccountID(id) {
+			http.Error(w, `{"error":"invalid source account id"}`, http.StatusBadRequest)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -72,7 +94,7 @@ const maxKeyBytes = 1024
 // validateKey blocks path traversal in object keys and rejects empty or over-long keys.
 // path.Clean resolves ".." so we compare the cleaned path against the key to detect traversal.
 func validateKey(key string) error {
-	if key == "" || len(key) > maxKeyBytes {
+	if key == "" || len(key) > maxKeyBytes || key == "." || strings.HasSuffix(key, "/.") {
 		return ErrInvalidKey
 	}
 	if strings.Contains(key, "..") {
