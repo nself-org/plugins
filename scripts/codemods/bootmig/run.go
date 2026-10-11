@@ -208,24 +208,6 @@ func writerParam(ft *ast.FuncType) string {
 	return ""
 }
 
-// writesHeaderBefore reports whether body calls <w>.WriteHeader(...) at a position before pos.
-func writesHeaderBefore(body *ast.BlockStmt, w string, pos token.Pos) bool {
-	if body == nil {
-		return false
-	}
-	hit := false
-	ast.Inspect(body, func(n ast.Node) bool {
-		if call, ok := n.(*ast.CallExpr); ok && call.Pos() < pos {
-			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "WriteHeader" {
-				if id, ok := sel.X.(*ast.Ident); ok && id.Name == w {
-					hit = true
-				}
-			}
-		}
-		return !hit
-	})
-	return hit
-}
 func isStatusMap(cl *ast.CompositeLit) bool {
 	if _, ok := cl.Type.(*ast.MapType); !ok {
 		return false

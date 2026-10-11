@@ -95,6 +95,8 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 		log.Printf("storage: put %s/%s: metadata upsert failed after the S3 write: %v", bucket, key, err)
 		if !existed {
 			s.removeOrphan(bucket, objectKey(sai, key))
+		} else {
+			log.Printf("storage: quota accounting drift: %s/%s was overwritten in S3 but its row keeps the old size (old %d bytes, new %d bytes)", bucket, key, overwrite, res.Size)
 		}
 		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
 		return

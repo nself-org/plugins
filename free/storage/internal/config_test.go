@@ -17,6 +17,8 @@ func TestLoadConfig_limitsAndSecret(t *testing.T) {
 		{"quota set", map[string]string{"STORAGE_ACCOUNT_QUOTA_BYTES": "1073741824"}, false, 5 << 30, 1 << 30, ""},
 		{"quota zero is off", map[string]string{"STORAGE_ACCOUNT_QUOTA_BYTES": "0"}, false, 5 << 30, 0, ""},
 		{"secret", map[string]string{"PLUGIN_INTERNAL_SECRET": "test-internal-secret"}, false, 5 << 30, 0, "test-internal-secret"},
+		{"secret is trimmed", map[string]string{"PLUGIN_INTERNAL_SECRET": "  test-internal-secret\n"}, false, 5 << 30, 0, "test-internal-secret"},
+		{"whitespace-only secret is unset", map[string]string{"PLUGIN_INTERNAL_SECRET": " \t\n"}, false, 5 << 30, 0, ""},
 		{"max zero", map[string]string{"STORAGE_MAX_OBJECT_BYTES": "0"}, true, 0, 0, ""},
 		{"max negative", map[string]string{"STORAGE_MAX_OBJECT_BYTES": "-5"}, true, 0, 0, ""},
 		{"max not a number", map[string]string{"STORAGE_MAX_OBJECT_BYTES": "5GiB"}, true, 0, 0, ""},

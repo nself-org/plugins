@@ -46,6 +46,61 @@ func TestHealthEdit(t *testing.T) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
 `, ""},
+		{"Encode(w) before the literal", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	_ = json.NewEncoder(w).Encode(map[string]any{"ready": true})
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, ""},
+		{"http.Error in a returning guard branch is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, `"migrations": bootMigrationsHealth(w)`},
+		{"http.Error in a branch that does not return", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, ""},
+		{"http.Error in an else branch that returns is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	if ok(r) {
+		x = 1
+	} else {
+		http.Error(w, "no", http.StatusBadRequest)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, `"migrations": bootMigrationsHealth(w)`},
+		{"Write before the literal", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	_, _ = w.Write([]byte("x"))
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, ""},
+		{"helper taking the writer before the literal", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, ""},
+		{"Header().Set before the literal is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, `"migrations": bootMigrationsHealth(w)`},
+		{"literal passed straight to a helper taking the writer", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	respond(w, map[string]any{"status": "ok"})
+}
+`, `"migrations": bootMigrationsHealth(w)`},
+		{"call on another writer before the literal is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	log.Print(other)
+	fmt.Fprintf(os.Stderr, "x")
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, `"migrations": bootMigrationsHealth(w)`},
 		{"WriteHeader after the literal is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{"status": "ok"}
 	_ = json.NewEncoder(w).Encode(body)

@@ -36,8 +36,12 @@ type putPlan struct {
 //
 // A declared length over maxObject is errObjectTooLarge; over the quota room (quota - (used - overwrite)) is
 // errQuotaExceeded. When the length is unknown, or declared but understated, the returned limit still stops the body
-// at the budget. Concurrent uploads each see the same `used`, so a burst can overshoot the quota by up to
-// (STORAGE_MAX_UPLOADS x maxObject): best effort, not a reservation.
+// at the budget.
+//
+// `used` is the stored total read before the upload starts. Every PUT between that lookup and its metadata row
+// commit (including PUTs still waiting for an upload slot) sees the same total, so concurrent uploads can overshoot
+// the quota by up to the sum of their sizes. This is a best-effort guard against runaway use, not a hard
+// reservation. A failed metadata write after an overwrite leaves the old size counted until the row is rewritten.
 func planPut(maxObject, quota, used, overwrite, declared int64) (putPlan, error) {
 	if declared > maxObject {
 		return putPlan{}, errObjectTooLarge

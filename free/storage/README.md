@@ -38,7 +38,7 @@ Check this plugin with `curl http://127.0.0.1:9007/health`.
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
 | `STORAGE_PLUGIN_PORT` | No | `9007` | HTTP server port |
-| `PLUGIN_INTERNAL_SECRET` | For `/storage/*` | — | Shared secret every `/storage/*` request must carry in `X-Plugin-Secret`. The CLI generates it and injects it into the plugin; unset, the object routes answer `503` |
+| `PLUGIN_INTERNAL_SECRET` | For `/storage/*` | — | Shared secret every `/storage/*` request must carry in `X-Plugin-Secret`. The value comes from the project's `PLUGIN_INTERNAL_SECRET` (written by `nself init`); when it is empty or blank, every `/storage/*` call answers `503` |
 | `STORAGE_MAX_OBJECT_BYTES` | No | `5368709120` (5 GiB) | Largest accepted object, positive integer bytes; larger uploads answer `413` |
 | `STORAGE_ACCOUNT_QUOTA_BYTES` | No | `0` (off) | Total bytes one account may store, non-negative integer bytes; `0` or unset disables the quota |
 | `STORAGE_MAX_UPLOADS` | No | `64` | Uploads of any size that may run at once; others wait |
@@ -66,6 +66,12 @@ The `/storage/*` routes are for trusted backend services, not end users. Every r
 |------|--------|
 | `X-Plugin-Secret` missing or wrong | `401 {"error":"unauthorized"}` |
 | `PLUGIN_INTERNAL_SECRET` not set on the plugin | `503 {"error":"PLUGIN_INTERNAL_SECRET not configured"}` (fail closed; the plugin logs one line at start and `/health` stays up) |
+
+The value is the project's `PLUGIN_INTERNAL_SECRET` (written to `.env` by `nself init`). If a project has no value, the
+plugin boots but every `/storage/*` call answers `503` until you set one. Surrounding whitespace is ignored.
+
+After a `PLUGIN_INTERNAL_SECRET` rotation, restart storage and its callers together: the plugin accepts one value only,
+and `nself secrets rotate --dual-window` keeps the old value in the secret store, not in the plugin's environment.
 
 Do not hand the secret to browsers or mobile apps: a caller holding it can name any account.
 
@@ -122,8 +128,11 @@ slot limit and are streamed; the server's write timeout caps a single download a
 and an in-progress multipart upload is aborted. With `STORAGE_ACCOUNT_QUOTA_BYTES` set, the plugin sums the account's
 `np_storage_objects.size_bytes` before the S3 write (minus the object being overwritten) and answers
 `413 {"error":"account quota exceeded"}` when the upload does not fit; chunked bodies are limited to the remaining room.
-The quota is best effort: uploads running at the same time each see the same stored total, so a burst can overshoot it by
-up to `STORAGE_MAX_UPLOADS x STORAGE_MAX_OBJECT_BYTES`. It is not a hard reservation.
+The quota is checked against the stored bytes read before the upload starts. Every `PUT` between that lookup and its
+row commit (including `PUT`s waiting for an upload slot) sees the same total, so concurrent uploads can overshoot the
+quota by up to the sum of their sizes. It is a best-effort guard against runaway use, not a hard reservation. If the
+metadata write fails after an overwrite, the old size stays counted (the plugin logs `quota accounting drift` with the
+old and new size so you can reconcile).
 
 **Truncated uploads never commit.** A body that ends early, or whose length differs from the declared
 `Content-Length`, answers `400 {"error":"request body incomplete"}`; nothing is stored and a multipart upload is
