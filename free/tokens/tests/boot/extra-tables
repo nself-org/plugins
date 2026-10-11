@@ -1,0 +1,4 @@
+# Extra tables for tokens plugin: key management tables removed from manifest in plugins#156
+# but still present in seed.sql and need to be verified for existence and row survival.
+np_tokens_signing_keys
+np_tokens_encryption_keys
