@@ -176,10 +176,13 @@ keys_flags() { # print the docker run hardening flags of the traefik service, on
     ((.sysctls // {}) | to_entries[] | "--sysctl\n\(.key)=\(.value)"), (if .user then "--user\n" + (.user | tostring) else empty end)' <<<"$1"
 }
 keys_case() {
-  local f=tls-full F D svc line flags=() ok=0
+  local f=tls-full F D svc dflt line flags=() ok=0
   F=$PLUGIN/testdata/fixtures/$f; D=$WORK/keys-$f; mkdir -p "$D/ssl" "$D/dynamic" "$D/static"
   log "key ownership: $f with privkey.pem 0600 owned by uid $KEYUID, user, capabilities and sysctls from $(basename "$FRAG")"
   svc=$(NSELF_PLUGIN_DIR=$(dirname "$PLUGIN") NSELF_HOST_UID=$KEYUID NSELF_HOST_GID=$KEYUID docker compose -f "$FRAG" config --format json | jq -c .services.traefik)
+  # until core exports the operator uid the fallback must be root without capabilities (hosts where core runs as root)
+  dflt=$(env -u NSELF_HOST_UID -u NSELF_HOST_GID "NSELF_PLUGIN_DIR=$(dirname "$PLUGIN")" docker compose -f "$FRAG" config --format json | jq -r .services.traefik.user)
+  [ "$dflt" = 0:0 ] || { echo "FAIL: with NSELF_HOST_UID unset the traefik user must be 0:0, got '$dflt'"; exit 1; }
   [ -n "$svc" ] && [ "$svc" != null ] || { echo "FAIL: no traefik service in $FRAG"; exit 1; }
   if jq -e '[((.volumes // [])[] | ((.source // ""), (.target // ""))), ((.environment // {}) | to_entries[] | "\(.key)=\(.value)")]
       | any(test("docker\\.sock|DOCKER_HOST"))' <<<"$svc" >/dev/null; then echo "FAIL: the traefik service mounts or names the Docker socket"; exit 1; fi

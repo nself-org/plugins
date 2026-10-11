@@ -87,9 +87,10 @@ services:
     # open a key it does not own, and the capability that would allow it (DAC_READ_SEARCH) also allows open_by_handle_at,
     # i.e. reading host files outside the container; an internet-facing proxy must not hold it. So traefik runs AS the
     # operator uid and reads the key as its owner, with no extra privilege. NSELF_HOST_UID / NSELF_HOST_GID must be the uid
-    # and gid core wrote ssl/ as (the default 1000 only matches a typical single-user Linux host). The image default user
-    # (root) is overridden; the files it reads are world-readable or owned by this uid.
-    user: "${NSELF_HOST_UID:-1000}:${NSELF_HOST_GID:-1000}"
+    # and gid core wrote ssl/ as. The default 0:0 (root, no capabilities) is today's behaviour until core exports them: it
+    # reads root-owned keys and binds :80/:443, but cannot read keys owned by another uid. The files it reads are
+    # world-readable or owned by this uid.
+    user: "${NSELF_HOST_UID:-0}:${NSELF_HOST_GID:-0}"
     cap_drop: [ALL]
     # NET_BIND_SERVICE is kept so the policy reads "only NET_BIND_SERVICE", but a non-root process gets no effective
     # capability from cap_add (CapEff is empty), so it is not what lets this user bind :80/:443. The sysctl is: the
