@@ -59,7 +59,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth()})
 }
 
 func sourceAccountID(r *http.Request) string {
@@ -91,23 +91,23 @@ type storageError struct{ msg string }
 func (e *storageError) Error() string { return e.msg }
 
 type bucketRow struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	Name             string    `json:"name"`
-	Region           string    `json:"region"`
-	Versioning       bool      `json:"versioning"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	Name            string    `json:"name"`
+	Region          string    `json:"region"`
+	Versioning      bool      `json:"versioning"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type objectRow struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	BucketID         string    `json:"bucket_id"`
-	Key              string    `json:"key"`
-	SizeBytes        int64     `json:"size_bytes"`
-	ContentType      string    `json:"content_type"`
-	Etag             string    `json:"etag"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	BucketID        string    `json:"bucket_id"`
+	Key             string    `json:"key"`
+	SizeBytes       int64     `json:"size_bytes"`
+	ContentType     string    `json:"content_type"`
+	Etag            string    `json:"etag"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -119,8 +119,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func (s *Server) handleCreateBucket(w http.ResponseWriter, r *http.Request) {
 	sai := sourceAccountID(r)
 	var body struct {
-		Name    string `json:"name"`
-		Region  string `json:"region"`
+		Name   string `json:"name"`
+		Region string `json:"region"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)

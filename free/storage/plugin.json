@@ -37,5 +37,10 @@
   "dependencies": {
     "required": [],
     "optional": []
+  },
+  "schema": "np_storage",
+  "migrations": {
+    "dir": "migrations",
+    "apply": "boot"
   }
 }
