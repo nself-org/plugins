@@ -94,6 +94,8 @@ func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (Release
 }
 
 // releaseMissing reports whether helm's stderr says the release is not there.
+// It matches helm's release-specific text ("release: not found"), not a bare
+// "not found": an unreachable cluster reports `context "prod" not found`.
 func releaseMissing(stderr []byte) bool {
-	return bytes.Contains(bytes.ToLower(stderr), []byte("not found"))
+	return bytes.Contains(bytes.ToLower(stderr), []byte("release: not found"))
 }

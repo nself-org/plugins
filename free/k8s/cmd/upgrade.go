@@ -39,6 +39,9 @@ yet (D-0311), and the licence key is not written to the release at all until it 
 		}
 		opts := installOptions(cmd)
 		opts.Stdout = r.helmStdout()
+		if err := r.checkRelease(releaseOrDefault(opts.ReleaseName), false); err != nil {
+			return err
+		}
 		warnUnusedLicence(r, opts)
 		if missing := k8s.NotPassed(opts); len(missing) > 0 {
 			r.warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")

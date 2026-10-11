@@ -58,6 +58,10 @@ if [ "$STUB_HELM" = "fail" ]; then
   echo "stub helm: boom" >&2
   exit 1
 fi
+if [ "$STUB_HELM" = "unreachable" ]; then
+  echo 'Error: Kubernetes cluster unreachable: context "prod" not found' >&2
+  exit 1
+fi
 if [ "$STUB_HELM" = "notfound" ]; then
   echo "Error: release: not found" >&2
   exit 1
@@ -86,7 +90,7 @@ const helmStatusJSON = `{"name":"nself","namespace":"default","version":3,"chart
 
 // cliRun configures one invocation.
 type cliRun struct {
-	Helm      string // "" (none on PATH), "ok", "fail", "notfound"
+	Helm      string // "" (none on PATH), "ok", "fail", "notfound", "unreachable"
 	Docker    string // "" (none on PATH), "ok", "fail"
 	StatusDoc string // helm status output; default helmStatusJSON
 	Env       []string
@@ -139,7 +143,7 @@ func runCLI(t *testing.T, o cliRun, args ...string) cliResult {
 		"STUB_STATUS_FILE=" + status,
 		"STUB_COMPOSE_JSON=" + compose,
 	}
-	if o.Helm == "fail" || o.Helm == "notfound" {
+	if o.Helm == "fail" || o.Helm == "notfound" || o.Helm == "unreachable" {
 		env = append(env, "STUB_HELM="+o.Helm)
 	}
 	if o.Docker == "fail" {

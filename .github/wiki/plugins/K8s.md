@@ -196,14 +196,14 @@ failure still prints `Error: <message>` and exits 1, except the uninstall refusa
 
 | Code | Class (exit) | Meaning |
 |------|--------------|---------|
-| E401 | user (1) | Usage: unknown or missing flag (install without `--domain`), unexpected argument. Core code |
+| E401 | user (1) | Usage: unknown or missing flag (install without `--domain`), unexpected argument, a `--release` that is not a helm release name (always for `uninstall`; for the others under `--json` only). Core code |
 | E403 | destructive_blocked (4) | `uninstall` without confirmation; nothing was removed. Core code |
 | E720 | infra (2) | `helm` is not on `PATH` |
 | E721 | user (1) | Generated chart values not found: run `nself k8s values` |
-| E722 | infra (2) | A helm command failed (`cause` is the exit status; helm's output is on stderr) |
+| E722 | infra (2) | A helm command failed (`cause` is the exit status). For install, upgrade and uninstall helm's output is on stderr; `status` does not show it (run `helm status` yourself) |
 | E723 | user (1) | `values --check` found differences (`cause` lists them: service, kind, image refs) |
 | E724 | infra (2) | The compose model could not be resolved (`docker compose config` failed) |
-| E725 | user (1) | The helm release does not exist (`status`, `uninstall`): install it, or fix `--release` and `--cluster` |
+| E725 | user (1) | helm reports `release: not found` (`status`, `uninstall`): install it, or fix `--release` and `--cluster`. An unreachable cluster or unknown kube context is E722 |
 | E726 | infra (2) | `helm status` printed something that is not a release document |
 | E727 | user (1) | Generated values unusable: `secrets.yaml` readable by others, unreadable, or an invalid `values.yaml` |
 | E729 | infra (2) | Unexpected failure (a temp directory, a write) |

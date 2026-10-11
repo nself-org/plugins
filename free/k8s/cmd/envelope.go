@@ -19,6 +19,8 @@ package main
 import (
 	"io"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -52,12 +54,23 @@ type invocation struct {
 // usage printing so stdout and stderr stay clean.
 func newInvocation(cmd *cobra.Command, sub string) *invocation {
 	js, _ := cmd.Flags().GetBool("json")
+	ran = true
 	if js {
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
+	} else {
+		// main silenced cobra because the arguments looked like --json (for
+		// example `status --release --json`, where --json is the release value).
+		// The command runs in human mode: restore cobra's own error printing.
+		rootCmd.SilenceErrors = false
+		rootCmd.SilenceUsage = false
 	}
 	return &invocation{cmd: cmd, sub: sub, json: js}
 }
+
+// ran records that a subcommand's RunE started, so main can tell a cobra usage
+// error (no command ran) from a command error.
+var ran bool
 
 func (r *invocation) command() string { return "k8s " + r.sub }
 
@@ -150,8 +163,14 @@ func wantsJSON(args []string) bool {
 		if a == "--" {
 			return false
 		}
-		if a == "--json" || a == "--json=true" {
+		if a == "--json" {
 			return true
+		}
+		// Every form pflag accepts for a bool: 1, t, T, TRUE, true, True, 0, f, ...
+		if v, ok := strings.CutPrefix(a, "--json="); ok {
+			if b, err := strconv.ParseBool(v); err == nil {
+				return b
+			}
 		}
 	}
 	return false

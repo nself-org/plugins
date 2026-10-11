@@ -44,6 +44,10 @@ Example:
 		release, _ := cmd.Flags().GetString("release")
 		yes, _ := cmd.Flags().GetBool("yes")
 		release = releaseOrDefault(release)
+		cmd.SilenceErrors = true // main prints a human-mode error once
+		if err := r.checkRelease(release, true); err != nil {
+			return err
+		}
 		if !yes {
 			if r.json || !stdinIsTTY() || !confirmRelease(os.Stdin, os.Stderr, release) {
 				return r.refuse(release)
@@ -52,7 +56,6 @@ Example:
 		r.info(fmt.Sprintf("Uninstalling Helm release %s...", release))
 		err := k8s.Uninstall(cmd.Context(), k8s.UninstallOptions{ReleaseName: release, Kubeconfig: cluster, Stdout: r.helmStdout()})
 		if err != nil {
-			cmd.SilenceErrors = r.json
 			return r.fail(err)
 		}
 		r.success("nSelf release " + release + " uninstalled.")
@@ -66,7 +69,6 @@ func (r *invocation) refuse(release string) error {
 	if r.json {
 		return r.emit(d)
 	}
-	r.cmd.SilenceErrors = true // main prints the message once
 	return &exitErr{code: output.ExitCodeFor(d.Class), msg: d.Message + "; " + d.Remediation}
 }
 

@@ -28,6 +28,9 @@ var statusCmd = &cobra.Command{
 		cluster, _ := cmd.Flags().GetString("cluster")
 		release, _ := cmd.Flags().GetString("release")
 		if r.json {
+			if err := r.checkRelease(releaseOrDefault(release), false); err != nil {
+				return err
+			}
 			sum, err := k8s.ReleaseStatus(cmd.Context(), release, cluster)
 			if err != nil {
 				return r.fail(err)

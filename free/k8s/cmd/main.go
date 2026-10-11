@@ -48,7 +48,9 @@ func report(err error, js bool, args []string, stdout, stderr io.Writer) int {
 		}
 		return ee.code
 	}
-	if js {
+	// A command that ran owns its output: in JSON mode it already wrote its
+	// envelope (exitErr above); in human mode this is the plain error line.
+	if js && !ran {
 		d := usageDetail(err.Error())
 		d.ExitCode = output.ExitCodeFor(d.Class)
 		name := "k8s"

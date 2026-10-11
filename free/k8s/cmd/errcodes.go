@@ -95,6 +95,10 @@ func helmDetail(he *k8s.HelmError) output.ErrorDetail {
 	}
 	d := output.ErrorDetail{Code: CodeHelmFailed, Class: output.ClassInfra,
 		Message: "helm " + he.Verb + " failed", Remediation: "helm's own output is on stderr"}
+	if he.Verb == "status" {
+		// ReleaseStatus captures helm's stderr to classify it and drops it.
+		d.Remediation = "check that the cluster is reachable and --cluster is right; run helm status for helm's own message"
+	}
 	var ee *exec.ExitError
 	if errors.As(he.Err, &ee) {
 		d.Cause = ee.Error()

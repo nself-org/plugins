@@ -57,6 +57,9 @@ Example:
 		}
 		opts := installOptions(cmd)
 		opts.Stdout = r.helmStdout()
+		if err := r.checkRelease(releaseOrDefault(opts.ReleaseName), false); err != nil {
+			return err
+		}
 		if opts.Domain == "" {
 			return r.usageFail("--domain is required")
 		}

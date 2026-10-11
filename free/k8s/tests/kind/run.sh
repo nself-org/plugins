@@ -31,7 +31,7 @@ SOURCE="${SOURCE:-branch}"
 CLI_REF="${CLI_REF:-$CLI_REF_DEFAULT}"
 READY_TIMEOUT="${READY_TIMEOUT:-600}"
 if [ "$SOURCE" != "branch" ] || [ "$LEG" != "install" ]; then
-  echo "run.sh: only source=branch leg=install is proven by this Ticket (registry: P7-DEPL-99, day2: P7-DEPL-07)" >&2
+  echo "run.sh: only source=branch leg=install is proven by this Ticket (registry: P7-DEPL-99, day2: P7-DEPL-08)" >&2
   exit 3
 fi
 
