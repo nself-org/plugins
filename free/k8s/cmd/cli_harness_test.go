@@ -112,6 +112,16 @@ func runCLI(t *testing.T, o cliRun, args ...string) cliResult {
 		doc = helmStatusJSON
 	}
 	writeFile(t, status, doc, 0o644)
+	// The stub scripts need sh and cat; nothing else is on PATH.
+	for _, tool := range []string{"sh", "cat"} {
+		p, err := exec.LookPath(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(p, filepath.Join(stubs, tool)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if o.Helm != "" {
 		writeFile(t, filepath.Join(stubs, "helm"), stubHelm, 0o755)
 	}
@@ -123,7 +133,7 @@ func runCLI(t *testing.T, o cliRun, args ...string) cliResult {
 		t.Fatal(err)
 	}
 	env := []string{
-		"PATH=" + stubs + ":/usr/bin:/bin",
+		"PATH=" + stubs, // only the stubs: a real helm or docker on the host must not leak in
 		"HOME=" + stubs,
 		"STUB_ARGV=" + argv,
 		"STUB_STATUS_FILE=" + status,
