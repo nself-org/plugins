@@ -3,7 +3,10 @@
 # Runs core (a cli origin/main build) and the head nself-ci against two disposable local sshd containers and
 # diffs stdout, stderr, exit code, the ssh argv sent (every remote script byte for byte) and the sorted commands
 # the containers' stub sudo/curl/apt-get/tar/dpkg/ldd recorded. "nself runner " is normalised to "nself ci nodes ";
-# the "--" the sdk puts before the ssh destination is dropped from the argv log (the one intended argv change).
+# the "--" the sdk puts before the ssh destination is dropped from the argv log (an intended argv change). The other
+# intended change (D-0263): core passes the registration token as `config.sh --token`, the plugin sends it on ssh stdin
+# into ACTIONS_RUNNER_INPUT_TOKEN; tokfix rewrites core's provision script and stub log into that form, so every other
+# byte still compares, and a head that puts a fake token on any argv or in any script fails as TOKEN.
 # Hosts: linuxserver/openssh-server pinned by digest, key auth, a key pair made in $TMPDIR, published on 127.0.0.1
 #   only, removed on exit. Nothing else is contacted: the stubs are first on the ssh PATH (asserted before every
 #   case) and the GitHub names resolve to the container itself. Provision never runs on this machine: every case
@@ -54,6 +57,16 @@ fi
 # ---- comparator -----------------------------------------------------------------------------------------
 norm() { sed -E -e "s#$WORK#<W>#g" -e 's/\[127\.0\.0\.1\]:[0-9]+/[127.0.0.1]:PORT/g' -e 's/port [0-9]+/port N/g' -e 's/nself runner /nself ci nodes /g'; }
 CASES=0; FAILS=0; ENVV=""; STATE=bare; WANT_RC=""; FAIL_PATS=()
+TOK=FAKE-RUNNER-TOKEN-parity-0000; TOK2=FAKE-ENV-OTHER-0000 # fake registration tokens; neither may reach a head argv
+# tokfix <capture dir>: core's `--token` line in the remote script (ssh.n, shell-quoted) and the stub sudo log (stub.n,
+# unquoted) rewritten into the plugin's stdin form, plus the two lines the plugin script reads the token with
+cat > "$WORK/tokfix.pl" <<'PERL'
+my $rd = q{IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN && export ACTIONS_RUNNER_INPUT_TOKEN && exec "$0" "$@"};
+s/^set -e$/set -e\nIFS= read -r NSELF_RUNNER_TOKEN || true\n[ -n "\$NSELF_RUNNER_TOKEN" ] || { echo 'no runner registration token on stdin' >&2; exit 1; }/;
+s/^sudo -u ('[^']*') \.\/config\.sh --url ('[^']*') --token '[^']*' /printf '%s\\n' "\$NSELF_RUNNER_TOKEN" | sudo -u $1 sh -c '$rd' .\/config.sh --url $2 /;
+s/^sudo -u (\S+) \.\/config\.sh --url (\S+) --token \S+ /sudo -u $1 sh -c $rd .\/config.sh --url $2 /;
+PERL
+tokfix() { perl -i -p "$WORK/tokfix.pl" "$1/ssh.n" "$1/stub.n"; }
 # capture <dir> cmd args...: stdout, stderr, rc, ssh argv log and the nodes' stub logs, normalised
 capture() {
   local dir=$1 rc=0 n; shift; mkdir -p "$dir"
@@ -72,6 +85,7 @@ pair() {
   if [ -n "${PARITY_ONLY:-}" ] && ! [[ $label =~ $PARITY_ONLY ]]; then return 0; fi
   id=$(printf '%s' "$label" | tr -c 'A-Za-z0-9\n' '_'); CASES=$((CASES + 1))
   capture "$WORK/o/$id/a" "$CORE" runner "$cmd" "$@"; capture "$WORK/o/$id/b" "$HEADBIN" nodes "$cmd" "$@"
+  [ "$cmd" != provision ] || tokfix "$WORK/o/$id/a"
   verdict "$label" "$id" "$ne"; FAIL_PATS=()
 }
 verdict() {
@@ -81,6 +95,8 @@ verdict() {
   done
   if [ "$ne" = 1 ] && ! [ -s "$o/a/out.n" ]; then bad=1; echo "EMPTY $label: nothing on stdout (vacuous)"; fi
   if [ "$ne" = 0 ] && ! [ -s "$o/a/err.n" ]; then bad=1; echo "EMPTY $label: nothing on stderr (vacuous)"; fi
+  if grep -qF -e "$TOK" -e "$TOK2" "$o/b/ssh.n" "$o/b/stub.n"; then
+    bad=1; echo "TOKEN $label: the head put a registration token on an argv or in a remote script (D-0263)"; fi
   if [ -n "$WANT_RC" ] && [ "$(cat "$o/a/rc")" != "$WANT_RC" ]; then
     bad=1; echo "RC $label: exit code $(cat "$o/a/rc"), expected $WANT_RC (the case did not exercise what it claims)"; fi
   if [ $bad -eq 0 ]; then echo "ok $label"; else FAILS=$((FAILS + 1)); fi
@@ -90,8 +106,10 @@ if [ "$MODE" = self ]; then # the comparator needs no containers
   capture "$WORK/o/s1/a" "$WORK/sa" x; capture "$WORK/o/s1/b" "$WORK/sa" x; capture "$WORK/o/s2/b" "$WORK/sb" x; cp -R "$WORK/o/s1/a" "$WORK/o/s2/a"
   [ "$(verdict "self identical" s1 1 | head -1)" = "ok self identical" ] || { echo "parity-nodes self-test: FAIL (identical sides differ)"; exit 1; }
   verdict "self planted" s2 1 | awk '/^DIFF self planted/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (difference not reported)"; exit 1; }
+  cp -R "$WORK/o/s1" "$WORK/o/s3"; echo "--token '$TOK'" >> "$WORK/o/s3/b/ssh.n"
+  verdict "self token" s3 1 | awk '/^TOKEN self token/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (token on argv not reported)"; exit 1; }
   WANT_RC=9; verdict "self rc" s1 1 | awk '/^RC self rc/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (wrong exit code not reported)"; exit 1; }
-  echo "parity-nodes self-test: PASS (identical sides equal, planted difference and wrong exit code reported)"; exit 0
+  echo "parity-nodes self-test: PASS (identical sides equal, planted difference, token on argv and wrong exit code reported)"; exit 0
 fi
 
 # ---- fixture: ssh shim, stubs, containers ---------------------------------------------------------------
@@ -174,7 +192,7 @@ reset_nodes() { # clean slate, the case's state and failure patterns; then prove
 }
 
 # ---- cases: STATE=<node state> WANT_RC=<expected core exit code> V|P <label rest> args --------------------
-A=ci@node-a; B=ci@node-b; D=ci@down; TOK=FAKE-RUNNER-TOKEN-parity-0000; URL=https://github.com/nself-org/example; KO=(--ssh-key "$KEY")
+A=ci@node-a; B=ci@node-b; D=ci@down; URL=https://github.com/nself-org/example; KO=(--ssh-key "$KEY")
 V() { pair "verify $1" 1 --host "$A" "${KO[@]}" "${@:2}"; }                                    # verify against node A
 P() { pair "provision $1" 1 --host "$A" "${KO[@]}" --github-url "$URL" --token "$TOK" "${@:2}"; } # provision node A
 STATE=bare WANT_RC=1 V "bare host: missing dependencies fail"
@@ -209,7 +227,7 @@ P "two instances, labels, install root" --instances 2 --install-root /opt/ar2 --
 pair "provision --flag=value forms" 1 --host="$A" --ssh-key="$KEY" --github-url="$URL" --token="$TOK" --instances=1
 P "instances 0 runs one" --instances 0
 ENVV="GITHUB_RUNNER_TOKEN=$TOK" pair "provision token from GITHUB_RUNNER_TOKEN" 1 --host "$A" "${KO[@]}" --github-url "$URL"
-ENVV="GITHUB_RUNNER_TOKEN=FAKE-ENV-OTHER-0000" P "--token overrides the env var"
+ENVV="GITHUB_RUNNER_TOKEN=$TOK2" P "--token overrides the env var"
 STATE=config P "with config.sh already present"
 STATE=symlink WANT_RC=1 P "refuses a symlinked work dir"
 export WANT_RC=100
