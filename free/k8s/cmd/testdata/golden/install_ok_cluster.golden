@@ -1,0 +1,8 @@
+exit: 0
+--- stdout ---
+[0;34mℹ[0m Installing nSelf chart (domain=app.example.test, recorded in the release values only)...
+STUB-HELM install stdout
+[0;32m✓[0m nSelf installed. Ingress hosts: https://api.example.test
+--- stderr ---
+k8s: target kubeconfig /k/cfg (--cluster)
+STUB-HELM install stderr

@@ -1,0 +1,4 @@
+exit: 0
+--- stdout ---
+{"name":"nself","namespace":"default","version":3,"chart_version":"0.1.0","status":"deployed"}
+--- stderr ---

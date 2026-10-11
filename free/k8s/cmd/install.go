@@ -24,7 +24,6 @@ import (
 
 	nselfk8s "github.com/nself-org/nself-k8s"
 	"github.com/nself-org/nself-k8s/internal/k8s"
-	"github.com/nself-org/nself-k8s/internal/tui"
 )
 
 var installCmd = &cobra.Command{
@@ -52,18 +51,47 @@ Example:
   nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true // a missing values file is not a usage error
-		opts := installOptions(cmd)
-		if opts.Domain == "" {
-			return fmt.Errorf("--domain is required")
+		r := newInvocation(cmd, "install")
+		if r.json && len(args) > 0 {
+			return r.usageFail("install takes no arguments")
 		}
-		warnUnusedLicence(opts)
-		tui.Info(fmt.Sprintf("Installing nSelf chart (domain=%s, recorded in the release values only)...", opts.Domain))
-		if err := k8s.Install(cmd.Context(), opts); err != nil {
+		opts := installOptions(cmd)
+		opts.Stdout = r.helmStdout()
+		if err := r.checkRelease(releaseOrDefault(opts.ReleaseName), false); err != nil {
 			return err
 		}
-		tui.Success(installedLine(opts.ProjectDir))
-		return nil
+		if opts.Domain == "" {
+			return r.usageFail("--domain is required")
+		}
+		warnUnusedLicence(r, opts)
+		r.info(fmt.Sprintf("Installing nSelf chart (domain=%s, recorded in the release values only)...", opts.Domain))
+		if err := k8s.Install(cmd.Context(), opts); err != nil {
+			return r.fail(err)
+		}
+		r.success(installedLine(opts.ProjectDir))
+		return r.done(map[string]any{
+			"release":       releaseOrDefault(opts.ReleaseName),
+			"installed":     true,
+			"ingress_hosts": ingressHosts(opts.ProjectDir),
+		})
 	},
+}
+
+// releaseOrDefault is the release name helm was given.
+func releaseOrDefault(name string) string {
+	if name == "" {
+		return k8s.HelmReleaseName
+	}
+	return name
+}
+
+// ingressHosts lists the generated ingress hosts (never nil, so JSON has []).
+func ingressHosts(projectDir string) []string {
+	hosts, err := k8s.IngressHosts(projectDir)
+	if err != nil || hosts == nil {
+		return []string{}
+	}
+	return hosts
 }
 
 // installedLine is the success line: the ingress hosts of the generated
@@ -82,9 +110,9 @@ func installedLine(projectDir string) string {
 }
 
 // warnUnusedLicence says that a licence key in the environment is not passed.
-func warnUnusedLicence(opts k8s.InstallOptions) {
+func warnUnusedLicence(r *invocation, opts k8s.InstallOptions) {
 	if k8s.HasUnusedLicence(opts) {
-		tui.Warn("NSELF_PLUGIN_LICENSE_KEY is set but not written to the release: the chart does not read it yet (D-0311)")
+		r.warn("NSELF_PLUGIN_LICENSE_KEY is set but not written to the release: the chart does not read it yet (D-0311)")
 	}
 }
 
@@ -128,6 +156,7 @@ func installOptions(cmd *cobra.Command) k8s.InstallOptions {
 }
 
 func init() {
+	addJSONFlag(installCmd)
 	installCmd.Flags().String("domain", "", "Domain, recorded in the release values (required; the chart does not consume it yet, D-0311)")
 	addInstallFlags(installCmd)
 }

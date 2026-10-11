@@ -12,6 +12,7 @@ package values
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +36,10 @@ func runProject(t *testing.T) string {
 func runOpts(t *testing.T, dir string, check bool, run Runner) (string, error) {
 	t.Helper()
 	var buf bytes.Buffer
-	err := Run(context.Background(), Options{ProjectDir: dir, Check: check, Runner: run, Out: &buf})
+	res, err := Run(context.Background(), Options{ProjectDir: dir, Check: check, Runner: run})
+	if res != nil {
+		res.WriteText(&buf)
+	}
 	return buf.String(), err
 }
 
@@ -106,5 +110,42 @@ func TestRunCheckFailsOnMissingValuesFile(t *testing.T) {
 	dir := runProject(t)
 	if _, err := runOpts(t, dir, true, recordedRunner(t, "full", nil)); err == nil {
 		t.Fatal("want an error when values.yaml does not exist")
+	}
+}
+
+// TestRunResultCarriesTheReport: Run returns the structured report both the
+// human text and the --json document are built from, and prints nothing itself.
+func TestRunResultCarriesTheReport(t *testing.T) {
+	dir := runProject(t)
+	run := recordedRunner(t, "full", nil)
+	res, err := Run(context.Background(), Options{ProjectDir: dir, Runner: run})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Mode != ModeGenerate || res.Mapped == 0 || len(res.Unsupported) != 2 || len(res.UnmappedRoutes) == 0 {
+		t.Errorf("generate result = %+v", res)
+	}
+	if res.SecretsFile == "" || filepath.Base(res.ValuesFile) != ValuesFile {
+		t.Errorf("files = %q %q", res.ValuesFile, res.SecretsFile)
+	}
+	if items := Items(res.Unsupported); len(items) != 2 || items[0].Reason == "" {
+		t.Errorf("items = %+v", items)
+	}
+	chk, err := Run(context.Background(), Options{ProjectDir: dir, Check: true, Runner: run})
+	if err != nil || chk.Mode != ModeCheck || chk.Services == 0 || len(chk.Diffs) != 0 {
+		t.Fatalf("check result = %+v, err = %v", chk, err)
+	}
+	b, _ := os.ReadFile(res.ValuesFile)
+	mustWrite(t, res.ValuesFile, strings.Replace(string(b), "tag: v2.44.0", "tag: v1.0.0", 1))
+	chk, err = Run(context.Background(), Options{ProjectDir: dir, Check: true, Runner: run})
+	var ve *Error
+	if !errors.As(err, &ve) || ve.Kind != KindParity || chk == nil || len(chk.Diffs) != 1 {
+		t.Fatalf("parity failure: result = %+v, err = %v", chk, err)
+	}
+	_, err = Run(context.Background(), Options{ProjectDir: dir, Runner: func(context.Context, string, []string) ([]byte, error) {
+		return nil, errors.New("no docker")
+	}})
+	if !errors.As(err, &ve) || ve.Kind != KindCompose {
+		t.Errorf("compose failure: err = %v", err)
 	}
 }

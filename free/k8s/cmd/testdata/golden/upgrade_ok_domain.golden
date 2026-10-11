@@ -1,0 +1,8 @@
+exit: 0
+--- stdout ---
+[0;34mℹ[0m Upgrading nSelf Helm release...
+STUB-HELM upgrade stdout
+[0;32m✓[0m nSelf upgraded successfully.
+--- stderr ---
+k8s: target kubeconfig ~/.kube/config (current context)
+STUB-HELM upgrade stderr
