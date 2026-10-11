@@ -4,7 +4,7 @@
 # Purpose: regression cases for scripts/lint-compose-password-urls.sh (D-0235).
 #   Each case writes a one-service fragment, runs the lint on it and checks the
 #   verdict. The reject cases are the bypasses the P7-PROD-33 review found (two
-#   URLs on one line, password in the query, URL split across two or three
+#   URLs on one line, password in the query, URL split across two to four
 #   lines, secret names outside PASSWORD|PASSWD) plus the classic raw form;
 #   the accept cases are the nested form and secret variables outside any
 #   URL, a multi-line shell script included.
@@ -38,6 +38,8 @@ check split-userinfo-head reject '      DATABASE_URL: >-' \
 check split-userinfo-tail reject '      DATABASE_URL: >-' \
   '        postgresql://${POSTGRES_USER}:' '        ${POSTGRES_PASSWORD}@postgres:5432/db'
 check split-three-lines reject '      D: >-' '        postgresql://u:' \
+  '        ${POSTGRES_PASSWORD}' '        @pg/db'
+check split-four-lines reject '      D: >-' '        postgresql://' '        u:' \
   '        ${POSTGRES_PASSWORD}' '        @pg/db'
 check name-pass reject '      - A=postgresql://u:${DB_PASS}@postgres/db'
 check name-pwd reject '      - E=postgresql://u:${DB_PWD}@postgres/db'

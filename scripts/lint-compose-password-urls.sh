@@ -16,8 +16,9 @@
 #        secret variable anywhere: userinfo, path or query,
 #     2. a secret variable is followed by "@" in the same word (the userinfo
 #        tail of a URL whose "://" sits on the line above), or
-#     3. it is a one-word continuation line (not a key or list item) below a
-#        "://" line, i.e. a URL split across three or more lines.
+#     3. it is a one-word line below a "://" line and indented deeper than the
+#        key or list item holding that scalar, i.e. a URL split across three
+#        or more lines.
 # Inputs: fragment paths as arguments; default free/*/docker-compose.plugin.yml.
 # Outputs: one "file:line: ..." line per offence on stderr; exit 1 if any.
 # Constraints: bash 3.2 compatible; sed/grep/awk only; never prints a password.
@@ -41,9 +42,12 @@ for f in $files; do
   [ -n "$hits" ] || continue
   # Line numbers of one-word continuation lines inside a multi-line URL.
   cont=" $(awk '
-    /^[[:space:]]*#/ { next }
-    /^[[:space:]]*(- |[A-Za-z0-9_.-]+:)/ { url = 0 }
+    /^[[:space:]]*(#|$)/ { next }
+    { match($0, /^[[:space:]]*/); ind = RLENGTH
+      key = ($0 ~ /^[[:space:]]*(- |[A-Za-z0-9_.-]+:([[:space:]]|$))/) }
+    url && ind <= kind { url = 0 }
     url && NF == 1 { printf "%d ", NR }
+    !url && key { kind = ind }
     /:\/\// { url = 1 }
   ' "$f")"
   while IFS= read -r line; do
