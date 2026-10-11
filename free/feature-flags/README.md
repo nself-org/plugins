@@ -306,6 +306,23 @@ curl -X POST http://localhost:3305/v1/evaluate \
   }'
 ```
 
+## Boot-applied migrations
+
+`feature-flags` applies its own `migrations/*.sql` when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`):
+files run in file-name order, one transaction per file, recorded in `np_feature_flags.schema_migrations`. The manifest declares
+`migrations.apply: boot`, and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates
+tables from Go code; a fresh database gets the three manifest tables `np_feature_flags_flags`, `np_feature_flags_segments` and `np_feature_flags_audit` from the migration files alone.
+
+**Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
+over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables; until it finishes the plugin does not answer /health, so the container shows as unhealthy and an install readiness wait can time out: re-run it once the migration log line appears.
+
+**Old unprefixed tables.** Installs from the TypeScript era hold `ff_flags`, `ff_rules`, `ff_segments`, `ff_evaluations` and `ff_webhook_events`; migration `001` renames them (and their `idx_ff_*` indexes) to `np_flags_*`. Their columns (`flag_type`, `tags`, rules in a separate table, `UNIQUE(source_account_id, key)`) do not match the tables this plugin uses (`np_feature_flags_*`), so that data is parked under the new names: preserved, not read by the plugin, and not merged into the live tables.
+Each rename runs only when the old table exists and the new name is free. If both names exist, both are left as they are:
+nothing is merged and nothing is dropped, and the plugin log prints one line per such table:
+`migrations: legacy table public.<old> kept beside public.<new>: both existed, nothing merged or dropped`. Move the data by hand
+if you want it, then drop the old table.
+
 ## License
 
 MIT
