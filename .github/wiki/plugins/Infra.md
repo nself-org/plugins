@@ -123,6 +123,8 @@ nself-infra apply
   `server_id`/`snapshot_id`/`retained_ips`/`released_ips`, with snake_case keys), and failures are error envelopes with an
   exit class instead of plain text. The plugin is `planned` and ungated, so there is no compatibility window.
 - `validate`, `plan`, `apply` and `destroy` gain `--json` with the same envelope.
+- A stdin of `/dev/null` no longer counts as a terminal: `apply` and `destroy` run by a program (whose stdin is `/dev/null` by
+  default) now exit 4 at the terminal check instead of passing it.
 - `apply` and `destroy` refusals (spend flag, terminal) exit 4 as before; with `--json` they also print an E403 envelope.
 
 ## Source

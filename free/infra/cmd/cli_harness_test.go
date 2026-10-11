@@ -45,6 +45,7 @@ type cliEnv struct {
 	TTY        bool          // answer of stdinIsTTY
 	Client     server.Client // fake client for the server commands; nil keeps the real factory
 	NoTok      bool          // clear every token variable (real factory then has none)
+	RealTTY    bool          // keep the production stdinIsTTY (the test sets os.Stdin)
 	realClient bool          // keep the real client factory (buildServerClient)
 }
 
@@ -80,7 +81,9 @@ func runCLI(t *testing.T, env cliEnv, args ...string) cliResult {
 	}
 
 	oldTTY, oldClient := stdinIsTTY, newServerClient
-	stdinIsTTY = func() bool { return env.TTY }
+	if !env.RealTTY {
+		stdinIsTTY = func() bool { return env.TTY }
+	}
 	if env.Client != nil {
 		newServerClient = func(*cobra.Command) (server.Client, error) { return env.Client, nil }
 	}

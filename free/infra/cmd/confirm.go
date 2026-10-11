@@ -10,8 +10,8 @@
 // Constraints: the order is fixed, flag first, terminal second, and both run
 // before any argument is validated or any provider code is reached. The
 // terminal check sits behind a variable so tests can drive both branches
-// without a pty; the production default is the character-device check the
-// commands always used.
+// without a pty; the production default is a character device that is not
+// /dev/null (stdlib only).
 package main
 
 import (
@@ -19,13 +19,21 @@ import (
 	"os"
 )
 
-// stdinIsTTY reports whether stdin is a character device. Tests replace it.
-var stdinIsTTY = func() bool {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
+// stdinIsTTY reports whether stdin is an interactive terminal. Tests replace it.
+var stdinIsTTY = func() bool { return isTerminal(os.Stdin) }
+
+// isTerminal reports whether f is a character device other than /dev/null.
+// /dev/null is a character device too, and it is what a child process gets
+// from Go's exec by default, so a machine invoker must not pass this gate.
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
 		return false
 	}
-	return stat.Mode()&os.ModeCharDevice != 0
+	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(fi, null) {
+		return false
+	}
+	return true
 }
 
 // spendGate runs the two spend checks for the subcommand verb ("apply" or "destroy").

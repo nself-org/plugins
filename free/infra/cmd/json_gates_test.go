@@ -12,6 +12,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -94,6 +96,64 @@ func TestServerDestroyRefusalExitsAndNeverDeletes(t *testing.T) {
 		}
 		if rc.deletes != 0 || rc.snapshots != 0 || rc.ipWrites != 0 {
 			t.Errorf("json=%v: a refused destroy touched the provider: deletes=%d snapshots=%d ipWrites=%d", js, rc.deletes, rc.snapshots, rc.ipWrites)
+		}
+	}
+}
+
+// The production check, not the test override: /dev/null (what exec gives a
+// child by default) and a regular file are not terminals.
+func TestProductionTTYCheckRejectsNullAndFiles(t *testing.T) {
+	old := os.Stdin
+	t.Cleanup(func() { os.Stdin = old })
+
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer null.Close()
+	reg, err := os.Create(filepath.Join(t.TempDir(), "stdin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
+
+	for name, f := range map[string]*os.File{"/dev/null": null, "regular file": reg} {
+		os.Stdin = f
+		if stdinIsTTY() {
+			t.Errorf("stdin on %s counted as a terminal", name)
+		}
+		if isTerminal(f) {
+			t.Errorf("isTerminal(%s) = true", name)
+		}
+	}
+}
+
+// With every consent flag but a stdin that is not a terminal (the production
+// check, stdin on /dev/null), apply and destroy refuse: E403, exit 4, and the
+// stub terraform is never run.
+func TestApplyDestroyRefuseNonTTYStdin(t *testing.T) {
+	old := os.Stdin
+	t.Cleanup(func() { os.Stdin = old })
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer null.Close()
+	os.Stdin = null
+
+	for _, args := range [][]string{
+		{"apply", "--provider", "hetzner", "--domain", tfDomain, consent, "--auto-approve", "--json"},
+		{"destroy", "--provider", "hetzner", consent, "--auto-approve", "--json"},
+	} {
+		r := runCLI(t, cliEnv{Tofu: "ok", RealTTY: true}, args...)
+		if r.Exit != output.ExitDestructiveBlocked {
+			t.Errorf("%s: exit = %d, want 4\n%s", args[0], r.Exit, r.Stdout)
+		}
+		if !strings.Contains(r.Stdout, `"code": "E403"`) {
+			t.Errorf("%s: no E403 envelope:\n%s", args[0], r.Stdout)
+		}
+		if r.TofuLog != "" {
+			t.Errorf("%s: terraform was invoked: %q", args[0], r.TofuLog)
 		}
 	}
 }

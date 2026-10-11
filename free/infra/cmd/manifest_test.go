@@ -9,6 +9,8 @@
 // Constraints: the pinned manifest schema accepts json none|legacy only (the
 // k8s plugin has the same limit, debt D-0342 adds envelope), so a subcommand
 // that prints a v1 envelope declares json legacy until that lands.
+//
+// json: legacy pending D-0342
 package main
 
 import (
@@ -71,6 +73,7 @@ func TestManifestMatchesCommandTree(t *testing.T) {
 			t.Errorf("manifest subcommand %q has no cobra command", sc.Name)
 			continue
 		}
+		// json: legacy pending D-0342
 		if sc.JSON != "legacy" {
 			t.Errorf("%s: json = %q, want legacy (it prints a v1 envelope)", sc.Name, sc.JSON)
 		}
