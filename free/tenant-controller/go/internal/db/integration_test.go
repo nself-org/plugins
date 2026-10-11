@@ -15,7 +15,7 @@ import (
 
 // Run with:
 //
-//	TC_PG_DSN=postgres://postgres:fakepw@localhost:55432/postgres \
+//	PGPASSWORD=<throwaway> TC_PG_DSN=postgres://postgres@localhost:55432/postgres \
 //	  go test -tags integration ./internal/db/...
 //
 // Each case runs in its own throwaway database created on the DSN's server.
