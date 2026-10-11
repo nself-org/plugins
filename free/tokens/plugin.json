@@ -79,5 +79,10 @@
   "licenseType": "free",
   "requiredEntitlements": [],
   "requires_license": false,
-  "tier": "free"
+  "tier": "free",
+  "schema": "np_tokens",
+  "migrations": {
+    "dir": "migrations",
+    "apply": "boot"
+  }
 }

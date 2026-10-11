@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -40,9 +41,7 @@ func main() {
 
 	cfg := internal.LoadConfig()
 	db := internal.NewDB(pool)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("tokens: schema init failed: %v", err)
-	}
+	internal.BootMigrations(context.Background(), pool)
 
 	srv := sdk.NewServer(port)
 	r := srv.Router()
