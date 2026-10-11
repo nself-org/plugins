@@ -125,12 +125,12 @@ func classify(err error, sub string) output.ErrorDetail {
 	if m := httpRe.FindStringSubmatch(text); m != nil {
 		if m[2] == "401" || m[2] == "403" {
 			return output.ErrorDetail{Code: CodeTokenRejected, Class: output.ClassAuth, Cause: "HTTP " + m[2],
-				Message:     "Hetzner Cloud rejected the API token",
+				Message:     "Hetzner Cloud rejected the API token" + notDeleted(text),
 				Remediation: "check that the token is valid, not revoked, and belongs to the right Hetzner project (HETZNER_NSELF_TOKEN, HCLOUD_TOKEN or --token); a read-only token cannot change servers"}
 		}
 		if m[2] == "404" && strings.HasPrefix(m[1], "/servers/") {
 			return output.ErrorDetail{Code: CodeServerNotFound, Class: output.ClassUser, Cause: "HTTP 404",
-				Message: "the server was not found", Remediation: "check the id with nself infra server list"}
+				Message: "the server was not found" + notDeleted(text), Remediation: "check the id with nself infra server list"}
 		}
 		return hetznerDetail("HTTP "+m[2], text)
 	}
@@ -149,10 +149,16 @@ func classify(err error, sub string) output.ErrorDetail {
 			Message: "the terraform run for infra " + sub + " failed", Remediation: "terraform's own output is on stderr"}
 	}
 	d := output.ErrorDetail{Code: CodeUnexpected, Class: output.ClassInfra, Message: "the infra command failed unexpectedly"}
-	if strings.Contains(text, "NOT deleted") {
-		d.Message += ", the server was not deleted"
-	}
+	d.Message += notDeleted(text)
 	return d
+}
+
+// notDeleted is the message suffix for a destroy that stopped before the delete.
+func notDeleted(text string) string {
+	if strings.Contains(text, "NOT deleted") {
+		return ", the server was not deleted"
+	}
+	return ""
 }
 
 // hetznerDetail is E744. The message never carries the provider's text.
@@ -160,9 +166,7 @@ func hetznerDetail(cause, text string) output.ErrorDetail {
 	d := output.ErrorDetail{Code: CodeHetznerFailed, Class: output.ClassInfra, Cause: cause,
 		Message:     "the Hetzner Cloud operation failed",
 		Remediation: "check the server with nself infra server list before retrying"}
-	if strings.Contains(text, "NOT deleted") {
-		d.Message = "the Hetzner Cloud operation failed, the server was not deleted"
-	}
+	d.Message += notDeleted(text)
 	return d
 }
 

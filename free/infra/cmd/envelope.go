@@ -189,11 +189,19 @@ func (r *invocation) diagnostic(d output.ErrorDetail, cause error) string {
 	if name, _ := r.cmd.Flags().GetString("token-env"); name != "" {
 		secrets = append(secrets, os.Getenv(name))
 	}
-	return redact(cause.Error(), secrets)
+	out := redact(cause.Error(), secrets)
+	if r := []rune(out); len(r) > maxDiagnostic {
+		out = string(r[:maxDiagnostic]) + "..."
+	}
+	return out
 }
 
+// maxDiagnostic caps the stderr diagnostic, in characters.
+const maxDiagnostic = 300
+
 // redact removes every secret value and drops everything from the first
-// "token", "Bearer" or "Authorization" (any case) to the end.
+// "token", "Bearer", "Authorization", "password", "secret", "api_key", "apikey"
+// or "x-auth" (any case) to the end.
 func redact(text string, secrets []string) string {
 	for _, s := range secrets {
 		if s != "" {
@@ -202,7 +210,7 @@ func redact(text string, secrets []string) string {
 	}
 	low := strings.ToLower(text)
 	cut := len(text)
-	for _, w := range []string{"token", "bearer", "authorization"} {
+	for _, w := range []string{"token", "bearer", "authorization", "password", "secret", "api_key", "apikey", "x-auth"} {
 		if i := strings.Index(low, w); i >= 0 && i < cut {
 			cut = i
 		}

@@ -124,6 +124,8 @@ nself-infra apply
   `server_id`/`snapshot_id`/`retained_ips`/`released_ips`, with snake_case keys), and failures are error envelopes with an
   exit class instead of plain text. The plugin is `planned` and ungated, so there is no compatibility window.
 - `validate`, `plan`, `apply` and `destroy` gain `--json` with the same envelope.
+- The isatty check is covered by unit tests for every non-terminal input; the positive control (a real terminal passes) is manual, under a pty, for example with `script`.
+- `apply --help` no longer carries the stale "gated as PLANNED" paragraph; `--force` is accepted and ignored. Redacted stderr diagnostics also cut at "password", "secret", "api_key", "apikey" and "x-auth" and are capped at 300 characters.
 - `--json` takes the last value given, like every other flag (`--json=false --json` is on). Failures without terraform output of their own print a redacted diagnostic on stderr.
 - The terminal check of `apply` and `destroy` is now a real isatty test. A stdin of `/dev/null` (what a program gives a child by
   default), `/dev/zero`, `/dev/urandom`, a pipe or a file no longer counts as a terminal: those runs exit 4 at the check.

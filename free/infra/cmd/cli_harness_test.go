@@ -142,7 +142,7 @@ func resetAllFlags(c *cobra.Command) {
 // errClient wraps the in-memory fake and fails the named operations.
 type errClient struct {
 	*fakeServerClient
-	get, list, create, change, del error
+	get, list, create, change, del, ipSet error
 }
 
 func (e *errClient) GetServer(c context.Context, id int64) (*server.Server, error) {
@@ -178,4 +178,11 @@ func (e *errClient) DeleteServer(c context.Context, id int64) error {
 		return e.del
 	}
 	return e.fakeServerClient.DeleteServer(c, id)
+}
+
+func (e *errClient) SetPrimaryIPAutoDelete(c context.Context, id int64, v bool) error {
+	if e.ipSet != nil {
+		return e.ipSet
+	}
+	return e.fakeServerClient.SetPrimaryIPAutoDelete(c, id, v)
 }

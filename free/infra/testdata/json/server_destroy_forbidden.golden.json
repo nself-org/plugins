@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "infra server destroy",
+  "error": {
+    "code": "E747",
+    "message": "Hetzner Cloud rejected the API token, the server was not deleted",
+    "cause": "HTTP 403",
+    "remediation": "check that the token is valid, not revoked, and belongs to the right Hetzner project (HETZNER_NSELF_TOKEN, HCLOUD_TOKEN or --token); a read-only token cannot change servers",
+    "exit_code": 3,
+    "class": "auth"
+  }
+}

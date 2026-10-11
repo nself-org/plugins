@@ -265,3 +265,20 @@ func TestWantsJSONLastValueWins(t *testing.T) {
 		}
 	}
 }
+
+func TestRedactAndCap(t *testing.T) {
+	for _, w := range []string{"token", "Bearer", "Authorization", "password", "SECRET", "api_key", "apikey", "X-Auth"} {
+		got := redact("hetzner API GET /servers: 500 x: sent "+w+"=hunter2 more", nil)
+		if strings.Contains(strings.ToLower(got), strings.ToLower(w)) || strings.Contains(got, "hunter2") {
+			t.Errorf("%s not cut: %q", w, got)
+		}
+		if !strings.HasPrefix(got, "hetzner API GET /servers: 500 x: sent") {
+			t.Errorf("%s: the safe prefix was lost: %q", w, got)
+		}
+	}
+	long := errors.New("list servers: hetzner API GET /servers: 500 x: " + strings.Repeat("a", 1000))
+	r := runCLI(t, cliEnv{Client: &errClient{fakeServerClient: fixtureClient(), list: long}}, "server", "list", "--json")
+	if n := len(strings.TrimSpace(strings.TrimPrefix(r.Stderr, "Error:"))); n > maxDiagnostic+5 || n < 100 {
+		t.Errorf("diagnostic length %d, want about %d: %q", n, maxDiagnostic, r.Stderr)
+	}
+}

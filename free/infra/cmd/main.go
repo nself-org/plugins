@@ -8,7 +8,7 @@
 // Inputs: the same flags and subcommands as `nself infra` — plan, apply and
 // destroy, each taking --provider and --domain.
 //
-// Outputs: identical to the pre-extraction command, including the PLANNED gate
+// Outputs: identical to the pre-extraction command, including the spend gate
 // on apply and the --auto-approve requirement on destroy.
 //
 // Constraints: the CLI proxies `nself infra ...` to this binary once installed,
@@ -19,8 +19,6 @@
 package main
 
 // infra.go — B51/B52: Terraform-based infrastructure provisioning for nSelf.
-//
-// Status: PLANNED — deferred (requires UD-12 minor release approval).
 //
 // Commands:
 //   nself infra plan    --provider <provider> --domain <domain>
@@ -71,10 +69,7 @@ var infraApplyCmd = &cobra.Command{
 	Short: "Provision nSelf infrastructure via Terraform",
 	Long: `Run 'terraform apply' for the nSelf module matching the given provider.
 
-Outputs include NSELF_URL, ssh_host, and postgres_url after provisioning.
-
-This command is gated as PLANNED. Use --force to bypass the gate and run
-terraform against real infrastructure (requires UD-12 minor release approval).`,
+Outputs include NSELF_URL, ssh_host, and postgres_url after provisioning.`,
 	// RunE is set in apply.go.
 }
 
@@ -151,7 +146,7 @@ func report(err error, js bool, args []string, stdout, stderr io.Writer) int {
 			name = c.CommandPath()
 		}
 		if werr := output.WriteError(stdout, name, d, nil); werr != nil {
-			fmt.Fprintln(stderr, "Error:", err)
+			fmt.Fprintln(stderr, "Error:", safeUsage(err.Error()))
 		}
 		return d.ExitCode
 	}

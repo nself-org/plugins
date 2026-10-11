@@ -76,6 +76,7 @@ func jsonCases() []jsonCase {
 	delFail := &errClient{fakeServerClient: fixtureClient(), del: errors.New("delete server 1: hetzner API DELETE /servers/1: 503 unavailable")}
 	rejected := &errClient{fakeServerClient: fixtureClient(), list: errors.New("list servers: hetzner API GET /servers: 401 unauthorized: token text")}
 	forbidden := &errClient{fakeServerClient: fixtureClient(), create: errors.New("create server: hetzner API POST /servers: 403 forbidden: read only")}
+	destroy403 := &errClient{fakeServerClient: fixtureClient(), ipSet: errors.New("set auto_delete=false on primary IP 10: hetzner API PUT /primary_ips/10: 403 forbidden: read only")}
 	shrink := fixtureClient()
 	shrink.servers[1].ServerType = "cx41"
 	provFail := &errClient{fakeServerClient: fixtureClient(), create: errors.New("create server: hetzner API POST /servers: 422 invalid_input: bad")}
@@ -115,6 +116,7 @@ func jsonCases() []jsonCase {
 		{name: "server_resize_not_found", cmd: "infra server resize", args: []string{"server", "resize", "--id", "9", "--type", "cx41", "--json"}, env: cliEnv{Client: gone}, code: CodeServerNotFound, class: output.ClassUser},
 		{name: "server_destroy_ok", cmd: "infra server destroy", args: []string{"server", "destroy", "--id", "1", "--snapshot", "--json"}, env: srv},
 		{name: "server_destroy_no_backup", cmd: "infra server destroy", args: []string{"server", "destroy", "--id", "1", "--json"}, env: srv, code: CodeBlocked, class: output.ClassDestructiveBlocked},
+		{name: "server_destroy_forbidden", cmd: "infra server destroy", args: []string{"server", "destroy", "--id", "1", "--force-no-backup", "--json"}, env: cliEnv{Client: destroy403}, code: CodeTokenRejected, class: output.ClassAuth},
 		{name: "server_destroy_hetzner_error", cmd: "infra server destroy", args: []string{"server", "destroy", "--id", "1", "--force-no-backup", "--json"}, env: cliEnv{Client: delFail}, code: CodeHetznerFailed, class: output.ClassInfra},
 	}
 }
