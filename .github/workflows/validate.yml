@@ -322,6 +322,9 @@ jobs:
       - name: Pinned schema matches the cli commit
         run: bash scripts/conformance/sync-schema.sh --check
 
+      - name: Free manifests validate against manifest v2 (D-0520)
+        run: bash tests/manifests/validate-free-manifests.sh
+
       - name: Conformance gate on changed plugins
         run: bash scripts/conformance/check.sh --changed
 

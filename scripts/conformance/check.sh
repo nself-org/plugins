@@ -3,8 +3,8 @@
 # has manifest_version 2; v1 plugins are reported and keep the validate.yml checks.
 # Usage: check.sh [--plugins a,b | --changed | --all | --fixtures] [--rules r1,r2] [--root DIR] [--exceptions FILE]
 #                 [--migration-base DIR]
-# Rules: exceptions (global), schema compat healthcheck replace docker-socket migrations migration-immutable
-#        migration-idempotent legacy-renames repository ports build.
+# Rules: exceptions (global), schema compat healthcheck replace docker-socket port-bind migrations boot-schema
+#        migration-immutable migration-idempotent legacy-renames repository ports build.
 # migration-immutable and migration-idempotent compare a plugin with the last release: --migration-base DIR is a directory
 # holding <plugin> trees of that release. Without it the gate resolves the last v* tag (git describe; CI needs fetch-depth
 # 0 or fetched tags), extracts `free` from it with git archive into the work dir and prints "migration baseline: <tag>";
@@ -16,7 +16,7 @@
 set -u
 . "$(dirname "$0")/lib.sh"
 mode=all; list=; root=$CONF_ROOT/free; rules=; exc=$CONF_DIR/exceptions.yaml
-ALL="schema compat healthcheck replace docker-socket migrations migration-immutable migration-idempotent legacy-renames repository ports build"
+ALL="schema compat healthcheck replace docker-socket port-bind migrations boot-schema migration-immutable migration-idempotent legacy-renames repository ports build"
 migbase=
 while [ $# -gt 0 ]; do case $1 in
   --plugins) mode=plugins; list=$2; shift;; --changed) mode=changed;; --all) mode=all;;
@@ -69,6 +69,7 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
     case $r in exceptions) continue;; build) cmd="bash $CONF_DIR/build-from-tarball.sh $dir";;
       ports) cmd="bash $CONF_DIR/ports.sh --plugins $p --root $root";;
       docker-socket) cmd="bash $CONF_DIR/rules/docker-socket.sh $dir $exc";;
+      port-bind) cmd="bash $CONF_DIR/rules/port-bind.sh $dir $exc";;
       migration-immutable|migration-idempotent) [ -n "$migbase" ] || continue; cmd="bash $CONF_DIR/rules/$r.sh $dir $exc $migbase";;
       legacy-renames) cmd="bash $CONF_DIR/rules/legacy-renames.sh $dir $exc";;
       *) cmd="bash $CONF_DIR/rules/$r.sh $dir";; esac

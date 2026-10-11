@@ -16,13 +16,17 @@ done
 edit() { local f=$1; shift; sed -e "$@" "$f" > "$f.tmp" && mv "$f.tmp" "$f"; }
 sock() { local f=${1:-docker-compose.plugin.yml}; awk '/^    networks:/ { print "    volumes:"; print "      - /var/run/docker.sock:/var/run/docker.sock" } { print }' "$f" > c.tmp && mv c.tmp "$f"; }
 jqe() { jq "$1" plugin.json > p.tmp && mv p.tmp plugin.json; }
+# setport <line> [file]: replace the published-port line of the compose fragment (a block of lines is allowed).
+setport() { local f=${2:-docker-compose.plugin.yml}; awk -v r="$1" '/^      - "127\.0\.0\.1:39[0-9][0-9]:39[0-9][0-9]"$/ { print r; next } { print }' "$f" > c.tmp && mv c.tmp "$f"; }
+portflow() { awk '/^    ports:$/ { print "    ports: [\"3902:3902\"]"; getline; next } { print }' docker-compose.plugin.yml > c.tmp && mv c.tmp docker-compose.plugin.yml; }
+hostnet() { awk '{ print } /^    restart:/ { print "    network_mode: host" }' docker-compose.plugin.yml > c.tmp && mv c.tmp docker-compose.plugin.yml; }
 # plant <id> <plugin> <rule> <shell snippet run inside the copied plugin dir> [extra check.sh args]
 plant() {
   local id=$1 p=$2 rule=$3 snip=$4; shift 4
   rm -rf "$mut/$id"; mkdir -p "$mut/$id"; cp -R "$conv/$p" "$mut/$id/$p"
   ( cd "$mut/$id/$p" && eval "$snip" )
   local out; out=$(bash "$CONF_DIR/check.sh" --root "$mut/$id" --plugins "$p" --rules "$rule" --migration-base "$mig" "$@" 2>&1); local r=$?
-  if [ $r -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL $rule "; then echo "pass  defect $id fails rule $rule"
+  if [ $r -ne 0 ] && printf '%s\n' "$out" | grep -qE "FAIL $rule .*(${PLANT_MSG:-.})"; then echo "pass  defect $id fails rule $rule"
   else echo "FAIL  defect $id: rule $rule did not fail (rc=$r)"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
 }
 # pass_plant <id> <plugin> <rules> <snippet> [extra check.sh args]: apply the snippet to a copy, require the rules to PASS.
@@ -48,6 +52,29 @@ plant unvendored-build alpha build "rm -rf vendor"
 plant sock-in-named-fragment beta docker-socket "mkdir deploy; mv docker-compose.plugin.yml deploy/plugin.yml; jqe '.service.compose = \"deploy/plugin.yml\"'; sock deploy/plugin.yml"
 plant sock-in-other-yaml beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - /var/run/docker.sock:/s\n' > extra/override.yaml"
 plant sock-var-run beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - \"/var/run:/host-run\"\n' > extra/run.yml"
+# Rule port-bind (D-0453): every published port binds the literal 127.0.0.1. PLANT_MSG pins the failure to a real finding,
+# not a tool or parse error.
+PLANT_MSG='publishes|network_mode'
+plant port-all-interfaces beta port-bind "setport '      - \"3902:3902\"'"
+plant port-any-ip beta port-bind "setport '      - \"0.0.0.0:3902:3902\"'"
+plant port-container-only beta port-bind "setport '      - \"3902\"'"
+plant port-env-host-ip beta port-bind "setport '      - \"\${PLUGIN_BIND:-127.0.0.1}:3902:3902\"'"
+plant port-ipv6-any beta port-bind "setport '      - \"[::]:3902:3902\"'"
+plant port-long-syntax beta port-bind "setport '      - target: 3902\n        published: 3902'"
+plant port-flow-seq beta port-bind "portflow"
+plant port-in-other-compose beta port-bind "mkdir extra; printf 'services:\n  x:\n    ports:\n      - \"3999:3999\"\n' > extra/docker-compose.override.yml"
+plant port-in-named-fragment beta port-bind "mkdir deploy; mv docker-compose.plugin.yml deploy/plugin.yml; jqe '.service.compose = \"deploy/plugin.yml\"'; setport '      - \"3902:3902\"' deploy/plugin.yml"
+plant port-host-network beta port-bind "hostnet"
+pass_plant port-long-loopback beta port-bind "setport '      - target: 3902\n        published: 3902\n        host_ip: 127.0.0.1'"
+pass_plant port-newline-filename beta port-bind "mkdir meta; printf 'a: 1\n' > 'meta/x
+y.yaml'"
+pass_plant port-k8s-yaml beta port-bind "mkdir k8s; printf 'kind: Deployment\nspec:\n  template:\n    spec:\n      containers:\n        - name: x\n          ports:\n            - containerPort: 3902\n' > k8s/deploy.yaml"
+PLANT_MSG=
+# Rule boot-schema (D-0453): migrations.apply boot needs schema np_<name>, and the Go boot code must agree.
+plant boot-no-schema alpha boot-schema "jqe 'del(.schema)'"
+plant boot-wrong-schema alpha boot-schema "jqe '.schema = \"np_other\"'"
+plant boot-code-schema-mismatch alpha boot-schema "edit cmd/boot_migrations.go 's/Schema: \"np_alpha\"/Schema: \"np_other\"/'"
+pass_plant no-migrations-no-schema beta boot-schema "jqe 'del(.schema)'"
 plant healthcheck-none alpha healthcheck "edit Dockerfile 's/^HEALTHCHECK.*/HEALTHCHECK NONE/'; edit docker-compose.plugin.yml '/^    healthcheck:/,/^    networks:/{/^    networks:/!d;}'"
 plant healthcheck-disabled alpha healthcheck "awk '{ print } /^    healthcheck:/ { print \"      disable: true\" }' docker-compose.plugin.yml > c.tmp && mv c.tmp docker-compose.plugin.yml"
 plant healthcheck-none-test alpha healthcheck "edit docker-compose.plugin.yml 's/^      test: .*/      test: [\"NONE\"]/'"
@@ -116,6 +143,11 @@ printf 'exceptions:\n  - rule: docker-socket\n    plugin: beta\n    reason: "fix
 printf 'exceptions:\n  - rule: docker-socket\n    plugin: beta\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2020-01-01\n' > "$work/exc-old.yaml"
 if bash "$CONF_DIR/check.sh" --root "$mut/docker-sock" --plugins beta --rules docker-socket --exceptions "$work/exc-ok.yaml" >/dev/null 2>&1; then echo "pass  docker.sock with an unexpired exception passes"; else echo "FAIL  unexpired exception did not allow docker.sock"; rc=1; fi
 plant docker-sock-expired beta docker-socket "sock" --exceptions "$work/exc-old.yaml"
+# port-bind with an unexpired exception passes; with an expired one it fails.
+printf 'exceptions:\n  - rule: port-bind\n    plugin: beta\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2026-12-31\n' > "$work/exc-pb-ok.yaml"
+printf 'exceptions:\n  - rule: port-bind\n    plugin: beta\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2020-01-01\n' > "$work/exc-pb-old.yaml"
+pass_plant port-all-interfaces-excepted beta port-bind "setport '      - \"3902:3902\"'" --exceptions "$work/exc-pb-ok.yaml"
+plant port-all-interfaces-expired beta port-bind "setport '      - \"3902:3902\"'" --exceptions "$work/exc-pb-old.yaml"
 out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions --exceptions "$work/exc-old.yaml" 2>&1) && { echo "FAIL  expired exception did not fail the gate"; rc=1; } || { printf '%s\n' "$out" | grep -q 'FAIL exceptions' && echo "pass  expired exception fails the gate" || { echo "FAIL  expired exception rc but no message"; rc=1; }; }
 out=$(CONF_TODAY=2027-06-01 bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions 2>&1) && { echo "FAIL  committed exceptions.yaml must expire"; rc=1; } || echo "pass  committed exceptions expire after the cap date"
 [ $rc -eq 0 ] && echo "fixtures: gate ok" || echo "fixtures: gate FAIL"

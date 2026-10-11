@@ -63,3 +63,9 @@ exceptions:
     reason: "core still registers functions until the break-out ships"
     owner_ref: P7-SHIP-09
     expires: 2026-12-31
+  # Rule port-bind (D-0453): a deliberate public port. D-0626 tracks a permanent class for these.
+  - rule: port-bind
+    plugin: traefik
+    reason: "the edge proxy publishes 80 and 443 on all interfaces by design (NSELF_HTTP_PORT, NSELF_HTTPS_PORT)"
+    owner_ref: D-0626
+    expires: 2026-12-31
