@@ -179,9 +179,11 @@ keys_case() {
   local f=tls-full F D svc dflt line flags=() ok=0
   F=$PLUGIN/testdata/fixtures/$f; D=$WORK/keys-$f; mkdir -p "$D/ssl" "$D/dynamic" "$D/static"
   log "key ownership: $f with privkey.pem 0600 owned by uid $KEYUID, user, capabilities and sysctls from $(basename "$FRAG")"
-  svc=$(NSELF_PLUGIN_DIR=$(dirname "$PLUGIN") NSELF_HOST_UID=$KEYUID NSELF_HOST_GID=$KEYUID docker compose -f "$FRAG" config --format json | jq -c .services.traefik)
+  # one environment for every render (what core passes a fragment: the plugin dir and the project network); only the uid/gid differ
+  compose_cfg() { env -u NSELF_HOST_UID -u NSELF_HOST_GID "NSELF_PLUGIN_DIR=$(dirname "$PLUGIN")" "DOCKER_NETWORK=$NET" "$@" docker compose -f "$FRAG" config --format json; }
+  svc=$(compose_cfg NSELF_HOST_UID=$KEYUID NSELF_HOST_GID=$KEYUID | jq -c .services.traefik)
   # until core exports the operator uid the fallback must be root without capabilities (hosts where core runs as root)
-  dflt=$(env -u NSELF_HOST_UID -u NSELF_HOST_GID "NSELF_PLUGIN_DIR=$(dirname "$PLUGIN")" docker compose -f "$FRAG" config --format json | jq -r .services.traefik.user)
+  dflt=$(compose_cfg | jq -r .services.traefik.user)
   [ "$dflt" = 0:0 ] || { echo "FAIL: with NSELF_HOST_UID unset the traefik user must be 0:0, got '$dflt'"; exit 1; }
   [ -n "$svc" ] && [ "$svc" != null ] || { echo "FAIL: no traefik service in $FRAG"; exit 1; }
   if jq -e '[((.volumes // [])[] | ((.source // ""), (.target // ""))), ((.environment // {}) | to_entries[] | "\(.key)=\(.value)")]
