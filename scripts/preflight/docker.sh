@@ -65,11 +65,12 @@ pf_cli_dockerfile() {
     echo "cli plugin go.mod has no usable go directive (${gover:-none})"
     return 1
   fi
-  cmds=$(jq -r 'if ((.cliCommands // []) | length) > 0 then .cliCommands[].name
-    else ((.binaryName // .implementation.binaryName // "") | ltrimstr("nself-")) end' "$manifest")
+  cmds=$(jq -r 'if ((.cliCommands // []) | length) > 0 then (.cliCommands[] | .name | if type == "string" then . else "<\(type)>" end)
+    else ((.binaryName // .implementation.binaryName // "") | tostring | ltrimstr("nself-")) end' "$manifest")
   [ -n "$cmds" ] || { echo "cli plugin declares no cliCommands and no binaryName"; return 1; }
-  c=$(printf '%s\n' "$cmds" | grep -Ev '^[a-z0-9][a-z0-9-]*$' | head -n 1)
-  [ -z "$c" ] || { echo "cli command name '$c' is not a plain command name"; return 1; }
+  # Every line must be a plain name: an empty or multi-line name is rejected too.
+  c=$(printf '%s\n' "$cmds" | awk '!/^[a-z0-9][a-z0-9-]*$/ {print "[" $0 "]"; exit}')
+  [ -z "$c" ] || { echo "cli command name $c is not a plain command name"; return 1; }
   {
     printf 'FROM golang:%s-alpine\nWORKDIR /src\nCOPY . .\nENV CGO_ENABLED=0\n' "$gover"
     [ ! -d "$root/vendor" ] || printf 'ENV GOFLAGS=-mod=vendor\n'
