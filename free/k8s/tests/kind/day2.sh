@@ -34,13 +34,14 @@ SQL
 }
 
 # wait_migrated: "every pod Ready" does not mean hasura-auth, storage and hasura finished their
-# migrations. Wait until the auth and storage schemas have tables and hdb_catalog exists, then
+# migrations. Wait until the auth or storage schemas have tables (the stack runs hasura-auth, not
+# necessarily storage) and hdb_catalog exists, then
 # until the table count has not moved for 10 seconds, so nothing creates tables mid-backup or
 # mid-restore.
 wait_migrated() {
   local i=0 a b
-  until [ "$(pg_sql <<<"SELECT (SELECT count(*) FROM pg_tables WHERE schemaname = 'auth') > 0 AND (SELECT count(*) FROM pg_tables WHERE schemaname = 'storage') > 0 AND to_regclass('hdb_catalog.hdb_version') IS NOT NULL;")" = "t" ]; do
-    i=$((i + 1)); [ "$i" -lt 90 ] || fail "auth, storage and hasura tables never appeared"
+  until [ "$(pg_sql <<<"SELECT (SELECT count(*) FROM pg_tables WHERE schemaname IN ('auth', 'storage')) > 0 AND to_regclass('hdb_catalog.hdb_version') IS NOT NULL;")" = "t" ]; do
+    i=$((i + 1)); [ "$i" -lt 90 ] || fail "auth or storage tables, or hdb_catalog, never appeared"
     sleep 2
   done
   a="$(user_table_count)"
