@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0.0",
   "generated_at": "2026-09-21T21:11:03.046357Z",
-  "plugins_count": 131,
+  "plugins_count": 132,
   "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
@@ -2463,6 +2463,37 @@
         "sha256": "d8c63e56e1cba30396a0d4e75eac8e152e6abad12f21670b413857e6cb03ba47"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/torrent-manager-1.2.6.tar.gz"
+    },
+    "traefik": {
+      "version": "1.2.7",
+      "description": "Traefik reverse proxy from the nSelf route model: file-provider configuration rendered from routes.json at route, TLS and upstream parity with nginx. No Docker socket, certificates from core.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.4.12",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/traefik-1.2.7.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/traefik/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "traefik",
+        "proxy",
+        "reverse-proxy",
+        "tls",
+        "routes"
+      ],
+      "dependencies": [],
+      "name": "traefik",
+      "author": "nself",
+      "minNselfVersion": "1.4.12",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/render"
+      },
+      "releaseTag": "v1.2.7",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/traefik-1.2.7.tar.gz"
     },
     "vpn": {
       "version": "1.2.6",

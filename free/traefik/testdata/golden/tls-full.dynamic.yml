@@ -1,0 +1,1125 @@
+http:
+    middlewares:
+        buffering-8642699b:
+            buffering:
+                maxRequestBodyBytes: 104857600
+        compress-6dedd647:
+            compress:
+                encodings:
+                    - gzip
+                includedContentTypes:
+                    - text/html
+                    - text/plain
+                    - text/css
+                    - text/xml
+                    - text/javascript
+                    - application/json
+                    - application/javascript
+                    - application/xml
+                    - application/xml+rss
+                    - application/vnd.api+json
+                    - image/svg+xml
+                    - font/woff
+                    - font/woff2
+                minResponseBodyBytes: 20
+        headers-fec414ab:
+            headers:
+                customResponseHeaders:
+                    Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'
+                    Permissions-Policy: camera=(), microphone=(), geolocation=()
+                    Referrer-Policy: strict-origin-when-cross-origin
+                    Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+                    X-Content-Type-Options: nosniff
+                    X-Frame-Options: SAMEORIGIN
+                    X-XSS-Protection: "0"
+        inFlightReq-2ddcbcc7:
+            inFlightReq:
+                amount: 5
+                sourceCriterion:
+                    ipStrategy:
+                        depth: 0
+        inFlightReq-fef96462:
+            inFlightReq:
+                amount: 10
+                sourceCriterion:
+                    ipStrategy:
+                        depth: 0
+        rateLimit-65bf1d7a:
+            rateLimit:
+                average: 5
+                burst: 3
+                period: 1m
+        rateLimit-228f9a91:
+            rateLimit:
+                average: 1000
+                burst: 11
+                period: 1m
+        rateLimit-0443ee9d:
+            rateLimit:
+                average: 50
+                burst: 16
+                period: 1m
+        rateLimit-682b8c9a:
+            rateLimit:
+                average: 2
+                burst: 11
+                period: 1s
+        rateLimit-8291d82c:
+            rateLimit:
+                average: 30
+                burst: 21
+                period: 1s
+        rateLimit-bdb6e689:
+            rateLimit:
+                average: 100
+                burst: 21
+                period: 1m
+        rateLimit-dc354fa7:
+            rateLimit:
+                average: 30
+                burst: 6
+                period: 1m
+        rateLimit-f9f47695:
+            rateLimit:
+                average: 5
+                burst: 6
+                period: 1s
+        redirectRegex-15538fe9:
+            redirectRegex:
+                permanent: true
+                regex: ^https?://([^/:]+)(?::[0-9]+)?(.*)$
+                replacement: https://${1}${2}
+        replacePath-0c55bb7a:
+            replacePath:
+                path: /__nself/ok
+        replacePath-1c0314cc:
+            replacePath:
+                path: /__nself/status/403
+        replacePath-8861c4ed:
+            replacePath:
+                path: /__nself/status/404
+    routers:
+        core-auth-fcf1e097-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`auth.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        core-auth-fcf1e097-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`auth.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        core-auth-fcf1e097-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`auth.example.org`)
+            service: responder
+            tls: {}
+        core-auth-fcf1e097-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`auth.example.org`) && Path(`/auth/login`)
+            service: svc-http-auth-4000-efeded9d
+            tls: {}
+        core-auth-fcf1e097-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`auth.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        core-auth-fcf1e097-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`auth.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-auth-4000-efeded9d
+            tls: {}
+        core-auth-fcf1e097-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-dc354fa7
+                - inFlightReq-2ddcbcc7
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`auth.example.org`) && PathPrefix(`/`)
+            service: svc-http-auth-4000-efeded9d
+            tls: {}
+        core-auth-fcf1e097-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`auth.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-auth-4000-efeded9d
+            tls: {}
+        core-hasura-fd45e43a-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`api.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        core-hasura-fd45e43a-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`api.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        core-hasura-fd45e43a-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`api.example.org`)
+            service: responder
+            tls: {}
+        core-hasura-fd45e43a-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`api.example.org`) && Path(`/auth/login`)
+            service: svc-http-hasura-8080-78493bcd
+            tls: {}
+        core-hasura-fd45e43a-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`api.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        core-hasura-fd45e43a-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`api.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-hasura-8080-78493bcd
+            tls: {}
+        core-hasura-fd45e43a-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-bdb6e689
+                - inFlightReq-fef96462
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`api.example.org`) && PathPrefix(`/`)
+            service: svc-http-hasura-8080-fbc40eb9
+            tls: {}
+        core-hasura-fd45e43a-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`api.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-hasura-8080-78493bcd
+            tls: {}
+        core-storage-6cd68f54-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`storage.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        core-storage-6cd68f54-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`storage.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        core-storage-6cd68f54-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`storage.example.org`)
+            service: responder
+            tls: {}
+        core-storage-6cd68f54-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`storage.example.org`) && Path(`/auth/login`)
+            service: svc-http-minio-9000-60586f1a
+            tls: {}
+        core-storage-6cd68f54-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`storage.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        core-storage-6cd68f54-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`storage.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-minio-9000-60586f1a
+            tls: {}
+        core-storage-6cd68f54-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-65bf1d7a
+                - inFlightReq-2ddcbcc7
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`storage.example.org`) && PathPrefix(`/`)
+            service: svc-http-minio-9000-60586f1a
+            tls: {}
+        core-storage-6cd68f54-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`storage.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-minio-9000-60586f1a
+            tls: {}
+        core-storage-console-cf94819c-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`storage-console.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        core-storage-console-cf94819c-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`storage-console.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        core-storage-console-cf94819c-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`storage-console.example.org`)
+            service: responder
+            tls: {}
+        core-storage-console-cf94819c-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`storage-console.example.org`) && Path(`/auth/login`)
+            service: svc-http-minio-9001-60586f1a
+            tls: {}
+        core-storage-console-cf94819c-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`storage-console.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        core-storage-console-cf94819c-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`storage-console.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-minio-9001-60586f1a
+            tls: {}
+        core-storage-console-cf94819c-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`storage-console.example.org`) && PathPrefix(`/`)
+            service: svc-http-minio-9001-60586f1a
+            tls: {}
+        core-storage-console-cf94819c-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`storage-console.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-minio-9001-60586f1a
+            tls: {}
+        cs-1-2e79b478-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`worker-one.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        cs-1-2e79b478-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`worker-one.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        cs-1-2e79b478-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`worker-one.example.org`)
+            service: responder
+            tls: {}
+        cs-1-2e79b478-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`worker-one.example.org`) && Path(`/auth/login`)
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        cs-1-2e79b478-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`worker-one.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        cs-1-2e79b478-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`worker-one.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        cs-1-2e79b478-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-682b8c9a
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`worker-one.example.org`) && PathPrefix(`/`)
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        cs-1-2e79b478-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`worker-one.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        default-acme-web:
+            entryPoints:
+                - web
+            priority: 3
+            rule: PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
+        default-health-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-0c55bb7a
+            priority: 2
+            rule: PathPrefix(`/health`)
+            service: responder
+            tls: {}
+        default-health-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-0c55bb7a
+            priority: 2
+            rule: PathPrefix(`/health`)
+            service: responder
+        default-root-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 1
+            rule: PathPrefix(`/`)
+            service: responder
+            tls: {}
+        default-root-web:
+            entryPoints:
+                - web
+            middlewares:
+                - redirectRegex-15538fe9
+            priority: 1
+            rule: PathPrefix(`/`)
+            service: responder
+        frontend-1-267c6f4e-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`web.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        frontend-1-267c6f4e-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`web.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        frontend-1-267c6f4e-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`web.example.org`)
+            service: responder
+            tls: {}
+        frontend-1-267c6f4e-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`web.example.org`) && Path(`/auth/login`)
+            service: svc-http-host-docker-internal-3000-6be26c46
+            tls: {}
+        frontend-1-267c6f4e-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`web.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        frontend-1-267c6f4e-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`web.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-host-docker-internal-3000-6be26c46
+            tls: {}
+        frontend-1-267c6f4e-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-228f9a91
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`web.example.org`) && PathPrefix(`/`)
+            service: svc-http-host-docker-internal-3000-1d1a113e
+            tls: {}
+        frontend-1-267c6f4e-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`web.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-host-docker-internal-3000-6be26c46
+            tls: {}
+        internal-1-9e901ba0-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`internal-one.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        internal-1-9e901ba0-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`internal-one.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        internal-1-9e901ba0-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`internal-one.example.org`)
+            service: responder
+            tls: {}
+        internal-1-9e901ba0-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`internal-one.example.org`) && Path(`/auth/login`)
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        internal-1-9e901ba0-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`internal-one.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        internal-1-9e901ba0-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`internal-one.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        internal-1-9e901ba0-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-682b8c9a
+                - inFlightReq-fef96462
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`internal-one.example.org`) && PathPrefix(`/`)
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        internal-1-9e901ba0-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`internal-one.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-worker-one-9011-f8c715a5
+            tls: {}
+        internal-2-d7c7a0a9-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`internal-two.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        internal-2-d7c7a0a9-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`internal-two.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        internal-2-d7c7a0a9-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`internal-two.example.org`)
+            service: responder
+            tls: {}
+        internal-2-d7c7a0a9-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`internal-two.example.org`) && Path(`/auth/login`)
+            service: svc-https-worker-two-9012-45a8f6d9
+            tls: {}
+        internal-2-d7c7a0a9-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`internal-two.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        internal-2-d7c7a0a9-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`internal-two.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-https-worker-two-9012-45a8f6d9
+            tls: {}
+        internal-2-d7c7a0a9-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-682b8c9a
+                - inFlightReq-fef96462
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`internal-two.example.org`) && PathPrefix(`/`)
+            service: svc-https-worker-two-9012-0618708e
+            tls: {}
+        internal-2-d7c7a0a9-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`internal-two.example.org`) && PathPrefix(`/api/`)
+            service: svc-https-worker-two-9012-45a8f6d9
+            tls: {}
+        optional-functions-eb8c0e11-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`functions.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        optional-functions-eb8c0e11-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`functions.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        optional-functions-eb8c0e11-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`functions.example.org`)
+            service: responder
+            tls: {}
+        optional-functions-eb8c0e11-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`functions.example.org`) && Path(`/auth/login`)
+            service: svc-http-functions-3008-accbdcd8
+            tls: {}
+        optional-functions-eb8c0e11-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`functions.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        optional-functions-eb8c0e11-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`functions.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-functions-3008-accbdcd8
+            tls: {}
+        optional-functions-eb8c0e11-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-0443ee9d
+                - inFlightReq-fef96462
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`functions.example.org`) && PathPrefix(`/`)
+            service: svc-http-functions-3008-accbdcd8
+            tls: {}
+        optional-functions-eb8c0e11-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`functions.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-functions-3008-accbdcd8
+            tls: {}
+        optional-mail-1d49c2f7-b0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`mail.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
+            service: responder
+            tls: {}
+        optional-mail-1d49c2f7-b1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-8861c4ed
+            priority: 25620000
+            rule: Host(`mail.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+            tls: {}
+        optional-mail-1d49c2f7-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`mail.example.org`)
+            service: responder
+            tls: {}
+        optional-mail-1d49c2f7-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-f9f47695
+                - buffering-8642699b
+            priority: 25660022
+            rule: Host(`mail.example.org`) && Path(`/auth/login`)
+            service: svc-http-mailpit-8025-40a7cbf6
+            tls: {}
+        optional-mail-1d49c2f7-l1-deny-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`mail.example.org`) && Path(`/healthz`)
+            service: responder
+            tls: {}
+        optional-mail-1d49c2f7-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - buffering-8642699b
+            priority: 25660017
+            rule: Host(`mail.example.org`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
+            service: svc-http-mailpit-8025-40a7cbf6
+            tls: {}
+        optional-mail-1d49c2f7-l2-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-682b8c9a
+                - buffering-8642699b
+            priority: 25602002
+            rule: Host(`mail.example.org`) && PathPrefix(`/`)
+            service: svc-http-mailpit-8025-40a7cbf6
+            tls: {}
+        optional-mail-1d49c2f7-l3-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - headers-fec414ab
+                - compress-6dedd647
+                - rateLimit-8291d82c
+                - buffering-8642699b
+            priority: 25602010
+            rule: Host(`mail.example.org`) && PathPrefix(`/api/`)
+            service: svc-http-mailpit-8025-40a7cbf6
+            tls: {}
+    serversTransports:
+        transport-3d2ffcc4:
+            forwardingTimeouts:
+                dialTimeout: 1m0s
+                responseHeaderTimeout: 24h0m0s
+        transport-8c9de12f:
+            forwardingTimeouts:
+                dialTimeout: 1m0s
+                responseHeaderTimeout: 1m0s
+        transport-41d9fcb2:
+            forwardingTimeouts:
+                dialTimeout: 1m0s
+                responseHeaderTimeout: 24h0m0s
+            insecureSkipVerify: true
+        transport-83afdb4b:
+            forwardingTimeouts:
+                dialTimeout: 1m0s
+                responseHeaderTimeout: 1m0s
+            insecureSkipVerify: true
+    services:
+        responder:
+            loadBalancer:
+                passHostHeader: false
+                servers:
+                    - url: http://traefik-acme:8080
+        svc-http-auth-4000-efeded9d:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://auth:4000
+                serversTransport: transport-8c9de12f
+        svc-http-functions-3008-accbdcd8:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://functions:3008
+                serversTransport: transport-8c9de12f
+        svc-http-hasura-8080-78493bcd:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://hasura:8080
+                serversTransport: transport-8c9de12f
+        svc-http-hasura-8080-fbc40eb9:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://hasura:8080
+                serversTransport: transport-3d2ffcc4
+        svc-http-host-docker-internal-3000-1d1a113e:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://host.docker.internal:3000
+                serversTransport: transport-3d2ffcc4
+        svc-http-host-docker-internal-3000-6be26c46:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://host.docker.internal:3000
+                serversTransport: transport-8c9de12f
+        svc-http-mailpit-8025-40a7cbf6:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://mailpit:8025
+                serversTransport: transport-8c9de12f
+        svc-http-minio-9000-60586f1a:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://minio:9000
+                serversTransport: transport-8c9de12f
+        svc-http-minio-9001-60586f1a:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://minio:9001
+                serversTransport: transport-8c9de12f
+        svc-http-worker-one-9011-f8c715a5:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: http://worker-one:9011
+                serversTransport: transport-8c9de12f
+        svc-https-worker-two-9012-45a8f6d9:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: https://worker-two:9012
+                serversTransport: transport-83afdb4b
+        svc-https-worker-two-9012-0618708e:
+            loadBalancer:
+                passHostHeader: true
+                servers:
+                    - url: https://worker-two:9012
+                serversTransport: transport-41d9fcb2
+tls:
+    certificates:
+        - certFile: /nself/ssl/certificates/.example-org.gen-1/fullchain.pem
+          keyFile: /nself/ssl/certificates/.example-org.gen-1/privkey.pem
+          stores:
+            - default
+    options:
+        default:
+            cipherSuites:
+                - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+                - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+                - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+                - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+                - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+                - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+            maxVersion: VersionTLS13
+            minVersion: VersionTLS12
+    stores:
+        default:
+            defaultCertificate:
+                certFile: /nself/ssl/certificates/.example-org.gen-1/fullchain.pem
+                keyFile: /nself/ssl/certificates/.example-org.gen-1/privkey.pem
