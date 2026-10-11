@@ -94,7 +94,7 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("storage: put %s/%s: metadata upsert failed after the S3 write: %v", bucket, key, err)
 		if !existed {
-			s.removeOrphan(bucket, objectKey(sai, key))
+			s.removeOrphan(bucket, objectKey(sai, key), bucketID, key)
 		} else {
 			log.Printf("storage: quota accounting drift: %s/%s was overwritten in S3 but its row keeps the old size (old %d bytes, new %d bytes)", bucket, key, overwrite, res.Size)
 		}
@@ -252,11 +252,36 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 // removeOrphan deletes bytes that were written to S3 but never got a metadata row (best effort, detached from the
-// request so a client that hung up does not leave them behind). An overwrite is never cleaned up this way.
-func (s *Server) removeOrphan(bucket, physicalKey string) {
+// request so a client that hung up does not leave them behind). An overwrite is never cleaned up this way, and
+// neither is a key that has a row by now: `existed` was read before the upload, so a concurrent PUT may have
+// committed the row (and owns these bytes) since. The row is re-checked on a fresh context; if the check fails the
+// bytes stay, because deleting bytes that a row points at is worse than leaking an orphan.
+func (s *Server) removeOrphan(bucket, physicalKey, bucketID, key string) {
+	cleanOrphan(s.store, bucket, physicalKey, func(ctx context.Context) (bool, error) {
+		var exists bool
+		err := s.db.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM np_storage_objects WHERE bucket_id = $1 AND key = $2)`,
+			bucketID, key).Scan(&exists)
+		return exists, err
+	})
+}
+
+// cleanOrphan deletes physicalKey unless rowExists says a metadata row claims it or cannot say.
+func cleanOrphan(store ObjectStore, bucket, physicalKey string, rowExists func(context.Context) (bool, error)) {
+	checkCtx, cancelCheck := context.WithTimeout(context.Background(), 10*time.Second)
+	exists, err := rowExists(checkCtx)
+	cancelCheck()
+	if err != nil {
+		log.Printf("storage: orphan cleanup of %s/%s skipped: row re-check failed: %v", bucket, physicalKey, err)
+		return
+	}
+	if exists {
+		log.Printf("storage: orphan cleanup of %s/%s skipped: a concurrent PUT wrote the row", bucket, physicalKey)
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := s.store.Delete(ctx, bucket, physicalKey); err != nil {
+	if err := store.Delete(ctx, bucket, physicalKey); err != nil {
 		log.Printf("storage: orphan cleanup of %s/%s failed: %v", bucket, physicalKey, err)
 		return
 	}

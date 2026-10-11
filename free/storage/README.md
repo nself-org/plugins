@@ -146,9 +146,18 @@ stored literally, so keys written by an older version with `%` sequences are now
 **Failed metadata write.** If the S3 write succeeds but the Postgres row cannot be written, bytes of a new key are
 deleted again (best effort, logged); an overwrite keeps its new bytes.
 
+A concurrent PUT can commit the row for the same new key while this upload's own row write fails. The cleanup
+re-checks for a row first and keeps the bytes if one exists or if the check itself fails. This narrows the race, it
+does not close it: a PUT whose bytes are in S3 but whose row is not committed yet can still lose its bytes (a retried
+PUT heals it).
+
 **Concurrent writes.** Two simultaneous PUTs of one key can reach S3 and Postgres in opposite orders. A download uses
 the `Content-Type` stored with the bytes in S3, but the object list and `?metadata=true` (Postgres) may briefly show the
 size, ETag and type of the other write. The last S3 write holds the bytes.
+
+**Delete order.** Object and bucket deletes remove the S3 bytes first, then the row. If the row delete fails, the
+object still lists but a GET is 404. A retried DELETE is idempotent (a missing key counts as deleted) and clears the
+row.
 
 Deleting a bucket also deletes every object under the account's prefix in S3 (listed from S3, not only the objects
 that have a metadata row), so bytes left by a failed or racing upload do not outlive the bucket.

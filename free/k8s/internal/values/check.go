@@ -6,7 +6,9 @@
 // Outputs: []Diff, empty when the file matches the model.
 //
 // Constraints: reports a service that is missing from the values file, extra
-// in it, or whose image or tag differs. A service listed under unsupported
+// in it, or whose image, tag, plugin marker or init-script names differ, and a
+// differing baseDomain. secrets.yaml is not read: init-script bodies are
+// compared by name only, never by content. A service listed under unsupported
 // counts as present (it is accounted for). Diffs are sorted by service then
 // kind and never include env values.
 package values
@@ -15,6 +17,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -25,6 +28,9 @@ const (
 	DiffExtra   = "extra"
 	DiffDiffers = "differs"
 )
+
+// ProjectDiff is the Diff.Service of a difference that belongs to no service.
+const ProjectDiff = "(project)"
 
 // Diff is one parity difference.
 type Diff struct {
@@ -39,16 +45,25 @@ func (d Diff) String() string {
 
 // Check compares existing with the values the model would produce today.
 func Check(existing []byte, m *Model) ([]Diff, error) {
+	return CheckWith(existing, m, MapOptions{})
+}
+
+// CheckWith is Check with explicit mapping options.
+func CheckWith(existing []byte, m *Model, o MapOptions) ([]Diff, error) {
 	var have Values
 	dec := yaml.NewDecoder(bytes.NewReader(existing))
 	if err := dec.Decode(&have); err != nil {
 		return nil, fmt.Errorf("existing values file is not valid: %w", err)
 	}
-	want, _, err := Map(m, nil)
+	want, _, err := MapWith(m, nil, o)
 	if err != nil {
 		return nil, err
 	}
 	var diffs []Diff
+	if have.BaseDomain != want.BaseDomain {
+		diffs = append(diffs, Diff{ProjectDiff, DiffDiffers,
+			fmt.Sprintf("baseDomain: values %q, compose %q", have.BaseDomain, want.BaseDomain)})
+	}
 	for _, name := range sortedKeys(m.Services) {
 		_, mapped := have.Services[name]
 		if !mapped && !hasUnsupported(have.Unsupported, name) {
@@ -59,9 +74,17 @@ func Check(existing []byte, m *Model) ([]Diff, error) {
 		if !ok || !mapped {
 			continue
 		}
-		if h := have.Services[name]; h.Image != w.Image || h.Tag != w.Tag || h.Digest != w.Digest {
+		h := have.Services[name]
+		switch {
+		case h.Image != w.Image || h.Tag != w.Tag || h.Digest != w.Digest:
 			diffs = append(diffs, Diff{name, DiffDiffers,
 				fmt.Sprintf("values %s, compose %s", ref(h), ref(w))})
+		case h.Plugin != w.Plugin:
+			diffs = append(diffs, Diff{name, DiffDiffers,
+				fmt.Sprintf("plugin marker: values %q, compose %q", h.Plugin, w.Plugin)})
+		case !equalNames(h.InitDB, w.InitDB):
+			diffs = append(diffs, Diff{name, DiffDiffers,
+				fmt.Sprintf("initdb scripts: values [%s], compose [%s]", strings.Join(h.InitDB, " "), strings.Join(w.InitDB, " "))})
 		}
 	}
 	for _, name := range sortedKeys(have.Services) {
@@ -76,6 +99,18 @@ func Check(existing []byte, m *Model) ([]Diff, error) {
 	}
 	sort.SliceStable(diffs, func(i, j int) bool { return diffs[i].Service < diffs[j].Service })
 	return diffs, nil
+}
+
+func equalNames(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func ref(s Service) string {

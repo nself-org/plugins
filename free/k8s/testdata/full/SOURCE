@@ -8,3 +8,4 @@ Steps:
   4. Scrub: the build directory became /project; every generated secret (admin secret, JWT key, postgres password, database URLs, internal secrets) became fixture-<key-name>.
   5. golden/*.yaml = `UPDATE_GOLDEN=1 go test ./internal/values/` output, reviewed by hand.
 .nself/compose-files.txt and compose-env-files.txt hold the relative lines `nself build` wrote as absolute paths.
+postgres/init/ is hand-written for the initdb mapping (D-0308): fake scripts only (no real password); README.txt is there to be skipped, 30-seed.sql.gz is gzip with mtime 0.

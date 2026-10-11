@@ -51,7 +51,7 @@
           {
             "name": "domain",
             "type": "string",
-            "usage": "Domain, recorded in the release values (required for install; the chart does not consume it yet, D-0311)"
+            "usage": "Domain that replaces the project's BASE_DOMAIN in the ingress hosts (required for install)"
           },
           {
             "default": "false",
@@ -60,9 +60,14 @@
             "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
           },
           {
+            "name": "license-secret",
+            "type": "string",
+            "usage": "Name of an existing Secret that holds NSELF_PLUGIN_LICENSE_KEY; plugin workloads read the key from it (the key itself is never sent)"
+          },
+          {
             "name": "plugins",
             "type": "string",
-            "usage": "Comma-separated plugins, recorded in the release values (the chart does not consume them yet, D-0311)"
+            "usage": "Comma-separated plugins the chart checks against the generated values (each must be a plugin service there)"
           },
           {
             "default": ".",
@@ -105,7 +110,7 @@
           {
             "name": "domain",
             "type": "string",
-            "usage": "Domain, recorded in the release values (required for install; the chart does not consume it yet, D-0311)"
+            "usage": "Domain that replaces the project's BASE_DOMAIN in the ingress hosts"
           },
           {
             "default": "false",
@@ -114,9 +119,14 @@
             "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
           },
           {
+            "name": "license-secret",
+            "type": "string",
+            "usage": "Name of an existing Secret that holds NSELF_PLUGIN_LICENSE_KEY; plugin workloads read the key from it (the key itself is never sent)"
+          },
+          {
             "name": "plugins",
             "type": "string",
-            "usage": "Comma-separated plugins, recorded in the release values (the chart does not consume them yet, D-0311)"
+            "usage": "Comma-separated plugins the chart checks against the generated values (each must be a plugin service there)"
           },
           {
             "default": ".",
@@ -316,7 +326,7 @@
   "entryPoint": "cmd/",
   "envVars": [
     {
-      "description": "Optional. Not written to the release until the chart reads it (D-0311)",
+      "description": "Optional. Never sent to the cluster: install and upgrade only warn when it is set. Put it in a Secret and pass --license-secret",
       "name": "NSELF_PLUGIN_LICENSE_KEY",
       "required": false
     },

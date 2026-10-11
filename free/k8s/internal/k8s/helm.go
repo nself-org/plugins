@@ -6,14 +6,16 @@
 // (.nself/generated/k8s/{values,secrets}.yaml) and are passed with --values.
 //
 // Inputs: InstallOptions (project dir, embedded chart, release, kubeconfig,
-// kube context, domain, licence key, plugins).
+// kube context, domain, licence Secret name, plugins).
 //
 // Outputs: helm's stdout and stderr, inherited.
 //
 // Constraints: a secret value never appears on argv: secrets travel in the
-// generated secrets.yaml. The licence key is not given to helm at all until the
-// chart reads it (D-0311): helm stores every value in the release Secret.
-// The install overlay (domain, plugins) goes to helm on stdin (--values -), so
+// generated secrets.yaml. The licence key is never given to helm: helm stores
+// every value in the release Secret. The overlay carries only the NAME of a
+// licence Secret that the user created (license.secretName, see license.go).
+// The install overlay (domain, plugins, licence Secret name) goes to helm on
+// stdin (--values -), so
 // no overlay file exists to leave behind. helm runs with a cleaned environment
 // (env.go). The kubeconfig is passed with --kubeconfig only when the caller
 // gives one (the --cluster flag); otherwise helm reads KUBECONFIG itself. An
@@ -56,10 +58,13 @@ type InstallOptions struct {
 	// HELM_KUBEAPISERVER, HELM_KUBETOKEN, ...) is stripped from helm's
 	// environment, so nothing inherited redirects or re-authenticates the run.
 	KubeContext string
-	// LicenseKey is read from the environment but not passed to helm until the
-	// chart consumes it (D-0311); see HasUnusedLicence.
+	// LicenseKey is read from the environment only to warn when it is set
+	// without LicenseSecret; it is never passed to helm (see LicenseKeyUnsent).
 	LicenseKey string
-	Plugins    []string
+	// LicenseSecret names an existing Secret in the release namespace that
+	// holds the licence key; the overlay writes it as license.secretName.
+	LicenseSecret string
+	Plugins       []string
 	// ProjectDir holds .nself/generated/k8s (default ".").
 	ProjectDir string
 	// Chart is the filesystem holding the chart at ChartRoot (the embed.FS).

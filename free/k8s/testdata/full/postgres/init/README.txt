@@ -1,0 +1,1 @@
+not an init script

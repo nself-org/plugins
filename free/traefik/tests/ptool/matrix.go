@@ -104,11 +104,10 @@ func norm(h http.Header) []string {
 
 // diff compares two results on status, headers (minus Date and Server), body digest and TLS SANs.
 func diff(a, b result) string {
-	if (a.err != nil) || (b.err != nil) {
-		if a.err != nil && b.err != nil {
-			return ""
-		}
-		return fmt.Sprintf("error mismatch: nginx=%v traefik=%v", a.err, b.err)
+	// A transport error on either side is a failure, even when both sides fail: two dead
+	// connections compare nothing, so equal errors must not read as a match.
+	if a.err != nil || b.err != nil {
+		return fmt.Sprintf("transport error nginx=%v traefik=%v", a.err, b.err)
 	}
 	var d []string
 	if a.status != b.status {

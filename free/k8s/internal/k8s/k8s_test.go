@@ -139,7 +139,7 @@ func argvOf(t *testing.T, out string) []string {
 
 // TestInstallArgvHasNoSecretOrLicence is the secrets-on-argv guard: neither a
 // value of secrets.yaml nor the licence key appears in any argument, no --set
-// is used, and the licence key does not reach helm at all (D-0311).
+// is used, and the licence key does not reach helm at all.
 func TestInstallArgvHasNoSecretOrLicence(t *testing.T) {
 	out := fakeHelm(t)
 	opts := baseOpts(project(t, true, true))

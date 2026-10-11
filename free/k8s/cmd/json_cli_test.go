@@ -126,8 +126,9 @@ func TestJSONInstall(t *testing.T) {
 	if h, _ := d.Data["ingress_hosts"].([]any); len(h) != 1 || h[0] != "api.example.test" {
 		t.Errorf("ingress_hosts = %v", d.Data["ingress_hosts"])
 	}
-	if len(d.Meta.Warnings) != 1 || !strings.Contains(d.Meta.Warnings[0], "NSELF_PLUGIN_LICENSE_KEY") {
-		t.Errorf("warnings = %v, want the unused-licence warning", d.Meta.Warnings)
+	if len(d.Meta.Warnings) != 2 || !strings.Contains(d.Meta.Warnings[0], "NSELF_PLUGIN_LICENSE_KEY") ||
+		!strings.Contains(d.Meta.Warnings[1], "--domain has no effect") {
+		t.Errorf("warnings = %v, want the unsent-licence and the no-baseDomain warnings", d.Meta.Warnings)
 	}
 	if strings.Contains(r.Stdout+r.Stderr, "json-key-value") {
 		t.Error("the licence key value leaked")
@@ -170,8 +171,9 @@ func TestJSONUpgrade(t *testing.T) {
 	if d.Data["upgraded"] != true || d.Data["release"] != "nself" {
 		t.Errorf("data = %v", d.Data)
 	}
-	if len(d.Meta.Warnings) == 0 || !strings.Contains(d.Meta.Warnings[0], "Not passing") {
-		t.Errorf("warnings = %v, want the not-passed warning", d.Meta.Warnings)
+	if len(d.Meta.Warnings) != 2 || !strings.Contains(d.Meta.Warnings[0], "--domain has no effect") ||
+		!strings.Contains(d.Meta.Warnings[1], "Not passing") {
+		t.Errorf("warnings = %v, want the no-baseDomain and not-passed warnings", d.Meta.Warnings)
 	}
 	wantFailure(t, runCLI(t, cliRun{Helm: "fail"}, args...), "k8s upgrade", "E722", "infra")
 	wantFailure(t, runCLI(t, cliRun{}, args...), "k8s upgrade", "E720", "infra")

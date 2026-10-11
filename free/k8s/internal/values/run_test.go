@@ -36,7 +36,7 @@ func runProject(t *testing.T) string {
 func runOpts(t *testing.T, dir string, check bool, run Runner) (string, error) {
 	t.Helper()
 	var buf bytes.Buffer
-	res, err := Run(context.Background(), Options{ProjectDir: dir, Check: check, Runner: run})
+	res, err := Run(context.Background(), Options{ProjectDir: dir, Check: check, Runner: run, InitFS: fixtureFS("full")})
 	if res != nil {
 		res.WriteText(&buf)
 	}
@@ -118,7 +118,7 @@ func TestRunCheckFailsOnMissingValuesFile(t *testing.T) {
 func TestRunResultCarriesTheReport(t *testing.T) {
 	dir := runProject(t)
 	run := recordedRunner(t, "full", nil)
-	res, err := Run(context.Background(), Options{ProjectDir: dir, Runner: run})
+	res, err := Run(context.Background(), Options{ProjectDir: dir, Runner: run, InitFS: fixtureFS("full")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,13 +131,13 @@ func TestRunResultCarriesTheReport(t *testing.T) {
 	if items := Items(res.Unsupported); len(items) != 2 || items[0].Reason == "" {
 		t.Errorf("items = %+v", items)
 	}
-	chk, err := Run(context.Background(), Options{ProjectDir: dir, Check: true, Runner: run})
+	chk, err := Run(context.Background(), Options{ProjectDir: dir, Check: true, Runner: run, InitFS: fixtureFS("full")})
 	if err != nil || chk.Mode != ModeCheck || chk.Services == 0 || len(chk.Diffs) != 0 {
 		t.Fatalf("check result = %+v, err = %v", chk, err)
 	}
 	b, _ := os.ReadFile(res.ValuesFile)
 	mustWrite(t, res.ValuesFile, strings.Replace(string(b), "tag: v2.44.0", "tag: v1.0.0", 1))
-	chk, err = Run(context.Background(), Options{ProjectDir: dir, Check: true, Runner: run})
+	chk, err = Run(context.Background(), Options{ProjectDir: dir, Check: true, Runner: run, InitFS: fixtureFS("full")})
 	var ve *Error
 	if !errors.As(err, &ve) || ve.Kind != KindParity || chk == nil || len(chk.Diffs) != 1 {
 		t.Fatalf("parity failure: result = %+v, err = %v", chk, err)

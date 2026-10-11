@@ -22,19 +22,19 @@ ingress:
 // rules means no host; a missing values file keeps the "run nself k8s values" hint.
 func TestIngressHosts(t *testing.T) {
 	dir := project(t, true, true)
-	hosts, err := IngressHosts(dir)
+	hosts, err := IngressHosts(dir, "")
 	if err != nil || len(hosts) != 0 {
 		t.Fatalf("no rules: hosts=%v err=%v, want none", hosts, err)
 	}
 	writeFile(t, filepath.Join(dir, filepath.FromSlash(GeneratedDir), "values.yaml"), valuesWithRules, 0o644)
-	hosts, err = IngressHosts(dir)
+	hosts, err = IngressHosts(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(hosts, ","); got != "a.example.test,b.example.test" {
 		t.Errorf("hosts = %q, want sorted unique a.example.test,b.example.test", got)
 	}
-	if _, err := IngressHosts(project(t, false, false)); err == nil || !strings.Contains(err.Error(), "run nself k8s values") {
+	if _, err := IngressHosts(project(t, false, false), ""); err == nil || !strings.Contains(err.Error(), "run nself k8s values") {
 		t.Errorf("missing values: err = %v", err)
 	}
 }
@@ -101,10 +101,88 @@ func TestRefusesGroupReadableSecrets(t *testing.T) {
 	}
 }
 
-// TestHasUnusedLicence (S3): a licence key in the environment is reported as
-// not passed, and its absence is not.
-func TestHasUnusedLicence(t *testing.T) {
-	if !HasUnusedLicence(InstallOptions{LicenseKey: "k"}) || HasUnusedLicence(InstallOptions{}) {
-		t.Error("HasUnusedLicence must be true exactly when a key is set")
+// TestLicenseKeyUnsent: a licence key in the environment without a
+// --license-secret is reported as not sent; a Secret name or no key is not.
+func TestLicenseKeyUnsent(t *testing.T) {
+	cases := map[string]struct {
+		opts InstallOptions
+		want bool
+	}{
+		"key only":       {InstallOptions{LicenseKey: "k"}, true},
+		"key and secret": {InstallOptions{LicenseKey: "k", LicenseSecret: "nself-license"}, false},
+		"secret only":    {InstallOptions{LicenseSecret: "nself-license"}, false},
+		"neither":        {InstallOptions{}, false},
+	}
+	for name, c := range cases {
+		if got := LicenseKeyUnsent(c.opts); got != c.want {
+			t.Errorf("%s: LicenseKeyUnsent = %v, want %v", name, got, c.want)
+		}
+	}
+	if strings.Contains(LicenseSecretHint, "=fake") || !strings.Contains(LicenseSecretHint, "--license-secret") {
+		t.Errorf("hint = %q", LicenseSecretHint)
+	}
+}
+
+// TestRewriteHost: the Go twin of the chart helper nself.host.
+func TestRewriteHost(t *testing.T) {
+	cases := []struct{ name, host, base, domain, want string }{
+		{"apex", "example.test", "example.test", "shop.org", "shop.org"},
+		{"subdomain keeps prefix", "api.example.test", "example.test", "shop.org", "api.shop.org"},
+		{"nested prefix", "a.b.example.test", "example.test", "shop.org", "a.b.shop.org"},
+		{"other host unchanged", "mail.other.test", "example.test", "shop.org", "mail.other.test"},
+		{"suffix without dot is not a subdomain", "notexample.test", "example.test", "shop.org", "notexample.test"},
+		{"case-insensitive apex", "Example.TEST", "example.test", "shop.org", "shop.org"},
+		{"case-insensitive subdomain", "API.Example.Test", "EXAMPLE.test", "shop.org", "api.shop.org"},
+		{"same domain, other case", "api.example.test", "example.test", "EXAMPLE.test", "api.example.test"},
+		{"no domain", "api.example.test", "example.test", "", "api.example.test"},
+		{"no base domain", "api.example.test", "", "shop.org", "api.example.test"},
+		{"same domain", "api.example.test", "example.test", "example.test", "api.example.test"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := RewriteHost(c.host, c.base, c.domain); got != c.want {
+				t.Errorf("RewriteHost(%q, %q, %q) = %q, want %q", c.host, c.base, c.domain, got, c.want)
+			}
+		})
+	}
+}
+
+// TestIngressHostsAppliesDomain: with a baseDomain in the values and an install
+// domain, the printed hosts are the rewritten ones, sorted and unique.
+func TestIngressHostsAppliesDomain(t *testing.T) {
+	dir := project(t, true, true)
+	body := "baseDomain: example.test\n" + valuesWithRules + "    - {name: d, host: mail.other.test, service: m, port: 1, scheme: http}\n"
+	writeFile(t, filepath.Join(dir, filepath.FromSlash(GeneratedDir), "values.yaml"), body, 0o644)
+	hosts, err := IngressHosts(dir, "shop.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(hosts, ","); got != "a.shop.org,b.shop.org,mail.other.test" {
+		t.Errorf("hosts = %q", got)
+	}
+	hosts, _ = IngressHosts(dir, "")
+	if got := strings.Join(hosts, ","); got != "a.example.test,b.example.test,mail.other.test" {
+		t.Errorf("no domain: hosts = %q", got)
+	}
+}
+
+// TestDomainHasNoEffect: --domain with values that have no baseDomain is
+// reported; with a baseDomain, without --domain, or with unreadable values it is not.
+func TestDomainHasNoEffect(t *testing.T) {
+	dir := project(t, true, true)
+	vals := filepath.Join(dir, filepath.FromSlash(GeneratedDir), "values.yaml")
+	writeFile(t, vals, valuesWithRules, 0o644)
+	if !DomainHasNoEffect(dir, "shop.org") {
+		t.Error("no baseDomain and a domain: want a report")
+	}
+	if DomainHasNoEffect(dir, "") {
+		t.Error("no domain: nothing to report")
+	}
+	writeFile(t, vals, "baseDomain: example.test\n"+valuesWithRules, 0o644)
+	if DomainHasNoEffect(dir, "shop.org") {
+		t.Error("baseDomain present: nothing to report")
+	}
+	if DomainHasNoEffect(project(t, false, false), "shop.org") {
+		t.Error("missing values: reported by install itself, not here")
 	}
 }
