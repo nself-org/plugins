@@ -34,7 +34,8 @@ type ProvisionOptions struct {
 	GithubURL string
 	// RegToken is a GitHub Actions runner registration token. Sourced from
 	// an env var by the caller (cmd/nodes_provision.go) — never
-	// hardcoded, never included in ProvisionResult.
+	// hardcoded, never included in ProvisionResult, and sent to the host
+	// on stdin only, never in a command string or argv (D-0263).
 	RegToken string
 	// Labels are extra labels appended after the standard
 	// self-hosted,Linux,X64 set.
@@ -66,6 +67,11 @@ func Provision(ctx context.Context, ex Executor, m *Manifest, opts ProvisionOpti
 	}
 
 	result := &ProvisionResult{}
+	// the token travels as one stdin line (installRunnerInstance): a line
+	// break would cut it short, so refuse before any host work
+	if strings.ContainsAny(opts.RegToken, "\r\n\x00") {
+		return result, fmt.Errorf("runner provision: the registration token must be a single line")
+	}
 	baseSteps := []struct {
 		name string
 		run  func() (string, error)
@@ -173,12 +179,28 @@ func ensureRealWorkDir(ctx context.Context, ex Executor, workDir string) (string
 // the runner's own svc.sh, which is the supported way to register a
 // self-hosted runner as a systemd unit — reimplementing that unit file
 // would just have to track GitHub's own runner releases anyway.
+//
+// The registration token never enters the script or any argv (D-0263): it
+// is the script's stdin, read by the shell builtin `read` into an
+// unexported variable, then piped by the builtin printf into the runner
+// user's shell, which exports it as ACTIONS_RUNNER_INPUT_TOKEN (the runner
+// reads ACTIONS_RUNNER_INPUT_<ARG> in place of --<arg>) and execs config.sh.
+// ssh, sudo, sh and config.sh therefore show no token in ps, the remote sudo
+// log or the operator's ssh argv. `set +x` stops a tracing shell (BASH_ENV,
+// SHELLOPTS, a .bashrc sourced under sshd) from printing the expanded value,
+// printf's stderr is dropped (a Broken pipe when sudo exits unread), and the
+// variable is unset once used. Output and errors are redacted as well, for a
+// pty that echoes stdin (RequestTTY force). The core copy (cli
+// internal/runner) still passes --token; parity-nodes.sh rewrites that line.
 func installRunnerInstance(ctx context.Context, ex Executor, m *Manifest, opts ProvisionOptions, idx int) (string, error) {
 	instanceDir := opts.InstallRoot + "/runner-" + strconv.Itoa(idx)
 	name := ex.Label() + "-" + strconv.Itoa(idx)
 	labels := strings.Join(append([]string{"self-hosted", "Linux", "X64"}, opts.Labels...), ",")
 
 	script := fmt.Sprintf(`set -e
+set +x
+IFS= read -r NSELF_RUNNER_TOKEN || true
+[ -n "$NSELF_RUNNER_TOKEN" ] || { echo 'no runner registration token on stdin' >&2; exit 1; }
 sudo mkdir -p %[1]s && sudo chown %[2]s:%[2]s %[1]s
 cd %[1]s
 if [ ! -f config.sh ]; then
@@ -187,10 +209,33 @@ if [ ! -f config.sh ]; then
   curl -fsSL -o actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v${VER}/actions-runner-linux-${RARCH}-${VER}.tar.gz"
   tar xzf actions-runner.tar.gz
 fi
-sudo -u %[2]s ./config.sh --url %[3]s --token %[4]s --name %[5]s --labels %[6]s --work _work --unattended --replace
+printf '%%s\n' "$NSELF_RUNNER_TOKEN" 2>/dev/null | sudo -u %[2]s sh -c 'IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN && export ACTIONS_RUNNER_INPUT_TOKEN && exec "$0" "$@"' ./config.sh --url %[3]s --name %[4]s --labels %[5]s --work _work --unattended --replace
+unset NSELF_RUNNER_TOKEN
 sudo ./svc.sh install %[2]s
 sudo ./svc.sh start
 `, shellQuote(instanceDir), shellQuote(m.RunnerUser), shellQuote(opts.GithubURL),
-		shellQuote(opts.RegToken), shellQuote(name), shellQuote(labels))
-	return ex.Run(ctx, script)
+		shellQuote(name), shellQuote(labels))
+	out, err := ex.RunInput(ctx, script, opts.RegToken+"\n")
+	if opts.RegToken == "" {
+		return out, err
+	}
+	out = strings.ReplaceAll(out, opts.RegToken, redacted)
+	if err != nil {
+		err = redactedError{err: err, secret: opts.RegToken}
+	}
+	return out, err
 }
+
+// redacted replaces the registration token wherever host output or an error
+// would carry it.
+const redacted = "[token redacted]"
+
+// redactedError hides secret in err's text and keeps err in the chain, so
+// finish() still finds the process's exit code.
+type redactedError struct {
+	err    error
+	secret string
+}
+
+func (r redactedError) Error() string { return strings.ReplaceAll(r.err.Error(), r.secret, redacted) }
+func (r redactedError) Unwrap() error { return r.err }

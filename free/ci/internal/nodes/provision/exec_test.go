@@ -98,6 +98,25 @@ func TestSSHExecutor_ArgvAndOutput(t *testing.T) {
 	}
 }
 
+// A bracketed IPv6 host (core's form) reaches ssh bare, the form the sdk
+// allowlist accepts, through both Run and RunInput.
+func TestSSHExecutor_BracketedIPv6ReachesSSHBare(t *testing.T) {
+	log := stubSSH(t, "cat >/dev/null; exit 0")
+	ex := NewSSHExecutor("ci@[2001:db8::1]", "/k/key")
+	for name, run := range map[string]func() (string, error){
+		"Run":      func() (string, error) { return ex.Run(context.Background(), "echo hi") },
+		"RunInput": func() (string, error) { return ex.RunInput(context.Background(), "echo hi", "x\n") },
+	} {
+		if _, err := run(); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		b, _ := os.ReadFile(log)
+		if !strings.Contains(string(b), "--\nci@2001:db8::1\necho hi\n") {
+			t.Fatalf("%s ssh argv:\n%s", name, b)
+		}
+	}
+}
+
 func TestSSHExecutor_FailureWrapsOutput(t *testing.T) {
 	stubSSH(t, "echo boom; exit 3")
 	ex := NewSSHExecutor("ci@host-1", "/k/key")
@@ -109,15 +128,25 @@ func TestSSHExecutor_FailureWrapsOutput(t *testing.T) {
 
 func TestSSHExecutor_RefusesBeforeExec(t *testing.T) {
 	log := stubSSH(t, "exit 0")
+	// core's exact messages (cli internal/deploy RunRemoteCommand: empty host,
+	// then remote.ParseHostSpec); parity-nodes.sh compares them end to end (D-0270)
 	for _, tc := range []struct{ dest, want string }{
 		{"", "remote target has no SSH host configured"},
-		{"-oProxyCommand=x", "must not start with '-'"},
-		{"a b@host", "whitespace or a control character"},
-		{"ci@host;id", "unsafe character"},
+		{"-oProxyCommand=x", `invalid host "-oProxyCommand=x": host must not start with '-'`},
+		{"a b@host", `invalid host "a b@host": user must match [a-z_][a-z0-9_.-]{0,31}`},
+		{"ci@host;id", `invalid host "ci@host;id": host holds a byte outside [A-Za-z0-9_.-]`},
+		{"ci@a b", `invalid host "ci@a b": host holds a byte outside [A-Za-z0-9_.-]`},
+		{"ci@a\tb", `invalid host "ci@a\tb": host holds a byte outside [A-Za-z0-9_.-]`},
+		{"ci@2001:db8::1", `invalid host "ci@2001:db8::1": an IPv6 address needs brackets: [2001:db8::1]`},
+		{"ci@node:2222", `host "ci@node:2222": a port or path in the host is not supported here; set Port for that host in ~/.ssh/config`},
+		{"ci@node:/srv", `host "ci@node:/srv": a port or path in the host is not supported here; set Port for that host in ~/.ssh/config`},
 	} {
 		ex := NewSSHExecutor(tc.dest, "/k")
-		if _, err := ex.Run(context.Background(), "echo"); err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Fatalf("dest %q: err=%v, want %q", tc.dest, err, tc.want)
+		if _, err := ex.Run(context.Background(), "echo"); err == nil || err.Error() != tc.want {
+			t.Fatalf("Run dest %q: err=%v, want %q", tc.dest, err, tc.want)
+		}
+		if _, err := ex.RunInput(context.Background(), "echo", "x\n"); err == nil || err.Error() != tc.want {
+			t.Fatalf("RunInput dest %q: err=%v, want %q", tc.dest, err, tc.want)
 		}
 	}
 	if _, err := os.Stat(log); err == nil {

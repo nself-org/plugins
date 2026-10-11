@@ -74,15 +74,18 @@ func TestProvision_RefusalsInCoreOrder(t *testing.T) {
 }
 
 func TestProvision_TokenSourceAndNeverPrinted(t *testing.T) {
-	const flagTok, envTok = "FLAG-TOKEN-1", "ENV-TOKEN-2"
+	const flagTok, envTok = "FAKE-FLAG-TOKEN-0001", "FAKE-ENV-TOKEN-0002"
 	h := &harness{env: map[string]string{"GITHUB_RUNNER_TOKEN": envTok}, fakes: []*fakeExecutor{okFake()}}
 	code, out, errs := h.run(RunProvision, "--github-url", "https://github.com/o/r", "--host", "ci@h1")
 	if code != 0 || errs != "" {
 		t.Fatalf("code=%d err=%q", code, errs)
 	}
-	joined := strings.Join(h.fakes[0].commands, "\n")
-	if !strings.Contains(joined, "--token '"+envTok+"'") {
-		t.Fatalf("env token was not used; commands:\n%s", joined)
+	joined := strings.Join(h.fakes[0].inputs, "\n")
+	if !strings.Contains(joined, envTok+"\n") {
+		t.Fatalf("env token was not sent; inputs:\n%q", joined)
+	}
+	if strings.Contains(strings.Join(h.fakes[0].commands, "\n"), envTok) {
+		t.Fatal("token appears in a command string (D-0263)")
 	}
 	for _, s := range []string{out, errs} {
 		if strings.Contains(s, envTok) {
@@ -95,8 +98,8 @@ func TestProvision_TokenSourceAndNeverPrinted(t *testing.T) {
 	// --token overrides the env var
 	h = &harness{env: map[string]string{"GITHUB_RUNNER_TOKEN": envTok}, fakes: []*fakeExecutor{okFake()}}
 	h.run(RunProvision, "--github-url", "u", "--token", flagTok)
-	joined = strings.Join(h.fakes[0].commands, "\n")
-	if !strings.Contains(joined, "'"+flagTok+"'") || strings.Contains(joined, envTok) {
+	joined = strings.Join(h.fakes[0].inputs, "\n")
+	if !strings.Contains(joined, flagTok+"\n") || strings.Contains(joined, envTok) {
 		t.Fatalf("--token did not override the env var:\n%s", joined)
 	}
 }
