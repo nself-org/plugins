@@ -1,16 +1,78 @@
 {
-  "name": "jobs",
-  "version": "1.2.6",
-  "description": "PostgreSQL-backed background job queue with priorities, scheduling, retries, and REST API. Simplified Go implementation using database polling instead of Redis/BullMQ.",
   "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/jobs",
-  "repository": "https://github.com/nself-org/plugins",
-  "language": "go",
-  "runtime": "go",
-  "minNselfVersion": "0.9.9",
-  "port": 3105,
   "category": "infrastructure",
+  "description": "PostgreSQL-backed background job queue with priorities, scheduling, retries, and REST API. Simplified Go implementation using database polling instead of Redis/BullMQ.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "JOBS_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "JOBS_POLL_INTERVAL_MS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "JOBS_RETRY_ATTEMPTS",
+      "required": false
+    }
+  ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/jobs",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "0.9.9",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "jobs",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs"
+    ],
+    "network": []
+  },
+  "port": 3105,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=0.9.9"
+  },
+  "runtime": "go",
+  "schema": "np_jobs",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3105
+  },
+  "status": "stable",
+  "tables": [
+    "np_jobs_jobs",
+    "np_jobs_queues"
+  ],
   "tags": [
     "jobs",
     "queue",
@@ -19,64 +81,6 @@
     "workers",
     "postgresql"
   ],
-  "tables": [
-    "np_jobs_jobs",
-    "np_jobs_queues"
-  ],
-  "webhooks": {},
-  "actions": {
-    "init": "Initialize jobs infrastructure",
-    "server": "Start jobs HTTP server",
-    "worker": "Background worker runs embedded in server",
-    "retry": "Retry failed jobs via API",
-    "stats": "View queue statistics via API"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "JOBS_PORT",
-      "JOBS_POLL_INTERVAL_MS",
-      "JOBS_RETRY_ATTEMPTS"
-    ]
-  },
-  "config": {
-    "port": 3105,
-    "pollIntervalMs": 1000,
-    "retryAttempts": 3
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "hooks": {
-    "postInstall": "install.sh",
-    "preUninstall": "uninstall.sh",
-    "postSync": null
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [],
-    "filesystem": [
-      "logs"
-    ]
-  },
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
   "tier": "free",
-  "schema": "np_jobs",
-  "migrations": {
-    "dir": "migrations",
-    "apply": "boot"
-  }
+  "version": "1.2.6"
 }
