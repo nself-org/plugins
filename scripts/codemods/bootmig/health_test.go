@@ -86,6 +86,17 @@ func TestHealthEdit(t *testing.T) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
 `, ""},
+		{"returning branch inside a closure before the literal", `func handleHealth(w http.ResponseWriter, r *http.Request) {
+	f := func() {
+		if r == nil {
+			w.Write(nil)
+			return
+		}
+	}
+	f()
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+}
+`, ""},
 		{"Header().Set before the literal is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})

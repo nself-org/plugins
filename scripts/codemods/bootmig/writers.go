@@ -53,6 +53,16 @@ func writesHeaderBefore(body *ast.BlockStmt, w string, pos token.Pos) bool {
 			if exits[v] {
 				return false
 			}
+		case *ast.FuncLit:
+			if v.End() <= stmtStart { // an earlier closure: no return exemption, any writer use counts
+				ast.Inspect(v.Body, func(m ast.Node) bool {
+					if c, ok := m.(*ast.CallExpr); ok && callTouchesWriter(c, w) {
+						hit = true
+					}
+					return !hit
+				})
+				return false
+			}
 		case *ast.CallExpr:
 			if v.End() <= stmtStart && callTouchesWriter(v, w) {
 				hit = true
