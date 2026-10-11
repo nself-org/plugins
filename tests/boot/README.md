@@ -19,6 +19,7 @@ Three-pass verification per plugin:
 - `env` — KEY=value lines passed to every boot.
 - `legacy.sql` — TS-era unprefixed tables with fixture rows (legacy pass only).
 - `legacy-renames` — `old new` pairs for legacy table renames (legacy pass verification).
+- `legacy-probe.sql` — SQL run on the legacy database after the converted boot and the rename checks (legacy pass only); a failing statement fails the pass, a pass line ends with `probe ok`. Requires `legacy-renames`: the conformance rule `legacy-renames` fails a probe that would never run. The same rule requires `legacy-renames` to list exactly the table renames the plugin's migrations perform (and the `legacyTables` list in its Go source, when it has one).
 - `seed.sql` — rows written through the basis schema before the upgrade.
 - `basis-from` — image ref to rewrite the basis Dockerfile's first FROM line.
 - `basis-absent` — manifest tables the basis build never created (not seeded or verified before upgrade).
