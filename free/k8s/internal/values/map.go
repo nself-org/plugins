@@ -29,10 +29,17 @@ import (
 
 var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
-// Map projects the model. routes may be nil (no routes.json).
+// Map projects the model with the production options (init scripts are read
+// from the real disk). routes may be nil (no routes.json).
 func Map(m *Model, routes []Route) (*Values, *Secrets, error) {
+	return MapWith(m, routes, MapOptions{})
+}
+
+// MapWith is Map with explicit options (tests inject the init-script source).
+func MapWith(m *Model, routes []Route, o MapOptions) (*Values, *Secrets, error) {
 	v := &Values{
 		Project:       m.Name,
+		BaseDomain:    baseDomain(m),
 		Services:      map[string]Service{},
 		Volumes:       map[string]Volume{},
 		Unsupported:   []Unsupported{},
@@ -53,6 +60,9 @@ func Map(m *Model, routes []Route) (*Values, *Secrets, error) {
 		if svc.Kind == "" {
 			v.Unsupported = append(v.Unsupported, Unsupported{Name: name, Reason: svc.Image})
 			continue
+		}
+		if err := addInitDB(name, cs, &svc, sec, o.initFS()); err != nil {
+			return nil, nil, err
 		}
 		v.Services[name] = svc
 		if len(env) > 0 {
@@ -111,6 +121,7 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 		return svc, nil, nil
 	}
 	svc.PullPolicy = PullIfNotPresent
+	svc.Plugin = pluginOf(name, cs)
 	svc.Entrypoint, svc.Command = cs.Entrypoint, cs.Command
 	env := map[string]string{}
 	for _, k := range sortedKeys(cs.Environment) {
@@ -127,6 +138,9 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 	svc.Ports = mapPorts(cs)
 	var notMapped []string
 	for _, mt := range cs.Volumes {
+		if isInitDB(mt) {
+			continue // carried by addInitDB
+		}
 		if mt.Type != "volume" {
 			notMapped = append(notMapped, mt.Type+"-mount:"+mt.Target)
 			continue
@@ -146,6 +160,20 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 	sort.Strings(notMapped)
 	svc.NotMapped = notMapped
 	return svc, env, nil
+}
+
+// pluginPrefix names plugin services and the hostname the CLI gives them.
+const pluginPrefix = "plugin-"
+
+// pluginOf returns the plugin name of a plugin workload, or "".
+func pluginOf(name string, cs ComposeSvc) string {
+	if n := strings.TrimPrefix(name, pluginPrefix); n != name && n != "" {
+		return n
+	}
+	if n := strings.TrimPrefix(cs.Hostname, pluginPrefix); n != cs.Hostname && n != "" {
+		return n
+	}
+	return ""
 }
 
 func kindOf(name, repo string, cs ComposeSvc) string {

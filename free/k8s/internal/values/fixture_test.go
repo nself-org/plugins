@@ -11,6 +11,7 @@ package values
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,20 @@ func recordedRunner(t *testing.T, name string, got *[]string) Runner {
 	}
 }
 
+// fixtureFS opens a fixture's bind sources: the recorded compose JSON names
+// them /project/<path>, which lives at testdata/<name>/<path>.
+func fixtureFS(name string) SourceFS {
+	return func(source string) (fs.FS, error) {
+		rel, ok := strings.CutPrefix(source, "/project/")
+		if !ok {
+			return nil, fs.ErrNotExist
+		}
+		return os.DirFS(filepath.Join(fixtureDir(name), filepath.FromSlash(rel))), nil
+	}
+}
+
+func fixtureOpts(name string) MapOptions { return MapOptions{InitFS: fixtureFS(name)} }
+
 // mapFixture resolves and maps a fixture project.
 func mapFixture(t *testing.T, name string) (*Model, *Values, *Secrets) {
 	t.Helper()
@@ -46,7 +61,7 @@ func mapFixture(t *testing.T, name string) (*Model, *Values, *Secrets) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, s, err := Map(m, routes)
+	v, s, err := MapWith(m, routes, fixtureOpts(name))
 	if err != nil {
 		t.Fatal(err)
 	}

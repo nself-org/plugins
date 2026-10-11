@@ -1,4 +1,5 @@
 project: proxy-full
+baseDomain: example.test
 services:
   auth:
     kind: deployment
@@ -292,11 +293,16 @@ services:
       timeoutSeconds: 5
       failureThreshold: 5
       initialDelaySeconds: 0
+    initdb:
+      - 00-extensions.sql
+      - 10-auth.sql
+      - 20-hook.sh
+      - 30-seed.sql.gz
     notMapped:
-      - bind-mount:/docker-entrypoint-initdb.d
       - cap_add:CHOWN,SETUID,SETGID,IPC_LOCK
       - cap_drop:ALL
       - deploy
+      - initdb:README.txt
       - read_only
       - security_opt:no-new-privileges:true
       - tmpfs-mount:/run/postgresql

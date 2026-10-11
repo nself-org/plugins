@@ -1,0 +1,2 @@
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE ROLE fixture_app LOGIN PASSWORD 'fake-initdb-0000';

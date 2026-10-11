@@ -26,7 +26,8 @@ type Options struct {
 	ProjectDir string
 	OutDir     string // default <ProjectDir>/.nself/generated/k8s
 	Check      bool
-	Runner     Runner // default ExecRunner
+	Runner     Runner   // default ExecRunner
+	InitFS     SourceFS // opens init-script directories; default the real disk
 }
 
 // Run executes one `values` invocation. The Result is valid, with its Diffs,
@@ -49,7 +50,7 @@ func Run(ctx context.Context, o Options) (*Result, error) {
 	if err != nil {
 		return nil, &Error{Kind: KindOther, Err: err}
 	}
-	v, s, err := Map(model, routes)
+	v, s, err := MapWith(model, routes, MapOptions{InitFS: o.InitFS})
 	if err != nil {
 		return nil, &Error{Kind: KindOther, Err: err}
 	}
@@ -72,7 +73,7 @@ func runCheck(o Options, model *Model) (*Result, error) {
 	if err != nil {
 		return nil, &Error{Kind: KindMissing, Err: fmt.Errorf("reading existing values (run nself k8s values first): %w", err)}
 	}
-	diffs, err := Check(existing, model)
+	diffs, err := CheckWith(existing, model, MapOptions{InitFS: o.InitFS})
 	if err != nil {
 		return nil, &Error{Kind: KindInvalid, Err: err}
 	}
