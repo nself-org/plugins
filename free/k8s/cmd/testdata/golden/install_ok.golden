@@ -1,0 +1,9 @@
+exit: 0
+--- stdout ---
+[0;34mℹ[0m Installing nSelf chart (domain=app.example.test, recorded in the release values only)...
+STUB-HELM install stdout
+[0;32m✓[0m nSelf installed. Ingress hosts: https://api.example.test
+--- stderr ---
+[0;33m⚠[0m NSELF_PLUGIN_LICENSE_KEY is set but not written to the release: the chart does not read it yet (D-0311)
+k8s: target kubeconfig ~/.kube/config (current context)
+STUB-HELM install stderr

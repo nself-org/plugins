@@ -1,0 +1,9 @@
+exit: 0
+--- stdout ---
+[0;34mℹ[0m Upgrading nSelf Helm release...
+STUB-HELM upgrade stdout
+[0;32m✓[0m nSelf upgraded successfully.
+--- stderr ---
+[0;33m⚠[0m Not passing domain, plugins (upgrade applies values afresh; repeat the install flags to pass them)
+k8s: target kubeconfig ~/.kube/config (current context)
+STUB-HELM upgrade stderr

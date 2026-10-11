@@ -1,0 +1,5 @@
+exit: 1
+--- stdout ---
+hasura: differs (values hasura/graphql-engine:v1.0.0, compose hasura/graphql-engine:v2.44.0)
+--- stderr ---
+Error: parity check failed: 1 difference(s) between values.yaml and the compose model

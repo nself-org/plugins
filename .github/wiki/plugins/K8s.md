@@ -29,10 +29,14 @@ Category: `infrastructure`. Current version: `1.0.0`.
 
 `nself-k8s` subcommands (installed alongside the plugin):
 
+- `nself-k8s values [--check]`
 - `nself-k8s install`
 - `nself-k8s upgrade`
 - `nself-k8s status`
-- `nself-k8s values [--check]`
+- `nself-k8s uninstall [--yes]`
+
+Every subcommand accepts `--json` (see [JSON output and exit classes](#json-output-and-exit-classes)). The manifest declares
+the same surface in its `commands` block, so `nself help --json k8s` lists the five subcommands with canon `plugin`.
 
 ## Chart values from the compose model
 
@@ -160,6 +164,53 @@ URLs, or no URL when the project routes none.
 `postgres/init/*.sql` by hand while it waits (`init_postgres` in `run.sh`). Until D-0308 closes, do not read the kind result as
 "nSelf on Kubernetes works".
 
+## Uninstall
+
+`nself k8s uninstall` removes the release with `helm uninstall <release>` (add `--cluster` and `--release` as for install). It is
+destructive, so it needs confirmation:
+
+- `--yes` (or `-y`) confirms.
+- Without `--yes`, a terminal is asked to type the release name.
+- Without `--yes` and without a terminal (a script, CI, stdin from `/dev/null`), or with `--json`, it refuses with E403 and
+  exit status 4, and runs no helm command.
+
+Persistent volumes the chart created are not deleted by helm: check the cluster before you reuse the namespace.
+
+## JSON output and exit classes
+
+`--json` on any subcommand makes stdout carry exactly one v1 envelope (`schema_version`, `command`, then `data` or `error`, plus
+`meta.warnings` when there are warnings), written through `sdk/go/output`. `command` is `k8s <subcommand>`. helm's own stdout and
+the progress lines go to stderr, so a script can pipe stdout into `jq`. Without `--json` the output is unchanged.
+
+| Subcommand | `data` |
+|------------|--------|
+| `values` | `mode` (`generate`), `values_file`, `secrets_file`, `mapped`, `unsupported[]`, `unmapped_routes[]` (`name`, `reason`); with `--check`: `mode` (`check`), `values_file`, `services`, `parity` (`ok`) |
+| `install` | `release`, `installed`, `ingress_hosts[]` |
+| `upgrade` | `release`, `upgraded` |
+| `status` | `name`, `namespace`, `version`, `chart_version`, `status` (never helm's config or manifest) |
+| `uninstall` | `release`, `uninstalled` |
+
+An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
+status equals `exit_code`. Messages never carry a secret, the licence key or helm's release JSON. Without `--json` every
+failure still prints `Error: <message>` and exits 1, except the uninstall refusal (exit 4).
+
+| Code | Class (exit) | Meaning |
+|------|--------------|---------|
+| E401 | user (1) | Usage: unknown or missing flag (install without `--domain`), unexpected argument. Core code |
+| E403 | destructive_blocked (4) | `uninstall` without confirmation; nothing was removed. Core code |
+| E720 | infra (2) | `helm` is not on `PATH` |
+| E721 | user (1) | Generated chart values not found: run `nself k8s values` |
+| E722 | infra (2) | A helm command failed (`cause` is the exit status; helm's output is on stderr) |
+| E723 | user (1) | `values --check` found differences (`cause` lists them: service, kind, image refs) |
+| E724 | infra (2) | The compose model could not be resolved (`docker compose config` failed) |
+| E725 | user (1) | The helm release does not exist (`status`, `uninstall`): install it, or fix `--release` and `--cluster` |
+| E726 | infra (2) | `helm status` printed something that is not a release document |
+| E727 | user (1) | Generated values unusable: `secrets.yaml` readable by others, unreadable, or an invalid `values.yaml` |
+| E729 | infra (2) | Unexpected failure (a temp directory, a write) |
+
+The plugin owns E720 to E739; E728 and E730 to E739 are free. E401 and E403 are the core registry's codes, reused because a
+plugin cannot register new ones.
+
 ### Troubleshooting
 
 | Symptom | Cause and fix |
@@ -173,7 +224,9 @@ URLs, or no URL when the project routes none.
 `free/k8s/tests/kind/run.sh` is the proof the `k8s-kind` workflow runs: it builds `nself` from `nself-org/cli` at a pinned
 commit, lays this plugin out the way `nself add` does, builds a minimal fixture project, runs `nself k8s values`,
 `nself k8s install` and `nself k8s upgrade` on a kind cluster, waits for every pod to be Ready and POSTs `{__typename}` to
-Hasura through `kubectl port-forward`. It needs docker, go and git; it downloads kind, kubectl and helm at the versions and
+Hasura through `kubectl port-forward`. It then checks the machine contract with `jq`: `nself help --json k8s` lists the
+subtree with canon `plugin`, `nself k8s status --json` is a v1 envelope, `nself k8s uninstall` without `--yes` and without a
+terminal exits 4 and leaves the release, and `nself k8s uninstall --yes --json` removes it. It needs docker, go and git; it downloads kind, kubectl and helm at the versions and
 checksums pinned in `free/k8s/tests/kind/tools.env`.
 
 ```bash

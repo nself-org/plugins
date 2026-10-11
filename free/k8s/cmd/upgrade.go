@@ -18,7 +18,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nself-org/nself-k8s/internal/k8s"
-	"github.com/nself-org/nself-k8s/internal/tui"
 )
 
 var upgradeCmd = &cobra.Command{
@@ -34,21 +33,27 @@ values it is not passing. The embedded chart does not consume domain or plugins
 yet (D-0311), and the licence key is not written to the release at all until it does.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true // a missing values file is not a usage error
+		r := newInvocation(cmd, "upgrade")
+		if r.json && len(args) > 0 {
+			return r.usageFail("upgrade takes no arguments")
+		}
 		opts := installOptions(cmd)
-		warnUnusedLicence(opts)
+		opts.Stdout = r.helmStdout()
+		warnUnusedLicence(r, opts)
 		if missing := k8s.NotPassed(opts); len(missing) > 0 {
-			tui.Warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
+			r.warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
 		}
-		tui.Info("Upgrading nSelf Helm release...")
+		r.info("Upgrading nSelf Helm release...")
 		if err := k8s.Upgrade(cmd.Context(), opts); err != nil {
-			return err
+			return r.fail(err)
 		}
-		tui.Success("nSelf upgraded successfully.")
-		return nil
+		r.success("nSelf upgraded successfully.")
+		return r.done(map[string]any{"release": releaseOrDefault(opts.ReleaseName), "upgraded": true})
 	},
 }
 
 func init() {
+	addJSONFlag(upgradeCmd)
 	upgradeCmd.Flags().String("domain", "", "Domain, recorded in the release values (the chart does not consume it yet, D-0311)")
 	addInstallFlags(upgradeCmd)
 }

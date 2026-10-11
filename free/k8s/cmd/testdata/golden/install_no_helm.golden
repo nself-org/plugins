@@ -1,0 +1,6 @@
+exit: 1
+--- stdout ---
+[0;34mℹ[0m Installing nSelf chart (domain=x.test, recorded in the release values only)...
+--- stderr ---
+Error: k8s: helm binary not found; install from https://helm.sh
+Error: k8s: helm binary not found; install from https://helm.sh

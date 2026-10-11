@@ -12,8 +12,10 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,11 +45,30 @@ type helmRelease struct {
 	} `json:"info"`
 }
 
+// ErrStatusUnparsable is returned when helm status prints something that is
+// not a release JSON document. The output is never echoed.
+var ErrStatusUnparsable = errors.New("k8s: helm status: output is not a release JSON document")
+
 // Status returns the release summary as a JSON line.
 func Status(ctx context.Context, releaseName, kubeconfig string) (string, error) {
-	helm, err := helmBinary()
+	sum, err := ReleaseStatus(ctx, releaseName, kubeconfig)
 	if err != nil {
 		return "", err
+	}
+	b, err := json.Marshal(sum)
+	if err != nil {
+		return "", fmt.Errorf("k8s: helm status: %w", err)
+	}
+	return string(b), nil
+}
+
+// ReleaseStatus runs `helm status` and returns the five-field summary. A
+// helm failure is a *HelmError; NotFound is set when helm's stderr says the
+// release does not exist (the stderr text itself is dropped).
+func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (ReleaseSummary, error) {
+	helm, err := helmBinary()
+	if err != nil {
+		return ReleaseSummary{}, err
 	}
 	if releaseName == "" {
 		releaseName = HelmReleaseName
@@ -60,15 +81,19 @@ func Status(ctx context.Context, releaseName, kubeconfig string) (string, error)
 	cmd.Env = helmEnv(os.Environ())
 	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("k8s: helm status: %w", err)
+		var ee *exec.ExitError
+		notFound := errors.As(err, &ee) && releaseMissing(ee.Stderr)
+		return ReleaseSummary{}, &HelmError{Verb: "status", Err: err, NotFound: notFound,
+			text: fmt.Sprintf("k8s: helm status: %v", err)}
 	}
 	var rel helmRelease
 	if err := json.Unmarshal(out, &rel); err != nil {
-		return "", fmt.Errorf("k8s: helm status: output is not a release JSON document")
+		return ReleaseSummary{}, ErrStatusUnparsable
 	}
-	b, err := json.Marshal(ReleaseSummary{rel.Name, rel.Namespace, rel.Version, rel.Chart.Metadata.Version, rel.Info.Status})
-	if err != nil {
-		return "", fmt.Errorf("k8s: helm status: %w", err)
-	}
-	return string(b), nil
+	return ReleaseSummary{rel.Name, rel.Namespace, rel.Version, rel.Chart.Metadata.Version, rel.Info.Status}, nil
+}
+
+// releaseMissing reports whether helm's stderr says the release is not there.
+func releaseMissing(stderr []byte) bool {
+	return bytes.Contains(bytes.ToLower(stderr), []byte("not found"))
 }

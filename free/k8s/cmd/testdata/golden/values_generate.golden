@@ -1,0 +1,11 @@
+exit: 0
+--- stdout ---
+wrote <DIR>/.nself/generated/k8s/values.yaml and <DIR>/.nself/generated/k8s/secrets.yaml (9 mapped, 2 unsupported)
+unsupported: worker-one: build context and no pullable image
+unsupported: worker-two: build context and no pullable image
+unmapped route: cs:1: upstream worker-one:9011 is not a mapped workload service
+unmapped route: cs:2: upstream worker-two:9012 is not a mapped workload service
+unmapped route: frontend:1: upstream host.docker.internal:3000 is not a mapped workload service
+unmapped route: internal:1: upstream worker-one:9011 is not a mapped workload service
+unmapped route: internal:2: upstream worker-two:9012 is not a mapped workload service
+--- stderr ---

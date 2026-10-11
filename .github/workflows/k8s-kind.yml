@@ -4,7 +4,10 @@ name: k8s-kind
 # The job runs free/k8s/tests/kind/run.sh, the same script a developer runs locally:
 # it builds nself from nself-org/cli at cli_ref, lays the branch's k8s plugin out as
 # `nself add` does, generates the chart values, installs the embedded chart, waits for
-# every pod to be Ready and answers a GraphQL query. It never calls helm directly.
+# every pod to be Ready and answers a GraphQL query. It never calls helm directly. It then
+# checks the machine contract (P7-DEPL-07): `nself help --json k8s` lists the subtree with
+# canon plugin, `nself k8s status --json` is a v1 envelope, `nself k8s uninstall` without
+# --yes exits 4 and leaves the release, and `uninstall --yes --json` removes it.
 # Legs: source=branch + leg=install is proven here; source=registry belongs to
 # P7-DEPL-99 and leg=day2 to P7-DEPL-07, so run.sh fails those loudly (exit 3).
 
