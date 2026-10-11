@@ -19,6 +19,8 @@ for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/
 sleep 2
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p; pj=$dir/plugin.json; schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj")
+  # A manifest still on v1 may not carry `schema` yet (the v1 normalizer refuses the key): np_<name> is the ledger schema.
+  [ -n "$schema" ] || { [ "$(manifest_version "$dir")" = 2 ] || schema=np_$(printf '%s' "$p" | tr '-' '_'); }
   [ -n "$schema" ] || { echo "FAIL boot $p: manifest has no schema"; rc=1; continue; }
   docker build --network none -q -t "nself-boot-$p:$pid" "$dir" >/dev/null 2>"$W/build.err" || { echo "FAIL boot $p: image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
   dburl="postgres://postgres:boot@$pg:5432/boot"; envargs=(); ef=$dir/tests/boot/env
