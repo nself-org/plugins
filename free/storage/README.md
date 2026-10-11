@@ -10,9 +10,27 @@ service. **Object bytes live in an S3-compatible endpoint** (SeaweedFS, MinIO, A
 
 ```bash
 nself plugin install storage
+nself build && nself start
 ```
 
-Set the `S3_*` variables below in the project env so the plugin can reach your S3 endpoint.
+Storage runs as a compose service with port 9007 bound to `127.0.0.1`. It waits for Postgres to
+be healthy and applies its boot migrations at start. The `S3_*` values come from the project env.
+Set them there so the plugin can reach your S3 endpoint. The `STORAGE_*` upload limits below are passed through the
+same way.
+
+Setting `S3_ACCESS_KEY` or `S3_SECRET_KEY` in `.env` also switches on core MinIO unless `MINIO_ENABLED` is set, and
+those two keys are not passed to MinIO. Pick one of these:
+
+- **Core MinIO:** `MINIO_ENABLED=true`, `S3_ACCESS_KEY` equal to `MINIO_ROOT_USER`, `S3_SECRET_KEY` equal to
+  `MINIO_ROOT_PASSWORD`, and `S3_ENDPOINT` left empty (it defaults to `minio:9000`).
+- **Any other endpoint** (SeaweedFS, AWS S3, R2): `MINIO_ENABLED=false` unless you also want MinIO, `S3_ENDPOINT` set to
+  the endpoint (`https://...` for TLS), and the keys that endpoint issued.
+
+The connection string uses the URL-encoded Postgres password that `nself build` writes from v1.4.13 on. An older CLI
+passes the raw password, so a password with URL-reserved characters (`@ : / % # ?`) needs CLI v1.4.13 or later.
+
+The CLI's `storage` service alias (`nself service ... storage`) names core object storage (MinIO), not this plugin.
+Check this plugin with `curl http://127.0.0.1:9007/health`.
 
 ## Environment Variables
 

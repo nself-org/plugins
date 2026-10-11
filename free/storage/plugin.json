@@ -1,21 +1,38 @@
 {
-  "name": "storage",
-  "version": "1.2.6",
-  "api_version": "1.0",
-  "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.1.0",
-  "port": 9007,
   "category": "infrastructure",
-  "tier": "free",
+  "description": "S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation.",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.1.0",
+  "name": "storage",
+  "port": 9007,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.0"
+  },
+  "schema": "np_storage",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 9007
+  },
+  "status": "stable",
+  "tables": [
+    "np_storage_buckets",
+    "np_storage_objects",
+    "np_storage_metadata"
+  ],
   "tags": [
     "storage",
     "s3",
@@ -23,24 +40,6 @@
     "files",
     "uploads"
   ],
-  "tables": [
-    "np_storage_buckets",
-    "np_storage_objects",
-    "np_storage_metadata"
-  ],
-  "bundles": [
-    "clawde",
-    "ntv",
-    "nfamily"
-  ],
-  "ssrf_guard": true,
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "migrations": {
-    "dir": "migrations",
-    "apply": "boot"
-  },
-  "schema": "np_storage"
+  "tier": "free",
+  "version": "1.2.6"
 }
