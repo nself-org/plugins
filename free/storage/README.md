@@ -114,7 +114,9 @@ stored literally, so keys written by an older version with `%` sequences are now
 deleted again (best effort, logged); an overwrite keeps its new bytes.
 
 A concurrent PUT can commit the row for the same new key while this upload's own row write fails. The cleanup
-re-checks for a row first and keeps the bytes if one exists or if the check itself fails.
+re-checks for a row first and keeps the bytes if one exists or if the check itself fails. This narrows the race, it
+does not close it: a PUT whose bytes are in S3 but whose row is not committed yet can still lose its bytes (a retried
+PUT heals it).
 
 **Concurrent writes.** Two simultaneous PUTs of one key can reach S3 and Postgres in opposite orders. A download uses
 the `Content-Type` stored with the bytes in S3, but the object list and `?metadata=true` (Postgres) may briefly show the

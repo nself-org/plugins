@@ -8,8 +8,8 @@ import (
 // On a proxied "/" location the body limit (buffering) comes AFTER the rate and connection
 // limits. Buffering reads the whole in-limit body into memory, and rate and conn are what bound
 // concurrent buffering; moving it first would let a limited client make Traefik buffer without
-// bound. The price is a 429 where nginx gives 413 on an exhausted zone (documented in the wiki).
-// Do not "fix" this order.
+// bound. The price is a 429 where nginx gives 413 on an exhausted zone (wiki Traefik.md,
+// accepted differences, "Body limit versus rate and connection limit"; hq debt D-0439).
 func TestProxiedBodyLimitFollowsRateAndConnLimits(t *testing.T) {
 	m := fixture(t, "tls-full")
 	var id string
