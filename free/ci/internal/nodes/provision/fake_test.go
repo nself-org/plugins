@@ -30,10 +30,18 @@ type fakeExecutor struct {
 	rules    []fakeRule
 	fallback fakeResponse
 	commands []string
+	// inputs holds the stdin of each command, index-aligned with commands
+	// ("" for a Run call).
+	inputs []string
 }
 
-func (f *fakeExecutor) Run(_ context.Context, command string) (string, error) {
+func (f *fakeExecutor) Run(ctx context.Context, command string) (string, error) {
+	return f.RunInput(ctx, command, "")
+}
+
+func (f *fakeExecutor) RunInput(_ context.Context, command, input string) (string, error) {
 	f.commands = append(f.commands, command)
+	f.inputs = append(f.inputs, input)
 	for _, r := range f.rules {
 		if strings.Contains(command, r.contains) {
 			return r.resp.out, r.resp.err
