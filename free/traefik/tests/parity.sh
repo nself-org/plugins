@@ -180,7 +180,12 @@ keys_case() {
   F=$PLUGIN/testdata/fixtures/$f; D=$WORK/keys-$f; mkdir -p "$D/ssl" "$D/dynamic" "$D/static"
   log "key ownership: $f with privkey.pem 0600 owned by uid $KEYUID, user, capabilities and sysctls from $(basename "$FRAG")"
   # one environment for every render (what core passes a fragment: the plugin dir and the project network); only the uid/gid differ
-  compose_cfg() { env -u NSELF_HOST_UID -u NSELF_HOST_GID "NSELF_PLUGIN_DIR=$(dirname "$PLUGIN")" "DOCKER_NETWORK=$NET" "$@" docker compose -f "$FRAG" config --format json; }
+  # The fragment joins ${DOCKER_NETWORK}, which the core compose declares; a stub base file declares it external, as core does.
+  printf 'networks:\n  "%s":\n    external: true\n    name: "%s"\n' "$NET" "$NET" >"$D/network.yml"
+  compose_cfg() {
+    env -u NSELF_HOST_UID -u NSELF_HOST_GID "NSELF_PLUGIN_DIR=$(dirname "$PLUGIN")" "DOCKER_NETWORK=$NET" "$@" \
+      docker compose -f "$D/network.yml" -f "$FRAG" config --format json
+  }
   svc=$(compose_cfg NSELF_HOST_UID=$KEYUID NSELF_HOST_GID=$KEYUID | jq -c .services.traefik)
   # until core exports the operator uid the fallback must be root without capabilities (hosts where core runs as root)
   dflt=$(compose_cfg | jq -r .services.traefik.user)
