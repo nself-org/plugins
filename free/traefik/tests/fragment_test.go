@@ -157,6 +157,13 @@ func TestNonRootAndUploadFragmentPolicy(t *testing.T) {
 	if u := services["traefik-config"].(map[string]any)["user"]; u != "0:0" {
 		t.Errorf("traefik-config user = %v, want the documented 0:0 exception", u)
 	}
+	// One render-interface tag on both renderer services, never a floating one: a stale local image
+	// without --static-out would otherwise be reused after an upgrade.
+	cfgImg, _ := services["traefik-config"].(map[string]any)["image"].(string)
+	acmeImg, _ := services["traefik-acme"].(map[string]any)["image"].(string)
+	if cfgImg != acmeImg || !regexp.MustCompile(`^nself/nself-traefik-render:r[0-9]+$`).MatchString(cfgImg) {
+		t.Errorf("traefik-config and traefik-acme must share a render-generation tag (:rN, not :local or :latest), got %q and %q", cfgImg, acmeImg)
+	}
 	tr := services["traefik"].(map[string]any)
 	mounted := false
 	for _, v := range asList(tr["volumes"]) {

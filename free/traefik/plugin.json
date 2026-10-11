@@ -3,6 +3,13 @@
   "category": "infrastructure",
   "description": "Traefik reverse proxy from the nSelf route model: file-provider configuration rendered from routes.json at route, TLS and upstream parity with nginx. No Docker socket, certificates from core.",
   "entryPoint": "cmd/render",
+  "envVars": {
+    "optional": [
+      "TRAEFIK_UPLOAD_ROUTES",
+      "TRAEFIK_UPLOAD_READ_TIMEOUT",
+      "TRAEFIK_UPLOAD_PUBLISH"
+    ]
+  },
   "homepage": "https://nself.org/plugins",
   "language": "go",
   "license": "free",

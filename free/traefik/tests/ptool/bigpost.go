@@ -114,7 +114,7 @@ func uploadOnly(m routes, name, port string) {
 		if rt.ID == named.ID || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
 			continue
 		}
-		if st := get("http", hostOf(rt)); st != 404 {
+		if st := get(scheme(rt), hostOf(rt)); st != 404 {
 			die(fmt.Errorf("route %s is not named but answers %d on %s:%s, want 404", rt.ID, st, name, port))
 		}
 		n++

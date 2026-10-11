@@ -193,6 +193,9 @@ func (b *builder) route(r contract.Route) {
 	if !b.hostsFree(r, ls) {
 		return
 	}
+	// hostsFree runs before the upload mirror on purpose: a duplicate name on the upload entrypoint
+	// implies a duplicate on web or websecure, or a TLS/plain pair that Traefik keeps apart, so it is
+	// already refused (or harmless) there.
 	ls = b.withUpload(r, ls)
 	sec := ""
 	if len(r.SecurityHeaders) > 0 {
