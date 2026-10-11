@@ -15,6 +15,7 @@
         "managed-by": "nself-cli",
         "purpose": "ci"
       }
-    }
+    },
+    "user_data": false
   }
 }

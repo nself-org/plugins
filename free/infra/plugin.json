@@ -228,6 +228,11 @@
             "name": "type",
             "type": "string",
             "usage": "server type, e.g. cx22 (required)"
+          },
+          {
+            "name": "user-data-file",
+            "type": "string",
+            "usage": "path to a cloud-init user-data file sent as user_data; must be a regular, non-empty, valid UTF-8 file, mode 0600 or stricter, owned by you, at most 32768 bytes; the content is never printed"
           }
         ],
         "json": "legacy",
