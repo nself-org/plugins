@@ -78,7 +78,9 @@ jobs:
 
             # Port: required for a service plugin, absent for a CLI plugin.
             provides_command=$(python3 -c "import json,sys; d=json.load(open('$file')); print('yes' if d.get('pluginType')=='cli' or d.get('binaryName') else 'no')" 2>/dev/null)
-            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print(d.get('port',''))" 2>/dev/null)
+            # A v2 manifest (manifest_version 2) carries the port at service.port and forbids
+            # a top-level `port` (conformance gate E112); a v1 manifest keeps the top-level rule.
+            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('port','') if d.get('manifest_version')==2 else d.get('port',''))" 2>/dev/null)
 
             if [ "$provides_command" = "yes" ] && [ -z "$port" ]; then
               port=0   # a command plugin has no HTTP server

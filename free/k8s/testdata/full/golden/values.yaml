@@ -4,6 +4,7 @@ services:
     kind: deployment
     image: nhost/hasura-auth
     tag: 0.36.0
+    pullPolicy: IfNotPresent
     env:
       - AUTH_ACCESS_TOKEN_EXPIRES_IN
       - AUTH_ALLOWED_REDIRECT_URLS
@@ -61,6 +62,7 @@ services:
     kind: deployment
     image: nhost/functions
     tag: latest
+    pullPolicy: IfNotPresent
     env:
       - DATABASE_URL
       - HASURA_GRAPHQL_ADMIN_SECRET
@@ -91,6 +93,7 @@ services:
     kind: deployment
     image: hasura/graphql-engine
     tag: v2.44.0
+    pullPolicy: IfNotPresent
     env:
       - ACTION_HANDLER_URL
       - HASURA_GRAPHQL_ADMIN_SECRET
@@ -127,6 +130,7 @@ services:
     kind: deployment
     image: axllent/mailpit
     tag: latest
+    pullPolicy: IfNotPresent
     env:
       - MP_MAX_MESSAGES
       - MP_SMTP_AUTH_ACCEPT_ANY
@@ -160,6 +164,7 @@ services:
     kind: deployment
     image: getmeili/meilisearch
     tag: v1.6
+    pullPolicy: IfNotPresent
     command:
       - meilisearch
       - --db-path=/meili_data
@@ -194,6 +199,7 @@ services:
     kind: job
     image: busybox
     tag: "1.36"
+    pullPolicy: IfNotPresent
     command:
       - sh
       - -c
@@ -213,6 +219,7 @@ services:
     kind: deployment
     image: docker.io/pgsty/minio
     tag: latest
+    pullPolicy: IfNotPresent
     command:
       - server
       - /data
@@ -258,6 +265,7 @@ services:
     kind: statefulset
     image: postgres
     tag: 16-alpine
+    pullPolicy: IfNotPresent
     command:
       - postgres
       - -c

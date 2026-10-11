@@ -94,7 +94,6 @@ free/search/sdk/identity.go	338
 free/shopify/actions/sync.sh	376
 free/sports/internal/handlers.go	876
 free/storage-transform/go/cmd/main.go	324
-free/storage/internal/handlers.go	304
 free/stripe/actions/sync.sh	381
 free/stripe/internal/db_schema.go	761
 free/tenant-controller/go/internal/metering/metering.go	621

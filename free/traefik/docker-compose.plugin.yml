@@ -1,0 +1,105 @@
+# traefik plugin (ADR 0027): the proxy swap. traefik-config renders .nself/generated/routes.json into Traefik
+# file-provider configuration, traefik-acme serves the ACME webroot and fixed answers, traefik is the official
+# image pinned by tag and digest. No Docker provider, no Docker socket, no ACME resolver; ssl/ is read-only.
+# Build context is anchored with NSELF_PLUGIN_DIR: compose resolves relative paths against the first -f file.
+services:
+  traefik-config:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/traefik
+      dockerfile: Dockerfile
+    # The image tag is the render-interface generation: bump it (r2, r3, ...) whenever the render command line or its
+    # outputs change, so compose builds the new image instead of reusing a stale local one (an old image lacks
+    # --static-out and traefik-config would exit 2). traefik-acme must use the same tag.
+    image: nself/nself-traefik-render:r2
+    restart: "no"
+    command:
+      - "--routes"
+      - "/nself/routes.json"
+      - "--out"
+      - "/dynamic"
+      - "--ssl"
+      - "/nself/ssl"
+      - "--static-out"
+      - "/static"
+      - "--upload-routes"
+      - "${TRAEFIK_UPLOAD_ROUTES:-}"
+      - "--upload-read-timeout"
+      - "${TRAEFIK_UPLOAD_READ_TIMEOUT:-600s}"
+    # one-shot writer into bind dirs that Docker creates root-owned on Linux; read-only root, no capabilities,
+    # no listener. The long-running traefik-acme uses the image's non-root user.
+    user: "0:0"
+    volumes:
+      - ./.nself/generated/routes.json:/nself/routes.json:ro
+      - ./ssl:/nself/ssl:ro
+      - ./.nself/generated/traefik:/dynamic
+      - ./.nself/generated/traefik-static:/static
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      - nself_network
+
+  traefik-acme:
+    # explicit build: the cli rewrites a service-level "image: nself/..." without build: into its own per-project build,
+    # which would leave the old root image in use after an upgrade; same build and tag as traefik-config.
+    build:
+      context: ${NSELF_PLUGIN_DIR}/traefik
+      dockerfile: Dockerfile
+    image: nself/nself-traefik-render:r2
+    entrypoint: ["/render"]
+    command: ["serve-static", "--root", "/acme-webroot", "--listen", ":8080"]
+    restart: unless-stopped
+    volumes:
+      - ./ssl/.acme-webroot:/acme-webroot:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "/render", "healthcheck", "--addr", "127.0.0.1:8080"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      traefik-config:
+        condition: service_completed_successfully
+    networks:
+      - nself_network
+
+  traefik:
+    image: traefik:v3.7.14@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c
+    restart: unless-stopped
+    ports:
+      - "${NSELF_HTTP_PORT:-80}:80"
+      - "${NSELF_HTTPS_PORT:-443}:443"
+      # the upload entrypoint carries only the routes named in TRAEFIK_UPLOAD_ROUTES; by default it is published on a
+      # loopback ephemeral port, so nothing public opens unless the operator sets e.g. TRAEFIK_UPLOAD_PUBLISH=8444
+      - "${TRAEFIK_UPLOAD_PUBLISH:-127.0.0.1:}:8444"
+    volumes:
+      - ./.nself/generated/traefik-static:/etc/traefik:ro
+      - ./.nself/generated/traefik:/dynamic:ro
+      - ./ssl:/nself/ssl:ro
+    read_only: true
+    # the buffering middleware spills request bodies over 1 MiB to a temp file; a read-only root needs a tmpfs for it
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      traefik-config:
+        condition: service_completed_successfully
+      traefik-acme:
+        condition: service_healthy
+    networks:
+      - nself_network
+
+networks:
+  nself_network:
+    external: true

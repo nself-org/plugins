@@ -29,12 +29,15 @@ Notes
     store a 32-bit value next to the magic: nfat_arch (a handful) for fat,
     minor<<16|major (>= 45) for Java. Values 1..30 count as fat; a Java class
     file is not a compiled binary for this rule and passes.
+    A PE signature is read at e_lfanew wherever it points (D-0238); a pointer
+    past the end of the blob is not a PE, and the bytes before it are streamed
+    and dropped, so a huge offset never loads the blob into memory.
 """
 import subprocess
 import sys
 
 PREFIX_BYTES = 8000
-PE_OFFSET_CAP = 1 << 20
+PE_SIGNATURE = b"PE\x00\x00"
 
 ELF_MAGIC = b"\x7fELF"
 MACHO_MAGICS = {
@@ -47,11 +50,12 @@ FAT_MAGICS = (b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbf")
 FAT_MAX_ARCHS = 30
 
 
-def classify_prefix(prefix, mode, load_more):
+def classify_prefix(prefix, mode, read_at):
     """Return the binary kind for a blob prefix, or None when it passes.
 
-    load_more(n) returns up to the first n bytes of the blob; it is only used
-    when a PE header's e_lfanew points past the prefix.
+    read_at(offset, n) returns the n blob bytes at offset, or b"" when the blob
+    ends first; it is only used when a PE header's e_lfanew points past the
+    prefix.
     """
     head = prefix[:4]
     if head == ELF_MAGIC:
@@ -63,10 +67,12 @@ def classify_prefix(prefix, mode, load_more):
             return "Mach-O fat"
     if prefix[:2] == b"MZ" and len(prefix) >= 0x40:
         offset = int.from_bytes(prefix[0x3C:0x40], "little")
-        if offset <= PE_OFFSET_CAP:
-            window = prefix if offset + 4 <= len(prefix) else load_more(offset + 4)
-            if window[offset:offset + 4] == b"PE\x00\x00":
-                return "PE"
+        if offset + 4 <= len(prefix):
+            signature = prefix[offset:offset + 4]
+        else:
+            signature = read_at(offset, 4)
+        if signature == PE_SIGNATURE:
+            return "PE"
     if mode == "100755" and b"\x00" in prefix[:PREFIX_BYTES]:
         return "mode 100755 with NUL byte"
     return None
@@ -91,18 +97,40 @@ class BlobReader:
         self.proc = subprocess.Popen(["git", "cat-file", "--batch"],
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
-    def prefix(self, sha, limit=PREFIX_BYTES):
+    def _open(self, sha):
+        """Request a blob; return its size with its bytes next on stdout."""
         self.proc.stdin.write(sha.encode() + b"\n")
         self.proc.stdin.flush()
         header = self.proc.stdout.readline().split()
         if len(header) != 3 or header[1] != b"blob":
             raise RuntimeError("git cat-file: no blob for " + sha)
-        size = int(header[2])
-        data = self.proc.stdout.read(min(size, limit))
-        remaining = size - len(data)
-        while remaining > 0:
-            remaining -= len(self.proc.stdout.read(min(remaining, 1 << 20)))
-        self.proc.stdout.read(1)  # trailing newline
+        return int(header[2])
+
+    def _read(self, n):
+        data = self.proc.stdout.read(n)
+        if len(data) != n:
+            raise RuntimeError("git cat-file: short read")
+        return data
+
+    def _drop(self, n):
+        while n > 0:
+            n -= len(self._read(min(n, 1 << 20)))
+
+    def prefix(self, sha, limit=PREFIX_BYTES):
+        size = self._open(sha)
+        data = self._read(min(size, limit))
+        self._drop(size - len(data) + 1)  # the rest and the trailing newline
+        return data
+
+    def read_at(self, sha, offset, n):
+        """Return the n bytes at offset, or b"" when the blob ends first."""
+        size = self._open(sha)
+        if offset + n > size:
+            self._drop(size + 1)
+            return b""
+        self._drop(offset)
+        data = self._read(n)
+        self._drop(size - offset - n + 1)
         return data
 
     def close(self):
@@ -118,7 +146,7 @@ def main():
             if mode in ("160000", "120000"):
                 continue
             kind = classify_prefix(reader.prefix(sha), mode,
-                                   lambda n, s=sha: reader.prefix(s, n))
+                                   lambda o, n, s=sha: reader.read_at(s, o, n))
             if kind:
                 hits.append("%s: tracked compiled binary (%s)" % (path, kind))
     except (subprocess.CalledProcessError, RuntimeError, OSError) as err:

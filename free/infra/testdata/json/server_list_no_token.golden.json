@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra server list",
+  "error": {
+    "code": "E742",
+    "message": "no Hetzner API token was found",
+    "remediation": "set HETZNER_NSELF_TOKEN (or HCLOUD_TOKEN) in the environment, or pass --token",
+    "exit_code": 3,
+    "class": "auth"
+  }
+}

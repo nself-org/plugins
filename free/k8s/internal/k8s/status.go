@@ -8,7 +8,9 @@
 // Constraints: helm's own JSON carries the release config (every value of
 // values.yaml, secrets.yaml and the overlay) and the rendered manifest (the
 // Secret objects). None of that is decoded or printed: only the five fields
-// above survive. Output that is not JSON is an error that does not echo it.
+// above survive. Output that is not JSON is an error that does not echo it. On
+// a helm failure the tail of helm's stderr (not stdout) goes in HelmError.Stderr,
+// not in the error text.
 package k8s
 
 import (
@@ -19,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"unicode/utf8"
 )
 
 // ReleaseSummary is what `nself k8s status` prints.
@@ -64,7 +67,8 @@ func Status(ctx context.Context, releaseName, kubeconfig string) (string, error)
 
 // ReleaseStatus runs `helm status` and returns the five-field summary. A
 // helm failure is a *HelmError; NotFound is set when helm's stderr says the
-// release does not exist (the stderr text itself is dropped).
+// release does not exist. helm's stderr (trimmed, last 512 bytes) is kept in
+// HelmError.Stderr so an unreachable cluster or a bad context is diagnosable.
 func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (ReleaseSummary, error) {
 	helm, err := helmBinary()
 	if err != nil {
@@ -82,8 +86,13 @@ func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (Release
 	out, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError
-		notFound := errors.As(err, &ee) && releaseMissing(ee.Stderr)
-		return ReleaseSummary{}, &HelmError{Verb: "status", Err: err, NotFound: notFound,
+		isExit := errors.As(err, &ee)
+		notFound := isExit && releaseMissing(ee.Stderr)
+		stderr := ""
+		if isExit {
+			stderr = stderrTail(ee.Stderr)
+		}
+		return ReleaseSummary{}, &HelmError{Verb: "status", Err: err, NotFound: notFound, Stderr: stderr,
 			text: fmt.Sprintf("k8s: helm status: %v", err)}
 	}
 	var rel helmRelease
@@ -98,4 +107,21 @@ func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (Release
 // "not found": an unreachable cluster reports `context "prod" not found`.
 func releaseMissing(stderr []byte) bool {
 	return bytes.Contains(bytes.ToLower(stderr), []byte("release: not found"))
+}
+
+// maxStderrTail bounds the helm stderr kept in a status error.
+const maxStderrTail = 512
+
+// stderrTail returns stderr trimmed of surrounding space, cut to its last
+// maxStderrTail bytes at a rune boundary and prefixed "..." when cut.
+func stderrTail(stderr []byte) string {
+	s := bytes.TrimSpace(stderr)
+	if len(s) <= maxStderrTail {
+		return string(s)
+	}
+	s = s[len(s)-maxStderrTail:]
+	for len(s) > 0 && !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	return "..." + string(s)
 }

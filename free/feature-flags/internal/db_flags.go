@@ -1,10 +1,10 @@
 package internal
 
 import (
-	pgx "github.com/jackc/pgx/v5"
 	"context"
 	"encoding/json"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -18,27 +18,27 @@ func scanFlag(row interface{ Scan(...interface{}) error }, f *Flag) error {
 
 // CreateFlagRequest is the JSON body for creating a flag.
 type CreateFlagRequest struct {
-	Key             string           `json:"key"`
-	Name            *string          `json:"name,omitempty"`
-	Description     *string          `json:"description,omitempty"`
-	Type            string           `json:"type,omitempty"`
-	Enabled         *bool            `json:"enabled,omitempty"`
-	RolloutPct      *int             `json:"rollout_pct,omitempty"`
-	StaleAfterDays  *int             `json:"stale_after_days,omitempty"`
-	DefaultValue    *json.RawMessage `json:"default_value,omitempty"`
-	Rules           *json.RawMessage `json:"rules,omitempty"`
+	Key            string           `json:"key"`
+	Name           *string          `json:"name,omitempty"`
+	Description    *string          `json:"description,omitempty"`
+	Type           string           `json:"type,omitempty"`
+	Enabled        *bool            `json:"enabled,omitempty"`
+	RolloutPct     *int             `json:"rollout_pct,omitempty"`
+	StaleAfterDays *int             `json:"stale_after_days,omitempty"`
+	DefaultValue   *json.RawMessage `json:"default_value,omitempty"`
+	Rules          *json.RawMessage `json:"rules,omitempty"`
 }
 
 // UpdateFlagRequest is the JSON body for updating a flag.
 type UpdateFlagRequest struct {
-	Name            *string          `json:"name,omitempty"`
-	Description     *string          `json:"description,omitempty"`
-	Type            *string          `json:"type,omitempty"`
-	Enabled         *bool            `json:"enabled,omitempty"`
-	RolloutPct      *int             `json:"rollout_pct,omitempty"`
-	StaleAfterDays  *int             `json:"stale_after_days,omitempty"`
-	DefaultValue    *json.RawMessage `json:"default_value,omitempty"`
-	Rules           *json.RawMessage `json:"rules,omitempty"`
+	Name           *string          `json:"name,omitempty"`
+	Description    *string          `json:"description,omitempty"`
+	Type           *string          `json:"type,omitempty"`
+	Enabled        *bool            `json:"enabled,omitempty"`
+	RolloutPct     *int             `json:"rollout_pct,omitempty"`
+	StaleAfterDays *int             `json:"stale_after_days,omitempty"`
+	DefaultValue   *json.RawMessage `json:"default_value,omitempty"`
+	Rules          *json.RawMessage `json:"rules,omitempty"`
 }
 
 // --- Segment types ---

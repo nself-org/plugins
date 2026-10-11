@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "command": "infra validate",
+  "data": {
+    "provider": "hetzner",
+    "status": "valid"
+  }
+}

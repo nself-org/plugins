@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nself-org/plugin-storage/internal"
+	"github.com/nself-org/plugin-storage/internal/s3store"
 )
 
 func main() {
@@ -35,6 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect error: %v", err)
 	}
+	internal.BootMigrations(ctx, db)
 	defer db.Close()
 
 	if err := db.Ping(ctx); err != nil {
@@ -46,15 +48,34 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 
-	srv := internal.NewServer(db, cfg)
+	var store internal.ObjectStore // stays a nil interface when S3 is not configured
+	if cfg.AccessKey != "" && cfg.SecretKey != "" {
+		st, err := s3store.New(s3store.Config{
+			Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
+			AccessKey: cfg.AccessKey, SecretKey: cfg.SecretKey, UseSSL: cfg.UseSSL,
+			MaxLargeUploads: cfg.MaxLargeUploads, MaxUploads: cfg.MaxUploads, SlotWait: cfg.UploadSlotWait,
+		})
+		if err != nil {
+			log.Fatalf("s3 config error: %v", err)
+		}
+		store = st
+		log.Printf("s3: endpoint %s region %s (path-style)", cfg.S3Endpoint, cfg.S3Region)
+	} else if cfg.AccessKey != "" || cfg.SecretKey != "" {
+		log.Fatalf("s3 config error: set both S3_ACCESS_KEY and S3_SECRET_KEY, or neither")
+	} else {
+		log.Printf("s3: not configured (S3_ACCESS_KEY/S3_SECRET_KEY unset); object routes answer 503")
+	}
+
+	srv := internal.NewServer(db, cfg, store)
 	srv.Routes(r)
 
 	httpSrv := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Minute, // large uploads stream through the handler
+		WriteTimeout:      15 * time.Minute,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)

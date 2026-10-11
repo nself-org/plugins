@@ -1,52 +1,35 @@
 {
-  "name": "feature-flags",
-  "version": "1.2.6",
-  "description": "Feature flags service with targeting rules, segments, and evaluation engine",
   "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/feature-flags",
-  "repository": "https://github.com/nself-org/plugins",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
-  "runtime": "go",
-  "port": 3305,
   "category": "infrastructure",
-  "tags": [
-    "feature-flags",
-    "feature-toggles",
-    "toggles",
-    "configuration",
-    "infrastructure"
+  "description": "Feature flags service with targeting rules, segments, and evaluation engine",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "FF_PLUGIN_PORT",
+      "required": false
+    }
   ],
-  "tables": [
-    "np_feature_flags_flags",
-    "np_feature_flags_segments"
-  ],
-  "webhooks": {},
-  "actions": {
-    "init": "Initialize database schema",
-    "server": "Start the API server",
-    "flags": "Manage feature flags",
-    "evaluate": "Evaluate flags for context",
-    "segments": "Manage user segments"
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/feature-flags",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
   },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "FF_PLUGIN_PORT"
-    ]
-  },
-  "config": {},
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
+  "minNselfVersion": "1.0.0",
   "multiApp": {
     "supported": false
   },
+  "name": "feature-flags",
   "permissions": {
     "database": [
       "create",
@@ -54,12 +37,35 @@
       "update",
       "delete"
     ],
-    "network": [],
-    "filesystem": []
+    "filesystem": [],
+    "network": []
   },
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "port": 3305,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "runtime": "go",
+  "schema": "np_feature_flags",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3305
+  },
+  "status": "stable",
+  "tables": [
+    "np_feature_flags_flags",
+    "np_feature_flags_segments",
+    "np_feature_flags_audit"
+  ],
+  "tags": [
+    "feature-flags",
+    "feature-toggles",
+    "toggles",
+    "configuration",
+    "infrastructure"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }

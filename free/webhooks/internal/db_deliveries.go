@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 func RecordEndpointSuccess(ctx context.Context, pool *pgxpool.Pool, id string) error {

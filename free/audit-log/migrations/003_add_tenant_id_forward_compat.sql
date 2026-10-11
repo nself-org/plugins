@@ -29,7 +29,7 @@
 -- Column
 -- ============================================================
 
-ALTER TABLE np_auditlog_events
+ALTER TABLE public.np_auditlog_events
     ADD COLUMN IF NOT EXISTS tenant_id UUID NULL;
 
 -- ============================================================
@@ -37,14 +37,14 @@ ALTER TABLE np_auditlog_events
 -- ============================================================
 
 CREATE INDEX IF NOT EXISTS idx_np_auditlog_tenant_id
-    ON np_auditlog_events (tenant_id)
+    ON public.np_auditlog_events (tenant_id)
     WHERE tenant_id IS NOT NULL;
 
 -- ============================================================
 -- Comment
 -- ============================================================
 
-COMMENT ON COLUMN np_auditlog_events.tenant_id IS
+COMMENT ON COLUMN public.np_auditlog_events.tenant_id IS
     'Cloud multi-tenancy: NULL for single-user and multi-app deployments. '
     'Populated in v1.1.0+ once the user→tenant mapping table exists. '
     'Semantics differ from source_account_id: see multi-tenant-conventions.md.';

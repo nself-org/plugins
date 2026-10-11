@@ -1,10 +1,16 @@
-{{- /* Every named compose volume becomes one PersistentVolumeClaim. */ -}}
+{{- /*
+Every named compose volume becomes one PersistentVolumeClaim. resource-policy
+keep: helm uninstall, and an upgrade that drops or renames a volume, leave the
+claim (and the data) in place. A reinstall with the same release name adopts it.
+*/ -}}
 {{- range $vol, $v := .Values.volumes }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ $.Release.Name }}-{{ $v.claim }}
+  annotations:
+    helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: {{ $.Release.Name }}
     app.kubernetes.io/managed-by: {{ $.Release.Service }}

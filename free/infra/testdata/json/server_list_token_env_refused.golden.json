@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra server list",
+  "error": {
+    "code": "E743",
+    "message": "--token-env names the Terraform-only token variable, which a server command never reads",
+    "remediation": "export the token in your shell and name it with --token-env, or pass --token",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

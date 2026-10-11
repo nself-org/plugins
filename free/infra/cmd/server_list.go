@@ -1,9 +1,9 @@
 package main
 
 // Purpose: `nself infra server list` handler — renders server.List's result as a
-// table (default) or JSON (--json).
+// table (default) or one v1 envelope (--json).
 // Inputs: --label-selector, --token, --token-env, --json.
-// Outputs: a table (or JSON array) of servers in the Hetzner project.
+// Outputs: a table of servers in the Hetzner project, or the envelope with them.
 
 import (
 	"fmt"
@@ -25,25 +25,29 @@ var serverListCmd = &cobra.Command{
 
 func init() {
 	serverListCmd.Flags().String("label-selector", "", "filter by Hetzner label selector, e.g. managed-by=nself-cli")
-	serverListCmd.Flags().Bool("json", false, "output as JSON")
+	addJSONFlag(serverListCmd)
 }
 
 func runServerList(cmd *cobra.Command, args []string) error {
+	r := begin(cmd)
+	defer r.end()
 	labelSelector, _ := cmd.Flags().GetString("label-selector")
-	jsonOut, _ := cmd.Flags().GetBool("json")
 
 	client, err := newServerClient(cmd)
 	if err != nil {
-		return err
+		return r.fail(err)
 	}
 
 	servers, err := server.List(cmd.Context(), client, server.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
-		return fmt.Errorf("list servers: %w", err)
+		return r.fail(fmt.Errorf("list servers: %w", err))
 	}
 
-	if jsonOut {
-		return ui.PrintJSON(servers)
+	if r.json {
+		if servers == nil {
+			servers = []server.Server{}
+		}
+		return r.done(map[string]any{"servers": servers, "count": len(servers)})
 	}
 
 	if len(servers) == 0 {

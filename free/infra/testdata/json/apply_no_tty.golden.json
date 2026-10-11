@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra apply",
+  "error": {
+    "code": "E403",
+    "message": "nself infra apply needs an interactive terminal to confirm cloud spend: nothing was changed",
+    "remediation": "run it from a terminal",
+    "exit_code": 4,
+    "class": "destructive_blocked"
+  }
+}

@@ -11,7 +11,7 @@ import (
 
 // matchPercentage uses a consistent hash to determine if user falls within rollout percentage.
 func (e *Evaluator) matchPercentage(rule Rule, flagKey, userID string) bool {
-if userID == "" || rule.Percentage == nil {
+	if userID == "" || rule.Percentage == nil {
 		return false
 	}
 	h := hashPercentage(flagKey, userID)

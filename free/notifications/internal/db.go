@@ -45,61 +45,6 @@ type Preference struct {
 	UpdatedAt    time.Time       `json:"updated_at"`
 }
 
-// Migrate creates the required tables if they do not exist.
-// Size-cap exception: SQL DDL migration — 52L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
-func Migrate(pool *pgxpool.Pool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS np_notifications_notifications (
-			id         TEXT PRIMARY KEY,
-			channel    TEXT NOT NULL,
-			recipient  TEXT NOT NULL,
-			template   TEXT NOT NULL DEFAULT '',
-			data       JSONB NOT NULL DEFAULT '{}',
-			status     TEXT NOT NULL DEFAULT 'pending',
-			sent_at    TIMESTAMPTZ,
-			error      TEXT,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notifications_notifications_status
-			ON np_notifications_notifications (status);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notifications_notifications_channel
-			ON np_notifications_notifications (channel);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notifications_notifications_recipient
-			ON np_notifications_notifications (recipient);
-
-		CREATE TABLE IF NOT EXISTS np_notifications_templates (
-			id               TEXT PRIMARY KEY,
-			name             TEXT NOT NULL UNIQUE,
-			channel          TEXT NOT NULL,
-			subject_template TEXT NOT NULL DEFAULT '',
-			body_template    TEXT NOT NULL DEFAULT '',
-			created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notifications_templates_name
-			ON np_notifications_templates (name);
-
-		CREATE TABLE IF NOT EXISTS np_notifications_preferences (
-			user_id       TEXT PRIMARY KEY,
-			email_enabled BOOLEAN NOT NULL DEFAULT true,
-			push_enabled  BOOLEAN NOT NULL DEFAULT true,
-			sms_enabled   BOOLEAN NOT NULL DEFAULT true,
-			quiet_start   TEXT,
-			quiet_end     TEXT,
-			channels      JSONB NOT NULL DEFAULT '{}',
-			updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-	`)
-	return err
-}
-
 // InsertNotification inserts a notification record.
 func InsertNotification(ctx context.Context, pool *pgxpool.Pool, id, channel, recipient, template string, data json.RawMessage, status string, sentAt *time.Time, errMsg *string) error {
 	if data == nil {

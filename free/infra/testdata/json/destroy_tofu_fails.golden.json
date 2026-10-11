@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "infra destroy",
+  "error": {
+    "code": "E741",
+    "message": "the terraform run for infra destroy failed",
+    "cause": "exit status 1",
+    "remediation": "terraform's own output is on stderr",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

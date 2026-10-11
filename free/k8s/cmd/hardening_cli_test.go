@@ -110,19 +110,18 @@ func TestReleaseNameValidation(t *testing.T) {
 }
 
 // TestStatusReleaseSwallowsJSON: `status --release --json` makes pflag read
-// "--json" as the release, so the command runs in human mode. A helm failure
-// then prints the old human bytes, not an E401 envelope.
+// "--json" as the release, so the command runs in human mode. A release name
+// starting with "-" would reach helm as a flag (`helm status --json`), so it is
+// a usage error in human mode too and helm never runs (D-0376, K8S-02).
 func TestStatusReleaseSwallowsJSON(t *testing.T) {
-	r := runCLI(t, cliRun{Helm: "fail"}, "status", "--release", "--json")
-	if r.Exit != 1 || r.Stdout != "" {
-		t.Fatalf("exit %d, stdout %q", r.Exit, r.Stdout)
-	}
-	if !strings.HasPrefix(r.Stderr, "Error: k8s: helm status: exit status 1\nUsage:") || strings.Contains(r.Stderr, "E401") {
-		t.Errorf("stderr = %q, want the human error and usage", r.Stderr)
-	}
-	ok := runCLI(t, cliRun{Helm: "ok"}, "status", "--release", "--json")
-	if ok.Exit != 0 || !strings.HasPrefix(ok.Stdout, `{"name":"nself"`) {
-		t.Errorf("success: exit %d, stdout %q", ok.Exit, ok.Stdout)
+	for _, h := range []string{"fail", "ok"} {
+		r := runCLI(t, cliRun{Helm: h}, "status", "--release", "--json")
+		if r.Exit != 1 || r.Stdout != "" || !strings.HasPrefix(r.Stderr, "Error: --release must be a helm release name") || strings.Contains(r.Stderr, "E401") {
+			t.Errorf("helm %s: exit %d, stdout %q, stderr %q", h, r.Exit, r.Stdout, r.Stderr)
+		}
+		if calls := argvCalls(t, r.ArgvFile); calls != nil {
+			t.Errorf("helm %s: a dash release ran helm: %v", h, calls)
+		}
 	}
 	// A real cobra usage error under --json is still an E401 envelope.
 	wantFailure(t, runCLI(t, cliRun{Helm: "ok"}, "status", "--json", "--bogus"), "k8s status", "E401", "user")

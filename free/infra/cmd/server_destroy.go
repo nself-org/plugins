@@ -6,7 +6,7 @@ package main
 // server.Destroy so it is unit-tested without a command layer in the way.
 // Inputs: --id, --snapshot, --force-no-backup, --release-ip,
 // --snapshot-timeout, --token, --token-env, --json.
-// Outputs: printed confirmation naming the snapshot taken (if any) and
+// Outputs: printed confirmation (or the v1 envelope) naming the snapshot taken (if any) and
 // which IPs were retained/released; a non-nil error (including
 // server.ErrNoBackup) that leaves the server untouched.
 
@@ -50,23 +50,24 @@ func init() {
 	f.Bool("force-no-backup", false, "proceed without any backup (explicit acknowledgment)")
 	f.Bool("release-ip", false, "let the server's primary IP(s) be released with it, instead of retaining them")
 	f.Duration("snapshot-timeout", server.DefaultSnapshotWait, "how long to wait for the snapshot to become available")
-	f.Bool("json", false, "output as JSON")
+	addJSONFlag(serverDestroyCmd)
 }
 
 func runServerDestroy(cmd *cobra.Command, args []string) error {
+	r := begin(cmd)
+	defer r.end()
 	id, _ := cmd.Flags().GetInt64("id")
 	takeSnapshot, _ := cmd.Flags().GetBool("snapshot")
 	forceNoBackup, _ := cmd.Flags().GetBool("force-no-backup")
 	releaseIP, _ := cmd.Flags().GetBool("release-ip")
 	snapshotTimeout, _ := cmd.Flags().GetDuration("snapshot-timeout")
-	jsonOut, _ := cmd.Flags().GetBool("json")
 
 	client, err := newServerClient(cmd)
 	if err != nil {
-		return err
+		return r.fail(err)
 	}
 
-	if !jsonOut {
+	if !r.json {
 		ui.CommandHeader("nself infra server destroy", fmt.Sprintf("server %d", id))
 		if takeSnapshot {
 			ui.Info("Taking a snapshot and waiting for it to become available (up to " + snapshotTimeout.String() + ")...")
@@ -79,16 +80,29 @@ func runServerDestroy(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		if errors.Is(err, server.ErrNoBackup) {
-			return fmt.Errorf("%w — see 'nself infra server destroy --help'", err)
+			return r.fail(fmt.Errorf("%w — see 'nself infra server destroy --help'", err))
 		}
-		return fmt.Errorf("destroy server %d: %w", id, err)
+		return r.fail(fmt.Errorf("destroy server %d: %w", id, err))
 	}
 
-	if jsonOut {
-		return ui.PrintJSON(result)
+	if r.json {
+		return r.done(destroyData(id, result))
 	}
 	printDestroyResult(result)
 	return nil
+}
+
+// destroyData is the envelope data of a completed destroy: what was done, from
+// the result and never assumed from the flags.
+func destroyData(id int64, result *server.DestroyResult) map[string]any {
+	retained, released := result.RetainedIPs, result.ReleasedIPs
+	if retained == nil {
+		retained = []server.PrimaryIP{}
+	}
+	if released == nil {
+		released = []server.PrimaryIP{}
+	}
+	return map[string]any{"server_id": id, "snapshot_id": result.SnapshotID, "retained_ips": retained, "released_ips": released}
 }
 
 // printDestroyResult reports exactly what Destroy did — never assumed from

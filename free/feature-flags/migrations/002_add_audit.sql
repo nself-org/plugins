@@ -5,8 +5,9 @@
 -- Purpose: Immutable append-only log of every create/enable/disable/kill/set/delete.
 --
 -- Retention: Application-level (recommend 365 days; prune via cron on audit table).
+-- Every object is public-qualified: sdk/go/migrate pins search_path to np_feature_flags, public, so an unqualified name would land in np_feature_flags.
 
-CREATE TABLE IF NOT EXISTS np_feature_flags_audit (
+CREATE TABLE IF NOT EXISTS public.np_feature_flags_audit (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     flag_key   VARCHAR(255) NOT NULL,
     actor      TEXT         NOT NULL,
@@ -19,10 +20,10 @@ CREATE TABLE IF NOT EXISTS np_feature_flags_audit (
 );
 
 -- Index for per-flag audit queries (most common access pattern)
-CREATE INDEX IF NOT EXISTS idx_np_ff_audit_flag_key ON np_feature_flags_audit(flag_key);
+CREATE INDEX IF NOT EXISTS idx_np_ff_audit_flag_key ON public.np_feature_flags_audit(flag_key);
 
 -- Index for time-range queries (retention sweep, compliance export)
-CREATE INDEX IF NOT EXISTS idx_np_ff_audit_ts ON np_feature_flags_audit(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_np_ff_audit_ts ON public.np_feature_flags_audit(ts DESC);
 
 -- Index for actor queries (who changed what)
-CREATE INDEX IF NOT EXISTS idx_np_ff_audit_actor ON np_feature_flags_audit(actor);
+CREATE INDEX IF NOT EXISTS idx_np_ff_audit_actor ON public.np_feature_flags_audit(actor);

@@ -1,0 +1,11 @@
+repo: nself-org/cli
+commit: 77c35e16 (P7-DEPL-22 merge)
+produced: nself build (internal/build, Build with Force) on scratch projects; routes.json and the nginx/ tree are the unmodified build output.
+projects: ENV/BASE_DOMAIN/SSL_MODE per fixture name:
+  http-full         ENV=dev  BASE_DOMAIN=example.test SSL_MODE=none; core services, one custom service, one frontend app, two internal routes (one https+websocket)
+  tls-full          ENV=prod BASE_DOMAIN=example.org  SSL_MODE=letsencrypt; same, certificate lineage example-org
+  plugin-modelled   dev; plugin cron snippet (location-only, fully modelled)
+  plugin-unmodelled dev; plugin idme snippet holding a directive outside the vocabulary
+  plugin-tls-server prod; MONITORING_ENABLED
+  hand              dev; nginx/conf.d/custom.conf with an http-level map (unmodelled_global)
+  host-tier         NOT cli output: plugin-modelled plus one hand-written wildcard route (*.example.test, /api/ and /quiet/ with access_log off) and its nginx conf; proves exact hosts beat a wildcard with a longer path

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/nself-org/plugins/free/audit-log/internal"
 	sdk "github.com/nself-org/plugin-sdk"
+	"github.com/nself-org/plugins/free/audit-log/internal"
 )
 
 // Size-cap exception: plugin entry-point main() — 82L startup wiring (env/db/router/server); single invocation, not a reusable unit.
@@ -36,9 +36,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := internal.Migrate(pool); err != nil {
-		log.Fatalf("[audit-log] migration failed: %v", err)
-	}
+	internal.BootMigrations(context.Background(), pool)
 
 	secret := os.Getenv("PLUGIN_INTERNAL_SECRET")
 	if secret == "" {
