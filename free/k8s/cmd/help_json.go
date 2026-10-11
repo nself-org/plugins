@@ -13,10 +13,13 @@
 // Constraints: a hook inside cobra's help function is not enough. The root has
 // no --json flag, so cobra rejects `--help --json` as an unknown flag before it
 // reaches help, and the E401 envelope would win. The check therefore runs on the
-// raw arguments before the normal Execute (main calls it): it drops --json and
-// runs the real help path into a buffer, so the text is the human help byte for
-// byte. A flag error in the arguments is not handled here; the normal path
-// reports it. Only sdk/go/output writes the envelope.
+// raw arguments before the normal Execute (main and the test harness both call
+// it). It never runs a command: it resolves the target with Find, parses that
+// command's flags, and answers only if the parsed help flag is true, so "-h" as
+// the value of another flag (--domain -h) is not a help request and no RunE can
+// run here. Anything else (flag error, unknown command) is left to the normal
+// path. The text comes from the command's own Help, byte for byte what human
+// --help prints. Only sdk/go/output writes the envelope.
 package main
 
 import (
@@ -27,6 +30,7 @@ import (
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // wantsHelp reports whether args ask for help (--help or -h, before any "--").
@@ -56,20 +60,33 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 		}
 		rest = append(rest, a)
 	}
-	// Run the real help path (cobra adds its help flag and default commands
-	// during Execute), so the text is what human --help prints, byte for byte.
-	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetArgs(rest)
-	err := root.Execute()
-	root.SetOut(nil)
-	root.SetArgs(args) // a caller that goes on to Execute must see the original arguments
-	if err != nil || buf.Len() == 0 {
-		return false, 0 // a flag error or similar: the normal path reports it
+	// Resolve the command the way Execute would, without running it: add the
+	// default help command and flag, find the target, parse its flags, and treat
+	// the request as help only if the parsed help flag is true. "-h" as the value
+	// of another flag (--domain -h) leaves help false, so nothing here can reach a
+	// RunE and the normal path handles the arguments.
+	root.InitDefaultHelpCmd()
+	root.InitDefaultCompletionCmd(rest...)
+	c, flags, err := root.Find(rest)
+	if err != nil || c == nil {
+		return false, 0
 	}
-	c, _, ferr := root.Find(rest)
-	if ferr != nil || c == nil {
-		c = root
+	c.InitDefaultHelpFlag()
+	help := false
+	if c.ParseFlags(flags) == nil {
+		help, _ = c.Flags().GetBool("help")
+	}
+	resetFlags(c) // the normal path parses the same flags again; slices would append twice
+	if !help {
+		return false, 0
+	}
+	var buf bytes.Buffer
+	c.SetOut(&buf)
+	err = c.Help()
+	c.SetOut(nil)
+	if err != nil {
+		fmt.Fprintln(stderr, "Error:", err)
+		return true, output.ExitInfra
 	}
 	name := "k8s"
 	if c != root {
@@ -80,4 +97,17 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 		return true, output.ExitInfra
 	}
 	return true, 0
+}
+
+// resetFlags puts every flag of c back to its default, so a parse done only to
+// look for --help leaves no trace.
+func resetFlags(c *cobra.Command) {
+	c.Flags().VisitAll(func(f *pflag.Flag) {
+		if sv, ok := f.Value.(pflag.SliceValue); ok {
+			_ = sv.Replace(nil)
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
+		f.Changed = false
+	})
 }

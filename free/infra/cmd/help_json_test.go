@@ -11,11 +11,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
+	"github.com/spf13/cobra"
 )
 
 func TestHelpJSONEnvelope(t *testing.T) {
@@ -89,5 +91,82 @@ func TestHumanHelpBytes(t *testing.T) {
 		if !strings.Contains(root.Stdout, want) {
 			t.Errorf("root help lacks %q", want)
 		}
+	}
+}
+
+// spyRunE wraps the RunE of every command under c and returns the call counter.
+func spyRunE(t *testing.T, c *cobra.Command) *int {
+	t.Helper()
+	n := new(int)
+	var wrap func(*cobra.Command)
+	wrap = func(c *cobra.Command) {
+		if orig := c.RunE; orig != nil {
+			c.RunE = func(cmd *cobra.Command, args []string) error { *n++; return orig(cmd, args) }
+			t.Cleanup(func() { c.RunE = orig })
+		}
+		for _, sub := range c.Commands() {
+			wrap(sub)
+		}
+	}
+	wrap(c)
+	return n
+}
+
+// TestHelpFlagValueIsNotHelp: "-h" or "--help" as the VALUE of another flag is not a
+// help request. helpJSON must answer handled=false, print nothing and never run a
+// RunE (it used to Execute the command, which ran it and then printed an ok help).
+func TestHelpFlagValueIsNotHelp(t *testing.T) {
+	rootOnce.Do(configureRoot)
+	cases := [][]string{
+		{"apply", "--provider", "hetzner", "--domain", "-h", "--i-accept-cloud-spend", "--auto-approve", "--json"},
+		{"--json", "apply", "--provider", "hetzner", "--domain", "-h"},
+		{"apply", "--domain=-h", "--provider", "hetzner", "--json"},
+		{"plan", "--domain", "--help", "--json"},
+		{"server", "provision", "--name", "-h", "--type", "cx22", "--location", "fsn1", "--image", "x", "--json"},
+		{"server", "provision", "--label", "-h", "--name", "a", "--json"},
+		{"server", "destroy", "--id", "1", "--token", "-h", "--force-no-backup", "--json"},
+		{"server", "resize", "--id", "1", "--type", "-h", "--json"},
+	}
+	n := spyRunE(t, infraCmd)
+	for _, args := range cases {
+		var out, errb bytes.Buffer
+		handled, _ := helpJSON(infraCmd, args, &out, &errb)
+		if handled || out.Len() != 0 || *n != 0 {
+			t.Errorf("%v: handled=%v stdout=%q RunE calls=%d, want unhandled, silent, 0 calls", args, handled, out.String(), *n)
+		}
+		*n = 0
+	}
+	// The full path takes the normal route: the spend gate refuses (no terminal).
+	res := runCLI(t, cliEnv{Tofu: "ok"}, cases[0]...)
+	var doc envDoc
+	if err := json.Unmarshal([]byte(res.Stdout), &doc); err != nil {
+		t.Fatalf("stdout is not an envelope: %v\n%s", err, res.Stdout)
+	}
+	if _, has := doc.Data["help"]; has || doc.Error == nil || doc.Error.Code != "E403" || res.Exit != 4 || res.TofuLog != "" {
+		t.Fatalf("want the E403 spend refusal, no tofu call; got exit %d log %q:\n%s", res.Exit, res.TofuLog, res.Stdout)
+	}
+	*n = 0 // the full run above legitimately ran apply once
+	// Control: a real help request still answers, still without a RunE.
+	var out bytes.Buffer
+	if handled, code := helpJSON(infraCmd, []string{"apply", "--domain", "x", "-h", "--json"}, &out, &bytes.Buffer{}); !handled || code != 0 || *n != 0 {
+		t.Fatalf("control: handled=%v code=%d RunE calls=%d", handled, code, *n)
+	}
+}
+
+// TestHelpJSONLeavesFlagsClean: the parse inside helpJSON must not leak flag
+// values into the normal run that follows (slice flags would append twice).
+func TestHelpJSONLeavesFlagsClean(t *testing.T) {
+	rootOnce.Do(configureRoot)
+	var out bytes.Buffer
+	args := []string{"server", "provision", "--label", "a=b", "--name", "n", "--help", "--json"}
+	if handled, _ := helpJSON(infraCmd, args, &out, &bytes.Buffer{}); !handled {
+		t.Fatal("want handled")
+	}
+	f := serverProvisionCmd.Flags()
+	if l, _ := f.GetStringArray("label"); len(l) != 0 {
+		t.Errorf("label leaked: %v", l)
+	}
+	if v, _ := f.GetString("name"); v != "" || f.Lookup("name").Changed {
+		t.Errorf("name leaked: %q changed=%v", v, f.Lookup("name").Changed)
 	}
 }
