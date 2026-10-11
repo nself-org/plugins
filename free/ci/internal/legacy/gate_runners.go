@@ -122,16 +122,46 @@ func runRepoGoScripts(root string, timeout int, verbose bool) []GateResult {
 		if !fileExists(filepath.Join(root, filepath.FromSlash(s.path))) {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), repoScriptDeadline)
-		gr := runStepCtx(ctx, s.name, root, verbose, "bash", s.path)
-		if ctx.Err() == context.DeadlineExceeded {
-			gr.Passed = false
-			gr.Output = strings.TrimSpace(fmt.Sprintf("timed out after %s\n%s", repoScriptDeadline, gr.Output))
-		}
-		cancel()
-		gates = append(gates, gr)
+		gates = append(gates, runRepoScript(s.name, root, s.path, verbose))
 	}
 	return gates
+}
+
+// runRepoScript runs `bash path` in root under repoScriptDeadline. At the
+// deadline the script's whole process group is killed (unix), so children
+// such as gremlins or go test die with it, and its pipes are closed shortly
+// after even if something still holds them.
+func runRepoScript(name, root, path string, verbose bool) GateResult {
+	start := time.Now()
+	gr := GateResult{Name: name}
+	if _, err := exec.LookPath("bash"); err != nil {
+		gr.Output = "command not found: bash (skipped)"
+		gr.Passed = true
+		gr.Skipped = true
+		gr.Elapsed = time.Since(start)
+		return gr
+	}
+	if verbose {
+		fmt.Fprintf(os.Stderr, "[nself-ci] running: bash %s\n", path)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), repoScriptDeadline)
+	defer cancel()
+	c := exec.CommandContext(ctx, "bash", path)
+	c.Dir = root
+	c.WaitDelay = 10 * time.Second
+	killProcessGroupOnCancel(c)
+	var buf bytes.Buffer
+	c.Stdout = &buf
+	c.Stderr = &buf
+	err := c.Run()
+	gr.Output = strings.TrimSpace(buf.String())
+	gr.Elapsed = time.Since(start)
+	gr.Passed = err == nil
+	if ctx.Err() == context.DeadlineExceeded {
+		gr.Passed = false
+		gr.Output = strings.TrimSpace(fmt.Sprintf("timed out after %s\n%s", repoScriptDeadline, gr.Output))
+	}
+	return gr
 }
 
 // runFlutterGates runs flutter analyze and flutter test.
@@ -213,12 +243,6 @@ func runGatewayRoutingCheck(gatewayBase string, timeout int, verbose bool) []Gat
 // runStep executes a single gate command and returns its result.
 // For gofmt specifically, success means no output (unlinted files print their path).
 func runStep(name, root string, timeout int, verbose bool, cmd string, args ...string) GateResult {
-	return runStepCtx(context.Background(), name, root, verbose, cmd, args...)
-}
-
-// runStepCtx is runStep under ctx: when ctx ends the command is killed, and
-// its output pipes are closed WaitDelay later even if a child still holds them.
-func runStepCtx(ctx context.Context, name, root string, verbose bool, cmd string, args ...string) GateResult {
 	start := time.Now()
 	gr := GateResult{Name: name}
 
@@ -235,8 +259,7 @@ func runStepCtx(ctx context.Context, name, root string, verbose bool, cmd string
 		fmt.Fprintf(os.Stderr, "[nself-ci] running: %s %s\n", cmd, strings.Join(args, " "))
 	}
 
-	c := exec.CommandContext(ctx, cmd, args...)
-	c.WaitDelay = 10 * time.Second
+	c := exec.Command(cmd, args...)
 	c.Dir = root
 
 	var buf bytes.Buffer
