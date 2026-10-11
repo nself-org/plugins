@@ -33,6 +33,7 @@ nself k8s install --domain myapp.com
 nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself
 nself k8s status
 nself k8s upgrade
+nself k8s uninstall --yes
 ```
 
 The chart is embedded in the plugin binary (source in `charts/nself/` in this

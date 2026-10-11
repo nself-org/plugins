@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Purpose: prove `nself k8s values|install|upgrade` on a real kind cluster. The same
+# Purpose: prove `nself k8s values|install|upgrade|status|uninstall` on a real kind cluster. The same
 #   script is the body of .github/workflows/k8s-kind.yml and the local pre-merge run.
 # Inputs (env, all optional):
 #   CLI_REF      nself-org/cli commit to build (default CLI_REF_DEFAULT from tools.env)
@@ -10,8 +10,11 @@
 #   KIND_WORK    work directory (default: a new mktemp dir, removed on exit)
 #   TOOLS_CACHE  directory that caches the pinned tool downloads
 #   KEEP_CLUSTER=1 keeps the kind cluster for debugging
-# Outputs: exit 0 when the stack is Ready and Hasura answers {__typename}; 1 on
-#   any failure (cluster state is dumped first); 3 for a leg this Ticket does not run.
+# Outputs: exit 0 when the stack is Ready, Hasura answers {__typename} and the machine
+#   contract holds (contract.sh, needs jq: the help --json subtree with canon plugin, the
+#   status --json envelope, the uninstall gate that exits 4 without --yes, and a real
+#   uninstall --yes --json); 1 on any failure (cluster state is dumped first); 3 for a leg
+#   this Ticket does not run.
 # Constraints: helm is only ever run by `nself k8s`; the script never calls it. The cli
 #   sha is printed. No secret goes on any argv: the admin secret reaches curl on stdin.
 #   The plugin is laid out as `nself add` does: bin/nself-k8s plus k8s/plugin.json under
@@ -31,6 +34,8 @@ if [ "$SOURCE" != "branch" ] || [ "$LEG" != "install" ]; then
   echo "run.sh: only source=branch leg=install is proven by this Ticket (registry: P7-DEPL-99, day2: P7-DEPL-07)" >&2
   exit 3
 fi
+
+command -v jq >/dev/null || { echo "run.sh: jq is required (contract.sh reads the envelopes with it)" >&2; exit 2; }
 
 real_home="$HOME"
 made_work=0
@@ -206,6 +211,21 @@ status="$(cd "$project" && nself k8s status --cluster "$KUBECONFIG")"
 printf '%s\n' "$status" | grep -q '"version":2' || { echo "FAIL: release is not at revision 2" >&2; exit 1; }
 kubectl wait --for=condition=Ready pod --all --field-selector=status.phase!=Succeeded --timeout="${READY_TIMEOUT}s"
 query_hasura
+
+# shellcheck disable=SC1091
+. "$here/contract.sh"
+
+step "nself help --json k8s lists the subtree with canon plugin"
+check_help_subtree
+
+step "nself k8s status --json is a v1 envelope"
+check_json_status
+
+step "nself k8s uninstall refuses without --yes (exit 4), the release survives"
+check_uninstall_gate
+
+step "nself k8s uninstall --yes --json removes the release"
+check_uninstall
 
 echo
 echo "k8s-kind: ok (cli $(git -C "$CLI_DIR" rev-parse HEAD))"
