@@ -123,7 +123,11 @@ pkrows() {
   cols=$(sql "$1" "SELECT coalesce(string_agg(format('%I', a.attname), ',' ORDER BY k.ord), '') FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ord) JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum WHERE i.indrelid = '$q'::regclass AND i.indisprimary" 2>/dev/null) || return 2
   [ -n "$cols" ] || return 1
   rows=$(sql "$1" "SELECT ROW($cols)::text FROM $q" 2>/dev/null) || return 2
-  printf '%s\n' "$rows" | LC_ALL=C sort > "$3"
+  if [ -n "$rows" ]; then
+    printf '%s\n' "$rows" | LC_ALL=C sort > "$3"
+  else
+    : > "$3"
+  fi
 }
 
 # legacy_pass: the LEGACY pass for the current plugin (globals p dir tag schema port tables expected safe W pid pg). Silent no-op
@@ -221,6 +225,14 @@ sleep 2
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p; pj=$dir/plugin.json; [ -f "$pj" ] || { echo "FAIL  $p: no plugin.json under $root"; rc=1; continue; }
   schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj"); tables=$(jq -r '.tables[]?' "$pj" | tr '\n' ' ')
+  # load extra-tables: optional per-plugin file listing additional tables to verify (one per line, # comments allowed)
+  if [ -f "$dir/tests/boot/extra-tables" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case $line in ''|'#'*) continue;; esac
+      line=$(printf '%s' "$line" | tr -d '[:space:]')
+      [ -n "$line" ] && tables="$tables$line "
+    done < "$dir/tests/boot/extra-tables"
+  fi
   [ -n "$schema" ] || { echo "FAIL  $p: manifest has no schema"; rc=1; continue; }
   [ -n "$tables" ] || { echo "FAIL  $p: manifest has no tables (nothing to prove)"; rc=1; continue; }
   expected=$(ls "$dir"/migrations/*.sql 2>/dev/null | grep -vc '\.down\.sql$'); tag=nself-tu-$p:$pid; btag=nself-tu-basis-$p:$pid
