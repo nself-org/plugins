@@ -92,13 +92,14 @@ counts() {
 }
 
 # pkrows <db> <table> <file>: the primary-key values of every row ("(v1,v2)" text), sorted, into <file>. Returns 1 when the
-# table has no primary key (the caller then falls back to the row count).
+# table has no primary key (the caller then falls back to the row count) and 2 when a query fails (the caller FAILs).
 pkrows() {
-  local q cols
+  local q cols rows
   q=$(qualified "$2")
-  cols=$(sql "$1" "SELECT string_agg(format('%I', a.attname), ',' ORDER BY k.ord) FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ord) JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum WHERE i.indrelid = '$q'::regclass AND i.indisprimary" 2>/dev/null)
+  cols=$(sql "$1" "SELECT coalesce(string_agg(format('%I', a.attname), ',' ORDER BY k.ord), '') FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ord) JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum WHERE i.indrelid = '$q'::regclass AND i.indisprimary" 2>/dev/null) || return 2
   [ -n "$cols" ] || return 1
-  sql "$1" "SELECT ROW($cols)::text FROM $q" 2>/dev/null | LC_ALL=C sort > "$3"
+  rows=$(sql "$1" "SELECT ROW($cols)::text FROM $q" 2>/dev/null) || return 2
+  printf '%s\n' "$rows" | LC_ALL=C sort > "$3"
 }
 
 docker network create "$net" >/dev/null
@@ -141,15 +142,19 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   before=$(counts "$udb" $tables); seeded=0; unreadable=0
   for n in $before; do case $n in x) unreadable=1;; *) seeded=$((seeded + n));; esac; done
   if [ $seeded -lt 1 ] || [ $unreadable -eq 1 ]; then echo "FAIL  upgrade $p: seeded rows before the upgrade: counts '$before' (need at least one row, every manifest table readable)"; rc=1; continue; fi
-  i=0; nopk=" "
-  for t in $tables; do i=$((i + 1)); pkrows "$udb" "$t" "$W/pk-before-$i" || nopk="$nopk$i "; done
+  i=0; nopk=" "; capfail=0
+  for t in $tables; do
+    i=$((i + 1)); pkrows "$udb" "$t" "$W/pk-before-$i"; r=$?
+    case $r in 0) ;; 1) nopk="$nopk$i ";; *) capfail=1; echo "FAIL  upgrade $p: cannot read the primary keys of $t before the upgrade";; esac
+  done
+  [ $capfail -eq 0 ] || { rc=1; continue; }
   boot "nself-tu-c-$pid" "$tag" "$udb" "$port"
   after=$(counts "$udb" $tables); lost=0; i=0
   for t in $tables; do
     i=$((i + 1)); n=$(printf '%s' "$before" | awk -v k=$i '{ print $k }'); a=$(printf '%s' "$after" | awk -v k=$i '{ print $k }')
     case $nopk in
       *" $i "*) case $a in x|'') lost=1;; *) [ "$a" -ge "$n" ] || { lost=1; echo "FAIL  upgrade $p: table $t lost rows (count $n -> $a)"; };; esac;;
-      *) if pkrows "$udb" "$t" "$W/pk-after-$i" && [ -z "$(LC_ALL=C comm -23 "$W/pk-before-$i" "$W/pk-after-$i")" ]; then :; else lost=1; echo "FAIL  upgrade $p: table $t lost or rewrote a seeded row (primary keys: $(LC_ALL=C comm -23 "$W/pk-before-$i" "$W/pk-after-$i" 2>/dev/null | head -3 | tr '\n' ' '))"; fi;;
+      *) if pkrows "$udb" "$t" "$W/pk-after-$i" && [ -z "$(LC_ALL=C comm -23 "$W/pk-before-$i" "$W/pk-after-$i")" ]; then :; else lost=1; echo "FAIL  upgrade $p: table $t lost a seeded row or changed its primary key (missing keys: $(LC_ALL=C comm -23 "$W/pk-before-$i" "$W/pk-after-$i" 2>/dev/null | head -3 | tr '\n' ' '))"; fi;;
     esac
   done
   if mig_ok "$expected" && tables_present "$udb" $tables && [ $lost -eq 0 ]; then echo "pass  upgrade $p: basis seeded $seeded row(s) (counts $before), converted boot applied=expected=$expected, counts after $after"
