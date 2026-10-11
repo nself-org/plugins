@@ -19,6 +19,9 @@ func TestErrTerraformNotFound(t *testing.T) {
 	if !contains(msg, "terraform") {
 		t.Errorf("ErrTerraformNotFound.Error() = %q: should mention terraform", msg)
 	}
+	if i, j := strings.Index(msg, "tofu"), strings.Index(msg, "OpenTofu"); i < 0 || j < 0 || strings.Index(msg, "Terraform") < j {
+		t.Errorf("ErrTerraformNotFound.Error() = %q: should name tofu and OpenTofu before Terraform", msg)
+	}
 }
 
 // TestTerraformBinaryNotInPath verifies terraformBinary returns ErrTerraformNotFound

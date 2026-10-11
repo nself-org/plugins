@@ -30,6 +30,9 @@ func main() {
 		rootCmd.SilenceErrors = true
 		rootCmd.SilenceUsage = true
 	}
+	if handled, code := helpJSON(rootCmd, os.Args[1:], os.Stdout, os.Stderr); handled {
+		os.Exit(code)
+	}
 	os.Exit(report(rootCmd.Execute(), js, os.Args[1:], os.Stdout, os.Stderr))
 }
 

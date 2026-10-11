@@ -106,7 +106,7 @@ func runCLI(t *testing.T, env cliEnv, args ...string) cliResult {
 	infraCmd.SilenceErrors = js
 	infraCmd.SilenceUsage = true
 	infraCmd.SetArgs(args)
-	exit := report(infraCmd.Execute(), js, args, os.Stdout, os.Stderr)
+	exit := run(args, js, os.Stdout, os.Stderr) // the same entry point main uses
 	os.Stdout, os.Stderr = oldOut, oldErr
 	_ = outF.Close()
 	_ = errF.Close()
