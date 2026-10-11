@@ -1,0 +1,4 @@
+exit: 1
+--- stdout ---
+--- stderr ---
+Error: docker compose config failed: exec: "docker": executable file not found in $PATH: 

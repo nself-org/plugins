@@ -1,0 +1,13 @@
+exit: 1
+--- stdout ---
+--- stderr ---
+Error: k8s: helm binary not found; install from https://helm.sh
+Usage:
+  nself-k8s status [flags]
+
+Flags:
+      --cluster string   Path to kubeconfig
+  -h, --help             help for status
+      --release string   Helm release name (default "nself")
+
+Error: k8s: helm binary not found; install from https://helm.sh

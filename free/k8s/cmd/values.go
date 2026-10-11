@@ -12,6 +12,10 @@
 // is written, differences are printed (service name first) and the command
 // exits 1.
 //
+// With --json one v1 envelope replaces the text: data holds the files written
+// and what could not be mapped (or the services count in --check); a parity
+// failure is E723 with the differences in cause.
+//
 // Constraints: no cli import. Secret values are never printed. Without
 // --check, services that cannot be mapped are listed on stdout with the
 // reason and the command still succeeds (they are recorded in values.yaml).
@@ -36,16 +40,26 @@ naming every service that is missing, extra, or differs in image or tag.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true  // a failed check is not a usage error
 		cmd.SilenceErrors = true // main prints the error once
+		r := newInvocation(cmd, "values")
 		dir, _ := cmd.Flags().GetString("project-dir")
 		out, _ := cmd.Flags().GetString("out")
 		check, _ := cmd.Flags().GetBool("check")
-		return values.Run(cmd.Context(), values.Options{
-			ProjectDir: dir, OutDir: out, Check: check, Out: cmd.OutOrStdout(),
-		})
+		res, err := values.Run(cmd.Context(), values.Options{ProjectDir: dir, OutDir: out, Check: check})
+		if !r.json {
+			if res != nil {
+				res.WriteText(cmd.OutOrStdout())
+			}
+			return err
+		}
+		if err != nil {
+			return r.valuesFail(res, err)
+		}
+		return r.done(valuesData(res))
 	},
 }
 
 func init() {
+	addJSONFlag(valuesCmd)
 	valuesCmd.Flags().String("project-dir", ".", "nSelf project directory (holds .nself/)")
 	valuesCmd.Flags().String("out", "", "Output directory (default <project-dir>/.nself/generated/k8s)")
 	valuesCmd.Flags().Bool("check", false, "Compare an existing values.yaml with the compose model; exit 1 on any difference")

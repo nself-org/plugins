@@ -1,0 +1,4 @@
+exit: 0
+--- stdout ---
+parity ok: 11 compose service(s) match <DIR>/.nself/generated/k8s/values.yaml
+--- stderr ---
