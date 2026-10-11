@@ -159,6 +159,12 @@ func TestOp_PutBucketCors(t *testing.T) {
 	// Informational: an origin the rule does not list. Servers with a global CORS setting answer "*" here.
 	_, other, _ := preflight(t, b, "https://other.example.test")
 	t.Logf("preflight ACAO: listed origin %q, unlisted origin %q", hdr.Get("Access-Control-Allow-Origin"), other.Get("Access-Control-Allow-Origin"))
+	if env.target == "seaweedfs" {
+		// The strict target must enforce the bucket rule, not answer "*" for everybody.
+		if got := other.Get("Access-Control-Allow-Origin"); got != "" {
+			t.Fatalf("unlisted origin got Access-Control-Allow-Origin %q; the bucket CORS rule is not enforced", got)
+		}
+	}
 }
 
 // preflight sends an OPTIONS preflight (Origin + Access-Control-Request-Method: PUT) for an object in bucket b.

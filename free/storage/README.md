@@ -20,7 +20,9 @@ Set the `S3_*` variables below in the project env so the plugin can reach your S
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
 | `STORAGE_PLUGIN_PORT` | No | `9007` | HTTP server port |
-| `STORAGE_MAX_LARGE_UPLOADS` | No | `8` | Uploads above 1 MiB that may run at once (each holds a 16 MiB buffer; others wait) |
+| `STORAGE_MAX_UPLOADS` | No | `64` | Uploads of any size that may run at once; others wait |
+| `STORAGE_MAX_LARGE_UPLOADS` | No | `8` | Of those, uploads above 1 MiB that may run at once (each holds a 16 MiB buffer) |
+| `STORAGE_UPLOAD_SLOT_WAIT` | No | `30s` | How long an upload waits for a free slot before `503` |
 | `S3_ENDPOINT` | No | `minio:9000` | S3 endpoint, `host[:port]` or a full `http(s)://` URL (config-only, not user-overridable) |
 | `S3_REGION` | No | `us-east-1` | Signing region |
 | `S3_ACCESS_KEY` | With `S3_SECRET_KEY` | — | S3 access key |
@@ -51,7 +53,7 @@ reaches S3 and fails there answers `502 {"error":"object storage error"}`.
 plugin's origin). The JSON metadata row that this route used to return is now `GET .../objects/{key}?metadata=true`.
 
 Bucket names follow S3 rules (3-63 characters of `a-z 0-9 . -`, start and end alphanumeric, no `..`, not an IP
-address); anything else is `400 {"error":"invalid bucket name"}`. Object keys are 1-1024 bytes with no `..` and no `.` or `/.` ending. A `X-Hasura-Source-Account-Id` that is blank, `.`, `..` or contains control characters is `400 {"error":"invalid source account id"}`.
+address); anything else is `400 {"error":"invalid bucket name"}`. A `Content-Type` with non-ASCII or control bytes is `400 {"error":"invalid content type"}`. Object keys are 1-1024 bytes (the account prefix counts) with no `..` and no `.` or `/.` ending. A `X-Hasura-Source-Account-Id` that is blank, `.`, `..` or contains control characters is `400 {"error":"invalid source account id"}`.
 
 ## Storage layout
 
@@ -71,10 +73,26 @@ prefix, including a bucket that apps use directly. Isolation between accounts is
 the bucket; use separate S3 credentials or an endpoint-side policy when a bucket must stay closed to the plugin.
 
 Uploads of 16 MiB or less use one `PutObject`; larger uploads use a multipart upload with 16 MiB parts, streamed with
-one part in memory, and are aborted on any failure. Bodies of 1 MiB or less are buffered in a small allocation; larger
-ones take one of `STORAGE_MAX_LARGE_UPLOADS` slots and a pooled 16 MiB buffer, so process memory stays bounded. The client is path-style with static credentials and
-"when required" request/response checksums (needed by SeaweedFS and MinIO). The server allows 15 minutes per transfer
-(read and write timeouts), so one upload or download that takes longer than 15 minutes fails.
+one part in memory, and are aborted on any failure. The client is path-style with static credentials and
+"when required" request/response checksums (needed by SeaweedFS and MinIO).
+
+**What is bounded.** At most `STORAGE_MAX_UPLOADS` uploads run at once; each holds its first MiB in memory. Of those,
+at most `STORAGE_MAX_LARGE_UPLOADS` hold a pooled 16 MiB buffer, so upload memory is about
+`64 x 1 MiB + 8 x 16 MiB` at the defaults. An upload that finds no free slot waits `STORAGE_UPLOAD_SLOT_WAIT`, then
+answers `503 {"error":"upload capacity reached, retry"}` with `Retry-After`. An upload body that sends nothing for 60
+seconds fails (`408`) and frees its slot; a body that keeps flowing may take as long as it needs. Downloads have no
+slot limit and are streamed; the server's write timeout caps a single download at 15 minutes.
+
+**Truncated uploads never commit.** A body that ends early, or whose length differs from the declared
+`Content-Length`, answers `400 {"error":"request body incomplete"}`; nothing is stored and a multipart upload is
+aborted.
+
+**Concurrent writes.** Two simultaneous PUTs of one key can reach S3 and Postgres in opposite orders. A download uses
+the `Content-Type` stored with the bytes in S3, but the object list and `?metadata=true` (Postgres) may briefly show the
+size, ETag and type of the other write. The last S3 write holds the bytes.
+
+Deleting a bucket also deletes every object under the account's prefix in S3 (listed from S3, not only the objects
+that have a metadata row), so bytes left by a failed or racing upload do not outlive the bucket.
 
 ## S3 operations used
 

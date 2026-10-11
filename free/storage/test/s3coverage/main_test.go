@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	mrand "math/rand"
 	"net/http"
@@ -237,4 +238,23 @@ func is404(err error) bool {
 	s := err.Error()
 	return strings.Contains(s, "StatusCode: 404") || strings.Contains(s, "NotFound") || strings.Contains(s, "NoSuchKey") ||
 		strings.Contains(s, "NoSuchBucket") || strings.Contains(s, "NoSuchUpload") || strings.Contains(s, "NoSuchVersion")
+}
+
+// patternStream yields n position-dependent bytes (a streamed payload that never exists in memory as a whole).
+type patternStream struct{ pos, n int64 }
+
+func (p *patternStream) Read(b []byte) (int, error) {
+	if p.pos >= p.n {
+		return 0, io.EOF
+	}
+	k := int64(len(b))
+	if k > p.n-p.pos {
+		k = p.n - p.pos
+	}
+	for i := int64(0); i < k; i++ {
+		x := p.pos + i
+		b[i] = byte(x*131 + x>>8 + x>>16)
+	}
+	p.pos += k
+	return int(k), nil
 }

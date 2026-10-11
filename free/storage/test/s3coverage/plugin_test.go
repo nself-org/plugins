@@ -11,11 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -52,16 +54,16 @@ func newPlugin(t *testing.T) *pluginHarness {
 // failStore wraps the real store and fails chosen operations on demand (S3 failure injection).
 type failStore struct {
 	internal.ObjectStore
-	failPut, failDelete, deleteNotFound, failDeleteObjects atomic.Bool
+	failPut, failDelete, deleteNotFound, failDeleteObjects, failDeletePrefix atomic.Bool
 }
 
 var errInjected = errors.New("injected S3 failure")
 
-func (f *failStore) Put(c context.Context, bucket, key string, body io.Reader, ct string) (s3store.PutResult, error) {
+func (f *failStore) Put(c context.Context, bucket, key string, body io.Reader, ct string, declared int64) (s3store.PutResult, error) {
 	if f.failPut.Load() {
 		return s3store.PutResult{}, errInjected
 	}
-	return f.ObjectStore.Put(c, bucket, key, body, ct)
+	return f.ObjectStore.Put(c, bucket, key, body, ct, declared)
 }
 
 func (f *failStore) Delete(c context.Context, bucket, key string) error {
@@ -79,6 +81,13 @@ func (f *failStore) DeleteObjects(c context.Context, bucket string, keys []strin
 		return errInjected
 	}
 	return f.ObjectStore.DeleteObjects(c, bucket, keys)
+}
+
+func (f *failStore) DeletePrefix(c context.Context, bucket, prefix string) error {
+	if f.failDeletePrefix.Load() {
+		return errInjected
+	}
+	return f.ObjectStore.DeletePrefix(c, bucket, prefix)
 }
 
 // newPluginWrapped is newPlugin with a failure-injecting store in front of the real one.
@@ -153,10 +162,8 @@ func TestPlugin_UploadLargeObjectViaS3(t *testing.T) {
 	bucket := p.createBucket(t, "")
 
 	// Build the 64 MiB body from a seeded stream and hash it while it is sent.
-	chunk := payload(8<<20, 11)
-	src := &hashReader{h: sha256.New()}
-	src.r = io.MultiReader(bytes.NewReader(chunk), bytes.NewReader(chunk), bytes.NewReader(chunk), bytes.NewReader(chunk),
-		bytes.NewReader(chunk), bytes.NewReader(chunk), bytes.NewReader(chunk), bytes.NewReader(chunk))
+	// Position-dependent bytes: every part differs, so reordered or duplicated parts change the SHA.
+	src := &hashReader{h: sha256.New(), r: &patternStream{n: size}}
 	code, _, body := p.call(t, "", http.MethodPut, "/storage/buckets/"+bucket+"/objects/big.bin", src, "application/x-big")
 	if code != http.StatusOK {
 		t.Fatalf("PUT 64 MiB: %d %s", code, body)
@@ -300,12 +307,27 @@ func TestPlugin_TenantIsolationInSharedBucket(t *testing.T) {
 			t.Errorf("physical key %s missing: %v", k, err)
 		}
 	}
+	// Objects without a metadata row (a failed upsert, a racing PUT) sit under the tenant prefix: the bucket delete
+	// must sweep them too, but not another tenant's objects (including an id that merely starts the same way).
+	for _, k := range []string{"tenant-a/untracked.txt", "tenant-a/deep/er/untracked.txt", "tenant-b/untracked.txt", "tenant-ab/keep.txt"} {
+		putBytes(t, bucket, k, []byte("planted"))
+	}
 	// Deleting tenant-a's bucket removes only tenant-a's objects and never the physical bucket.
 	if code, _, _ := p.call(t, "tenant-a", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusNoContent {
 		t.Fatalf("DELETE bucket: %d", code)
 	}
 	if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String("tenant-a/same.txt")}); !is404(err) {
 		t.Errorf("tenant-a object survived its bucket delete: %v", err)
+	}
+	for _, k := range []string{"tenant-a/untracked.txt", "tenant-a/deep/er/untracked.txt"} {
+		if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(k)}); !is404(err) {
+			t.Errorf("untracked tenant-a object %s survived the bucket delete: %v", k, err)
+		}
+	}
+	for _, k := range []string{"tenant-b/untracked.txt", "tenant-ab/keep.txt", "tenant-b/same.txt"} {
+		if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(k)}); err != nil {
+			t.Errorf("another tenant's object %s was removed by tenant-a's bucket delete: %v", k, err)
+		}
 	}
 	if _, _, b := p.call(t, "tenant-b", http.MethodGet, path, nil, ""); string(b) != "from b" {
 		t.Errorf("tenant-b lost its object: %q", b)
@@ -388,6 +410,16 @@ func TestPlugin_S3FailureKeepsDatabaseConsistent(t *testing.T) {
 		t.Fatalf("rows lost although DeleteObjects failed (bucket %d, object %d)", rowCount(t, bucket, ""), rowCount(t, bucket, "a.txt"))
 	}
 	fs.failDeleteObjects.Store(false)
+
+	// The prefix sweep failing also keeps every row.
+	fs.failDeletePrefix.Store(true)
+	if code, _, _ := p.call(t, "", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusBadGateway {
+		t.Fatalf("DELETE bucket with the prefix sweep failing: %d, want 502", code)
+	}
+	if rowCount(t, bucket, "") != 1 || rowCount(t, bucket, "a.txt") != 1 {
+		t.Fatal("rows lost although the prefix sweep failed")
+	}
+	fs.failDeletePrefix.Store(false)
 	if code, _, _ := p.call(t, "", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusNoContent {
 		t.Fatalf("DELETE bucket after recovery: %d", code)
 	}
@@ -402,5 +434,42 @@ func TestPlugin_RejectsInvalidAccountID(t *testing.T) {
 		if code, _, body := p.call(t, id, http.MethodGet, "/storage/buckets", nil, ""); code != http.StatusBadRequest || !strings.Contains(string(body), "invalid source account id") {
 			t.Errorf("account %q: %d %s", id, code, body)
 		}
+	}
+}
+
+// A client that declares 40 MiB, sends 20 MiB and hangs up must leave nothing behind: no object, no row, and no
+// multipart upload left open on the S3 side.
+func TestPlugin_TruncatedUploadCommitsNothing(t *testing.T) {
+	p := newPlugin(t)
+	bucket := p.createBucket(t, "")
+	conn, err := net.Dial("tcp", strings.TrimPrefix(p.url, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(conn, "PUT /storage/buckets/%s/objects/trunc.bin HTTP/1.1\r\nHost: plugin\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", bucket, 40<<20)
+	if _, err := io.Copy(conn, &patternStream{n: 20 << 20}); err != nil {
+		t.Fatalf("sending the partial body: %v", err)
+	}
+	_ = conn.Close()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		mu, err := direct.ListMultipartUploads(ctx, &s3.ListMultipartUploadsInput{Bucket: aws.String(bucket)})
+		if err == nil && len(mu.Uploads) == 0 && p.rec.count(func(q reqRecord) bool { return strings.Contains(q.Query, "uploads") }) >= 1 {
+			break // the plugin started the multipart upload and aborted it
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("multipart upload still open or never started (err %v)", err)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String("primary/trunc.bin")}); !is404(err) {
+		t.Fatalf("a truncated upload produced an object: %v", err)
+	}
+	if n := rowCount(t, bucket, "trunc.bin"); n != 0 {
+		t.Fatalf("%d metadata row(s) for a truncated upload", n)
+	}
+	if n := p.rec.count(func(q reqRecord) bool { return q.Method == http.MethodPost && strings.Contains(q.Query, "uploadId=") }); n != 0 {
+		t.Fatalf("CompleteMultipartUpload was sent %d time(s) for a truncated body", n)
 	}
 }
