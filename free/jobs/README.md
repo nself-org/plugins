@@ -480,6 +480,35 @@ payload: {
 
 **Status**: Jobs are queued and tracked. The Hasura Actions integration point in `processCustomJob()` (`ts/src/processors.ts`) requires `HASURA_GRAPHQL_ENDPOINT` and `HASURA_ADMIN_SECRET` environment variables to route actions to Hasura.
 
+## Access (private by default)
+
+The jobs API has no authentication: whoever reaches it can create, delete and retry jobs, list queues and read or revive the dead-letter queue (`/v1/jobs`, `/v1/jobs/{id}/retry`, `/v1/queues`, `/v1/dlq`, `/v1/dlq/{id}/revive`). So it is private by default:
+
+- Services on the project network call it by service name: `http://nself-jobs:3105`.
+- On the host, it listens on `127.0.0.1:3105` only. From your machine, tunnel to it: `ssh -L 3105:127.0.0.1:3105 <server>`, then use `http://127.0.0.1:3105`.
+- `nself build` installs `nginx/jobs.conf` as the `jobs.<BASE_DOMAIN>` server block. That block answers `403` to every caller except the nginx container's own loopback (`allow 127.0.0.1; allow ::1; deny all;`). Private address ranges are not allowed: behind Docker's userland proxy (IPv6 clients, Docker Desktop, rootless Docker) or a tunnel container, internet traffic arrives from a private address.
+
+To expose the API on purpose, add your own server block under another name in `nginx/conf.d/` (hand-managed; `nself build` never touches it) and put authentication in front of it. Do not reuse `jobs.<BASE_DOMAIN>`: the plugin's block already serves that name. For example, `nginx/conf.d/jobs-admin.conf`:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name jobs-admin.example.com;
+    ssl_certificate     /etc/nginx/ssl/<your-cert-dir>/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/<your-cert-dir>/privkey.pem;
+
+    satisfy all;                       # both checks must pass
+    allow 203.0.113.10;                # your admin address
+    deny all;
+    auth_basic "jobs admin";
+    auth_basic_user_file /etc/nginx/conf.d/jobs-admin.htpasswd;
+
+    resolver 127.0.0.11 valid=10s;
+    set $upstream http://nself-jobs:3105;
+    location / { proxy_pass $upstream; }
+}
+```
+
 ## API Endpoints
 
 ### Create Job
