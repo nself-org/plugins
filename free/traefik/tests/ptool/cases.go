@@ -101,6 +101,7 @@ func matrix(m routes, ngx, trf string, needTier bool) {
 	encodedSlash(r, m)
 	hostTier(r, m, needTier)
 	hostCase(r, m)
+	hostDot(r, m, needTier)
 	healthMethod(r, m)
 	bodyLimit(r, m, get)
 	rates(r, m, get)

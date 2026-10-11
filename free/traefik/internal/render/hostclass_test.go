@@ -200,6 +200,14 @@ func TestHealthProbeAcceptsOnlyGetAndHead(t *testing.T) {
 	if _, spec := winner(t, out, "web", reqIn{host: "h.example.test", path: "/healthz", method: "POST"}); answers(t, out, spec) != 403 {
 		t.Error("a health probe without a methods list must still refuse POST")
 	}
+	hp.Methods = []string{"HEAD"} // HEAD only (limit_except HEAD): GET must be refused, not admitted
+	out = mustRender(t, mkRoute(t, "hand:h#1", []string{"h.example.test"}, loc(t, "proxy", "/", "prefix"), hp))
+	for m, want := range map[string]int{"HEAD": 0, "GET": 403, "POST": 403} {
+		name, spec := winner(t, out, "web", reqIn{host: "h.example.test", path: "/healthz", method: m})
+		if got := answers(t, out, spec); got != want || (want == 0 && !strings.Contains(name, "-l1-")) {
+			t.Errorf("HEAD-only probe, %s /healthz: want %d (0 = upstream), got %d via %s", m, want, got, name)
+		}
+	}
 	hp.Methods = []string{"POST"}
 	if _, err := renderRoutes(t, mkRoute(t, "hand:h#1", []string{"h.example.test"}, loc(t, "proxy", "/", "prefix"), hp)); err == nil || !strings.Contains(err.Error(), "health_probe") {
 		t.Errorf("a health probe restricted to POST must be refused, got %v", err)

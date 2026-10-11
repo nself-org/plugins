@@ -147,7 +147,8 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 	pri := (class + len(l.Path)) * 2
 	name := fmt.Sprintf("%s-l%d", b.pfx, i)
 	// nginx forces GET on a health probe and drops the body; Traefik cannot, so only GET (and
-	// HEAD) pass and every other method is a 403 (an accepted difference, in the wiki).
+	// HEAD) pass and every other method is a 403 (an accepted difference, in the wiki). A caller's
+	// subset of GET/HEAD is kept: limit_except HEAD admits HEAD only, so HEAD alone must not add GET.
 	methods := l.Methods
 	if l.HealthProbe {
 		for _, m := range methods {
@@ -156,7 +157,9 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 				return false
 			}
 		}
-		methods = []string{"GET"}
+		if len(methods) == 0 {
+			methods = []string{"GET"}
+		}
 	}
 	for _, ln := range ls {
 		if len(methods) == 0 {
