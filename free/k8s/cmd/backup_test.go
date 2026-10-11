@@ -34,10 +34,12 @@ for a in "$@"; do
     *"exec pg_dump"*) kind=dump ;;
     *"exec pg_restore"*) kind=restore ;;
     *"exec psql"*) kind=psql ;;
+    *"pg_restore -f /dev/null"*) kind=verify ;;
   esac
 done
 case "$kind" in
   dump) cat "$STUB_DUMP" ;;
+  verify) cat >/dev/null ;;
   restore) cat >/dev/null; if [ -n "$STUB_RESTORE_ERR" ]; then echo "$STUB_RESTORE_ERR" >&2; exit 1; fi ;;
   psql)
     if [ "$STUB_MODE" = "backup" ]; then

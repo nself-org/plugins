@@ -39,7 +39,7 @@ type TargetOptions struct {
 // recorded in its metadata (empty with --output when PROJECT_NAME is not usable).
 func ResolveTarget(o TargetOptions) (path, project string, err error) {
 	if o.Tag != "" && !tagRe.MatchString(o.Tag) {
-		return "", "", errTarget("--tag may only contain letters, digits, '.', '_' and '-'", "")
+		return "", "", errTargetWith("--tag may only contain letters, digits, '.', '_' and '-'", "use a tag made of letters, digits, '.', '_' and '-'")
 	}
 	dotenv := readDotEnv(filepath.Join(o.ProjectDir, ".env"))
 	get := func(k string) string {
@@ -53,7 +53,7 @@ func ResolveTarget(o TargetOptions) (path, project string, err error) {
 	name := get("PROJECT_NAME")
 	if o.Output != "" {
 		if strings.HasSuffix(o.Output, "/") {
-			return "", "", errTarget("--output must name a file, not a directory", "")
+			return "", "", errTargetWith("--output must name a file, not a directory", "pass a file path such as backups/before-upgrade.dump")
 		}
 		if !nameRe.MatchString(name) {
 			name = ""

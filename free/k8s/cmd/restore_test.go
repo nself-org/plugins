@@ -77,10 +77,13 @@ func TestRestoreTamperedDumpExits2WithoutSuccess(t *testing.T) {
 	if strings.Contains(r.Stdout, `"verified"`) {
 		t.Error("stdout carries a success")
 	}
-	// pg_restore never ran: the only kubectl call is the pod lookup.
-	if r.Calls != 1 {
-		t.Errorf("kubectl calls = %d, want 1 (get pods)", r.Calls)
+	// A bad file never touches the cluster: not even the pod lookup.
+	if r.Calls != 0 {
+		t.Errorf("kubectl calls = %d, want 0", r.Calls)
 	}
+	// ... and it is reported before kubectl is looked up.
+	nk := runK8s(t, k8sRun{Dir: dir, NoKubectl: true}, "restore", file, "--yes", "--json")
+	wantFailure(t, nk.cliResult, "k8s restore", "E735", output.ClassInfra)
 	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes")
 	if h.Exit != 2 || !strings.Contains(h.Stderr, "E735") || strings.Contains(h.Stdout+h.Stderr, "Restored") {
 		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
@@ -111,9 +114,11 @@ func TestRestoreRefusesDumpWithoutSidecar(t *testing.T) {
 	if !strings.Contains(d.Error.Message, "no metadata") {
 		t.Errorf("message = %q", d.Error.Message)
 	}
-	if r.Calls != 1 {
-		t.Errorf("kubectl calls = %d, want only the pod lookup", r.Calls)
+	if r.Calls != 0 {
+		t.Errorf("kubectl calls = %d, want 0", r.Calls)
 	}
+	nk := runK8s(t, k8sRun{Dir: dir, NoKubectl: true}, "restore", core, "--yes", "--json")
+	wantFailure(t, nk.cliResult, "k8s restore", "E734", output.ClassUser)
 }
 
 func TestRestorePgRestoreErrorIsE736(t *testing.T) {
@@ -129,5 +134,19 @@ func TestRestoreUsageErrors(t *testing.T) {
 	wantFailure(t, r.cliResult, "k8s restore", "E401", output.ClassUser)
 	if r.Calls != 0 {
 		t.Error("kubectl ran")
+	}
+}
+
+func TestRestoreWarnsWhenTargetDiffersFromBackup(t *testing.T) {
+	dir := project(t)
+	file := madeBackup(t, dir) // taken from release "nself"
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes", "--json", "--release", "other", "--namespace", "ns9")
+	d := wantSuccess(t, r.cliResult, "k8s restore")
+	if len(d.Meta.Warnings) != 1 || !strings.Contains(d.Meta.Warnings[0], `"nself"`) || !strings.Contains(d.Meta.Warnings[0], `"other"`) {
+		t.Errorf("warnings = %q", d.Meta.Warnings)
+	}
+	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes", "--release", "other")
+	if h.Exit != 0 {
+		t.Errorf("a differing target must not refuse: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
 	}
 }

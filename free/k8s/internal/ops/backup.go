@@ -52,6 +52,7 @@ type BackupOptions struct {
 	Release   string
 	Namespace string
 	Now       func() time.Time
+	Warn      func(string) // a problem that does not invalidate the backup; may be nil
 }
 
 // BackupResult describes the backup that was made.
@@ -67,7 +68,7 @@ type BackupResult struct {
 func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	var res BackupResult
 	if _, err := os.Lstat(o.Path); err == nil {
-		return res, errTarget("the backup file already exists: nothing was written", "")
+		return res, errExists()
 	}
 	if err := os.MkdirAll(filepath.Dir(o.Path), 0o700); err != nil {
 		return res, errBackup("the backup directory cannot be created")
@@ -78,6 +79,7 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 		return res, errBackup("the psql session could not be started")
 	}
 	ended, created := false, false
+	var eof chan struct{} // closed when the session's stdout ends
 	defer func() {
 		if !ended {
 			_ = sess.Stdin().Close()
@@ -94,10 +96,15 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 		return res, err
 	}
 	argv, _ := pgDumpArgv(snap) // snap was validated by openSnapshot
+	eof = make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, sess.Stdout())
+		close(eof)
+	}()
 	f, ferr := os.OpenFile(o.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if ferr != nil {
 		if errors.Is(ferr, os.ErrExist) {
-			err = errTarget("the backup file already exists: nothing was written", "")
+			err = errExists()
 		} else {
 			err = errBackup("the backup file cannot be created")
 		}
@@ -122,8 +129,21 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 		err = errBackup("pg_dump wrote no data")
 		return res, err
 	}
-	if err = finishSession(sess, &ended); err != nil {
+	select {
+	case <-eof: // the session ended while pg_dump was still running
+		err = errBackup("the psql session holding the snapshot ended before pg_dump finished")
 		return res, err
+	default:
+	}
+	// The dump is complete: read it back through pg_restore (no database) to prove it is a
+	// whole, readable archive before it gets a checksum and a sidecar.
+	if err = verifyDump(ctx, o.Exec, o.Path); err != nil {
+		return res, err
+	}
+	// pg_dump exited 0, so the snapshot was imported and the fingerprints were read before
+	// it: a session that fails now (COMMIT, exit status) does not change the backup.
+	if werr := finishSession(sess, eof, &ended); werr != nil && o.Warn != nil {
+		o.Warn("the psql session that held the snapshot ended with an error after pg_dump finished; the dump and its fingerprints were taken before it and are not affected")
 	}
 	meta := Meta{SchemaVersion: metaVersion, Kind: metaKind, Project: o.Project, File: filepath.Base(o.Path),
 		Bytes: cw.n, SHA256: hex.EncodeToString(h.Sum(nil)), CreatedAt: o.Now().UTC().Format(time.RFC3339),
@@ -185,13 +205,34 @@ func readUntil(r io.Reader, sentinel string) ([]string, bool) {
 }
 
 // finishSession commits the snapshot transaction, quits psql and waits for it.
-func finishSession(sess Session, ended *bool) error {
-	_, _ = io.WriteString(sess.Stdin(), "COMMIT;\n\\q\n")
+func finishSession(sess Session, eof <-chan struct{}, ended *bool) error {
+	_, werr := io.WriteString(sess.Stdin(), "COMMIT;\n\\q\n")
 	_ = sess.Stdin().Close()
-	_, _ = io.Copy(io.Discard, sess.Stdout())
+	<-eof
 	*ended = true
 	if err := sess.Wait(); err != nil {
-		return errBackup("the psql session ended with " + exitCause(err))
+		return err
+	}
+	return werr
+}
+
+// verifyDump streams the stored file into `pg_restore -f /dev/null` in the pod. A
+// truncated or corrupt archive fails there (E732); the caller removes the file.
+func verifyDump(ctx context.Context, ex Exec, path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return errBackup("the finished dump cannot be read back")
+	}
+	defer func() { _ = f.Close() }()
+	ew := &errLineWriter{}
+	runErr := ex.Run(ctx, pgVerifyArgv, f, io.Discard, ew)
+	ew.flush()
+	if runErr != nil || ew.count > 0 {
+		cause := ew.first
+		if cause == "" {
+			cause = exitCause(runErr)
+		}
+		return errBackup("the dump is not a complete archive: " + cause)
 	}
 	return nil
 }

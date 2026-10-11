@@ -14,6 +14,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
 )
 
 type call struct {
@@ -34,11 +35,16 @@ type fakeExec struct {
 	psqlDies bool     // the interactive session ends before the sentinel
 	psqlErr  string   // its stderr
 
-	dump       []byte
-	dumpErr    error // pg_dump fails after writing dump
-	restoreErr string
-	restoreRC  error
-	restored   []byte
+	dump         []byte
+	dumpErr      error  // pg_dump fails after writing dump
+	verifyErr    error  // the connectionless pg_restore -f /dev/null fails
+	verifyStderr string // and prints this
+	killSession  bool   // pg_dump ends the holding session while it runs
+	waitErr      error  // Wait of the holding session fails (COMMIT and quit)
+	onRestore    func()
+	restoreErr   string
+	restoreRC    error
+	restored     []byte
 }
 
 func newFake() *fakeExec {
@@ -71,6 +77,8 @@ func (f *fakeExec) count(kind string) int {
 func kindOf(argv []string) string {
 	s := strings.Join(argv, " ")
 	switch {
+	case strings.Contains(s, "pg_restore -f /dev/null"):
+		return "pg_verify"
 	case strings.Contains(s, "exec pg_dump"):
 		return "pg_dump"
 	case strings.Contains(s, "exec pg_restore"):
@@ -81,11 +89,14 @@ func kindOf(argv []string) string {
 
 func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	k := kindOf(argv)
+	if k == "pg_restore" && f.onRestore != nil {
+		f.onRestore()
+	}
 	in := ""
 	if stdin != nil {
 		b, _ := io.ReadAll(stdin)
 		in = string(b)
-		if k == "pg_restore" {
+		if k == "pg_restore" || k == "pg_verify" {
 			f.restored = b
 			in = "<dump>"
 		}
@@ -94,7 +105,18 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 	switch k {
 	case "pg_dump":
 		_, _ = stdout.Write(f.dump)
+		if f.killSession {
+			f.mu.Lock()
+			s := f.sessions[0]
+			f.mu.Unlock()
+			s.dead = true
+			s.Kill()
+			time.Sleep(50 * time.Millisecond) // let the reader see the end of the stream
+		}
 		return f.dumpErr
+	case "pg_verify":
+		_, _ = io.WriteString(stderr, f.verifyStderr)
+		return f.verifyErr
 	case "pg_restore":
 		_, _ = io.WriteString(stderr, f.restoreErr)
 		return f.restoreRC
@@ -126,6 +148,7 @@ type fakeSession struct {
 	ready chan string // the sentinel, once the script was written
 	quit  chan struct{}
 	once  sync.Once
+	dead  bool
 }
 
 func (s *fakeSession) stop() { s.once.Do(func() { close(s.quit) }) }
@@ -192,9 +215,9 @@ func (s *fakeSession) play() {
 func (s *fakeSession) Stdin() io.WriteCloser { return s.in }
 func (s *fakeSession) Stdout() io.Reader     { return s.out }
 func (s *fakeSession) Wait() error {
-	if s.f.psqlDies {
+	if s.f.psqlDies || s.dead {
 		return errors.New("exit status 3")
 	}
-	return nil
+	return s.f.waitErr
 }
 func (s *fakeSession) Kill() { s.stop(); _ = s.outW.Close() }

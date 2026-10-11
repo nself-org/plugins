@@ -190,3 +190,52 @@ func TestErrLineWriterSplitsAcrossWrites(t *testing.T) {
 		t.Errorf("count=%d first=%q", w.count, w.first)
 	}
 }
+
+func TestRestoreFileChangedDuringStreamHasItsOwnMessage(t *testing.T) {
+	f, path := madeBackup(t)
+	f.onRestore = func() {
+		fh, err := os.OpenFile(path, os.O_WRONLY, 0)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer func() { _ = fh.Close() }()
+		_, _ = fh.WriteAt([]byte("X"), 2)
+	}
+	_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
+	oe := wantCode(t, err, CodeChecksum)
+	if !strings.Contains(oe.Message, "pg_restore ran") || !strings.Contains(oe.Message, "not verified") || strings.Contains(oe.Message, "nothing was restored") {
+		t.Errorf("message = %q", oe.Message)
+	}
+	if f.count("psql") != 0 {
+		t.Error("fingerprints were read after the file changed")
+	}
+}
+
+func TestPrepareRestoreChecksWithoutACluster(t *testing.T) {
+	_, path := madeBackup(t)
+	p, err := PrepareRestore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := p.TargetWarning("nself", "ns1"); w != "" {
+		t.Errorf("same target warned: %s", w)
+	}
+	if w := p.TargetWarning("nself", ""); w != "" {
+		t.Errorf("unknown namespace warned: %s", w)
+	}
+	w := p.TargetWarning("other", "ns2")
+	for _, want := range []string{`"nself"`, `"ns1"`, `"other"`, `"ns2"`} {
+		if !strings.Contains(w, want) {
+			t.Errorf("warning %q lacks %s", w, want)
+		}
+	}
+	b, _ := os.ReadFile(path)
+	b[0] ^= 1
+	_ = os.WriteFile(path, b, 0o600)
+	_, err = PrepareRestore(path)
+	wantCode(t, err, CodeChecksum)
+	_ = os.Remove(MetaPath(path))
+	_, err = PrepareRestore(path)
+	wantCode(t, err, CodeBackupInvalid)
+}

@@ -2,7 +2,7 @@
 // pg_restore --clean --if-exists and succeeds only when the post-restore table
 // fingerprints equal the ones recorded at backup time.
 //
-// Inputs: an Exec into the postgres container and the dump path (its sidecar is
+// Inputs: the dump path (PrepareRestore) and an Exec into the postgres container (Run) (its sidecar is
 // <dir>/.meta/<file>.json).
 //
 // Outputs: the verified table fingerprints, or a coded error (E733 to E737).
@@ -19,6 +19,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -36,32 +37,68 @@ type RestoreResult struct {
 	Tables []Fingerprint
 }
 
-// Restore restores o.File and verifies it. See the file comment.
-func Restore(ctx context.Context, o RestoreOptions) (RestoreResult, error) {
-	var res RestoreResult
-	fi, err := os.Stat(o.File)
+// Prepared is a backup file whose sidecar is valid and whose size and sha256 equal
+// the recorded ones. Nothing has touched the cluster yet.
+type Prepared struct {
+	file string
+	meta Meta
+}
+
+// PrepareRestore runs the checks that need no cluster: the file, its sidecar (E734)
+// and its checksum (E735). The caller looks up the pod only after this succeeds.
+func PrepareRestore(file string) (*Prepared, error) {
+	fi, err := os.Stat(file)
 	if err != nil || !fi.Mode().IsRegular() {
-		return res, errInvalid("the backup file is missing or not a regular file", "")
+		return nil, errInvalid("the backup file is missing or not a regular file", "")
 	}
-	meta, err := readMeta(o.File)
+	meta, err := readMeta(file)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
-	f, err := os.Open(o.File)
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, errInvalid("the backup file cannot be read", "")
+	}
+	defer func() { _ = f.Close() }()
+	if err := verifyChecksum(f, meta); err != nil {
+		return nil, err
+	}
+	return &Prepared{file: file, meta: meta}, nil
+}
+
+// TargetWarning names the release and namespace of the backup when they differ from
+// the restore target ("" when they match or the target does not say).
+func (p *Prepared) TargetWarning(release, namespace string) string {
+	relDiff := p.meta.Release != "" && release != "" && p.meta.Release != release
+	nsDiff := p.meta.Namespace != "" && namespace != "" && p.meta.Namespace != namespace
+	if !relDiff && !nsDiff {
+		return ""
+	}
+	return fmt.Sprintf("the backup was taken from release %q in namespace %q; restoring into release %q in namespace %q",
+		p.meta.Release, p.meta.Namespace, release, namespace)
+}
+
+// Restore prepares and restores o.File and verifies it. See the file comment.
+func Restore(ctx context.Context, o RestoreOptions) (RestoreResult, error) {
+	p, err := PrepareRestore(o.File)
+	if err != nil {
+		return RestoreResult{}, err
+	}
+	return p.Run(ctx, o.Exec)
+}
+
+// Run restores the prepared file through ex and verifies the fingerprints.
+func (p *Prepared) Run(ctx context.Context, ex Exec) (RestoreResult, error) {
+	var res RestoreResult
+	f, err := os.Open(p.file)
 	if err != nil {
 		return res, errInvalid("the backup file cannot be read", "")
 	}
 	defer func() { _ = f.Close() }()
-	if err := verifyChecksum(f, meta); err != nil {
-		return res, err
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return res, errInvalid("the backup file cannot be read", "")
-	}
-	// Hash again while streaming: a file changed after the check above is caught.
+	// Hash again while streaming: a file changed since the check is caught.
 	h := sha256.New()
 	ew := &errLineWriter{}
-	runErr := o.Exec.Run(ctx, pgRestoreArgv, io.TeeReader(f, h), io.Discard, ew)
+	runErr := ex.Run(ctx, pgRestoreArgv, io.TeeReader(f, h), io.Discard, ew)
 	ew.flush()
 	if runErr != nil || ew.count > 0 {
 		cause := ew.first
@@ -70,17 +107,17 @@ func Restore(ctx context.Context, o RestoreOptions) (RestoreResult, error) {
 		}
 		return res, errRestore(cause)
 	}
-	if hex.EncodeToString(h.Sum(nil)) != meta.SHA256 {
-		return res, errChecksum("the file changed while it was restored")
+	if hex.EncodeToString(h.Sum(nil)) != p.meta.SHA256 {
+		return res, errChangedDuringRestore()
 	}
-	got, err := ReadFingerprints(ctx, o.Exec)
+	got, err := ReadFingerprints(ctx, ex)
 	if err != nil {
 		return res, err
 	}
-	if diffs := Compare(meta.Fingerprints, got); len(diffs) > 0 {
+	if diffs := Compare(p.meta.Fingerprints, got); len(diffs) > 0 {
 		return res, errMismatch(diffs)
 	}
-	return RestoreResult{File: o.File, Tables: got}, nil
+	return RestoreResult{File: p.file, Tables: got}, nil
 }
 
 // verifyChecksum compares the size and sha256 of f with the sidecar.

@@ -2,8 +2,9 @@
 //
 // Inputs: a snapshot id for pg_dump (the only variable part).
 //
-// Outputs: argv slices for Exec: an interactive psql, pg_dump of one snapshot and
-// pg_restore reading the dump on stdin.
+// Outputs: argv slices for Exec: an interactive psql, pg_dump of one snapshot,
+// pg_restore reading the dump on stdin, and a connectionless pg_restore that only
+// verifies a dump is readable.
 //
 // Constraints: every command is `sh -c '<fixed script>'`. The script reads the
 // connection settings from the pod's own environment (POSTGRES_USER, POSTGRES_DB,
@@ -22,6 +23,9 @@ const podPrelude = `export PGPASSWORD="$POSTGRES_PASSWORD"; U="${POSTGRES_USER:-
 var (
 	psqlArgv      = []string{"sh", "-c", podPrelude + `exec psql -X -q -A -t -v ON_ERROR_STOP=1 -U "$U" -d "$D"`}
 	pgRestoreArgv = []string{"sh", "-c", podPrelude + `exec pg_restore -U "$U" -d "$D" --clean --if-exists`}
+	// pgVerifyArgv reads a whole dump from stdin and writes its SQL to /dev/null: no
+	// database connection, so it proves the archive is complete and readable.
+	pgVerifyArgv = []string{"sh", "-c", `exec pg_restore -f /dev/null`}
 )
 
 // snapshotRe is the form of a snapshot id: 00000003-0000001B-1.

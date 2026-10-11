@@ -225,11 +225,30 @@ from that snapshot, so dump and fingerprints describe the same moment even while
 fingerprints in one `REPEATABLE READ` transaction after `pg_restore` and compares them with the sidecar. A writer that changes
 data during the restore makes them differ: stop the writers first (scale the apps down) or expect E737.
 
+If the psql session that holds the snapshot ends while `pg_dump` is still running, the backup fails (E732). If it ends or its
+`COMMIT` fails after `pg_dump` exited 0, the backup is kept and a warning is printed (`meta.warnings` with `--json`): the
+snapshot was imported and the fingerprints were read before the dump started.
+
+After the dump is written, backup streams the stored file back into the pod through `pg_restore -f /dev/null` (no database
+connection). A truncated or corrupt archive fails there (E732), the dump is removed and no sidecar is written, so a recorded
+checksum always belongs to a file that was proven readable when it was made.
+
+### What the fingerprint does not prove
+
+The fingerprint covers the row count and content of ordinary tables only. It does not cover sequence values, large objects,
+the contents of materialized views, foreign tables, or the data of extension configuration tables that `pg_dump` does not
+dump. It also compares every table of the database, so E737 can follow a good restore when the database holds tables the
+backup does not have (for example tables an init script or another service created before the restore). Check the listed tables
+before treating E737 as data loss.
+
 ### Restore order
 
 1. The dump must exist and its sidecar must be valid (E734). A dump made by `nself backup create` has no sidecar and is refused.
-2. The size and sha256 of the file must equal the sidecar's (E735). A tampered or truncated file stops here; nothing ran in the pod.
-3. `pg_restore --clean --if-exists` runs. Any `pg_restore: error:` line or a non-zero exit is E736.
+2. The size and sha256 of the file must equal the sidecar's (E735). A tampered or truncated file stops here. Steps 1 and 2 run
+   before kubectl is looked up, so a bad file never touches the cluster. If the backup's release or namespace differs from
+   `--release` or `--namespace`, restore prints a warning naming both and goes on.
+3. `pg_restore --clean --if-exists` runs. If the file changes while it streams (its hash then differs), the result is E735
+   with the message that `pg_restore` ran and the database state is not verified. Any `pg_restore: error:` line or a non-zero exit is E736.
 4. The fingerprints are compared (E737 on any difference, up to 20 listed). Success is printed only after this step.
 
 ### Compatibility with `nself backup`
@@ -273,13 +292,13 @@ failure still prints `Error: <message>` and exits 1, except the uninstall and re
 | E729 | infra (2) | Unexpected failure (a temp directory, a write) |
 | E730 | infra (2) | `kubectl` is not on `PATH` (`backup`, `restore`) |
 | E731 | user (1) | The postgres pod of the release was not found, is not unique, or is not running and ready; the message says how many were found. Check `--cluster`, `--namespace`, `--release` |
-| E732 | infra (2) | The backup stream failed. The partial dump is removed and no sidecar is written |
+| E732 | infra (2) | The backup stream failed, or the finished dump is not a complete archive (read back with `pg_restore -f /dev/null`), or the snapshot session ended before `pg_dump` finished. The dump is removed and no sidecar is written |
 | E733 | infra (2) | The fingerprint query failed (before the dump, or after a restore) |
 | E734 | user (1) | The backup file or its `.meta` sidecar is missing, unreadable or invalid. Nothing ran in the pod |
-| E735 | infra (2) | The dump does not match the checksum or size in its sidecar. Nothing was restored |
+| E735 | infra (2) | The dump does not match the checksum or size in its sidecar; nothing was restored. Or the file changed while it streamed: `pg_restore` ran and the database state is not verified |
 | E736 | infra (2) | `pg_restore` printed an error line or exited non-zero (`cause` is the first error line). The database state is not verified |
 | E737 | infra (2) | After the restore the fingerprints differ from the backup's (`cause` lists up to 20 tables). Never reported as success |
-| E738 | user (1) | The backup target cannot be resolved: `PROJECT_NAME` missing or not a plain name, a bad `--tag`, or the output file already exists |
+| E738 | user (1) | The backup target cannot be resolved: `PROJECT_NAME` missing or not a plain name, a bad `--tag`, or the output file already exists (its own remediation: choose another `--output` or `--tag`) |
 
 The plugin owns E720 to E739; E728 and E739 are free. E401 and E403 are the core registry's codes, reused because a
 plugin cannot register new ones.

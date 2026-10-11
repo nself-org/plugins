@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 // Exec runs commands inside the postgres container.
@@ -110,8 +111,10 @@ func NewDocker(container string) Exec {
 	return &cmdExec{bin: "docker", prefix: []string{"exec", "-i", container}, env: cleanEnv(os.Environ())}
 }
 
-// boundedBuffer keeps the last max bytes written to it.
+// boundedBuffer keeps the last max bytes written to it. It is safe for the
+// concurrent writes of exec's stderr copy and a reader.
 type boundedBuffer struct {
+	mu  sync.Mutex
 	max int
 	buf []byte
 }
@@ -119,6 +122,8 @@ type boundedBuffer struct {
 func newBounded(max int) *boundedBuffer { return &boundedBuffer{max: max} }
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.buf = append(b.buf, p...)
 	if len(b.buf) > b.max {
 		b.buf = append([]byte{}, b.buf[len(b.buf)-b.max:]...)
@@ -126,7 +131,11 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func (b *boundedBuffer) String() string { return string(b.buf) }
+func (b *boundedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
+}
 
 // errorLine returns the first line of s that mentions an error, else its last
 // non-empty line. It is the only part of a tool's stderr that reaches a Cause.

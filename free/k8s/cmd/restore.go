@@ -8,10 +8,11 @@
 // are equal, one Success line. --json: one envelope, data {file, verified:true,
 // tables:[{schema,table,rows}]}. A failure is a coded error (E733 to E737, E734 when
 // the dump or its sidecar is unusable).
+// The file, sidecar and checksum checks (E734, E735) run before the kubectl and pod lookup.
 //
 // Constraints: destructive. Without --yes the command refuses with E403, exit 4,
 // in both modes, before kubectl is looked up; there is no terminal prompt. Nothing
-// runs in the pod until the sidecar and the checksum of the file are verified.
+// reaches the cluster until the sidecar and the checksum of the file are verified.
 package main
 
 import (
@@ -58,13 +59,23 @@ Example:
 		if !yes {
 			return r.refuseRestore(file)
 		}
+		// The file, its sidecar and its checksum are checked first: a bad file never
+		// touches the cluster (not even the pod lookup).
+		r.info("Checking " + file + " against its metadata...")
+		prep, err := ops.PrepareRestore(file)
+		if err != nil {
+			return r.failOps(err)
+		}
+		if w := prep.TargetWarning(release, namespace); w != "" {
+			r.warn(w)
+		}
 		r.info("Looking for the postgres pod of release " + release + "...")
 		ex, err := newExec(cmd.Context(), cluster, namespace, release)
 		if err != nil {
 			return r.failOps(err)
 		}
 		r.info("Restoring " + file + " (this replaces the database content)...")
-		res, err := ops.Restore(cmd.Context(), ops.RestoreOptions{Exec: ex, File: file})
+		res, err := prep.Run(cmd.Context(), ex)
 		if err != nil {
 			return r.failOps(err)
 		}

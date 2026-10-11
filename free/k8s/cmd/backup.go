@@ -75,7 +75,7 @@ Example:
 		}
 		r.info("Backing up to " + path + "...")
 		res, err := ops.Backup(cmd.Context(), ops.BackupOptions{Exec: ex, Path: path, Project: project, Release: release, Namespace: namespace,
-			Now: func() time.Time { return now }})
+			Now: func() time.Time { return now }, Warn: r.warn})
 		if err != nil {
 			return r.failOps(err)
 		}

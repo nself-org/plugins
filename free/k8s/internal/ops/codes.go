@@ -109,6 +109,13 @@ func errChecksum(cause string) *Error {
 		"the file changed after the backup; restore from another copy", cause)
 }
 
+// errChangedDuringRestore is E735 raised after pg_restore ran: the file's hash while
+// streaming differs from the recorded one.
+func errChangedDuringRestore() *Error {
+	return newErr(CodeChecksum, ClassInfra, "the file changed while it was restored: pg_restore ran and the database state is not verified",
+		"restore again from an unchanged copy of the backup", "")
+}
+
 func errRestore(cause string) *Error {
 	return newErr(CodeRestoreFailed, ClassInfra, "pg_restore reported errors: the database state is not verified",
 		"fix the cause and run the restore again; pg_restore's own output was not kept", cause)
@@ -129,5 +136,15 @@ func errMismatch(diffs []Diff) *Error {
 
 func errTarget(msg, cause string) *Error {
 	return newErr(CodeTarget, ClassUser, msg,
-		"set PROJECT_NAME in the environment or the project .env, and use a new file name", cause)
+		"set PROJECT_NAME in the environment or the project .env (letters, digits, '.', '_', '-')", cause)
+}
+
+// errTargetWith is E738 with its own remediation.
+func errTargetWith(msg, remediation string) *Error {
+	return newErr(CodeTarget, ClassUser, msg, remediation, "")
+}
+
+func errExists() *Error {
+	return errTargetWith("the backup file already exists: nothing was written",
+		"choose another --output or --tag, or move the existing file away; a backup is never overwritten")
 }

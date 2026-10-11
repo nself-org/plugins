@@ -102,8 +102,11 @@ func TestBackupSnapshotHandshakeOrder(t *testing.T) {
 	if _, err := Backup(context.Background(), backupOpts(f, t.TempDir())); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.calls) != 2 || f.calls[0].kind != "psql-session" || f.calls[1].kind != "pg_dump" {
-		t.Fatalf("calls = %+v, want psql-session then pg_dump", f.calls)
+	if len(f.calls) != 3 || f.calls[0].kind != "psql-session" || f.calls[1].kind != "pg_dump" || f.calls[2].kind != "pg_verify" {
+		t.Fatalf("calls = %+v, want psql-session, pg_dump, pg_verify", f.calls)
+	}
+	if f.calls[2].stdin != "<dump>" || strings.Contains(strings.Join(f.calls[2].argv, " "), "-d ") {
+		t.Errorf("the verify step must read the dump on stdin and not connect: %+v", f.calls[2])
 	}
 	last := f.calls[1].argv
 	if last[len(last)-1] != f.snapshot || !strings.Contains(last[2], `--snapshot="$1"`) {
@@ -232,5 +235,94 @@ func TestBackupNeverStartsPgDumpTwice(t *testing.T) {
 	}
 	if f.count("pg_dump") != 1 || f.count("psql-session") != 1 {
 		t.Errorf("calls = %+v", f.calls)
+	}
+}
+
+func TestBackupVerifyFailureRemovesDumpAndSidecar(t *testing.T) {
+	for name, set := range map[string]func(*fakeExec){
+		"non-zero exit": func(f *fakeExec) { f.verifyErr = errors.New("exit status 1") },
+		"error line":    func(f *fakeExec) { f.verifyStderr = "pg_restore: error: unexpected end of file\n" },
+		"both": func(f *fakeExec) {
+			f.verifyErr = errors.New("exit status 1")
+			f.verifyStderr = "pg_restore: error: could not read from input file: end of file\n"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFake()
+			set(f)
+			o := backupOpts(f, t.TempDir())
+			_, err := Backup(context.Background(), o)
+			oe := wantCode(t, err, CodeBackupFailed)
+			if !strings.Contains(oe.Cause, "not a complete archive") {
+				t.Errorf("cause = %q", oe.Cause)
+			}
+			if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
+				t.Error("the unverified dump was kept")
+			}
+			if _, e := os.Stat(MetaPath(o.Path)); !os.IsNotExist(e) {
+				t.Error("a sidecar was written")
+			}
+		})
+	}
+}
+
+func TestBackupSessionEndingDuringDumpIsFatal(t *testing.T) {
+	f := newFake()
+	f.killSession = true
+	o := backupOpts(f, t.TempDir())
+	_, err := Backup(context.Background(), o)
+	oe := wantCode(t, err, CodeBackupFailed)
+	if !strings.Contains(oe.Cause, "before pg_dump finished") {
+		t.Errorf("cause = %q", oe.Cause)
+	}
+	if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
+		t.Error("the dump was kept")
+	}
+	if f.count("pg_verify") != 0 {
+		t.Error("verify ran after a fatal session failure")
+	}
+}
+
+func TestBackupCommitFailureAfterDumpIsAWarning(t *testing.T) {
+	f := newFake()
+	f.waitErr = errors.New("exit status 2")
+	o := backupOpts(f, t.TempDir())
+	var warns []string
+	o.Warn = func(w string) { warns = append(warns, w) }
+	res, err := Backup(context.Background(), o)
+	if err != nil {
+		t.Fatalf("backup failed: %v", err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "after pg_dump finished") {
+		t.Errorf("warnings = %q", warns)
+	}
+	if _, e := os.Stat(res.MetaFile); e != nil {
+		t.Errorf("no sidecar: %v", e)
+	}
+}
+
+func TestBackupExistingOutputHasItsOwnRemediation(t *testing.T) {
+	exists := errExists()
+	other := errTarget("PROJECT_NAME is not set", "")
+	if exists.Remediation == other.Remediation || strings.Contains(exists.Remediation, "PROJECT_NAME") {
+		t.Errorf("remediations: %q / %q", exists.Remediation, other.Remediation)
+	}
+}
+
+func TestBoundedBufferConcurrentWriteAndRead(t *testing.T) {
+	b := newBounded(128)
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 2000; i++ {
+			_, _ = b.Write([]byte("error: line\n"))
+		}
+		close(done)
+	}()
+	for i := 0; i < 200; i++ {
+		_ = b.String()
+	}
+	<-done
+	if len(b.String()) > 128 {
+		t.Error("buffer exceeds its bound")
 	}
 }
