@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
 
@@ -42,6 +43,7 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 	}
 	log.Printf("migrations: applied %d", len(res.Applied))
 	reportLegacyTables(ctx, pool)
+	reportParkedTables(ctx, pool)
 }
 
 // reportLegacyTables logs each old-name table that is still present: migration 001 renames only when the new name
@@ -56,6 +58,27 @@ func reportLegacyTables(ctx context.Context, pool *pgxpool.Pool) {
 		if present {
 			log.Printf("migrations: legacy table public.%s kept beside public.%s: both existed, nothing merged or dropped (see README)", t.old, t.renamed)
 		}
+	}
+}
+
+// reportParkedTables logs each TS-era table migration 001 parked under its np_flags_ name, with its row count: the data is
+// kept but this plugin never reads it. SELECTs only; a failed check or count is logged, never hidden.
+func reportParkedTables(ctx context.Context, pool *pgxpool.Pool) {
+	for _, t := range legacyTables {
+		var present bool
+		if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+t.renamed).Scan(&present); err != nil {
+			log.Printf("migrations: cannot check TS-era table public.%s: %v", t.renamed, err)
+			continue
+		}
+		if !present {
+			continue
+		}
+		var n int64
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{"public", t.renamed}.Sanitize()).Scan(&n); err != nil {
+			log.Printf("migrations: cannot count rows of TS-era table public.%s: %v", t.renamed, err)
+			continue
+		}
+		log.Printf("migrations: TS-era table public.%s holds %d row(s), parked and not read by this plugin (see README)", t.renamed, n)
 	}
 }
 
