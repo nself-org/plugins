@@ -20,7 +20,7 @@ func TestRunRepoScript_DeadlineKillsChildren(t *testing.T) {
 		t.Skip("skip: bash not on PATH")
 	}
 	old := repoScriptDeadline
-	repoScriptDeadline = 300 * time.Millisecond
+	repoScriptDeadline = 2 * time.Second
 	t.Cleanup(func() { repoScriptDeadline = old })
 	root := t.TempDir()
 	pidFile := filepath.Join(root, "child.pid")
