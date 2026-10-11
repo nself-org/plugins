@@ -49,7 +49,7 @@ func Uninstall(ctx context.Context, opts UninstallOptions) error {
 	if err != nil {
 		return err
 	}
-	announceTarget(os.Stderr, opts.Kubeconfig)
+	announceTarget(os.Stderr, opts.Kubeconfig, "")
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, helm, uninstallArgs(opts)...)
 	cmd.Stdout = opts.Stdout

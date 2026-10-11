@@ -189,8 +189,8 @@ func TestUnreadableValuesIsNotMissing(t *testing.T) {
 func TestAnnounceTarget(t *testing.T) {
 	t.Setenv("KUBECONFIG", "/env/kc")
 	var b bytes.Buffer
-	announceTarget(&b, "/flag/kc")
-	announceTarget(&b, "")
+	announceTarget(&b, "/flag/kc", "")
+	announceTarget(&b, "", "")
 	if s := b.String(); !strings.Contains(s, "/flag/kc") || !strings.Contains(s, "/env/kc") {
 		t.Errorf("announce = %q", s)
 	}
