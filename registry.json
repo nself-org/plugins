@@ -301,13 +301,13 @@
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/backup-1.2.6.tar.gz"
     },
     "ci": {
-      "version": "1.2.6",
+      "version": "1.2.7",
       "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ci-1.2.6.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ci/tarball",
       "requires_license": false,
       "language": "go",
@@ -331,12 +331,12 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.6",
+      "releaseTag": "v1.2.7",
       "checksum": "d602d6df2b80264e8cb06c40f5e8a1dd9dc2d986b9accb8bdc657243f4004c96",
       "checksums": {
         "sha256": "d602d6df2b80264e8cb06c40f5e8a1dd9dc2d986b9accb8bdc657243f4004c96"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ci-1.2.6.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz"
     },
     "claw-cli": {
       "version": "1.2.6",
