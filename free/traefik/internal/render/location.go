@@ -157,6 +157,11 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 		return false
 	}
 	buf := b.bufferIf(limit)
+	// The body limit stays after the rate and connection limits on purpose: buffering reads the
+	// whole in-limit body into memory before passing it on, and rate and conn are what bound how
+	// many bodies buffer at once. Buffering first would let a rate-limited or over-conn-limit
+	// client make Traefik buffer bodies without bound. The cost: an oversized Content-Length on
+	// an exhausted zone answers 429 where nginx answers 413 (fails closed, status only).
 	add(buf)
 	add(b.reqHeaders(r.ID, field, l))
 	passHost := l.ForwardedHeaders || l.HeadersSet["Host"] == "$host"
