@@ -17,7 +17,7 @@
 # fail <message>: report and return 1.
 fail() { echo "FAIL: $*" >&2; return 1; }
 
-# check_help_subtree: the cli with the plugin mount lists k8s and its five subcommands,
+# check_help_subtree: the cli with the plugin mount lists k8s and its seven subcommands,
 # every one with canon "plugin".
 check_help_subtree() {
   local doc paths p missing=""
@@ -26,7 +26,7 @@ check_help_subtree() {
   paths="$(printf '%s' "$doc" | jq -r '.data.commands[] | select(.canon == "plugin") | .path | sub("^nself "; "")')"
   echo "plugin-canon paths under k8s:"
   printf '%s\n' "$paths" | sed 's/^/  /'
-  for p in "k8s" "k8s values" "k8s install" "k8s upgrade" "k8s status" "k8s uninstall"; do
+  for p in "k8s" "k8s values" "k8s install" "k8s upgrade" "k8s status" "k8s uninstall" "k8s backup" "k8s restore"; do
     printf '%s\n' "$paths" | grep -qxF "$p" || missing="$missing [$p]"
   done
   [ -z "$missing" ] || fail "help --json k8s does not list with canon plugin:$missing"

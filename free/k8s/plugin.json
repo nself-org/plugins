@@ -212,11 +212,107 @@
         "output": "document",
         "side_effect": "destructive",
         "summary": "Remove the nSelf Helm release"
+      },
+      {
+        "flags": [
+          {
+            "name": "cluster",
+            "type": "string",
+            "usage": "Path to kubeconfig (default: kubectl reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "name": "namespace",
+            "type": "string",
+            "usage": "Kubernetes namespace of the release (default: the kubeconfig context's namespace)"
+          },
+          {
+            "name": "output",
+            "type": "string",
+            "usage": "Write the dump to exactly this file instead of BACKUP_DIR (must not exist)"
+          },
+          {
+            "default": ".",
+            "name": "project-dir",
+            "type": "string",
+            "usage": "nSelf project directory (holds .env; BACKUP_DIR is relative to it)"
+          },
+          {
+            "default": "nself",
+            "name": "release",
+            "type": "string",
+            "usage": "Helm release name"
+          },
+          {
+            "name": "tag",
+            "type": "string",
+            "usage": "Label appended to the file name (letters, digits, '.', '_', '-')"
+          }
+        ],
+        "json": "legacy",
+        "name": "backup",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Back up the postgres database with content fingerprints"
+      },
+      {
+        "args": [
+          {
+            "name": "file",
+            "required": true
+          }
+        ],
+        "confirm": {
+          "flags": [
+            "yes"
+          ]
+        },
+        "flags": [
+          {
+            "name": "cluster",
+            "type": "string",
+            "usage": "Path to kubeconfig (default: kubectl reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "name": "namespace",
+            "type": "string",
+            "usage": "Kubernetes namespace of the release (default: the kubeconfig context's namespace)"
+          },
+          {
+            "default": "nself",
+            "name": "release",
+            "type": "string",
+            "usage": "Helm release name"
+          },
+          {
+            "default": "false",
+            "name": "yes",
+            "shorthand": "y",
+            "type": "bool",
+            "usage": "Confirm that the database content is replaced (required)"
+          }
+        ],
+        "json": "legacy",
+        "name": "restore",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Restore a backup and verify it with the recorded fingerprints"
       }
     ],
     "summary": "Deploy and manage nSelf on Kubernetes with the embedded Helm chart"
   },
-  "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: values, install, upgrade, status and uninstall commands wrapping helm.",
+  "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: values, install, upgrade, status and uninstall commands wrapping helm, plus backup and restore of the postgres database with content fingerprints.",
   "entryPoint": "cmd/",
   "envVars": [
     {
