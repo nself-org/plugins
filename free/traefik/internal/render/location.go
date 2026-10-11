@@ -65,7 +65,18 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 	if !b.oneKind(r, l, field) {
 		return
 	}
-	svc := ""
+	svc, buf := "", ""
+	if l.Upstream == nil {
+		// nginx compares Content-Length with client_max_body_size in its find-config phase, before
+		// return (rewrite) and before deny or limit_except (access): an oversized request is a 413
+		// on every location, so the limit is the first middleware of every non-proxied router.
+		limit, ok := b.bodyLimit(r, l, field)
+		if !ok {
+			return
+		}
+		buf = b.bufferIf(limit)
+		add(buf)
+	}
 	switch {
 	case l.StaticRoot != nil:
 		if l.Path != acmePrefix || l.Match != "prefix" {
@@ -107,7 +118,7 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 	for _, ln := range ls {
 		if l.StaticRoot != nil && len(l.Methods) > 0 {
 			// The CLI emits the ACME webroot with methods ["GET"] (limit_except GET): other methods are a 403.
-			if !b.methodSplit(r.ID, field, name, rule, pri, ln, mws, svc, sec, l.Methods) {
+			if !b.methodSplit(r.ID, field, name, rule, pri, ln, mws, svc, buf, sec, l.Methods) {
 				return
 			}
 			continue
@@ -120,8 +131,8 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 // every directive of a location (an access rule before the content handler), the switch in
 // location picks one kind. More than one of static_root, deny_all, return and upstream is
 // refused, and so is a field that has no meaning on a location that is not an upstream.
-// max_body_bytes is not refused: the CLI emits it on deny_all and return locations, where
-// nginx answers before reading the body, so dropping it changes nothing a client sees.
+// max_body_bytes is allowed: the CLI emits it on deny_all and return locations, and nginx
+// checks it against Content-Length before the deny or return runs, so location() renders it.
 func (b *builder) oneKind(r contract.Route, l contract.Location, field string) bool {
 	var kinds []string
 	for _, k := range []struct {
@@ -155,8 +166,8 @@ func (b *builder) oneKind(r contract.Route, l contract.Location, field string) b
 }
 
 // methodSplit routes the listed methods (GET also admits HEAD, as nginx does) to svc at pri+1
-// and every other method to a 403 at pri.
-func (b *builder) methodSplit(id, field, name, rule string, pri int, ln listener, mws []string, svc, sec string, methods []string) bool {
+// and every other method to a 403 at pri. buf is the body-limit middleware ("" when unlimited).
+func (b *builder) methodSplit(id, field, name, rule string, pri int, ln listener, mws []string, svc, buf, sec string, methods []string) bool {
 	var ms []string
 	for _, m := range methods {
 		if !methodRE.MatchString(m) {
@@ -169,12 +180,39 @@ func (b *builder) methodSplit(id, field, name, rule string, pri int, ln listener
 		}
 	}
 	b.addRouter(name, rule+" && ("+strings.Join(ms, " || ")+")", pri+1, ln, mws, svc)
-	var deny []string
+	// The 403 router answers after the same body-limit check as the allowed methods (nginx 413
+	// comes before limit_except), so the limit leads its chain; sec follows.
+	deny := []string{}
+	if buf != "" {
+		deny = append(deny, buf)
+	}
 	if sec != "" {
 		deny = append(deny, sec)
 	}
 	b.addRouter(name+"-deny", rule, pri, ln, append(deny, b.respondMW(403)), b.responder())
 	return true
+}
+
+// bodyLimit is the client_max_body_size of a location: its own max_body_bytes, else the default
+// (0 is unlimited, as in nginx). A negative value is refused.
+func (b *builder) bodyLimit(r contract.Route, l contract.Location, field string) (int64, bool) {
+	limit := b.m.Defaults.MaxBodyBytes
+	if l.MaxBodyBytes != nil {
+		limit = *l.MaxBodyBytes
+	}
+	if limit < 0 {
+		b.refuse(r.ID, field+".max_body_bytes", fmt.Sprintf("%d is negative", limit))
+		return 0, false
+	}
+	return limit, true
+}
+
+// bufferIf returns the body-limit middleware for a positive limit, "" for none.
+func (b *builder) bufferIf(limit int64) string {
+	if limit > 0 {
+		return b.bufferMW(limit)
+	}
+	return ""
 }
 
 // proxied renders an upstream location, splitting it by method when methods is set.
@@ -199,17 +237,12 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 	if rl := r.RateLimit; rl != nil && rl.ConnLimit > 0 && l.Path == "/" && l.Match == "prefix" {
 		add(b.connMW(rl.ConnLimit))
 	}
-	limit := b.m.Defaults.MaxBodyBytes
-	if l.MaxBodyBytes != nil {
-		limit = *l.MaxBodyBytes
-	}
-	if limit < 0 {
-		b.refuse(r.ID, field+".max_body_bytes", fmt.Sprintf("%d is negative", limit))
+	limit, ok := b.bodyLimit(r, l, field)
+	if !ok {
 		return false
 	}
-	if limit > 0 {
-		add(b.bufferMW(limit))
-	}
+	buf := b.bufferIf(limit)
+	add(buf)
 	add(b.reqHeaders(r.ID, field, l))
 	passHost := l.ForwardedHeaders || l.HeadersSet["Host"] == "$host"
 	svc := b.service(r.ID, field, l, passHost)
@@ -238,7 +271,7 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 			b.addRouter(name, rule, pri, ln, mws, svc)
 			continue
 		}
-		if !b.methodSplit(r.ID, field, name, rule, pri, ln, mws, svc, sec, methods) {
+		if !b.methodSplit(r.ID, field, name, rule, pri, ln, mws, svc, buf, sec, methods) {
 			return false
 		}
 	}
@@ -271,7 +304,11 @@ func (b *builder) blocked(r contract.Route, host string, ls []listener, sec stri
 			b.refuse(r.ID, field+".status", fmt.Sprintf("%d", bp.Status))
 			continue
 		}
+		// The body limit leads: nginx answers 413 on Content-Length before a regex location's return.
 		var mws []string
+		if buf := b.bufferIf(b.m.Defaults.MaxBodyBytes); buf != "" {
+			mws = append(mws, buf)
+		}
 		if sec != "" {
 			mws = append(mws, sec)
 		}

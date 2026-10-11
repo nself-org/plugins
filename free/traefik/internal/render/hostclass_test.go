@@ -1,6 +1,7 @@
 package render
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -152,6 +153,8 @@ func TestWildcardRedirectStaysBelowALongerWildcard(t *testing.T) {
 }
 
 // Opus N4 / lens 4: names compare and render in lower case; ".x" claims "x" and "*.x".
+var methodArg = regexp.MustCompile("Method\\(`[A-Z]+`\\)")
+
 func TestServerNamesAreCaseInsensitive(t *testing.T) {
 	a := mkRoute(t, "hand:a#1", []string{"a.example.test"}, loc(t, "proxy", "/", "prefix"))
 	b := mkRoute(t, "hand:b#1", []string{"A.EXAMPLE.TEST"}, loc(t, "proxy", "/", "prefix"))
@@ -168,7 +171,8 @@ func TestServerNamesAreCaseInsensitive(t *testing.T) {
 	out := mustRender(t, mkRoute(t, "hand:mixed#1", []string{"Mixed.Example.TEST", "*.Wild.Example.TEST"}, loc(t, "proxy", "/", "prefix")))
 	for _, r := range parse(t, out)["http"]["routers"] {
 		rule := r.(map[string]any)["rule"].(string)
-		if strings.ContainsAny(rule, "MWET") { // the only upper-case letters left would come from the names
+		rule = methodArg.ReplaceAllString(rule, "") // Method(`GET`) is the one place upper case belongs
+		if strings.ContainsAny(rule, "MWET") {      // the only upper-case letters left would come from the names
 			t.Errorf("host rule keeps upper case: %s", rule)
 		}
 	}

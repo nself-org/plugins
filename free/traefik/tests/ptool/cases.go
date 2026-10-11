@@ -104,6 +104,8 @@ func matrix(m routes, ngx, trf string, needTier bool) {
 	hostDot(r, m, needTier)
 	healthMethod(r, m)
 	bodyLimit(r, m, get)
+	bodyOrder(r, m)
+	acmeMethods(r, m)
 	rates(r, m, get)
 	fmt.Printf("\nmatrix: %d checks passed, %d failed\n", r.checks, len(r.fails))
 	if len(r.fails) > 0 || r.checks == 0 {

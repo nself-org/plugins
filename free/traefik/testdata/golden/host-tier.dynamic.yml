@@ -98,6 +98,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620002
@@ -107,6 +108,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620001
@@ -136,6 +138,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25660016
@@ -167,6 +170,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25640056
@@ -176,6 +180,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
             priority: 25640057
             rule: Host(`auth.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
@@ -195,6 +200,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620002
@@ -204,6 +210,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620001
@@ -233,6 +240,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25660016
@@ -264,6 +272,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25640056
@@ -273,6 +282,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
             priority: 25640057
             rule: Host(`api.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
@@ -292,6 +302,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620002
@@ -301,6 +312,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620001
@@ -330,6 +342,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25660016
@@ -361,6 +374,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25640056
@@ -370,6 +384,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
             priority: 25640057
             rule: Host(`storage.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
@@ -389,6 +404,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620002
@@ -398,6 +414,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25620001
@@ -427,6 +444,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25660016
@@ -456,6 +474,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
                 - replacePath-1c0314cc
             priority: 25640056
@@ -465,6 +484,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - headers-25c21423
             priority: 25640057
             rule: Host(`storage-console.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
@@ -480,11 +500,22 @@ http:
             priority: 25602010
             rule: Host(`storage-console.example.test`) && PathPrefix(`/api/`)
             service: svc-http-minio-9001-60586f1a
+        default-acme-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - buffering-8642699b
+                - replacePath-1c0314cc
+            priority: 3
+            rule: PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
         default-acme-web:
             entryPoints:
                 - web
-            priority: 3
-            rule: PathPrefix(`/.well-known/acme-challenge/`)
+            middlewares:
+                - buffering-8642699b
+            priority: 4
+            rule: PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
             service: responder
         default-health-web:
             entryPoints:
@@ -514,6 +545,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-3fa19d10
                 - ipAllowList-14f28fd9
                 - replacePath-1c0314cc
             priority: 25660018
@@ -533,6 +565,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-3fa19d10
                 - redirectRegex-15538fe9
             priority: 25602010
             rule: Host(`notes.example.test`) && PathPrefix(`/old/`)

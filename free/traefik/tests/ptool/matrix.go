@@ -196,13 +196,18 @@ func dialRaw(t target, scheme, host string) (net.Conn, error) {
 
 // declaredTooLarge sends only the headers of a POST whose Content-Length is over the limit and returns the status.
 func declaredTooLarge(t target, scheme, host string, n int64) (int, error) {
+	return declared(t, scheme, host, "POST", "/", n)
+}
+
+// declared sends only the headers of a request that declares Content-Length n and returns the status.
+func declared(t target, scheme, host, method, path string, n int64) (int, error) {
 	c, err := dialRaw(t, scheme, host)
 	if err != nil {
 		return 0, err
 	}
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
-	fmt.Fprintf(c, "POST / HTTP/1.1\r\nHost: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", host, n)
+	fmt.Fprintf(c, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", method, path, host, n)
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 	if err != nil {
 		return 0, err

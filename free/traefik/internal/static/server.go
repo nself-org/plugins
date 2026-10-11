@@ -40,8 +40,11 @@ func Handler(root string) http.Handler {
 	})
 }
 
-// serveToken mirrors the nginx challenge location: the URI check answers 404
-// before the method check answers 403, as in nginx's rewrite-then-access order.
+// serveToken mirrors the nginx challenge location for GET and HEAD. The renderer routes every
+// other method to a 403 before it reaches this helper (a method split on the per-route and the
+// default-server ACME routers), because nginx limit_except answers a method outside GET and
+// HEAD with 403 whatever the path. The method check here is a second line of defence only, so
+// its order against the URI check is not an nginx behaviour a client can see.
 func serveToken(w http.ResponseWriter, r *http.Request, root string) {
 	if !tokenRE.MatchString(r.URL.Path) {
 		w.WriteHeader(http.StatusNotFound)

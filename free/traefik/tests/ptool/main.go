@@ -38,7 +38,8 @@ import (
 type routes struct {
 	DefaultServer struct {
 		HTTP struct {
-			RedirectHTTPS bool `json:"redirect_https"`
+			RedirectHTTPS bool    `json:"redirect_https"`
+			ACMEWebroot   *string `json:"acme_webroot"`
 		} `json:"http"`
 	} `json:"default_server"`
 	Defaults struct {
@@ -84,7 +85,11 @@ type route struct {
 			Zone  string `json:"zone"`
 			Burst int    `json:"burst"`
 		} `json:"rate_limit"`
-		StaticRoot *string `json:"static_root"`
+		StaticRoot   *string `json:"static_root"`
+		MaxBodyBytes *int64  `json:"max_body_bytes"`
+		Return       *struct {
+			Status int `json:"status"`
+		} `json:"return"`
 	} `json:"locations"`
 }
 

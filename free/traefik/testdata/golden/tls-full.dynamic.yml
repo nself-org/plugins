@@ -103,6 +103,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -113,6 +114,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -145,6 +147,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -191,6 +194,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -201,6 +205,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -233,6 +238,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -279,6 +285,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -289,6 +296,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -321,6 +329,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -367,6 +376,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -377,6 +387,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -409,6 +420,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -453,6 +465,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -463,6 +476,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -495,6 +509,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -536,11 +551,22 @@ http:
             rule: Host(`worker-one.example.org`) && PathPrefix(`/api/`)
             service: svc-http-worker-one-9011-f8c715a5
             tls: {}
+        default-acme-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - buffering-8642699b
+                - replacePath-1c0314cc
+            priority: 3
+            rule: PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
         default-acme-web:
             entryPoints:
                 - web
-            priority: 3
-            rule: PathPrefix(`/.well-known/acme-challenge/`)
+            middlewares:
+                - buffering-8642699b
+            priority: 4
+            rule: PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
             service: responder
         default-health-tls:
             entryPoints:
@@ -580,6 +606,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -590,6 +617,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -622,6 +650,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -667,6 +696,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -677,6 +707,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -709,6 +740,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -755,6 +787,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -765,6 +798,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -797,6 +831,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -843,6 +878,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -853,6 +889,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -885,6 +922,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
@@ -931,6 +969,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620002
@@ -941,6 +980,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25620001
@@ -973,6 +1013,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-1c0314cc
             priority: 25660016
