@@ -10,6 +10,8 @@
 #     networks:
 #       - ${DOCKER_NETWORK}
 #   and must not redefine the project network at the top level (D-0326).
+#   A ${DOCKER_NETWORK:-<literal>} default is not flagged by design: the CLI
+#   rewrites it to ${DOCKER_NETWORK} (internal/build/plugins_network_normalize.go).
 # Inputs: fragment paths as arguments; default free/*/docker-compose.plugin.yml.
 # Outputs: one "file:line: ..." line per offence on stderr; exit 1 if any. An
 #   excepted file that still holds a literal is reported on stdout as
@@ -31,10 +33,16 @@ else
   root="$(cd "$(dirname "$0")/.." && pwd)"
   files="$(ls "$root"/free/*/docker-compose.plugin.yml 2>/dev/null)"
 fi
+if [ -z "$files" ]; then
+  echo "lint-compose-network-literals: no fragments found" >&2
+  echo "lint-compose-network-literals: FAILED" >&2
+  exit 1
+fi
 
 # scan <file>: prints "N: message" for each literal project network name.
 # Scope: inside a "networks:" mapping (service or top level; a deeper indent
-# than the key is inside it, blank and comment lines do not end it), a list
+# than the key is inside it, as is a "- X" item at the key indent; blank and
+# comment lines do not end it), a list
 # item "- X", a key "X:" or a "name: X" naming a literal; an inline
 # "networks: [ ... ]" element; and "network_mode: X".
 scan() {
@@ -58,7 +66,9 @@ scan() {
       match(line, /^[ \t]*/)
       indent = RLENGTH
       body = substr(line, indent + 1)
-      if (in_net && indent <= net_indent) { in_net = 0; child = -1 }
+      # A block ends on a line at or below the key indent, except a "- X" item
+      # at the key indent: a valid non-indented YAML sequence, still inside.
+      if (in_net && (indent < net_indent || (indent == net_indent && body !~ /^-/))) { in_net = 0; child = -1 }
 
       if (body ~ /^network_mode[ \t]*:/) {
         v = body; sub(/^network_mode[ \t]*:/, "", v); v = clean(v)
@@ -68,7 +78,7 @@ scan() {
       if (body ~ /^networks[ \t]*:/) {
         v = body; sub(/^networks[ \t]*:/, "", v); v = clean(v)
         if (v == "") { in_net = 1; net_indent = indent; child = -1; next }
-        n = split(v, tok, /[\[\]{},: \t]+/)
+        n = split(v, tok, /[][{},: \t]+/)
         for (i = 1; i <= n; i++) {
           t = clean(tok[i])
           if (lit(t)) print NR ": inline networks list names the literal project network \"" t "\"; use ${DOCKER_NETWORK}"
@@ -108,7 +118,12 @@ checked=0
 for f in $files; do
   [ -f "$f" ] || { echo "lint-compose-network-literals: no such file: $f" >&2; bad=1; continue; }
   checked=$((checked + 1))
-  hits="$(scan "$f")"
+  # An awk error must never read as a clean file (it used to fail open).
+  if ! hits="$(scan "$f")"; then
+    echo "$f: awk failed" >&2
+    bad=1
+    continue
+  fi
   if is_allowed "$f"; then
     if [ -n "$hits" ]; then
       echo "allowed: $f (D-0326)"

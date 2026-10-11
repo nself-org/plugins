@@ -182,7 +182,8 @@ volumes:
 
 # ─── Networks ─────────────────────────────────────────────────────────────────
 networks:
-  # The project network comes from the main compose file (${DOCKER_NETWORK}); nself build merges this fragment into it.
+  # The project network comes from the main compose file (${DOCKER_NETWORK});
+  # nself build merges this fragment into it.
 
   # forgejo_runner_net: runner-only isolated bridge. Runner jobs cannot reach
   # postgres/hasura/auth; they can only reach Forgejo (also on this network).
