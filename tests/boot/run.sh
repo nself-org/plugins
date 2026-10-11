@@ -2,6 +2,9 @@
 # tests/boot/run.sh [--plugins a,b | --fixtures] [--sequential]: the fresh-DB boot kit. Builds the converted plugin
 # image (network disabled for RUN steps), starts postgres:16, boots the plugin twice and requires: first boot
 # applies all migrations, second applies none, and /health reports migrations applied == expected.
+# Env hook (P7-PLUG-76): when <plugin>/tests/boot/env exists, each KEY=value line is passed as -e to both boots. Only
+# $DATABASE_URL and $PORT (or ${...}) are expanded, by plain string replacement (no eval); blank and # lines are
+# skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); . "$HERE/../../scripts/conformance/lib.sh"
 mode=fixtures; list=alpha
@@ -18,11 +21,19 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p; pj=$dir/plugin.json; schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj")
   [ -n "$schema" ] || { echo "FAIL boot $p: manifest has no schema"; rc=1; continue; }
   docker build --network none -q -t "nself-boot-$p:$pid" "$dir" >/dev/null 2>"$W/build.err" || { echo "FAIL boot $p: image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
+  dburl="postgres://postgres:boot@$pg:5432/boot"; envargs=(); ef=$dir/tests/boot/env
+  if [ -f "$ef" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case $line in ''|'#'*) continue;; *=*) ;; *) continue;; esac
+      line=${line//\$\{DATABASE_URL\}/$dburl}; line=${line//\$DATABASE_URL/$dburl}; line=${line//\$\{PORT\}/$port}; line=${line//\$PORT/$port}
+      envargs+=(-e "$line")
+    done < "$ef"
+  fi
   expected=$(ls "$dir"/migrations/*.sql 2>/dev/null | grep -vc '\.down\.sql$')
   docker exec "$pg" psql -U postgres -d boot -qc "CREATE SCHEMA IF NOT EXISTS $schema" >/dev/null
   for boot in a b; do
     c=nself-boot-$boot-$pid
-    docker run -d --name "$c" --network "$net" -e DATABASE_URL="postgres://postgres:boot@$pg:5432/boot" -e PORT="$port" "nself-boot-$p:$pid" >/dev/null
+    docker run -d --name "$c" --network "$net" -e DATABASE_URL="$dburl" -e PORT="$port" ${envargs[@]+"${envargs[@]}"} "nself-boot-$p:$pid" >/dev/null
     h=
     for i in $(seq 1 40); do h=$(docker exec "$c" wget -q -O- "http://127.0.0.1:$port/health" 2>/dev/null) && [ -n "$h" ] && break; sleep 1; done
     logs=$(docker logs "$c" 2>&1); docker rm -f "$c" >/dev/null
