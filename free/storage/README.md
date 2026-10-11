@@ -10,9 +10,12 @@ service. **Object bytes live in an S3-compatible endpoint** (SeaweedFS, MinIO, A
 
 ```bash
 nself plugin install storage
+nself build && nself start
 ```
 
-Set the `S3_*` variables below in the project env so the plugin can reach your S3 endpoint.
+Storage runs as a compose service with port 9007 bound to `127.0.0.1`. It waits for Postgres to
+be healthy and applies its boot migrations at start. The `S3_*` values come from the project env.
+Set them there so the plugin can reach your S3 endpoint.
 
 ## Environment Variables
 

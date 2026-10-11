@@ -6,6 +6,14 @@
 #   from "-": key is the exact whole line the converted output has and the original lacks.
 #   otherwise: in `file`, lines containing the literal key have `to` replaced by `from` on the converted side.
 deltas:
+  # 2026-10-11 P7-PLUG-79: storage gains its compose service (it shipped no fragment before, D-0336).
+  - slug: storage
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/storage/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/storage/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-79
+    expires: 2026-12-31
   # The two port defaults below are fixed by P7-PLUG-44, which owns these plugins; it refines the file/key
   # to the line its real run produces.
   - slug: nself-cloud
