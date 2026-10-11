@@ -6,7 +6,7 @@ package controller
 
 import "time"
 
-// Project mirrors nself_controller.projects.
+// Project mirrors np_tenant_controller.projects.
 type Project struct {
 	ID           string     `json:"id"`
 	Slug         string     `json:"slug"`

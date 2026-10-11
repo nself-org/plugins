@@ -301,13 +301,13 @@
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/backup-1.2.6.tar.gz"
     },
     "ci": {
-      "version": "1.2.7",
+      "version": "1.2.6",
       "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
       "category": "development",
       "tier": "free",
       "license": "MIT",
       "min_nself_version": "1.0.0",
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ci-1.2.6.tar.gz",
       "download_url": "https://plugins.nself.org/plugins/ci/tarball",
       "requires_license": false,
       "language": "go",
@@ -331,12 +331,12 @@
         "runtime": "go",
         "entryPoint": "cmd/main.go"
       },
-      "releaseTag": "v1.2.7",
+      "releaseTag": "v1.2.6",
       "checksum": "d602d6df2b80264e8cb06c40f5e8a1dd9dc2d986b9accb8bdc657243f4004c96",
       "checksums": {
         "sha256": "d602d6df2b80264e8cb06c40f5e8a1dd9dc2d986b9accb8bdc657243f4004c96"
       },
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/ci-1.2.7.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ci-1.2.6.tar.gz"
     },
     "claw-cli": {
       "version": "1.2.6",
@@ -1780,7 +1780,10 @@
         "sha256": "b44a0d7fe3a481fa4d9391e6246ef51b303159ebf0bdc38994ef486a1e35afbb"
       },
       "releaseTag": "v1.2.6",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ollama-1.2.6.tar.gz"
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ollama-1.2.6.tar.gz",
+      "tables": [
+        "np_ollama_model_registry"
+      ]
     },
     "paypal": {
       "version": "1.2.6",
@@ -3252,7 +3255,11 @@
       "name": "email",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_email_messages",
+        "np_email_templates",
+        "np_email_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "28648697b8530ac87e0d1ea14dc99f841963e79ea307b39558e1896f3d8e82de",
       "checksums": {
@@ -4704,7 +4711,11 @@
       "name": "tenant-controller",
       "author": "nself",
       "minNselfVersion": "1.0.9",
-      "tables": [],
+      "tables": [
+        "np_tenant_controller.projects",
+        "np_tenant_controller.project_audit_log",
+        "np_tenant_controller.port_map"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "2acb28ab5411b2455b84367085e1e8d36ef284e4aba3727b0ec6eed43caf8231",
       "checksums": {
@@ -4736,7 +4747,11 @@
       "name": "transactional-email",
       "author": "nself",
       "minNselfVersion": "1.1.0",
-      "tables": [],
+      "tables": [
+        "np_temail_domains",
+        "np_temail_messages",
+        "np_temail_templates"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "b5163bfa249b99960b28fd5232d006917b87d5e2f1c3793dd97e5f71395f4a72",
       "checksums": {

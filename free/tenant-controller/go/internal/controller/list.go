@@ -74,7 +74,7 @@ func ListProjects(ctx context.Context, pool *pgxpool.Pool) ([]Project, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT id, slug, domain, schema_name, role_name, hasura_source, hasura_port,
 		       status, created_at, updated_at, deleted_at
-		FROM nself_controller.projects
+		FROM np_tenant_controller.projects
 		WHERE deleted_at IS NULL
 		ORDER BY created_at ASC
 	`)

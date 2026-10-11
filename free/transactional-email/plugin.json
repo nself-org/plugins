@@ -32,9 +32,9 @@
     "shared"
   ],
   "tables": [
-    "np_email_domains",
-    "np_email_messages",
-    "np_email_templates"
+    "np_temail_domains",
+    "np_temail_messages",
+    "np_temail_templates"
   ],
   "hasuraRemoteSchema": true,
   "systemDependencies": [],

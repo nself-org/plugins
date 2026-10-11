@@ -103,7 +103,7 @@ func tenantCountWatcher(ctx context.Context, pool *pgxpool.Pool, cfg *config.Con
 		case <-ticker.C:
 			var count int
 			_ = pool.QueryRow(ctx,
-				`SELECT COUNT(*) FROM nself_controller.projects WHERE status='active' AND deleted_at IS NULL`,
+				`SELECT COUNT(*) FROM np_tenant_controller.projects WHERE status='active' AND deleted_at IS NULL`,
 			).Scan(&count)
 			if count >= threshold {
 				slog.Warn("tenant count near cap",

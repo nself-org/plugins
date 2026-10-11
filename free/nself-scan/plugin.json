@@ -1,7 +1,7 @@
 {
   "name": "nself-scan",
   "author": "nSelf Team",
-  "minNselfVersion": "1.0.0",
+  "minNselfVersion": "1.1.0",
   "display_name": "File Virus & Content Scanning",
   "version": "1.2.6",
   "language": "go",
@@ -17,7 +17,6 @@
   "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
   "category": "security",
   "license": "MIT",
-  "min_nself_version": "1.1.0",
   "tarball": "nself-scan-v0.1.0-linux-amd64.tar.gz",
   "download_url": "https://ping.nself.org/plugins/nself-scan/download",
   "requires_license": false,

@@ -1,5 +1,5 @@
 // Package db provides the Postgres connection pool and migration runner
-// for the nself_controller schema. It also provides helpers for per-project
+// for the np_tenant_controller schema. It also provides helpers for per-project
 // DDL (schema, role, grant) that run as the superuser/controller role.
 package db
 
@@ -32,12 +32,18 @@ func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 
 // Migrate runs all *.sql migration files embedded from the migrations/ directory.
 // Files are run in lexicographic order; already-applied migrations are skipped
-// via the nself_controller.schema_migrations tracking table.
+// via the np_tenant_controller.schema_migrations tracking table.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	// Lossless upgrade of pre-manifest-v2 installs: nself_controller -> np_tenant_controller.
+	// Errors if both schemas exist. No-op on fresh installs and on already-renamed ones.
+	if _, err := pool.Exec(ctx, renameLegacySchemaSQL); err != nil {
+		return fmt.Errorf("rename legacy schema %s to %s: %w", legacyControllerSchema, controllerSchema, err)
+	}
+
 	// Ensure the migrations table exists.
 	_, err := pool.Exec(ctx, `
-		CREATE SCHEMA IF NOT EXISTS nself_controller;
-		CREATE TABLE IF NOT EXISTS nself_controller.schema_migrations (
+		CREATE SCHEMA IF NOT EXISTS np_tenant_controller;
+		CREATE TABLE IF NOT EXISTS np_tenant_controller.schema_migrations (
 			filename text PRIMARY KEY,
 			applied_at timestamptz NOT NULL DEFAULT now()
 		);
@@ -62,7 +68,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	for _, name := range files {
 		var already bool
 		err := pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM nself_controller.schema_migrations WHERE filename = $1)`, name,
+			`SELECT EXISTS(SELECT 1 FROM np_tenant_controller.schema_migrations WHERE filename = $1)`, name,
 		).Scan(&already)
 		if err != nil {
 			return fmt.Errorf("check migration %s: %w", name, err)
@@ -81,7 +87,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		}
 
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO nself_controller.schema_migrations (filename) VALUES ($1)`, name,
+			`INSERT INTO np_tenant_controller.schema_migrations (filename) VALUES ($1)`, name,
 		); err != nil {
 			return fmt.Errorf("record migration %s: %w", name, err)
 		}
@@ -156,10 +162,10 @@ func TeardownProjectSchema(ctx context.Context, pool *pgxpool.Pool, schemaName, 
 	return nil
 }
 
-// WriteAuditLog inserts a row into nself_controller.project_audit_log.
+// WriteAuditLog inserts a row into np_tenant_controller.project_audit_log.
 func WriteAuditLog(ctx context.Context, pool *pgxpool.Pool, eventType, slug, initiatedBy string, detail []byte) error {
 	_, err := pool.Exec(ctx,
-		`INSERT INTO nself_controller.project_audit_log (event_type, slug, initiated_by, detail)
+		`INSERT INTO np_tenant_controller.project_audit_log (event_type, slug, initiated_by, detail)
 		 VALUES ($1, $2, $3, $4)`,
 		eventType, slug, initiatedBy, detail,
 	)
