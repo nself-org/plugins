@@ -35,6 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect error: %v", err)
 	}
+	internal.BootMigrations(ctx, db)
 	defer db.Close()
 
 	if err := db.Ping(ctx); err != nil {

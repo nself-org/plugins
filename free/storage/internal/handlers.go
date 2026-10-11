@@ -10,7 +10,6 @@
 package internal
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"path"
@@ -50,18 +49,6 @@ func (s *Server) Routes(r chi.Router) {
 	})
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-	defer cancel()
-	if err := s.db.Ping(ctx); err != nil {
-		http.Error(w, `{"status":"unhealthy"}`, http.StatusServiceUnavailable)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
-}
-
 func sourceAccountID(r *http.Request) string {
 	id := r.Header.Get("X-Hasura-Source-Account-Id")
 	if id == "" {
@@ -91,23 +78,23 @@ type storageError struct{ msg string }
 func (e *storageError) Error() string { return e.msg }
 
 type bucketRow struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	Name             string    `json:"name"`
-	Region           string    `json:"region"`
-	Versioning       bool      `json:"versioning"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	Name            string    `json:"name"`
+	Region          string    `json:"region"`
+	Versioning      bool      `json:"versioning"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type objectRow struct {
-	ID               string    `json:"id"`
-	SourceAccountID  string    `json:"source_account_id"`
-	BucketID         string    `json:"bucket_id"`
-	Key              string    `json:"key"`
-	SizeBytes        int64     `json:"size_bytes"`
-	ContentType      string    `json:"content_type"`
-	Etag             string    `json:"etag"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	SourceAccountID string    `json:"source_account_id"`
+	BucketID        string    `json:"bucket_id"`
+	Key             string    `json:"key"`
+	SizeBytes       int64     `json:"size_bytes"`
+	ContentType     string    `json:"content_type"`
+	Etag            string    `json:"etag"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -119,8 +106,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func (s *Server) handleCreateBucket(w http.ResponseWriter, r *http.Request) {
 	sai := sourceAccountID(r)
 	var body struct {
-		Name    string `json:"name"`
-		Region  string `json:"region"`
+		Name   string `json:"name"`
+		Region string `json:"region"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)

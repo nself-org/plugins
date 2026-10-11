@@ -1,7 +1,10 @@
 -- plugin-storage: initial schema
 -- port 9007 | Multi-App Isolation: source_account_id on all tables
+--
+-- Boot-applied by sdk/go/migrate with search_path pinned to np_storage, so every object is
+-- schema-qualified: the manifest tables live in public (the cli tracking rule). Idempotent.
 
-CREATE TABLE IF NOT EXISTS np_storage_buckets (
+CREATE TABLE IF NOT EXISTS public.np_storage_buckets (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     name              TEXT        NOT NULL,
@@ -12,12 +15,12 @@ CREATE TABLE IF NOT EXISTS np_storage_buckets (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_storage_buckets_source
-    ON np_storage_buckets (source_account_id);
+    ON public.np_storage_buckets (source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_storage_objects (
+CREATE TABLE IF NOT EXISTS public.np_storage_objects (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
-    bucket_id         UUID        NOT NULL REFERENCES np_storage_buckets(id) ON DELETE CASCADE,
+    bucket_id         UUID        NOT NULL REFERENCES public.np_storage_buckets(id) ON DELETE CASCADE,
     key               TEXT        NOT NULL,
     size_bytes        BIGINT      NOT NULL DEFAULT 0,
     content_type      TEXT        NOT NULL DEFAULT 'application/octet-stream',
@@ -29,14 +32,14 @@ CREATE TABLE IF NOT EXISTS np_storage_objects (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_storage_objects_bucket
-    ON np_storage_objects (bucket_id);
+    ON public.np_storage_objects (bucket_id);
 CREATE INDEX IF NOT EXISTS idx_np_storage_objects_source
-    ON np_storage_objects (source_account_id);
+    ON public.np_storage_objects (source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_storage_metadata (
+CREATE TABLE IF NOT EXISTS public.np_storage_metadata (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
-    object_id         UUID        NOT NULL REFERENCES np_storage_objects(id) ON DELETE CASCADE,
+    object_id         UUID        NOT NULL REFERENCES public.np_storage_objects(id) ON DELETE CASCADE,
     key               TEXT        NOT NULL,
     value             TEXT        NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -44,4 +47,4 @@ CREATE TABLE IF NOT EXISTS np_storage_metadata (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_storage_metadata_object
-    ON np_storage_metadata (object_id);
+    ON public.np_storage_metadata (object_id);

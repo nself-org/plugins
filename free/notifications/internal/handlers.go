@@ -1,8 +1,8 @@
 package internal
 
 import (
-	"net/http"
 	"encoding/json"
+	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,7 +13,7 @@ func RegisterRoutes(r chi.Router, pool *pgxpool.Pool) {
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth()})
 	})
 	// Notifications
 	r.Post("/v1/notifications", handleSendNotification(pool))
