@@ -59,21 +59,12 @@ jobs:
           pnpm install --frozen-lockfile --dir free/feature-flags/sdk-ts
           pnpm install --frozen-lockfile --dir shared
 
-      # ORDER IS LOAD-BEARING: shared must be BUILT before the packages that
-      # depend on it are INSTALLED.
-      #
-      # free/file-processing/ts and free/media-processing/ts depend on
-      # @nself/plugin-utils via "file:../../../shared". pnpm does NOT symlink a
-      # file: dependency back to the source tree — it takes a real directory
-      # COPY into its store (.pnpm/@nself+plugin-utils@file+..+..+..+shared_*/)
-      # at install time. Anything produced in shared/ AFTER that install, such
-      # as shared/dist, is therefore absent from the copy the dependents
-      # actually resolve against, and since @nself/plugin-utils' main/types
-      # point at ./dist/*, tsc reports "Cannot find module '@nself/plugin-utils'"
-      # for every importing file.
-      #
-      # Building shared first means the copy already contains dist/.
-      - name: Build shared plugin-utils package (before its dependents install)
+      # Since plugins#163, free/file-processing/ts and free/media-processing/ts
+      # depend on @nself/plugin-utils via "link:../../../shared" (a symlink, not
+      # a store copy) and build shared in their own typecheck/build scripts. So
+      # this step's position no longer matters; it builds shared/dist once for
+      # both. It goes away when D-0294 deletes the two ts sidecars.
+      - name: Build shared plugin-utils package
         run: pnpm --dir shared run build
 
       - name: Install Node dependencies for packages depending on shared
