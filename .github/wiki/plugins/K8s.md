@@ -198,8 +198,10 @@ What uninstall keeps:
 `--json` on any subcommand makes stdout carry exactly one v1 envelope (`schema_version`, `command`, then `data` or `error`, plus
 `meta.warnings` when there are warnings), written through `sdk/go/output`. `command` is `k8s <subcommand>`. helm's own stdout and
 the progress lines go to stderr, so a script can pipe stdout into `jq`. Without `--json` the output is unchanged.
-`--help --json` (or `-h`, any position, any subcommand) prints one ok envelope instead of help text: `command` is `k8s` or
-`k8s <subcommand>`, `data` is `{"help": "<the text plain --help prints>"}`, and the exit status is 0.
+`--help --json` (`--help` or `-h` as a flag, not as another flag's value and not after `--`, together with `--json`, on the
+root or any subcommand) prints one ok envelope instead of help text: `command` is `k8s` or
+`k8s <subcommand>`, `data` is `{"help": "<the text plain --help prints>"}`, and the exit status is 0. The `help` subcommand (`nself k8s help install --json`) is not covered and gives the usual E401
+unknown-flag envelope.
 
 | Subcommand | `data` |
 |------------|--------|

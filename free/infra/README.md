@@ -35,9 +35,11 @@ you answer its own approval prompt. `destroy` also requires `--auto-approve`; th
 flag is the confirmation, there is no second prompt. With `--json` the prompt goes to
 stderr and stdout carries only the envelope.
 
-`--help --json` (any command, any flag order) prints one ok v1 envelope with
+`--help --json` (`--help` or `-h` as a flag, not as another flag's value and not after `--`, with `--json`, on the root or
+any subcommand) prints one ok v1 envelope with
 `command` (for example `infra plan`) and `data.help`, the same text `--help` prints,
-and exits 0. Plain `--help` is unchanged.
+and exits 0. Plain `--help` is unchanged. The hidden `help` subcommand (`nself infra help plan --json`) is not covered:
+it gives the usual E401 unknown-flag envelope.
 
 ### Hetzner Cloud servers: `nself infra server`
 

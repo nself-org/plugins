@@ -13,7 +13,8 @@
 #   port (so even a binary that ignored the seam could not reach the internet), HOME is a temp dir and the only token is a
 #   fake string. A preflight aborts unless BOTH binaries demonstrably hit the fixture. Cases that must not delete assert
 #   the head's request log holds no DELETE (a refusal path must additionally hold NO request at all).
-# Inputs: run from anywhere inside the plugins worktree.
+# Inputs: run from anywhere inside the plugins worktree. Do NOT wrap the script in lockf on the plugins compile lock:
+#   it takes that lock itself for its build, so an outer lockf deadlocks.
 #   NSELF            checkout holding cli/ (core build from cli origin/main; required)
 #   TMPDIR           scratch parent (required)
 #   PARITY_HEAD_SRC  free/infra sources to build (default: this plugin); the self-test points it at mutants.

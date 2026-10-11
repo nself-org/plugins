@@ -2,8 +2,10 @@
 // so a machine caller gets the same shape from every command (core does the
 // same for `nself help --json`).
 //
-// Inputs: the raw arguments. --json together with --help or -h, in any
-// position, for the root or any subcommand.
+// Inputs: the raw arguments. --json together with --help or -h used as a flag
+// (not as another flag's value, not after "--"), for the root or any subcommand.
+// The hidden `help` subcommand (`help plan --json`) is not covered: it gets the
+// usual E401 unknown-flag envelope.
 //
 // Outputs: exactly one ok envelope on stdout: command = "k8s" or "k8s <sub>"
 // (the same names the plugin's other envelopes use), data =

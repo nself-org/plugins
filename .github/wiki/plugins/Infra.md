@@ -103,9 +103,11 @@ appears on stderr and you answer it on that terminal; stdout stays the envelope.
 | `server resize` | `server_id`, `target_type`, `action` (`id`, `status`, `command`, `progress`) |
 | `server destroy` | `server_id`, `snapshot_id` (0 when none), `retained_ips[]`, `released_ips[]` (`id`, `ip`, `type`, `assignee_id`, `auto_delete`) |
 
-`--help --json` (or `-h`, any position, any subcommand, for example `nself infra plan --help --json`) prints one ok
+`--help --json` (`--help` or `-h` as a flag, not as another flag's value and not after `--`, together with `--json`, on the
+root or any subcommand, for example `nself infra plan --help --json`) prints one ok
 envelope instead of help text: `command` is the command path (`infra`, `infra plan`, `infra server list`), `data` is
-`{"help": "<the text plain --help prints>"}`, and the exit status is 0. Plain `--help` is unchanged. The `k8s` plugin
+`{"help": "<the text plain --help prints>"}`, and the exit status is 0. Plain `--help` is unchanged. The hidden `help`
+subcommand (`nself infra help plan --json`) is not covered and gives the usual E401 unknown-flag envelope. The `k8s` plugin
 behaves the same way (`command` is `k8s` or `k8s <subcommand>`).
 
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
