@@ -89,17 +89,19 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = t AND column_name = 'source_account_id' AND data_type = 'text'
       ) THEN
+        <<retype>>
         BEGIN
           EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id TYPE TEXT', t);
         EXCEPTION WHEN dependent_objects_still_exist OR feature_not_supported THEN
           RAISE WARNING 'migration 002: public.%.source_account_id keeps its type: a view, rule or policy depends on it (%)', t, SQLERRM;
-        END;
+        END retype;
       END IF;
+      <<setnotnull>>
       BEGIN
         EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id SET NOT NULL', t);
       EXCEPTION WHEN dependent_objects_still_exist OR feature_not_supported THEN
         RAISE WARNING 'migration 002: public.%.source_account_id stays nullable (%)', t, SQLERRM;
-      END;
+      END setnotnull;
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
