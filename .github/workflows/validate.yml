@@ -172,13 +172,17 @@ jobs:
                   errors.append(f"{f}: deprecation.migrationGuide must be an absolute URL, got {url!r}")
               elif url:
                   # The policy requires this to resolve. A definitive 4xx is a real
-                  # defect and fails. A network error is NOT treated as a failure -
-                  # a DNS blip must not turn this into a flaky gate.
+                  # defect and fails. A network error or a server-side 5xx is NOT
+                  # treated as a failure - a DNS blip or a GitHub wiki 504 must not
+                  # turn this into a flaky gate (D-0316).
                   try:
                       req = urllib.request.Request(url, method="GET", headers={"User-Agent": "nself-ci"})
                       urllib.request.urlopen(req, timeout=20).read(1)
                   except urllib.error.HTTPError as ex:
-                      errors.append(f"{f}: deprecation.migrationGuide {url} returned HTTP {ex.code}")
+                      if 400 <= ex.code < 500:
+                          errors.append(f"{f}: deprecation.migrationGuide {url} returned HTTP {ex.code}")
+                      else:
+                          print(f"  note: {url} returned HTTP {ex.code} - not failing on a server-side error")
                   except Exception as ex:
                       print(f"  note: could not reach {url} ({ex}) - not failing on a network error")
 
