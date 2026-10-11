@@ -17,6 +17,9 @@ services:
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
       - S3_SECRET_KEY=${S3_SECRET_KEY:-}
       - S3_USE_SSL=${S3_USE_SSL:-false}
+      - STORAGE_MAX_LARGE_UPLOADS=${STORAGE_MAX_LARGE_UPLOADS:-}
+      - STORAGE_MAX_UPLOADS=${STORAGE_MAX_UPLOADS:-}
+      - STORAGE_UPLOAD_SLOT_WAIT=${STORAGE_UPLOAD_SLOT_WAIT:-}
     depends_on:
       postgres:
         condition: service_healthy
