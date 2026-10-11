@@ -52,6 +52,7 @@ func bodyOrder(r *runner, m routes) {
 			n++
 		}
 	}
+	n += serverBodyOrder(r, m, both)
 	if n == 0 {
 		r.fail("body limit order", "no deny_all, return, blocked or ACME location in the fixture")
 	}

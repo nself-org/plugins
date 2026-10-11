@@ -24,9 +24,10 @@ import (
 
 // Options locate the inputs the renderer cannot take from routes.json.
 type Options struct {
-	SSLRoot  string // ssl/ as the renderer sees it (certificates/<dir> may be a generation link)
-	CertRoot string // the same tree as Traefik sees it; certFile/keyFile paths start here (default SSLRoot)
-	Helper   string // base URL of traefik-acme (default http://traefik-acme:8080)
+	SSLRoot  string   // ssl/ as the renderer sees it (certificates/<dir> may be a generation link)
+	CertRoot string   // the same tree as Traefik sees it; certFile/keyFile paths start here (default SSLRoot)
+	Helper   string   // base URL of traefik-acme (default http://traefik-acme:8080)
+	Upload   []string // route ids also served on the "upload" entrypoint (see upload.go)
 }
 
 type listener struct {
@@ -47,6 +48,7 @@ type builder struct {
 	tier                                      int               // host specificity added to every router priority of the route
 	pfx                                       string            // router name prefix of the route (and host group) under render
 	noLog                                     bool              // the location under render has access_log off
+	upload                                    map[string]bool   // route ids named for the upload entrypoint
 }
 
 var unsafeRE = regexp.MustCompile(`[^A-Za-z0-9]+`)
@@ -79,6 +81,10 @@ func Render(m *contract.Model, o Options) ([]byte, error) {
 	}
 	b := &builder{m: m, o: o, routers: map[string]any{}, services: map[string]any{}, mws: map[string]any{},
 		transports: map[string]any{}, tlsOp: map[string]any{}, certs: map[string][2]string{}, zones: map[string]contract.Zone{}, cur: "-", hosts: map[string]string{}}
+	b.upload = map[string]bool{}
+	for _, id := range o.Upload {
+		b.upload[id] = true
+	}
 	for _, z := range m.Zones {
 		b.zones[z.Name] = z
 	}
@@ -91,6 +97,7 @@ func Render(m *contract.Model, o Options) ([]byte, error) {
 	for _, r := range m.Routes {
 		b.route(r)
 	}
+	b.checkUpload()
 	b.cur, b.tier, b.noLog = "-", 0, false
 	b.defaultServer()
 	if len(b.refs) > 0 {
@@ -186,6 +193,10 @@ func (b *builder) route(r contract.Route) {
 	if !b.hostsFree(r, ls) {
 		return
 	}
+	// hostsFree runs before the upload mirror on purpose: a duplicate name on the upload entrypoint
+	// implies a duplicate on web or websecure, or a TLS/plain pair that Traefik keeps apart, so it is
+	// already refused (or harmless) there.
+	ls = b.withUpload(r, ls)
 	sec := ""
 	if len(r.SecurityHeaders) > 0 {
 		hdr := map[string]string{}
@@ -214,14 +225,23 @@ func (b *builder) route(r contract.Route) {
 		// The server owns every path of its names: a path none of its locations matches is a 404
 		// here, never a fall-through to a wildcard route or to the default server. Like every other
 		// answer of the server it carries the security headers (nginx add_header ... always).
+		// nginx answers 413 on Content-Length before this 404 or redirect, so the server-level body
+		// limit leads both chains (the redirect uses the limit of its "/" return location).
+		defBuf := b.bufferIf(b.m.Defaults.MaxBodyBytes)
 		for _, ln := range ls {
-			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, withSec(sec, b.respondMW(404)), b.responder())
+			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, lead(defBuf, withSec(sec, b.respondMW(404))...), b.responder())
 		}
 		if r.HTTPToHTTPSRedirect && r.Listen.HTTP {
-			status := redirectStatus(r)
+			status, redirBuf := 301, defBuf
+			if rl := redirectLoc(r); rl != nil {
+				status = rl.Return.Status
+				if rl.MaxBodyBytes != nil {
+					redirBuf = b.bufferIf(*rl.MaxBodyBytes)
+				}
+			}
 			for _, l := range ls {
 				if !l.secure {
-					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, withSec(sec, b.redirectMW(r.ID, "http_to_https_redirect", status)), b.responder())
+					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, lead(redirBuf, withSec(sec, b.redirectMW(r.ID, "http_to_https_redirect", status))...), b.responder())
 				}
 			}
 		}
@@ -236,14 +256,14 @@ func withSec(sec string, mws ...string) []string {
 	return append([]string{sec}, mws...)
 }
 
-// redirectStatus is the status of the server-level https redirect: the Return.Status of the "/"
-// location that redirects to https://$host$request_uri, as the CLI sets the flag from that
-// return (301 when the model carries no such location).
-func redirectStatus(r contract.Route) int {
-	for _, l := range r.Locations {
+// redirectLoc is the "/" location that redirects to https://$host$request_uri, from which the CLI
+// sets the server-level https redirect (status and body limit); nil when the model carries none
+// (the redirect is then a 301 under the default body limit).
+func redirectLoc(r contract.Route) *contract.Location {
+	for i, l := range r.Locations {
 		if l.Path == "/" && l.Match == "prefix" && l.Return != nil && l.Return.To != nil && *l.Return.To == "https://$host$request_uri" {
-			return l.Return.Status
+			return &r.Locations[i]
 		}
 	}
-	return 301
+	return nil
 }

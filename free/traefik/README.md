@@ -6,8 +6,16 @@ come from `ssl/` (read-only). Details: `.github/wiki/plugins/Traefik.md`.
 
 ```
 render --routes /nself/routes.json --out /dynamic --ssl /nself/ssl   # exit 0 ok, 1 refusal or invalid input, 2 I/O
+render --routes ... --out /dynamic --static-out /static [--upload-routes ID,ID] [--upload-read-timeout 600s]
 render serve-static --root /acme-webroot --listen :8080
 ```
+
+Upload entrypoint (optional). Traefik's `readTimeout` is a total deadline per entrypoint (60s on web/websecure). To let
+named routes take long uploads, set in the stack environment: `TRAEFIK_UPLOAD_ROUTES` (comma-separated route ids, empty =
+off), `TRAEFIK_UPLOAD_READ_TIMEOUT` (default `600s`, 60s to 24h) and `TRAEFIK_UPLOAD_PUBLISH` (default `127.0.0.1:`, a
+loopback ephemeral port; set `8444` to open it). Container port :8444 carries only the named routes (an unknown Host there
+is Traefik's own 404, there is no default server). The static configuration is read at start: restart the stack after
+changing them. The image runs as the non-root user 65532; only the one-shot `traefik-config` is `0:0`.
 
 Development
 

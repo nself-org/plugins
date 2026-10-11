@@ -3,6 +3,23 @@
   "category": "infrastructure",
   "description": "Traefik reverse proxy from the nSelf route model: file-provider configuration rendered from routes.json at route, TLS and upstream parity with nginx. No Docker socket, certificates from core.",
   "entryPoint": "cmd/render",
+  "envVars": [
+    {
+      "description": "Comma-separated route ids also served on the upload entrypoint (container port 8444); default empty (no upload entrypoint). Restart the stack after changing.",
+      "name": "TRAEFIK_UPLOAD_ROUTES",
+      "required": false
+    },
+    {
+      "description": "readTimeout of the upload entrypoint, whole seconds from 60s to 24h; default 600s. Only used when TRAEFIK_UPLOAD_ROUTES is set.",
+      "name": "TRAEFIK_UPLOAD_READ_TIMEOUT",
+      "required": false
+    },
+    {
+      "description": "Host side of the upload port mapping; default 127.0.0.1: (loopback ephemeral port, nothing public). Set 8444 to expose it.",
+      "name": "TRAEFIK_UPLOAD_PUBLISH",
+      "required": false
+    }
+  ],
   "homepage": "https://nself.org/plugins",
   "language": "go",
   "license": "free",
