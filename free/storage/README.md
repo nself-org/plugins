@@ -15,7 +15,14 @@ nself build && nself start
 
 Storage runs as a compose service with port 9007 bound to `127.0.0.1`. It waits for Postgres to
 be healthy and applies its boot migrations at start. The `S3_*` values come from the project env.
-Set them there so the plugin can reach your S3 endpoint.
+Set them there so the plugin can reach your S3 endpoint. The `STORAGE_*` upload limits below are passed through the
+same way.
+
+The connection string uses the URL-encoded Postgres password that `nself build` writes from v1.4.13 on. An older CLI
+passes the raw password, so a password with URL-reserved characters (`@ : / % # ?`) needs CLI v1.4.13 or later.
+
+The CLI's `storage` service alias (`nself service ... storage`) names core object storage (MinIO), not this plugin.
+Check this plugin with `curl http://127.0.0.1:9007/health`.
 
 ## Environment Variables
 
