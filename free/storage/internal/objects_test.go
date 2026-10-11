@@ -33,7 +33,25 @@ func (f *fakeStore) Put(context.Context, string, string, io.Reader, string, int6
 	return s3store.PutResult{}, errors.New("unexpected Put")
 }
 
+// testSecret is the fake PLUGIN_INTERNAL_SECRET the unit tests use.
+const testSecret = "test-internal-secret"
+
+// newRouter serves s with the secret configured and every request carrying it, so tests of the object routes
+// need not repeat the header. Tests of the secret gate itself use rawRouter.
 func newRouter(s *Server) http.Handler {
+	if s.cfg == nil {
+		s.cfg = &Config{}
+	}
+	s.cfg.InternalSecret = testSecret
+	inner := rawRouter(s)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set(secretHeader, testSecret)
+		inner.ServeHTTP(w, r)
+	})
+}
+
+// rawRouter serves s exactly as configured.
+func rawRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
 	s.Routes(r)
 	return r

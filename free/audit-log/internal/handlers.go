@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -47,13 +48,23 @@ func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
 			httpStatus = http.StatusServiceUnavailable
 		}
 
-		sdk.Respond(w, httpStatus, map[string]any{
+		// The ledger check writes the 503 itself on a Status error, so it runs before Respond and a
+		// second WriteHeader is avoided: in that case the body is encoded directly.
+		w.Header().Set("Content-Type", "application/json")
+		mig := bootMigrationsHealth(w)
+		body := map[string]any{
 			"status":     status,
 			"plugin":     "audit-log",
 			"version":    "1.0.0",
 			"db":         dbStatus,
-			"migrations": bootMigrationsHealth(),
-		})
+			"migrations": mig,
+		}
+		if mig["applied"] < 0 {
+			body["status"] = "degraded"
+			_ = json.NewEncoder(w).Encode(body)
+			return
+		}
+		sdk.Respond(w, httpStatus, body)
 	}
 }
 

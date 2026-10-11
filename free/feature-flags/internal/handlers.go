@@ -14,8 +14,7 @@ import (
 func RegisterRoutes(r chi.Router, db *DB, pubsub *PubSub) {
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w)})
 	})
 	eval := NewEvaluator(db)
 

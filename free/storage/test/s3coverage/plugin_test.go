@@ -27,6 +27,9 @@ import (
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
 
+// testInternalSecret is the fake PLUGIN_INTERNAL_SECRET the harness server expects in X-Plugin-Secret.
+const testInternalSecret = "test-internal-secret"
+
 // pluginHarness is the real internal.Server on the suite database and S3 endpoint, behind httptest.
 type pluginHarness struct {
 	url string
@@ -103,7 +106,7 @@ func newPluginWrapped(t *testing.T) (*pluginHarness, *failStore) {
 	rec := &recorder{}
 	fs := &failStore{ObjectStore: newStore(t, rec)}
 	r := chi.NewRouter()
-	internal.NewServer(pool, &internal.Config{Port: "0"}, fs).Routes(r)
+	internal.NewServer(pool, &internal.Config{Port: "0", InternalSecret: testInternalSecret}, fs).Routes(r)
 	ts := httptest.NewServer(r)
 	t.Cleanup(ts.Close)
 	return &pluginHarness{url: ts.URL, rec: rec}, fs
@@ -116,6 +119,7 @@ func (p *pluginHarness) call(t *testing.T, tenant, method, path string, body io.
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("X-Plugin-Secret", testInternalSecret)
 	if tenant != "" {
 		req.Header.Set("X-Hasura-Source-Account-Id", tenant)
 	}
@@ -225,7 +229,12 @@ func TestPlugin_UploadLargeObjectViaS3(t *testing.T) {
 	}
 
 	// GET returns identical bytes with the right headers.
-	resp, err := http.Get(p.url + "/storage/buckets/" + bucket + "/objects/big.bin")
+	req, err := http.NewRequest(http.MethodGet, p.url+"/storage/buckets/"+bucket+"/objects/big.bin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Plugin-Secret", testInternalSecret)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +462,7 @@ func TestPlugin_TruncatedUploadCommitsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Fprintf(conn, "PUT /storage/buckets/%s/objects/trunc.bin HTTP/1.1\r\nHost: plugin\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", bucket, 40<<20)
+	fmt.Fprintf(conn, "PUT /storage/buckets/%s/objects/trunc.bin HTTP/1.1\r\nHost: plugin\r\nX-Plugin-Secret: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", bucket, testInternalSecret, 40<<20)
 	if _, err := io.Copy(conn, &patternStream{n: 20 << 20}); err != nil {
 		t.Fatalf("sending the partial body: %v", err)
 	}

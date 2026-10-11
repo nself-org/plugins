@@ -8,10 +8,13 @@
 //   - S3_ENDPOINT is config-only; never user-overridable per request.
 //   - Object bytes never touch Postgres; with no S3 credentials configured object routes answer 503.
 //   - Object keys are validated to block path traversal.
-//   - source_account_id from X-Hasura-Source-Account-Id header scopes all DB queries.
+//   - source_account_id from X-Hasura-Source-Account-Id header scopes all DB queries. The header is trusted only on
+//     requests that carry X-Plugin-Secret equal to PLUGIN_INTERNAL_SECRET (callers are trusted backend services):
+//     wrong or missing secret is 401, secret not configured is 503 (see auth.go).
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"path"
@@ -27,6 +30,8 @@ type Server struct {
 	db    *pgxpool.Pool
 	cfg   *Config
 	store ObjectStore // nil when S3 is not configured
+	// putLookup replaces the PUT bucket/quota query in tests; nil means query the database.
+	putLookup func(ctx context.Context, sai, bucket, key string, quota int64) (putLookupResult, error)
 }
 
 // NewServer creates a new Server instance. A nil store means S3 is not configured: object routes answer 503.
@@ -40,6 +45,7 @@ func (s *Server) Routes(r chi.Router) {
 	r.Get("/health", s.handleHealth)
 
 	r.Route("/storage", func(r chi.Router) {
+		r.Use(s.requireInternalSecret) // first: nothing reads the account header before the secret is checked
 		r.Use(requireValidAccount)
 		// Bucket operations
 		r.Post("/buckets", s.handleCreateBucket)

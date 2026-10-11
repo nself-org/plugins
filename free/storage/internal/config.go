@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -28,7 +29,18 @@ type Config struct {
 	MaxUploads int
 	// UploadSlotWait is how long an upload waits for a slot before 503 (STORAGE_UPLOAD_SLOT_WAIT, default 30s).
 	UploadSlotWait time.Duration
+	// MaxObjectBytes caps one object (STORAGE_MAX_OBJECT_BYTES, default 5 GiB). Larger PUTs answer 413.
+	MaxObjectBytes int64
+	// AccountQuotaBytes caps the summed size of one account's objects (STORAGE_ACCOUNT_QUOTA_BYTES); 0 = off.
+	AccountQuotaBytes int64
+	// InternalSecret is PLUGIN_INTERNAL_SECRET. /storage/* routes require it in X-Plugin-Secret; empty = routes
+	// answer 503 (fail closed). Surrounding whitespace is trimmed, so a whitespace-only value counts as unset (a header
+	// value never carries it, so such a secret could never match and every call would answer 401 with no hint).
+	InternalSecret string
 }
+
+// defaultMaxObjectBytes is the per-object cap when STORAGE_MAX_OBJECT_BYTES is unset (5 GiB, the S3 single-PutObject size).
+const defaultMaxObjectBytes int64 = 5 << 30
 
 // LoadConfig reads configuration from environment variables.
 func LoadConfig() (*Config, error) {
@@ -78,16 +90,36 @@ func LoadConfig() (*Config, error) {
 		slotWait = d
 	}
 
+	maxObject := defaultMaxObjectBytes
+	if v := os.Getenv("STORAGE_MAX_OBJECT_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("STORAGE_MAX_OBJECT_BYTES must be a positive integer (bytes), got %q", v)
+		}
+		maxObject = n
+	}
+	var quota int64 // 0 = off
+	if v := os.Getenv("STORAGE_ACCOUNT_QUOTA_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("STORAGE_ACCOUNT_QUOTA_BYTES must be a non-negative integer (bytes, 0 = off), got %q", v)
+		}
+		quota = n
+	}
+
 	return &Config{
-		Port:            port,
-		DBUrl:           dbURL,
-		S3Endpoint:      endpoint,
-		S3Region:        region,
-		AccessKey:       accessKey,
-		SecretKey:       secretKey,
-		UseSSL:          useSSL,
-		MaxLargeUploads: maxLarge,
-		MaxUploads:      maxUploads,
-		UploadSlotWait:  slotWait,
+		Port:              port,
+		DBUrl:             dbURL,
+		S3Endpoint:        endpoint,
+		S3Region:          region,
+		AccessKey:         accessKey,
+		SecretKey:         secretKey,
+		UseSSL:            useSSL,
+		MaxLargeUploads:   maxLarge,
+		MaxUploads:        maxUploads,
+		UploadSlotWait:    slotWait,
+		MaxObjectBytes:    maxObject,
+		AccountQuotaBytes: quota,
+		InternalSecret:    strings.TrimSpace(os.Getenv("PLUGIN_INTERNAL_SECRET")),
 	}, nil
 }
