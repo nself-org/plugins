@@ -137,6 +137,7 @@ func TestRedirectStatusFollowsTheRootLocation(t *testing.T) {
 	}{{301, true, true}, {302, false, true}, {307, false, false}, {308, false, false}} {
 		root := loc(t, "proxy", "/", "prefix")
 		root.Upstream, root.Return = nil, redirectTo(c.status)
+		clearProxyOnly(&root)
 		r := mkRoute(t, "hand:r#1", []string{"r.example.test"}, root)
 		r.HTTPToHTTPSRedirect = true
 		out, err := renderRoutes(t, r)

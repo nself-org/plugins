@@ -63,11 +63,25 @@ func (b *builder) listeners(r contract.Route) []listener {
 	return ls
 }
 
-var wildRE = regexp.MustCompile(`^\*\.[A-Za-z0-9.-]+$`)
-var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
+// The name regexes allow no empty label (no "..", no trailing dot): see badShape.
+var wildRE = regexp.MustCompile(`^\*\.[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*$`)
+var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*$`)
 
 // dotRE is nginx's ".example.test": the name itself plus every subdomain.
-var dotRE = regexp.MustCompile(`^\.[A-Za-z0-9][A-Za-z0-9.-]*$`)
+var dotRE = regexp.MustCompile(`^\.[A-Za-z0-9][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*$`)
+
+// badShape reports a server name with an empty label or a last character that is not a letter
+// or digit. Traefik's Host() ignores a trailing dot on the rule and on the request, nginx keeps
+// it in the name, and duplicate detection keys on the written name: "a.example.test" and
+// "a.example.test." would be two hosts here and one host in Traefik (a deny_all route and an
+// upstream route would then tie). nginx answers a request for "a..example.test" with a 400.
+func badShape(raw string) bool {
+	if raw == "" || strings.Contains(raw, "..") {
+		return true
+	}
+	c := raw[len(raw)-1]
+	return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9')
+}
 
 // Host specificity. nginx picks the server by exact name, then by the longest
 // wildcard, and only then the location; Traefik ranks by one priority number, so
@@ -107,6 +121,10 @@ func (b *builder) hostGroups(r contract.Route) ([]hostGroup, bool) {
 		// The name is checked as written: strings.ToLower folds U+212A (Kelvin sign) to an ASCII "k",
 		// so a check after lowercasing would accept a name that is not the ASCII name. Only an
 		// all-ASCII name reaches ToLower.
+		if badShape(raw) {
+			b.refuse(r.ID, "server_names", fmt.Sprintf("%q has an empty label or does not end in a letter or digit (a trailing dot names the same host to Traefik and a different one to nginx)", raw))
+			return nil, false
+		}
 		switch {
 		case nameRE.MatchString(raw):
 			n := strings.ToLower(raw)

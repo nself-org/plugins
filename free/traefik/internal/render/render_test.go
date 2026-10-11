@@ -155,6 +155,7 @@ func TestRefusesInexpressibleValues(t *testing.T) {
 		{"return target", "return.to", func(m *contract.Model) {
 			to := "https://elsewhere.example/"
 			m.Routes[0].Locations[0].Upstream = nil
+			clearProxyOnly(&m.Routes[0].Locations[0])
 			m.Routes[0].Locations[0].Return = &struct {
 				Status int     `json:"status"`
 				To     *string `json:"to"`

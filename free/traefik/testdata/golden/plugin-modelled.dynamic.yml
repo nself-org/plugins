@@ -163,13 +163,22 @@ http:
             priority: 25602002
             rule: Host(`auth.example.test`) && PathPrefix(`/`)
             service: svc-http-auth-4000-efeded9d
+        core-auth-fcf1e097-l3-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25640056
+            rule: Host(`auth.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
         core-auth-fcf1e097-l3-web:
             entryPoints:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 25640056
-            rule: Host(`auth.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            priority: 25640057
+            rule: Host(`auth.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
             service: responder
         core-auth-fcf1e097-l4-web:
             entryPoints:
@@ -251,13 +260,22 @@ http:
             priority: 25602002
             rule: Host(`api.example.test`) && PathPrefix(`/`)
             service: svc-http-hasura-8080-fbc40eb9
+        core-hasura-fd45e43a-l3-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25640056
+            rule: Host(`api.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
         core-hasura-fd45e43a-l3-web:
             entryPoints:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 25640056
-            rule: Host(`api.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            priority: 25640057
+            rule: Host(`api.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
             service: responder
         core-hasura-fd45e43a-l4-web:
             entryPoints:
@@ -339,13 +357,22 @@ http:
             priority: 25602002
             rule: Host(`storage.example.test`) && PathPrefix(`/`)
             service: svc-http-minio-9000-60586f1a
+        core-storage-6cd68f54-l3-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25640056
+            rule: Host(`storage.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
         core-storage-6cd68f54-l3-web:
             entryPoints:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 25640056
-            rule: Host(`storage.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            priority: 25640057
+            rule: Host(`storage.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
             service: responder
         core-storage-6cd68f54-l4-web:
             entryPoints:
@@ -425,13 +452,22 @@ http:
             priority: 25602002
             rule: Host(`storage-console.example.test`) && PathPrefix(`/`)
             service: svc-http-minio-9001-60586f1a
+        core-storage-console-cf94819c-l3-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25640056
+            rule: Host(`storage-console.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            service: responder
         core-storage-console-cf94819c-l3-web:
             entryPoints:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 25640056
-            rule: Host(`storage-console.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
+            priority: 25640057
+            rule: Host(`storage-console.example.test`) && PathPrefix(`/.well-known/acme-challenge/`) && (Method(`GET`) || Method(`HEAD`))
             service: responder
         core-storage-console-cf94819c-l4-web:
             entryPoints:

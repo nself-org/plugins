@@ -62,6 +62,9 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 			mws = append(mws, n)
 		}
 	}
+	if !b.oneKind(r, l, field) {
+		return
+	}
 	svc := ""
 	switch {
 	case l.StaticRoot != nil:
@@ -100,9 +103,78 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 		b.refuse(r.ID, field, "location has no upstream, return, static_root or deny_all")
 		return
 	}
+	name, pri := fmt.Sprintf("%s-l%d", b.pfx, i), (class+len(l.Path))*2
 	for _, ln := range ls {
-		b.addRouter(fmt.Sprintf("%s-l%d", b.pfx, i), rule, (class+len(l.Path))*2, ln, mws, svc)
+		if l.StaticRoot != nil && len(l.Methods) > 0 {
+			// The CLI emits the ACME webroot with methods ["GET"] (limit_except GET): other methods are a 403.
+			if !b.methodSplit(r.ID, field, name, rule, pri, ln, mws, svc, sec, l.Methods) {
+				return
+			}
+			continue
+		}
+		b.addRouter(name, rule, pri, ln, mws, svc)
 	}
+}
+
+// oneKind refuses a location the renderer would otherwise render only in part: nginx applies
+// every directive of a location (an access rule before the content handler), the switch in
+// location picks one kind. More than one of static_root, deny_all, return and upstream is
+// refused, and so is a field that has no meaning on a location that is not an upstream.
+// max_body_bytes is not refused: the CLI emits it on deny_all and return locations, where
+// nginx answers before reading the body, so dropping it changes nothing a client sees.
+func (b *builder) oneKind(r contract.Route, l contract.Location, field string) bool {
+	var kinds []string
+	for _, k := range []struct {
+		name string
+		set  bool
+	}{{"static_root", l.StaticRoot != nil}, {"deny_all", l.DenyAll}, {"return", l.Return != nil}, {"upstream", l.Upstream != nil}} {
+		if k.set {
+			kinds = append(kinds, k.name)
+		}
+	}
+	if len(kinds) > 1 {
+		b.refuse(r.ID, field, fmt.Sprintf("more than one of static_root, deny_all, return and upstream is set (%s); nginx applies them together, this renderer would render one", strings.Join(kinds, ", ")))
+		return false
+	}
+	if len(kinds) == 0 || l.Upstream != nil {
+		return true
+	}
+	ok := true
+	drop := func(f string, set bool) {
+		if set {
+			b.refuse(r.ID, field+"."+f, fmt.Sprintf("set on a %s location, where it would not be rendered", kinds[0]))
+			ok = false
+		}
+	}
+	drop("methods", len(l.Methods) > 0 && l.StaticRoot == nil)
+	drop("health_probe", l.HealthProbe)
+	drop("rate_limit", l.RateLimit != nil)
+	drop("timeouts", l.Timeouts.ConnectS != nil || l.Timeouts.ReadS != nil || l.Timeouts.SendS != nil)
+	drop("websocket", l.WebSocket)
+	return ok
+}
+
+// methodSplit routes the listed methods (GET also admits HEAD, as nginx does) to svc at pri+1
+// and every other method to a 403 at pri.
+func (b *builder) methodSplit(id, field, name, rule string, pri int, ln listener, mws []string, svc, sec string, methods []string) bool {
+	var ms []string
+	for _, m := range methods {
+		if !methodRE.MatchString(m) {
+			b.refuse(id, field+".methods", fmt.Sprintf("method %q", m))
+			return false
+		}
+		ms = append(ms, "Method(`"+m+"`)")
+		if m == "GET" {
+			ms = append(ms, "Method(`HEAD`)")
+		}
+	}
+	b.addRouter(name, rule+" && ("+strings.Join(ms, " || ")+")", pri+1, ln, mws, svc)
+	var deny []string
+	if sec != "" {
+		deny = append(deny, sec)
+	}
+	b.addRouter(name+"-deny", rule, pri, ln, append(deny, b.respondMW(403)), b.responder())
+	return true
 }
 
 // proxied renders an upstream location, splitting it by method when methods is set.
@@ -166,23 +238,9 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 			b.addRouter(name, rule, pri, ln, mws, svc)
 			continue
 		}
-		var ms []string
-		for _, m := range methods {
-			if !methodRE.MatchString(m) {
-				b.refuse(r.ID, field+".methods", fmt.Sprintf("method %q", m))
-				return false
-			}
-			ms = append(ms, "Method(`"+m+"`)")
-			if m == "GET" {
-				ms = append(ms, "Method(`HEAD`)")
-			}
+		if !b.methodSplit(r.ID, field, name, rule, pri, ln, mws, svc, sec, methods) {
+			return false
 		}
-		b.addRouter(name, rule+" && ("+strings.Join(ms, " || ")+")", pri+1, ln, mws, svc)
-		deny := []string{}
-		if sec != "" {
-			deny = append(deny, sec)
-		}
-		b.addRouter(name+"-deny", rule, pri, ln, append(deny, b.respondMW(403)), b.responder())
 	}
 	return true
 }

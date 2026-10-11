@@ -24,6 +24,13 @@ func loc(t *testing.T, kind, path, match string) contract.Location {
 	return l
 }
 
+// clearProxyOnly drops the fields that mean nothing on a location that is not an upstream, so a
+// test can turn the proxy template into a return or static_root location the renderer accepts.
+func clearProxyOnly(l *contract.Location) {
+	l.RateLimit, l.WebSocket, l.HealthProbe, l.Methods = nil, false, false, nil
+	l.Timeouts.ConnectS, l.Timeouts.ReadS, l.Timeouts.SendS = nil, nil, nil
+}
+
 func mkRoute(t *testing.T, id string, names []string, locs ...contract.Location) contract.Route {
 	t.Helper()
 	r := noteRoute(t, fixture(t, "plugin-modelled"))
@@ -108,6 +115,7 @@ func TestWildcardRedirectDoesNotOutrankExactHosts(t *testing.T) {
 	acme := loc(t, "proxy", "/.well-known/acme-challenge/", "prefix")
 	root := "/acme"
 	acme.Upstream, acme.StaticRoot = nil, &root
+	clearProxyOnly(&acme)
 	exact.Locations = append(exact.Locations, acme)
 	wild := mkRoute(t, "hand:redir#1", []string{"*.example.test"}, loc(t, "proxy", "/", "prefix"))
 	wild.HTTPToHTTPSRedirect = true
@@ -219,6 +227,7 @@ func TestReturnStatusRange(t *testing.T) {
 	for st, ok := range map[int]bool{0: false, 100: false, 199: false, 200: true, 204: false, 205: false, 304: false, 403: true, 410: true, 444: false, 503: true, 599: true, 600: false, -1: false} {
 		l := loc(t, "proxy", "/gone", "prefix")
 		l.Upstream = nil
+		clearProxyOnly(&l)
 		l.Return = &struct {
 			Status int     `json:"status"`
 			To     *string `json:"to"`
