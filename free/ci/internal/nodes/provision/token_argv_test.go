@@ -41,8 +41,10 @@ func TestInstallRunnerInstance_TokenOnlyOnStdin(t *testing.T) {
 	if ex.inputs[0] != fakeRegToken+"\n" {
 		t.Fatalf("stdin = %q, want the token and a newline", ex.inputs[0])
 	}
-	if !strings.Contains(script, "export ACTIONS_RUNNER_INPUT_TOKEN") {
-		t.Fatalf("script does not hand the token to config.sh through the environment:\n%s", script)
+	for _, want := range []string{"export ACTIONS_RUNNER_INPUT_TOKEN", "\nset +x\n", `"$NSELF_RUNNER_TOKEN" 2>/dev/null | sudo`, "\nunset NSELF_RUNNER_TOKEN\n"} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("script lacks %q:\n%s", want, script)
+		}
 	}
 }
 

@@ -18,7 +18,9 @@
 #   --capture-help (rewrite internal/nodes/provision/help/*.txt from the core build).
 # Exit: 0 all equal, 1 a difference or an empty capture, 2 usage, build or docker failure.
 # Not compared: core `provision --json` prints core's E402 error (the plugin a plain one); a destination that
-#   passes core's legacy check but not the sdk allowlist is refused before ssh (unit tests).
+#   passes core's host check but not the sdk allowlist, and a host with a port or legacy path (core turns them into
+#   ssh options, the plugin refuses them by name), are refused before ssh; a registration token with a line break is
+#   refused before host work (unit tests).
 set -euo pipefail
 MODE=run
 case "${1:-}" in --self-test) MODE=self;; --capture-help) MODE=help;; "") ;; *) echo "usage: parity-nodes.sh [--self-test|--capture-help]" >&2; exit 2;; esac
@@ -115,7 +117,7 @@ if [ "$MODE" = self ]; then # the comparator needs no containers
     && grep -qF "2>/dev/null | sudo -u 'u' sh -c 'IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN" "$WORK/tf.out"; } \
     || { echo "parity-nodes self-test: FAIL (tokfix did not rewrite core's --token line)"; cat "$WORK/tf.out"; exit 1; }
   WANT_RC=9; verdict "self rc" s1 1 | awk '/^RC self rc/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (wrong exit code not reported)"; exit 1; }
-  echo "parity-nodes self-test: PASS (identical sides equal, planted difference, token on argv and wrong exit code reported)"; exit 0
+  echo "parity-nodes self-test: PASS (identical sides equal, planted difference, token on argv, tokfix rewrite and wrong exit code reported)"; exit 0
 fi
 
 # ---- fixture: ssh shim, stubs, containers ---------------------------------------------------------------

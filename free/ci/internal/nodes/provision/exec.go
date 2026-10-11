@@ -18,7 +18,9 @@ package provision
 //   Three deliberate differences from core: the destination also passes
 //   remote.ValidateDest (an allowlist), ssh gets "--" before the
 //   destination and runs with the sdk's environment allowlist (all from the
-//   sdk), and the runner token travels on stdin (RunInput, D-0263).
+//   sdk), and the runner token travels on stdin (RunInput, D-0263; a token
+//   with a line break is refused in Provision). A host with a port or a
+//   legacy path, which core accepts, is refused by name (see target).
 
 import (
 	"bytes"
