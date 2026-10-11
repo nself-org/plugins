@@ -10,7 +10,6 @@
 package internal
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"path"
@@ -48,18 +47,6 @@ func (s *Server) Routes(r chi.Router) {
 		r.Delete("/buckets/{bucket}/objects/{key}", s.handleDeleteObject)
 		r.Get("/buckets/{bucket}/objects", s.handleListObjects)
 	})
-}
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-	defer cancel()
-	if err := s.db.Ping(ctx); err != nil {
-		http.Error(w, `{"status":"unhealthy"}`, http.StatusServiceUnavailable)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth()})
 }
 
 func sourceAccountID(r *http.Request) string {
