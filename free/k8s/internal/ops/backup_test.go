@@ -184,8 +184,8 @@ func TestBackupSessionDiesBeforeSentinel(t *testing.T) {
 	o := backupOpts(f, t.TempDir())
 	_, err := Backup(context.Background(), o)
 	oe := wantCode(t, err, CodeFingerprint)
-	if !strings.Contains(oe.Cause, "connection to server failed") {
-		t.Errorf("cause = %q", oe.Cause)
+	if strings.Contains(oe.Cause, "connection to server failed") || oe.Cause == "" {
+		t.Errorf("cause = %q: fixed text only, no tool output", oe.Cause)
 	}
 	if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
 		t.Error("a dump file exists although the fingerprints failed")
@@ -404,5 +404,111 @@ func TestBackupRecordsThePodsRealNamespace(t *testing.T) {
 	}
 	if m, _ := readMeta(o2.Path); m.Namespace != "from-flag" {
 		t.Errorf("fallback namespace = %q", m.Namespace)
+	}
+}
+
+func partialsIn(t *testing.T, dir string) []string {
+	t.Helper()
+	m, _ := filepath.Glob(filepath.Join(dir, ".meta", "*.partial"))
+	return m
+}
+
+func finalDumpsIn(t *testing.T, dir string) []string {
+	t.Helper()
+	m, _ := filepath.Glob(filepath.Join(dir, "*_full_*.dump"))
+	return m
+}
+
+func TestBackupWritesThePartialInMetaAndPublishesAtTheEnd(t *testing.T) {
+	f := newFake()
+	o := backupOpts(f, t.TempDir())
+	dir := filepath.Dir(o.Path)
+	f.onDump = func() {
+		if p := partialsIn(t, dir); len(p) != 1 {
+			t.Errorf("during the dump the partial files are %v, want one in .meta", p)
+		} else if fi, _ := os.Stat(p[0]); fi.Mode().Perm() != 0o600 {
+			t.Errorf("partial mode = %v", fi.Mode().Perm())
+		}
+		if d := finalDumpsIn(t, dir); len(d) != 0 {
+			t.Errorf("a file with a core backup name exists mid-dump: %v", d)
+		}
+	}
+	if _, err := Backup(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	if len(partialsIn(t, dir)) != 0 || len(finalDumpsIn(t, dir)) != 1 {
+		t.Errorf("after: partials %v finals %v", partialsIn(t, dir), finalDumpsIn(t, dir))
+	}
+}
+
+func TestBackupCancelledMidDumpLeavesNothing(t *testing.T) {
+	f := newFake()
+	o := backupOpts(f, t.TempDir())
+	dir := filepath.Dir(o.Path)
+	ctx, cancel := context.WithCancel(context.Background())
+	f.onDump = cancel
+	_, err := Backup(ctx, o)
+	wantCode(t, err, CodeBackupFailed)
+	if d := finalDumpsIn(t, dir); len(d) != 0 {
+		t.Errorf("a truncated dump stayed under a core name: %v", d)
+	}
+	if p := partialsIn(t, dir); len(p) != 0 {
+		t.Errorf("the partial stayed: %v", p)
+	}
+	if _, e := os.Stat(MetaPath(o.Path)); !os.IsNotExist(e) {
+		t.Error("a sidecar was written")
+	}
+}
+
+func TestBackupNeverOverwritesAFileThatAppearsMidDump(t *testing.T) {
+	f := newFake()
+	o := backupOpts(f, t.TempDir())
+	dir := filepath.Dir(o.Path)
+	f.onDump = func() { _ = os.WriteFile(o.Path, []byte("someone else"), 0o600) }
+	_, err := Backup(context.Background(), o)
+	wantCode(t, err, CodeTarget)
+	if b, _ := os.ReadFile(o.Path); string(b) != "someone else" {
+		t.Error("the file that appeared was overwritten")
+	}
+	if len(partialsIn(t, dir)) != 0 {
+		t.Error("the partial stayed")
+	}
+	if _, e := os.Stat(MetaPath(o.Path)); !os.IsNotExist(e) {
+		t.Error("the sidecar stayed")
+	}
+}
+
+func TestBackupRefusesAStalePartial(t *testing.T) {
+	f := newFake()
+	o := backupOpts(f, t.TempDir())
+	if err := os.MkdirAll(filepath.Dir(partialPath(o.Path)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(partialPath(o.Path), []byte("stale"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Backup(context.Background(), o)
+	wantCode(t, err, CodeTarget)
+	if b, _ := os.ReadFile(partialPath(o.Path)); string(b) != "stale" {
+		t.Error("another backup's partial was touched")
+	}
+}
+
+func TestErrorDetailIsMaskedForHumansAndNeverInTheCause(t *testing.T) {
+	const secret = "s3cr3t-row-value"
+	e := errRestore("1 error line(s)", `pg_restore: error: COPY failed for table "users": ERROR:  invalid input syntax for type uuid: '`+secret+`' DETAIL: Key (id)=(`+secret+`) exists.`)
+	if strings.Contains(e.Cause, secret) || strings.Contains(e.Error(), secret) {
+		t.Errorf("secret in cause: %q", e.Error())
+	}
+	h := e.HumanDetail()
+	if strings.Contains(h, secret) || strings.Contains(h, "users") || strings.Contains(h, "DETAIL") || !strings.Contains(h, "…") {
+		t.Errorf("human detail = %q", h)
+	}
+	long := &Error{Detail: "error: " + strings.Repeat("x", 500)}
+	if n := len(long.HumanDetail()); n > maxHuman {
+		t.Errorf("human detail is %d bytes", n)
+	}
+	if (&Error{Detail: `error: "unterminated ` + secret}).HumanDetail() == "" || strings.Contains((&Error{Detail: `error: "unterminated ` + secret}).HumanDetail(), secret) {
+		t.Error("an unterminated quote must mask the rest of the line")
 	}
 }

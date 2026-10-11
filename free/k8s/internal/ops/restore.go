@@ -97,11 +97,17 @@ func (p *Prepared) Run(ctx context.Context, ex Exec) (RestoreResult, error) {
 	defer func() { _ = f.Close() }()
 	// Hash again while streaming: a file changed since the check is caught.
 	h := sha256.New()
+	in := &countReader{r: io.TeeReader(f, h)}
 	ew := &errLineWriter{}
-	runErr := ex.Run(ctx, pgRestoreArgv, io.TeeReader(f, h), io.Discard, ew)
+	runErr := ex.Run(ctx, pgRestoreArgv, in, io.Discard, ew)
 	ew.flush()
 	if runErr != nil || ew.count > 0 || !ew.finished() {
-		return res, errRestore(ew.failure(runErr))
+		return res, errRestore(ew.failure(runErr), ew.detail())
+	}
+	if in.n != p.meta.Bytes {
+		// pg_restore ended cleanly without taking every byte (a short read), or the file
+		// changed in size: that is not the same as a changed file of full length.
+		return res, errRestoreShort()
 	}
 	if hex.EncodeToString(h.Sum(nil)) != p.meta.SHA256 {
 		return res, errChangedDuringRestore()
@@ -130,15 +136,22 @@ func verifyChecksum(f *os.File, m Meta) error {
 }
 
 // ReadFingerprints reads the fingerprints of the current database in one
-// REPEATABLE READ READ ONLY transaction.
+// REPEATABLE READ READ ONLY transaction. The script ends with an \echo of a random
+// sentinel: kubectl can exit 0 on a cut-off stream, so the output counts only when the
+// sentinel is its last line (E733 otherwise, also for empty output).
 func ReadFingerprints(ctx context.Context, ex Exec) ([]Fingerprint, error) {
-	script := sessionPrelude + "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n" + fingerprintSQL + "COMMIT;\n"
+	sentinel := newSentinel()
+	script := sessionPrelude + "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n" + fingerprintSQL + "COMMIT;\n\\echo " + sentinel + "\n"
 	var out strings.Builder
 	serr := newBounded(stderrKeep)
 	if err := ex.Run(ctx, psqlArgv, strings.NewReader(script), &out, serr); err != nil {
-		return nil, errFingerprint(exitCause(err) + ": " + errorLine(serr.String()))
+		return nil, errFingerprint(exitCause(err))
 	}
-	return parseFingerprints(strings.Split(out.String(), "\n"))
+	lines, ok := readUntil(strings.NewReader(out.String()), sentinel)
+	if !ok || !strings.HasSuffix(strings.TrimRight(out.String(), "\r\n"), sentinel) {
+		return nil, errFingerprint("the fingerprint query did not finish: its output ended without the completion marker")
+	}
+	return parseFingerprints(lines)
 }
 
 // errLineWriter reads a pod command's stderr line by line. It counts error lines, keeps the
@@ -215,18 +228,32 @@ func isDigits(s string) bool {
 // status 0: exactly one marker line, NSELF_RC=0, and it is the last line on stderr.
 func (w *errLineWriter) finished() bool { return w.rcCount == 1 && w.rc == "0" && w.rcLast }
 
-// failure describes why a pod command is not a success, for a Cause: its first error
-// line, else the marker state, else the local exit status.
+// failure describes why a pod command is not a success, in fixed words: the local exit
+// status, the marker state and the number of error lines. It never contains text the
+// database or the tool printed (that is detail()).
 func (w *errLineWriter) failure(runErr error) string {
-	switch {
-	case w.first != "":
-		return w.first
-	case runErr != nil:
-		return exitCause(runErr)
-	case w.rcCount == 0:
-		return "the command in the pod did not report an exit status: the stream was cut off"
-	case w.rc != "0":
-		return "the command in the pod exited with status " + w.rc
+	var parts []string
+	if runErr != nil {
+		parts = append(parts, exitCause(runErr))
 	}
-	return "the command in the pod did not end cleanly"
+	switch {
+	case w.rcCount == 0:
+		parts = append(parts, "the command in the pod did not report an exit status: the stream was cut off")
+	case w.rcCount > 1:
+		parts = append(parts, "the command in the pod reported its exit status more than once")
+	case w.rc != "0":
+		parts = append(parts, "the command in the pod exited with status "+w.rc)
+	case !w.rcLast:
+		parts = append(parts, "the exit status was not the last line from the pod")
+	}
+	if w.count > 0 {
+		parts = append(parts, fmt.Sprintf("%d error line(s)", w.count))
+	}
+	if len(parts) == 0 {
+		return "the command in the pod did not end cleanly"
+	}
+	return strings.Join(parts, "; ")
 }
+
+// detail is the first error line the command printed (database-provided text).
+func (w *errLineWriter) detail() string { return w.first }

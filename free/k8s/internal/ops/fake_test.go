@@ -46,6 +46,9 @@ type fakeExec struct {
 	ns             string
 	verifyShort    bool
 	verifyNoMarker bool
+	postNoSentinel bool   // the fingerprint read ends without its completion marker
+	restoreShort   bool   // pg_restore reads only part of its stdin and exits 0
+	onDump         func() // runs after pg_dump wrote its bytes
 	onRestore      func()
 	restoreErr     string
 	restoreRC      error
@@ -92,7 +95,7 @@ func kindOf(argv []string) string {
 	return "psql"
 }
 
-func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func (f *fakeExec) Run(ctx context.Context, argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	k := kindOf(argv)
 	if k == "pg_restore" && f.onRestore != nil {
 		f.onRestore()
@@ -100,7 +103,7 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 	in := ""
 	if stdin != nil {
 		var b []byte
-		if k == "pg_verify" && f.verifyShort {
+		if (k == "pg_verify" && f.verifyShort) || (k == "pg_restore" && f.restoreShort) {
 			b, _ = io.ReadAll(io.LimitReader(stdin, 4)) // closes early: reads 4 bytes only
 		} else {
 			b, _ = io.ReadAll(stdin)
@@ -117,6 +120,12 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 		_, _ = stdout.Write(f.dump)
 		if f.dumpErr == nil {
 			f.marker(stderr)
+		}
+		if f.onDump != nil {
+			f.onDump()
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 		}
 		if f.killSession {
 			f.mu.Lock()
@@ -140,6 +149,9 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 	}
 	for _, l := range f.postFps {
 		_, _ = io.WriteString(stdout, l+"\n")
+	}
+	if i := strings.LastIndex(in, "\\echo "); i >= 0 && !f.postNoSentinel {
+		_, _ = io.WriteString(stdout, strings.TrimSpace(in[i+6:])+"\n")
 	}
 	return nil
 }

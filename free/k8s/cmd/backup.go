@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -74,7 +76,10 @@ Example:
 			return r.failOps(err)
 		}
 		r.info("Backing up to " + path + "...")
-		res, err := ops.Backup(cmd.Context(), ops.BackupOptions{Exec: ex, Path: path, Project: project, Release: release, Namespace: namespace,
+		// Ctrl-C and SIGTERM cancel the context, so Backup removes its partial file and sidecar.
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		res, err := ops.Backup(ctx, ops.BackupOptions{Exec: ex, Path: path, Project: project, Release: release, Namespace: namespace,
 			Now: func() time.Time { return now }, Warn: r.warn})
 		if err != nil {
 			return r.failOps(err)
@@ -123,6 +128,10 @@ func (r *invocation) failOps(err error) error {
 	msg := oe.Code + " " + oe.Message
 	if oe.Cause != "" {
 		msg += ": " + oe.Cause
+	}
+	// The first error line of the tool, masked: human mode only, never in an envelope.
+	if d := oe.HumanDetail(); d != "" {
+		msg += " [first error line: " + d + "]"
 	}
 	if oe.Remediation != "" {
 		msg += " (" + strings.TrimSpace(oe.Remediation) + ")"

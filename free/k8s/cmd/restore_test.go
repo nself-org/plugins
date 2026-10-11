@@ -160,3 +160,22 @@ func TestRestoreWarnsWhenTargetDiffersFromBackup(t *testing.T) {
 		t.Errorf("a differing target must not refuse: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
 	}
 }
+
+func TestRestoreDatabaseTextNeverReachesTheEnvelope(t *testing.T) {
+	const secret = "row-secret-value-9"
+	dir := project(t)
+	file := madeBackup(t, dir)
+	errLine := "pg_restore: error: COPY failed for table \"users\": ERROR:  invalid input syntax for type uuid: '" + secret + "'"
+	j := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines, RestoreErr: errLine}, "restore", file, "--yes", "--json")
+	d := wantFailure(t, j.cliResult, "k8s restore", "E736", output.ClassInfra)
+	if strings.Contains(j.Stdout, secret) || strings.Contains(j.Stderr, secret) || strings.Contains(d.Error.Cause, "COPY") {
+		t.Errorf("database text in the JSON run:\n%s\n%s", j.Stdout, j.Stderr)
+	}
+	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines, RestoreErr: errLine}, "restore", file, "--yes")
+	if h.Exit != 1 || strings.Contains(h.Stdout+h.Stderr, secret) || strings.Contains(h.Stdout+h.Stderr, "users") {
+		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
+	}
+	if !strings.Contains(h.Stderr, "first error line:") || !strings.Contains(h.Stderr, "…") || strings.Contains(h.Stderr, "DETAIL") {
+		t.Errorf("human stderr lacks the masked first error line: %q", h.Stderr)
+	}
+}

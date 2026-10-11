@@ -18,7 +18,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 )
@@ -38,7 +40,9 @@ for a in "$@"; do
   esac
 done
 case "$kind" in
-  dump) cat "$STUB_DUMP"; echo "NSELF_RC=0" >&2 ;;
+  dump)
+    if [ -n "$STUB_HANG" ]; then echo started >"$STUB_HANG"; exec cat "$STUB_FIFO"; fi
+    cat "$STUB_DUMP"; echo "NSELF_RC=0" >&2 ;;
   verify) cat >/dev/null; echo "NSELF_RC=0" >&2 ;;
   restore) cat >/dev/null; if [ -n "$STUB_RESTORE_ERR" ]; then echo "$STUB_RESTORE_ERR" >&2; exit 1; fi; echo "NSELF_RC=0" >&2 ;;
   psql)
@@ -51,7 +55,12 @@ case "$kind" in
       echo "00000003-0000001B-1"; echo "160004"; cat "$STUB_FPS"; echo "$sentinel"
       cat >/dev/null
     else
-      cat >/dev/null; cat "$STUB_POST_FPS"
+      while IFS= read -r line; do
+        case "$line" in
+          '\echo '*) sentinel="${line#\\echo }" ;;
+        esac
+      done
+      cat "$STUB_POST_FPS"; echo "$sentinel"
     fi ;;
 esac
 exit 0
@@ -82,8 +91,8 @@ type k8sResult struct {
 	Calls int // kubectl invocations
 }
 
-// runK8s execs the binary with the stub kubectl as the only tool on PATH.
-func runK8s(t *testing.T, o k8sRun, args ...string) k8sResult {
+// stubEnv lays out the stub tools and data files and returns the stub dir and the environment.
+func stubEnv(t *testing.T, o k8sRun) (string, []string) {
 	t.Helper()
 	stubs := t.TempDir()
 	for _, tool := range []string{"sh", "cat"} {
@@ -95,7 +104,6 @@ func runK8s(t *testing.T, o k8sRun, args ...string) k8sResult {
 			t.Fatal(err)
 		}
 	}
-	argv := filepath.Join(stubs, "kubectl.argv")
 	if !o.NoKubectl {
 		writeFile(t, filepath.Join(stubs, "kubectl"), stubKubectl, 0o755)
 	}
@@ -107,11 +115,19 @@ func runK8s(t *testing.T, o k8sRun, args ...string) k8sResult {
 	for k, v := range data {
 		writeFile(t, filepath.Join(stubs, k), v, 0o644)
 	}
-	cmd := exec.Command(cliBin, args...)
-	cmd.Env = []string{"PATH=" + stubs, "HOME=" + stubs, "STUB_ARGV=" + argv, "STUB_MODE=" + o.Mode,
+	return stubs, []string{"PATH=" + stubs, "HOME=" + stubs, "STUB_ARGV=" + filepath.Join(stubs, "kubectl.argv"), "STUB_MODE=" + o.Mode,
 		"STUB_PODS=" + filepath.Join(stubs, "pods"), "STUB_DUMP=" + filepath.Join(stubs, "dump"),
 		"STUB_FPS=" + filepath.Join(stubs, "fps"), "STUB_POST_FPS=" + filepath.Join(stubs, "post"),
 		"STUB_RESTORE_ERR=" + o.RestoreErr}
+}
+
+// runK8s execs the binary with the stub kubectl as the only tool on PATH.
+func runK8s(t *testing.T, o k8sRun, args ...string) k8sResult {
+	t.Helper()
+	stubs, env := stubEnv(t, o)
+	argv := filepath.Join(stubs, "kubectl.argv")
+	cmd := exec.Command(cliBin, args...)
+	cmd.Env = env
 	cmd.Dir = o.Dir
 	cmd.Stdin = o.Stdin
 	var so, se bytes.Buffer
@@ -221,4 +237,53 @@ func TestBackupErrorsAreCodedEnvelopes(t *testing.T) {
 		r := runK8s(t, k8sRun{Dir: dir}, "backup", "--json", "--release", "--x")
 		wantFailure(t, r.cliResult, "k8s backup", "E401", output.ClassUser)
 	})
+}
+
+func TestBackupKilledByTermSignalLeavesNoCoreNamedFile(t *testing.T) {
+	dir := project(t)
+	stubs, env := stubEnv(t, k8sRun{Dir: dir, Mode: "backup", Dump: "x", Fps: fpLines})
+	fifo := filepath.Join(stubs, "hang.fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Skip("no fifo:", err)
+	}
+	started := filepath.Join(stubs, "started")
+	cmd := exec.Command(cliBin, "backup", "--json")
+	cmd.Env = append(env, "STUB_HANG="+started, "STUB_FIFO="+fifo)
+	cmd.Dir = dir
+	var so bytes.Buffer
+	cmd.Stdout = &so
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatal("the dump never started")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if p, _ := filepath.Glob(filepath.Join(dir, "backups", ".meta", "*.partial")); len(p) != 1 {
+		t.Errorf("partials mid-dump = %v", p)
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("the backup did not stop on SIGTERM")
+	}
+	if d, _ := filepath.Glob(filepath.Join(dir, "backups", "*_full_*.dump")); len(d) != 0 {
+		t.Errorf("a dump with a core name stayed: %v", d)
+	}
+	if p, _ := filepath.Glob(filepath.Join(dir, "backups", ".meta", "*")); len(p) != 0 {
+		t.Errorf(".meta is not empty after the interrupt: %v", p)
+	}
 }

@@ -140,20 +140,3 @@ func (b *boundedBuffer) String() string {
 	defer b.mu.Unlock()
 	return string(b.buf)
 }
-
-// errorLine returns the first line of s that mentions an error, else its last
-// non-empty line. It is the only part of a tool's stderr that reaches a Cause.
-func errorLine(s string) string {
-	last := ""
-	for _, l := range strings.Split(s, "\n") {
-		l = strings.TrimSpace(l)
-		if l == "" {
-			continue
-		}
-		last = l
-		if strings.Contains(strings.ToLower(l), "error") {
-			return l
-		}
-	}
-	return last
-}

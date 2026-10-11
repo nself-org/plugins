@@ -10,6 +10,7 @@ package ops
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -158,8 +159,11 @@ func TestRestoreErrorLineFailsEvenAtExitZero(t *testing.T) {
 	f.restoreErr = "pg_restore: warning: harmless\npg_restore: error: could not execute query: ERROR:  relation \"x\" does not exist\npg_restore: error: second\n"
 	_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
 	oe := wantCode(t, err, CodeRestoreFailed)
-	if !strings.Contains(oe.Cause, "could not execute query") || strings.Contains(oe.Cause, "second") {
-		t.Errorf("cause = %q, want the first error line only", oe.Cause)
+	if strings.Contains(oe.Cause, "could not execute query") || strings.Contains(oe.Cause, "relation") || !strings.Contains(oe.Cause, "2 error line(s)") {
+		t.Errorf("cause = %q, want fixed text with the count of error lines", oe.Cause)
+	}
+	if !strings.Contains(oe.Detail, "could not execute query") || strings.Contains(oe.Detail, "second") {
+		t.Errorf("detail = %q, want the first error line", oe.Detail)
 	}
 	if f.count("psql") != 0 {
 		t.Error("fingerprints were read after a failed pg_restore")
@@ -257,5 +261,59 @@ func TestRestoreRequiresTheExitMarker(t *testing.T) {
 				t.Errorf("cause = %q", oe.Cause)
 			}
 		})
+	}
+}
+
+func TestReadFingerprintsNeedsTheCompletionMarker(t *testing.T) {
+	for name, lines := range map[string][]string{
+		"truncated output": {`{"schema":"public","table":"t","rows":1000,"sum":"-5"}`},
+		"empty output":     nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, path := madeBackup(t)
+			f.postFps = lines
+			f.postNoSentinel = true
+			_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
+			wantCode(t, err, CodeFingerprint)
+		})
+	}
+	f, path := madeBackup(t) // control: the same output with its marker verifies
+	if _, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReadFingerprintsSentinelMustBeLast(t *testing.T) {
+	f, _ := madeBackup(t)
+	f.postFps = []string{`{"schema":"public","table":"t","rows":1,"sum":"1"}`}
+	f.postNoSentinel = true
+	// The marker appears, but more output follows it: not the last line.
+	ex := &lateLineExec{fakeExec: f}
+	if _, err := ReadFingerprints(context.Background(), ex); err == nil {
+		t.Error("accepted output with a line after the completion marker")
+	}
+}
+
+// lateLineExec prints one more line after the completion marker.
+type lateLineExec struct{ *fakeExec }
+
+func (l *lateLineExec) Run(ctx context.Context, argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	b, _ := io.ReadAll(stdin)
+	s := string(b)
+	i := strings.LastIndex(s, "\\echo ")
+	_, _ = io.WriteString(stdout, strings.TrimSpace(s[i+6:])+"\n"+`{"schema":"public","table":"late","rows":1,"sum":"1"}`+"\n")
+	return nil
+}
+
+func TestRestoreShortReadIsNotReportedAsChanged(t *testing.T) {
+	f, path := madeBackup(t)
+	f.restoreShort = true
+	_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
+	oe := wantCode(t, err, CodeRestoreFailed)
+	if !strings.Contains(oe.Message, "did not read the whole archive") || strings.Contains(oe.Message, "changed") {
+		t.Errorf("message = %q", oe.Message)
+	}
+	if f.count("psql") != 0 {
+		t.Error("fingerprints were read after a short read")
 	}
 }

@@ -199,7 +199,7 @@ data it finds equals what the backup recorded. Both need `kubectl` on `PATH` and
 
 The dump is `<BACKUP_DIR>/<PROJECT_NAME>_full_<YYYYMMDD_HHMMSS>[_<tag>].dump` (mode 0600, directory 0700). `PROJECT_NAME` and
 `BACKUP_DIR` (default `./backups`) come from the process environment, else from the project `.env`. An existing file is never
-replaced. Next to the dump, `<dir>/.meta/<file>.json` (mode 0600) records the metadata:
+replaced. The dump is first written to `<dir>/.meta/<name>.partial` (mode 0600) and gets its final name only after the archive check and the sidecar write succeed, so an interrupted backup (Ctrl-C or SIGTERM) leaves no file under a backup name that `nself backup restore latest` could pick. A killed process (SIGKILL) can leave a `.partial` file in `.meta/`; core ignores it and it is safe to delete. Next to the dump, `<dir>/.meta/<file>.json` (mode 0600) records the metadata:
 
 ```json
 {"schema_version": "1", "kind": "k8s-backup", "project": "myapp", "file": "myapp_full_20261011_040506.dump",
@@ -225,7 +225,7 @@ every covered table (as `pg_dump` does) before it reads any fingerprint, and `pg
 fingerprints in one `REPEATABLE READ` transaction after `pg_restore` and compares them with the sidecar. A writer that changes
 data during the restore makes them differ: stop the writers first (scale the apps down) or expect E737.
 
-A `TRUNCATE` or table rewrite that commits between the snapshot export and the lock on its table is not seen by the backup (the same window `pg_dump --snapshot` has). Every psql session lifts `statement_timeout`, `lock_timeout` and `idle_in_transaction_session_timeout` first, so a database or role setting cannot cut the long-running sessions.
+A `TRUNCATE` or table rewrite that commits between the snapshot export and the lock on its table is not seen by the backup (the same window `pg_dump --snapshot` has), so avoid running a backup while services run migrations or rewrite tables. Every psql session lifts `statement_timeout`, `lock_timeout` and `idle_in_transaction_session_timeout` first, so a database or role setting cannot cut the long-running sessions.
 
 If the psql session that holds the snapshot ends while `pg_dump` is still running, the backup fails (E732). If it ends or its
 `COMMIT` fails after `pg_dump` exited 0, the backup is kept and a warning is printed (`meta.warnings` with `--json`): the
@@ -252,7 +252,7 @@ before treating E737 as data loss.
    before kubectl is looked up, so a bad file never touches the cluster. If the backup's release or namespace differs from
    `--release` or the target pod's real namespace, restore prints a warning naming both and goes on. The sidecar records the namespace of the pod the backup read (not the `--namespace` flag).
 3. `pg_restore --clean --if-exists` runs. If the file changes while it streams (its hash then differs), the result is E735
-   with the message that `pg_restore` ran and the database state is not verified. Any `pg_restore: error:` line or a non-zero exit is E736.
+   with the message that `pg_restore` ran and the database state is not verified. If `pg_restore` ends cleanly without taking every byte of the archive, that is E736 ("did not read the whole archive"), not a changed file. Any `pg_restore: error:` line or a non-zero exit is E736.
 4. The fingerprints are compared (E737 on any difference, up to 20 listed). Success is printed only after this step.
 
 ### Compatibility with `nself backup`
@@ -277,6 +277,8 @@ the progress lines go to stderr, so a script can pipe stdout into `jq`. Without 
 | `backup` | `file`, `metadata_file`, `bytes`, `sha256`, `tables[]` (`schema`, `table`, `rows`) |
 | `restore` | `file`, `verified` (always `true`), `tables[]` (`schema`, `table`, `rows`) |
 
+Database error text never reaches an envelope: `cause` holds fixed text only. Human mode prints the first error line of `pg_dump` or `pg_restore` after the code, with every quoted part masked as `…`, `DETAIL`, `CONTEXT` and `HINT` dropped, at most 160 characters.
+
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
 status equals `exit_code`. Messages never carry a secret, the licence key or helm's release JSON. Without `--json` every
 failure still prints `Error: <message>` and exits 1, except the uninstall and restore refusals (exit 4) and the integrity failures E735 and E737 (exit 2).
@@ -297,10 +299,10 @@ failure still prints `Error: <message>` and exits 1, except the uninstall and re
 | E730 | infra (2) | `kubectl` is not on `PATH` (`backup`, `restore`) |
 | E731 | user (1) | The postgres pod of the release was not found, is not unique, or is not running and ready; the message says how many were found. Check `--cluster`, `--namespace`, `--release` |
 | E732 | infra (2) | The backup stream failed, or the finished dump is not a complete archive (read back with `pg_restore -f /dev/null`), or the snapshot session ended before `pg_dump` finished. The dump is removed and no sidecar is written |
-| E733 | infra (2) | The fingerprint query failed (before the dump, or after a restore) |
+| E733 | infra (2) | The fingerprint query failed (before the dump, or after a restore), or its output ended without the completion marker (a cut-off stream) |
 | E734 | user (1) | The backup file or its `.meta` sidecar is missing, unreadable or invalid. Nothing ran in the pod |
 | E735 | infra (2) | The dump does not match the checksum or size in its sidecar; nothing was restored. Or the file changed while it streamed: `pg_restore` ran and the database state is not verified |
-| E736 | infra (2) | `pg_restore` printed an error line, exited non-zero, or did not report `NSELF_RC=0` (`cause` is the first error line or the marker state). The database state is not verified |
+| E736 | infra (2) | `pg_restore` printed an error line, exited non-zero, or did not report `NSELF_RC=0`, or did not read the whole archive (`cause` is fixed text: exit status, marker state, count of error lines). The database state is not verified |
 | E737 | infra (2) | After the restore the fingerprints differ from the backup's (`cause` lists up to 20 tables). Never reported as success |
 | E738 | user (1) | The backup target cannot be resolved: `PROJECT_NAME` missing or not a plain name, a bad `--tag`, or the output file already exists (its own remediation: choose another `--output` or `--tag`) |
 

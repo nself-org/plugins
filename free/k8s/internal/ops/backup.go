@@ -12,8 +12,12 @@
 // ONLY, exports a snapshot, reads the fingerprints and stays open while
 // `pg_dump --snapshot` streams, so the dump and the fingerprints describe the same
 // moment even with writers active. The stream goes through a sha256 hasher into
-// the file; nothing is copied inside the pod. On any failure the partial dump is
-// removed and no sidecar is written.
+// <dir>/.meta/<name>.partial (O_EXCL, 0600; .meta is 0700 and ignored by core "nself
+// backup", which reads every top-level file of <dir>). Only after the dump is checked and
+// the sidecar is written is the partial linked to <dir>/<name> without overwriting, so an
+// interrupted backup never leaves a truncated file under a core backup name. On any
+// failure the partial and the sidecar are removed. A killed process (SIGKILL) can leave a
+// .partial file in .meta; it is safe to delete.
 package ops
 
 import (
@@ -70,7 +74,9 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	if _, err := os.Lstat(o.Path); err == nil {
 		return res, errExists()
 	}
-	if err := os.MkdirAll(filepath.Dir(o.Path), 0o700); err != nil {
+	dir := filepath.Dir(o.Path)
+	partial := partialPath(o.Path)
+	if err := os.MkdirAll(filepath.Dir(partial), 0o700); err != nil {
 		return res, errBackup("the backup directory cannot be created")
 	}
 	psqlErr := newBounded(stderrKeep)
@@ -78,7 +84,7 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	if err != nil {
 		return res, errBackup("the psql session could not be started")
 	}
-	ended, created := false, false
+	ended, created, metaWritten := false, false, false
 	var eof chan struct{} // closed when the session's stdout ends
 	defer func() {
 		if !ended {
@@ -86,8 +92,13 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 			sess.Kill()
 			_ = sess.Wait()
 		}
-		if err != nil && created {
-			_ = os.Remove(o.Path)
+		if err != nil {
+			if created {
+				_ = os.Remove(partial)
+			}
+			if metaWritten {
+				_ = os.Remove(MetaPath(o.Path))
+			}
 		}
 	}()
 
@@ -101,10 +112,11 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 		_, _ = io.Copy(io.Discard, sess.Stdout())
 		close(eof)
 	}()
-	f, ferr := os.OpenFile(o.Path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, ferr := os.OpenFile(partial, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if ferr != nil {
 		if errors.Is(ferr, os.ErrExist) {
-			err = errExists()
+			err = errTargetWith("a partial backup of this name exists in .meta: another backup is running or one was killed",
+				"wait for the other backup, or delete "+filepath.Base(partial)+" from the .meta directory")
 		} else {
 			err = errBackup("the backup file cannot be created")
 		}
@@ -123,7 +135,9 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 		runErr = cerr
 	}
 	if runErr != nil || dumpErr.count > 0 || !dumpErr.finished() {
-		err = errBackup(dumpErr.failure(runErr))
+		e := errBackup(dumpErr.failure(runErr))
+		e.Detail = dumpErr.detail()
+		err = e
 		return res, err
 	}
 	if cw.n == 0 {
@@ -138,7 +152,7 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	}
 	// The dump is complete: read it back through pg_restore (no database) to prove it is a
 	// whole, readable archive before it gets a checksum and a sidecar.
-	if err = verifyDump(ctx, o.Exec, o.Path, cw.n); err != nil {
+	if err = verifyDump(ctx, o.Exec, partial, cw.n); err != nil {
 		return res, err
 	}
 	// pg_dump exited 0, so the snapshot was imported and the fingerprints were read before
@@ -153,6 +167,13 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 		err = errBackup("the metadata file could not be written")
 		return res, err
 	}
+	metaWritten = true
+	if err = publish(partial, o.Path); err != nil {
+		return res, err
+	}
+	created = false // the partial is now the backup
+	syncDir(dir)
+	syncDir(filepath.Dir(partial))
 	return BackupResult{File: o.Path, MetaFile: MetaPath(o.Path), Bytes: meta.Bytes, SHA256: meta.SHA256, Tables: fps}, nil
 }
 
@@ -170,7 +191,7 @@ func openSnapshot(sess Session, stderr *boundedBuffer) (snap, version string, fp
 	_, _ = io.WriteString(sess.Stdin(), script) // a dead psql shows as EOF below
 	lines, ok := readUntil(sess.Stdout(), sentinel)
 	if !ok {
-		return "", "", nil, errFingerprint(errorLine(stderr.String()))
+		return "", "", nil, errFingerprint("the psql session ended before it returned the snapshot and the fingerprints")
 	}
 	if len(lines) < 2 {
 		return "", "", nil, errFingerprint("psql did not return a snapshot")
@@ -216,51 +237,4 @@ func finishSession(sess Session, eof <-chan struct{}, ended *bool) error {
 		return err
 	}
 	return werr
-}
-
-// verifyDump streams the stored file into `pg_restore -f /dev/null` in the pod. A
-// truncated or corrupt archive fails there (E732); the caller removes the file. The
-// check must have read the whole file (size bytes) and the pod must report exit status 0.
-func verifyDump(ctx context.Context, ex Exec, path string, size int64) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return errBackup("the finished dump cannot be read back")
-	}
-	defer func() { _ = f.Close() }()
-	in := &countReader{r: f}
-	ew := &errLineWriter{}
-	runErr := ex.Run(ctx, pgVerifyArgv, in, io.Discard, ew)
-	ew.flush()
-	if runErr != nil || ew.count > 0 || !ew.finished() {
-		return errBackup("the dump is not a complete archive: " + ew.failure(runErr))
-	}
-	if in.n != size {
-		return errBackup("the dump check did not read the whole file")
-	}
-	return nil
-}
-
-// countReader counts the bytes read from r.
-type countReader struct {
-	r io.Reader
-	n int64
-}
-
-func (c *countReader) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	c.n += int64(n)
-	return n, err
-}
-
-// countWriter counts the bytes written to it.
-type countWriter struct{ n int64 }
-
-func (c *countWriter) Write(p []byte) (int, error) { c.n += int64(len(p)); return len(p), nil }
-
-// podNamespace is the namespace recorded in the sidecar: the pod's real one, else the flag.
-func podNamespace(o BackupOptions) string {
-	if ns := PodNamespace(o.Exec); ns != "" {
-		return ns
-	}
-	return o.Namespace
 }

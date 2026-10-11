@@ -6,9 +6,10 @@
 // Outputs: *Error with a code, a class (user or infra), a fixed message, a fixed
 // remediation and an optional bounded cause. cmd maps it to an output.ErrorDetail.
 //
-// Constraints: messages and remediations are fixed text. Cause is limited to an
-// exit status, a table name or one line of the tool's own error text (at most
-// maxCause bytes): never an environment value, a password or SQL result data.
+// Constraints: messages, remediations and causes are fixed text: a step, an exit status, a
+// marker state, a count of error lines, or table names (E737). Database-provided error
+// text is kept apart in Detail and never reaches the envelope; HumanDetail masks it for
+// human-mode stderr.
 //
 //	E730 kubectl not on PATH                                     infra
 //	E731 postgres pod not found, not unique or not reachable     user
@@ -24,6 +25,7 @@ package ops
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Error codes owned by this package.
@@ -48,6 +50,9 @@ const (
 // maxCause bounds the cause text of an Error.
 const maxCause = 1500
 
+// maxHuman bounds the masked first error line shown in human mode.
+const maxHuman = 160
+
 // Error is a coded failure of backup or restore.
 type Error struct {
 	Code        string
@@ -55,6 +60,10 @@ type Error struct {
 	Message     string
 	Remediation string
 	Cause       string
+	// Detail is the first error line the tool printed. It is database-provided text and
+	// may carry a row value, so it is never serialized: only HumanDetail (masked) reaches
+	// human-mode stderr.
+	Detail string
 }
 
 func (e *Error) Error() string {
@@ -116,9 +125,50 @@ func errChangedDuringRestore() *Error {
 		"restore again from an unchanged copy of the backup", "")
 }
 
-func errRestore(cause string) *Error {
-	return newErr(CodeRestoreFailed, ClassInfra, "pg_restore reported errors: the database state is not verified",
+func errRestore(cause, detail string) *Error {
+	e := newErr(CodeRestoreFailed, ClassInfra, "pg_restore reported errors: the database state is not verified",
 		"fix the cause and run the restore again; pg_restore's own output was not kept", cause)
+	e.Detail = detail
+	return e
+}
+
+// errRestoreShort is E736: pg_restore finished but did not consume the whole archive.
+func errRestoreShort() *Error {
+	return newErr(CodeRestoreFailed, ClassInfra, "pg_restore did not read the whole archive; the database state is not verified",
+		"restore again; check the connection to the cluster", "")
+}
+
+// HumanDetail is the first error line for a person: every quoted segment masked, text
+// from DETAIL, CONTEXT or HINT dropped, at most maxHuman bytes. "" when there is none.
+func (e *Error) HumanDetail() string {
+	s := e.Detail
+	for _, k := range []string{"DETAIL:", "CONTEXT:", "HINT:"} {
+		if i := strings.Index(s, k); i >= 0 {
+			s = s[:i]
+		}
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		q := s[i]
+		if q != '\'' && q != '"' {
+			b.WriteByte(q)
+			continue
+		}
+		b.WriteString("…") // the quoted segment, or the rest of an unterminated one
+		if j := strings.IndexByte(s[i+1:], q); j >= 0 {
+			i += j + 1
+		} else {
+			i = len(s)
+		}
+	}
+	out := strings.Join(strings.Fields(b.String()), " ")
+	if len(out) > maxHuman {
+		out = out[:maxHuman]
+		for len(out) > 0 && !utf8.ValidString(out) {
+			out = out[:len(out)-1]
+		}
+	}
+	return out
 }
 
 func errMismatch(diffs []Diff) *Error {
