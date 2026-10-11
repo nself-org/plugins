@@ -35,16 +35,21 @@ type fakeExec struct {
 	psqlDies bool     // the interactive session ends before the sentinel
 	psqlErr  string   // its stderr
 
-	dump         []byte
-	dumpErr      error  // pg_dump fails after writing dump
-	verifyErr    error  // the connectionless pg_restore -f /dev/null fails
-	verifyStderr string // and prints this
-	killSession  bool   // pg_dump ends the holding session while it runs
-	waitErr      error  // Wait of the holding session fails (COMMIT and quit)
-	onRestore    func()
-	restoreErr   string
-	restoreRC    error
-	restored     []byte
+	dump           []byte
+	dumpErr        error  // pg_dump fails after writing dump
+	verifyErr      error  // the connectionless pg_restore -f /dev/null fails
+	verifyStderr   string // and prints this
+	killSession    bool   // pg_dump ends the holding session while it runs
+	waitErr        error  // Wait of the holding session fails (COMMIT and quit)
+	noMarker       bool
+	rc             string
+	ns             string
+	verifyShort    bool
+	verifyNoMarker bool
+	onRestore      func()
+	restoreErr     string
+	restoreRC      error
+	restored       []byte
 }
 
 func newFake() *fakeExec {
@@ -79,9 +84,9 @@ func kindOf(argv []string) string {
 	switch {
 	case strings.Contains(s, "pg_restore -f /dev/null"):
 		return "pg_verify"
-	case strings.Contains(s, "exec pg_dump"):
+	case strings.Contains(s, "pg_dump -U"):
 		return "pg_dump"
-	case strings.Contains(s, "exec pg_restore"):
+	case strings.Contains(s, "pg_restore -U"):
 		return "pg_restore"
 	}
 	return "psql"
@@ -94,7 +99,12 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 	}
 	in := ""
 	if stdin != nil {
-		b, _ := io.ReadAll(stdin)
+		var b []byte
+		if k == "pg_verify" && f.verifyShort {
+			b, _ = io.ReadAll(io.LimitReader(stdin, 4)) // closes early: reads 4 bytes only
+		} else {
+			b, _ = io.ReadAll(stdin)
+		}
 		in = string(b)
 		if k == "pg_restore" || k == "pg_verify" {
 			f.restored = b
@@ -105,6 +115,9 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 	switch k {
 	case "pg_dump":
 		_, _ = stdout.Write(f.dump)
+		if f.dumpErr == nil {
+			f.marker(stderr)
+		}
 		if f.killSession {
 			f.mu.Lock()
 			s := f.sessions[0]
@@ -116,9 +129,13 @@ func (f *fakeExec) Run(_ context.Context, argv []string, stdin io.Reader, stdout
 		return f.dumpErr
 	case "pg_verify":
 		_, _ = io.WriteString(stderr, f.verifyStderr)
+		if !f.verifyNoMarker {
+			f.marker(stderr)
+		}
 		return f.verifyErr
 	case "pg_restore":
 		_, _ = io.WriteString(stderr, f.restoreErr)
+		f.marker(stderr)
 		return f.restoreRC
 	}
 	for _, l := range f.postFps {
@@ -221,3 +238,18 @@ func (s *fakeSession) Wait() error {
 	return s.f.waitErr
 }
 func (s *fakeSession) Kill() { s.stop(); _ = s.outW.Close() }
+
+// marker prints the exit marker the pod script prints after pg_dump and pg_restore.
+func (f *fakeExec) marker(stderr io.Writer) {
+	if f.noMarker {
+		return
+	}
+	rc := f.rc
+	if rc == "" {
+		rc = "0"
+	}
+	_, _ = io.WriteString(stderr, "NSELF_RC="+rc+"\n")
+}
+
+// Namespace is the pod's namespace.
+func (f *fakeExec) Namespace() string { return f.ns }

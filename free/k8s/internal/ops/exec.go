@@ -47,7 +47,11 @@ type cmdExec struct {
 	bin    string
 	prefix []string
 	env    []string
+	ns     string // the pod's namespace, when known
 }
+
+// Namespace is the namespace of the pod commands run in ("" for docker).
+func (c *cmdExec) Namespace() string { return c.ns }
 
 func (c *cmdExec) command(ctx context.Context, argv []string) *exec.Cmd {
 	full := append(append([]string{}, c.prefix...), argv...)

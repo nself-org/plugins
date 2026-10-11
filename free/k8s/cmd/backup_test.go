@@ -31,16 +31,16 @@ if [ "$1" = "get" ]; then cat "$STUB_PODS"; exit 0; fi
 kind=""
 for a in "$@"; do
   case "$a" in
-    *"exec pg_dump"*) kind=dump ;;
-    *"exec pg_restore"*) kind=restore ;;
+    *"pg_dump -U"*) kind=dump ;;
+    *"pg_restore -U"*) kind=restore ;;
     *"exec psql"*) kind=psql ;;
     *"pg_restore -f /dev/null"*) kind=verify ;;
   esac
 done
 case "$kind" in
-  dump) cat "$STUB_DUMP" ;;
-  verify) cat >/dev/null ;;
-  restore) cat >/dev/null; if [ -n "$STUB_RESTORE_ERR" ]; then echo "$STUB_RESTORE_ERR" >&2; exit 1; fi ;;
+  dump) cat "$STUB_DUMP"; echo "NSELF_RC=0" >&2 ;;
+  verify) cat >/dev/null; echo "NSELF_RC=0" >&2 ;;
+  restore) cat >/dev/null; if [ -n "$STUB_RESTORE_ERR" ]; then echo "$STUB_RESTORE_ERR" >&2; exit 1; fi; echo "NSELF_RC=0" >&2 ;;
   psql)
     if [ "$STUB_MODE" = "backup" ]; then
       while IFS= read -r line; do
@@ -57,7 +57,7 @@ esac
 exit 0
 `
 
-const onePod = `{"items":[{"metadata":{"name":"postgres-0"},"status":{"phase":"Running","containerStatuses":[{"name":"postgres","ready":true}]}}]}`
+const onePod = `{"items":[{"metadata":{"name":"postgres-0","namespace":"pod-ns"},"status":{"phase":"Running","containerStatuses":[{"name":"postgres","ready":true}]}}]}`
 
 const fpLines = `{"schema":"auth","table":"users","rows":2,"sum":"11"}
 {"schema":"public","table":"Weird \"name\"","rows":1000,"sum":"-5"}

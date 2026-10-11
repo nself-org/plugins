@@ -100,12 +100,8 @@ func (p *Prepared) Run(ctx context.Context, ex Exec) (RestoreResult, error) {
 	ew := &errLineWriter{}
 	runErr := ex.Run(ctx, pgRestoreArgv, io.TeeReader(f, h), io.Discard, ew)
 	ew.flush()
-	if runErr != nil || ew.count > 0 {
-		cause := ew.first
-		if cause == "" {
-			cause = exitCause(runErr)
-		}
-		return res, errRestore(cause)
+	if runErr != nil || ew.count > 0 || !ew.finished() {
+		return res, errRestore(ew.failure(runErr))
 	}
 	if hex.EncodeToString(h.Sum(nil)) != p.meta.SHA256 {
 		return res, errChangedDuringRestore()
@@ -145,15 +141,22 @@ func ReadFingerprints(ctx context.Context, ex Exec) ([]Fingerprint, error) {
 	return parseFingerprints(strings.Split(out.String(), "\n"))
 }
 
-// errLineWriter reads pg_restore's stderr line by line, counting error lines and
-// keeping the first one. It holds at most one partial line.
+// errLineWriter reads a pod command's stderr line by line. It counts error lines, keeps the
+// first one, and tracks the exit marker (rcMarker): how many marker lines there were, the
+// last status and whether the marker was the last non-empty line. It holds at most one
+// partial line, so a marker split across writes is parsed once and memory stays bounded.
 type errLineWriter struct {
 	partial []byte
 	count   int
 	first   string
+	rcCount int
+	rc      string
+	rcLast  bool
 }
 
 const maxLine = 4096
+
+const rcPrefix = "NSELF_RC="
 
 func (w *errLineWriter) Write(p []byte) (int, error) {
 	for _, c := range p {
@@ -177,11 +180,53 @@ func (w *errLineWriter) flush() {
 func (w *errLineWriter) line() {
 	l := strings.TrimSpace(string(w.partial))
 	w.partial = w.partial[:0]
+	if l == "" {
+		return
+	}
+	if v, ok := strings.CutPrefix(l, rcPrefix); ok && isDigits(v) {
+		w.rcCount++
+		w.rc = v
+		w.rcLast = true
+		return
+	}
+	w.rcLast = false
 	low := strings.ToLower(l)
-	if strings.HasPrefix(low, "pg_restore: error:") || strings.HasPrefix(low, "error:") {
+	if strings.HasPrefix(low, "pg_restore: error:") || strings.HasPrefix(low, "pg_dump: error:") || strings.HasPrefix(low, "error:") {
 		w.count++
 		if w.first == "" {
 			w.first = l
 		}
 	}
+}
+
+func isDigits(s string) bool {
+	if s == "" || len(s) > 3 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// finished reports whether the command in the pod proved that it ran to the end with
+// status 0: exactly one marker line, NSELF_RC=0, and it is the last line on stderr.
+func (w *errLineWriter) finished() bool { return w.rcCount == 1 && w.rc == "0" && w.rcLast }
+
+// failure describes why a pod command is not a success, for a Cause: its first error
+// line, else the marker state, else the local exit status.
+func (w *errLineWriter) failure(runErr error) string {
+	switch {
+	case w.first != "":
+		return w.first
+	case runErr != nil:
+		return exitCause(runErr)
+	case w.rcCount == 0:
+		return "the command in the pod did not report an exit status: the stream was cut off"
+	case w.rc != "0":
+		return "the command in the pod exited with status " + w.rc
+	}
+	return "the command in the pod did not end cleanly"
 }

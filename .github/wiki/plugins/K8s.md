@@ -220,17 +220,21 @@ inside SQL from `pg_catalog` with `format('%I', ...)`, so odd table names are qu
 input. The session pins `TimeZone`, `DateStyle`, `IntervalStyle`, `extra_float_digits` and `bytea_output` so a row has the same
 text at backup and at restore.
 
-Backup reads the fingerprints in a `REPEATABLE READ READ ONLY` session that exports a snapshot, and `pg_dump --snapshot` streams
-from that snapshot, so dump and fingerprints describe the same moment even while the database is written. Restore reads the
+Backup reads the fingerprints in a `REPEATABLE READ READ ONLY` session that exports a snapshot, takes `ACCESS SHARE` locks on
+every covered table (as `pg_dump` does) before it reads any fingerprint, and `pg_dump --snapshot` streams from that snapshot, so dump and fingerprints describe the same moment even while the database is written. Restore reads the
 fingerprints in one `REPEATABLE READ` transaction after `pg_restore` and compares them with the sidecar. A writer that changes
 data during the restore makes them differ: stop the writers first (scale the apps down) or expect E737.
+
+A `TRUNCATE` or table rewrite that commits between the snapshot export and the lock on its table is not seen by the backup (the same window `pg_dump --snapshot` has). Every psql session lifts `statement_timeout`, `lock_timeout` and `idle_in_transaction_session_timeout` first, so a database or role setting cannot cut the long-running sessions.
 
 If the psql session that holds the snapshot ends while `pg_dump` is still running, the backup fails (E732). If it ends or its
 `COMMIT` fails after `pg_dump` exited 0, the backup is kept and a warning is printed (`meta.warnings` with `--json`): the
 snapshot was imported and the fingerprints were read before the dump started.
 
+`kubectl exec` can exit 0 when the stream to the pod was cut off, so `pg_dump`, `pg_restore` and the check below run inside a pod script that prints `NSELF_RC=<status>` to stderr when the command ends. A step counts as done only with exactly one `NSELF_RC=0` line, last on stderr; a missing or non-zero marker is E732 (dump and check) or E736 (restore).
+
 After the dump is written, backup streams the stored file back into the pod through `pg_restore -f /dev/null` (no database
-connection). A truncated or corrupt archive fails there (E732), the dump is removed and no sidecar is written, so a recorded
+connection). It must read the whole file. A truncated or corrupt archive fails there (E732), the dump is removed and no sidecar is written, so a recorded
 checksum always belongs to a file that was proven readable when it was made.
 
 ### What the fingerprint does not prove
@@ -246,7 +250,7 @@ before treating E737 as data loss.
 1. The dump must exist and its sidecar must be valid (E734). A dump made by `nself backup create` has no sidecar and is refused.
 2. The size and sha256 of the file must equal the sidecar's (E735). A tampered or truncated file stops here. Steps 1 and 2 run
    before kubectl is looked up, so a bad file never touches the cluster. If the backup's release or namespace differs from
-   `--release` or `--namespace`, restore prints a warning naming both and goes on.
+   `--release` or the target pod's real namespace, restore prints a warning naming both and goes on. The sidecar records the namespace of the pod the backup read (not the `--namespace` flag).
 3. `pg_restore --clean --if-exists` runs. If the file changes while it streams (its hash then differs), the result is E735
    with the message that `pg_restore` ran and the database state is not verified. Any `pg_restore: error:` line or a non-zero exit is E736.
 4. The fingerprints are compared (E737 on any difference, up to 20 listed). Success is printed only after this step.
@@ -296,7 +300,7 @@ failure still prints `Error: <message>` and exits 1, except the uninstall and re
 | E733 | infra (2) | The fingerprint query failed (before the dump, or after a restore) |
 | E734 | user (1) | The backup file or its `.meta` sidecar is missing, unreadable or invalid. Nothing ran in the pod |
 | E735 | infra (2) | The dump does not match the checksum or size in its sidecar; nothing was restored. Or the file changed while it streamed: `pg_restore` ran and the database state is not verified |
-| E736 | infra (2) | `pg_restore` printed an error line or exited non-zero (`cause` is the first error line). The database state is not verified |
+| E736 | infra (2) | `pg_restore` printed an error line, exited non-zero, or did not report `NSELF_RC=0` (`cause` is the first error line or the marker state). The database state is not verified |
 | E737 | infra (2) | After the restore the fingerprints differ from the backup's (`cause` lists up to 20 tables). Never reported as success |
 | E738 | user (1) | The backup target cannot be resolved: `PROJECT_NAME` missing or not a plain name, a bad `--tag`, or the output file already exists (its own remediation: choose another `--output` or `--tag`) |
 

@@ -6,7 +6,8 @@
 // pg_restore reading the dump on stdin, and a connectionless pg_restore that only
 // verifies a dump is readable.
 //
-// Constraints: every command is `sh -c '<fixed script>'`. The script reads the
+// Constraints: every command is `sh -c '<fixed script>'` (pg_dump and pg_restore are not
+// exec'd: the script stays alive to print the exit marker). The script reads the
 // connection settings from the pod's own environment (POSTGRES_USER, POSTGRES_DB,
 // POSTGRES_PASSWORD, as the postgres image and the chart define them), so no
 // value is ever on an argv here or in kubectl's. SQL goes on stdin, never argv.
@@ -16,16 +17,21 @@ package ops
 
 import "regexp"
 
+// rcMarker follows pg_dump and pg_restore in the pod script: the real exit status goes to
+// stderr as one fixed line. kubectl exec can exit 0 when the stream was cut off, so the
+// marker (exactly one NSELF_RC=0 line, last on stderr) is the proof the command finished.
+const rcMarker = `; echo "NSELF_RC=$?" >&2`
+
 // podPrelude exports the password for libpq and resolves user and database with
 // the postgres image's own defaults.
 const podPrelude = `export PGPASSWORD="$POSTGRES_PASSWORD"; U="${POSTGRES_USER:-postgres}"; D="${POSTGRES_DB:-$U}"; `
 
 var (
 	psqlArgv      = []string{"sh", "-c", podPrelude + `exec psql -X -q -A -t -v ON_ERROR_STOP=1 -U "$U" -d "$D"`}
-	pgRestoreArgv = []string{"sh", "-c", podPrelude + `exec pg_restore -U "$U" -d "$D" --clean --if-exists`}
+	pgRestoreArgv = []string{"sh", "-c", podPrelude + `pg_restore -U "$U" -d "$D" --clean --if-exists` + rcMarker}
 	// pgVerifyArgv reads a whole dump from stdin and writes its SQL to /dev/null: no
 	// database connection, so it proves the archive is complete and readable.
-	pgVerifyArgv = []string{"sh", "-c", `exec pg_restore -f /dev/null`}
+	pgVerifyArgv = []string{"sh", "-c", `pg_restore -f /dev/null` + rcMarker}
 )
 
 // snapshotRe is the form of a snapshot id: 00000003-0000001B-1.
@@ -37,5 +43,5 @@ func pgDumpArgv(snapshot string) ([]string, bool) {
 	if !snapshotRe.MatchString(snapshot) {
 		return nil, false
 	}
-	return []string{"sh", "-c", podPrelude + `exec pg_dump -U "$U" -d "$D" -Fc --snapshot="$1"`, "sh", snapshot}, true
+	return []string{"sh", "-c", podPrelude + `pg_dump -U "$U" -d "$D" -Fc --snapshot="$1"` + rcMarker, "sh", snapshot}, true
 }

@@ -39,11 +39,12 @@ func NewKubectl(ctx context.Context, kubeconfig, namespace, release string) (Exe
 	if err := list.Run(ctx, getPodsArgv(kubeconfig, namespace, release), nil, &out, &serr); err != nil {
 		return nil, errPod("the postgres pod could not be looked up", exitCause(err))
 	}
-	pod, err := pickPod(out.Bytes())
+	pod, podNS, err := pickPod(out.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	return &cmdExec{bin: bin, prefix: execPrefix(kubeconfig, namespace, pod), env: env}, nil
+	// Exec in the pod's real namespace (what the lookup returned), not the flag.
+	return &cmdExec{bin: bin, prefix: execPrefix(kubeconfig, podNS, pod), env: env, ns: podNS}, nil
 }
 
 func kubeFlags(kubeconfig, namespace string) []string {
@@ -70,7 +71,8 @@ func execPrefix(kubeconfig, namespace, pod string) []string {
 type podList struct {
 	Items []struct {
 		Metadata struct {
-			Name string `json:"name"`
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 		} `json:"metadata"`
 		Status struct {
 			Phase             string `json:"phase"`
@@ -82,28 +84,29 @@ type podList struct {
 	} `json:"items"`
 }
 
-// pickPod returns the name of the single running, ready postgres pod in the
-// `kubectl get pods -o json` document.
-func pickPod(doc []byte) (string, error) {
+// pickPod returns the name and namespace of the single running, ready postgres pod in
+// the `kubectl get pods -o json` document.
+func pickPod(doc []byte) (string, string, error) {
 	var l podList
 	if err := json.Unmarshal(doc, &l); err != nil {
-		return "", errPod("the postgres pod list is not readable", "")
+		return "", "", errPod("the postgres pod list is not readable", "")
 	}
-	var ready []string
+	type podRef struct{ name, ns string }
+	var ready []podRef
 	for _, it := range l.Items {
 		if it.Status.Phase != "Running" {
 			continue
 		}
 		for _, c := range it.Status.ContainerStatuses {
 			if c.Name == postgresContainer && c.Ready {
-				ready = append(ready, it.Metadata.Name)
+				ready = append(ready, podRef{it.Metadata.Name, it.Metadata.Namespace})
 			}
 		}
 	}
 	if len(ready) != 1 {
-		return "", errPod(fmt.Sprintf("expected one running postgres pod, found %d (of %d matching)", len(ready), len(l.Items)), "")
+		return "", "", errPod(fmt.Sprintf("expected one running postgres pod, found %d (of %d matching)", len(ready), len(l.Items)), "")
 	}
-	return ready[0], nil
+	return ready[0].name, ready[0].ns, nil
 }
 
 // exitCause renders a process error as its exit status only.
@@ -112,4 +115,13 @@ func exitCause(err error) string {
 		return ee.Error()
 	}
 	return "the command could not be started"
+}
+
+// PodNamespace returns the real namespace of the pod behind ex ("" when ex does not know,
+// as with the docker exec of the integration test).
+func PodNamespace(ex Exec) string {
+	if n, ok := ex.(interface{ Namespace() string }); ok {
+		return n.Namespace()
+	}
+	return ""
 }

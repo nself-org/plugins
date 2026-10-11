@@ -239,3 +239,23 @@ func TestPrepareRestoreChecksWithoutACluster(t *testing.T) {
 	_, err = PrepareRestore(path)
 	wantCode(t, err, CodeBackupInvalid)
 }
+
+func TestRestoreRequiresTheExitMarker(t *testing.T) {
+	for name, set := range map[string]func(*fakeExec){
+		"stream cut off (exit 0, no marker)": func(f *fakeExec) { f.noMarker = true },
+		"marker rc 1":                        func(f *fakeExec) { f.rc = "1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, path := madeBackup(t)
+			set(f)
+			res, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
+			oe := wantCode(t, err, CodeRestoreFailed)
+			if res.File != "" || f.count("psql") != 0 {
+				t.Errorf("success or fingerprint read after an unproven restore: %+v", res)
+			}
+			if !strings.Contains(oe.Cause, "exited with status") && !strings.Contains(oe.Cause, "stream was cut off") {
+				t.Errorf("cause = %q", oe.Cause)
+			}
+		})
+	}
+}

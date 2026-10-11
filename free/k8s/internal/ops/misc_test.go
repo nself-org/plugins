@@ -33,8 +33,11 @@ func TestCompareIsDeterministic(t *testing.T) {
 }
 
 func TestFingerprintSQLQuotesEveryIdentifierInSQL(t *testing.T) {
-	for _, must := range []string{"%I.%I", "%L::text", "relkind = 'r'", "'pg_catalog', 'information_schema'", `pg\_toast%`, `pg\_temp\_%`, "ORDER BY n.nspname, c.relname", `\gexec`,
-		"count(*)", "md5(nself_fp_row::text)", "::bit(64)::bigint"} {
+	if !strings.HasPrefix(sessionPrelude, "SET statement_timeout = 0;") {
+		t.Error("the timeouts are not reset first")
+	}
+	for _, must := range []string{"%1$I.%2$I", "%1$L::text", "AS %3$I", "nself_fp_' || c.oid", "attname ~", "relkind = 'r'", "'pg_catalog', 'information_schema'", `pg\_toast%`, `pg\_temp\_%`, "ORDER BY n.nspname, c.relname", `\gexec`,
+		"count(*)", "md5(%3$I::text)", "::bit(64)::bigint"} {
 		if !strings.Contains(fingerprintSQL, must) {
 			t.Errorf("fingerprint SQL lacks %q", must)
 		}
@@ -43,7 +46,7 @@ func TestFingerprintSQLQuotesEveryIdentifierInSQL(t *testing.T) {
 	if strings.Contains(fingerprintSQL, "%s") {
 		t.Error("fingerprint SQL splices a Go string verb")
 	}
-	for _, pin := range []string{"TimeZone = 'UTC'", "DateStyle = 'ISO, MDY'", "IntervalStyle = 'postgres'", "extra_float_digits = 3", "bytea_output = 'hex'"} {
+	for _, pin := range []string{"SET statement_timeout = 0;", "SET lock_timeout = 0;", "SET idle_in_transaction_session_timeout = 0;", "TimeZone = 'UTC'", "DateStyle = 'ISO, MDY'", "IntervalStyle = 'postgres'", "extra_float_digits = 3", "bytea_output = 'hex'"} {
 		if !strings.Contains(sessionPrelude, pin) {
 			t.Errorf("session prelude lacks %q", pin)
 		}
@@ -114,13 +117,13 @@ func TestResolveTarget(t *testing.T) {
 }
 
 const podDoc = `{"items":[
- {"metadata":{"name":"postgres-0"},"status":{"phase":"Running","containerStatuses":[{"name":"postgres","ready":true}]}},
+ {"metadata":{"name":"postgres-0","namespace":"real-ns"},"status":{"phase":"Running","containerStatuses":[{"name":"postgres","ready":true}]}},
  {"metadata":{"name":"old"},"status":{"phase":"Succeeded","containerStatuses":[{"name":"postgres","ready":false}]}},
  {"metadata":{"name":"unready"},"status":{"phase":"Running","containerStatuses":[{"name":"postgres","ready":false}]}}]}`
 
 func TestPickPod(t *testing.T) {
-	if p, err := pickPod([]byte(podDoc)); err != nil || p != "postgres-0" {
-		t.Errorf("pod = %q, %v", p, err)
+	if p, ns, err := pickPod([]byte(podDoc)); err != nil || p != "postgres-0" || ns != "real-ns" {
+		t.Errorf("pod = %q ns = %q, %v", p, ns, err)
 	}
 	for name, doc := range map[string]string{
 		"none":      `{"items":[]}`,
@@ -129,13 +132,13 @@ func TestPickPod(t *testing.T) {
 		"not json":  `<html>`,
 		"wrong ctr": `{"items":[{"metadata":{"name":"a"},"status":{"phase":"Running","containerStatuses":[{"name":"sidecar","ready":true}]}}]}`,
 	} {
-		_, err := pickPod([]byte(doc))
+		_, _, err := pickPod([]byte(doc))
 		oe := wantCode(t, err, CodePodNotFound)
 		if oe.Class != ClassUser {
 			t.Errorf("%s: class %s", name, oe.Class)
 		}
 	}
-	_, err := pickPod([]byte(`{"items":[]}`))
+	_, _, err := pickPod([]byte(`{"items":[]}`))
 	if !strings.Contains(err.Error(), "found 0") {
 		t.Errorf("message = %v", err)
 	}
@@ -168,5 +171,55 @@ func TestCleanEnvDropsNselfVariables(t *testing.T) {
 	got := cleanEnv([]string{"PATH=/bin", "NSELF_PLUGIN_LICENSE_KEY=x", "HOME=/h", "NSELF_X=1"})
 	if strings.Join(got, ",") != "PATH=/bin,HOME=/h" {
 		t.Errorf("env = %v", got)
+	}
+}
+
+func TestLockSQLCoversTheSameTablesAsTheFingerprint(t *testing.T) {
+	for _, must := range []string{"LOCK TABLE %I.%I IN ACCESS SHARE MODE", `\gexec`, "relkind = 'r'", `pg\_toast%`, "ORDER BY n.nspname, c.relname"} {
+		if !strings.Contains(lockSQL, must) {
+			t.Errorf("lock SQL lacks %q", must)
+		}
+	}
+	for _, shared := range []string{coveredFrom, coveredWhere, coveredOrder} {
+		if !strings.Contains(lockSQL, shared) || !strings.Contains(fingerprintSQL, shared) {
+			t.Errorf("lock and fingerprint SQL do not share %q", shared)
+		}
+	}
+}
+
+func TestErrLineWriterExitMarker(t *testing.T) {
+	cases := map[string]struct {
+		in       []string
+		finished bool
+	}{
+		"happy":            {[]string{"NSELF_RC=0\n"}, true},
+		"split across":     {[]string{"NSELF_", "RC=", "0", "\n"}, true},
+		"no newline":       {[]string{"NSELF_RC=0"}, true},
+		"warning before":   {[]string{"pg_restore: warning: x\nNSELF_RC=0\n"}, true},
+		"missing":          {[]string{"pg_restore: warning: x\n"}, false},
+		"rc 1":             {[]string{"NSELF_RC=1\n"}, false},
+		"twice":            {[]string{"NSELF_RC=0\nNSELF_RC=0\n"}, false},
+		"not last":         {[]string{"NSELF_RC=0\ncommand terminated\n"}, false},
+		"garbage value":    {[]string{"NSELF_RC=0x\n"}, false},
+		"zero then failed": {[]string{"NSELF_RC=0\nNSELF_RC=2\n"}, false},
+	}
+	for name, c := range cases {
+		w := &errLineWriter{}
+		for _, p := range c.in {
+			_, _ = w.Write([]byte(p))
+		}
+		w.flush()
+		if w.finished() != c.finished {
+			t.Errorf("%s: finished = %v, want %v", name, w.finished(), c.finished)
+		}
+	}
+}
+
+func TestPodScriptsPrintTheMarkerAndDoNotExec(t *testing.T) {
+	dump, _ := pgDumpArgv("00000003-0000001B-1")
+	for name, argv := range map[string][]string{"dump": dump, "restore": pgRestoreArgv, "verify": pgVerifyArgv} {
+		if !strings.Contains(argv[2], `echo "NSELF_RC=$?" >&2`) || strings.Contains(argv[2], "exec ") {
+			t.Errorf("%s script = %q", name, argv[2])
+		}
 	}
 }

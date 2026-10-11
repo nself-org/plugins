@@ -41,6 +41,9 @@ func TestRestoreWithoutYesIsRefusedAndRunsNothing(t *testing.T) {
 		if strings.Contains(r.Stdout+r.Stderr, "Restored") {
 			t.Errorf("%v: printed success", args)
 		}
+		if len(args) == 2 && !strings.Contains(r.Stderr, "Error: E403 ") {
+			t.Errorf("human refusal lacks the code: %q", r.Stderr)
+		}
 		if len(args) == 3 {
 			wantFailure(t, r.cliResult, "k8s restore", "E403", output.ClassDestructiveBlocked)
 		}
@@ -144,6 +147,13 @@ func TestRestoreWarnsWhenTargetDiffersFromBackup(t *testing.T) {
 	d := wantSuccess(t, r.cliResult, "k8s restore")
 	if len(d.Meta.Warnings) != 1 || !strings.Contains(d.Meta.Warnings[0], `"nself"`) || !strings.Contains(d.Meta.Warnings[0], `"other"`) {
 		t.Errorf("warnings = %q", d.Meta.Warnings)
+	}
+	// The namespace comes from the pod itself, not the flag: a different pod namespace warns.
+	other := strings.Replace(onePod, "pod-ns", "other-ns", 1)
+	n := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines, Pods: other}, "restore", file, "--yes", "--json")
+	nd := wantSuccess(t, n.cliResult, "k8s restore")
+	if len(nd.Meta.Warnings) != 1 || !strings.Contains(nd.Meta.Warnings[0], `"pod-ns"`) || !strings.Contains(nd.Meta.Warnings[0], `"other-ns"`) {
+		t.Errorf("namespace warnings = %q", nd.Meta.Warnings)
 	}
 	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes", "--release", "other")
 	if h.Exit != 0 {

@@ -113,8 +113,8 @@ func TestBackupSnapshotHandshakeOrder(t *testing.T) {
 		t.Errorf("pg_dump argv = %q: snapshot must be the positional parameter", last)
 	}
 	script := f.sessions[0].in.text()
-	order := []string{"SET TimeZone = 'UTC'", "SET bytea_output = 'hex'", "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;",
-		"SELECT pg_export_snapshot();", "SHOW server_version_num;", `\gexec`, `\echo NSELF_FP_DONE_test`, "COMMIT;", `\q`}
+	order := []string{"SET statement_timeout = 0;", "SET lock_timeout = 0;", "SET idle_in_transaction_session_timeout = 0;", "SET TimeZone = 'UTC'", "SET bytea_output = 'hex'", "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;",
+		"SELECT pg_export_snapshot();", "LOCK TABLE %I.%I IN ACCESS SHARE MODE", "SHOW server_version_num;", `\gexec`, `\echo NSELF_FP_DONE_test`, "COMMIT;", `\q`}
 	pos := -1
 	for _, want := range order {
 		i := strings.Index(script[pos+1:], want)
@@ -324,5 +324,85 @@ func TestBoundedBufferConcurrentWriteAndRead(t *testing.T) {
 	<-done
 	if len(b.String()) > 128 {
 		t.Error("buffer exceeds its bound")
+	}
+}
+
+func TestBackupRequiresTheExitMarkerOfPgDump(t *testing.T) {
+	for name, set := range map[string]func(*fakeExec){
+		"no marker":   func(f *fakeExec) { f.noMarker = true },
+		"marker rc 1": func(f *fakeExec) { f.rc = "1" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFake()
+			set(f)
+			o := backupOpts(f, t.TempDir())
+			_, err := Backup(context.Background(), o)
+			wantCode(t, err, CodeBackupFailed)
+			if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
+				t.Error("the dump was kept")
+			}
+			if _, e := os.Stat(MetaPath(o.Path)); !os.IsNotExist(e) {
+				t.Error("a sidecar was written")
+			}
+			if f.count("pg_verify") != 0 {
+				t.Error("the check ran on a dump that did not finish")
+			}
+		})
+	}
+}
+
+func TestBackupVerifyNeedsMarkerAndWholeFile(t *testing.T) {
+	cases := map[string]struct {
+		set   func(*fakeExec)
+		cause string
+	}{
+		"no marker":          {func(f *fakeExec) {}, "did not report an exit status"},
+		"stdin closed early": {func(f *fakeExec) { f.verifyShort = true }, "did not read the whole file"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newFake()
+			if name == "no marker" {
+				// only the check lacks the marker: the dump step still prints it
+				f.verifyErr = nil
+				f.verifyNoMarker = true
+			}
+			c.set(f)
+			o := backupOpts(f, t.TempDir())
+			_, err := Backup(context.Background(), o)
+			oe := wantCode(t, err, CodeBackupFailed)
+			if !strings.Contains(oe.Cause, c.cause) {
+				t.Errorf("cause = %q, want %q", oe.Cause, c.cause)
+			}
+			if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
+				t.Error("the dump was kept")
+			}
+			if _, e := os.Stat(MetaPath(o.Path)); !os.IsNotExist(e) {
+				t.Error("a sidecar was written")
+			}
+		})
+	}
+}
+
+func TestBackupRecordsThePodsRealNamespace(t *testing.T) {
+	f := newFake()
+	f.ns = "pod-ns"
+	o := backupOpts(f, t.TempDir())
+	o.Namespace = "from-flag"
+	if _, err := Backup(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	m, err := readMeta(o.Path)
+	if err != nil || m.Namespace != "pod-ns" {
+		t.Errorf("namespace = %q, %v", m.Namespace, err)
+	}
+	f2 := newFake() // an Exec that does not know its namespace falls back to the flag
+	o2 := backupOpts(f2, t.TempDir())
+	o2.Namespace = "from-flag"
+	if _, err := Backup(context.Background(), o2); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := readMeta(o2.Path); m.Namespace != "from-flag" {
+		t.Errorf("fallback namespace = %q", m.Namespace)
 	}
 }

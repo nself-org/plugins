@@ -113,16 +113,17 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	created = true
 	h := sha256.New()
 	cw := &countWriter{}
-	dumpErr := newBounded(stderrKeep)
+	dumpErr := &errLineWriter{}
 	runErr := o.Exec.Run(ctx, argv, nil, io.MultiWriter(f, h, cw), dumpErr)
+	dumpErr.flush()
 	if serr := f.Sync(); runErr == nil && serr != nil {
 		runErr = serr
 	}
 	if cerr := f.Close(); runErr == nil && cerr != nil {
 		runErr = cerr
 	}
-	if runErr != nil {
-		err = errBackup(exitCause(runErr) + ": " + errorLine(dumpErr.String()))
+	if runErr != nil || dumpErr.count > 0 || !dumpErr.finished() {
+		err = errBackup(dumpErr.failure(runErr))
 		return res, err
 	}
 	if cw.n == 0 {
@@ -137,7 +138,7 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	}
 	// The dump is complete: read it back through pg_restore (no database) to prove it is a
 	// whole, readable archive before it gets a checksum and a sidecar.
-	if err = verifyDump(ctx, o.Exec, o.Path); err != nil {
+	if err = verifyDump(ctx, o.Exec, o.Path, cw.n); err != nil {
 		return res, err
 	}
 	// pg_dump exited 0, so the snapshot was imported and the fingerprints were read before
@@ -147,7 +148,7 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	}
 	meta := Meta{SchemaVersion: metaVersion, Kind: metaKind, Project: o.Project, File: filepath.Base(o.Path),
 		Bytes: cw.n, SHA256: hex.EncodeToString(h.Sum(nil)), CreatedAt: o.Now().UTC().Format(time.RFC3339),
-		ServerVersion: version, Release: o.Release, Namespace: o.Namespace, Fingerprints: fps}
+		ServerVersion: version, Release: o.Release, Namespace: podNamespace(o), Fingerprints: fps}
 	if werr := writeMeta(o.Path, meta); werr != nil {
 		err = errBackup("the metadata file could not be written")
 		return res, err
@@ -162,6 +163,7 @@ func openSnapshot(sess Session, stderr *boundedBuffer) (snap, version string, fp
 	script := sessionPrelude +
 		"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\n" +
 		"SELECT pg_export_snapshot();\n" +
+		lockSQL +
 		"SHOW server_version_num;\n" +
 		fingerprintSQL +
 		"\\echo " + sentinel + "\n"
@@ -217,27 +219,48 @@ func finishSession(sess Session, eof <-chan struct{}, ended *bool) error {
 }
 
 // verifyDump streams the stored file into `pg_restore -f /dev/null` in the pod. A
-// truncated or corrupt archive fails there (E732); the caller removes the file.
-func verifyDump(ctx context.Context, ex Exec, path string) error {
+// truncated or corrupt archive fails there (E732); the caller removes the file. The
+// check must have read the whole file (size bytes) and the pod must report exit status 0.
+func verifyDump(ctx context.Context, ex Exec, path string, size int64) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return errBackup("the finished dump cannot be read back")
 	}
 	defer func() { _ = f.Close() }()
+	in := &countReader{r: f}
 	ew := &errLineWriter{}
-	runErr := ex.Run(ctx, pgVerifyArgv, f, io.Discard, ew)
+	runErr := ex.Run(ctx, pgVerifyArgv, in, io.Discard, ew)
 	ew.flush()
-	if runErr != nil || ew.count > 0 {
-		cause := ew.first
-		if cause == "" {
-			cause = exitCause(runErr)
-		}
-		return errBackup("the dump is not a complete archive: " + cause)
+	if runErr != nil || ew.count > 0 || !ew.finished() {
+		return errBackup("the dump is not a complete archive: " + ew.failure(runErr))
+	}
+	if in.n != size {
+		return errBackup("the dump check did not read the whole file")
 	}
 	return nil
+}
+
+// countReader counts the bytes read from r.
+type countReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // countWriter counts the bytes written to it.
 type countWriter struct{ n int64 }
 
 func (c *countWriter) Write(p []byte) (int, error) { c.n += int64(len(p)); return len(p), nil }
+
+// podNamespace is the namespace recorded in the sidecar: the pod's real one, else the flag.
+func podNamespace(o BackupOptions) string {
+	if ns := PodNamespace(o.Exec); ns != "" {
+		return ns
+	}
+	return o.Namespace
+}

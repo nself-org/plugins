@@ -23,19 +23,41 @@ import (
 	"strings"
 )
 
-// sessionPrelude pins everything that changes how a row prints as text.
-const sessionPrelude = "SET TimeZone = 'UTC';\nSET DateStyle = 'ISO, MDY';\nSET IntervalStyle = 'postgres';\nSET extra_float_digits = 3;\nSET bytea_output = 'hex';\n"
+// sessionPrelude opens every psql session of this package. The first three lines lift the
+// timeouts a database or role may set (pg_dump and pg_restore reset them too): the holding
+// session idles while pg_dump runs, and a fingerprint query on a large table can be slow.
+// The rest pins everything that changes how a row prints as text.
+const sessionPrelude = "SET statement_timeout = 0;\nSET lock_timeout = 0;\nSET idle_in_transaction_session_timeout = 0;\n" +
+	"SET TimeZone = 'UTC';\nSET DateStyle = 'ISO, MDY';\nSET IntervalStyle = 'postgres';\nSET extra_float_digits = 3;\nSET bytea_output = 'hex';\n"
 
-// fingerprintSQL generates one query per table and runs it with \gexec. The
-// whole-row alias has a name no column plausibly has (a column called like the
-// alias would win over the whole-row reference).
-const fingerprintSQL = `SELECT format('SELECT json_build_object(''schema'', %L::text, ''table'', %L::text, ''rows'', count(*), ''sum'', coalesce(sum((''x'' || substr(md5(nself_fp_row::text), 1, 16))::bit(64)::bigint), 0)::text)::text FROM %I.%I AS nself_fp_row', n.nspname, c.relname, n.nspname, c.relname)
-FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND n.nspname NOT LIKE 'pg\_toast%' AND n.nspname NOT LIKE 'pg\_temp\_%'
-ORDER BY n.nspname, c.relname
-\gexec
-`
+// The tables the fingerprint covers: ordinary tables (partitions included) outside
+// pg_catalog, information_schema, pg_toast* and pg_temp_*. The query is split so the
+// lock and fingerprint statements share one definition.
+const (
+	coveredFrom  = "\nFROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace"
+	coveredWhere = "\nWHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'information_schema')" +
+		"\n  AND n.nspname NOT LIKE 'pg\\_toast%' AND n.nspname NOT LIKE 'pg\\_temp\\_%'"
+	coveredOrder = "\nORDER BY n.nspname, c.relname\n"
+)
+
+// lockSQL takes ACCESS SHARE on every covered table, as pg_dump does, right after the
+// snapshot is exported and before any fingerprint is read: a later TRUNCATE, rewrite or
+// DDL waits for the holding session. (A TRUNCATE that commits before its table is locked
+// is the same window pg_dump --snapshot has.)
+const lockSQL = "SELECT format('LOCK TABLE %I.%I IN ACCESS SHARE MODE', n.nspname, c.relname)" +
+	coveredFrom + coveredWhere + coveredOrder + "\\gexec\n"
+
+// fingerprintSQL generates one query per table and runs it with \gexec. The whole-row alias
+// is 'nself_fp_' + the table oid, plus as many trailing '_' as it takes to be longer than
+// every column name of that form, so no column of the table can shadow the whole-row
+// reference (a column wins over a same-named alias).
+const fingerprintSQL = "SELECT format('SELECT json_build_object(''schema'', %1$L::text, ''table'', %2$L::text, ''rows'', count(*), " +
+	"''sum'', coalesce(sum((''x'' || substr(md5(%3$I::text), 1, 16))::bit(64)::bigint), 0)::text)::text FROM %1$I.%2$I AS %3$I', " +
+	"n.nspname, c.relname, x.alias)" + coveredFrom +
+	"\nCROSS JOIN LATERAL (SELECT 'nself_fp_' || c.oid::text || repeat('_', coalesce((SELECT max(length(a.attname) - length('nself_fp_' || c.oid::text))" +
+	"\n  FROM pg_catalog.pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped" +
+	"\n  AND a.attname ~ ('^nself_fp_' || c.oid::text || '_*$')), -1) + 1) AS alias) x" +
+	coveredWhere + coveredOrder + "\\gexec\n"
 
 // Fingerprint is the content fingerprint of one table.
 type Fingerprint struct {

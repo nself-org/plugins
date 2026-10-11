@@ -66,13 +66,14 @@ Example:
 		if err != nil {
 			return r.failOps(err)
 		}
-		if w := prep.TargetWarning(release, namespace); w != "" {
-			r.warn(w)
-		}
 		r.info("Looking for the postgres pod of release " + release + "...")
 		ex, err := newExec(cmd.Context(), cluster, namespace, release)
 		if err != nil {
 			return r.failOps(err)
+		}
+		// Compare with the pod's real namespace (the --namespace flag may be empty).
+		if w := prep.TargetWarning(release, ops.PodNamespace(ex)); w != "" {
+			r.warn(w)
 		}
 		r.info("Restoring " + file + " (this replaces the database content)...")
 		res, err := prep.Run(cmd.Context(), ex)
@@ -97,7 +98,7 @@ func (r *invocation) refuseRestore(file string) error {
 	if r.json {
 		return r.emit(d)
 	}
-	return &exitErr{code: output.ExitCodeFor(d.Class), msg: d.Message + "; " + d.Remediation}
+	return &exitErr{code: output.ExitCodeFor(d.Class), msg: d.Code + " " + d.Message + "; " + d.Remediation}
 }
 
 func init() {

@@ -40,6 +40,11 @@ INSERT INTO public."Weird ""name""" VALUES (1, E'tab\there\nnewline'), (2, NULL)
 CREATE TABLE "Odd Schema"."t;DROP TABLE x" (a int);
 INSERT INTO "Odd Schema"."t;DROP TABLE x" VALUES (1), (2), (3);
 CREATE TABLE public.empty_t (a int);
+CREATE TABLE public.shadow (id int, nself_fp_row text);
+INSERT INTO public.shadow VALUES (1, 'a'), (2, 'a');
+CREATE TABLE public.shadow2 (id int);
+DO $$ BEGIN EXECUTE format('ALTER TABLE public.shadow2 ADD COLUMN %I text DEFAULT ''a''', 'nself_fp_' || 'public.shadow2'::regclass::oid::text); END $$;
+INSERT INTO public.shadow2 (id) VALUES (1), (2);
 CREATE TABLE public.big AS SELECT g::bigint AS id, (g %% 1000)::int AS v, md5(g::text) AS h FROM generate_series(1, 5000000) g;
 `
 
@@ -52,6 +57,10 @@ func TestIntegrationBackupRestoreRealPostgres(t *testing.T) {
 	ex := startPostgres(ctx, t)
 
 	sql(ctx, t, ex, strings.ReplaceAll(fixtureSQL, "%%", "%"))
+	// Timeouts a database may set: the sessions of this package must lift them. The
+	// fingerprint of the 5M-row table takes longer than a second, and the holding session
+	// idles in a transaction while pg_dump runs.
+	sql(ctx, t, ex, `ALTER DATABASE postgres SET statement_timeout = '1s'; ALTER DATABASE postgres SET idle_in_transaction_session_timeout = '1s'; ALTER DATABASE postgres SET lock_timeout = '1s';`)
 	dir := t.TempDir()
 	res, err := Backup(ctx, BackupOptions{Exec: ex, Path: dir + "/it_full_20261011_000000.dump", Project: "it", Release: "nself", Now: time.Now})
 	if err != nil {
@@ -62,7 +71,7 @@ func TestIntegrationBackupRestoreRealPostgres(t *testing.T) {
 		rows[f.Schema+"."+f.Table] = f.Rows
 	}
 	for name, want := range map[string]int64{"auth.users": 2, "storage.files": 500, `public.Weird "name"`: 2,
-		"Odd Schema.t;DROP TABLE x": 3, "public.empty_t": 0, "public.big": 5000000} {
+		"Odd Schema.t;DROP TABLE x": 3, "public.empty_t": 0, "public.big": 5000000, "public.shadow": 2, "public.shadow2": 2} {
 		if got, ok := rows[name]; !ok || got != want {
 			t.Errorf("fingerprint %q = %d (present %v), want %d", name, got, ok, want)
 		}
@@ -85,14 +94,20 @@ func TestIntegrationBackupRestoreRealPostgres(t *testing.T) {
 	}
 
 	// A change after the restore must show in the fingerprints.
-	sql(ctx, t, ex, `UPDATE storage.files SET size = size + 1 WHERE id = '00000000-0000-0000-0000-000000000001';`)
+	// A table with a column named nself_fp_row (or like the generated alias) is hashed whole,
+	// so a change in another column must show.
+	sql(ctx, t, ex, `UPDATE storage.files SET size = size + 1 WHERE id = '00000000-0000-0000-0000-000000000001'; UPDATE public.shadow SET id = 3 WHERE id = 1; UPDATE public.shadow2 SET id = 3 WHERE id = 1;`)
 	after, err := ReadFingerprints(ctx, ex)
 	if err != nil {
 		t.Fatal(err)
 	}
 	d := Compare(res.Tables, after)
-	if len(d) != 1 || d[0].Schema != "storage" || d[0].Table != "files" || d[0].Kind != DiffSum {
-		t.Errorf("diffs after tampering = %v, want one content difference on storage.files", d)
+	kinds := map[string]string{}
+	for _, x := range d {
+		kinds[x.Schema+"."+x.Table] = x.Kind
+	}
+	if len(d) != 3 || kinds["storage.files"] != DiffSum || kinds["public.shadow"] != DiffSum || kinds["public.shadow2"] != DiffSum {
+		t.Errorf("diffs after tampering = %v, want a content difference on storage.files, public.shadow and public.shadow2", d)
 	}
 }
 
