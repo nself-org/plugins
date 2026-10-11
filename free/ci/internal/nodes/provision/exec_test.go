@@ -109,15 +109,22 @@ func TestSSHExecutor_FailureWrapsOutput(t *testing.T) {
 
 func TestSSHExecutor_RefusesBeforeExec(t *testing.T) {
 	log := stubSSH(t, "exit 0")
+	// core's exact messages (cli internal/deploy RunRemoteCommand: empty host,
+	// then remote.ParseHostSpec); parity-nodes.sh compares them end to end (D-0270)
 	for _, tc := range []struct{ dest, want string }{
 		{"", "remote target has no SSH host configured"},
-		{"-oProxyCommand=x", "must not start with '-'"},
-		{"a b@host", "whitespace or a control character"},
-		{"ci@host;id", "unsafe character"},
+		{"-oProxyCommand=x", `invalid host "-oProxyCommand=x": host must not start with '-'`},
+		{"a b@host", `invalid host "a b@host": user must match [a-z_][a-z0-9_.-]{0,31}`},
+		{"ci@host;id", `invalid host "ci@host;id": host holds a byte outside [A-Za-z0-9_.-]`},
+		{"ci@a b", `invalid host "ci@a b": host holds a byte outside [A-Za-z0-9_.-]`},
+		{"ci@a\tb", `invalid host "ci@a\tb": host holds a byte outside [A-Za-z0-9_.-]`},
 	} {
 		ex := NewSSHExecutor(tc.dest, "/k")
-		if _, err := ex.Run(context.Background(), "echo"); err == nil || !strings.Contains(err.Error(), tc.want) {
-			t.Fatalf("dest %q: err=%v, want %q", tc.dest, err, tc.want)
+		if _, err := ex.Run(context.Background(), "echo"); err == nil || err.Error() != tc.want {
+			t.Fatalf("Run dest %q: err=%v, want %q", tc.dest, err, tc.want)
+		}
+		if _, err := ex.RunInput(context.Background(), "echo", "x\n"); err == nil || err.Error() != tc.want {
+			t.Fatalf("RunInput dest %q: err=%v, want %q", tc.dest, err, tc.want)
 		}
 	}
 	if _, err := os.Stat(log); err == nil {

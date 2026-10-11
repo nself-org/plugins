@@ -13,10 +13,12 @@ package provision
 //   sdk/go/v2, vendored): the plugin has no ssh or scp exec site of its own
 //   (TestSingleSSHExecSite). The ssh option set is remote.BaseOptions, the
 //   set core `nself runner` used through internal/deploy, so key resolution
-//   and StrictHostKeyChecking=accept-new are unchanged. Two deliberate
-//   differences from core, both from the sdk: the destination also passes
-//   remote.ValidateDest (an allowlist), and ssh gets "--" before the
-//   destination and runs with the sdk's environment allowlist.
+//   and StrictHostKeyChecking=accept-new are unchanged; a host is checked
+//   with core's remote.ParseHostSpec first, so refusals read as core's.
+//   Three deliberate differences from core: the destination also passes
+//   remote.ValidateDest (an allowlist), ssh gets "--" before the
+//   destination and runs with the sdk's environment allowlist (all from the
+//   sdk), and the runner token travels on stdin (RunInput, D-0263).
 
 import (
 	"bytes"
@@ -89,14 +91,21 @@ func NewSSHExecutor(sshTarget, keyPath string) SSHExecutor {
 	}
 }
 
-// Run implements Executor. The two checks before the sdk call are core's own
-// (empty host, then the legacy destination check) so their messages are
-// unchanged; the sdk then applies its stricter destination allowlist.
-func (e SSHExecutor) Run(ctx context.Context, command string) (string, error) {
+// checkDest applies core's two checks in core's order (cli internal/deploy
+// RunRemoteCommand: empty host, then remote.ParseHostSpec) so a malformed
+// host is refused with core's message (D-0270); the sdk then applies its
+// stricter destination allowlist.
+func (e SSHExecutor) checkDest() error {
 	if e.Target.Dest == "" {
-		return "", fmt.Errorf("remote target has no SSH host configured")
+		return fmt.Errorf("remote target has no SSH host configured")
 	}
-	if err := remote.ValidateLegacyDest(e.Target.Dest); err != nil {
+	_, err := remote.ParseHostSpec(e.Target.Dest)
+	return err
+}
+
+// Run implements Executor.
+func (e SSHExecutor) Run(ctx context.Context, command string) (string, error) {
+	if err := e.checkDest(); err != nil {
 		return "", err
 	}
 	return remote.Run(ctx, e.Target, command)
@@ -107,10 +116,7 @@ func (e SSHExecutor) Run(ctx context.Context, command string) (string, error) {
 // stderr gathered into one trimmed buffer, and a failure reported as
 // "remote command on <dest> failed" carrying the process's exit status.
 func (e SSHExecutor) RunInput(ctx context.Context, command, input string) (string, error) {
-	if e.Target.Dest == "" {
-		return "", fmt.Errorf("remote target has no SSH host configured")
-	}
-	if err := remote.ValidateLegacyDest(e.Target.Dest); err != nil {
+	if err := e.checkDest(); err != nil {
 		return "", err
 	}
 	s, err := remote.Start(ctx, e.Target, command)
