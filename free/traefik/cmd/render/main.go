@@ -16,7 +16,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/nself-org/plugins/free/traefik/internal/contract"
@@ -75,29 +74,6 @@ func run(args []string, errw io.Writer) int {
 		return 2
 	}
 	return 0
-}
-
-func writeAtomic(dir, name string, data []byte) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, "."+name+".*.tmp")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
 func serve(args []string, errw io.Writer) int {
