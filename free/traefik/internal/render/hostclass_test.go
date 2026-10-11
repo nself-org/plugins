@@ -128,6 +128,21 @@ func TestWildcardRedirectDoesNotOutrankExactHosts(t *testing.T) {
 	}
 }
 
+// Opus N3, nested form: the redirect of a short-suffix wildcard route stays inside its own tier, so a
+// longer wildcard's host (and its ACME location) is not redirected by the shorter one.
+func TestWildcardRedirectStaysBelowALongerWildcard(t *testing.T) {
+	outer := mkRoute(t, "hand:outer#1", []string{"*.example.test"}, loc(t, "proxy", "/", "prefix"))
+	outer.HTTPToHTTPSRedirect = true
+	inner := mkRoute(t, "hand:inner#1", []string{"*.a.example.test"}, loc(t, "proxy", "/", "prefix"))
+	out := mustRender(t, outer, inner)
+	if name, _ := winner(t, out, "web", reqIn{host: "x.a.example.test", path: "/"}); owner(name, outer.ID, inner.ID) != inner.ID {
+		t.Errorf("x.a.example.test must stay with the longer wildcard, got %s", name)
+	}
+	if name, _ := winner(t, out, "web", reqIn{host: "x.example.test", path: "/"}); !strings.HasSuffix(name, "-redirect-web") {
+		t.Errorf("x.example.test must be redirected by its own wildcard route, got %s", name)
+	}
+}
+
 // Opus N4 / lens 4: names compare and render in lower case; ".x" claims "x" and "*.x".
 func TestServerNamesAreCaseInsensitive(t *testing.T) {
 	a := mkRoute(t, "hand:a#1", []string{"a.example.test"}, loc(t, "proxy", "/", "prefix"))
