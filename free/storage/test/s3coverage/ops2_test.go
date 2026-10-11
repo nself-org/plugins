@@ -136,8 +136,8 @@ func TestOp_PutBucketCors(t *testing.T) {
 		t.Fatalf("PutBucketCors: %v", err)
 	}
 	gc, err := direct.GetBucketCors(ctx, &s3.GetBucketCorsInput{Bucket: aws.String(b)})
-	if err != nil || len(gc.CORSRules) != 1 {
-		t.Fatalf("GetBucketCors: %v (%d rules)", err, len(gc.CORSRules))
+	if err != nil || len(gc.CORSRules) != 1 || len(gc.CORSRules[0].AllowedOrigins) != 1 || gc.CORSRules[0].AllowedOrigins[0] != origin {
+		t.Fatalf("GetBucketCors did not return the rule that was set: %v %+v", err, gc)
 	}
 	code, hdr, _ := httpDo(t, http.MethodOptions, objectURL(b, "up.bin"), nil, map[string]string{
 		"Origin": origin, "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "content-type",
@@ -148,6 +148,11 @@ func TestOp_PutBucketCors(t *testing.T) {
 	if got := hdr.Get("Access-Control-Allow-Origin"); got != origin && got != "*" {
 		t.Fatalf("preflight Access-Control-Allow-Origin = %q, want %q", got, origin)
 	}
+	// Informational: an origin the rule does not list. Servers with a global CORS setting answer "*" here.
+	_, other, _ := httpDo(t, http.MethodOptions, objectURL(b, "up.bin"), nil, map[string]string{
+		"Origin": "https://other.example.test", "Access-Control-Request-Method": "PUT",
+	})
+	t.Logf("preflight ACAO: listed origin %q, unlisted origin %q", hdr.Get("Access-Control-Allow-Origin"), other.Get("Access-Control-Allow-Origin"))
 }
 
 func TestOp_ListObjectVersions(t *testing.T) {
