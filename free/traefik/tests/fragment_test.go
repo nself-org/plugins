@@ -76,6 +76,9 @@ func TestFragmentPolicy(t *testing.T) {
 	if !hasSSLRO(tr) {
 		t.Error("traefik does not mount ssl/ read-only")
 	}
+	if tr["read_only"] == true && !strings.Contains(toString(tr["tmpfs"]), "/tmp") {
+		t.Error("traefik runs read-only without a tmpfs on /tmp: request bodies over the buffering memory limit would fail")
+	}
 	cfg := services["traefik-config"].(map[string]any)
 	if !hasSSLRO(cfg) || cfg["restart"] != "no" {
 		t.Error("traefik-config must mount ssl/ read-only and run once (restart no)")
