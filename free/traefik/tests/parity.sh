@@ -8,8 +8,10 @@
 # static configuration the renderer wrote (--static-out) plus the test-only API; traefik-acme runs as the image's
 # non-root user. http-full also names one route for the upload entrypoint (:8444, readTimeout 120s).
 # Key-ownership case (P7-DEPL-27, D-0508): after the fixtures, tls-full is served again with every ssl/ private key 0600 and
-# owned by uid 1001 (what core issues on Linux), by a traefik container whose hardening flags are read from the compose
-# fragment itself (docker compose config), so the case follows the fragment. Set PARITY_KEYS_CASE=0 to skip it.
+# owned by uid 1001 (what core issues on Linux), by a traefik container whose user, capabilities and sysctls are read from
+# the compose fragment itself (docker compose config, with NSELF_HOST_UID/GID set to the key owner as core must), so the
+# case follows the fragment. The fix is "run as the key owner", not a capability: DAC_READ_SEARCH is refused (it also
+# allows open_by_handle_at, reading host files outside the container). Set PARITY_KEYS_CASE=0 to skip it.
 # Needs docker (with compose) and jq. Work files live in $PARITY_WORK (default: .parity-work next to this plugin) and are removed.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); PLUGIN=$(dirname "$HERE"); REPO=$(cd "$PLUGIN/../.." && pwd)
@@ -170,13 +172,14 @@ FRAG=$PLUGIN/docker-compose.plugin.yml
 keys_flags() { # print the docker run hardening flags of the traefik service, one per line, from the compose fragment
   jq -r '(if .read_only then "--read-only" else empty end),
     ((.tmpfs // [])[] | "--tmpfs\n" + .), ((.cap_drop // [])[] | "--cap-drop\n" + .), ((.cap_add // [])[] | "--cap-add\n" + .),
-    ((.security_opt // [])[] | "--security-opt\n" + .), (if .user then "--user\n" + (.user | tostring) else empty end)' <<<"$1"
+    ((.security_opt // [])[] | "--security-opt\n" + .),
+    ((.sysctls // {}) | to_entries[] | "--sysctl\n\(.key)=\(.value)"), (if .user then "--user\n" + (.user | tostring) else empty end)' <<<"$1"
 }
 keys_case() {
   local f=tls-full F D svc line flags=() ok=0
   F=$PLUGIN/testdata/fixtures/$f; D=$WORK/keys-$f; mkdir -p "$D/ssl" "$D/dynamic" "$D/static"
-  log "key ownership: $f with privkey.pem 0600 owned by uid $KEYUID, hardening flags from $(basename "$FRAG")"
-  svc=$(NSELF_PLUGIN_DIR=$(dirname "$PLUGIN") docker compose -f "$FRAG" config --format json | jq -c .services.traefik)
+  log "key ownership: $f with privkey.pem 0600 owned by uid $KEYUID, user, capabilities and sysctls from $(basename "$FRAG")"
+  svc=$(NSELF_PLUGIN_DIR=$(dirname "$PLUGIN") NSELF_HOST_UID=$KEYUID NSELF_HOST_GID=$KEYUID docker compose -f "$FRAG" config --format json | jq -c .services.traefik)
   [ -n "$svc" ] && [ "$svc" != null ] || { echo "FAIL: no traefik service in $FRAG"; exit 1; }
   if jq -e '[((.volumes // [])[] | ((.source // ""), (.target // ""))), ((.environment // {}) | to_entries[] | "\(.key)=\(.value)")]
       | any(test("docker\\.sock|DOCKER_HOST"))' <<<"$svc" >/dev/null; then echo "FAIL: the traefik service mounts or names the Docker socket"; exit 1; fi
@@ -201,7 +204,7 @@ keys_case() {
   docker run -d --name traefik --label "$LABEL" --network "$NET" ${flags[@]+"${flags[@]}"} -v "$D/traefik-test.yml:/etc/traefik/traefik.yml:ro" \
     -v "$D/dynamic:/dynamic:ro" -v "$D/ssl:/nself/ssl:ro" "$TRAEFIK_IMG" >/dev/null
 
-  log "docker inspect: capabilities, read-only root, no Docker socket"
+  log "docker inspect: operator uid, capabilities, read-only root, no Docker socket"
   local capadd capdrop ro user mounts
   capadd=$(docker inspect -f '{{json .HostConfig.CapAdd}}' traefik | jq -c 'map(sub("^CAP_"; "")) | sort')
   capdrop=$(docker inspect -f '{{json .HostConfig.CapDrop}}' traefik | jq -c 'map(sub("^CAP_"; "")) | sort')
@@ -212,12 +215,9 @@ keys_case() {
   [ "$capdrop" = '["ALL"]' ] || { echo "FAIL: CapDrop must be exactly [ALL]"; exit 1; }
   [ "$ro" = true ] || { echo "FAIL: ReadonlyRootfs must be true"; exit 1; }
   if grep -q 'docker\.sock' <<<"$mounts"; then echo "FAIL: the Docker socket is mounted"; exit 1; fi
-  case "$capadd" in
-    '["DAC_READ_SEARCH","NET_BIND_SERVICE"]') ;; # root in the container that may read what is mounted read-only
-    '["NET_BIND_SERVICE"]') # only acceptable as the owner of the keys, not as root
-      case "$user" in ""|0|0:*|root|root:*) echo "FAIL: CapAdd is only NET_BIND_SERVICE but traefik runs as root ($user): root cannot read 0600 keys it does not own"; exit 1 ;; esac ;;
-    *) echo "FAIL: CapAdd must be [DAC_READ_SEARCH, NET_BIND_SERVICE] (or a non-root User with only NET_BIND_SERVICE), got $capadd"; exit 1 ;;
-  esac
+  # DAC_READ_SEARCH is refused outright: it also authorises open_by_handle_at (host files outside the container).
+  [ "$capadd" = '["NET_BIND_SERVICE"]' ] || { echo "FAIL: CapAdd must be exactly [NET_BIND_SERVICE], got $capadd"; exit 1; }
+  [ "$user" = "$KEYUID:$KEYUID" ] || { echo "FAIL: traefik must run as the key owner $KEYUID:$KEYUID (non-root), got '${user:-<image default>}'"; exit 1; }
 
   for _ in $(seq 1 40); do
     if ptool "$PTOOL" rawdata --require default-root-web@file --url http://traefik:8082/api/rawdata >"$WORK/rawdata.out" 2>&1; then ok=1; break; fi

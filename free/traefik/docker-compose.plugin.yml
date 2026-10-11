@@ -83,12 +83,21 @@ services:
     # the buffering middleware spills request bodies over 1 MiB to a temp file; a read-only root needs a tmpfs for it
     tmpfs:
       - /tmp
-    # NET_BIND_SERVICE: bind :80/:443 as root. DAC_READ_SEARCH (D-0508): core writes ssl/**/privkey.pem 0600 and owned by the
-    # operator uid, and root without capabilities cannot open a file it does not own. This one capability bypasses only
-    # read and directory-search permission checks (no write, no chmod/chown, no exec, no DAC_OVERRIDE), so it reads just
-    # what is mounted into the container: ssl/ and the generated config, both read-only. Key mode and owner stay untouched.
+    # D-0508: core writes ssl/**/privkey.pem 0600, owned by the operator uid. Root with every capability dropped cannot
+    # open a key it does not own, and the capability that would allow it (DAC_READ_SEARCH) also allows open_by_handle_at,
+    # i.e. reading host files outside the container; an internet-facing proxy must not hold it. So traefik runs AS the
+    # operator uid and reads the key as its owner, with no extra privilege. NSELF_HOST_UID / NSELF_HOST_GID must be the uid
+    # and gid core wrote ssl/ as (the default 1000 only matches a typical single-user Linux host). The image default user
+    # (root) is overridden; the files it reads are world-readable or owned by this uid.
+    user: "${NSELF_HOST_UID:-1000}:${NSELF_HOST_GID:-1000}"
     cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE, DAC_READ_SEARCH]
+    # NET_BIND_SERVICE is kept so the policy reads "only NET_BIND_SERVICE", but a non-root process gets no effective
+    # capability from cap_add (CapEff is empty), so it is not what lets this user bind :80/:443. The sysctl is: the
+    # container's own network namespace allows every port, which Docker already defaults to since 20.10; stated here so a
+    # runtime without that default (older Docker, Podman) behaves the same. It is namespaced and does not touch the host.
+    cap_add: [NET_BIND_SERVICE]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
     security_opt: ["no-new-privileges:true"]
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
