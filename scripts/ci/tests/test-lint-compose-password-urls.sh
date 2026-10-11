@@ -4,9 +4,10 @@
 # Purpose: regression cases for scripts/lint-compose-password-urls.sh (D-0235).
 #   Each case writes a one-service fragment, runs the lint on it and checks the
 #   verdict. The reject cases are the bypasses the P7-PROD-33 review found (two
-#   URLs on one line, password in the query, URL split across lines, secret
-#   names outside PASSWORD|PASSWD) plus the classic raw form; the accept cases
-#   are the nested form and secret variables outside any URL.
+#   URLs on one line, password in the query, URL split across two or three
+#   lines, secret names outside PASSWORD|PASSWD) plus the classic raw form;
+#   the accept cases are the nested form and secret variables outside any
+#   URL, a multi-line shell script included.
 # Inputs: none. Fixtures are generated into a temp dir at run time and hold
 #   variable references only, never a value.
 # Outputs: "ok:"/"FAIL:" per case, final summary; exit 1 on any failure.
@@ -36,7 +37,10 @@ check split-userinfo-head reject '      DATABASE_URL: >-' \
   '        postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}' '        @postgres:5432/db'
 check split-userinfo-tail reject '      DATABASE_URL: >-' \
   '        postgresql://${POSTGRES_USER}:' '        ${POSTGRES_PASSWORD}@postgres:5432/db'
+check split-three-lines reject '      D: >-' '        postgresql://u:' \
+  '        ${POSTGRES_PASSWORD}' '        @pg/db'
 check name-pass reject '      - A=postgresql://u:${DB_PASS}@postgres/db'
+check name-pwd reject '      - E=postgresql://u:${DB_PWD}@postgres/db'
 check name-secret reject '      - B=amqp://u:${RABBIT_SECRET}@mq:5672'
 check name-token-unbraced reject '      - C=redis://:$REDIS_AUTH_TOKEN@redis:6379'
 check name-lowercase-default reject '      - D=postgres://u:${db_pass:-x}@pg/db'
@@ -45,7 +49,10 @@ check nested-form accept \
   '      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENC:-${REDIS_PASSWORD}}@redis:6379 http://a@b'
 check secrets-outside-urls accept '      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}' \
   '      - GITHUB_TOKEN=${GITHUB_TOKEN}' '      # - X=postgres://u:${POSTGRES_PASSWORD}@h' \
-  '      - HEALTH=http://127.0.0.1:3107/tokens/health'
+  '      - HEALTH=http://127.0.0.1:3107/tokens/health' \
+  '      - KEYCLOAK_URL=http://${KEYCLOAK_HOST}:8080' \
+  '    healthcheck:' '      test:' '        - CMD-SHELL' '        - |' \
+  '          wget -q http://127.0.0.1:3107/health' '          redis-cli -a ${REDIS_PASSWORD} ping'
 
 if [ "$fail" -ne 0 ]; then echo "test-lint-compose-password-urls: FAILED" >&2; exit 1; fi
 echo "test-lint-compose-password-urls: OK"

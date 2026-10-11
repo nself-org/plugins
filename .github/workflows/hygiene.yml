@@ -2,8 +2,8 @@ name: Hygiene
 
 # Single-checkout, no-toolchain gates consolidated from separate workflows (clean-root,
 # clean-working-tree, multi-arch, nself-first, attribution, hadolint, api-contract, deprecation,
-# doc-sync, compose-password-urls, compose-network-literals, tracked-binaries, file-size), plus a
-# docker job for the fragment URL-encoding smoke (D-0235).
+# doc-sync, compose-password-urls, compose-network-literals, tracked-binaries, file-size, and the
+# fragment URL-encoding smoke, which uses the runner's docker compose).
 # PR-context and commit-message checks keep their original event guards; the trigger is the
 # union of the originals', so none narrowed.
 
@@ -176,7 +176,18 @@ jobs:
       - name: "compose-password-urls: no raw password variable in a fragment URL"
         id: compose_password_urls
         if: always()
-        run: bash scripts/lint-compose-password-urls.sh && bash scripts/ci/tests/test-lint-compose-password-urls.sh
+        run: bash scripts/lint-compose-password-urls.sh
+
+      - name: "compose-password-urls: lint regression cases (D-0235)"
+        id: compose_password_urls_test
+        if: always()
+        run: bash scripts/ci/tests/test-lint-compose-password-urls.sh
+
+      # docker compose ships on ubuntu-latest; the smoke renders, starts nothing.
+      - name: "fragment-urlenc-smoke: reserved-character passwords render and round-trip (D-0235)"
+        id: fragment_urlenc_smoke
+        if: always()
+        run: bash scripts/ci/fragment-urlenc-smoke.sh
 
       # --- D-0326: fragments join the project network by ${DOCKER_NETWORK} only ---
       - name: "compose-network-literals: no literal project network name in a fragment"
@@ -493,6 +504,8 @@ jobs:
             [cwt_root]="${{ steps.cwt_root.outcome }}"
             [nself_first]="${{ steps.nself_first.outcome }}"
             [compose_password_urls]="${{ steps.compose_password_urls.outcome }}"
+            [compose_password_urls_test]="${{ steps.compose_password_urls_test.outcome }}"
+            [fragment_urlenc_smoke]="${{ steps.fragment_urlenc_smoke.outcome }}"
             [compose_network_literals]="${{ steps.compose_network_literals.outcome }}"
             [tracked_binaries]="${{ steps.tracked_binaries.outcome }}"
             [file_size]="${{ steps.file_size.outcome }}"
@@ -519,14 +532,3 @@ jobs:
             exit 1
           fi
           echo "All hygiene gates passed (or were not applicable to this event)."
-
-  # --- D-0235: the URL-encoded password render smoke needs docker compose ---
-  fragment-urlenc-smoke:
-    name: Fragment URL-encoding smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: "fragment-urlenc-smoke: reserved-character passwords render and round-trip"
-        run: bash scripts/ci/fragment-urlenc-smoke.sh
