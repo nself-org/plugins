@@ -40,6 +40,11 @@ services:
       - nself_network
 
   traefik-acme:
+    # explicit build: the cli rewrites a service-level "image: nself/..." without build: into its own per-project build,
+    # which would leave the old root image in use after an upgrade; same build and tag as traefik-config.
+    build:
+      context: ${NSELF_PLUGIN_DIR}/traefik
+      dockerfile: Dockerfile
     image: nself/nself-traefik-render:r2
     entrypoint: ["/render"]
     command: ["serve-static", "--root", "/acme-webroot", "--listen", ":8080"]

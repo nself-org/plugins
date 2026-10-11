@@ -164,6 +164,12 @@ func TestNonRootAndUploadFragmentPolicy(t *testing.T) {
 	if cfgImg != acmeImg || !regexp.MustCompile(`^nself/nself-traefik-render:r[0-9]+$`).MatchString(cfgImg) {
 		t.Errorf("traefik-config and traefik-acme must share a render-generation tag (:rN, not :local or :latest), got %q and %q", cfgImg, acmeImg)
 	}
+	for _, n := range []string{"traefik-config", "traefik-acme"} {
+		svc := services[n].(map[string]any)
+		if get(svc, "build", "dockerfile") != "Dockerfile" || !strings.Contains(toString(get(svc, "build", "context")), "${NSELF_PLUGIN_DIR}/traefik") {
+			t.Errorf("%s must declare the anchored build (the cli rewrites a bare image: line into its own per-project build)", n)
+		}
+	}
 	tr := services["traefik"].(map[string]any)
 	mounted := false
 	for _, v := range asList(tr["volumes"]) {
