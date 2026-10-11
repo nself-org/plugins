@@ -449,6 +449,23 @@ curl "http://localhost:3403/v1/deliveries?endpoint_id=<id>&status=failed"
 3. Check endpoint timeout settings
 4. Review dead letter queue for patterns
 
+## Boot-applied migrations
+
+`webhooks` applies its own `migrations/*.sql` when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`):
+files run in file-name order, one transaction per file, recorded in `np_webhooks.schema_migrations`. The manifest declares
+`migrations.apply: boot`, and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates
+tables from Go code; a fresh database gets the two manifest tables `np_webhooks_endpoints` and `np_webhooks_deliveries` from the migration files alone.
+
+**Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
+over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables; until it finishes the plugin does not answer /health, so the container shows as unhealthy and an install readiness wait can time out: re-run it once the migration log line appears.
+
+**Old unprefixed tables.** Installs from the TypeScript era hold `webhook_endpoints`, `webhook_deliveries`, `webhook_event_types` and `webhook_dead_letters`; migration `001` renames them (and their `idx_webhook_*` indexes) to `np_webhooks_*`, and migration `002` adds `source_account_id` where it is missing. The event-type and dead-letter tables are kept for their data but nothing in this plugin reads or writes them.
+Each rename runs only when the old table exists and the new name is free. If both names exist, both are left as they are:
+nothing is merged and nothing is dropped, and the plugin log prints one line per such table:
+`migrations: legacy table public.<old> kept beside public.<new>: both existed, nothing merged or dropped`. Move the data by hand
+if you want it, then drop the old table.
+
 ## License
 
 Source-Available License

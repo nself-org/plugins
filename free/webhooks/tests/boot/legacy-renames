@@ -1,0 +1,4 @@
+webhook_endpoints np_webhooks_endpoints
+webhook_deliveries np_webhooks_deliveries
+webhook_event_types np_webhooks_event_types
+webhook_dead_letters np_webhooks_dead_letters

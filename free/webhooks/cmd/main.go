@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -28,9 +29,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := internal.Migrate(pool); err != nil {
-		log.Fatalf("[nself-webhooks] migration failed: %v", err)
-	}
+	internal.BootMigrations(context.Background(), pool)
 
 	dispatcher := internal.NewDispatcher(pool)
 	go dispatcher.StartProcessing()
