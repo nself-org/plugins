@@ -8,10 +8,11 @@
 #     1. with the encoded twins set, every URL's password decodes to the
 #        original (a double-encode or a raw substitution fails here),
 #     2. with only the raw variables set (an older CLI), each render equals the
-#        render of the same fragment at the base ref,
-#     3. the lint rejects the base ref's raw-password fragments.
-# Inputs: env SMOKE_BASE (default origin/main) names the baseline ref;
-#   SMOKE_TMPDIR (default $TMPDIR or /tmp) holds scratch copies.
+#        render of its raw twin (every ${X_URLENC:-${X}} rewritten to ${X}),
+#     3. the lint rejects every raw twin.
+#   The raw twin stands in for the pre-P7-PROD-33 fragment, so the smoke needs
+#   no base ref and runs on any checkout (CI: hygiene.yml, D-0235).
+# Inputs: env SMOKE_TMPDIR (default $TMPDIR or /tmp) holds scratch copies.
 # Outputs: "ok:"/"FAIL:" lines, final summary; exit 1 on any failure.
 # Constraints: docker compose config only (no containers, no network),
 #   deterministic, python3 for URL decoding, bash 3.2 compatible.
@@ -19,13 +20,13 @@ set -u
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root" || exit 1
-base="${SMOKE_BASE:-origin/main}"
 tmp="$(mktemp -d "${SMOKE_TMPDIR:-${TMPDIR:-/tmp}}/urlenc-smoke.XXXXXX")" || exit 1
 trap 'rm -rf "$tmp"' EXIT
 fail=0
 note_fail() { echo "FAIL: $*" >&2; fail=1; }
 
 command -v docker >/dev/null 2>&1 || { echo "FAIL: docker not found" >&2; exit 1; }
+docker compose version >/dev/null 2>&1 || { echo "FAIL: docker compose plugin not found" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found" >&2; exit 1; }
 
 # Values every fragment needs to render; none is a password.
@@ -78,7 +79,7 @@ if seen == 0:
 print(seen)
 PY
 
-pws=('p/@ss:w?rd#1%' 'a+b c' '%40%2F-already pct' '@:/?# %+' 'plain' '100%')
+pws=('p/@ss:w?rd#1%' 'a+b c' '%40%2F-already pct' '@:/?# %+' 'plain' '100%' 'a$b')
 for pw in "${pws[@]}"; do
   enc="$(encode "$pw")"
   rpw='r/@:?#%+ '"$pw"
@@ -96,15 +97,17 @@ for pw in "${pws[@]}"; do
   [ "$bad" -eq 0 ] && echo "ok: $nfrags fragments round-trip test password '$pw'"
 done
 
-# --- 2. raw only: render equals the base ref's render ------------------------
+# --- 2. raw only: render equals the raw twin's render ------------------------
+# raw_twin FILE -> FILE with every ${X_URLENC:-${X}} rewritten to ${X}.
+raw_twin() {
+  python3 -c 'import re,sys; sys.stdout.write(re.sub(r"\$\{([A-Za-z0-9_]+)_URLENC:-\$\{\1\}\}", r"${\1}", open(sys.argv[1]).read()))' "$1"
+}
 mkdir -p "$tmp/old" "$tmp/new"
 bad=0
 for f in $frags; do
   d="$(basename "$(dirname "$f")")"
   mkdir -p "$tmp/old/$d" "$tmp/new/$d"
-  if ! git show "$base:$f" > "$tmp/old/$d/docker-compose.plugin.yml" 2>/dev/null; then
-    echo "skip: $f is new at $base"; continue
-  fi
+  raw_twin "$f" > "$tmp/old/$d/docker-compose.plugin.yml"
   cp "$f" "$tmp/new/$d/docker-compose.plugin.yml"
   for pw in 'plain-pw' 'p/@ss:w?rd#1%'; do
     export POSTGRES_PASSWORD="$pw" REDIS_PASSWORD="$pw"
@@ -114,25 +117,24 @@ for f in $frags; do
     if [ ! -s "$tmp/old.json" ] || [ ! -s "$tmp/new.json" ]; then
       note_fail "$f: render failed (raw only)"; bad=1
     elif ! cmp -s "$tmp/old.json" "$tmp/new.json"; then
-      note_fail "$f: raw-only render differs from $base"; bad=1
+      note_fail "$f: raw-only render differs from its raw twin"; bad=1
     fi
   done
   unset POSTGRES_PASSWORD REDIS_PASSWORD
 done
-[ "$bad" -eq 0 ] && echo "ok: raw-only renders equal $base for $nfrags fragments"
+[ "$bad" -eq 0 ] && echo "ok: raw-only renders equal the raw twins for $nfrags fragments"
 
-# --- 3. the lint rejects the base ref's raw form -----------------------------
+# --- 3. the lint rejects every raw twin ---------------------------------------
 n=0
 for f in $frags; do
   d="$(basename "$(dirname "$f")")"
-  [ -s "$tmp/old/$d/docker-compose.plugin.yml" ] || continue
   if bash scripts/lint-compose-password-urls.sh "$tmp/old/$d/docker-compose.plugin.yml" >/dev/null 2>&1; then
-    note_fail "$f: lint accepted the base ref's raw password URL"
+    note_fail "$f: lint accepted the raw twin's password URL"
   else
     n=$((n + 1))
   fi
 done
-echo "ok: lint rejects $n base-ref fragments"
+echo "ok: lint rejects $n raw twins"
 
 if [ "$fail" -ne 0 ]; then echo "fragment-urlenc-smoke: FAILED" >&2; exit 1; fi
 echo "fragment-urlenc-smoke: OK ($nfrags fragments)"
