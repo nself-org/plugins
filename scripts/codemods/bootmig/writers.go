@@ -17,7 +17,11 @@ import (
 //
 // An if/else branch that ends in a return is skipped: control cannot fall from it to pos, which is the common
 // `if err := ping(); err != nil { http.Error(w, ...); return }` guard. Any other earlier write counts, even in a branch
-// that may not run, so such a site goes to manual wiring rather than risk a second WriteHeader.
+// that may not run, so such a site goes to manual wiring rather than risk a second WriteHeader. The exemption does not
+// reach into a func literal that ends before pos (its return leaves only the closure): any writer use there counts.
+//
+// The check is syntactic and direct-use only (see callTouchesWriter): aliases such as `rw := w`, type assertions like
+// `w.(http.Flusher)`, and a writer wrapped in a composite or struct are not tracked.
 func writesHeaderBefore(body *ast.BlockStmt, w string, pos token.Pos) bool {
 	if body == nil {
 		return false
@@ -68,7 +72,8 @@ func endsInReturn(b *ast.BlockStmt) bool {
 	return ok
 }
 
-// callTouchesWriter reports whether call is <w>.Write/<w>.WriteHeader or takes <w> as a direct argument.
+// callTouchesWriter reports whether call is <w>.Write/<w>.WriteHeader or takes <w> as a direct argument. Syntactic and
+// direct-use only: aliases (rw := w), w.(http.Flusher) and a writer wrapped in a composite are not tracked.
 func callTouchesWriter(call *ast.CallExpr, w string) bool {
 	if sel, ok := call.Fun.(*ast.SelectorExpr); ok && (sel.Sel.Name == "WriteHeader" || sel.Sel.Name == "Write") {
 		if id, ok := sel.X.(*ast.Ident); ok && id.Name == w {
