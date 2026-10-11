@@ -113,6 +113,8 @@ type Location struct {
 		Port   int    `json:"port"`
 		// Path is the escaped URL path of the proxy_pass target ("/" kept); Query is its raw
 		// query without the '?' (nil = no '?', "" = a bare '?'). Both are optional (omitempty).
+		// The cli's nginx uses a variable proxy_pass, so they REPLACE THE WHOLE REQUEST URI
+		// (path and query), not the matched prefix. A consumer that cannot do that must refuse.
 		Path  string  `json:"path,omitempty"`
 		Query *string `json:"query,omitempty"`
 	} `json:"upstream"`

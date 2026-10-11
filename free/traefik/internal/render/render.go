@@ -181,8 +181,9 @@ func (b *builder) route(r contract.Route) {
 	b.cur, b.tier = r.ID, 0
 	if apiDocsRoute(r) {
 		// Accepted difference (DEPL lead ruling 2026-10-11): nginx serves docs.<base> by aliasing
-		// host files, which Traefik cannot do. The route is skipped, never refused; the cli build
-		// warns that docs.<base> is not served by traefik.
+		// host files, which Traefik cannot do. The route is skipped, never refused. The cli proxy
+		// provider (P7-DEPL-03, cli PR 651) warns that docs.<base> is not served by traefik; a
+		// follow-up debt row tracks serving it.
 		return
 	}
 	if len(r.Unmodelled) > 0 {

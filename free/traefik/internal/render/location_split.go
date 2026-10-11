@@ -109,8 +109,9 @@ var methodRE = regexp.MustCompile(`^[A-Z]+$`)
 
 // contractExtras refuses the optional v1 fields this renderer cannot carry (fail closed). A
 // static_file or headers_add location is only the core:api-docs route, which route() skips before
-// it gets here. An upstream path or query changes what nginx proxy_pass sends (a "/" path replaces
-// the matched prefix), and Traefik's service URL cannot carry that.
+// it gets here. The cli's nginx uses a variable proxy_pass ("set $up_x <target>; proxy_pass $up_x;"),
+// so an upstream path or query REPLACES THE WHOLE REQUEST URI (not the matched prefix), and
+// Traefik's service URL cannot do that.
 func (b *builder) contractExtras(r contract.Route, l contract.Location, field string) bool {
 	ok := true
 	if l.StaticFile != nil {
@@ -123,11 +124,11 @@ func (b *builder) contractExtras(r contract.Route, l contract.Location, field st
 	}
 	if l.Upstream != nil {
 		if l.Upstream.Path != "" {
-			b.refuse(r.ID, field+".upstream.path", fmt.Sprintf("proxy_pass URI %q: Traefik's service URL cannot carry nginx proxy_pass URI semantics (a path, even \"/\", replaces the matched prefix)", l.Upstream.Path))
+			b.refuse(r.ID, field+".upstream.path", fmt.Sprintf("upstream path %q: nginx sends this path instead of the request URI; traefik cannot; remove the path from INTERNAL_ROUTE_N_TARGET", l.Upstream.Path))
 			ok = false
 		}
 		if l.Upstream.Query != nil {
-			b.refuse(r.ID, field+".upstream.query", fmt.Sprintf("proxy_pass query %q: Traefik's service URL cannot carry nginx proxy_pass URI semantics", *l.Upstream.Query))
+			b.refuse(r.ID, field+".upstream.query", fmt.Sprintf("upstream query %q: nginx sends this query instead of the request query; traefik cannot; remove the query from INTERNAL_ROUTE_N_TARGET", *l.Upstream.Query))
 			ok = false
 		}
 	}
