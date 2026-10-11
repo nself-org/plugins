@@ -27,8 +27,4 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - nself_network
-
-networks:
-  nself_network:
-    external: true
+      - ${DOCKER_NETWORK}

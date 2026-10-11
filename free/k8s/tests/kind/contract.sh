@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Purpose: the machine-contract checks of tests/kind/run.sh (P7-DEPL-07): the k8s subtree
 #   `nself help --json k8s` lists, the v1 envelope of `nself k8s status --json`, the
-#   uninstall confirmation gate, and a real uninstall. Sourced by run.sh after the upgrade.
-# Inputs: the run.sh environment: the nself function, $project, $KUBECONFIG, jq on PATH.
+#   uninstall confirmation gate, a real uninstall that keeps the PersistentVolumeClaims and
+#   the data in them (D-0376), and a reinstall with the same release name that adopts them.
+#   Sourced by run.sh after the upgrade.
+# Inputs: the run.sh environment: the nself function, $project, $KUBECONFIG, $READY_TIMEOUT,
+#   jq and kubectl on PATH.
 # Outputs: functions that return non-zero (with a FAIL line on stderr) when a check fails.
-# Constraints: only `nself k8s ...` touches the release; helm is never called here. jq reads
-#   the envelopes, so the checks do not depend on key order or spacing.
+# Constraints: only `nself k8s ...` touches the release; helm is never called here. kubectl
+#   only reads claims and writes one marker row through psql on stdin (no secret on argv).
+#   jq reads the envelopes, so the checks do not depend on key order or spacing.
 
 # project and KUBECONFIG are set by run.sh before this file is sourced.
 # shellcheck disable=SC2154
@@ -63,9 +67,33 @@ check_uninstall_gate() {
   check_json_status
 }
 
-# check_uninstall: uninstall --yes --json removes the release; status then reports E725.
+# release_claims: "name=uid" of every PersistentVolumeClaim of the default release, sorted.
+release_claims() {
+  kubectl get pvc -l app.kubernetes.io/instance=nself \
+    -o jsonpath='{range .items[*]}{.metadata.name}={.metadata.uid}{"\n"}{end}' | sort
+}
+
+# psql_marker <sql>: run sql in the postgres pod as the release's database user (stdin, -At).
+psql_marker() {
+  local db user
+  db="$(kubectl get secret nself-postgres -o jsonpath='{.data.POSTGRES_DB}' | base64 -d)"
+  user="$(kubectl get secret nself-postgres -o jsonpath='{.data.POSTGRES_USER}' | base64 -d)"
+  printf '%s\n' "$1" | kubectl exec -i postgres-0 -- psql -q -At -v ON_ERROR_STOP=1 -U "$user" -d "$db"
+}
+
+# check_uninstall: uninstall --yes --json removes the release and status then reports E725,
+# but every PersistentVolumeClaim (same uid) and a marker row written before survive
+# (helm.sh/resource-policy: keep). A reinstall with the same release name adopts the claims
+# and reads the marker back.
 check_uninstall() {
-  local out rc
+  local out rc before after marker
+  before="$(release_claims)"
+  printf 'claims before uninstall:\n%s\n' "$before"
+  [ -n "$before" ] || { fail "the release has no PersistentVolumeClaims to keep"; return 1; }
+  marker="d0376-$$-$RANDOM"
+  psql_marker "CREATE TABLE IF NOT EXISTS public.k8s_kind_keep (v text); INSERT INTO public.k8s_kind_keep VALUES ('$marker');" ||
+    { fail "could not write the marker row"; return 1; }
+
   out="$(cd "$project" && nself k8s uninstall --yes --json --cluster "$KUBECONFIG" 2>/dev/null)"
   printf '%s\n' "$out"
   envelope_ok "$out" '.command == "k8s uninstall" and .data.uninstalled == true' || fail "uninstall --yes --json did not report uninstalled"
@@ -76,4 +104,19 @@ check_uninstall() {
   printf '%s\n' "$out"
   [ "$rc" -eq 1 ] || fail "status after uninstall exited $rc, want 1"
   envelope_ok "$out" '.error.code == "E725"' || fail "the release is still there: status did not report E725"
+
+  after="$(release_claims)"
+  printf 'claims after uninstall:\n%s\n' "$after"
+  [ "$after" = "$before" ] || { fail "uninstall deleted or replaced PersistentVolumeClaims"; return 1; }
+
+  # Reinstall under the same release name: helm adopts the kept claims (same uid).
+  (cd "$project" && nself k8s install --domain example.test --cluster "$KUBECONFIG" --wait --timeout "${READY_TIMEOUT}s") ||
+    { fail "reinstall with the same release name failed (kept claims not adopted)"; return 1; }
+  check_json_status || return 1
+  after="$(release_claims)"
+  [ "$after" = "$before" ] || { fail "reinstall replaced the kept PersistentVolumeClaims"; return 1; }
+  kubectl wait --for=condition=Ready pod/postgres-0 --timeout="${READY_TIMEOUT}s"
+  out="$(psql_marker "SELECT v FROM public.k8s_kind_keep WHERE v = '$marker';")" ||
+    { fail "could not read the marker row after the reinstall"; return 1; }
+  [ "$out" = "$marker" ] || fail "the marker row did not survive uninstall and reinstall (got '$out')"
 }

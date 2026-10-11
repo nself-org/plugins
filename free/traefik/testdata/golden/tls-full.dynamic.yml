@@ -125,6 +125,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -216,6 +217,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -307,6 +309,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -398,6 +401,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -487,6 +491,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -572,6 +577,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - replacePath-0c55bb7a
             priority: 2
             rule: PathPrefix(`/health`)
@@ -581,6 +587,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - replacePath-0c55bb7a
             priority: 2
             rule: PathPrefix(`/health`)
@@ -589,6 +596,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - replacePath-8861c4ed
             priority: 1
             rule: PathPrefix(`/`)
@@ -598,6 +606,7 @@ http:
             entryPoints:
                 - web
             middlewares:
+                - buffering-8642699b
                 - redirectRegex-15538fe9
             priority: 1
             rule: PathPrefix(`/`)
@@ -628,6 +637,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -718,6 +728,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -809,6 +820,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -900,6 +912,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
@@ -991,6 +1004,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - buffering-8642699b
                 - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001

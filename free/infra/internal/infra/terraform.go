@@ -1,8 +1,16 @@
-// Package infra provides a thin wrapper around the Terraform CLI for
-// provisioning nSelf infrastructure via provider-specific modules (B51/B52).
+// Package infra provides a thin wrapper around the OpenTofu and Terraform CLIs
+// for provisioning nSelf infrastructure (B51/B52).
 //
-// Status: PLANNED — deferred. Requires UD-12 minor release approval.
-// Terraform modules live in terraform/modules/<provider>/ at the repo root.
+// Status: shipped for Hetzner only. The Hetzner module is embedded in the
+// plugin binary (embed.go) and extracted to the user cache directory on first
+// use; no module directory is needed on disk. Of the providers below, only
+// hetzner is in ValidProviders; the others are recognised so the command can
+// say "not shipped (DEF-005)" instead of "unknown provider".
+//
+// The binary is `tofu` when OpenTofu is on PATH, else `terraform`. Apply and
+// destroy hand the child the caller's stdin so the tool's own approval prompt
+// works when --auto-approve is not given; the caller (cmd/confirm.go) has
+// already required an interactive terminal by then.
 package infra
 
 import (
@@ -13,7 +21,7 @@ import (
 	"os/exec"
 )
 
-// Provider is a cloud provider supported by the Terraform modules.
+// Provider names a cloud provider; only the ones in ValidProviders are shipped.
 type Provider string
 
 const (
@@ -25,20 +33,20 @@ const (
 	ProviderLinode       Provider = "linode"
 )
 
-// ValidProviders is the set of supported providers.
+// ValidProviders is the set of shipped providers (hetzner only).
 var ValidProviders = map[Provider]bool{
 	ProviderHetzner: true,
 }
 
-// ErrTerraformNotFound is returned when the terraform binary is not in PATH.
-var ErrTerraformNotFound = fmt.Errorf("infra: terraform binary not found; install from https://developer.hashicorp.com/terraform")
+// ErrTerraformNotFound is returned when neither tofu nor terraform is in PATH.
+var ErrTerraformNotFound = fmt.Errorf("infra: neither tofu nor terraform found in PATH; install OpenTofu (https://opentofu.org/docs/intro/install/) or Terraform")
 
 // PlanOptions holds parameters for terraform plan.
 type PlanOptions struct {
 	Provider    Provider
 	Domain      string
 	StateBucket string
-	ModulesDir  string // defaults to terraform/modules/<provider>
+	ModulesDir  string // empty: the embedded module, extracted to the user cache
 }
 
 // ApplyOptions holds parameters for terraform apply.
@@ -141,6 +149,7 @@ func Apply(ctx context.Context, opts ApplyOptions) error {
 		args = append(args, fmt.Sprintf("-var=%s=%s", k, v))
 	}
 	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
+	cmd.Stdin = os.Stdin // the approval prompt reads it; the spend gate required a terminal
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -168,6 +177,7 @@ func Destroy(ctx context.Context, provider Provider, domain, modulesDir string, 
 		args = append(args, "-auto-approve")
 	}
 	cmd := exec.CommandContext(ctx, tf, append([]string{"-chdir=" + dir}, args...)...)
+	cmd.Stdin = os.Stdin // the approval prompt reads it; the spend gate required a terminal
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

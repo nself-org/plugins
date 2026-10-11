@@ -73,7 +73,7 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     networks:
-      - nself_network
+      - ${DOCKER_NETWORK}
       - forgejo_runner_net
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/healthz"]
@@ -182,12 +182,8 @@ volumes:
 
 # ─── Networks ─────────────────────────────────────────────────────────────────
 networks:
-  # nself_network: shared with the main nSelf stack. Declared external so this
-  # fragment composes cleanly with the base docker-compose.yml (which defines
-  # the network). When run standalone, create it first:
-  #   docker network create nself_network
-  nself_network:
-    external: true
+  # The project network comes from the main compose file (${DOCKER_NETWORK});
+  # nself build merges this fragment into it.
 
   # forgejo_runner_net: runner-only isolated bridge. Runner jobs cannot reach
   # postgres/hasura/auth; they can only reach Forgejo (also on this network).

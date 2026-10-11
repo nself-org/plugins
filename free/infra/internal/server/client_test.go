@@ -63,6 +63,55 @@ func TestHetznerClient_CreateServer_SendsExpectedRequest(t *testing.T) {
 	}
 }
 
+func TestHetznerClient_CreateServer_SendsUserDataExactly(t *testing.T) {
+	const created = `{"server":{"id":43,"name":"ci-box","status":"running",
+		"server_type":{"name":"cx22"},"datacenter":{"location":{"name":"fsn1"}},
+		"public_net":{"ipv4":{"id":101,"ip":"203.0.113.11"},"ipv6":{"id":0,"ip":""}},
+		"labels":{}}}`
+	input := "#cloud-config\n# NSELFCI-FIXTURE-USERDATA fake pairing code 000000\n" +
+		"runcmd:\n\t- echo \"quoted\" 'single' back\\slash caf\u00e9 \u2713\n"
+
+	cases := []struct {
+		name     string
+		userData string
+		wantKey  bool
+	}{
+		{"exact bytes", input, true},
+		{"empty omits the key", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body map[string]interface{}
+			withTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(created))
+			})
+			c := NewHetznerClient("test-token")
+			if _, err := c.CreateServer(context.Background(), ProvisionRequest{
+				Name: "ci-box", ServerType: "cx22", Location: "fsn1", Image: "ubuntu-24.04",
+				UserData: tc.userData,
+			}); err != nil {
+				t.Fatalf("CreateServer: %v", err)
+			}
+			got, present := body["user_data"]
+			if present != tc.wantKey {
+				t.Fatalf("user_data key present = %v, want %v", present, tc.wantKey)
+			}
+			if !tc.wantKey {
+				return
+			}
+			s, isString := got.(string)
+			if !isString {
+				t.Fatal("user_data is not a JSON string")
+			}
+			if s != tc.userData {
+				t.Fatalf("user_data differs from the input (got %d bytes, want %d bytes)", len(s), len(tc.userData))
+			}
+		})
+	}
+}
+
 func TestHetznerClient_ErrorEnvelope_IsWrapped(t *testing.T) {
 	withTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)

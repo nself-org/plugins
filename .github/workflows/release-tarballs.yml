@@ -55,7 +55,7 @@ jobs:
       # workflows in this repo.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26.6'   # >= the go directive of the cli commit in scripts/cli-tools.version
+          go-version: '1.26.9'   # >= the go directive of the cli commit in scripts/cli-tools.version
           cache: false
 
       # Binary targets come from the pinned cli tool (scripts/cli-tools.version), built once

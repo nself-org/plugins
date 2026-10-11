@@ -11,7 +11,9 @@
 #   extract   not a gzip tarball, unsafe member path, or tar exit != 0
 #   manifest  plugin.json missing, not JSON, or name/version != registry entry
 #   fragment  service plugin without docker-compose.plugin.yml or Dockerfile
-#   build     `docker build` of the extracted tree alone failed (or no Dockerfile)
+#   build     `docker build` of the extracted tree alone failed; a cli plugin with
+#             no Dockerfile is built with the release recipe (docker.sh
+#             pf_cli_dockerfile) and fails here only when that cannot be expressed
 #   drift     served registry differs from registry.json at main (or slug absent);
 #             wins over every other class and names it ("; also <class>: ...")
 #
@@ -132,7 +134,7 @@ pf_done() {
 # (the entry's own tarball URL from registry.json at main).
 pf_check_entry() {
   local source="$1" slug="$2" version="$3" installable="$4" url="$5" want="$6"
-  local route="" dl="" sha="" dir="$PF_WORK/x" manifest root kind mname mver missing rc drift
+  local route="" dl="" sha="" dir="$PF_WORK/x" df="" why="" manifest root kind mname mver missing rc drift
   drift=$(pf_drift "$source" "$slug" "$version" "$want")
   if [ "$installable" = false ]; then
     if [ "$url" = "-" ]; then
@@ -214,11 +216,15 @@ pf_check_entry() {
       return 0
     fi
   elif [ ! -f "$root/Dockerfile" ]; then
-    pf_done fail build "cli plugin tarball has no Dockerfile: nothing to build from the tarball alone"
-    return 0
+    # A cli plugin ships per-platform binaries: build them with the release recipe.
+    if ! why=$(pf_cli_dockerfile "$root" "$manifest" "$PF_WORK/cli.Dockerfile"); then
+      pf_done fail build "$why"
+      return 0
+    fi
+    df="$PF_WORK/cli.Dockerfile"
   fi
 
-  pf_build "$root" "$sha" "$slug"
+  pf_build "$root" "$sha" "$slug" "$df"
   if [ "$PF_B_RESULT" != pass ]; then
     pf_done "$PF_B_RESULT" "$PF_B_CLASS" "$PF_B_REASON"
     return 0

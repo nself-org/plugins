@@ -89,7 +89,7 @@ func badShape(raw string) bool {
 // location priority (locPri is capped at maxLocPri, the redirect sits at
 // redirectPri, one below the next tier). A wildcard tier grows with the suffix
 // length, so the longer suffix wins as in nginx; exactTier beats every wildcard
-// tier. Defaults routes (priority 1 to 3) sit at tier 0.
+// tier. Defaults routes (priority 1 to 4) sit at tier 0.
 const (
 	tierStep    = 100000
 	maxLocPri   = tierStep - 3

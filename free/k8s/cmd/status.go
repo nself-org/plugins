@@ -6,7 +6,9 @@
 // Outputs: the release summary JSON line (five fields only); with --json the
 // same object is the data member of a v1 envelope.
 //
-// Constraints: pure move from cli/cmd/commands/k8s.go's k8sStatusCmd.
+// Constraints: pure move from cli/cmd/commands/k8s.go's k8sStatusCmd, except
+// that a --release starting with "-" is now a usage error in human mode too
+// (helm read it as a flag; D-0376).
 package main
 
 import (
@@ -27,10 +29,10 @@ var statusCmd = &cobra.Command{
 		}
 		cluster, _ := cmd.Flags().GetString("cluster")
 		release, _ := cmd.Flags().GetString("release")
+		if err := r.checkRelease(releaseOrDefault(release), false); err != nil {
+			return err
+		}
 		if r.json {
-			if err := r.checkRelease(releaseOrDefault(release), false); err != nil {
-				return err
-			}
 			sum, err := k8s.ReleaseStatus(cmd.Context(), release, cluster)
 			if err != nil {
 				return r.fail(err)

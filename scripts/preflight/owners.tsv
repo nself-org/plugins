@@ -1,4 +1,5 @@
-# slug<TAB>batch Ticket owning the free plugin (hq plan/p7/epics/PLUG/tickets.yaml, P7-PLUG-40..47 write_scope).
+# slug<TAB>batch Ticket owning the free plugin (hq plan/p7/epics/PLUG/tickets.yaml, P7-PLUG-40..47 write_scope),
+# or, for a plugin outside those batches, the open Ticket owning its plugin.json (ci: P7-CI-62).
 # Failing entries name this Ticket as follow-up; a slug absent here needs a new debt id.
 access-controls	P7-PLUG-40
 admin-api	P7-PLUG-40
@@ -15,6 +16,7 @@ backup	P7-PLUG-40
 byok	P7-PLUG-40
 cdc	P7-PLUG-40
 cdn	P7-PLUG-40
+ci	P7-CI-62
 claw-cli	P7-PLUG-40
 cloudflare	P7-PLUG-41
 compliance	P7-PLUG-41

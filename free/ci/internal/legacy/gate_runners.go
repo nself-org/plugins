@@ -92,6 +92,7 @@ func runGoGates(root string, timeout int, verbose bool) []GateResult {
 		runStep("go:vet", root, timeout, verbose, "go", "vet", "./..."),
 		runStep("go:test", root, timeout, verbose, "go", "test", "-count=1", "-timeout", fmt.Sprintf("%ds", goTestTimeout(timeout)), "./..."),
 	}
+	gates = append(gates, runRepoGoScripts(root, timeout, verbose)...)
 	markSubstantive(gates)
 	return gates
 }

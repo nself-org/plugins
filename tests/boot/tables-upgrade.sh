@@ -29,6 +29,10 @@
 #   env             KEY=value lines passed to every boot (see the env hook below).
 #   legacy.sql      TS-era unprefixed tables with fixture rows (fixed primary keys); used by the legacy and upgrade passes.
 #   legacy-renames  `old new` lines naming public tables (`#` comments and blank lines skipped): the renames the legacy pass checks.
+#   legacy-probe.sql  SQL run on the legacy database after the converted boot and the pair checks (legacy pass only; ON_ERROR_STOP,
+#                   so a failing statement fails the pass): for a check the renames cannot express, e.g. that a
+#                   renamed table still takes the plugin's inserts. Needs legacy-renames: conformance rule legacy-renames fails a
+#                   probe that would never run. The pass line ends with `probe ok`.
 #   seed.sql        rows written through the basis schema before the upgrade (parent rows first).
 #   basis-from      image ref for the basis Dockerfile (see below).
 #   basis-absent    manifest tables the BASIS build never created, one per line (a plugin whose conversion adds a table). The
@@ -133,7 +137,7 @@ pkrows() {
 # legacy_pass: the LEGACY pass for the current plugin (globals p dir tag schema port tables expected safe W pid pg). Silent no-op
 # without tests/boot/legacy-renames; 0 on pass, 1 on any FAIL (the caller keeps going to the upgrade pass).
 legacy_pass() {
-  local lr=$dir/tests/boot/legacy-renames ldb=tu_l_$safe line old new extra np=0 nrows=0 bad=0 r k cnt lurl
+  local lr=$dir/tests/boot/legacy-renames ldb=tu_l_$safe line old new extra np=0 nrows=0 bad=0 r k cnt lurl probe=
   [ -f "$lr" ] || return 0
   [ -f "$dir/tests/boot/legacy.sql" ] || { echo "FAIL  legacy $p: legacy-renames without legacy.sql"; return 1; }
   lurl="postgres://postgres:boot@$pg:5432/$ldb"; : > "$W/lpairs-$p"
@@ -167,7 +171,11 @@ EOF
     else echo "FAIL  legacy $p: $new lost a fixture row of $old (missing keys: $(LC_ALL=C comm -23 "$W/lpk-before-$k" "$W/lpk-after-$k" 2>/dev/null | head -3 | tr '\n' ' '))"; bad=1; fi
   done < "$W/lpairs-$p"
   [ $bad -eq 0 ] || return 1
-  echo "pass  legacy $p: $np renames, $nrows fixture rows kept"
+  if [ -f "$dir/tests/boot/legacy-probe.sql" ]; then
+    sqlfile "$ldb" "$dir/tests/boot/legacy-probe.sql" >/dev/null || { echo "FAIL  legacy $p: legacy-probe.sql failed after the legacy boot"; return 1; }
+    probe=", probe ok"
+  fi
+  echo "pass  legacy $p: $np renames, $nrows fixture rows kept$probe"
 }
 
 # ul_before <db>: UPGRADE-pass check of legacy-renames, run after legacy.sql and seed.sql and before the converted boot. Classifies

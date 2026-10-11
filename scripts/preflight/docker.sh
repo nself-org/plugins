@@ -47,14 +47,50 @@ pf_docker_cleanup() {
   fi
 }
 
-# pf_build ROOT SHA SLUG: docker build from the extracted tree alone. Sets
+# pf_cli_dockerfile ROOT MANIFEST OUT: write OUT, a Dockerfile that builds a cli
+# plugin's command binaries from the extracted tree alone with the release recipe
+# (scripts/build-tarballs.sh build_platform_tarballs: CGO_ENABLED=0 go build of
+# nself-<command> from cmd/<command>/, else cmd/, for each cliCommands name, else
+# binaryName). Used when a cli plugin ships no Dockerfile: its release is
+# per-platform binary tarballs, so the source has nothing else to build.
+# Returns 1 and prints the reason when the tarball cannot express that build.
+pf_cli_dockerfile() {
+  local root="$1" manifest="$2" out="$3" gover cmds c pkg
+  if [ ! -f "$root/go.mod" ]; then
+    echo "cli plugin tarball has no Dockerfile and no go.mod: nothing to build from the tarball alone"
+    return 1
+  fi
+  gover=$(awk '$1 == "go" {print $2; exit}' "$root/go.mod")
+  if ! printf '%s' "$gover" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+    echo "cli plugin go.mod has no usable go directive (${gover:-none})"
+    return 1
+  fi
+  cmds=$(jq -r 'if ((.cliCommands // []) | length) > 0 then (.cliCommands[] | .name | if type == "string" then . else "<\(type)>" end)
+    else ((.binaryName // .implementation.binaryName // "") | tostring | ltrimstr("nself-")) end' "$manifest")
+  [ -n "$cmds" ] || { echo "cli plugin declares no cliCommands and no binaryName"; return 1; }
+  # Every line must be a plain name: an empty or multi-line name is rejected too.
+  c=$(printf '%s\n' "$cmds" | awk '!/^[a-z0-9][a-z0-9-]*$/ {print "[" $0 "]"; exit}')
+  [ -z "$c" ] || { echo "cli command name $c is not a plain command name"; return 1; }
+  {
+    printf 'FROM golang:%s-alpine\nWORKDIR /src\nCOPY . .\nENV CGO_ENABLED=0\n' "$gover"
+    [ ! -d "$root/vendor" ] || printf 'ENV GOFLAGS=-mod=vendor\n'
+    while IFS= read -r c; do
+      pkg="./cmd/"
+      [ ! -d "$root/cmd/$c" ] || pkg="./cmd/$c/"
+      printf 'RUN go build -trimpath -ldflags="-s -w" -o /out/nself-%s %s\n' "$c" "$pkg"
+    done <<<"$cmds"
+  } >"$out"
+}
+
+# pf_build ROOT SHA SLUG [DOCKERFILE]: docker build from the extracted tree
+# alone (with DOCKERFILE in place of ROOT/Dockerfile when given). Sets
 # PF_B_RESULT PF_B_CLASS PF_B_REASON. Identical bytes (same sha256) are built
 # once; the second source reuses the measured outcome. With PF_BUILD_CACHE
 # (--build-cache DIR) outcomes persist so an interrupted run resumes.
 # A daemon outage is infrastructure, never a plugin build failure: the build is
 # retried after the daemon returns, else the run aborts (exit 2).
 pf_build() {
-  local root="$1" sha="$2" slug="$3" cache rc=0 tag log err cause blk tries=0 short
+  local root="$1" sha="$2" slug="$3" df="${4:-}" cache rc=0 tag log err cause blk tries=0 short
   local -a cmd
   short=$(printf '%s' "$sha" | cut -c1-12)
   cache="$PF_WORK/build/$sha.res"
@@ -75,6 +111,7 @@ pf_build() {
     pf_docker_up || pf_die "docker daemon down; aborting (not a plugin failure)"
     pf_builder_ensure
     if [ -n "${PF_BUILDER:-}" ]; then cmd=(docker buildx build --builder "$PF_BUILDER" --load); else cmd=(docker build); fi
+    [ -z "$df" ] || cmd+=(-f "$df")
     ${PF_TIMEOUT_BIN:+$PF_TIMEOUT_BIN ${PF_BUILD_TIMEOUT:-1800}} \
       "${cmd[@]}" --label "nself.preflight=$PF_RUN_ID" --progress=plain -t "$tag" "$root" >"$log" 2>&1 || rc=$?
     [ "$rc" != 0 ] || break
@@ -84,7 +121,7 @@ pf_build() {
     pf_log "docker daemon dropped during $slug (try $tries); retrying"
   done
   if [ "$rc" = 0 ]; then
-    PF_B_RESULT=pass PF_B_CLASS=- PF_B_REASON="docker build from the extracted tree succeeded"
+    PF_B_RESULT=pass PF_B_CLASS=- PF_B_REASON="docker build from the extracted tree succeeded${df:+ (cli release recipe: go build of the command binaries)}"
     docker rmi -f "$tag" >/dev/null 2>&1 || true
   else
     if [ "$rc" = 124 ]; then

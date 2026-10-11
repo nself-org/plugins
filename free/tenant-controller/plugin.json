@@ -22,9 +22,9 @@
     "hosting"
   ],
   "tables": [
-    "nself_controller.projects",
-    "nself_controller.project_audit_log",
-    "nself_controller.port_map"
+    "np_tenant_controller.projects",
+    "np_tenant_controller.project_audit_log",
+    "np_tenant_controller.port_map"
   ],
   "capabilities": [
     "multi_project",

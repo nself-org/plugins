@@ -1,0 +1,33 @@
+# pnpm >= 10 reads install settings from this file; pnpm >= 11 reads them
+# ONLY from here (package.json "pnpm" is ignored). pnpm 9, which the
+# GitHub nself-ci workflow and the CI hosts run, reads package.json, so
+# the overrides below are kept identical to package.json pnpm.overrides.
+# packages: ['.'] keeps this directory its own one-package workspace.
+packages:
+  - '.'
+overrides:
+  fast-xml-parser: '>=5.7.0'
+  file-type: '>=21.3.1'
+  '@xmldom/xmldom': '>=0.9.10'
+  '@tootallnate/once': '>=2.0.1'
+  uuid: '>=11.1.1'
+  esbuild: '>=0.28.1'
+  form-data: '>=2.5.6'
+  exifreader: '>=4.40.1'
+  fast-uri: '>=3.1.5'
+  sharp: '>=0.35.0'
+  find-my-way: '>=9.7.0'
+# Build scripts: esbuild (via tsx) must run its postinstall. exifreader's
+# postinstall only rebuilds a custom tag subset and msgpackr-extract (via
+# bullmq) is an optional native speed-up with a JS fallback, so both stay off.
+# pnpm 10 reads onlyBuiltDependencies/ignoredBuiltDependencies; pnpm >= 11
+# reads allowBuilds and fails the install on any build not listed there.
+onlyBuiltDependencies:
+  - esbuild
+ignoredBuiltDependencies:
+  - exifreader
+  - msgpackr-extract
+allowBuilds:
+  esbuild: true
+  exifreader: false
+  msgpackr-extract: false

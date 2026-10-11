@@ -84,8 +84,9 @@ service (bind mounts, tmpfs, `user`, `read_only`, `cap_add`, `cap_drop`, `securi
 that service's `notMapped`; nothing is approximated silently. A route whose upstream is not a mapped workload port (for
 example a frontend on the host) is listed under `unmappedRoutes`.
 
-Every named volume becomes one PersistentVolumeClaim `<release>-<claim>`. Service names equal compose names, so addresses such
-as `postgres:5432` keep working; install one release per namespace.
+Every named volume becomes one PersistentVolumeClaim `<release>-<claim>`, annotated `helm.sh/resource-policy: keep`: helm never
+deletes it, neither on uninstall nor on an upgrade that drops or renames the volume (see [Uninstall](#uninstall)). Service names
+equal compose names, so addresses such as `postgres:5432` keep working; install one release per namespace.
 
 ### Chart values schema
 
@@ -108,7 +109,8 @@ The chart in `charts/nself` is generic over these keys. No image reference is ty
 | `secrets.<name>.<ENV>` | `secrets.yaml` | Env values |
 
 `tests/template-check.sh` renders the chart with the generated values of two fixtures through `helm template` and validates
-every manifest with `kubeconform -strict`. Tool images are pinned by digest in `tests/tools.env`.
+every manifest with `kubeconform -strict`. Tool images are pinned by digest in `tests/tools.env`. `go test` fails when any
+PersistentVolumeClaim template lacks `helm.sh/resource-policy: keep` (and checks the rendered fixtures too when helm is on PATH).
 
 ## Install and upgrade
 
@@ -133,7 +135,7 @@ Both commands refuse (exit 1, `run nself k8s values`) when `values.yaml` or `sec
 |------|---------|---------|
 | `--domain` | none | Required for install. Recorded in the release values only: the chart does not read it yet (D-0311) |
 | `--cluster` | none | Path to a kubeconfig. Without it helm reads `KUBECONFIG` or `~/.kube/config` |
-| `--release` | `nself` | Helm release name |
+| `--release` | `nself` | Helm release name. A name that starts with `-` is refused in every mode (helm would read it as a flag) |
 | `--plugins` | none | Comma-separated plugins, recorded in the release values (`plugins.install`). The chart does not read them yet (D-0311) |
 | `--project-dir` | `.` | Project directory that holds `.nself/generated/k8s` |
 | `--wait` | on | Wait until every workload is ready |
@@ -174,13 +176,32 @@ destructive, so it needs confirmation:
 - Without `--yes` and without a terminal (a script, CI, stdin from `/dev/null`), or with `--json`, it refuses with E403 and
   exit status 4, and runs no helm command.
 
-Persistent volumes the chart created are not deleted by helm: check the cluster before you reuse the namespace.
+The confirmation answer is read up to 4096 bytes; a longer line never matches.
+
+What uninstall keeps:
+
+- Every PersistentVolumeClaim of the release (`<release>-<claim>`, the database and storage data) stays, because the chart marks
+  it `helm.sh/resource-policy: keep`. helm lists them as kept resources. The bound volumes stay with them.
+- A later `nself k8s install` with the same release name, in the same namespace, adopts the kept claims and finds the data again.
+  The kind test proves this: it writes a row, uninstalls, reinstalls and reads the row back.
+- To delete the data for good, remove the claims yourself after the uninstall:
+
+  ```bash
+  kubectl delete pvc -l app.kubernetes.io/instance=<release>   # add --kubeconfig and -n as for install
+  ```
+
+  With a `Delete` reclaim policy (the default of most storage classes, kind's `standard` included) this also deletes the volumes
+  and their data. With `Retain` the volumes stay until you delete them.
 
 ## JSON output and exit classes
 
 `--json` on any subcommand makes stdout carry exactly one v1 envelope (`schema_version`, `command`, then `data` or `error`, plus
 `meta.warnings` when there are warnings), written through `sdk/go/output`. `command` is `k8s <subcommand>`. helm's own stdout and
 the progress lines go to stderr, so a script can pipe stdout into `jq`. Without `--json` the output is unchanged.
+`--help --json` (`--help` or `-h` as a flag, not as another flag's value and not after `--`, together with `--json`, on the
+root or any subcommand) prints one ok envelope instead of help text: `command` is `k8s` or
+`k8s <subcommand>`, `data` is `{"help": "<the text plain --help prints>"}`, and the exit status is 0. The `help` subcommand (`nself k8s help install --json`) is not covered and gives the usual E401
+unknown-flag envelope.
 
 | Subcommand | `data` |
 |------------|--------|
@@ -196,7 +217,7 @@ failure still prints `Error: <message>` and exits 1, except the uninstall refusa
 
 | Code | Class (exit) | Meaning |
 |------|--------------|---------|
-| E401 | user (1) | Usage: unknown or missing flag (install without `--domain`), unexpected argument, a `--release` that is not a helm release name (always for `uninstall`; for the others under `--json` only). Core code |
+| E401 | user (1) | Usage: unknown or missing flag (install without `--domain`), unexpected argument, a `--release` that is not a helm release name (always for `uninstall` and for a name starting with `-`; otherwise under `--json` only). Core code |
 | E403 | destructive_blocked (4) | `uninstall` without confirmation; nothing was removed. Core code |
 | E720 | infra (2) | `helm` is not on `PATH` |
 | E721 | user (1) | Generated chart values not found: run `nself k8s values` |

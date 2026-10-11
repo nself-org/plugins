@@ -1,0 +1,428 @@
+//go:build unix
+
+package main
+
+// Tests for `nself infra server provision --user-data-file`: the exact content
+// reaches the client, every refusal happens before any API call, and the
+// content is never echoed to stdout, stderr or the std log. Fixtures are
+// obviously fake. A failing assertion prints only booleans and lengths, never
+// content, so the marker cannot leak through test output.
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+
+	"github.com/nself-org/nself-infra/internal/server"
+)
+
+const udMarker = "NSELFCI-FIXTURE-USERDATA"
+
+// udCode is a fake provider error code that must never reach output.
+const udCode = "nselfci_fixture_code"
+
+// udProbe is a fake lowercase token placed where a too-wide code capture would
+// take it; it must never reach output.
+const udProbe = "nselfci_capture_probe"
+
+const udContent = "#cloud-config\n# " + udMarker + " fake pairing code 000000\n"
+
+// udRecorder records the user data and the number of CreateServer calls.
+type udRecorder struct {
+	*fakeServerClient
+	calls    int
+	userData string
+}
+
+func (c *udRecorder) CreateServer(ctx context.Context, req server.ProvisionRequest) (*server.Server, error) {
+	c.calls++
+	c.userData = req.UserData
+	return c.fakeServerClient.CreateServer(ctx, req)
+}
+
+// echoingFailClient is a udRecorder whose provider call fails with a text built
+// from the request's user data, as a provider that echoes the body would.
+type echoingFailClient struct {
+	*udRecorder
+	build func(userData string) error
+}
+
+func (c *echoingFailClient) CreateServer(ctx context.Context, req server.ProvisionRequest) (*server.Server, error) {
+	c.calls++
+	c.userData = req.UserData
+	return nil, c.build(req.UserData)
+}
+
+func newRecorder() *udRecorder { return &udRecorder{fakeServerClient: newFakeServerClient()} }
+
+// udWrite writes a fixture with the given mode (chmod'd so the umask cannot interfere).
+func udWrite(t *testing.T, name string, data []byte, mode os.FileMode) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, data, mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(p, mode); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// udWriteSpecial writes a 0600 file carrying a special mode bit, or returns ""
+// when the OS drops the bit (the sub-case is then skipped).
+func udWriteSpecial(t *testing.T, name string, bit os.FileMode) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte(udContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(p, 0o600|bit); err != nil {
+		return ""
+	}
+	if fi, err := os.Stat(p); err != nil || fi.Mode()&bit == 0 {
+		return ""
+	}
+	return p
+}
+
+func provisionArgs(extra ...string) []string {
+	base := []string{"server", "provision", "--name", "ci-1", "--type", "cx22", "--location", "fsn1", "--image", "ubuntu-24.04"}
+	return append(base, extra...)
+}
+
+// runCaptured runs the CLI with the std log redirected, and reports whether any
+// output stream or the log contained the marker.
+func runCaptured(t *testing.T, c server.Client, args ...string) (cliResult, bool) {
+	t.Helper()
+	var logBuf bytes.Buffer
+	oldW, oldF := log.Writer(), log.Flags()
+	log.SetOutput(&logBuf)
+	defer func() { log.SetOutput(oldW); log.SetFlags(oldF) }()
+	res := runCLI(t, cliEnv{Client: c}, args...)
+	m := []byte(udMarker)
+	leaked := bytes.Contains([]byte(res.Stdout), m) || bytes.Contains([]byte(res.Stderr), m) || bytes.Contains(logBuf.Bytes(), m)
+	return res, leaked
+}
+
+func decodeEnv(t *testing.T, stdout string) envDoc {
+	t.Helper()
+	var d envDoc
+	if err := json.Unmarshal([]byte(stdout), &d); err != nil {
+		t.Fatalf("stdout is not a JSON envelope (%d bytes)", len(stdout))
+	}
+	return d
+}
+
+func TestProvisionUserDataNoEcho(t *testing.T) {
+	t.Run("human success", func(t *testing.T) {
+		rc := newRecorder()
+		p := udWrite(t, "ud", []byte(udContent), 0o600)
+		res, leaked := runCaptured(t, rc, provisionArgs("--user-data-file", p)...)
+		if leaked {
+			t.Fatal("marker found in output or log")
+		}
+		if res.Exit != 0 || rc.calls != 1 || rc.userData != udContent {
+			t.Fatalf("exit=%d calls=%d exactMatch=%v", res.Exit, rc.calls, rc.userData == udContent)
+		}
+	})
+	t.Run("json success", func(t *testing.T) {
+		rc := newRecorder()
+		p := udWrite(t, "ud", []byte(udContent), 0o600)
+		res, leaked := runCaptured(t, rc, provisionArgs("--user-data-file", p, "--json")...)
+		if leaked {
+			t.Fatal("marker found in output or log")
+		}
+		d := decodeEnv(t, res.Stdout)
+		if res.Exit != 0 || d.Error != nil || d.Data["user_data"] != true || rc.userData != udContent || rc.calls != 1 {
+			t.Fatalf("exit=%d err=%v user_data=%v calls=%d exactMatch=%v", res.Exit, d.Error != nil, d.Data["user_data"], rc.calls, rc.userData == udContent)
+		}
+	})
+	t.Run("provider failure echoing user data", func(t *testing.T) {
+		jsonEsc := func(u string) string { b, _ := json.Marshal(u); return string(b) }
+		cases := []struct {
+			name  string
+			code  string // envelope code expected in --json mode
+			build func(u string) error
+		}{
+			{"plain echo", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input: bad user_data %s", u)
+			}},
+			{"json-escaped echo", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input: bad user_data %s", jsonEsc(u))
+			}},
+			{"raw body fallback", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 502: <html>%s</html>", u)
+			}},
+			{"network error", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: network error: %s", u)
+			}},
+			{"network error echoing a status-shaped line", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: network error: %s\nhetzner API GET /x: 200 %s", u, udCode)
+			}},
+			{"no status or network head (generic fallback)", "E749", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: decode response: %s", u)
+			}},
+			{"probe after status colon", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422: %s %s", udProbe, u)
+			}},
+			{"probe after code and space", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input %s: %s", udProbe, u)
+			}},
+			{"probe in the code position", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 %s: %s", udProbe, u)
+			}},
+		}
+		for _, tc := range cases {
+			for _, js := range []bool{false, true} {
+				fc := &echoingFailClient{udRecorder: newRecorder(), build: tc.build}
+				p := udWrite(t, "ud", []byte(udContent), 0o600)
+				args := provisionArgs("--user-data-file", p)
+				if js {
+					args = append(args, "--json")
+				}
+				res, leaked := runCaptured(t, fc, args...)
+				if leaked || strings.Contains(res.Stdout+res.Stderr, udCode) || strings.Contains(res.Stdout+res.Stderr, udProbe) {
+					t.Fatalf("%s: marker or fake code found in output or log (json=%v)", tc.name, js)
+				}
+				if res.Exit == 0 || fc.calls != 1 {
+					t.Fatalf("%s: json=%v exit=%d calls=%d", tc.name, js, res.Exit, fc.calls)
+				}
+				if js {
+					d := decodeEnv(t, res.Stdout)
+					if d.Error == nil || d.Error.Code != tc.code {
+						t.Fatalf("%s: envelope has error=%v, want code %s", tc.name, d.Error != nil, tc.code)
+					}
+				}
+			}
+		}
+	})
+	t.Run("refusals", func(t *testing.T) {
+		for _, tc := range refusalCases(t) {
+			for _, js := range []bool{false, true} {
+				rc := newRecorder()
+				args := provisionArgs(tc.args...)
+				if js {
+					args = append(args, "--json")
+				}
+				res, leaked := runCaptured(t, rc, args...)
+				if leaked {
+					t.Fatalf("%s: marker found in output or log (json=%v)", tc.name, js)
+				}
+				if res.Exit == 0 || rc.calls != 0 {
+					t.Fatalf("%s: json=%v exit=%d calls=%d", tc.name, js, res.Exit, rc.calls)
+				}
+			}
+		}
+	})
+}
+
+type refusalCase struct {
+	name string
+	args []string
+}
+
+// refusalCases builds the fixtures for every refused input. Files carry the marker
+// where the refusal is not about the content, to prove refusals do not echo it.
+func refusalCases(t *testing.T) []refusalCase {
+	t.Helper()
+	dir := t.TempDir()
+	good := udWrite(t, "target", []byte(udContent), 0o600)
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(good, link); err != nil {
+		t.Fatal(err)
+	}
+	notUTF8 := append([]byte(udContent), 0xff, 0xfe)
+	flag := "--user-data-file"
+	cases := []refusalCase{
+		{"mode 0644", []string{flag, udWrite(t, "m644", []byte(udContent), 0o644)}},
+		{"mode 0640", []string{flag, udWrite(t, "m640", []byte(udContent), 0o640)}},
+		{"mode 0700", []string{flag, udWrite(t, "m700", []byte(udContent), 0o700)}},
+		{"mode 0500", []string{flag, udWrite(t, "m500", []byte(udContent), 0o500)}},
+		{"directory", []string{flag, t.TempDir()}},
+		{"symlink", []string{flag, link}},
+		{"too large", []string{flag, udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600)}},
+		{"empty", []string{flag, udWrite(t, "empty", nil, 0o600)}},
+		{"invalid utf-8", []string{flag, udWrite(t, "bin", notUTF8, 0o600)}},
+		{"missing", []string{flag, filepath.Join(dir, "absent")}},
+		{"empty path", []string{flag, ""}},
+	}
+	for _, sp := range []struct {
+		name string
+		bit  os.FileMode
+	}{{"setuid", os.ModeSetuid}, {"setgid", os.ModeSetgid}, {"sticky", os.ModeSticky}} {
+		if p := udWriteSpecial(t, sp.name, sp.bit); p != "" {
+			cases = append(cases, refusalCase{"mode 0600 + " + sp.name, []string{flag, p}})
+		}
+	}
+	return cases
+}
+
+func TestProvisionUserDataRefusals(t *testing.T) {
+	for _, tc := range refusalCases(t) {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			rc := newRecorder()
+			res := runCLI(t, cliEnv{Client: rc}, provisionArgs(tc.args...)...)
+			if res.Exit == 0 || rc.calls != 0 {
+				t.Fatalf("human: exit=%d calls=%d", res.Exit, rc.calls)
+			}
+			rc = newRecorder()
+			res = runCLI(t, cliEnv{Client: rc}, provisionArgs(append(tc.args, "--json")...)...)
+			d := decodeEnv(t, res.Stdout)
+			if res.Exit == 0 || rc.calls != 0 || d.Error == nil {
+				t.Fatalf("json: exit=%d calls=%d hasError=%v", res.Exit, rc.calls, d.Error != nil)
+			}
+			if d.Error.Code != "E401" {
+				t.Fatalf("json: error code = %q, want E401", d.Error.Code)
+			}
+			if strings.Contains(d.Error.Message, "/") {
+				t.Fatal("envelope message carries a path")
+			}
+		})
+	}
+	t.Run("another owner", func(t *testing.T) {
+		old := userDataUID
+		userDataUID = func() int { return os.Getuid() + 1 }
+		defer func() { userDataUID = old }()
+		p := udWrite(t, "ud", []byte(udContent), 0o600)
+		rc := newRecorder()
+		res := runCLI(t, cliEnv{Client: rc}, provisionArgs("--user-data-file", p, "--json")...)
+		d := decodeEnv(t, res.Stdout)
+		if res.Exit == 0 || rc.calls != 0 || d.Error == nil || d.Error.Code != "E401" {
+			t.Fatalf("exit=%d calls=%d hasError=%v", res.Exit, rc.calls, d.Error != nil)
+		}
+	})
+	t.Run("mode 0400 accepted", func(t *testing.T) {
+		p := udWrite(t, "m400", []byte(udContent), 0o400)
+		rc := newRecorder()
+		res := runCLI(t, cliEnv{Client: rc}, provisionArgs("--user-data-file", p)...)
+		if res.Exit != 0 || rc.calls != 1 || rc.userData != udContent {
+			t.Fatalf("exit=%d calls=%d exactMatch=%v", res.Exit, rc.calls, rc.userData == udContent)
+		}
+	})
+	t.Run("exactly 32768 bytes accepted", func(t *testing.T) {
+		data := bytes.Repeat([]byte("a"), maxUserDataBytes)
+		p := udWrite(t, "max", data, 0o600)
+		rc := newRecorder()
+		res := runCLI(t, cliEnv{Client: rc}, provisionArgs("--user-data-file", p)...)
+		if res.Exit != 0 || rc.calls != 1 || len(rc.userData) != maxUserDataBytes {
+			t.Fatalf("exit=%d calls=%d len=%d", res.Exit, rc.calls, len(rc.userData))
+		}
+	})
+}
+
+func TestProvisionWithoutUserDataUnchanged(t *testing.T) {
+	rc := newRecorder()
+	res := runCLI(t, cliEnv{Client: rc}, provisionArgs("--json")...)
+	d := decodeEnv(t, res.Stdout)
+	if res.Exit != 0 || d.Error != nil || rc.calls != 1 || rc.userData != "" {
+		t.Fatalf("exit=%d calls=%d userDataLen=%d", res.Exit, rc.calls, len(rc.userData))
+	}
+	if v, ok := d.Data["user_data"]; !ok || v != false {
+		t.Fatalf("data.user_data = %v (present=%v), want false", v, ok)
+	}
+}
+
+// TestProvisionProviderErrorUnchangedWithoutUserData proves the provider text is
+// still shown when no --user-data-file was given.
+func TestProvisionProviderErrorUnchangedWithoutUserData(t *testing.T) {
+	fc := &echoingFailClient{udRecorder: newRecorder(), build: func(string) error {
+		return errors.New("hetzner API POST /servers: 422 invalid_input: provider-detail-text")
+	}}
+	res := runCLI(t, cliEnv{Client: fc}, provisionArgs()...)
+	if res.Exit == 0 || fc.calls != 1 {
+		t.Fatalf("exit=%d calls=%d", res.Exit, fc.calls)
+	}
+	if !strings.Contains(res.Stderr, "provider-detail-text") || strings.Contains(res.Stderr, "withheld") {
+		t.Fatalf("stderr keeps provider text=%v, has withheld note=%v",
+			strings.Contains(res.Stderr, "provider-detail-text"), strings.Contains(res.Stderr, "withheld"))
+	}
+}
+
+// TestProvisionWithheldErrorKeepsCauseChain checks that errors.As and errors.Is
+// still reach the original error through the withheld wrapper.
+func TestProvisionWithheldErrorKeepsCauseChain(t *testing.T) {
+	cause := errors.New("hetzner API POST /servers: 401 unauthorized: secret-echo")
+	err := withheldProviderError("web", cause)
+	var pe *userDataProviderError
+	if !errors.As(err, &pe) || !errors.Is(err, cause) {
+		t.Fatalf("as=%v is=%v", errors.As(err, &pe), errors.Is(err, cause))
+	}
+	if strings.Contains(err.Error(), "secret-echo") {
+		t.Fatal("withheld error text carries the provider message")
+	}
+	if got := classify(err, "server provision").Code; got != CodeTokenRejected {
+		t.Fatalf("classify code = %q, want %q", got, CodeTokenRejected)
+	}
+}
+
+// TestReadUserDataFileReasons pins the refusal reason of each check by calling
+// readUserDataFile directly. The usageError msg holds only the path and reason.
+func TestReadUserDataFileReasons(t *testing.T) {
+	dir := t.TempDir()
+	good := udWrite(t, "target", []byte(udContent), 0o600)
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(good, link); err != nil {
+		t.Fatal(err)
+	}
+	fifo := filepath.Join(dir, "fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ name, path, reason string }{
+		{"directory", t.TempDir(), "is not a regular file"},
+		{"fifo", fifo, "is not a regular file"},
+		{"mode 0644", udWrite(t, "m644", []byte(udContent), 0o644), "must be mode 0600 or stricter"},
+		{"mode 0700", udWrite(t, "m700", []byte(udContent), 0o700), "must be mode 0600 or stricter"},
+		{"mode 0500", udWrite(t, "m500", []byte(udContent), 0o500), "must be mode 0600 or stricter"},
+		{"symlink", link, "is a symbolic link"},
+		{"too large", udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600), "is larger than"},
+		{"empty", udWrite(t, "empty", nil, 0o600), "is empty"},
+		{"invalid utf-8", udWrite(t, "bin", append([]byte(udContent), 0xff, 0xfe), 0o600), "is not valid UTF-8"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			assertRefusalReason(t, tc.path, tc.reason)
+		})
+	}
+	for _, sp := range []struct {
+		name string
+		bit  os.FileMode
+	}{{"setuid", os.ModeSetuid}, {"setgid", os.ModeSetgid}, {"sticky", os.ModeSticky}} {
+		sp := sp
+		if p := udWriteSpecial(t, sp.name, sp.bit); p != "" {
+			t.Run("mode 0600 + "+sp.name, func(t *testing.T) {
+				assertRefusalReason(t, p, "must be mode 0600 or stricter")
+			})
+		}
+	}
+	t.Run("another owner", func(t *testing.T) {
+		old := userDataUID
+		userDataUID = func() int { return os.Getuid() + 1 }
+		defer func() { userDataUID = old }()
+		assertRefusalReason(t, good, "is not owned by you")
+	})
+}
+
+// assertRefusalReason requires readUserDataFile(path) to fail with a usageError
+// whose msg holds reason. Failures print booleans only.
+func assertRefusalReason(t *testing.T, path, reason string) {
+	t.Helper()
+	_, err := readUserDataFile(path)
+	var ue *usageError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error is a usageError = false (err nil = %v)", err == nil)
+	}
+	if !strings.Contains(ue.msg, reason) {
+		t.Fatalf("msg has reason %q = false", reason)
+	}
+}

@@ -28,7 +28,7 @@ var slugRE = regexp.MustCompile(`^[a-z][a-z0-9\-]{1,38}[a-z0-9]$`)
 //  4. Provision Postgres schema + role via DDL (superuser pool).
 //  5. Register Hasura source (Metadata API).
 //  6. Generate + write Nginx vhost snippet; reload Nginx.
-//  7. Store project row in nself_controller.projects.
+//  7. Store project row in np_tenant_controller.projects.
 //  8. Write audit log entry.
 //
 // All steps after (3) are idempotent-safe on retry (schemas/roles/sources
@@ -48,7 +48,7 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 	// Check capacity cap.
 	var activeCount int
 	if err := pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM nself_controller.projects WHERE status = 'active' AND deleted_at IS NULL`,
+		`SELECT COUNT(*) FROM np_tenant_controller.projects WHERE status = 'active' AND deleted_at IS NULL`,
 	).Scan(&activeCount); err != nil {
 		return nil, fmt.Errorf("count active projects: %w", err)
 	}
@@ -59,7 +59,7 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 	// Check for slug / domain uniqueness.
 	var exists bool
 	if err := pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM nself_controller.projects WHERE slug = $1 AND deleted_at IS NULL)`,
+		`SELECT EXISTS(SELECT 1 FROM np_tenant_controller.projects WHERE slug = $1 AND deleted_at IS NULL)`,
 		input.Slug,
 	).Scan(&exists); err != nil {
 		return nil, fmt.Errorf("check slug: %w", err)
@@ -122,7 +122,7 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 	// 7. Persist project row + port reservation.
 	var proj Project
 	err = pool.QueryRow(ctx, `
-		INSERT INTO nself_controller.projects
+		INSERT INTO np_tenant_controller.projects
 		  (slug, domain, schema_name, role_name, hasura_source, hasura_port, status)
 		VALUES ($1, $2, $3, $4, $5, $6, 'active')
 		RETURNING id, slug, domain, schema_name, role_name, hasura_source, hasura_port, status, created_at, updated_at
@@ -136,7 +136,7 @@ func Create(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input C
 
 	// Reserve the port in port_map.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO nself_controller.port_map (port, slug) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		`INSERT INTO np_tenant_controller.port_map (port, slug) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 		port, input.Slug,
 	); err != nil {
 		slog.Warn("port_map insert failed (non-fatal)", "port", port, "slug", input.Slug, "err", err)
@@ -169,7 +169,7 @@ func allocatePort(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) (
 	for port := cfg.HasuraPortStart; port < cfg.HasuraPortStart+cfg.MaxProjects; port++ {
 		var inUse bool
 		if err := pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM nself_controller.port_map WHERE port = $1)`, port,
+			`SELECT EXISTS(SELECT 1 FROM np_tenant_controller.port_map WHERE port = $1)`, port,
 		).Scan(&inUse); err != nil {
 			return 0, fmt.Errorf("port check: %w", err)
 		}

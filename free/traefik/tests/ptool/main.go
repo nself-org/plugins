@@ -8,7 +8,9 @@
 //	ptool matrix  --routes F --nginx H --traefik H [--tls]   request-level comparison
 //	ptool connhold  --routes F --target H [--secs N]   client A: hold conn_limit upgrades, expect 429 on the next request
 //	ptool wsidle    --routes F --target H --secs N     a websocket idle for N seconds must still echo
-//	ptool slowpost  --routes F --target H --secs N --expect ok|cut   a trickle upload of N seconds
+//	ptool slowpost  --routes F --target H --secs N --expect ok|cut [--port P]   a trickle upload of N seconds
+//	ptool bigpost   --routes F --target H --mib N    POST N MiB; 200 and the echoed length and sha256 must match
+//	ptool uploadonly --routes F --target H --port P  only the route slowpost uses is served on the upload port
 //	ptool slowheader --routes F --target H --mode idle|trickle       a partial header must be closed after about 60s
 //	ptool connprobe --routes F --target H              client B (another container): must still get 200
 //
@@ -59,7 +61,8 @@ type route struct {
 		HTTP  bool `json:"http"`
 		HTTPS bool `json:"https"`
 	} `json:"listen"`
-	TLS *struct {
+	HTTPToHTTPSRedirect bool `json:"http_to_https_redirect"`
+	TLS                 *struct {
 		SSLDir string `json:"ssl_dir"`
 	} `json:"tls"`
 	RateLimit *struct {
@@ -88,7 +91,8 @@ type route struct {
 		StaticRoot   *string `json:"static_root"`
 		MaxBodyBytes *int64  `json:"max_body_bytes"`
 		Return       *struct {
-			Status int `json:"status"`
+			Status int     `json:"status"`
+			To     *string `json:"to"`
 		} `json:"return"`
 	} `json:"locations"`
 }
@@ -129,6 +133,8 @@ func main() {
 	secs := fs.Int("secs", 30, "seconds connhold keeps its connections, wsidle stays idle")
 	mode := fs.String("mode", "idle", "slowheader: idle (send nothing more) or trickle (one header line every 20s)")
 	expect := fs.String("expect", "ok", "slowpost: ok (200) or cut (the proxy ends the upload)")
+	port := fs.String("port", "", "slowpost, uploadonly: port to use instead of 80/443 (the upload entrypoint, 8444)")
+	mib := fs.Int("mib", 2, "bigpost: body size in MiB")
 	needTier := fs.Bool("need-tier", false, "matrix: fail unless a host-tier overlap was compared")
 	_ = fs.Parse(args)
 	switch cmd {
@@ -149,7 +155,11 @@ func main() {
 	case "wsidle":
 		wsIdle(loadRoutes(*rf), *tgt, *secs)
 	case "slowpost":
-		slowPost(loadRoutes(*rf), *tgt, *secs, *expect)
+		slowPost(loadRoutes(*rf), *tgt, *secs, *expect, *port)
+	case "bigpost":
+		bigPost(loadRoutes(*rf), *tgt, *mib)
+	case "uploadonly":
+		uploadOnly(loadRoutes(*rf), *tgt, *port)
 	case "slowheader":
 		slowHeader(loadRoutes(*rf), *tgt, *mode)
 	case "connhold":
@@ -188,6 +198,9 @@ func plan(r routes) {
 	for p, s := range ports {
 		fmt.Println("port", p, s)
 	}
+	if rt, ok := slowRoute(r); ok {
+		fmt.Println("upload", rt.ID) // the route the parity script names in --upload-routes
+	}
 }
 
 func gencert(r routes, out string, gen int) {
@@ -222,6 +235,11 @@ func gencert(r routes, out string, gen int) {
 	tok := filepath.Join(out, ".acme-webroot", ".well-known", "acme-challenge")
 	must(os.MkdirAll(tok, 0o755))
 	must(os.WriteFile(filepath.Join(tok, "parity-token"), []byte("token-content\n"), 0o644))
+	// traefik-acme runs as the image's non-root user (65532): the webroot must be readable by others,
+	// whatever the umask of the process that ran gencert.
+	for _, d := range []string{".acme-webroot", ".acme-webroot/.well-known", ".acme-webroot/.well-known/acme-challenge"} {
+		must(os.Chmod(filepath.Join(out, d), 0o755))
+	}
 }
 
 func must(err error) {
