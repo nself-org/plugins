@@ -2,12 +2,13 @@ package internal
 
 import (
 	"errors"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
@@ -19,8 +20,16 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
 
-	if err := validateKey(key); err != nil {
+	if err := validateObject(sai, key); err != nil {
 		http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
+		return
+	}
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if !validContentType(contentType) {
+		http.Error(w, `{"error":"invalid content type"}`, http.StatusBadRequest)
 		return
 	}
 	if s.store == nil {
@@ -28,27 +37,30 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
 	var bucketID string
 	err := s.db.QueryRow(r.Context(),
 		`SELECT id FROM np_storage_buckets WHERE source_account_id = $1 AND name = $2`,
 		sai, bucket).Scan(&bucketID)
 	if err != nil {
-		http.Error(w, `{"error":"bucket not found"}`, http.StatusNotFound)
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, `{"error":"bucket not found"}`, http.StatusNotFound)
+		} else {
+			log.Printf("storage: put %s/%s: bucket lookup: %v", bucket, key, err)
+			http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		}
 		return
 	}
 
 	defer r.Body.Close()
-	res, err := s.store.Put(r.Context(), bucket, objectKey(sai, key), r.Body, contentType)
+	body := newIdleReader(w, r.Body, uploadIdleTimeout)
+	res, err := s.store.Put(r.Context(), bucket, objectKey(sai, key), body, contentType, r.ContentLength)
 	if err != nil {
 		log.Printf("storage: put %s/%s: %v", bucket, key, err)
-		http.Error(w, errStoreFailed, http.StatusBadGateway)
+		writePutError(w, err)
 		return
 	}
+	// The body is in: the server's own write window may have run out during a long upload.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(downloadWriteTimeout))
 
 	var id string
 	err = s.db.QueryRow(r.Context(),
@@ -75,7 +87,7 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
 
-	if err := validateKey(key); err != nil {
+	if err := validateObject(sai, key); err != nil {
 		http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 		return
 	}
@@ -94,7 +106,12 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 		sai, bucket, key,
 	).Scan(&obj.ID, &obj.SourceAccountID, &obj.BucketID, &obj.Key, &obj.SizeBytes, &obj.ContentType, &obj.Etag, &obj.CreatedAt)
 	if err != nil {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		} else {
+			log.Printf("storage: get %s/%s: row lookup: %v", bucket, key, err)
+			http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		}
 		return
 	}
 	if wantMeta {
@@ -113,11 +130,14 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer o.Body.Close()
-	setObjectHeaders(w, obj.ContentType, o.Size, o.ETag)
-	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, o.Body); err != nil {
-		log.Printf("storage: get %s/%s: copy to client: %v", bucket, key, err)
+	// The Content-Type stored with the bytes wins over the row: concurrent PUTs of one key can leave the row stale.
+	ct := o.ContentType
+	if ct == "" {
+		ct = obj.ContentType
 	}
+	setObjectHeaders(w, ct, o.Size, o.ETag)
+	w.WriteHeader(http.StatusOK)
+	streamBody(w, o.Body, "get "+bucket+"/"+key)
 }
 
 // setObjectHeaders sets the response headers of an object download. Stored HTML/SVG must not run script from the
@@ -141,7 +161,7 @@ func (s *Server) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
 	bucket := chi.URLParam(r, "bucket")
 	key := chi.URLParam(r, "key")
 
-	if err := validateKey(key); err != nil {
+	if err := validateObject(sai, key); err != nil {
 		http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 		return
 	}

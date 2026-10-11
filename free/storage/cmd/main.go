@@ -53,7 +53,7 @@ func main() {
 		st, err := s3store.New(s3store.Config{
 			Endpoint: cfg.S3Endpoint, Region: cfg.S3Region,
 			AccessKey: cfg.AccessKey, SecretKey: cfg.SecretKey, UseSSL: cfg.UseSSL,
-			MaxLargeUploads: cfg.MaxLargeUploads,
+			MaxLargeUploads: cfg.MaxLargeUploads, MaxUploads: cfg.MaxUploads, SlotWait: cfg.UploadSlotWait,
 		})
 		if err != nil {
 			log.Fatalf("s3 config error: %v", err)

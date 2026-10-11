@@ -2,6 +2,7 @@ package s3store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -58,4 +59,32 @@ func (s *Store) PresignPut(ctx context.Context, bucket, key string, ttl time.Dur
 		return "", err
 	}
 	return req.URL, nil
+}
+
+// DeletePrefix deletes every object whose key starts with prefix, page by page (ListObjectsV2, then DeleteObjects).
+// A missing bucket counts as nothing to delete.
+func (s *Store) DeletePrefix(ctx context.Context, bucket, prefix string) error {
+	var token *string
+	for {
+		out, err := s.api.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket), Prefix: aws.String(prefix), ContinuationToken: token,
+		})
+		if err != nil {
+			if err = mapErr(err); errors.Is(err, ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+		keys := make([]string, 0, len(out.Contents))
+		for _, o := range out.Contents {
+			keys = append(keys, aws.ToString(o.Key))
+		}
+		if err := s.DeleteObjects(ctx, bucket, keys); err != nil {
+			return err
+		}
+		if !aws.ToBool(out.IsTruncated) || out.NextContinuationToken == nil {
+			return nil
+		}
+		token = out.NextContinuationToken
+	}
 }

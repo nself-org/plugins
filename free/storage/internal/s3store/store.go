@@ -41,6 +41,10 @@ type Config struct {
 	HTTPClient s3.HTTPClient // optional; tests inject a counting client
 	// MaxLargeUploads caps concurrent uploads larger than 1 MiB (each holds a 16 MiB buffer); 0 means 8.
 	MaxLargeUploads int
+	// MaxUploads caps concurrent uploads of any size (each holds at least a small buffer); 0 means 64.
+	MaxUploads int
+	// SlotWait is how long an upload waits for a free slot before ErrBusy; 0 means 30s.
+	SlotWait time.Duration
 }
 
 // api is the subset of *s3.Client the store uses; unit tests replace it with a fake.
@@ -56,14 +60,17 @@ type api interface {
 	AbortMultipartUpload(ctx context.Context, in *s3.AbortMultipartUploadInput, opts ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error)
 	CreateBucket(ctx context.Context, in *s3.CreateBucketInput, opts ...func(*s3.Options)) (*s3.CreateBucketOutput, error)
 	HeadBucket(ctx context.Context, in *s3.HeadBucketInput, opts ...func(*s3.Options)) (*s3.HeadBucketOutput, error)
+	ListObjectsV2(ctx context.Context, in *s3.ListObjectsV2Input, opts ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 }
 
 // Store talks to one S3 endpoint. Safe for concurrent use.
 type Store struct {
-	api    api
-	pre    *s3.PresignClient
-	region string
-	slots  chan struct{} // upload slots for large bodies; nil = unlimited
+	api      api
+	pre      *s3.PresignClient
+	region   string
+	slots    chan struct{} // slots for uploads above firstChunk; nil = unlimited
+	small    chan struct{} // slots for all uploads; nil = unlimited
+	slotWait time.Duration
 }
 
 // normalizeEndpoint returns a base URL with an explicit http:// or https:// scheme.
@@ -122,8 +129,15 @@ func New(cfg Config) (*Store, error) {
 	if maxLarge <= 0 {
 		maxLarge = DefaultMaxLargeUploads
 	}
+	maxAll := cfg.MaxUploads
+	if maxAll <= 0 {
+		maxAll = DefaultMaxUploads
+	}
 	c := s3.New(opts)
-	return &Store{api: c, pre: s3.NewPresignClient(c), region: region, slots: make(chan struct{}, maxLarge)}, nil
+	return &Store{
+		api: c, pre: s3.NewPresignClient(c), region: region, slotWait: cfg.SlotWait,
+		slots: make(chan struct{}, maxLarge), small: make(chan struct{}, maxAll),
+	}, nil
 }
 
 // defaultHTTPClient is the default transport: a clone of http.DefaultTransport with more idle connections per host

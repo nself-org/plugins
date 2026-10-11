@@ -3,11 +3,14 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -25,7 +28,7 @@ func (f *fakeStore) EnsureBucket(_ context.Context, b string) error {
 	f.ensured = append(f.ensured, b)
 	return f.ensureErr
 }
-func (f *fakeStore) Put(context.Context, string, string, io.Reader, string) (s3store.PutResult, error) {
+func (f *fakeStore) Put(context.Context, string, string, io.Reader, string, int64) (s3store.PutResult, error) {
 	return s3store.PutResult{}, errors.New("unexpected Put")
 }
 
@@ -195,5 +198,128 @@ func TestSetObjectHeaders(t *testing.T) {
 	setObjectHeaders(rr, "text/plain", -1, "")
 	if rr.Header().Get("Content-Length") != "" || rr.Header().Get("ETag") != "" {
 		t.Fatalf("unknown size / etag must be omitted: %v", rr.Header())
+	}
+}
+
+func TestWritePutError(t *testing.T) {
+	cases := []struct {
+		err   error
+		code  int
+		body  string
+		retry bool
+	}{
+		{fmt.Errorf("wait: %w", s3store.ErrBusy), 503, "upload capacity reached, retry", true},
+		{s3store.ErrBodyTruncated, 400, "request body incomplete", false},
+		{fmt.Errorf("x: %w", s3store.ErrLengthMismatch), 400, "request body incomplete", false},
+		{os.ErrDeadlineExceeded, 408, "request body stalled", false},
+		{errors.New("s3 down"), 502, "object storage error", false},
+	}
+	for _, c := range cases {
+		rr := httptest.NewRecorder()
+		writePutError(rr, c.err)
+		if rr.Code != c.code || !strings.Contains(rr.Body.String(), c.body) || (rr.Header().Get("Retry-After") != "") != c.retry {
+			t.Errorf("%v: %d %q retry-after %q", c.err, rr.Code, rr.Body.String(), rr.Header().Get("Retry-After"))
+		}
+	}
+}
+
+func TestValidContentType(t *testing.T) {
+	for _, ct := range []string{"text/plain", "application/json; charset=utf-8", "a\tb"} {
+		if !validContentType(ct) {
+			t.Errorf("%q should be valid", ct)
+		}
+	}
+	for _, ct := range []string{"text/\u00e9", "a\x00b", "a\nb", "a\x7fb", "caf\xe9"} {
+		if validContentType(ct) {
+			t.Errorf("%q should be invalid", ct)
+		}
+	}
+}
+
+func TestPutObject_invalidContentTypeIs400BeforeS3(t *testing.T) {
+	h := newRouter(&Server{store: &fakeStore{}})
+	req := httptest.NewRequest(http.MethodPut, "/storage/buckets/bkt/objects/k", strings.NewReader("x"))
+	req.Header["Content-Type"] = []string{"text/caf\u00e9"}
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != 400 || !strings.Contains(rr.Body.String(), "invalid content type") {
+		t.Fatalf("%d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestValidateObject_physicalKeyLength(t *testing.T) {
+	if validateObject("primary", strings.Repeat("k", 1000)) != nil {
+		t.Error("short account + 1000-byte key fits")
+	}
+	if validateObject(strings.Repeat("a", 100), strings.Repeat("k", 1000)) != ErrInvalidKey {
+		t.Error("physical key over 1024 bytes must be rejected")
+	}
+	// escaping grows the id: 10 slashes become 10 x "%2F"
+	if validateObject(strings.Repeat("/", 400), "k") != ErrInvalidKey {
+		t.Error("escaped account id must count at its escaped length")
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/storage/buckets/bkt/objects/"+strings.Repeat("k", 900), nil)
+	req.Header.Set("X-Hasura-Source-Account-Id", strings.Repeat("t", 200))
+	newRouter(&Server{store: &fakeStore{}}).ServeHTTP(rr, req)
+	if rr.Code != 400 {
+		t.Errorf("long account + key over HTTP: %d", rr.Code)
+	}
+}
+
+type fakeDeadline struct{ calls int }
+
+func (f *fakeDeadline) set(time.Time) error { f.calls++; return nil }
+
+func TestIdleReader_extendsAfterReadsWithData(t *testing.T) {
+	d := &fakeDeadline{}
+	ir := &idleReader{r: strings.NewReader("abcdef"), idle: time.Minute, setDeadline: d.set}
+	buf := make([]byte, 2)
+	for i := 0; i < 3; i++ {
+		if _, err := ir.Read(buf); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d.calls != 3 {
+		t.Fatalf("deadline extended %d times, want 3", d.calls)
+	}
+	if _, err := ir.Read(buf); err != io.EOF || d.calls != 3 {
+		t.Fatalf("EOF read: err %v calls %d", err, d.calls)
+	}
+}
+
+func TestNewIdleReader_unsupportedWriterIsIgnored(t *testing.T) {
+	ir := newIdleReader(httptest.NewRecorder(), strings.NewReader("x"), time.Second)
+	b, _ := io.ReadAll(ir)
+	if string(b) != "x" {
+		t.Fatal("body lost")
+	}
+}
+
+type failingBody struct{ sent bool }
+
+func (f *failingBody) Read(p []byte) (int, error) {
+	if !f.sent {
+		f.sent = true
+		return copy(p, "partial"), nil
+	}
+	return 0, errors.New("backend stream broke")
+}
+
+func TestStreamBody_abortsResponseOnCopyError(t *testing.T) {
+	defer func() {
+		if r := recover(); r != http.ErrAbortHandler {
+			t.Fatalf("recovered %v, want http.ErrAbortHandler", r)
+		}
+	}()
+	streamBody(io.Discard, &failingBody{}, "test")
+	t.Fatal("streamBody returned after a copy error")
+}
+
+func TestStreamBody_okCopies(t *testing.T) {
+	var sb strings.Builder
+	streamBody(&sb, strings.NewReader("hello"), "test")
+	if sb.String() != "hello" {
+		t.Fatal(sb.String())
 	}
 }

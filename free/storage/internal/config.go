@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 // Config holds all plugin-storage configuration.
@@ -23,6 +24,10 @@ type Config struct {
 	UseSSL     bool
 	// MaxLargeUploads caps concurrent uploads above 1 MiB (STORAGE_MAX_LARGE_UPLOADS, default 8).
 	MaxLargeUploads int
+	// MaxUploads caps concurrent uploads of any size (STORAGE_MAX_UPLOADS, default 64).
+	MaxUploads int
+	// UploadSlotWait is how long an upload waits for a slot before 503 (STORAGE_UPLOAD_SLOT_WAIT, default 30s).
+	UploadSlotWait time.Duration
 }
 
 // LoadConfig reads configuration from environment variables.
@@ -56,6 +61,23 @@ func LoadConfig() (*Config, error) {
 		maxLarge = n
 	}
 
+	maxUploads := 64
+	if v := os.Getenv("STORAGE_MAX_UPLOADS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("STORAGE_MAX_UPLOADS must be a positive integer, got %q", v)
+		}
+		maxUploads = n
+	}
+	slotWait := 30 * time.Second
+	if v := os.Getenv("STORAGE_UPLOAD_SLOT_WAIT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return nil, fmt.Errorf("STORAGE_UPLOAD_SLOT_WAIT must be a positive duration like 30s, got %q", v)
+		}
+		slotWait = d
+	}
+
 	return &Config{
 		Port:            port,
 		DBUrl:           dbURL,
@@ -65,5 +87,7 @@ func LoadConfig() (*Config, error) {
 		SecretKey:       secretKey,
 		UseSSL:          useSSL,
 		MaxLargeUploads: maxLarge,
+		MaxUploads:      maxUploads,
+		UploadSlotWait:  slotWait,
 	}, nil
 }

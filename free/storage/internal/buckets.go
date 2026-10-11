@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -131,6 +132,14 @@ func (s *Server) handleDeleteBucket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.store.DeleteObjects(r.Context(), bucket, keys); err != nil {
+			http.Error(w, errStoreFailed, http.StatusBadGateway)
+			return
+		}
+	}
+	// Bytes without a row (a failed upsert, a PUT racing this delete) are still under the tenant's prefix.
+	if s.store != nil {
+		if err := s.store.DeletePrefix(r.Context(), bucket, objectKey(sai, "")); err != nil {
+			log.Printf("storage: delete bucket %s: prefix sweep: %v", bucket, err)
 			http.Error(w, errStoreFailed, http.StatusBadGateway)
 			return
 		}

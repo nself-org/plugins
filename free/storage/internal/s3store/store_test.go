@@ -65,6 +65,8 @@ type fakeAPI struct {
 	puts, creates, completes, aborts, deleteCalls int
 	partLens                                      []int
 	partSums                                      []string // SHA-256 (hex) of each uploaded part, in order
+	listCalls, listTotal                          int
+	listPrefixes                                  []string
 	putSums                                       []string // SHA-256 (hex) of each single PutObject body
 	failPart                                      int      // 1-based part number to fail, 0 = none
 	deleteBatchSizes                              []int
@@ -110,6 +112,23 @@ func (f *fakeAPI) DeleteObjects(_ context.Context, in *s3.DeleteObjectsInput, _ 
 	f.deleteBatchSizes = append(f.deleteBatchSizes, len(in.Delete.Objects))
 	return &s3.DeleteObjectsOutput{Errors: f.deleteErrs}, nil
 }
+func (f *fakeAPI) ListObjectsV2(_ context.Context, in *s3.ListObjectsV2Input, _ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	f.listCalls++
+	f.listPrefixes = append(f.listPrefixes, aws.ToString(in.Prefix))
+	page := 0
+	if in.ContinuationToken != nil {
+		page = int((*in.ContinuationToken)[0] - '0')
+	}
+	out := &s3.ListObjectsV2Output{}
+	for i := 0; i < 1200 && page*1200+i < f.listTotal; i++ {
+		out.Contents = append(out.Contents, s3types.Object{Key: aws.String("k")})
+	}
+	if (page+1)*1200 < f.listTotal {
+		out.IsTruncated = aws.Bool(true)
+		out.NextContinuationToken = aws.String(string(rune('0' + page + 1)))
+	}
+	return out, nil
+}
 func (f *fakeAPI) GetObject(_ context.Context, _ *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	return nil, f.getErr
 }
@@ -122,7 +141,7 @@ func (f *fakeAPI) HeadBucket(_ context.Context, _ *s3.HeadBucketInput, _ ...func
 
 func TestPut_exactlyPartSizeIsSingle(t *testing.T) {
 	f := &fakeAPI{}
-	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(PartSize), "text/plain")
+	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(PartSize), "text/plain", -1)
 	if err != nil || res.Multipart || res.Size != PartSize || f.puts != 1 || f.creates != 0 {
 		t.Fatalf("res=%+v err=%v puts=%d creates=%d", res, err, f.puts, f.creates)
 	}
@@ -130,7 +149,7 @@ func TestPut_exactlyPartSizeIsSingle(t *testing.T) {
 
 func TestPut_emptyBodyIsSingle(t *testing.T) {
 	f := &fakeAPI{}
-	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", strings.NewReader(""), "")
+	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", strings.NewReader(""), "", -1)
 	if err != nil || res.Size != 0 || f.puts != 1 {
 		t.Fatalf("res=%+v err=%v puts=%d", res, err, f.puts)
 	}
@@ -138,7 +157,7 @@ func TestPut_emptyBodyIsSingle(t *testing.T) {
 
 func TestPut_17MiBIsTwoPartsThenComplete(t *testing.T) {
 	f := &fakeAPI{}
-	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(17<<20), "")
+	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(17<<20), "", -1)
 	if err != nil || !res.Multipart || res.Size != 17<<20 {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
@@ -152,7 +171,7 @@ func TestPut_17MiBIsTwoPartsThenComplete(t *testing.T) {
 
 func TestPut_multipleOfPartSizeHasNoEmptyTail(t *testing.T) {
 	f := &fakeAPI{}
-	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(2*PartSize), "")
+	res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(2*PartSize), "", -1)
 	if err != nil || res.Size != 2*PartSize || len(f.partLens) != 2 || f.partLens[1] != PartSize {
 		t.Fatalf("res=%+v err=%v parts=%v", res, err, f.partLens)
 	}
@@ -160,7 +179,7 @@ func TestPut_multipleOfPartSizeHasNoEmptyTail(t *testing.T) {
 
 func TestPut_abortsOnUploadPartFailure(t *testing.T) {
 	f := &fakeAPI{failPart: 2}
-	_, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(17<<20), "")
+	_, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(17<<20), "", -1)
 	if err == nil || f.aborts != 1 || f.completes != 0 {
 		t.Fatalf("err=%v aborts=%d completes=%d", err, f.aborts, f.completes)
 	}
@@ -179,7 +198,7 @@ func (e *errReader) Read(p []byte) (int, error) {
 func TestPut_bodyReadErrorAborts(t *testing.T) {
 	f := &fakeAPI{}
 	body := io.MultiReader(newPattern(PartSize+5), &errReader{})
-	_, err := (&Store{api: f}).Put(context.Background(), "b", "k", body, "")
+	_, err := (&Store{api: f}).Put(context.Background(), "b", "k", body, "", -1)
 	if err == nil || f.aborts != 1 {
 		t.Fatalf("err=%v aborts=%d", err, f.aborts)
 	}
@@ -326,7 +345,7 @@ func equalSums(a, b []string) bool {
 func TestPut_multipartPartsMatchSourceHashes(t *testing.T) {
 	for _, size := range []int64{PartSize + 1, 2 * PartSize, 40 << 20} {
 		f := &fakeAPI{}
-		res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(size), "")
+		res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(size), "", -1)
 		if err != nil || !res.Multipart || res.Size != size {
 			t.Fatalf("size %d: res=%+v err=%v", size, res, err)
 		}
@@ -339,7 +358,7 @@ func TestPut_multipartPartsMatchSourceHashes(t *testing.T) {
 func TestPut_singleBodiesMatchSourceHash(t *testing.T) {
 	for _, size := range []int64{0, 1024, firstChunk, firstChunk + 1, 5 << 20, PartSize} {
 		f := &fakeAPI{}
-		res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(size), "")
+		res, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(size), "", -1)
 		if err != nil || res.Multipart || res.Size != size || f.puts != 1 || f.creates != 0 {
 			t.Fatalf("size %d: res=%+v err=%v puts=%d creates=%d", size, res, err, f.puts, f.creates)
 		}
@@ -349,11 +368,11 @@ func TestPut_singleBodiesMatchSourceHash(t *testing.T) {
 	}
 }
 
-func TestPut_smallBodyNeverTakesPoolOrSlot(t *testing.T) {
+func TestPut_smallBodyNeverTakesPoolOrLargeSlot(t *testing.T) {
 	st := &Store{api: &fakeAPI{}, slots: make(chan struct{}, 1)}
 	st.slots <- struct{}{} // the only slot is taken: a small upload must not need it
 	before := poolGets.Load()
-	res, err := st.Put(context.Background(), "b", "k", newPattern(1024), "")
+	res, err := st.Put(context.Background(), "b", "k", newPattern(1024), "", -1)
 	if err != nil || res.Size != 1024 {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}
@@ -368,7 +387,7 @@ func TestPut_smallBodyNeverTakesPoolOrSlot(t *testing.T) {
 func TestPut_largeBodyReleasesSlotAndTakesPool(t *testing.T) {
 	st := &Store{api: &fakeAPI{}, slots: make(chan struct{}, 2)}
 	before := poolGets.Load()
-	if _, err := st.Put(context.Background(), "b", "k", newPattern(2<<20), ""); err != nil {
+	if _, err := st.Put(context.Background(), "b", "k", newPattern(2<<20), "", -1); err != nil {
 		t.Fatal(err)
 	}
 	if poolGets.Load() != before+1 || len(st.slots) != 0 {
@@ -382,7 +401,7 @@ func TestPut_blockedSlotHonoursContext(t *testing.T) {
 	st.slots <- struct{}{}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	_, err := st.Put(ctx, "b", "k", newPattern(3<<20), "")
+	_, err := st.Put(ctx, "b", "k", newPattern(3<<20), "", -1)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("want deadline exceeded, got %v", err)
 	}
@@ -398,5 +417,116 @@ func TestDefaultHTTPClient(t *testing.T) {
 	tr := defaultHTTPClient().Transport.(*http.Transport)
 	if tr.MaxIdleConnsPerHost != 32 || tr.ResponseHeaderTimeout != 60*time.Second {
 		t.Fatalf("transport = %d idle, %v header timeout", tr.MaxIdleConnsPerHost, tr.ResponseHeaderTimeout)
+	}
+}
+
+// truncReader yields n pattern bytes, then fails with err (a request body cut off by the client).
+type truncReader struct {
+	p   *patternReader
+	err error
+}
+
+func (r *truncReader) Read(b []byte) (int, error) {
+	n, err := r.p.Read(b)
+	if err == io.EOF {
+		return n, r.err
+	}
+	return n, err
+}
+
+func TestPut_truncatedBodyNeverCommits(t *testing.T) {
+	// Single path, and multipart path (second part cut short): a source ErrUnexpectedEOF is a hard error.
+	for _, size := range []int64{5000, 3 << 20, 20 << 20} {
+		f := &fakeAPI{}
+		body := &truncReader{p: newPattern(size), err: io.ErrUnexpectedEOF}
+		_, err := (&Store{api: f}).Put(context.Background(), "b", "k", body, "", -1)
+		if !errors.Is(err, ErrBodyTruncated) {
+			t.Fatalf("size %d: want ErrBodyTruncated, got %v", size, err)
+		}
+		if f.puts != 0 || f.completes != 0 {
+			t.Fatalf("size %d: truncated body was committed (puts %d, completes %d)", size, f.puts, f.completes)
+		}
+		if f.creates == 1 && f.aborts != 1 {
+			t.Fatalf("size %d: multipart upload not aborted (aborts %d)", size, f.aborts)
+		}
+	}
+	f := &fakeAPI{}
+	body := &truncReader{p: newPattern(20 << 20), err: errors.New("connection reset")}
+	if _, err := (&Store{api: f}).Put(context.Background(), "b", "k", body, "", -1); err == nil || f.completes != 0 || f.aborts != 1 {
+		t.Fatalf("non-EOF error: err=%v completes=%d aborts=%d", err, f.completes, f.aborts)
+	}
+}
+
+func TestPut_declaredLengthMismatchNeverCommits(t *testing.T) {
+	for _, tc := range []struct{ size, declared int64 }{{5000, 6000}, {5000, 4000}, {20 << 20, 30 << 20}, {20 << 20, 10 << 20}} {
+		f := &fakeAPI{}
+		_, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(tc.size), "", tc.declared)
+		if !errors.Is(err, ErrLengthMismatch) || f.puts != 0 || f.completes != 0 {
+			t.Fatalf("%+v: err=%v puts=%d completes=%d", tc, err, f.puts, f.completes)
+		}
+		if f.creates == 1 && f.aborts != 1 {
+			t.Fatalf("%+v: multipart not aborted", tc)
+		}
+	}
+	f := &fakeAPI{}
+	if _, err := (&Store{api: f}).Put(context.Background(), "b", "k", newPattern(20<<20), "", 20<<20); err != nil || f.completes != 1 {
+		t.Fatalf("matching declared length: %v completes %d", err, f.completes)
+	}
+}
+
+func TestPut_cancelledContextNeverCommits(t *testing.T) {
+	f := &fakeAPI{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := (&Store{api: f}).Put(ctx, "b", "k", newPattern(100), "", -1); err == nil || f.puts != 0 {
+		t.Fatalf("err=%v puts=%d", err, f.puts)
+	}
+}
+
+func TestPut_slotWaitTimesOutWithErrBusy(t *testing.T) {
+	for _, which := range []string{"small", "large"} {
+		f := &fakeAPI{}
+		st := &Store{api: f, slots: make(chan struct{}, 1), small: make(chan struct{}, 1), slotWait: 20 * time.Millisecond}
+		size := int64(3 << 20)
+		if which == "small" {
+			st.small <- struct{}{}
+			size = 100
+		} else {
+			st.slots <- struct{}{}
+		}
+		start := time.Now()
+		_, err := st.Put(context.Background(), "b", "k", newPattern(size), "", -1)
+		if !errors.Is(err, ErrBusy) || time.Since(start) > 5*time.Second {
+			t.Fatalf("%s: err=%v after %v", which, err, time.Since(start))
+		}
+		if f.puts+f.creates != 0 {
+			t.Fatalf("%s: S3 called while busy", which)
+		}
+	}
+}
+
+func TestPut_smallSlotReleased(t *testing.T) {
+	st := &Store{api: &fakeAPI{}, small: make(chan struct{}, 1)}
+	for i := 0; i < 3; i++ {
+		if _, err := st.Put(context.Background(), "b", "k", newPattern(10), "", -1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(st.small) != 0 {
+		t.Fatal("small slot leaked")
+	}
+}
+
+func TestDeletePrefix_paginates(t *testing.T) {
+	f := &fakeAPI{listTotal: 2500}
+	if err := (&Store{api: f}).DeletePrefix(context.Background(), "b", "tenant%2Fa/"); err != nil {
+		t.Fatal(err)
+	}
+	if f.listCalls != 3 || f.listPrefixes[0] != "tenant%2Fa/" {
+		t.Fatalf("list calls %d prefixes %v", f.listCalls, f.listPrefixes)
+	}
+	// 1200 + 1200 + 100 keys, each page below the 1000-key DeleteObjects limit only by batching: 2+2+1 calls.
+	if f.deleteCalls != 5 {
+		t.Fatalf("delete calls = %d, want 5 (%v)", f.deleteCalls, f.deleteBatchSizes)
 	}
 }
