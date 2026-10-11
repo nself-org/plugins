@@ -1,9 +1,9 @@
 package internal
 
 import (
-	pgx "github.com/jackc/pgx/v5"
 	"context"
 	"fmt"
+	pgx "github.com/jackc/pgx/v5"
 	"time"
 )
 

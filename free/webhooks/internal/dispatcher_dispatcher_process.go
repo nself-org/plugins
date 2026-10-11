@@ -178,4 +178,3 @@ func (d *Dispatcher) handleFailure(ctx context.Context, del Delivery, endpoint *
 
 	_ = RecordEndpointFailure(ctx, d.pool, endpoint.ID, d.autoDisableThresh)
 }
-
