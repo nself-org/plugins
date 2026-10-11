@@ -24,9 +24,10 @@ import (
 
 // Options locate the inputs the renderer cannot take from routes.json.
 type Options struct {
-	SSLRoot  string // ssl/ as the renderer sees it (certificates/<dir> may be a generation link)
-	CertRoot string // the same tree as Traefik sees it; certFile/keyFile paths start here (default SSLRoot)
-	Helper   string // base URL of traefik-acme (default http://traefik-acme:8080)
+	SSLRoot  string   // ssl/ as the renderer sees it (certificates/<dir> may be a generation link)
+	CertRoot string   // the same tree as Traefik sees it; certFile/keyFile paths start here (default SSLRoot)
+	Helper   string   // base URL of traefik-acme (default http://traefik-acme:8080)
+	Upload   []string // route ids also served on the "upload" entrypoint (see upload.go)
 }
 
 type listener struct {
@@ -47,6 +48,7 @@ type builder struct {
 	tier                                      int               // host specificity added to every router priority of the route
 	pfx                                       string            // router name prefix of the route (and host group) under render
 	noLog                                     bool              // the location under render has access_log off
+	upload                                    map[string]bool   // route ids named for the upload entrypoint
 }
 
 var unsafeRE = regexp.MustCompile(`[^A-Za-z0-9]+`)
@@ -79,6 +81,10 @@ func Render(m *contract.Model, o Options) ([]byte, error) {
 	}
 	b := &builder{m: m, o: o, routers: map[string]any{}, services: map[string]any{}, mws: map[string]any{},
 		transports: map[string]any{}, tlsOp: map[string]any{}, certs: map[string][2]string{}, zones: map[string]contract.Zone{}, cur: "-", hosts: map[string]string{}}
+	b.upload = map[string]bool{}
+	for _, id := range o.Upload {
+		b.upload[id] = true
+	}
 	for _, z := range m.Zones {
 		b.zones[z.Name] = z
 	}
@@ -91,6 +97,7 @@ func Render(m *contract.Model, o Options) ([]byte, error) {
 	for _, r := range m.Routes {
 		b.route(r)
 	}
+	b.checkUpload()
 	b.cur, b.tier, b.noLog = "-", 0, false
 	b.defaultServer()
 	if len(b.refs) > 0 {
@@ -186,6 +193,7 @@ func (b *builder) route(r contract.Route) {
 	if !b.hostsFree(r, ls) {
 		return
 	}
+	ls = b.withUpload(r, ls)
 	sec := ""
 	if len(r.SecurityHeaders) > 0 {
 		hdr := map[string]string{}

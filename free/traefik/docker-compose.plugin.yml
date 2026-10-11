@@ -9,11 +9,27 @@ services:
       dockerfile: Dockerfile
     image: nself/nself-traefik-render:local
     restart: "no"
-    command: ["--routes", "/nself/routes.json", "--out", "/dynamic", "--ssl", "/nself/ssl"]
+    command:
+      - "--routes"
+      - "/nself/routes.json"
+      - "--out"
+      - "/dynamic"
+      - "--ssl"
+      - "/nself/ssl"
+      - "--static-out"
+      - "/static"
+      - "--upload-routes"
+      - "${TRAEFIK_UPLOAD_ROUTES:-}"
+      - "--upload-read-timeout"
+      - "${TRAEFIK_UPLOAD_READ_TIMEOUT:-600s}"
+    # one-shot writer into bind dirs that Docker creates root-owned on Linux; read-only root, no capabilities,
+    # no listener. The long-running traefik-acme uses the image's non-root user.
+    user: "0:0"
     volumes:
       - ./.nself/generated/routes.json:/nself/routes.json:ro
       - ./ssl:/nself/ssl:ro
       - ./.nself/generated/traefik:/dynamic
+      - ./.nself/generated/traefik-static:/static
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -48,8 +64,11 @@ services:
     ports:
       - "${NSELF_HTTP_PORT:-80}:80"
       - "${NSELF_HTTPS_PORT:-443}:443"
+      # the upload entrypoint carries only the routes named in TRAEFIK_UPLOAD_ROUTES; by default it is published on a
+      # loopback ephemeral port, so nothing public opens unless the operator sets e.g. TRAEFIK_UPLOAD_PUBLISH=8444
+      - "${TRAEFIK_UPLOAD_PUBLISH:-127.0.0.1:}:8444"
     volumes:
-      - ${NSELF_PLUGIN_DIR}/traefik/config/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./.nself/generated/traefik-static:/etc/traefik:ro
       - ./.nself/generated/traefik:/dynamic:ro
       - ./ssl:/nself/ssl:ro
     read_only: true

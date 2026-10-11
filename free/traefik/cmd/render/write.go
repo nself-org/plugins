@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // chmodFile widens a written temp file to the wanted mode. It is a seam so a test can
@@ -62,4 +63,23 @@ func writeAtomic(dir, name string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+}
+
+// writeDoc writes a generated document and the .nself-generated marker beside it.
+func writeDoc(dir, name string, data []byte) error {
+	if err := writeAtomic(dir, name, data); err != nil {
+		return err
+	}
+	return writeAtomic(dir, ".nself-generated", []byte(marker))
+}
+
+// splitIDs splits a comma-separated list of route ids, trimming blanks and dropping empties.
+func splitIDs(s string) []string {
+	var ids []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			ids = append(ids, p)
+		}
+	}
+	return ids
 }

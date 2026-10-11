@@ -9,8 +9,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/nself-org/plugins/free/traefik/config"
+	"github.com/nself-org/plugins/free/traefik/internal/staticcfg"
 )
 
 func readYAML(t *testing.T, rel string) map[string]any {
@@ -89,8 +93,19 @@ func TestFragmentPolicy(t *testing.T) {
 }
 
 func TestStaticConfigPolicy(t *testing.T) {
-	for _, rel := range []string{"config/traefik.yml", "tests/traefik-test.yml"} {
-		st := readYAML(t, rel)
+	enabled, err := staticcfg.Render(config.Base, staticcfg.Upload{Enabled: true, ReadTimeout: 600 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name   string
+		st     map[string]any
+		upload bool
+	}{
+		{"config/traefik.yml", readYAML(t, "config/traefik.yml"), false},
+		{"rendered static (upload enabled)", parseYAML(t, enabled), true},
+	} {
+		rel, st := c.name, c.st
 		prov, _ := get(st, "providers").(map[string]any)
 		if _, ok := prov["docker"]; ok || len(prov) != 1 || get(st, "providers", "file", "directory") != "/dynamic" || get(st, "providers", "file", "watch") != true {
 			t.Errorf("%s: providers must be the file directory provider only: %v", rel, prov)
@@ -99,8 +114,6 @@ func TestStaticConfigPolicy(t *testing.T) {
 			if v, ok := get(st, "entryPoints", ep, "http", "encodedCharacters", "allowEncodedSlash").(bool); !ok || v {
 				t.Errorf("%s: entryPoints.%s must set http.encodedCharacters.allowEncodedSlash: false (blocked-path bypass via %%2F)", rel, ep)
 			}
-		}
-		for _, ep := range []string{"web", "websecure"} {
 			// nginx client_header_timeout 60s; 0s (no deadline) leaves slowloris connections open forever.
 			for key, want := range map[string]string{"readTimeout": "60s", "writeTimeout": "0s", "idleTimeout": "65s"} {
 				if got := get(st, "entryPoints", ep, "transport", "respondingTimeouts", key); got != want {
@@ -108,16 +121,82 @@ func TestStaticConfigPolicy(t *testing.T) {
 				}
 			}
 		}
+		up := get(st, "entryPoints", "upload")
+		if (up != nil) != c.upload {
+			t.Errorf("%s: upload entrypoint present=%v, want %v (only when upload routes are named)", rel, up != nil, c.upload)
+		}
+		if c.upload {
+			if v, ok := get(st, "entryPoints", "upload", "http", "encodedCharacters", "allowEncodedSlash").(bool); !ok || v {
+				t.Errorf("%s: entryPoints.upload must set allowEncodedSlash: false", rel)
+			}
+			if got := get(st, "entryPoints", "upload", "transport", "respondingTimeouts", "writeTimeout"); got != "0s" {
+				t.Errorf("%s: entryPoints.upload writeTimeout must be 0s, got %v", rel, got)
+			}
+		}
 		if get(st, "certificatesResolvers") != nil {
 			t.Errorf("%s: certificatesResolvers present (certificates come from ssl/)", rel)
 		}
+		if get(st, "api") != nil {
+			t.Errorf("%s: the shipped static config exposes the API (test-only)", rel)
+		}
 	}
-	if get(readYAML(t, "config/traefik.yml"), "api") != nil {
-		t.Error("the shipped static config exposes the API (test-only)")
+}
+
+// The image runs as the distroless nonroot uid; the long-running traefik-acme takes that default,
+// the one-shot traefik-config is the one documented root exception, and traefik reads the rendered
+// static directory read-only. The upload port stays on loopback unless the operator publishes it.
+func TestNonRootAndUploadFragmentPolicy(t *testing.T) {
+	df, _ := os.ReadFile(filepath.Join("..", "Dockerfile"))
+	if !regexp.MustCompile(`(?m)^USER 65532:65532$`).Match(df) {
+		t.Error("Dockerfile does not set USER 65532:65532")
 	}
-	if get(readYAML(t, "tests/traefik-test.yml"), "api", "insecure") != true {
-		t.Error("the test static config must enable api.insecure")
+	services := get(readYAML(t, "docker-compose.plugin.yml"), "services").(map[string]any)
+	if u, ok := services["traefik-acme"].(map[string]any)["user"]; ok {
+		t.Errorf("traefik-acme sets user %v: it must use the image's non-root user", u)
 	}
+	if u := services["traefik-config"].(map[string]any)["user"]; u != "0:0" {
+		t.Errorf("traefik-config user = %v, want the documented 0:0 exception", u)
+	}
+	tr := services["traefik"].(map[string]any)
+	mounted := false
+	for _, v := range asList(tr["volumes"]) {
+		if s := toString(v); strings.HasSuffix(s, "traefik-static:/etc/traefik:ro") {
+			mounted = true
+		}
+		if strings.Contains(toString(v), "config/traefik.yml") {
+			t.Errorf("traefik mounts the hand-written base: %v", v)
+		}
+	}
+	if !mounted {
+		t.Error("traefik must mount the rendered traefik-static directory read-only at /etc/traefik")
+	}
+	found := false
+	for _, v := range asList(tr["ports"]) {
+		if s := toString(v); strings.HasSuffix(s, ":8444") {
+			found = true
+			if !strings.Contains(s, "${TRAEFIK_UPLOAD_PUBLISH:-127.0.0.1:}") {
+				t.Errorf("the upload port must default to loopback, got %s", s)
+			}
+		}
+	}
+	if !found {
+		t.Error("traefik does not publish the upload port 8444")
+	}
+	cmd := toString(services["traefik-config"].(map[string]any)["command"])
+	for _, want := range []string{"--static-out", "--upload-routes", "--upload-read-timeout"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("traefik-config command lacks %s", want)
+		}
+	}
+}
+
+func parseYAML(t *testing.T, b []byte) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := yaml.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	return m
 }
 
 func hasSSLRO(svc map[string]any) bool {

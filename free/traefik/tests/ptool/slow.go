@@ -8,23 +8,33 @@ import (
 	"time"
 )
 
+// slowRoute is the route slowpost uploads to, and the route the parity script names for the upload
+// entrypoint: the first one with an upstream on "/".
+func slowRoute(m routes) (route, bool) {
+	for _, x := range m.Routes {
+		if hasRoot(x) && (x.Listen.HTTP || x.Listen.HTTPS) {
+			return x, true
+		}
+	}
+	return route{}, false
+}
+
 // slowPost sends a body of secs/4 bytes, one byte every 4s. nginx times only the gap between reads
 // (client_body_timeout 60s), so any length of upload with steady progress gets 200. Traefik's
 // entrypoint readTimeout (60s) is a total deadline for the request, so an upload longer than that
 // is cut: the accepted difference. expect=ok needs 200, expect=cut needs anything else.
-func slowPost(m routes, name string, secs int, expect string) {
-	var rt route
-	found := false
-	for _, x := range m.Routes {
-		if !found && hasRoot(x) && (x.Listen.HTTP || x.Listen.HTTPS) {
-			rt, found = x, true
-		}
-	}
+//
+// A non-empty port sends the trickle to that port instead of 80/443 (the upload entrypoint, 8444).
+func slowPost(m routes, name string, secs int, expect, port string) {
+	rt, found := slowRoute(m)
 	if !found {
 		die(fmt.Errorf("no route with an upstream on /"))
 	}
 	n := secs / 4
-	c, err := dialRaw(target{name}, scheme(rt), hostOf(rt))
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[scheme(rt)]
+	}
+	c, err := dialPort(target{name}, scheme(rt), hostOf(rt), port)
 	must(err)
 	defer c.Close()
 	_ = c.SetDeadline(time.Now().Add(time.Duration(secs+70) * time.Second))
@@ -43,7 +53,7 @@ func slowPost(m routes, name string, secs int, expect string) {
 	if status != 200 {
 		got = "cut"
 	}
-	fmt.Printf("slow upload (%ds) via %s on %s: status %d (write error %v), %s\n", secs, name, rt.ID, status, werr, got)
+	fmt.Printf("slow upload (%ds) via %s:%s on %s: status %d (write error %v), %s\n", secs, name, port, rt.ID, status, werr, got)
 	if got != expect {
 		die(fmt.Errorf("slow upload of %ds via %s: want %s, got %s", secs, name, expect, got))
 	}
