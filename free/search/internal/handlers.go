@@ -73,8 +73,7 @@ type SearchRequestBody struct {
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool) {
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w)})
 	})
 	// Index management.
 	r.Post("/v1/indexes", handleCreateIndex(pool))

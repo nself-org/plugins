@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,9 +32,13 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 }
 
 // bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
-func bootMigrationsHealth() map[string]int {
+// On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
+// a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
+func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
+		log.Printf("migrations: status: %v", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return map[string]int{"applied": -1, "expected": -1}
 	}
 	return map[string]int{"applied": st.Applied, "expected": st.Expected}

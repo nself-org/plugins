@@ -23,7 +23,7 @@ func main() {
 	defer pool.Close()
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": localsdk.Name("alpha"), "migrations": bootMigrationsHealth()})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": localsdk.Name("alpha"), "migrations": bootMigrationsHealth(w)})
 	})
 	port := os.Getenv("PORT")
 	if port == "" {

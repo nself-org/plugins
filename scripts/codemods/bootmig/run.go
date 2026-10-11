@@ -17,6 +17,7 @@ package %s
 import (
 	"context"
 	"log"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -41,9 +42,13 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 }
 
 // bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
-func bootMigrationsHealth() map[string]int {
+// On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
+// a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
+func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
+		log.Printf("migrations: status: %%v", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return map[string]int{"applied": -1, "expected": -1}
 	}
 	return map[string]int{"applied": st.Applied, "expected": st.Expected}
@@ -86,14 +91,15 @@ func run(dir, schema string, dry bool) (string, error) {
 	}
 	s := sites[0]
 	health := healthEdit(files)
-	detail := fmt.Sprintf("pool=%s:%d health=%s", filepath.Base(s.file), s.line, map[bool]string{true: "wired", false: "manual"}[health != nil])
+	wired := health != nil && !health.manual
+	detail := fmt.Sprintf("pool=%s:%d health=%s", filepath.Base(s.file), s.line, map[bool]string{true: "wired", false: "manual"}[wired])
 	if dry {
 		return "converted " + detail, nil
 	}
 	src, _ := os.ReadFile(s.file)
 	ind := indentOf(src, s.insert-1)
 	byFile := map[string][]edit{s.file: {{s.insert, "\n" + ind + "mustBootMigrations(" + s.ctx + ", " + s.pool + ")"}}}
-	if health != nil {
+	if wired {
 		byFile[health.file] = append(byFile[health.file], health.edit)
 	}
 	for f, es := range byFile {
@@ -113,12 +119,22 @@ func run(dir, schema string, dry bool) (string, error) {
 }
 
 type healthSite struct {
-	file string
-	edit edit
+	file   string
+	edit   edit
+	manual bool // the health literal was found but cannot be wired safely
+}
+
+// fnScope is the function (declaration or literal) enclosing a node: its type and body.
+type fnScope struct {
+	typ  *ast.FuncType
+	body *ast.BlockStmt
 }
 
 // healthEdit finds the map literal with a "status" key inside a health handler: a function whose name
-// contains "ealth", or any call whose first argument is a string literal ending in "/health".
+// contains "ealth", or any call whose first argument is a string literal ending in "/health". The literal
+// gets `"migrations": bootMigrationsHealth(<w>)`, <w> being the enclosing function's http.ResponseWriter
+// parameter. With no such parameter, or a <w>.WriteHeader call before the literal, nothing is wired
+// (the helper's 503 would be lost or superfluous) and the site is left for hand wiring.
 func healthEdit(files []string) *healthSite {
 	for _, f := range files {
 		src, _ := os.ReadFile(f)
@@ -128,10 +144,13 @@ func healthEdit(files []string) *healthSite {
 			continue
 		}
 		var found *healthSite
-		var walk func(n ast.Node, inHealth bool)
-		walk = func(n ast.Node, inHealth bool) {
+		var walk func(n ast.Node, inHealth bool, fn fnScope)
+		walk = func(n ast.Node, inHealth bool, fn fnScope) {
 			if n == nil || found != nil {
 				return
+			}
+			if fl, ok := n.(*ast.FuncLit); ok {
+				fn = fnScope{fl.Type, fl.Body}
 			}
 			ast.Inspect(n, func(c ast.Node) bool {
 				if found != nil || c == n {
@@ -139,26 +158,34 @@ func healthEdit(files []string) *healthSite {
 				}
 				switch v := c.(type) {
 				case *ast.FuncDecl:
-					walk(v.Body, inHealth || strings.Contains(v.Name.Name, "ealth"))
+					walk(v.Body, inHealth || strings.Contains(v.Name.Name, "ealth"), fnScope{v.Type, v.Body})
+					return false
+				case *ast.FuncLit:
+					walk(v, inHealth, fn)
 					return false
 				case *ast.CallExpr:
 					if len(v.Args) > 0 {
 						if bl, ok := v.Args[0].(*ast.BasicLit); ok && strings.HasSuffix(strings.Trim(bl.Value, "\"`"), "/health") {
 							for _, a := range v.Args[1:] {
-								walk(a, true)
+								walk(a, true, fn)
 							}
 						}
 					}
 				case *ast.CompositeLit:
 					if inHealth && isStatusMap(v) {
-						found = &healthSite{file: f, edit: litEdit(src, fset, v)}
+						w := writerParam(fn.typ)
+						if w == "" || writesHeaderBefore(fn.body, w, v.Pos()) {
+							found = &healthSite{manual: true}
+						} else {
+							found = &healthSite{file: f, edit: litEdit(src, fset, v, w)}
+						}
 						return false
 					}
 				}
 				return true
 			})
 		}
-		walk(af, false)
+		walk(af, false, fnScope{})
 		if found != nil {
 			return found
 		}
@@ -166,6 +193,39 @@ func healthEdit(files []string) *healthSite {
 	return nil
 }
 
+// writerParam returns the name of the http.ResponseWriter parameter of ft, or "" when there is none.
+func writerParam(ft *ast.FuncType) string {
+	if ft == nil || ft.Params == nil {
+		return ""
+	}
+	for _, p := range ft.Params.List {
+		sel, ok := p.Type.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "ResponseWriter" || len(p.Names) == 0 || p.Names[0].Name == "_" {
+			continue
+		}
+		return p.Names[0].Name
+	}
+	return ""
+}
+
+// writesHeaderBefore reports whether body calls <w>.WriteHeader(...) at a position before pos.
+func writesHeaderBefore(body *ast.BlockStmt, w string, pos token.Pos) bool {
+	if body == nil {
+		return false
+	}
+	hit := false
+	ast.Inspect(body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok && call.Pos() < pos {
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "WriteHeader" {
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == w {
+					hit = true
+				}
+			}
+		}
+		return !hit
+	})
+	return hit
+}
 func isStatusMap(cl *ast.CompositeLit) bool {
 	if _, ok := cl.Type.(*ast.MapType); !ok {
 		return false
@@ -185,11 +245,11 @@ func isStatusMap(cl *ast.CompositeLit) bool {
 	return has
 }
 
-func litEdit(src []byte, fset *token.FileSet, cl *ast.CompositeLit) edit {
+func litEdit(src []byte, fset *token.FileSet, cl *ast.CompositeLit, w string) edit {
 	rb := fset.Position(cl.Rbrace).Offset
 	if fset.Position(cl.Lbrace).Line == fset.Position(cl.Rbrace).Line {
-		return edit{rb, `, "migrations": bootMigrationsHealth()`}
+		return edit{rb, `, "migrations": bootMigrationsHealth(` + w + `)`}
 	}
 	line := strings.LastIndexByte(string(src[:rb]), '\n') + 1
-	return edit{line, indentOf(src, rb) + "\t\"migrations\": bootMigrationsHealth(),\n"}
+	return edit{line, indentOf(src, rb) + "\t\"migrations\": bootMigrationsHealth(" + w + "),\n"}
 }
