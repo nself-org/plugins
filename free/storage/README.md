@@ -20,6 +20,7 @@ Set the `S3_*` variables below in the project env so the plugin can reach your S
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
 | `STORAGE_PLUGIN_PORT` | No | `9007` | HTTP server port |
+| `STORAGE_MAX_LARGE_UPLOADS` | No | `8` | Uploads above 1 MiB that may run at once (each holds a 16 MiB buffer; others wait) |
 | `S3_ENDPOINT` | No | `minio:9000` | S3 endpoint, `host[:port]` or a full `http(s)://` URL (config-only, not user-overridable) |
 | `S3_REGION` | No | `us-east-1` | Signing region |
 | `S3_ACCESS_KEY` | With `S3_SECRET_KEY` | — | S3 access key |
@@ -45,8 +46,12 @@ reaches S3 and fails there answers `502 {"error":"object storage error"}`.
 | `DELETE` | `/storage/buckets/{bucket}/objects/{key}` | Delete object from S3 and its metadata row |
 | `GET` | `/storage/buckets/{bucket}/objects` | List objects from Postgres metadata (param: `prefix`) |
 
+**Behaviour change.** `GET .../objects/{key}` now returns the object bytes (with `Content-Type`, `ETag`,
+`X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, so stored HTML or SVG cannot run script from the
+plugin's origin). The JSON metadata row that this route used to return is now `GET .../objects/{key}?metadata=true`.
+
 Bucket names follow S3 rules (3-63 characters of `a-z 0-9 . -`, start and end alphanumeric, no `..`, not an IP
-address); anything else is `400 {"error":"invalid bucket name"}`. Object keys are 1-1024 bytes with no `..`.
+address); anything else is `400 {"error":"invalid bucket name"}`. Object keys are 1-1024 bytes with no `..` and no `.` or `/.` ending. A `X-Hasura-Source-Account-Id` that is blank, `.`, `..` or contains control characters is `400 {"error":"invalid source account id"}`.
 
 ## Storage layout
 
@@ -61,16 +66,21 @@ An account id containing `/` is escaped (`a/b` becomes `a%2Fb`), so one account 
 Deleting a bucket through the API removes that account's objects and bucket row; **the physical S3 bucket is never
 deleted** (it may be shared with other accounts and with apps that use the endpoint directly).
 
+Any account may register a physical bucket that already exists (creating it is idempotent) and write under its own
+prefix, including a bucket that apps use directly. Isolation between accounts is the per-account key prefix, not
+the bucket; use separate S3 credentials or an endpoint-side policy when a bucket must stay closed to the plugin.
+
 Uploads of 16 MiB or less use one `PutObject`; larger uploads use a multipart upload with 16 MiB parts, streamed with
-one part in memory, and are aborted on any failure. The client is path-style with static credentials and
-"when required" request/response checksums (needed by SeaweedFS and MinIO). The server allows 15 minutes per request
-for large uploads.
+one part in memory, and are aborted on any failure. Bodies of 1 MiB or less are buffered in a small allocation; larger
+ones take one of `STORAGE_MAX_LARGE_UPLOADS` slots and a pooled 16 MiB buffer, so process memory stays bounded. The client is path-style with static credentials and
+"when required" request/response checksums (needed by SeaweedFS and MinIO). The server allows 15 minutes per transfer
+(read and write timeouts), so one upload or download that takes longer than 15 minutes fails.
 
 ## S3 operations used
 
 `CreateBucket`, `HeadBucket`, `PutObject`, `GetObject`, `HeadObject`, `DeleteObject`, `DeleteObjects`,
 `CreateMultipartUpload`, `UploadPart`, `CompleteMultipartUpload`, `AbortMultipartUpload`, and SigV4 presigned GET/PUT
-(`internal/s3store`). Apps and plugins that talk to the endpoint directly also rely on `ListBuckets`, `ListObjectsV2`,
+(`internal/s3store`; presigning is library code, no HTTP route exposes it). Apps and plugins that talk to the endpoint directly also rely on `ListBuckets`, `ListObjectsV2`,
 `PutBucketPolicy`/`GetBucketPolicy`, `PutBucketCors`/`GetBucketCors`, `PutBucketVersioning` and `ListObjectVersions`;
 the coverage suite below checks those too.
 
@@ -101,9 +111,9 @@ Pinned images (OCI index digests, also in `run.sh`):
 | Test runner | `golang:1.26-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade` |
 | Database | `postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d` |
 
-To point the suite at another endpoint, set `S3COV_ENDPOINT`, `S3COV_ACCESS_KEY`, `S3COV_SECRET_KEY`, `S3COV_DB_URL`
-`S3COV_TARGET` (`seaweedfs` or `minio`, selects the declared-unsupported table) (and optionally `S3COV_REGION`) and run `go test -mod=vendor -tags s3coverage -count=1 -v ./test/s3coverage/` in this
-directory. Unit tests (`go test -mod=vendor ./...`) need no network, docker or database.
+To point the suite at another endpoint, set `S3COV_ENDPOINT`, `S3COV_ACCESS_KEY`, `S3COV_SECRET_KEY`, `S3COV_DB_URL` and `S3COV_TARGET`
+(`seaweedfs` or `minio`, which selects the declared-unsupported table); `S3COV_REGION` is optional. Then run
+`go test -mod=vendor -tags s3coverage -count=1 -v ./test/s3coverage/` in this directory. Unit tests (`go test -mod=vendor ./...`) need no network, docker or database.
 
 ## Security
 

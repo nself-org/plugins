@@ -4,13 +4,17 @@ package s3coverage
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,20 +31,66 @@ type pluginHarness struct {
 	rec *recorder // counts every request the plugin's own S3 client sends
 }
 
-func newPlugin(t *testing.T) *pluginHarness {
+// newStore builds the plugin's own S3 client for the endpoint under test; h (optional) sees every request.
+func newStore(t *testing.T, h s3.HTTPClient) *s3store.Store {
 	t.Helper()
-	rec := &recorder{}
 	st, err := s3store.New(s3store.Config{
-		Endpoint: env.baseURL, Region: env.region, AccessKey: env.access, SecretKey: env.secret, HTTPClient: rec,
+		Endpoint: env.baseURL, Region: env.region, AccessKey: env.access, SecretKey: env.secret, HTTPClient: h,
 	})
 	if err != nil {
 		t.Fatalf("s3store.New: %v", err)
 	}
+	return st
+}
+
+func newPlugin(t *testing.T) *pluginHarness {
+	t.Helper()
+	p, _ := newPluginWrapped(t)
+	return p
+}
+
+// failStore wraps the real store and fails chosen operations on demand (S3 failure injection).
+type failStore struct {
+	internal.ObjectStore
+	failPut, failDelete, deleteNotFound, failDeleteObjects atomic.Bool
+}
+
+var errInjected = errors.New("injected S3 failure")
+
+func (f *failStore) Put(c context.Context, bucket, key string, body io.Reader, ct string) (s3store.PutResult, error) {
+	if f.failPut.Load() {
+		return s3store.PutResult{}, errInjected
+	}
+	return f.ObjectStore.Put(c, bucket, key, body, ct)
+}
+
+func (f *failStore) Delete(c context.Context, bucket, key string) error {
+	if f.failDelete.Load() {
+		return errInjected
+	}
+	if f.deleteNotFound.Load() {
+		return fmt.Errorf("%w: injected", s3store.ErrNotFound)
+	}
+	return f.ObjectStore.Delete(c, bucket, key)
+}
+
+func (f *failStore) DeleteObjects(c context.Context, bucket string, keys []string) error {
+	if f.failDeleteObjects.Load() {
+		return errInjected
+	}
+	return f.ObjectStore.DeleteObjects(c, bucket, keys)
+}
+
+// newPluginWrapped is newPlugin with a failure-injecting store in front of the real one.
+func newPluginWrapped(t *testing.T) (*pluginHarness, *failStore) {
+	t.Helper()
+	rec := &recorder{}
+	fs := &failStore{ObjectStore: newStore(t, rec)}
 	r := chi.NewRouter()
-	internal.NewServer(pool, &internal.Config{Port: "0"}, st).Routes(r)
+	internal.NewServer(pool, &internal.Config{Port: "0"}, fs).Routes(r)
 	ts := httptest.NewServer(r)
 	t.Cleanup(ts.Close)
-	return &pluginHarness{url: ts.URL, rec: rec}
+	return &pluginHarness{url: ts.URL, rec: rec}, fs
 }
 
 // call performs a plugin API request as the given tenant.
@@ -209,6 +259,9 @@ func TestPlugin_SmallObjectAndMetadata(t *testing.T) {
 	if !bytes.Equal(got, data) || hdr.Get("Content-Type") != "text/plain" || hdr.Get("ETag") == "" {
 		t.Fatalf("GET bytes equal=%v type %q etag %q", bytes.Equal(got, data), hdr.Get("Content-Type"), hdr.Get("ETag"))
 	}
+	if hdr.Get("X-Content-Type-Options") != "nosniff" || hdr.Get("Content-Security-Policy") != "sandbox" {
+		t.Errorf("download hardening headers: nosniff %q, CSP %q", hdr.Get("X-Content-Type-Options"), hdr.Get("Content-Security-Policy"))
+	}
 	// ?metadata=true keeps the pre-S3 JSON shape.
 	_, _, meta := p.call(t, "", http.MethodGet, "/storage/buckets/"+bucket+"/objects/small.txt?metadata=true", nil, "")
 	var row struct {
@@ -262,5 +315,92 @@ func TestPlugin_TenantIsolationInSharedBucket(t *testing.T) {
 	}
 	if code, _, _ := p.call(t, "tenant-b", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusNoContent {
 		t.Errorf("tenant-b DELETE bucket: %d", code)
+	}
+}
+
+// rowCount returns how many metadata rows exist for bucket/key (key "" counts the bucket rows instead).
+func rowCount(t *testing.T, bucket, key string) int {
+	t.Helper()
+	var n int
+	var err error
+	if key == "" {
+		err = pool.QueryRow(ctx, `SELECT count(*) FROM np_storage_buckets WHERE name = $1`, bucket).Scan(&n)
+	} else {
+		err = pool.QueryRow(ctx, `SELECT count(*) FROM np_storage_objects o JOIN np_storage_buckets b ON b.id = o.bucket_id
+			WHERE b.name = $1 AND o.key = $2`, bucket, key).Scan(&n)
+	}
+	if err != nil {
+		t.Fatalf("rowCount: %v", err)
+	}
+	return n
+}
+
+// The S3 call always comes first: a failed S3 write leaves no row, a failed S3 delete keeps the row.
+func TestPlugin_S3FailureKeepsDatabaseConsistent(t *testing.T) {
+	p, fs := newPluginWrapped(t)
+	bucket := p.createBucket(t, "")
+	obj := "/storage/buckets/" + bucket + "/objects/"
+
+	// Put failure -> 502 and no row.
+	fs.failPut.Store(true)
+	if code, _, _ := p.call(t, "", http.MethodPut, obj+"a.txt", strings.NewReader("data"), "text/plain"); code != http.StatusBadGateway {
+		t.Fatalf("PUT with S3 failing: %d, want 502", code)
+	}
+	if n := rowCount(t, bucket, "a.txt"); n != 0 {
+		t.Fatalf("%d row(s) after a failed S3 write", n)
+	}
+	fs.failPut.Store(false)
+	for _, k := range []string{"a.txt", "b.txt"} {
+		if code, _, body := p.call(t, "", http.MethodPut, obj+k, strings.NewReader("data"), "text/plain"); code != 200 {
+			t.Fatalf("PUT %s: %d %s", k, code, body)
+		}
+	}
+
+	// Delete failure -> 502, row and S3 object kept.
+	fs.failDelete.Store(true)
+	if code, _, _ := p.call(t, "", http.MethodDelete, obj+"a.txt", nil, ""); code != http.StatusBadGateway {
+		t.Fatalf("DELETE with S3 failing: %d, want 502", code)
+	}
+	if n := rowCount(t, bucket, "a.txt"); n != 1 {
+		t.Fatalf("row count after a failed S3 delete = %d, want 1", n)
+	}
+	if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String("primary/a.txt")}); err != nil {
+		t.Fatalf("S3 object vanished although the delete failed: %v", err)
+	}
+	fs.failDelete.Store(false)
+
+	// S3 says the key is already gone -> counts as deleted: 204 and the row goes.
+	fs.deleteNotFound.Store(true)
+	if code, _, _ := p.call(t, "", http.MethodDelete, obj+"b.txt", nil, ""); code != http.StatusNoContent {
+		t.Fatalf("DELETE with S3 NotFound: %d, want 204", code)
+	}
+	if n := rowCount(t, bucket, "b.txt"); n != 0 {
+		t.Fatalf("row kept after S3 reported the key gone: %d", n)
+	}
+	fs.deleteNotFound.Store(false)
+
+	// Bucket delete with DeleteObjects failing -> 502, bucket row and object rows kept.
+	fs.failDeleteObjects.Store(true)
+	if code, _, _ := p.call(t, "", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusBadGateway {
+		t.Fatalf("DELETE bucket with S3 failing: %d, want 502", code)
+	}
+	if rowCount(t, bucket, "") != 1 || rowCount(t, bucket, "a.txt") != 1 {
+		t.Fatalf("rows lost although DeleteObjects failed (bucket %d, object %d)", rowCount(t, bucket, ""), rowCount(t, bucket, "a.txt"))
+	}
+	fs.failDeleteObjects.Store(false)
+	if code, _, _ := p.call(t, "", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusNoContent {
+		t.Fatalf("DELETE bucket after recovery: %d", code)
+	}
+	if rowCount(t, bucket, "") != 0 || rowCount(t, bucket, "a.txt") != 0 {
+		t.Fatal("rows left after a successful bucket delete")
+	}
+}
+
+func TestPlugin_RejectsInvalidAccountID(t *testing.T) {
+	p := newPlugin(t)
+	for _, id := range []string{"..", "."} {
+		if code, _, body := p.call(t, id, http.MethodGet, "/storage/buckets", nil, ""); code != http.StatusBadRequest || !strings.Contains(string(body), "invalid source account id") {
+			t.Errorf("account %q: %d %s", id, code, body)
+		}
 	}
 }

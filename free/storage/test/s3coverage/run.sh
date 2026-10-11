@@ -97,20 +97,25 @@ docker run --rm --network "$NET" --env-file "$WORK/runner.env" \
   -v "$MODROOT:/src:ro" -w /src \
   -e CGO_ENABLED=0 -e GOFLAGS=-mod=vendor -e GOCACHE=/tmp/gocache -e GOTMPDIR=/tmp -e GOTOOLCHAIN=local \
   "$RUNNER_IMAGE" \
-  go test -mod=vendor -tags s3coverage -count=1 -v -timeout 25m ./test/s3coverage/ >"$WORK/out.txt" 2>&1 || rc=$?
+  sh -c 'go test -mod=vendor -tags s3coverage -list "^Test(Op|Plugin)_" ./test/s3coverage/ >/tmp/list.txt 2>&1 || { cat /tmp/list.txt; exit 1; }
+    echo "S3COV_EXPECTED=$(grep -c "^Test" /tmp/list.txt)"
+    go test -mod=vendor -tags s3coverage -count=1 -v -timeout 25m ./test/s3coverage/' >"$WORK/out.txt" 2>&1 || rc=$?
 
-grep -E '^(=== RUN|--- (PASS|FAIL|SKIP)|PASS$|FAIL|ok |panic|\s+[a-z0-9_]+\.go:[0-9]+:)' "$WORK/out.txt" | grep -v '^=== RUN' || true
+grep -E '^(S3COV_EXPECTED|--- (PASS|FAIL|SKIP)|PASS$|FAIL|ok |panic|\s+[a-z0-9_]+\.go:[0-9]+:)' "$WORK/out.txt" || true
 passed=$(grep -cE '^--- PASS: Test(Op|Plugin)_' "$WORK/out.txt" || true)
 failed=$(grep -cE '^--- FAIL: Test' "$WORK/out.txt" || true)
 # Declared-unsupported ops are logged by the tests as "declared unsupported: <target> <Op> (<Code>); ...".
 declared=$(sed -n 's/.*declared unsupported: [a-z]* \([A-Za-z]*\) (.*/\1/p' "$WORK/out.txt" | sort -u | paste -sd, -)
 [ -n "$declared" ] || declared=none
-if [ "$rc" -ne 0 ] || [ "$failed" -ne 0 ] || [ "$passed" -eq 0 ]; then
+# A deleted or renamed test must not go unnoticed: every TestOp_/TestPlugin_ function found by `go test -list` has to pass.
+expected=$(sed -n 's/^S3COV_EXPECTED=//p' "$WORK/out.txt" | head -1)
+expected=${expected:-0}
+if [ "$rc" -ne 0 ] || [ "$failed" -ne 0 ] || [ "$expected" -eq 0 ] || [ "$passed" -lt "$expected" ]; then
   echo "== full test output"
   cat "$WORK/out.txt"
   echo "== $KIND server log (tail)"
   docker logs --tail 60 "$C_S3" 2>&1 || true
-  echo "s3coverage $KIND: FAIL ($passed passed, $failed failed) declared-unsupported: $declared"
+  echo "s3coverage $KIND: FAIL ($passed passed of $expected, $failed failed) declared-unsupported: $declared"
   exit 1
 fi
-echo "s3coverage $KIND: ok ($passed passed, $failed failed) declared-unsupported: $declared"
+echo "s3coverage $KIND: ok ($passed passed of $expected, $failed failed) declared-unsupported: $declared"

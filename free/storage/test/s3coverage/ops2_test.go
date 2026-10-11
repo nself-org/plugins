@@ -43,20 +43,20 @@ func TestOp_PresignedGet(t *testing.T) {
 	b := newBucket(t)
 	data := payload(10_000, 6)
 	putBytes(t, b, "p/get.bin", data)
-	ps := s3.NewPresignClient(direct)
-	req, err := ps.PresignGetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(b), Key: aws.String("p/get.bin")}, s3.WithPresignExpires(time.Minute))
+	// The URL comes from the plugin's own code (s3store.PresignGet).
+	u, err := newStore(t, nil).PresignGet(ctx, b, "p/get.bin", time.Minute)
 	if err != nil {
-		t.Fatalf("PresignGetObject: %v", err)
+		t.Fatalf("PresignGet: %v", err)
 	}
-	if !strings.Contains(req.URL, "X-Amz-Signature=") {
-		t.Fatalf("not a SigV4 query URL: %s", req.URL)
+	if !strings.Contains(u, "X-Amz-Signature=") {
+		t.Fatalf("not a SigV4 query URL: %s", u)
 	}
-	code, _, body := httpDo(t, http.MethodGet, req.URL, nil, nil)
+	code, _, body := httpDo(t, http.MethodGet, u, nil, nil)
 	if code != 200 || !bytes.Equal(body, data) {
 		t.Fatalf("presigned GET: status %d, %d bytes (want 200, %d)", code, len(body), len(data))
 	}
 	// A tampered signature must be refused.
-	bad := strings.Replace(req.URL, "X-Amz-Signature=", "X-Amz-Signature=00", 1)
+	bad := strings.Replace(u, "X-Amz-Signature=", "X-Amz-Signature=00", 1)
 	if code, _, _ := httpDo(t, http.MethodGet, bad, nil, nil); code == 200 {
 		t.Errorf("tampered presigned URL was accepted")
 	}
@@ -65,12 +65,12 @@ func TestOp_PresignedGet(t *testing.T) {
 func TestOp_PresignedPut(t *testing.T) {
 	b := newBucket(t)
 	data := payload(20_000, 7)
-	ps := s3.NewPresignClient(direct)
-	req, err := ps.PresignPutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(b), Key: aws.String("p/put.bin")}, s3.WithPresignExpires(time.Minute))
+	// The URL comes from the plugin's own code (s3store.PresignPut).
+	u, err := newStore(t, nil).PresignPut(ctx, b, "p/put.bin", time.Minute)
 	if err != nil {
-		t.Fatalf("PresignPutObject: %v", err)
+		t.Fatalf("PresignPut: %v", err)
 	}
-	code, _, body := httpDo(t, http.MethodPut, req.URL, bytes.NewReader(data), nil)
+	code, _, body := httpDo(t, http.MethodPut, u, bytes.NewReader(data), nil)
 	if code != 200 {
 		t.Fatalf("presigned PUT: status %d: %s", code, body)
 	}
