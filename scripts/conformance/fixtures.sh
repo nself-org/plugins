@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # fixtures.sh (check.sh --fixtures): convert the v1 fixtures with the codemods, require the gate to PASS on
 # every converted fixture (all rules, including the vendored build from the extracted tarball), then plant
-# each defect on a copy and require the named rule to FAIL.
+# each defect on a copy and require the named rule to FAIL. The migration rules (D-0346) compare with a baseline: a copy
+# of the converted fixtures (alpha is then a plugin whose release already applied migrations at boot).
 set -u
 . "$(dirname "$0")/lib.sh"
 work=$(conf_work)/gate-fixtures; conv=$work/converted; mut=$work/mut; rc=0
-rm -rf "$work"; mkdir -p "$work"
+mig=$work/migbase; rm -rf "$work"; mkdir -p "$work"
 bash "$CONF_ROOT/scripts/codemods/run.sh" --fixtures --out "$conv" >"$work/codemods.log" 2>&1 || { cat "$work/codemods.log"; echo "fixtures: codemods failed"; exit 1; }
+cp -R "$conv" "$mig"; mkdir -p "$work/migempty"
 for p in alpha beta gamma; do
-  if out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins "$p" 2>&1); then echo "pass  converted fixture $p"
+  if out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins "$p" --migration-base "$mig" 2>&1); then echo "pass  converted fixture $p"
   else echo "FAIL  converted fixture $p should pass:"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
 done
 edit() { local f=$1; shift; sed -e "$@" "$f" > "$f.tmp" && mv "$f.tmp" "$f"; }
@@ -19,9 +21,17 @@ plant() {
   local id=$1 p=$2 rule=$3 snip=$4; shift 4
   rm -rf "$mut/$id"; mkdir -p "$mut/$id"; cp -R "$conv/$p" "$mut/$id/$p"
   ( cd "$mut/$id/$p" && eval "$snip" )
-  local out; out=$(bash "$CONF_DIR/check.sh" --root "$mut/$id" --plugins "$p" --rules "$rule" "$@" 2>&1); local r=$?
+  local out; out=$(bash "$CONF_DIR/check.sh" --root "$mut/$id" --plugins "$p" --rules "$rule" --migration-base "$mig" "$@" 2>&1); local r=$?
   if [ $r -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL $rule "; then echo "pass  defect $id fails rule $rule"
   else echo "FAIL  defect $id: rule $rule did not fail (rc=$r)"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
+}
+# pass_plant <id> <plugin> <rules> <snippet> [extra check.sh args]: apply the snippet to a copy, require the rules to PASS.
+pass_plant() {
+  local id=$1 p=$2 rules=$3 snip=$4; shift 4
+  rm -rf "$mut/$id"; mkdir -p "$mut/$id"; cp -R "$conv/$p" "$mut/$id/$p"
+  ( cd "$mut/$id/$p" && eval "$snip" )
+  local out; out=$(bash "$CONF_DIR/check.sh" --root "$mut/$id" --plugins "$p" --rules "$rules" --migration-base "$mig" "$@" 2>&1)
+  if [ $? -eq 0 ]; then echo "pass  fixture $id passes rules $rules"; else echo "FAIL  fixture $id should pass rules $rules:"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
 }
 plant legacy-key alpha compat "jqe '.bundles = [\"x\"]'"
 plant bad-enum alpha schema "jqe '.maturity = \"bogus\"'"
@@ -47,6 +57,33 @@ plant replace-gowork-block alpha replace "printf 'go 1.25\n\nuse (\n\t.\n\t\"../
 plant replace-gowork-replace alpha replace "printf 'go 1.25\n\nreplace example.com/o => ../outside\n' > go.work"
 plant apply-in-comment alpha migrations "rm cmd/boot_migrations.go; printf '\n// migrate.Apply(ctx, pool, opts) is wired later\n/* migrate.Apply( */\n' >> cmd/main.go"
 plant apply-in-test-only alpha migrations "mv cmd/boot_migrations.go cmd/boot_migrations_test.go"
+# Migration rules (D-0346): frozen released files, replay-safe new files, renames proven by a fixture.
+newsql() { mkdir -p migrations; printf '%s\n' "$2" > "migrations/$1"; }
+renfx() { mkdir -p tests/boot; printf '%s\n' "$1" > tests/boot/legacy-renames; }
+# Snippets are eval'd inside the plugin copy and read these variables.
+# shellcheck disable=SC2034  # the three variables below are read by the eval'd snippets
+RENAME='ALTER TABLE IF EXISTS public.alpha_items RENAME TO np_alpha_items2;'
+DYN='DO $$ BEGIN FOR t IN SELECT o, n FROM (VALUES ('"'a1', 'b1'), ('a2', 'b2'"')) AS v(o, n) LOOP IF to_regclass('"'public.' || quote_ident(t.o)"') IS NOT NULL THEN EXECUTE format('"'ALTER TABLE public.%I RENAME TO %I'"', t.o, t.n); END IF; END LOOP; END $$;'
+GOOD='CREATE INDEX IF NOT EXISTS idx_np_alpha_items_name ON np_alpha_items (name);
+INSERT INTO np_alpha_items (id, name) VALUES (100, '"'x'"') ON CONFLICT DO NOTHING;
+DO $$ BEGIN IF to_regclass('"'public.np_alpha_items'"') IS NOT NULL THEN EXECUTE '"'ANALYZE np_alpha_items'"'; END IF; END $$;'
+plant edit-released alpha migration-immutable "echo '-- touched' >> migrations/001_init.sql"
+plant delete-released alpha migration-immutable "rm migrations/002_seed.sql"
+plant new-plain-index alpha migration-idempotent 'newsql 003_x.sql "CREATE INDEX idx_np_alpha_items_name ON np_alpha_items (name);"'
+plant new-plain-insert alpha migration-idempotent 'newsql 003_x.sql "INSERT INTO np_alpha_items (name) VALUES ('"'third'"');"'
+plant new-add-constraint alpha migration-idempotent 'newsql 003_x.sql "ALTER TABLE np_alpha_items ADD CONSTRAINT np_alpha_items_name_chk CHECK (length(name) > 0);"'
+plant new-unguarded-do-execute alpha migration-idempotent 'newsql 003_x.sql "DO \$\$ BEGIN EXECUTE '"'CREATE TABLE np_alpha_extra (id int)'"'; END \$\$;"'
+plant unreleased-alpha alpha migration-idempotent ":" --migration-base "$work/migempty"
+plant rename-no-fixture alpha legacy-renames 'newsql 003_rename.sql "$RENAME"'
+plant rename-wrong-pair alpha legacy-renames 'newsql 003_rename.sql "$RENAME"; renfx "alpha_items np_alpha_other"'
+plant rename-dynamic-mismatch alpha legacy-renames 'newsql 003_rename.sql "$DYN"; renfx "a1 b1"'
+plant probe-without-renames alpha legacy-renames "mkdir -p tests/boot; echo 'SELECT 1;' > tests/boot/legacy-probe.sql"
+pass_plant new-guarded alpha migration-immutable,migration-idempotent,legacy-renames 'newsql 003_x.sql "$GOOD"'
+pass_plant rename-with-fixture alpha migration-immutable,migration-idempotent,legacy-renames 'newsql 003_rename.sql "$RENAME"; renfx "alpha_items np_alpha_items2"'
+pass_plant rename-dynamic-with-fixture alpha migration-idempotent,legacy-renames 'newsql 003_rename.sql "$DYN"; renfx "a1 b1
+a2 b2"'
+printf 'exceptions:\n  - rule: migration-immutable\n    plugin: alpha\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2026-12-31\n' > "$work/exc-imm.yaml"
+pass_plant edit-released-with-exception alpha migration-immutable "echo '-- touched' >> migrations/001_init.sql" --exceptions "$work/exc-imm.yaml"
 # A gate that checks no plugin fails; a named plugin that does not exist fails.
 mkdir -p "$work/empty"
 for args in "--plugins nonexistent" "--all --root $work/empty"; do

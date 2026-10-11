@@ -2,7 +2,13 @@
 # check.sh: the free-plugin conformance gate (P7-PLUG-03). Enforced for every plugin whose plugin.json
 # has manifest_version 2; v1 plugins are reported and keep the validate.yml checks.
 # Usage: check.sh [--plugins a,b | --changed | --all | --fixtures] [--rules r1,r2] [--root DIR] [--exceptions FILE]
-# Rules: exceptions (global), schema compat healthcheck replace docker-socket migrations repository ports build.
+#                 [--migration-base DIR]
+# Rules: exceptions (global), schema compat healthcheck replace docker-socket migrations migration-immutable
+#        migration-idempotent legacy-renames repository ports build.
+# migration-immutable and migration-idempotent compare a plugin with the last release: --migration-base DIR is a directory
+# holding <plugin> trees of that release. Without it the gate resolves the last v* tag (git describe; CI needs fetch-depth
+# 0 or fetched tags), extracts `free` from it with git archive into the work dir and prints "migration baseline: <tag>";
+# no tag fails the gate.
 # --rules runs only the named rules and prints which ran; exit 0 means those rules passed, nothing else.
 # Exit: 0 all pass, 1 a rule failed, 2 usage. A rule that cannot run (no docker, no tool) fails, a named plugin that
 # does not exist fails, and --plugins/--all that checked no manifest v2 plugin fails (a gate that runs nothing is
@@ -10,11 +16,12 @@
 set -u
 . "$(dirname "$0")/lib.sh"
 mode=all; list=; root=$CONF_ROOT/free; rules=; exc=$CONF_DIR/exceptions.yaml
-ALL="schema compat healthcheck replace docker-socket migrations repository ports build"
+ALL="schema compat healthcheck replace docker-socket migrations migration-immutable migration-idempotent legacy-renames repository ports build"
+migbase=
 while [ $# -gt 0 ]; do case $1 in
   --plugins) mode=plugins; list=$2; shift;; --changed) mode=changed;; --all) mode=all;;
   --fixtures) mode=fixtures;; --rules) rules=$(printf '%s' "$2" | tr ',' ' '); shift;;
-  --root) root=$2; shift;; --exceptions) exc=$2; shift;;
+  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --migration-base) migbase=$2; shift;;
   *) echo "check.sh: unknown argument $1" >&2; exit 2;; esac; shift; done
 [ -n "$rules" ] || rules="exceptions $ALL"
 if [ "$mode" = fixtures ]; then exec bash "$CONF_DIR/fixtures.sh"; fi
@@ -24,6 +31,22 @@ case $mode in
 esac
 rc=0; checked=0; v1=0
 echo "rules: $rules"
+case " $rules " in *" migration-immutable "*|*" migration-idempotent "*)
+  if [ -n "$migbase" ]; then export CONF_MIG_LABEL=$migbase
+  else
+    tag=$(git -C "$CONF_ROOT" describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null)
+    if [ -z "$tag" ]; then echo "FAIL check: cannot resolve the last release tag (fetch tags)"; rc=1
+    else
+      migbase=$(conf_work)/migbase-$tag
+      if [ ! -d "$migbase/free" ]; then
+        rm -rf "$migbase"; mkdir -p "$migbase"
+        git -C "$CONF_ROOT" archive "$tag" free | tar -x -C "$migbase" || { echo "FAIL check: cannot extract free from $tag"; rc=1; }
+      fi
+      migbase=$migbase/free; export CONF_MIG_LABEL=$tag
+    fi
+  fi
+  [ -z "$migbase" ] || echo "migration baseline: $CONF_MIG_LABEL";;
+esac
 case " $rules " in *" exceptions "*) bash "$CONF_DIR/rules/exceptions.sh" "$exc" || rc=1;; esac
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p
@@ -37,6 +60,8 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
     case $r in exceptions) continue;; build) cmd="bash $CONF_DIR/build-from-tarball.sh $dir";;
       ports) cmd="bash $CONF_DIR/ports.sh --plugins $p --root $root";;
       docker-socket) cmd="bash $CONF_DIR/rules/docker-socket.sh $dir $exc";;
+      migration-immutable|migration-idempotent) [ -n "$migbase" ] || continue; cmd="bash $CONF_DIR/rules/$r.sh $dir $exc $migbase";;
+      legacy-renames) cmd="bash $CONF_DIR/rules/legacy-renames.sh $dir $exc";;
       *) cmd="bash $CONF_DIR/rules/$r.sh $dir";; esac
     out=$($cmd 2>&1) || { rc=1; printf '%s\n' "$out" | grep . | sed "s/^/[$p] /"; }
   done
