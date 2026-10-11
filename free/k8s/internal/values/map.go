@@ -1,9 +1,9 @@
 // Purpose: map the resolved compose model to the k8s values and secrets
 // documents. Mapping (EPIC D7): long-running service -> Deployment, postgres
 // -> StatefulSet, restart "no" -> Job, nginx -> Ingress rules, a service with
-// a build context and no image, or with host-level compose features, ->
-// unsupported with a reason. Every compose service lands in Services or in
-// Unsupported; nothing is approximated silently (per-service NotMapped lists
+// a build context and no image, an image with neither tag nor digest, or with
+// host-level compose features, -> unsupported with a reason. Every compose
+// service lands in Services or in Unsupported; nothing is approximated silently (per-service NotMapped lists
 // the compose features that have no counterpart).
 //
 // Inputs: Model, optional Routes.
@@ -13,7 +13,9 @@
 // Constraints: values.yaml never receives an env value (Env holds names);
 // an unresolved "${" in an image or env value is an error that names the
 // service and variable, never the value. Image references are only split,
-// never invented.
+// never invented: no tag is added, and an untagged, undigested image is
+// refused (k8s would pull a moving latest). Every mapped workload carries
+// pullPolicy IfNotPresent.
 package values
 
 import (
@@ -74,8 +76,21 @@ func unsupportedReason(name string, cs ComposeSvc) string {
 		return "pid or ipc namespace sharing has no mapping"
 	case len(cs.Devices) > 0:
 		return "host devices have no mapping"
+	case noTagOrDigest(cs.Image):
+		return "image has no tag or digest (k8s would pull a moving latest); pin a tag or digest in compose"
 	}
 	return ""
+}
+
+// noTagOrDigest reports whether image is a reference with neither tag nor
+// digest. An image with an unresolved "${" is not judged here: mapService
+// rejects it with its own error.
+func noTagOrDigest(image string) bool {
+	if strings.Contains(image, "${") {
+		return false
+	}
+	_, tag, digest := SplitImage(image)
+	return tag == "" && digest == ""
 }
 
 // mapService returns the Service and its env map. A zero-Kind result carries
@@ -90,6 +105,7 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 		svc.NotMapped = []string{"nginx-config: only the root location of each route becomes an Ingress rule"}
 		return svc, nil, nil
 	}
+	svc.PullPolicy = PullIfNotPresent
 	svc.Entrypoint, svc.Command = cs.Entrypoint, cs.Command
 	env := map[string]string{}
 	for _, k := range sortedKeys(cs.Environment) {
@@ -175,8 +191,9 @@ func orDefault(s, d string) string {
 	return s
 }
 
-// SplitImage splits a reference into repository, tag and digest. A reference
-// without tag or digest gets the tag "latest" (what compose pulls).
+// SplitImage splits a reference into repository, tag and digest. Nothing is
+// invented: a reference without tag or digest returns an empty tag and digest
+// (Map refuses such a service, see noTagOrDigest).
 func SplitImage(ref string) (repo, tag, digest string) {
 	if i := strings.LastIndex(ref, "@"); i >= 0 {
 		ref, digest = ref[:i], ref[i+1:]
@@ -185,10 +202,7 @@ func SplitImage(ref string) (repo, tag, digest string) {
 	if c := strings.LastIndex(ref, ":"); c > slash {
 		return ref[:c], ref[c+1:], digest
 	}
-	if digest == "" {
-		tag = "latest"
-	}
-	return ref, tag, digest
+	return ref, "", digest
 }
 
 func sortedKeys[V any](m map[string]V) []string {

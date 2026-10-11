@@ -6,7 +6,7 @@
 // (.nself/generated/k8s/{values,secrets}.yaml) and are passed with --values.
 //
 // Inputs: InstallOptions (project dir, embedded chart, release, kubeconfig,
-// domain, licence key, plugins).
+// kube context, domain, licence key, plugins).
 //
 // Outputs: helm's stdout and stderr, inherited.
 //
@@ -16,8 +16,12 @@
 // The install overlay (domain, plugins) goes to helm on stdin (--values -), so
 // no overlay file exists to leave behind. helm runs with a cleaned environment
 // (env.go). The kubeconfig is passed with --kubeconfig only when the caller
-// gives one (the --cluster flag); otherwise helm reads KUBECONFIG itself. There
-// is no remote chart repository. buildArgs (args.go) assembles the argv so
+// gives one (the --cluster flag); otherwise helm reads KUBECONFIG itself. An
+// explicit KubeContext is passed with --kube-context and strips the inherited
+// HELM_KUBECONTEXT/HELM_KUBEAPISERVER; the target (kubeconfig, context, API
+// server without userinfo) is announced on stderr before helm runs. Upgrade
+// runs --atomic, so a failed upgrade rolls back. There is no remote chart
+// repository. buildArgs (args.go) assembles the argv so
 // tests can check it without running helm.
 package k8s
 
@@ -28,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 )
@@ -46,6 +51,10 @@ type InstallOptions struct {
 	ReleaseName string
 	Domain      string
 	Kubeconfig  string
+	// KubeContext is an explicit kube context. When set it is passed as
+	// --kube-context and the inherited HELM_KUBECONTEXT and HELM_KUBEAPISERVER
+	// are stripped from helm's environment.
+	KubeContext string
 	// LicenseKey is read from the environment but not passed to helm until the
 	// chart consumes it (D-0311); see HasUnusedLicence.
 	LicenseKey string
@@ -72,7 +81,13 @@ type HelmError struct {
 	Err  error  // the exec error (an *exec.ExitError for a non-zero helm exit)
 	// NotFound is true when helm said the release does not exist.
 	NotFound bool
-	text     string
+	// Stderr is helm's trimmed stderr (last 512 bytes) for status failures;
+	// it is not part of Error(). cmd prints it in a follow-up (D-0315).
+	Stderr string
+	// Hint is the recovery advice for an upgrade failure (the --atomic
+	// rollback); it is not part of Error(). cmd prints it in a follow-up (D-0315).
+	Hint string
+	text string
 }
 
 func (e *HelmError) Error() string { return e.text }
@@ -134,14 +149,14 @@ func run(ctx context.Context, verb string, opts InstallOptions) error {
 		return err
 	}
 	args := buildArgs(verb, opts, chartDir, vf, len(overlay) > 0)
-	announceTarget(os.Stderr, opts.Kubeconfig)
+	announceTarget(os.Stderr, opts.Kubeconfig, opts.KubeContext)
 	cmd := exec.CommandContext(ctx, helm, args...)
 	cmd.Stdout = opts.Stdout
 	if cmd.Stdout == nil {
 		cmd.Stdout = os.Stdout
 	}
 	cmd.Stderr = os.Stderr
-	cmd.Env = helmEnv(os.Environ())
+	cmd.Env = helmEnvFor(os.Environ(), opts.KubeContext)
 	if len(overlay) > 0 {
 		cmd.Stdin = bytes.NewReader(overlay)
 	}
@@ -151,25 +166,36 @@ func run(ctx context.Context, verb string, opts InstallOptions) error {
 	return nil
 }
 
-// runError wraps a helm failure. A failed first install leaves the release in
-// state "failed": helm then refuses both install ("cannot re-use a name that is
-// still in use") and upgrade ("has no deployed releases"), so say how to leave it.
+// runError wraps a helm failure. A failed upgrade runs with --atomic, so helm
+// rolls the release back; Hint says how to check it. A failed first install leaves the
+// release in state "failed": helm then refuses both install ("cannot re-use a
+// name that is still in use") and upgrade ("has no deployed releases"), so say
+// how to leave it.
 func runError(verb string, opts InstallOptions, err error) error {
-	if verb != "install" {
-		return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm %s: %v", verb, err)}
-	}
 	release := opts.ReleaseName
 	if release == "" {
 		release = HelmReleaseName
 	}
-	return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm install: %v\nIf the release was left in a failed state, remove it with 'helm uninstall %s' "+
-		"(add --kubeconfig for your cluster) and run 'nself k8s install' again; 'nself k8s upgrade' only works once a "+
-		"revision is deployed", err, release)}
+	switch verb {
+	case "install":
+		return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm install: %v\nIf the release was left in a failed state, remove it with 'helm uninstall %s' "+
+			"(add --kubeconfig for your cluster) and run 'nself k8s install' again; 'nself k8s upgrade' only works once a "+
+			"revision is deployed", err, release)}
+	case "upgrade":
+		return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm upgrade: %v", err),
+			Hint: fmt.Sprintf("helm rolled the release back to its last deployed revision (--atomic). "+
+				"Check it with 'helm history %s'; if the rollback itself failed, run 'helm rollback %s' "+
+				"(add --kubeconfig for your cluster).", release, release)}
+	}
+	return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm %s: %v", verb, err)}
 }
 
-// announceTarget tells which kubeconfig helm will use, so a stale current
-// context that points at a real cluster is visible before anything is applied.
-func announceTarget(w io.Writer, kubeconfig string) {
+// announceTarget tells which kubeconfig, kube context and API server helm will
+// use (the context and server lines only when one is set), so a stale current
+// context or an inherited HELM_KUBE* variable that points at a real cluster is visible before anything is applied. The API
+// server URL is printed without userinfo; no other HELM_KUBE* value (such as
+// HELM_KUBETOKEN) is ever printed.
+func announceTarget(w io.Writer, kubeconfig, kubeContext string) {
 	switch {
 	case kubeconfig != "":
 		fmt.Fprintf(w, "k8s: target kubeconfig %s (--cluster)\n", kubeconfig)
@@ -178,4 +204,25 @@ func announceTarget(w io.Writer, kubeconfig string) {
 	default:
 		fmt.Fprintln(w, "k8s: target kubeconfig ~/.kube/config (current context)")
 	}
+	switch envCtx := os.Getenv("HELM_KUBECONTEXT"); {
+	case kubeContext != "":
+		fmt.Fprintf(w, "k8s: target context %s (--context)\n", kubeContext)
+	case envCtx != "":
+		fmt.Fprintf(w, "k8s: target context %s (inherited HELM_KUBECONTEXT)\n", envCtx)
+	}
+	if api := os.Getenv("HELM_KUBEAPISERVER"); kubeContext == "" && api != "" {
+		fmt.Fprintf(w, "k8s: target API server %s (inherited HELM_KUBEAPISERVER)\n", redactURL(api))
+	}
+}
+
+// redactURL returns raw without userinfo, or "(unparsable value)" when raw is
+// not a URL with a host (the raw text is never echoed then, so a value such as
+// "user:pass@host", which parses as an opaque URL, cannot leak).
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "(unparsable value)"
+	}
+	u.User = nil
+	return u.String()
 }

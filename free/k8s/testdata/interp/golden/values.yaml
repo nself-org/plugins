@@ -4,6 +4,7 @@ services:
     kind: deployment
     image: hasura/graphql-engine
     tag: v2.50.1
+    pullPolicy: IfNotPresent
     env:
       - API_DB_URL
     ports:
@@ -13,6 +14,7 @@ services:
     kind: statefulset
     image: postgres
     tag: 16-alpine
+    pullPolicy: IfNotPresent
     env:
       - POSTGRES_DB
       - POSTGRES_PASSWORD
@@ -23,6 +25,7 @@ services:
     kind: deployment
     image: ghcr.io/example/demo
     tag: 1.2.3
+    pullPolicy: IfNotPresent
     env:
       - DEMO_GREETING
       - DEMO_TOKEN

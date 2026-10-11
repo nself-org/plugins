@@ -89,6 +89,7 @@ func writeFile(t *testing.T, p, body string, mode os.FileMode) {
 
 // fakeHelm puts a helm stand-in first on PATH. It records its argv, copies
 // every --values file and notes whether the chart had templates/_helpers.tpl.
+// With FAKE_HELM_FAIL set it exits 1 after printing FAKE_HELM_STDERR to stderr.
 func fakeHelm(t *testing.T) (out string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -97,6 +98,7 @@ func fakeHelm(t *testing.T) (out string) {
 	bin, out := t.TempDir(), t.TempDir()
 	script := `#!/bin/sh
 env > "$FAKE_HELM_OUT/env"
+if [ "$1" = status ] && [ -n "$FAKE_HELM_FAIL" ]; then printf '%s' "$FAKE_HELM_STDERR" >&2; exit 1; fi
 if [ "$1" = status ]; then cat "$FAKE_HELM_OUT/status.json"; exit 0; fi
 printf '%s\n' "$@" > "$FAKE_HELM_OUT/argv"
 i=0; prev=""
@@ -110,7 +112,7 @@ done
 [ -f "$3/templates/_helpers.tpl" ] && echo yes > "$FAKE_HELM_OUT/helpers"
 echo "$3" > "$FAKE_HELM_OUT/chartdir"
 ls "$(dirname "$3")" > "$FAKE_HELM_OUT/chartparent"
-[ -n "$FAKE_HELM_FAIL" ] && { echo "Error: cannot re-use a name that is still in use" >&2; exit 1; }
+[ -n "$FAKE_HELM_FAIL" ] && { echo "${FAKE_HELM_STDERR:-Error: cannot re-use a name that is still in use}" >&2; exit 1; }
 exit 0
 `
 	writeFile(t, filepath.Join(bin, "helm"), script, 0o755)
@@ -241,7 +243,7 @@ func TestUpgradeAppliesFreshValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(argvOf(t, out), " ")
-	for _, bad := range []string{"--reuse-values", "--kubeconfig", "--wait", "/should/not/appear"} {
+	for _, bad := range []string{"--reuse-values", "--kubeconfig", "/should/not/appear"} {
 		if strings.Contains(joined, bad) {
 			t.Errorf("upgrade argv contains %q: %s", bad, joined)
 		}
