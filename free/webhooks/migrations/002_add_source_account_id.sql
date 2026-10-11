@@ -64,14 +64,34 @@ CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_next_retry
 CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_created
     ON public.np_webhooks_deliveries (created_at DESC);
 
-ALTER TABLE public.np_webhooks_endpoints
-    ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
-
-ALTER TABLE public.np_webhooks_deliveries
-    ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
-
-CREATE INDEX IF NOT EXISTS idx_np_webhooks_endpoints_account
-    ON public.np_webhooks_endpoints (source_account_id);
-
-CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_account
-    ON public.np_webhooks_deliveries (source_account_id);
+-- source_account_id must end up TEXT NOT NULL DEFAULT 'primary' on both tables. A TS-era table (renamed by 001) has it as a
+-- nullable VARCHAR(128): add it where missing, fill NULLs with 'primary', then fix type, default and nullability. Each step is
+-- skipped when the column is already (text, NOT NULL). The single-column account index is created only when no index on
+-- exactly (source_account_id) exists (001 renames the TS-era one, which would otherwise be duplicated).
+DO $$
+DECLARE
+  t TEXT;
+  ix TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['np_webhooks_endpoints', 'np_webhooks_deliveries'] LOOP
+    EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT %L', t, 'primary');
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = t AND column_name = 'source_account_id'
+        AND data_type = 'text' AND is_nullable = 'NO'
+    ) THEN
+      EXECUTE format('UPDATE public.%I SET source_account_id = %L WHERE source_account_id IS NULL', t, 'primary');
+      EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id TYPE TEXT', t);
+      EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id SET DEFAULT %L', t, 'primary');
+      EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id SET NOT NULL', t);
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+      WHERE i.indrelid = ('public.' || quote_ident(t))::regclass
+        AND i.indnatts = 1 AND i.indpred IS NULL AND i.indexprs IS NULL AND a.attname = 'source_account_id'
+    ) THEN
+      ix := 'idx_' || t || '_account';
+      EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON public.%I (source_account_id)', ix, t);
+    END IF;
+  END LOOP;
+END $$;
