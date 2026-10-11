@@ -12,9 +12,11 @@ package provision
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -145,6 +147,75 @@ func TestInstallRunnerInstance_EndToEndArgvAndEnv(t *testing.T) {
 	if _, statErr := os.Stat(argvLog); statErr == nil {
 		t.Fatal("the script ran a command without a token")
 	}
+}
+
+// A host shell that starts with tracing on (BASH_ENV here; SHELLOPTS or a
+// .bashrc sourced under sshd alike) must not print the expanded token.
+func TestInstallRunnerInstance_InheritedXtraceDoesNotLeak(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	root, bin := t.TempDir(), t.TempDir()
+	inst := filepath.Join(root, "runner-1")
+	if err := os.MkdirAll(inst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		filepath.Join(bin, "sudo"):         `case "$1" in chown) exit 0;; -u) shift 2;; esac; exec "$@"`,
+		filepath.Join(inst, "config.sh"):   "cat >/dev/null",
+		filepath.Join(inst, "svc.sh"):      "exit 0",
+		filepath.Join(root, "bash_env.sh"): "set -x",
+	} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("BASH_ENV", filepath.Join(root, "bash_env.sh"))
+	ex := LocalExecutor{}
+	raw, err := ex.RunInput(context.Background(), renderedScript(t, root), fakeRegToken+"\n")
+	if err != nil || !strings.Contains(raw, "+ set -e") {
+		t.Fatalf("tracing was not on, the test proves nothing: err=%v out=%q", err, raw)
+	}
+	if strings.Contains(raw, fakeRegToken) {
+		t.Fatalf("traced output holds the token:\n%s", raw)
+	}
+}
+
+// Output and errors that carry the token (a pty echoing stdin under
+// RequestTTY force) are redacted, and the exit code survives for finish().
+func TestInstallRunnerInstance_RedactsEchoedToken(t *testing.T) {
+	echo := &echoExecutor{fail: exitErr(t, 7)}
+	out, err := installRunnerInstance(context.Background(), echo, testManifest(), tokenOpts("/opt/actions-runner"), 1)
+	if strings.Contains(out, fakeRegToken) || !strings.Contains(out, redacted) {
+		t.Fatalf("out = %q", out)
+	}
+	var coder interface{ ExitCode() int }
+	if err == nil || strings.Contains(err.Error(), fakeRegToken) || !errors.As(err, &coder) || coder.ExitCode() != 7 {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// echoExecutor returns its stdin as output and inside its error, as a pty
+// that echoes input would.
+type echoExecutor struct{ fail error }
+
+func (e *echoExecutor) Run(ctx context.Context, c string) (string, error) {
+	return e.RunInput(ctx, c, "")
+}
+func (e *echoExecutor) Label() string { return "echo" }
+func (e *echoExecutor) RunInput(_ context.Context, _, in string) (string, error) {
+	return "echo: " + in, fmt.Errorf("remote failed: %w\necho: %s", e.fail, in)
+}
+
+// exitErr returns a real *exec.ExitError with the given code.
+func exitErr(t *testing.T, code int) error {
+	t.Helper()
+	err := exec.Command("sh", "-c", "exit "+strconv.Itoa(code)).Run()
+	if err == nil {
+		t.Fatal("no exit error")
+	}
+	return err
 }
 
 // renderedScript captures the script installRunnerInstance sends.

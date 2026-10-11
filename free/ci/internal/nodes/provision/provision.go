@@ -186,14 +186,19 @@ func ensureRealWorkDir(ctx context.Context, ex Executor, workDir string) (string
 // user's shell, which exports it as ACTIONS_RUNNER_INPUT_TOKEN (the runner
 // reads ACTIONS_RUNNER_INPUT_<ARG> in place of --<arg>) and execs config.sh.
 // ssh, sudo, sh and config.sh therefore show no token in ps, the remote sudo
-// log or the operator's ssh argv. The core copy (cli internal/runner) still
-// passes --token; parity-nodes.sh rewrites that one line.
+// log or the operator's ssh argv. `set +x` stops a tracing shell (BASH_ENV,
+// SHELLOPTS, a .bashrc sourced under sshd) from printing the expanded value,
+// printf's stderr is dropped (a Broken pipe when sudo exits unread), and the
+// variable is unset once used. Output and errors are redacted as well, for a
+// pty that echoes stdin (RequestTTY force). The core copy (cli
+// internal/runner) still passes --token; parity-nodes.sh rewrites that line.
 func installRunnerInstance(ctx context.Context, ex Executor, m *Manifest, opts ProvisionOptions, idx int) (string, error) {
 	instanceDir := opts.InstallRoot + "/runner-" + strconv.Itoa(idx)
 	name := ex.Label() + "-" + strconv.Itoa(idx)
 	labels := strings.Join(append([]string{"self-hosted", "Linux", "X64"}, opts.Labels...), ",")
 
 	script := fmt.Sprintf(`set -e
+set +x
 IFS= read -r NSELF_RUNNER_TOKEN || true
 [ -n "$NSELF_RUNNER_TOKEN" ] || { echo 'no runner registration token on stdin' >&2; exit 1; }
 sudo mkdir -p %[1]s && sudo chown %[2]s:%[2]s %[1]s
@@ -204,10 +209,33 @@ if [ ! -f config.sh ]; then
   curl -fsSL -o actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v${VER}/actions-runner-linux-${RARCH}-${VER}.tar.gz"
   tar xzf actions-runner.tar.gz
 fi
-printf '%%s\n' "$NSELF_RUNNER_TOKEN" | sudo -u %[2]s sh -c 'IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN && export ACTIONS_RUNNER_INPUT_TOKEN && exec "$0" "$@"' ./config.sh --url %[3]s --name %[4]s --labels %[5]s --work _work --unattended --replace
+printf '%%s\n' "$NSELF_RUNNER_TOKEN" 2>/dev/null | sudo -u %[2]s sh -c 'IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN && export ACTIONS_RUNNER_INPUT_TOKEN && exec "$0" "$@"' ./config.sh --url %[3]s --name %[4]s --labels %[5]s --work _work --unattended --replace
+unset NSELF_RUNNER_TOKEN
 sudo ./svc.sh install %[2]s
 sudo ./svc.sh start
 `, shellQuote(instanceDir), shellQuote(m.RunnerUser), shellQuote(opts.GithubURL),
 		shellQuote(name), shellQuote(labels))
-	return ex.RunInput(ctx, script, opts.RegToken+"\n")
+	out, err := ex.RunInput(ctx, script, opts.RegToken+"\n")
+	if opts.RegToken == "" {
+		return out, err
+	}
+	out = strings.ReplaceAll(out, opts.RegToken, redacted)
+	if err != nil {
+		err = redactedError{err: err, secret: opts.RegToken}
+	}
+	return out, err
 }
+
+// redacted replaces the registration token wherever host output or an error
+// would carry it.
+const redacted = "[token redacted]"
+
+// redactedError hides secret in err's text and keeps err in the chain, so
+// finish() still finds the process's exit code.
+type redactedError struct {
+	err    error
+	secret string
+}
+
+func (r redactedError) Error() string { return strings.ReplaceAll(r.err.Error(), r.secret, redacted) }
+func (r redactedError) Unwrap() error { return r.err }

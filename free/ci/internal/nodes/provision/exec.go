@@ -91,35 +91,49 @@ func NewSSHExecutor(sshTarget, keyPath string) SSHExecutor {
 	}
 }
 
-// checkDest applies core's two checks in core's order (cli internal/deploy
+// target applies core's two checks in core's order (cli internal/deploy
 // RunRemoteCommand: empty host, then remote.ParseHostSpec) so a malformed
-// host is refused with core's message (D-0270); the sdk then applies its
-// stricter destination allowlist.
-func (e SSHExecutor) checkDest() error {
+// host is refused with core's message (D-0270), and returns the Target to
+// run: the parsed destination, so an IPv6 host reaches the sdk bare (its
+// allowlist refuses brackets) and every other host is unchanged. A port or
+// legacy path, which core turns into ssh options, is refused by name: the
+// sdk's default option set cannot carry -p (see D-0270's note).
+func (e SSHExecutor) target() (remote.Target, error) {
 	if e.Target.Dest == "" {
-		return fmt.Errorf("remote target has no SSH host configured")
+		return remote.Target{}, fmt.Errorf("remote target has no SSH host configured")
 	}
-	_, err := remote.ParseHostSpec(e.Target.Dest)
-	return err
+	spec, err := remote.ParseHostSpec(e.Target.Dest)
+	if err != nil {
+		return remote.Target{}, err
+	}
+	if spec.Port > 0 || spec.LegacyPath != "" {
+		return remote.Target{}, fmt.Errorf("host %q: a port or path in the host is not supported here; set Port for that host in ~/.ssh/config", e.Target.Dest)
+	}
+	t := e.Target
+	t.Dest = spec.Dest()
+	return t, nil
 }
 
 // Run implements Executor.
 func (e SSHExecutor) Run(ctx context.Context, command string) (string, error) {
-	if err := e.checkDest(); err != nil {
+	t, err := e.target()
+	if err != nil {
 		return "", err
 	}
-	return remote.Run(ctx, e.Target, command)
+	return remote.Run(ctx, t, command)
 }
 
 // RunInput implements Executor through remote.Start, the sdk's only ssh
 // session with a stdin pipe. Output and errors take Run's shape: stdout and
-// stderr gathered into one trimmed buffer, and a failure reported as
-// "remote command on <dest> failed" carrying the process's exit status.
+// stderr gathered into one trimmed buffer (two pipes, so the interleaving of
+// stdout and stderr lines may differ from Run's single pipe), and a failure
+// reported as "remote command on <dest> failed" with the process's exit status.
 func (e SSHExecutor) RunInput(ctx context.Context, command, input string) (string, error) {
-	if err := e.checkDest(); err != nil {
+	t, err := e.target()
+	if err != nil {
 		return "", err
 	}
-	s, err := remote.Start(ctx, e.Target, command)
+	s, err := remote.Start(ctx, t, command)
 	if err != nil {
 		return "", err
 	}
@@ -149,7 +163,7 @@ func (e SSHExecutor) RunInput(ctx context.Context, command, input string) (strin
 func (e SSHExecutor) Label() string { return e.Target.Dest }
 
 // lockedBuffer is a bytes.Buffer two copy goroutines (stdout, stderr) write
-// into, mirroring CombinedOutput's single buffer.
+// into, standing in for CombinedOutput's single buffer.
 type lockedBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer

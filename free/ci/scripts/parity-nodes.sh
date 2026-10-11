@@ -62,8 +62,9 @@ TOK=FAKE-RUNNER-TOKEN-parity-0000; TOK2=FAKE-ENV-OTHER-0000 # fake registration 
 # unquoted) rewritten into the plugin's stdin form, plus the two lines the plugin script reads the token with
 cat > "$WORK/tokfix.pl" <<'PERL'
 my $rd = q{IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN && export ACTIONS_RUNNER_INPUT_TOKEN && exec "$0" "$@"};
-s/^set -e$/set -e\nIFS= read -r NSELF_RUNNER_TOKEN || true\n[ -n "\$NSELF_RUNNER_TOKEN" ] || { echo 'no runner registration token on stdin' >&2; exit 1; }/;
-s/^sudo -u ('[^']*') \.\/config\.sh --url ('[^']*') --token '[^']*' /printf '%s\\n' "\$NSELF_RUNNER_TOKEN" | sudo -u $1 sh -c '$rd' .\/config.sh --url $2 /;
+s/^set -e$/set -e\nset +x\nIFS= read -r NSELF_RUNNER_TOKEN || true\n[ -n "\$NSELF_RUNNER_TOKEN" ] || { echo 'no runner registration token on stdin' >&2; exit 1; }/;
+s/^sudo -u ('[^']*') \.\/config\.sh --url ('[^']*') --token '[^']*' /printf '%s\\n' "\$NSELF_RUNNER_TOKEN" 2>\/dev\/null | sudo -u $1 sh -c '$rd' .\/config.sh --url $2 /;
+s/^(printf .* --replace)$/$1\nunset NSELF_RUNNER_TOKEN/;
 s/^sudo -u (\S+) \.\/config\.sh --url (\S+) --token \S+ /sudo -u $1 sh -c $rd .\/config.sh --url $2 /;
 PERL
 tokfix() { perl -i -p "$WORK/tokfix.pl" "$1/ssh.n" "$1/stub.n"; }
@@ -95,8 +96,8 @@ verdict() {
   done
   if [ "$ne" = 1 ] && ! [ -s "$o/a/out.n" ]; then bad=1; echo "EMPTY $label: nothing on stdout (vacuous)"; fi
   if [ "$ne" = 0 ] && ! [ -s "$o/a/err.n" ]; then bad=1; echo "EMPTY $label: nothing on stderr (vacuous)"; fi
-  if grep -qF -e "$TOK" -e "$TOK2" "$o/b/ssh.n" "$o/b/stub.n"; then
-    bad=1; echo "TOKEN $label: the head put a registration token on an argv or in a remote script (D-0263)"; fi
+  if grep -qF -e "$TOK" -e "$TOK2" "$o/b/ssh.n" "$o/b/stub.n" "$o/b/out.n" "$o/b/err.n"; then
+    bad=1; echo "TOKEN $label: the head put a registration token on an argv, in a remote script or in its output (D-0263)"; fi
   if [ -n "$WANT_RC" ] && [ "$(cat "$o/a/rc")" != "$WANT_RC" ]; then
     bad=1; echo "RC $label: exit code $(cat "$o/a/rc"), expected $WANT_RC (the case did not exercise what it claims)"; fi
   if [ $bad -eq 0 ]; then echo "ok $label"; else FAILS=$((FAILS + 1)); fi
@@ -108,6 +109,11 @@ if [ "$MODE" = self ]; then # the comparator needs no containers
   verdict "self planted" s2 1 | awk '/^DIFF self planted/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (difference not reported)"; exit 1; }
   cp -R "$WORK/o/s1" "$WORK/o/s3"; echo "--token '$TOK'" >> "$WORK/o/s3/b/ssh.n"
   verdict "self token" s3 1 | awk '/^TOKEN self token/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (token on argv not reported)"; exit 1; }
+  printf '%s\n' "set -e" "sudo -u 'u' ./config.sh --url 'U' --token '$TOK' --name 'n' --work _work --unattended --replace" > "$WORK/tf.n"
+  perl -p "$WORK/tokfix.pl" "$WORK/tf.n" > "$WORK/tf.out"
+  { ! grep -qF "$TOK" "$WORK/tf.out" && grep -qx 'set +x' "$WORK/tf.out" && grep -qx 'unset NSELF_RUNNER_TOKEN' "$WORK/tf.out" \
+    && grep -qF "2>/dev/null | sudo -u 'u' sh -c 'IFS= read -r ACTIONS_RUNNER_INPUT_TOKEN" "$WORK/tf.out"; } \
+    || { echo "parity-nodes self-test: FAIL (tokfix did not rewrite core's --token line)"; cat "$WORK/tf.out"; exit 1; }
   WANT_RC=9; verdict "self rc" s1 1 | awk '/^RC self rc/{f=1} END{exit f?0:1}' || { echo "parity-nodes self-test: FAIL (wrong exit code not reported)"; exit 1; }
   echo "parity-nodes self-test: PASS (identical sides equal, planted difference, token on argv and wrong exit code reported)"; exit 0
 fi
