@@ -43,25 +43,37 @@ Category: `automation`. Current version: `1.0.0`.
 ## REST API
 
 ```
-POST /jobs                — Register a cron job
-GET  /jobs                — List registered jobs
-GET  /jobs/{id}/runs      — Run history for a job
-DELETE /jobs/{id}         — Remove a job
-GET  /health              — Health check
+POST   /v1/jobs                — Register a cron job
+GET    /v1/jobs                — List registered jobs
+GET    /v1/jobs/{id}           — One job with its recent runs (?history_limit=N)
+PUT    /v1/jobs/{id}           — Update a job
+DELETE /v1/jobs/{id}           — Remove a job
+POST   /v1/jobs/{id}/trigger   — Run a job now
+GET    /health                 — Health check
 ```
 
 ## Nginx Routes
 
-| Route | Target |
-|-------|--------|
-| `/cron/` | Cron plugin REST API |
+| Route | Target | Access |
+|-------|--------|--------|
+| `cron.<BASE_DOMAIN>/v1/` | `http://plugin-cron:3051` | nginx container loopback only; everyone else gets `403` |
+
+## Access (private by default)
+
+The API has no authentication: anyone who reaches it can create jobs with any callback URL, trigger them and delete them. It is therefore private by default:
+
+- Services on the project network call `http://plugin-cron:3051`.
+- On the host the port is published on `127.0.0.1:3051` only. Remote operators tunnel: `ssh -L 3051:127.0.0.1:3051 <server>`.
+- The `cron.<BASE_DOMAIN>` server block that `nself build` installs carries `allow 127.0.0.1; allow ::1; deny all;`. Private ranges are not allowed: behind Docker's userland proxy (IPv6 clients, Docker Desktop, rootless Docker) or a tunnel container, internet traffic arrives from a private address.
+
+To expose it on purpose, add your own server block under a different name in your own file in `nginx/conf.d/` (hand-managed; `nself build` leaves files it did not write alone) with an allow list and `auth_basic` in front of `http://plugin-cron:3051`. The full example is in the [plugin README](https://github.com/nself-org/plugins/blob/main/free/cron/README.md#access-private-by-default). Do not reuse `cron.<BASE_DOMAIN>`: the plugin's block already serves that name. Keep `auth_basic` even with the allow line. Behind Docker's userland proxy nginx sees the Docker gateway address instead of your admin address, so do not "fix" a refused allow line by widening it to private ranges.
 
 ## Examples
 
 ### Check health
 
 ```bash
-curl http://localhost:3051/health
+curl http://127.0.0.1:3051/health   # on the host
 ```
 
 ## Source

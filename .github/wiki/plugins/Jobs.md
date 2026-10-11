@@ -671,76 +671,15 @@ WHERE failed_at < NOW() - INTERVAL '30 days';
 
 ## Security Notes
 
-### Dashboard Authentication
+### API and Dashboard Access (private by default)
 
-The BullBoard dashboard has NO built-in authentication. Implement security layers:
+The jobs service has no built-in authentication. Anyone who reaches it can create, delete and retry jobs and read or revive the dead-letter queue, so it is private by default:
 
-**Option 1: Reverse Proxy with Authentication (Recommended)**
+- Services on the project network call `http://nself-jobs:3105`.
+- On the host the port is published on `127.0.0.1:3105` only. Remote operators tunnel: `ssh -L 3105:127.0.0.1:3105 user@production-server`.
+- The `jobs.<BASE_DOMAIN>` server block that `nself build` installs carries `allow 127.0.0.1; allow ::1; deny all;`, so every other caller gets `403`. Private ranges are not allowed: behind Docker's userland proxy (IPv6 clients, Docker Desktop, rootless Docker) or a tunnel container, internet traffic arrives from a private address.
 
-```nginx
-# nginx.conf
-server {
-  listen 443 ssl;
-  server_name jobs.example.com;
-
-  # Basic authentication
-  np_auth_basic "BullBoard Access";
-  np_auth_basic_user_file /etc/nginx/.htpasswd;
-
-  location / {
-    proxy_pass http://localhost:3105;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-  }
-}
-```
-
-Create password file:
-```bash
-htpasswd -c /etc/nginx/.htpasswd admin
-```
-
-**Option 2: VPN/SSH Tunnel**
-
-```bash
-# SSH tunnel for remote access
-ssh -L 3105:localhost:3105 user@production-server
-
-# Access locally
-open http://localhost:3105/dashboard
-```
-
-**Option 3: Firewall Rules**
-
-```bash
-# Allow only specific IPs
-sudo ufw allow from 203.0.113.0/24 to any port 3105
-
-# Block all other IPs
-sudo ufw deny 3105
-```
-
-**Option 4: Custom Authentication Middleware**
-
-```typescript
-// In server.ts
-import basicAuth from '@fastify/basic-auth';
-
-const validateUser = async (username: string, password: string) => {
-  if (username === process.env.DASHBOARD_USER &&
-      password === process.env.DASHBOARD_PASS) {
-    return;
-  }
-  throw new Error('Invalid credentials');
-};
-
-server.register(basicAuth, { validate: validateUser });
-
-// Protect dashboard route
-server.after(() => {
-  server.addHook('onRequest', server.basicAuth);
-});
-```
+To expose it on purpose, add your own server block under a different name in your own file in `nginx/conf.d/` (hand-managed; `nself build` leaves files it did not write alone), with an allow list and `auth_basic` in front of `http://nself-jobs:3105`. The full example is in the [plugin README](https://github.com/nself-org/plugins/blob/main/free/jobs/README.md#access-private-by-default). Do not reuse `jobs.<BASE_DOMAIN>`: the plugin's block already serves that name. Keep `auth_basic` even with the allow line. Behind Docker's userland proxy nginx sees the Docker gateway address instead of your admin address, so do not "fix" a refused allow line by widening it to private ranges.
 
 ### Job Data Security
 
