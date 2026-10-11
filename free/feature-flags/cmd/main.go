@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -34,10 +35,9 @@ func main() {
 	}
 	defer pool.Close()
 
+	internal.BootMigrations(context.Background(), pool)
+
 	db := internal.NewDB(pool)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("feature-flags: schema init failed: %v", err)
-	}
 
 	// Wire up Redis pub/sub for <5s kill-switch propagation (optional).
 	// FF_REDIS_ADDR defaults to the nself Redis service address.

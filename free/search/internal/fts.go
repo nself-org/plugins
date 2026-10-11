@@ -13,21 +13,21 @@ import (
 
 // SearchHit is a single result from a full-text search query.
 type SearchHit struct {
-	ID        string `json:"id"`
-	Index     string `json:"index"`
-	Score     float64 `json:"score"`
-	Content   string `json:"content"`
-	Headline  string `json:"headline,omitempty"`
+	ID       string  `json:"id"`
+	Index    string  `json:"index"`
+	Score    float64 `json:"score"`
+	Content  string  `json:"content"`
+	Headline string  `json:"headline,omitempty"`
 }
 
 // SearchResponse is the envelope returned by the search endpoint.
 type SearchResponse struct {
-	Hits            []SearchHit `json:"hits"`
-	Total           int         `json:"total"`
-	Limit           int         `json:"limit"`
-	Offset          int         `json:"offset"`
-	Query           string      `json:"query"`
-	ProcessingTimeMs int64      `json:"processingTimeMs"`
+	Hits             []SearchHit `json:"hits"`
+	Total            int         `json:"total"`
+	Limit            int         `json:"limit"`
+	Offset           int         `json:"offset"`
+	Query            string      `json:"query"`
+	ProcessingTimeMs int64       `json:"processingTimeMs"`
 }
 
 // Suggestion is a single autocomplete result.

@@ -186,7 +186,7 @@ func TestParseJSONValue(t *testing.T) {
 		{`"hello"`, false},
 		{`42`, false},
 		{`null`, true}, // JSON null decodes to nil
-		{``, false}, // empty → false default
+		{``, false},    // empty → false default
 	}
 	for _, tc := range cases {
 		import_json_raw := []byte(tc.raw)

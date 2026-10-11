@@ -3,9 +3,9 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"github.com/go-chi/chi/v5"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
 )
 
 func handleCreateFlag(db *DB, pubsub *PubSub) http.HandlerFunc {

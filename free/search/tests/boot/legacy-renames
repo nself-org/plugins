@@ -1,0 +1,5 @@
+search_indexes np_search_indexes
+search_documents np_search_documents
+search_synonyms np_search_synonyms
+search_queries np_search_queries
+search_webhook_events np_search_webhook_events

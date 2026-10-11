@@ -147,4 +147,3 @@ func emitDLQEvent(del Delivery, attemptCount int, lastError *string) {
 	defer resp.Body.Close()
 	log.Printf("[nself-webhooks] DLQ event dispatched for delivery %s, status=%d", del.ID, resp.StatusCode)
 }
-

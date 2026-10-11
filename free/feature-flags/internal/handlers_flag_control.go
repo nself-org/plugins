@@ -3,10 +3,10 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
 	"github.com/go-chi/chi/v5"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
+	"strings"
 )
 
 func handleEnableFlag(db *DB, pubsub *PubSub) http.HandlerFunc {
@@ -153,9 +153,9 @@ func handlePruneStale(db *DB) http.HandlerFunc {
 			stale = []Flag{}
 		}
 		sdk.Respond(w, http.StatusOK, map[string]interface{}{
-			"stale":    stale,
-			"count":    len(stale),
-			"dry_run":  dryRun,
+			"stale":   stale,
+			"count":   len(stale),
+			"dry_run": dryRun,
 		})
 	}
 }

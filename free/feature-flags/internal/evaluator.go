@@ -1,7 +1,6 @@
 package internal
 
-import (
-)
+import ()
 
 // EvaluationResult is returned by Evaluate and EvaluateBatch.
 type EvaluationResult struct {

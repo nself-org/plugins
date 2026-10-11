@@ -1,18 +1,40 @@
 #!/usr/bin/env bash
 # tests/boot/tables-upgrade.sh --plugins a,b --basis-dir DIR [--sequential]: the tables-and-upgrade proof for boot-applied
-# migrations (P7-PLUG-76; reused by P7-PLUG-77). Two passes per plugin, one plugin at a time:
+# migrations (P7-PLUG-76; reused and widened by P7-PLUG-77). Three passes per plugin, one plugin at a time:
 #
 #   Fresh pass    build the converted plugin (docker build --network none: nothing may need the network), boot it on an
 #                 empty database and require /health migrations applied == expected and every `tables` entry of its
 #                 manifest to exist at its schema in information_schema (`x` is public.x, `s.x` is schema s: the rule the
 #                 cli tracking step applies).
+#   Legacy pass   (only for a plugin with free/<plugin>/tests/boot/legacy-renames; needs only the converted image) run
+#                 free/<plugin>/tests/boot/legacy.sql (the TS-era unprefixed tables, with fixture rows) on an EMPTY database
+#                 with no basis boot, boot the converted image and require migrations applied == expected, every manifest
+#                 table present and, for each `old new` pair of legacy-renames: old gone, new present and every primary key
+#                 captured from old before the boot present in new. legacy-renames without legacy.sql FAILS; a pair whose
+#                 fixture is not true (old missing, new already there, old without a primary key) FAILS.
 #   Upgrade pass  build the BASIS tree (the plugin as it was before the conversion; default networking, because the basis
 #                 Dockerfile still runs go mod download) from $BASIS/free/<plugin> (or $BASIS/<plugin>), boot it on an
 #                 empty database, run free/<plugin>/tests/boot/legacy.sql when present (what an old install had that the
 #                 basis build never created), then seed rows: free/<plugin>/tests/boot/seed.sql when present, else
 #                 INSERT ... DEFAULT VALUES into every manifest table. A plugin that ends with zero seeded rows FAILS.
 #                 Then boot the converted build on the SAME database and require applied == expected, every manifest
-#                 table present, and every seeded row still there (by primary key).
+#                 table present, and every seeded row still there (by primary key). Every table the basis creates needs at
+#                 least one seeded row (FAIL naming the empty table). With legacy-renames, each pair is classified after
+#                 legacy.sql and seed.sql: both tables exist (the boot must leave old with identical keys and new with its
+#                 seeded keys) or only old exists (the boot must rename it, every key kept); one `upgrade-legacy` line per plugin. Each converted-boot log line that
+#                 contains `legacy table` is printed as a `note  upgrade <plugin>: log: ...` line (legacy.sql run after the
+#                 basis boot creates the both-exist case on purpose for plugins whose basis already had the np_ tables).
+#
+# Fixtures, all optional, under free/<plugin>/tests/boot/:
+#   env             KEY=value lines passed to every boot (see the env hook below).
+#   legacy.sql      TS-era unprefixed tables with fixture rows (fixed primary keys); used by the legacy and upgrade passes.
+#   legacy-renames  `old new` lines naming public tables (`#` comments and blank lines skipped): the renames the legacy pass checks.
+#   seed.sql        rows written through the basis schema before the upgrade (parent rows first).
+#   basis-from      image ref for the basis Dockerfile (see below).
+#   basis-absent    manifest tables the BASIS build never created, one per line (a plugin whose conversion adds a table). The
+#                   upgrade pass does not read, seed, count or capture them before the upgrade; the converted boot must still
+#                   create them (they stay in the manifest table check). An entry that is not in the manifest, or that exists
+#                   after the basis boot, FAILS: the fixture must be true.
 #
 # Basis image hook: free/<plugin>/tests/boot/basis-from (converted plugin dir; one line, an image ref) rewrites the image of
 # the basis Dockerfile's first `FROM golang:` line (an `AS name` is kept) to that ref before the basis image is built, and
@@ -104,6 +126,93 @@ pkrows() {
   printf '%s\n' "$rows" | LC_ALL=C sort > "$3"
 }
 
+# legacy_pass: the LEGACY pass for the current plugin (globals p dir tag schema port tables expected safe W pid pg). Silent no-op
+# without tests/boot/legacy-renames; 0 on pass, 1 on any FAIL (the caller keeps going to the upgrade pass).
+legacy_pass() {
+  local lr=$dir/tests/boot/legacy-renames ldb=tu_l_$safe line old new extra np=0 nrows=0 bad=0 r k cnt lurl
+  [ -f "$lr" ] || return 0
+  [ -f "$dir/tests/boot/legacy.sql" ] || { echo "FAIL  legacy $p: legacy-renames without legacy.sql"; return 1; }
+  lurl="postgres://postgres:boot@$pg:5432/$ldb"; : > "$W/lpairs-$p"
+  sql boot "CREATE DATABASE $ldb" >/dev/null && sql "$ldb" "CREATE SCHEMA IF NOT EXISTS $schema" >/dev/null
+  sqlfile "$ldb" "$dir/tests/boot/legacy.sql" || { echo "FAIL  legacy $p: legacy.sql failed on the empty database"; return 1; }
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in ''|'#'*) continue;; esac
+    old=; new=; extra=; read -r old new extra <<EOF
+$line
+EOF
+    if [ -z "$old" ] || [ -z "$new" ] || [ -n "$extra" ]; then echo "FAIL  legacy $p: legacy-renames line '$line' is not 'old new'"; bad=1; continue; fi
+    np=$((np + 1))
+    if [ "$(sql "$ldb" "SELECT to_regclass('public.$old') IS NOT NULL AND to_regclass('public.$new') IS NULL" 2>/dev/null)" != t ]; then
+      echo "FAIL  legacy $p: fixture must create public.$old and not public.$new (legacy.sql ran on an empty database)"; bad=1; continue; fi
+    pkrows "$ldb" "$old" "$W/lpk-before-$np"; r=$?
+    if [ $r -ne 0 ]; then echo "FAIL  legacy $p: fixture table $old has no primary key or its keys cannot be read (fixtures must have PKs)"; bad=1; continue; fi
+    cnt=$(wc -l < "$W/lpk-before-$np" | tr -d ' ')
+    if [ "$cnt" -lt 1 ]; then echo "FAIL  legacy $p: fixture table $old has no rows"; bad=1; continue; fi
+    nrows=$((nrows + cnt)); printf '%s %s %s\n' "$np" "$old" "$new" >> "$W/lpairs-$p"
+  done < "$lr"
+  [ $np -gt 0 ] || { echo "FAIL  legacy $p: legacy-renames names no pair"; return 1; }
+  [ $bad -eq 0 ] || return 1
+  load_env "$dir/tests/boot/env" "$lurl" "$port"; boot "nself-tu-c-$pid" "$tag" "$ldb" "$port"
+  if ! { mig_ok "$expected" && tables_present "$ldb" $tables; }; then
+    echo "FAIL  legacy $p: converted boot on the legacy database: want migrations $expected/$expected and every manifest table present; health='$H'"; printf '%s\n' "$LOGS" | tail -8; return 1; fi
+  while read -r k old new; do
+    [ -n "$k" ] || continue
+    if [ "$(sql "$ldb" "SELECT to_regclass('public.$old') IS NULL AND to_regclass('public.$new') IS NOT NULL" 2>/dev/null)" != t ]; then
+      echo "FAIL  legacy $p: after the boot public.$old must be gone and public.$new present"; bad=1; continue; fi
+    if pkrows "$ldb" "$new" "$W/lpk-after-$k" && [ -z "$(LC_ALL=C comm -23 "$W/lpk-before-$k" "$W/lpk-after-$k")" ]; then :
+    else echo "FAIL  legacy $p: $new lost a fixture row of $old (missing keys: $(LC_ALL=C comm -23 "$W/lpk-before-$k" "$W/lpk-after-$k" 2>/dev/null | head -3 | tr '\n' ' '))"; bad=1; fi
+  done < "$W/lpairs-$p"
+  [ $bad -eq 0 ] || return 1
+  echo "pass  legacy $p: $np renames, $nrows fixture rows kept"
+}
+
+# ul_before <db>: UPGRADE-pass check of legacy-renames, run after legacy.sql and seed.sql and before the converted boot. Classifies
+# each `old new` pair: `both` (old and new exist: the converted boot must leave both untouched) or `old` (only old exists: it
+# must be renamed). Saves the sorted primary keys of old (and of new for `both`) and writes "k old new class" lines to
+# $W/ul-$p. Fail closed: a missing old table, a table without a primary key or an old table without rows is a FAIL (return 1).
+ul_before() {
+  local lr=$dir/tests/boot/legacy-renames db=$1 line old new extra k=0 bad=0 class cnt
+  : > "$W/ul-$p"; ul_rows=0
+  [ -f "$lr" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in ''|'#'*) continue;; esac
+    old=; new=; extra=; read -r old new extra <<EOF
+$line
+EOF
+    if [ -z "$old" ] || [ -z "$new" ] || [ -n "$extra" ]; then echo "FAIL  upgrade-legacy $p: legacy-renames line '$line' is not 'old new'"; bad=1; continue; fi
+    k=$((k + 1))
+    if [ "$(sql "$db" "SELECT to_regclass('public.$old') IS NOT NULL" 2>/dev/null)" != t ]; then echo "FAIL  upgrade-legacy $p: public.$old does not exist after legacy.sql (the fixture must be true)"; bad=1; continue; fi
+    pkrows "$db" "$old" "$W/ul-old-before-$k" || { echo "FAIL  upgrade-legacy $p: $old has no readable primary key (fixtures must have PKs)"; bad=1; continue; }
+    cnt=$(wc -l < "$W/ul-old-before-$k" | tr -d ' ')
+    [ "$cnt" -ge 1 ] || { echo "FAIL  upgrade-legacy $p: $old has no fixture rows"; bad=1; continue; }
+    class=old
+    if [ "$(sql "$db" "SELECT to_regclass('public.$new') IS NOT NULL" 2>/dev/null)" = t ]; then
+      class=both; pkrows "$db" "$new" "$W/ul-new-before-$k" || { echo "FAIL  upgrade-legacy $p: $new has no readable primary key (fixtures must have PKs)"; bad=1; continue; }
+    fi
+    ul_rows=$((ul_rows + cnt)); printf '%s %s %s %s\n' "$k" "$old" "$new" "$class" >> "$W/ul-$p"
+  done < "$lr"
+  [ $bad -eq 0 ]
+}
+# ul_after <db>: after the converted boot, per ul_before's classes: `both` keeps old with IDENTICAL keys and new with every key it had;
+# `old` is gone and every old key is in new. One pass/FAIL line per plugin (nothing when the plugin has no legacy-renames).
+ul_after() {
+  local db=$1 k old new class bad=0 nboth=0 nren=0
+  [ -s "$W/ul-$p" ] || return 0
+  while read -r k old new class; do
+    case $class in
+      both) nboth=$((nboth + 1))
+        if [ "$(sql "$db" "SELECT to_regclass('public.$old') IS NOT NULL" 2>/dev/null)" != t ]; then echo "FAIL  upgrade-legacy $p: public.$old existed beside public.$new but the converted boot removed it"; bad=1; continue; fi
+        if pkrows "$db" "$old" "$W/ul-old-after-$k" && cmp -s "$W/ul-old-before-$k" "$W/ul-old-after-$k"; then :; else echo "FAIL  upgrade-legacy $p: public.$old changed (its primary keys differ after the boot)"; bad=1; fi
+        if pkrows "$db" "$new" "$W/ul-new-after-$k" && [ -z "$(LC_ALL=C comm -23 "$W/ul-new-before-$k" "$W/ul-new-after-$k")" ]; then :; else echo "FAIL  upgrade-legacy $p: public.$new lost a seeded row"; bad=1; fi;;
+      *) nren=$((nren + 1))
+        if [ "$(sql "$db" "SELECT to_regclass('public.$old') IS NULL AND to_regclass('public.$new') IS NOT NULL" 2>/dev/null)" != t ]; then echo "FAIL  upgrade-legacy $p: public.$old must be renamed to public.$new"; bad=1; continue; fi
+        if pkrows "$db" "$new" "$W/ul-new-after-$k" && [ -z "$(LC_ALL=C comm -23 "$W/ul-old-before-$k" "$W/ul-new-after-$k")" ]; then :; else echo "FAIL  upgrade-legacy $p: public.$new lost a row of $old"; bad=1; fi;;
+    esac
+  done < "$W/ul-$p"
+  [ $bad -eq 0 ] || return 1
+  echo "pass  upgrade-legacy $p: $nboth pair(s) kept untouched beside their np_ table, $nren renamed, $ul_rows fixture rows kept"
+}
+
 docker network create "$net" >/dev/null
 docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD=boot -e POSTGRES_DB=boot postgres:16 >/dev/null
 for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/null 2>&1 && break; sleep 1; done
@@ -125,6 +234,9 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   if mig_ok "$expected" && tables_present "$fdb" $tables; then echo "pass  fresh $p: applied=expected=$expected, $(printf '%s' "$tables" | wc -w | tr -d ' ') manifest tables at their schema"
   else echo "FAIL  fresh $p: want migrations $expected/$expected and every manifest table present; health='$H'"; printf '%s\n' "$LOGS" | tail -5; rc=1; continue; fi
 
+  # ---- legacy pass
+  legacy_pass || rc=1
+
   # ---- upgrade pass
   bdir=$basis/free/$p; [ -d "$bdir" ] || bdir=$basis/$p
   [ -f "$bdir/Dockerfile" ] || { echo "FAIL  upgrade $p: no basis tree (Dockerfile) under $basis"; rc=1; continue; }
@@ -138,21 +250,42 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   sql boot "CREATE DATABASE $udb" >/dev/null
   load_env "$dir/tests/boot/env" "$durl_u" "$port"; boot "nself-tu-b-$pid" "$btag" "$udb" "$port"
   if [ -z "$H" ]; then echo "FAIL  upgrade $p: the basis build never answered /health on a fresh database (record it and escalate)"; printf '%s\n' "$LOGS" | tail -8; rc=1; continue; fi
+  # basis-absent: manifest tables the basis build never created; they leave the before-upgrade checks ($stables) and must be true.
+  stables=; absent=; absbad=0
+  if [ -f "$dir/tests/boot/basis-absent" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case $line in ''|'#'*) continue;; esac
+      line=$(printf '%s' "$line" | tr -d '[:space:]')
+      case " $tables " in *" $line "*) ;; *) echo "FAIL  upgrade $p: basis-absent entry '$line' is not a manifest table"; absbad=1; continue;; esac
+      q=$(qualified "$line"); n=$(sql "$udb" "SELECT count(*) FROM information_schema.tables WHERE table_schema = '${q%%.*}' AND table_name = '${q#*.}'" 2>/dev/null)
+      [ "$n" = 0 ] || { echo "FAIL  upgrade $p: basis-absent entry '$line' exists after the basis boot (the fixture must be true)"; absbad=1; continue; }
+      absent="$absent $line "
+    done < "$dir/tests/boot/basis-absent"
+    [ $absbad -eq 0 ] || { rc=1; continue; }
+  fi
+  for t in $tables; do case " ${absent:-} " in *" $t "*) ;; *) stables="$stables$t ";; esac; done
   if [ -f "$dir/tests/boot/legacy.sql" ]; then sqlfile "$udb" "$dir/tests/boot/legacy.sql" || { echo "FAIL  upgrade $p: legacy.sql failed"; rc=1; continue; }; fi
   if [ -f "$dir/tests/boot/seed.sql" ]; then sqlfile "$udb" "$dir/tests/boot/seed.sql" || { echo "FAIL  upgrade $p: seed.sql failed"; rc=1; continue; }
-  else for t in $tables; do sql "$udb" "INSERT INTO $(qualified "$t") DEFAULT VALUES" >/dev/null 2>&1; done; fi
-  before=$(counts "$udb" $tables); seeded=0; unreadable=0
-  for n in $before; do case $n in x) unreadable=1;; *) seeded=$((seeded + n));; esac; done
+  else for t in $stables; do sql "$udb" "INSERT INTO $(qualified "$t") DEFAULT VALUES" >/dev/null 2>&1; done; fi
+  ul_before "$udb" || { rc=1; continue; }
+  before=$(counts "$udb" $stables); seeded=0; unreadable=0; empty=
+  i=0; for t in $stables; do
+    i=$((i + 1)); n=$(printf '%s' "$before" | awk -v k=$i '{ print $k }')
+    case $n in x) unreadable=1;; 0) empty="$empty $t";; *) seeded=$((seeded + n));; esac
+  done
+  if [ -n "$empty" ]; then echo "FAIL  upgrade $p: no seeded row in:$empty (every table the basis creates needs at least one row)"; rc=1; continue; fi
   if [ $seeded -lt 1 ] || [ $unreadable -eq 1 ]; then echo "FAIL  upgrade $p: seeded rows before the upgrade: counts '$before' (need at least one row, every manifest table readable)"; rc=1; continue; fi
   i=0; nopk=" "; capfail=0
-  for t in $tables; do
+  for t in $stables; do
     i=$((i + 1)); pkrows "$udb" "$t" "$W/pk-before-$i"; r=$?
     case $r in 0) ;; 1) nopk="$nopk$i ";; *) capfail=1; echo "FAIL  upgrade $p: cannot read the primary keys of $t before the upgrade";; esac
   done
   [ $capfail -eq 0 ] || { rc=1; continue; }
   boot "nself-tu-c-$pid" "$tag" "$udb" "$port"
-  after=$(counts "$udb" $tables); lost=0; i=0
-  for t in $tables; do
+  printf '%s\n' "$LOGS" | grep 'legacy table' | while IFS= read -r line; do echo "note  upgrade $p: log: $line"; done
+  ul_after "$udb" || rc=1
+  after=$(counts "$udb" $stables); lost=0; i=0
+  for t in $stables; do
     i=$((i + 1)); n=$(printf '%s' "$before" | awk -v k=$i '{ print $k }'); a=$(printf '%s' "$after" | awk -v k=$i '{ print $k }')
     case $nopk in
       *" $i "*) case $a in x|'') lost=1;; *) [ "$a" -ge "$n" ] || { lost=1; echo "FAIL  upgrade $p: table $t lost rows (count $n -> $a)"; };; esac;;
