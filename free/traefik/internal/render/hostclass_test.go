@@ -229,7 +229,7 @@ func TestLongPathsAreRefusedBeforeCrossingATier(t *testing.T) {
 		match string
 		n     int
 		ok    bool
-	}{{"exact", 21000, false}, {"exact", 19000, true}, {"prefix", 60000, false}, {"prefix", 48000, true}, {"prefix", 4000, true}} {
+	}{{"exact", 21000, false}, {"exact", 19000, true}, {"prefix", 60000, false}, {"prefix", 9000, false}, {"prefix", 8000, true}, {"prefix", 4000, true}} {
 		_, err := renderRoutes(t, mkRoute(t, "hand:p#1", []string{"p.example.test"}, loc(t, "proxy", "/", "prefix"), loc(t, "proxy", "/"+strings.Repeat("a", c.n), c.match)))
 		if (err == nil) != c.ok || (err != nil && !strings.Contains(err.Error(), "too long")) {
 			t.Errorf("%s path of %d characters: accepted=%v, error %v", c.match, c.n, c.ok, err)

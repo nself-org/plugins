@@ -212,16 +212,38 @@ func (b *builder) route(r contract.Route) {
 		}
 		b.blocked(r, g.rule, ls, sec)
 		// The server owns every path of its names: a path none of its locations matches is a 404
-		// here, never a fall-through to a wildcard route or to the default server.
+		// here, never a fall-through to a wildcard route or to the default server. Like every other
+		// answer of the server it carries the security headers (nginx add_header ... always).
 		for _, ln := range ls {
-			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, []string{b.respondMW(404)}, b.responder())
+			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, withSec(sec, b.respondMW(404)), b.responder())
 		}
 		if r.HTTPToHTTPSRedirect && r.Listen.HTTP {
+			status := redirectStatus(r)
 			for _, l := range ls {
 				if !l.secure {
-					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, []string{b.redirectMW(r.ID, "http_to_https_redirect", 301)}, b.responder())
+					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, withSec(sec, b.redirectMW(r.ID, "http_to_https_redirect", status)), b.responder())
 				}
 			}
 		}
 	}
+}
+
+// withSec puts the security-headers middleware (when the route has one) before mws.
+func withSec(sec string, mws ...string) []string {
+	if sec == "" {
+		return mws
+	}
+	return append([]string{sec}, mws...)
+}
+
+// redirectStatus is the status of the server-level https redirect: the Return.Status of the "/"
+// location that redirects to https://$host$request_uri, as the CLI sets the flag from that
+// return (301 when the model carries no such location).
+func redirectStatus(r contract.Route) int {
+	for _, l := range r.Locations {
+		if l.Path == "/" && l.Match == "prefix" && l.Return != nil && l.Return.To != nil && *l.Return.To == "https://$host$request_uri" {
+			return l.Return.Status
+		}
+	}
+	return 301
 }

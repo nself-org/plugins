@@ -24,9 +24,9 @@ func (b *builder) hostsFree(r contract.Route, ls []listener) bool {
 			ln := strings.ToLower(n)
 			keys := []string{"exact|" + ln}
 			switch {
-			case dotRE.MatchString(ln):
+			case dotRE.MatchString(n):
 				keys = []string{"exact|" + ln[1:], "wild|" + ln}
-			case wildRE.MatchString(ln):
+			case wildRE.MatchString(n):
 				keys = []string{"wild|" + ln[1:]}
 			}
 			for _, k := range keys {
@@ -100,19 +100,24 @@ func (b *builder) hostGroups(r contract.Route) ([]hostGroup, bool) {
 	}
 	byTier := map[int][]string{}
 	for _, raw := range r.ServerNames {
-		n := strings.ToLower(raw)
-		if len(n) > maxName {
+		if len(raw) > maxName {
 			b.refuse(r.ID, "server_names", fmt.Sprintf("%q is longer than %d characters", raw[:20]+"...", maxName))
 			return nil, false
 		}
+		// The name is checked as written: strings.ToLower folds U+212A (Kelvin sign) to an ASCII "k",
+		// so a check after lowercasing would accept a name that is not the ASCII name. Only an
+		// all-ASCII name reaches ToLower.
 		switch {
-		case nameRE.MatchString(n):
+		case nameRE.MatchString(raw):
+			n := strings.ToLower(raw)
 			byTier[exactTier] = append(byTier[exactTier], "Host(`"+n+"`)")
-		case dotRE.MatchString(n):
+		case dotRE.MatchString(raw):
+			n := strings.ToLower(raw)
 			byTier[exactTier] = append(byTier[exactTier], "Host(`"+n[1:]+"`)")
-			byTier[wildTier(len(n))] = append(byTier[wildTier(len(n))], "HostRegexp(`^.+"+regexp.QuoteMeta(n)+"$`)")
-		case wildRE.MatchString(n):
-			byTier[wildTier(len(n)-1)] = append(byTier[wildTier(len(n)-1)], "HostRegexp(`^.+"+regexp.QuoteMeta(n[1:])+"$`)")
+			byTier[wildTier(len(n))] = append(byTier[wildTier(len(n))], wildRule(n))
+		case wildRE.MatchString(raw):
+			n := strings.ToLower(raw)
+			byTier[wildTier(len(n)-1)] = append(byTier[wildTier(len(n)-1)], wildRule(n[1:]))
 		default:
 			b.refuse(r.ID, "server_names", fmt.Sprintf("%q is not a plain or leading-wildcard name", raw))
 			return nil, false
@@ -132,4 +137,11 @@ func (b *builder) hostGroups(r contract.Route) ([]hostGroup, bool) {
 		out = append(out, hostGroup{tier: t, rule: rule})
 	}
 	return out, true
+}
+
+// wildRule matches any name ending in suffix (".example.test"). The optional trailing dot
+// matches a Host header written as an absolute name ("x.example.test."), which nginx strips
+// and serves; Traefik's Host() tolerates it but a HostRegexp does not unless the pattern does.
+func wildRule(suffix string) string {
+	return "HostRegexp(`^.+" + regexp.QuoteMeta(suffix) + `\.?$` + "`)"
 }

@@ -17,7 +17,26 @@ const (
 	classStatic  = 20000
 	classExact   = 30000
 	acmePrefix   = "/.well-known/acme-challenge/"
+
+	// maxBlocked is how many blocked_paths fit between the blocked class and the static class
+	// (priorities classBlocked*2+1 .. classBlocked*2+n, each below classStatic*2).
+	maxBlocked = (classStatic-classBlocked)*2 - 1
 )
+
+// classCeil is the first priority the next class owns. A location of class c must rank
+// strictly below it (method split included), or it would outrank a class nginx tries first:
+// an over-long prefix would otherwise beat the blocked-path regexes.
+func classCeil(class int) int {
+	switch class {
+	case classPrefix:
+		return classBlocked * 2
+	case classBlocked:
+		return classStatic * 2
+	case classStatic:
+		return classExact * 2
+	}
+	return maxLocPri + 1
+}
 
 func (b *builder) location(r contract.Route, i int, l contract.Location, host string, ls []listener, sec string) {
 	field := fmt.Sprintf("locations[%d](%s)", i, l.Path)
@@ -31,9 +50,10 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 	if l.Match == "exact" {
 		class, rule = classExact, host+" && Path(`"+l.Path+"`)"
 	}
-	// A priority past the tier step would let this location outrank another route's host class.
-	if (class+len(l.Path))*2+1 > maxLocPri {
-		b.refuse(r.ID, field, fmt.Sprintf("path of %d characters is too long to rank below the next host tier", len(l.Path)))
+	// A priority at the next class would let this location outrank a class nginx tries first
+	// (blocked_paths for a prefix, the next host tier for an exact path).
+	if (class+len(l.Path))*2+1 >= classCeil(class) {
+		b.refuse(r.ID, field, fmt.Sprintf("path of %d characters is too long to rank below the next priority class", len(l.Path)))
 		return
 	}
 	var mws []string
@@ -174,7 +194,12 @@ func returnStatusOK(st int) bool {
 var methodRE = regexp.MustCompile(`^[A-Z]+$`)
 
 // blocked renders blocked_paths: nginx regex locations that answer a fixed status.
+// nginx takes the first matching regex in file order, so the priority falls with the index.
 func (b *builder) blocked(r contract.Route, host string, ls []listener, sec string) {
+	if len(r.BlockedPaths) > maxBlocked {
+		b.refuse(r.ID, "blocked_paths", fmt.Sprintf("%d entries; at most %d keep their file order below the static class", len(r.BlockedPaths), maxBlocked))
+		return
+	}
 	for i, bp := range r.BlockedPaths {
 		field := fmt.Sprintf("blocked_paths[%d]", i)
 		if _, err := regexp.Compile(bp.Regex); err != nil || strings.Contains(bp.Regex, "`") {
@@ -191,7 +216,7 @@ func (b *builder) blocked(r contract.Route, host string, ls []listener, sec stri
 		}
 		mws = append(mws, b.respondMW(bp.Status))
 		for _, ln := range ls {
-			b.addRouter(fmt.Sprintf("%s-b%d", b.pfx, i), host+" && PathRegexp(`"+bp.Regex+"`)", classBlocked*2, ln, mws, b.responder())
+			b.addRouter(fmt.Sprintf("%s-b%d", b.pfx, i), host+" && PathRegexp(`"+bp.Regex+"`)", classBlocked*2+len(r.BlockedPaths)-i, ln, mws, b.responder())
 		}
 	}
 }

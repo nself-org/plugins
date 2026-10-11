@@ -243,7 +243,7 @@ func TestExactHostBeatsWildcardWithLongerPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	exact := priorityOf(t, out, "Host(`notes.example.test`) && PathPrefix(`/`)")
-	wild := priorityOf(t, out, "HostRegexp(`^.+\\.example\\.test$`) && PathPrefix(`/api/`)")
+	wild := priorityOf(t, out, "HostRegexp(`^.+\\.example\\.test\\.?$`) && PathPrefix(`/api/`)")
 	if exact <= wild {
 		t.Fatalf("exact host / priority %d must exceed wildcard /api/ priority %d", exact, wild)
 	}
@@ -260,7 +260,7 @@ func TestLeadingDotServerNameMatchesNameAndSubdomains(t *testing.T) {
 	}
 	// the bare name is an exact server name, the subdomains are a wildcard: two tiers (host classes)
 	exact := priorityOf(t, out, "Host(`dot.example.test`) && PathPrefix(`/`)")
-	wild := priorityOf(t, out, "HostRegexp(`^.+\\.dot\\.example\\.test$`) && PathPrefix(`/`)")
+	wild := priorityOf(t, out, "HostRegexp(`^.+\\.dot\\.example\\.test\\.?$`) && PathPrefix(`/`)")
 	if exact <= wild {
 		t.Fatalf("the bare name (%d) must outrank the subdomain wildcard (%d)", exact, wild)
 	}

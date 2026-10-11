@@ -99,7 +99,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`auth.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-auth-fcf1e097-b1-web:
@@ -108,13 +108,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`auth.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         core-auth-fcf1e097-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`auth.example.test`)
@@ -186,7 +187,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`api.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-hasura-fd45e43a-b1-web:
@@ -195,13 +196,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`api.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         core-hasura-fd45e43a-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`api.example.test`)
@@ -273,7 +275,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`storage.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-storage-6cd68f54-b1-web:
@@ -282,13 +284,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`storage.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         core-storage-6cd68f54-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`storage.example.test`)
@@ -360,7 +363,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`storage-console.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-storage-console-cf94819c-b1-web:
@@ -369,13 +372,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`storage-console.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         core-storage-console-cf94819c-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`storage-console.example.test`)
@@ -445,7 +449,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`worker-one.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         cs-1-2e79b478-b1-web:
@@ -454,13 +458,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`worker-one.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         cs-1-2e79b478-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`worker-one.example.test`)
@@ -553,7 +558,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`web.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         frontend-1-267c6f4e-b1-web:
@@ -562,13 +567,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`web.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         frontend-1-267c6f4e-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`web.example.test`)
@@ -639,7 +645,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`internal-one.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         internal-1-9e901ba0-b1-web:
@@ -648,13 +654,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`internal-one.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         internal-1-9e901ba0-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`internal-one.example.test`)
@@ -726,7 +733,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`internal-two.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         internal-2-d7c7a0a9-b1-web:
@@ -735,13 +742,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`internal-two.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         internal-2-d7c7a0a9-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`internal-two.example.test`)
@@ -813,7 +821,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`functions.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         optional-functions-eb8c0e11-b1-web:
@@ -822,13 +830,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`functions.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         optional-functions-eb8c0e11-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`functions.example.test`)
@@ -900,7 +909,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`mail.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         optional-mail-1d49c2f7-b1-web:
@@ -909,13 +918,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`mail.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         optional-mail-1d49c2f7-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`mail.example.test`)
@@ -986,7 +996,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`search.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         optional-search-8f58046c-b1-web:
@@ -995,13 +1005,14 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`search.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
         optional-search-8f58046c-catchall-web:
             entryPoints:
                 - web
             middlewares:
+                - headers-25c21423
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`search.example.test`)

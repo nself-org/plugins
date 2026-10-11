@@ -105,7 +105,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`auth.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -115,7 +115,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`auth.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -123,6 +123,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`auth.example.org`)
@@ -192,7 +193,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`api.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -202,7 +203,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`api.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -210,6 +211,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`api.example.org`)
@@ -279,7 +281,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`storage.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -289,7 +291,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`storage.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -297,6 +299,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`storage.example.org`)
@@ -366,7 +369,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`storage-console.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -376,7 +379,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`storage-console.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -384,6 +387,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`storage-console.example.org`)
@@ -451,7 +455,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`worker-one.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -461,7 +465,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`worker-one.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -469,6 +473,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`worker-one.example.org`)
@@ -577,7 +582,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`web.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -587,7 +592,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`web.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -595,6 +600,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`web.example.org`)
@@ -663,7 +669,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`internal-one.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -673,7 +679,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`internal-one.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -681,6 +687,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`internal-one.example.org`)
@@ -750,7 +757,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`internal-two.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -760,7 +767,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`internal-two.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -768,6 +775,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`internal-two.example.org`)
@@ -837,7 +845,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`functions.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -847,7 +855,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`functions.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -855,6 +863,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`functions.example.org`)
@@ -924,7 +933,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620002
             rule: Host(`mail.example.org`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
             tls: {}
@@ -934,7 +943,7 @@ http:
             middlewares:
                 - headers-fec414ab
                 - replacePath-8861c4ed
-            priority: 25620000
+            priority: 25620001
             rule: Host(`mail.example.org`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
             service: responder
             tls: {}
@@ -942,6 +951,7 @@ http:
             entryPoints:
                 - websecure
             middlewares:
+                - headers-fec414ab
                 - replacePath-8861c4ed
             priority: 25600001
             rule: Host(`mail.example.org`)
