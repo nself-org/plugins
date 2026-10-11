@@ -74,6 +74,8 @@ func jsonCases() []jsonCase {
 	hetz500 := &errClient{fakeServerClient: fixtureClient(), list: errors.New("list servers: hetzner API GET /servers: 500 server_error: secret-looking text")}
 	gone := &errClient{fakeServerClient: fixtureClient(), get: errors.New("get server 9: hetzner API GET /servers/9: 404 not_found: nope")}
 	delFail := &errClient{fakeServerClient: fixtureClient(), del: errors.New("delete server 1: hetzner API DELETE /servers/1: 503 unavailable")}
+	rejected := &errClient{fakeServerClient: fixtureClient(), list: errors.New("list servers: hetzner API GET /servers: 401 unauthorized: token text")}
+	forbidden := &errClient{fakeServerClient: fixtureClient(), create: errors.New("create server: hetzner API POST /servers: 403 forbidden: read only")}
 	shrink := fixtureClient()
 	shrink.servers[1].ServerType = "cx41"
 	provFail := &errClient{fakeServerClient: fixtureClient(), create: errors.New("create server: hetzner API POST /servers: 422 invalid_input: bad")}
@@ -100,6 +102,9 @@ func jsonCases() []jsonCase {
 		{name: "destroy_tofu_fails", cmd: "infra destroy", args: destroyArgs, env: bad, code: CodeTerraformFail, class: output.ClassInfra},
 		{name: "server_list_ok", cmd: "infra server list", args: []string{"server", "list", "--json"}, env: srv},
 		{name: "server_list_hetzner_error", cmd: "infra server list", args: []string{"server", "list", "--json"}, env: cliEnv{Client: hetz500}, code: CodeHetznerFailed, class: output.ClassInfra},
+		{name: "server_list_token_rejected", cmd: "infra server list", args: []string{"server", "list", "--json"}, env: cliEnv{Client: rejected}, code: CodeTokenRejected, class: output.ClassAuth},
+		{name: "server_provision_forbidden", cmd: "infra server provision", args: []string{"server", "provision", "--name", "web-2", "--type", "cx22", "--location", "fsn1", "--image", "ubuntu-24.04", "--json"}, env: cliEnv{Client: forbidden}, code: CodeTokenRejected, class: output.ClassAuth},
+		{name: "server_list_unexpected", cmd: "infra server list", args: []string{"server", "list", "--json"}, env: cliEnv{Client: &errClient{fakeServerClient: fixtureClient(), list: errors.New("boom")}}, code: CodeUnexpected, class: output.ClassInfra},
 		{name: "server_list_no_token", cmd: "infra server list", args: []string{"server", "list", "--json"}, env: cliEnv{NoTok: true, realClient: true}, code: CodeNoToken, class: output.ClassAuth},
 		{name: "server_list_token_env_refused", cmd: "infra server list", args: []string{"server", "list", "--token-env", TerraformTokenEnvVar, "--json"}, env: cliEnv{realClient: true}, code: CodeTokenEnvBanned, class: output.ClassUser},
 		{name: "server_provision_ok", cmd: "infra server provision", args: []string{"server", "provision", "--name", "web-2", "--type", "cx22", "--location", "fsn1", "--image", "ubuntu-24.04", "--label", "purpose=ci", "--json"}, env: srv},

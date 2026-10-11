@@ -79,7 +79,7 @@ terraform's prompt. The manifest declares these subcommands `json: legacy` becau
 
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
 status equals `exit_code`. Messages are fixed text: they never carry a token, an environment value or a raw provider or
-terraform error. `cause` is limited to the terraform exit status or the HTTP status of a Hetzner reply.
+terraform error. A usage error names the flag only: a mistyped `--tokn=VALUE`, `-xVALUE` or `--id VALUE` never puts the value in the envelope. For Hetzner and local failures a redacted one-line diagnostic is printed on stderr, never in the envelope (secret values and everything after "token", "Bearer" or "Authorization" are dropped). `cause` is limited to the terraform exit status or the HTTP status of a Hetzner reply.
 
 Every refusal exits 4 with an E403 envelope and reaches neither terraform nor Hetzner: `apply` and `destroy` without
 `--i-accept-cloud-spend` or without a terminal, `destroy` without `--auto-approve`, and `server destroy` without `--snapshot`
@@ -94,12 +94,13 @@ or `--force-no-backup`. Without `--json` the exit status is what it always was: 
 | E741 | infra (2) | A terraform command failed (`cause` is the exit status; terraform's output is on stderr) |
 | E742 | auth (3) | No Hetzner API token: set `HETZNER_NSELF_TOKEN` (or `HCLOUD_TOKEN`) or pass `--token` |
 | E743 | user (1) | `--token-env` names `NSELF_INFRA_TERRAFORM_HCLOUD_TOKEN`, which a `server` command never reads |
-| E744 | infra (2) | A Hetzner Cloud operation failed (`cause` is `HTTP <status>` or `network error`). `server destroy` states when the server was not deleted |
+| E744 | infra (2) | A Hetzner Cloud operation failed (`cause` is `HTTP <status>` or `network error`; a 401 or 403 is E747). `server destroy` states when the server was not deleted |
 | E745 | user (1) | Server not found (Hetzner answered 404 for the id) |
 | E746 | user (1) | `server resize` would shrink the disk, which Hetzner cannot do: snapshot, provision a smaller server, destroy the original |
-| E749 | infra (2) | Unexpected failure |
+| E747 | auth (3) | Hetzner rejected the token (HTTP 401 or 403): check that it is valid, not revoked, in the right project, and not read-only for a change |
+| E749 | infra (2) | Unexpected failure: any error that is not an HTTP reply, a network error or a known refusal (a `server destroy` message says when the server was not deleted) |
 
-The plugin owns E740 to E759; E747, E748 and E750 to E759 are free. E401 and E403 are the core registry's codes, reused
+The plugin owns E740 to E759; E748 and E750 to E759 are free. E401 and E403 are the core registry's codes, reused
 because a plugin cannot register new ones.
 
 ## Examples
@@ -123,8 +124,12 @@ nself-infra apply
   `server_id`/`snapshot_id`/`retained_ips`/`released_ips`, with snake_case keys), and failures are error envelopes with an
   exit class instead of plain text. The plugin is `planned` and ungated, so there is no compatibility window.
 - `validate`, `plan`, `apply` and `destroy` gain `--json` with the same envelope.
-- A stdin of `/dev/null` no longer counts as a terminal: `apply` and `destroy` run by a program (whose stdin is `/dev/null` by
-  default) now exit 4 at the terminal check instead of passing it.
+- `--json` takes the last value given, like every other flag (`--json=false --json` is on). Failures without terraform output of their own print a redacted diagnostic on stderr.
+- The terminal check of `apply` and `destroy` is now a real isatty test. A stdin of `/dev/null` (what a program gives a child by
+  default), `/dev/zero`, `/dev/urandom`, a pipe or a file no longer counts as a terminal: those runs exit 4 at the check.
+- Hetzner HTTP 401 and 403 are now E747 (auth, exit 3) instead of E744; usage envelopes no longer echo flag values; the manifest
+  marks `apply` and `destroy` `surface: cli-only`, declares `--label` and `--ssh-key` as `stringSlice`, and `--force` is described
+  as ignored.
 - `apply` and `destroy` refusals (spend flag, terminal) exit 4 as before; with `--json` they also print an E403 envelope.
 
 ## Source

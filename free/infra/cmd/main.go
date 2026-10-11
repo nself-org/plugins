@@ -97,7 +97,7 @@ func init() {
 	infraApplyCmd.Flags().String("domain", "", "Domain for the nSelf deployment")
 	infraApplyCmd.Flags().String("state-bucket", "", "S3/GCS bucket for Terraform state (optional)")
 	infraApplyCmd.Flags().Bool("auto-approve", false, "Skip interactive approval")
-	infraApplyCmd.Flags().Bool("force", false, "Bypass the PLANNED gate and run terraform against real infrastructure")
+	infraApplyCmd.Flags().Bool("force", false, "Ignored; kept so old scripts still parse (the PLANNED gate was removed)")
 	infraApplyCmd.Flags().String("location", "", "Hetzner datacenter location (e.g. nbg1, fsn1, hel1) — passed as TF var")
 	infraApplyCmd.Flags().String("server-type", "", "Hetzner server type (e.g. cpx21, cx22) — passed as TF var")
 	infraApplyCmd.Flags().String("deploy-pubkey", "", "SSH public key content for the nself deploy user's authorized_keys — passed as TF var deploy_ssh_pubkey")
@@ -138,10 +138,13 @@ func report(err error, js bool, args []string, stdout, stderr io.Writer) int {
 		if ee.msg != "" {
 			fmt.Fprintln(stderr, "Error:", ee.msg)
 		}
+		if ee.diag != "" {
+			fmt.Fprintln(stderr, "Error:", ee.diag)
+		}
 		return ee.code
 	}
 	if js && !ran {
-		d := usageDetail(err.Error())
+		d := usageDetail(safeUsage(err.Error()))
 		d.ExitCode = output.ExitCodeFor(d.Class)
 		name := "infra"
 		if c, _, ferr := infraCmd.Find(args); ferr == nil && c != infraCmd {

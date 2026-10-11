@@ -94,7 +94,7 @@ func parseLabels(args []string) (map[string]string, error) {
 	for _, a := range args {
 		k, v, ok := strings.Cut(a, "=")
 		if !ok || k == "" {
-			return nil, &usageError{fmt.Sprintf("--label must be key=value, got %q", a)}
+			return nil, &usageError{msg: fmt.Sprintf("--label must be key=value, got %q", a), safe: "--label must be key=value"}
 		}
 		labels[k] = v
 	}

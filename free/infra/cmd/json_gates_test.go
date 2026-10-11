@@ -12,6 +12,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,7 +102,8 @@ func TestServerDestroyRefusalExitsAndNeverDeletes(t *testing.T) {
 }
 
 // The production check, not the test override: /dev/null (what exec gives a
-// child by default) and a regular file are not terminals.
+// child by default), /dev/zero, /dev/urandom, a pipe and a regular file are not
+// terminals. (A positive control needs a pty and is not run here.)
 func TestProductionTTYCheckRejectsNullAndFiles(t *testing.T) {
 	old := os.Stdin
 	t.Cleanup(func() { os.Stdin = old })
@@ -117,7 +119,25 @@ func TestProductionTTYCheckRejectsNullAndFiles(t *testing.T) {
 	}
 	defer reg.Close()
 
-	for name, f := range map[string]*os.File{"/dev/null": null, "regular file": reg} {
+	zero, err := os.Open("/dev/zero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zero.Close()
+	urandom, err := os.Open("/dev/urandom")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer urandom.Close()
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pr.Close()
+	defer pw.Close()
+
+	files := map[string]*os.File{"/dev/null": null, "regular file": reg, "/dev/zero": zero, "/dev/urandom": urandom, "pipe": pr}
+	for name, f := range files {
 		os.Stdin = f
 		if stdinIsTTY() {
 			t.Errorf("stdin on %s counted as a terminal", name)
@@ -154,6 +174,94 @@ func TestApplyDestroyRefuseNonTTYStdin(t *testing.T) {
 		}
 		if r.TofuLog != "" {
 			t.Errorf("%s: terraform was invoked: %q", args[0], r.TofuLog)
+		}
+	}
+}
+
+// The order is fixed: with neither the spend flag nor a terminal, the refusal
+// names the spend flag.
+func TestSpendFlagIsCheckedBeforeTerminal(t *testing.T) {
+	for _, verb := range []string{"apply", "destroy"} {
+		args := []string{verb, "--provider", "hetzner", "--domain", tfDomain, "--auto-approve"}
+		r := runCLI(t, cliEnv{Tofu: "ok", TTY: false}, args...)
+		if r.Exit != output.ExitDestructiveBlocked || !strings.Contains(r.Stderr, "will incur cloud spend") || strings.Contains(r.Stderr, "TTY") {
+			t.Errorf("%s human: exit=%d stderr=%q", verb, r.Exit, r.Stderr)
+		}
+		r = runCLI(t, cliEnv{Tofu: "ok", TTY: false}, append(args, "--json")...)
+		if !strings.Contains(r.Stdout, "--i-accept-cloud-spend") || strings.Contains(r.Stdout, "interactive terminal") {
+			t.Errorf("%s json: want the spend-flag refusal, got:\n%s", verb, r.Stdout)
+		}
+		if r.TofuLog != "" {
+			t.Errorf("%s: terraform was invoked", verb)
+		}
+	}
+}
+
+// A mistyped flag must not put its value in the envelope or on stderr.
+func TestUsageEnvelopeNeverEchoesFlagValues(t *testing.T) {
+	const secret = "FAKE-SECRET-VALUE-123"
+	cases := [][]string{
+		{"server", "list", "--tokn=" + secret, "--json"},
+		{"server", "list", "--tokn", secret, "--json"},
+		{"server", "list", "-x" + secret, "--json"},
+		{"server", "resize", "--id", secret, "--type", "cx41", "--json"},
+		{"server", "resize", "--id=" + secret, "--json"},
+		{"server", "resize", "--json", "--id"},
+		{"plan", "--provider", secret, "--domain", tfDomain, "--json"},
+		{"server", "provision", "--label", secret, "--name", "a", "--json"},
+	}
+	for _, args := range cases {
+		r := runCLI(t, cliEnv{Client: fixtureClient()}, args...)
+		if strings.Contains(r.Stdout, secret) || strings.Contains(r.Stderr, secret) {
+			t.Errorf("%v leaked the value:\nstdout:\n%s\nstderr:\n%s", args, r.Stdout, r.Stderr)
+		}
+		if err := output.CheckEnvelope([]byte(r.Stdout)); err != nil || r.Exit != output.ExitUser {
+			t.Errorf("%v: want one E401 envelope, exit 1: %v exit=%d\n%s", args, err, r.Exit, r.Stdout)
+		}
+	}
+}
+
+// A Hetzner or local failure leaves a redacted diagnostic on stderr (never in
+// the envelope), and no token reaches either stream.
+func TestHetznerFailureDiagnosticOnStderrOnly(t *testing.T) {
+	const argTok = "FAKE-ARG-TOKEN-777"
+	plain := errors.New("list servers: hetzner API GET /servers: 500 server_error: secret-looking text")
+	r := runCLI(t, cliEnv{Client: &errClient{fakeServerClient: fixtureClient(), list: plain}}, "server", "list", "--json")
+	want, err := os.ReadFile(filepath.Join("..", "testdata", "json", "server_list_hetzner_error.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Stdout != string(want) {
+		t.Errorf("stdout differs from the golden:\n%s", r.Stdout)
+	}
+	if !strings.Contains(r.Stderr, "500 server_error") {
+		t.Errorf("stderr has no diagnostic: %q", r.Stderr)
+	}
+
+	leaks := []error{
+		errors.New("list servers: hetzner API GET /servers: 500 x: " + fakeToken + " was refused"),
+		errors.New("list servers: hetzner API GET /servers: 500 x: Authorization: Bearer abc.def"),
+		errors.New("list servers: hetzner API GET /servers: 500 x: sent " + argTok + " in the request"),
+	}
+	for _, le := range leaks {
+		r := runCLI(t, cliEnv{Client: &errClient{fakeServerClient: fixtureClient(), list: le}}, "server", "list", "--token", argTok, "--json")
+		for _, bad := range []string{fakeToken, argTok, "abc.def", "Bearer", "Authorization"} {
+			if strings.Contains(r.Stdout, bad) || strings.Contains(r.Stderr, bad) {
+				t.Errorf("%q leaked (%v)\nstdout:\n%s\nstderr:\n%s", bad, le, r.Stdout, r.Stderr)
+			}
+		}
+		if r.Stderr == "" {
+			t.Errorf("empty stderr for %v", le)
+		}
+	}
+}
+
+// pflag takes the last --json value; so does wantsJSON.
+func TestWantsJSONLastValueWins(t *testing.T) {
+	cases := map[string]bool{"--json": true, "--json=false": false, "--json=false --json": true, "--json --json=false": false, "--json=1 --json=0": false, "-- --json": false, "": false}
+	for in, want := range cases {
+		if got := wantsJSON(strings.Fields(in)); got != want {
+			t.Errorf("wantsJSON(%q) = %v, want %v", in, got, want)
 		}
 	}
 }

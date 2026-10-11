@@ -34,6 +34,7 @@ type manifestSub struct {
 	Name       string         `json:"name"`
 	JSON       string         `json:"json"`
 	SideEffect string         `json:"side_effect"`
+	Surface    string         `json:"surface"`
 	Flags      []manifestFlag `json:"flags"`
 }
 
@@ -44,8 +45,10 @@ func manifestType(t string) string {
 		return "bool"
 	case "int64", "int":
 		return "int"
+	case "stringArray", "stringSlice":
+		return "stringSlice" // repeatable
 	}
-	return "string" // string, duration, stringArray
+	return "string" // string, duration
 }
 
 func TestManifestMatchesCommandTree(t *testing.T) {
@@ -72,6 +75,9 @@ func TestManifestMatchesCommandTree(t *testing.T) {
 		if err != nil || c == infraCmd {
 			t.Errorf("manifest subcommand %q has no cobra command", sc.Name)
 			continue
+		}
+		if sc.SideEffect != "read" && sc.Surface != "cli-only" {
+			t.Errorf("%s: surface = %q, want cli-only (destructive or spending, no machine exposure)", sc.Name, sc.Surface)
 		}
 		// json: legacy pending D-0342
 		if sc.JSON != "legacy" {
@@ -115,7 +121,7 @@ func checkFlags(t *testing.T, sc manifestSub, c *cobra.Command) {
 		if mf.Default != def {
 			t.Errorf("%s --%s: default %q, cobra %q", sc.Name, f.Name, mf.Default, def)
 		}
-		if f.Name == "json" && mf.Usage != f.Usage {
+		if (f.Name == "json" || f.Name == "force") && mf.Usage != f.Usage {
 			t.Errorf("%s --json: usage %q, cobra %q", sc.Name, mf.Usage, f.Usage)
 		}
 	})

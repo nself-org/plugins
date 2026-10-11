@@ -94,7 +94,7 @@
             "default": "false",
             "name": "force",
             "type": "bool",
-            "usage": "Bypass the PLANNED gate and run terraform against real infrastructure"
+            "usage": "Ignored; kept so old scripts still parse (the PLANNED gate was removed)"
           },
           {
             "default": "false",
@@ -133,7 +133,8 @@
         "name": "apply",
         "output": "document",
         "side_effect": "remote",
-        "summary": "Provision nSelf infrastructure via OpenTofu/Terraform"
+        "summary": "Provision nSelf infrastructure via OpenTofu/Terraform",
+        "surface": "cli-only"
       },
       {
         "confirm": {
@@ -175,7 +176,8 @@
         "name": "destroy",
         "output": "document",
         "side_effect": "destructive",
-        "summary": "Destroy nSelf infrastructure"
+        "summary": "Destroy nSelf infrastructure",
+        "surface": "cli-only"
       },
       {
         "flags": [
@@ -192,7 +194,7 @@
           },
           {
             "name": "label",
-            "type": "string",
+            "type": "stringSlice",
             "usage": "label as key=value (repeatable)"
           },
           {
@@ -207,7 +209,7 @@
           },
           {
             "name": "ssh-key",
-            "type": "string",
+            "type": "stringSlice",
             "usage": "Hetzner SSH key name to authorize (repeatable)"
           },
           {

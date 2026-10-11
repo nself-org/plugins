@@ -3,7 +3,7 @@
   "command": "infra validate",
   "error": {
     "code": "E401",
-    "message": "unknown provider \"aws\"; supported: hetzner",
+    "message": "unknown provider; supported: hetzner",
     "remediation": "run nself infra <command> --help",
     "exit_code": 1,
     "class": "user"

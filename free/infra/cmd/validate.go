@@ -28,7 +28,7 @@ func runInfraValidate(cmd *cobra.Command, args []string) error {
 		providerStr = "hetzner" // default or just error
 	}
 	if providerStr != "hetzner" {
-		return r.usage(fmt.Sprintf("unknown provider %q; supported: hetzner", providerStr))
+		return r.usageSafe(fmt.Sprintf("unknown provider %q; supported: hetzner", providerStr), "unknown provider; supported: hetzner")
 	}
 
 	provider := infra.Provider(providerStr)

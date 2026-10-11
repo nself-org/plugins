@@ -19,8 +19,10 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -38,6 +40,7 @@ type exitErr struct {
 	code  int
 	msg   string
 	cause error
+	diag  string // redacted diagnostic for stderr after an error envelope; never in the envelope
 }
 
 func (e *exitErr) Error() string {
@@ -56,12 +59,11 @@ func addJSONFlag(c *cobra.Command) {
 
 // invocation is the output context of one subcommand run.
 type invocation struct {
-	cmd      *cobra.Command
-	json     bool
-	out      io.Writer // where the envelope goes: the stdout of the process at begin
-	saved    *os.File  // os.Stdout before the redirect, nil when not redirected
-	sub      string    // "plan", "server list": the command path after "infra"
-	isServer bool
+	cmd   *cobra.Command
+	json  bool
+	out   io.Writer // where the envelope goes: the stdout of the process at begin
+	saved *os.File  // os.Stdout before the redirect, nil when not redirected
+	sub   string    // "plan", "server list": the command path after "infra"
 }
 
 // ran records that a subcommand's RunE started, so main can tell a cobra usage
@@ -74,7 +76,7 @@ func begin(cmd *cobra.Command) *invocation {
 	js, _ := cmd.Flags().GetBool("json")
 	ran = true
 	sub := strings.TrimPrefix(strings.TrimPrefix(cmd.CommandPath(), "infra"), " ")
-	r := &invocation{cmd: cmd, json: js, out: os.Stdout, sub: sub, isServer: strings.HasPrefix(sub, "server")}
+	r := &invocation{cmd: cmd, json: js, out: os.Stdout, sub: sub}
 	if js {
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
@@ -123,13 +125,19 @@ func (r *invocation) fail(err error) error {
 	if !r.json {
 		return err
 	}
-	return r.emit(classify(err, r.sub, r.isServer), err)
+	return r.emit(classify(err, r.sub), err)
 }
 
 // usage reports a usage error (E401): JSON mode writes the envelope; human
 // mode returns the plain error, as before.
 func (r *invocation) usage(msg string) error {
-	return r.fail(&usageError{msg})
+	return r.fail(&usageError{msg: msg})
+}
+
+// usageSafe is usage for a message that echoes a flag value: human mode prints
+// msg, the envelope carries safe.
+func (r *invocation) usageSafe(msg, safe string) error {
+	return r.fail(&usageError{msg: msg, safe: safe})
 }
 
 // refuse reports a refused destructive or spending action. Human mode prints
@@ -155,24 +163,74 @@ func (r *invocation) emit(d output.ErrorDetail, cause error) error {
 	if err := output.WriteError(r.out, r.command(), d, nil); err != nil {
 		return &exitErr{code: output.ExitInfra, msg: "writing the JSON envelope: " + err.Error()}
 	}
-	return &exitErr{code: d.ExitCode, cause: cause}
+	return &exitErr{code: d.ExitCode, cause: cause, diag: r.diagnostic(d, cause)}
 }
 
-// wantsJSON reports whether args carry --json (before any "--").
+// diagnostic is the stderr line for a failure that has no tool output of its
+// own (terraform prints its own): the Hetzner, network or local error text,
+// redacted. It never enters the envelope.
+func (r *invocation) diagnostic(d output.ErrorDetail, cause error) string {
+	switch d.Code {
+	case CodeHetznerFailed, CodeServerNotFound, CodeTokenRejected, CodeUnexpected:
+	default:
+		return ""
+	}
+	var ee *exec.ExitError
+	if cause == nil || errors.As(cause, &ee) {
+		return ""
+	}
+	secrets := []string{}
+	if v, _ := r.cmd.Flags().GetString("token"); v != "" {
+		secrets = append(secrets, v)
+	}
+	for _, name := range []string{"HETZNER_NSELF_TOKEN", "HCLOUD_TOKEN", TerraformTokenEnvVar} {
+		secrets = append(secrets, os.Getenv(name))
+	}
+	if name, _ := r.cmd.Flags().GetString("token-env"); name != "" {
+		secrets = append(secrets, os.Getenv(name))
+	}
+	return redact(cause.Error(), secrets)
+}
+
+// redact removes every secret value and drops everything from the first
+// "token", "Bearer" or "Authorization" (any case) to the end.
+func redact(text string, secrets []string) string {
+	for _, s := range secrets {
+		if s != "" {
+			text = strings.ReplaceAll(text, s, "[redacted]")
+		}
+	}
+	low := strings.ToLower(text)
+	cut := len(text)
+	for _, w := range []string{"token", "bearer", "authorization"} {
+		if i := strings.Index(low, w); i >= 0 && i < cut {
+			cut = i
+		}
+	}
+	if cut < len(text) {
+		text = strings.TrimRight(text[:cut], " :,;-") + " [redacted]"
+	}
+	return text
+}
+
+// wantsJSON reports whether args carry --json (before any "--"). Like pflag,
+// the last value wins: --json=false --json is true.
 func wantsJSON(args []string) bool {
+	js := false
 	for _, a := range args {
 		if a == "--" {
-			return false
+			break
 		}
 		if a == "--json" {
-			return true
+			js = true
+			continue
 		}
 		// Every form pflag accepts for a bool: 1, t, T, TRUE, true, True, 0, f, ...
 		if v, ok := strings.CutPrefix(a, "--json="); ok {
 			if b, err := strconv.ParseBool(v); err == nil {
-				return b
+				js = b
 			}
 		}
 	}
-	return false
+	return js
 }

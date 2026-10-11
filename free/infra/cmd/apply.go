@@ -52,7 +52,7 @@ func runInfraApply(cmd *cobra.Command, args []string) error {
 	}
 	provider := infra.Provider(providerStr)
 	if !infra.ValidProviders[provider] {
-		return r.usage(fmt.Sprintf("unknown provider %q; supported: hetzner", providerStr))
+		return r.usageSafe(fmt.Sprintf("unknown provider %q; supported: hetzner", providerStr), "unknown provider; supported: hetzner")
 	}
 
 	applyTerraformTokenEnv()

@@ -22,6 +22,7 @@
 //	E744 Hetzner Cloud operation failed                              infra
 //	E745 server not found                                            user
 //	E746 disk shrink refused (Hetzner cannot shrink a disk)          user
+//	E747 Hetzner rejected the token (HTTP 401 or 403)                auth
 //	E749 unexpected failure                                          infra
 package main
 
@@ -47,13 +48,23 @@ const (
 	CodeHetznerFailed  = "E744"
 	CodeServerNotFound = "E745"
 	CodeDiskShrink     = "E746"
+	CodeTokenRejected  = "E747"
 	CodeUnexpected     = "E749"
 )
 
-// usageError is a usage problem found by this package; its text is the human message.
-type usageError struct{ msg string }
+// usageError is a usage problem found by this package; msg is the human message.
+// safe, when set, replaces msg in the envelope (msg may echo a flag value).
+type usageError struct{ msg, safe string }
 
 func (e *usageError) Error() string { return e.msg }
+
+// envelopeMsg is the text the envelope carries.
+func (e *usageError) envelopeMsg() string {
+	if e.safe != "" {
+		return e.safe
+	}
+	return e.msg
+}
 
 // tokenError is a failure to resolve the Hetzner token. refused is true when
 // --token-env named the Terraform-only variable.
@@ -81,14 +92,14 @@ var httpRe = regexp.MustCompile(`hetzner API [A-Z]+ (\S+): (\d{3})\b`)
 
 // classify maps err to its error detail. Order matters: the typed errors first.
 // sub is the subcommand ("apply", "server list"), used in the terraform message.
-func classify(err error, sub string, isServer bool) output.ErrorDetail {
+func classify(err error, sub string) output.ErrorDetail {
 	var te *tokenError
 	var ue *usageError
 	var ee *exec.ExitError
 	text := err.Error()
 	switch {
 	case errors.As(err, &ue):
-		return usageDetail(ue.msg)
+		return usageDetail(ue.envelopeMsg())
 	case errors.As(err, &te) && te.refused:
 		return output.ErrorDetail{Code: CodeTokenEnvBanned, Class: output.ClassUser,
 			Message:     "--token-env names the Terraform-only token variable, which a server command never reads",
@@ -112,6 +123,11 @@ func classify(err error, sub string, isServer bool) output.ErrorDetail {
 			Message: "the terraform run for infra " + sub + " failed", Remediation: "terraform's own output is on stderr"}
 	}
 	if m := httpRe.FindStringSubmatch(text); m != nil {
+		if m[2] == "401" || m[2] == "403" {
+			return output.ErrorDetail{Code: CodeTokenRejected, Class: output.ClassAuth, Cause: "HTTP " + m[2],
+				Message:     "Hetzner Cloud rejected the API token",
+				Remediation: "check that the token is valid, not revoked, and belongs to the right Hetzner project (HETZNER_NSELF_TOKEN, HCLOUD_TOKEN or --token); a read-only token cannot change servers"}
+		}
 		if m[2] == "404" && strings.HasPrefix(m[1], "/servers/") {
 			return output.ErrorDetail{Code: CodeServerNotFound, Class: output.ClassUser, Cause: "HTTP 404",
 				Message: "the server was not found", Remediation: "check the id with nself infra server list"}
@@ -125,14 +141,18 @@ func classify(err error, sub string, isServer bool) output.ErrorDetail {
 			return usageDetail(msg)
 		}
 	}
-	if isServer {
-		return hetznerDetail("", text)
+	if strings.Contains(text, "hetzner API ") && strings.Contains(text, "network error") {
+		return hetznerDetail("network error", text)
 	}
 	if strings.HasPrefix(text, "infra: terraform ") {
 		return output.ErrorDetail{Code: CodeTerraformFail, Class: output.ClassInfra,
 			Message: "the terraform run for infra " + sub + " failed", Remediation: "terraform's own output is on stderr"}
 	}
-	return output.ErrorDetail{Code: CodeUnexpected, Class: output.ClassInfra, Message: "the infra command failed unexpectedly"}
+	d := output.ErrorDetail{Code: CodeUnexpected, Class: output.ClassInfra, Message: "the infra command failed unexpectedly"}
+	if strings.Contains(text, "NOT deleted") {
+		d.Message += ", the server was not deleted"
+	}
+	return d
 }
 
 // hetznerDetail is E744. The message never carries the provider's text.
@@ -143,20 +163,53 @@ func hetznerDetail(cause, text string) output.ErrorDetail {
 	if strings.Contains(text, "NOT deleted") {
 		d.Message = "the Hetzner Cloud operation failed, the server was not deleted"
 	}
-	if cause == "" && strings.Contains(text, "network error") {
-		d.Cause = "network error"
-	}
 	return d
 }
 
+// knownUsage is the set of internal/server validation messages, which name flags
+// only. Matching them exactly keeps a provider error that merely contains
+// " is required" from being echoed.
+var knownUsage = map[string]bool{
+	"provision: --name is required":                      true,
+	"provision: --type is required (e.g. cx22)":          true,
+	"provision: --location is required (e.g. fsn1)":      true,
+	"provision: --image is required (e.g. ubuntu-24.04)": true,
+	"resize: server ID is required":                      true,
+	"resize: --type is required (target server type)":    true,
+	"destroy: server ID is required":                     true,
+}
+
 // usageText reports whether text is one of internal/server's own validation
-// messages (provision, resize and destroy name the missing flag). Those carry
-// flag names only, so they are safe to echo.
+// messages, and the envelope text for it. An unknown target type is reported
+// without the value.
 func usageText(text string) (string, bool) {
-	for _, p := range []string{"provision: ", "resize: ", "destroy: "} {
-		if strings.HasPrefix(text, p) && (strings.Contains(text, " is required") || strings.Contains(text, "unknown target server type")) {
-			return text, true
-		}
+	if knownUsage[text] {
+		return text, true
+	}
+	if strings.HasPrefix(text, "resize: unknown target server type") {
+		return "resize: unknown target server type", true
 	}
 	return "", false
+}
+
+var (
+	invalidArgRe = regexp.MustCompile(`^invalid argument .* for "([^"]+)" flag`)
+	flagCutRe    = regexp.MustCompile(`^((?:unknown flag: |flag needs an argument: )--?[^=\s]*)`)
+)
+
+// safeUsage reduces a cobra or pflag error to text that cannot carry a flag
+// value: the flag name only. A mistyped --tokn=SECRET, -tSECRET or --id SECRET
+// must not reach stdout.
+func safeUsage(msg string) string {
+	short := strings.HasPrefix(msg, "unknown shorthand flag") || strings.HasPrefix(msg, "flag needs an argument: '")
+	if i := strings.Index(msg, " in -"); short && i > 0 {
+		return msg[:i]
+	}
+	if m := invalidArgRe.FindStringSubmatch(msg); m != nil {
+		return "invalid value for flag " + m[1]
+	}
+	if m := flagCutRe.FindStringSubmatch(msg); m != nil {
+		return m[1]
+	}
+	return "invalid usage"
 }
