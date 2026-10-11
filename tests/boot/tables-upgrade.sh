@@ -14,6 +14,10 @@
 #                 Then boot the converted build on the SAME database and require applied == expected, every manifest
 #                 table present, and every seeded row still there (row counts per table did not drop).
 #
+# Basis image hook: free/<plugin>/tests/boot/basis-from (converted plugin dir; one line, an image ref) rewrites the image of
+# the basis Dockerfile's first `FROM golang:` line (an `AS name` is kept) to that ref before the basis image is built, and
+# prints a line saying so. For a basis tree that never built as shipped (storage: go.mod needs go >= 1.25, FROM golang:1.22);
+# everything else of the basis build stays as shipped. Test-only.
 # Env hook, same as tests/boot/run.sh: free/<plugin>/tests/boot/env holds KEY=value lines passed as -e to every boot;
 # only $DATABASE_URL and $PORT (or ${...}) are expanded, by string replacement (no eval); dummy values only.
 # Basis tree: git archive "$(git merge-base origin/main HEAD)" free/<plugin>... | tar -x -C .boot-basis (never committed).
@@ -93,8 +97,6 @@ sleep 2
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p; pj=$dir/plugin.json; [ -f "$pj" ] || { echo "FAIL  $p: no plugin.json under $root"; rc=1; continue; }
   schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj"); tables=$(jq -r '.tables[]?' "$pj" | tr '\n' ' ')
-  # A manifest still on v1 may not carry `schema` yet (the v1 normalizer refuses the key): np_<name> is the ledger schema.
-  [ -n "$schema" ] || { [ "$(manifest_version "$dir")" = 2 ] || schema=np_$(printf '%s' "$p" | tr '-' '_'); }
   [ -n "$schema" ] || { echo "FAIL  $p: manifest has no schema"; rc=1; continue; }
   [ -n "$tables" ] || { echo "FAIL  $p: manifest has no tables (nothing to prove)"; rc=1; continue; }
   expected=$(ls "$dir"/migrations/*.sql 2>/dev/null | grep -vc '\.down\.sql$'); tag=nself-tu-$p:$pid; btag=nself-tu-basis-$p:$pid
@@ -111,7 +113,13 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   # ---- upgrade pass
   bdir=$basis/free/$p; [ -d "$bdir" ] || bdir=$basis/$p
   [ -f "$bdir/Dockerfile" ] || { echo "FAIL  upgrade $p: no basis tree (Dockerfile) under $basis"; rc=1; continue; }
-  docker build -q -t "$btag" "$bdir" >/dev/null 2>"$W/build.err" || { echo "FAIL  upgrade $p: basis image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
+  bctx=$bdir; bf=$dir/tests/boot/basis-from
+  if [ -f "$bf" ]; then
+    ref=$(head -1 "$bf" | tr -d '[:space:]'); bctx=$W/basis-$p; rm -rf "$bctx"; mkdir -p "$bctx"; cp -R "$bdir/." "$bctx/"
+    awk -v ref="$ref" '!done && /^FROM golang:/ { n = split($0, a, " "); out = "FROM " ref; for (i = 3; i <= n; i++) out = out " " a[i]; print out; done = 1; next } { print }' "$bdir/Dockerfile" > "$bctx/Dockerfile"
+    echo "note  upgrade $p: basis Dockerfile first FROM golang: line rewritten to $ref (tests/boot/basis-from)"
+  fi
+  docker build -q -t "$btag" "$bctx" >/dev/null 2>"$W/build.err" || { echo "FAIL  upgrade $p: basis image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
   sql boot "CREATE DATABASE $udb" >/dev/null
   load_env "$dir/tests/boot/env" "$durl_u" "$port"; boot "nself-tu-b-$pid" "$btag" "$udb" "$port"
   if [ -z "$H" ]; then echo "FAIL  upgrade $p: the basis build never answered /health on a fresh database (record it and escalate)"; printf '%s\n' "$LOGS" | tail -8; rc=1; continue; fi
