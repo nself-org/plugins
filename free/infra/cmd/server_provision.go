@@ -9,14 +9,15 @@ package main
 // any validation, resolution, or provider failure.
 // Constraints: the --user-data-file content may hold a single-use pairing code, so
 // it is never printed, logged or returned, and no message carries its bytes or size.
-// A provider error is reported from its HTTP status and error code only when user
-// data was sent, because a provider can echo the request body in its message.
+// A provider error is reported from its HTTP status only when user data was sent,
+// because a provider can echo the request body in its message or error code.
 
 import (
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -136,10 +137,11 @@ type userDataProviderError struct {
 func (e *userDataProviderError) Error() string { return e.shown }
 func (e *userDataProviderError) Unwrap() error { return e.cause }
 
-// statusRe is the status and code head of the client's HTTP error text; codes
-// are fixed identifiers such as invalid_input. netRe is the network-error head.
+// statusRe is the status head of the client's HTTP error text; the provider's
+// error code after it is provider-controlled text and is dropped. netRe is the
+// network-error head.
 var (
-	statusRe = regexp.MustCompile(`hetzner API [A-Z]+ \S+: \d{3}( [a-z_]+)?`)
+	statusRe = regexp.MustCompile(`hetzner API [A-Z]+ \S+: \d{3}\b`)
 	netRe    = regexp.MustCompile(`hetzner API [A-Z]+ \S+: network error`)
 )
 
@@ -159,7 +161,7 @@ func earliestHead(text string) string {
 }
 
 // withheldProviderError builds the error shown when server.Provision fails and
-// user data was sent: the provider text is cut to its status and code (or the
+// user data was sent: the provider text is cut to its HTTP status (or the
 // network-error head) so an echoed request body never reaches output. The
 // server's own flag-validation messages carry no user data and pass through.
 // classify sees the same E744/E747 class through the shown text.
@@ -230,8 +232,8 @@ func readUserDataFile(path string) (string, error) {
 	if !fi.Mode().IsRegular() {
 		return "", userDataRefusal(path, "is not a regular file")
 	}
-	if fi.Mode().Perm()&0o077 != 0 {
-		return "", userDataRefusal(path, "must be mode 0600 or stricter")
+	if fi.Mode().Perm()&^0o600 != 0 || fi.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
+		return "", userDataRefusal(path, "must be mode 0600 or stricter (no execute, group, other or special bits)")
 	}
 	if checkUserDataOwner(fi) != nil {
 		return "", userDataRefusal(path, "is not owned by you")

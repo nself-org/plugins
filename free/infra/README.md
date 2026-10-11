@@ -41,12 +41,12 @@ nself infra server destroy --id 12345 --force-no-backup
 `provision --user-data-file <path>` sends a cloud-init user-data file to the new
 server as `user_data`. The file is opened without following a symlink (a symlink
 as the final path component is refused), and the checks run on the open file,
-not on the path. It must be a regular file, mode 0600 or stricter, owned by you,
+not on the path. It must be a regular file, mode 0600 or stricter (no execute, group, other or special bits), owned by you,
 not empty, valid UTF-8 and at most 32768 bytes (the Hetzner limit). Any other
 file is refused with E401 before the provider is called. The content can hold a
 pairing code, so it is never printed or logged, and `--json` reports only
 `user_data: true` or `false`. When user data was sent, a provider error is shown
-with its HTTP status and code only. Linux and macOS only.
+with its HTTP status only. Linux and macOS only.
 
 `destroy` is safe by default and the order of its steps never changes:
 

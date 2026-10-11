@@ -76,6 +76,23 @@ func udWrite(t *testing.T, name string, data []byte, mode os.FileMode) string {
 	return p
 }
 
+// udWriteSpecial writes a 0600 file carrying a special mode bit, or returns ""
+// when the OS drops the bit (the sub-case is then skipped).
+func udWriteSpecial(t *testing.T, name string, bit os.FileMode) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(p, []byte(udContent), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(p, 0o600|bit); err != nil {
+		return ""
+	}
+	if fi, err := os.Stat(p); err != nil || fi.Mode()&bit == 0 {
+		return ""
+	}
+	return p
+}
+
 func provisionArgs(extra ...string) []string {
 	base := []string{"server", "provision", "--name", "ci-1", "--type", "cx22", "--location", "fsn1", "--image", "ubuntu-24.04"}
 	return append(base, extra...)
@@ -159,6 +176,9 @@ func TestProvisionUserDataNoEcho(t *testing.T) {
 			{"probe after code and space", "E744", func(u string) error {
 				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input %s: %s", udProbe, u)
 			}},
+			{"probe in the code position", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 %s: %s", udProbe, u)
+			}},
 		}
 		for _, tc := range cases {
 			for _, js := range []bool{false, true} {
@@ -222,9 +242,11 @@ func refusalCases(t *testing.T) []refusalCase {
 	}
 	notUTF8 := append([]byte(udContent), 0xff, 0xfe)
 	flag := "--user-data-file"
-	return []refusalCase{
+	cases := []refusalCase{
 		{"mode 0644", []string{flag, udWrite(t, "m644", []byte(udContent), 0o644)}, true},
 		{"mode 0640", []string{flag, udWrite(t, "m640", []byte(udContent), 0o640)}, true},
+		{"mode 0700", []string{flag, udWrite(t, "m700", []byte(udContent), 0o700)}, true},
+		{"mode 0500", []string{flag, udWrite(t, "m500", []byte(udContent), 0o500)}, true},
 		{"directory", []string{flag, t.TempDir()}, true},
 		{"symlink", []string{flag, link}, true},
 		{"too large", []string{flag, udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600)}, true},
@@ -233,6 +255,15 @@ func refusalCases(t *testing.T) []refusalCase {
 		{"missing", []string{flag, filepath.Join(dir, "absent")}, false},
 		{"empty path", []string{flag, ""}, false},
 	}
+	for _, sp := range []struct {
+		name string
+		bit  os.FileMode
+	}{{"setuid", os.ModeSetuid}, {"setgid", os.ModeSetgid}, {"sticky", os.ModeSticky}} {
+		if p := udWriteSpecial(t, sp.name, sp.bit); p != "" {
+			cases = append(cases, refusalCase{"mode 0600 + " + sp.name, []string{flag, p}, true})
+		}
+	}
+	return cases
 }
 
 func TestProvisionUserDataRefusals(t *testing.T) {
@@ -268,6 +299,14 @@ func TestProvisionUserDataRefusals(t *testing.T) {
 		d := decodeEnv(t, res.Stdout)
 		if res.Exit == 0 || rc.calls != 0 || d.Error == nil || d.Error.Code != "E401" {
 			t.Fatalf("exit=%d calls=%d hasError=%v", res.Exit, rc.calls, d.Error != nil)
+		}
+	})
+	t.Run("mode 0400 accepted", func(t *testing.T) {
+		p := udWrite(t, "m400", []byte(udContent), 0o400)
+		rc := newRecorder()
+		res := runCLI(t, cliEnv{Client: rc}, provisionArgs("--user-data-file", p)...)
+		if res.Exit != 0 || rc.calls != 1 || rc.userData != udContent {
+			t.Fatalf("exit=%d calls=%d exactMatch=%v", res.Exit, rc.calls, rc.userData == udContent)
 		}
 	})
 	t.Run("exactly 32768 bytes accepted", func(t *testing.T) {
@@ -343,6 +382,8 @@ func TestReadUserDataFileReasons(t *testing.T) {
 		{"directory", t.TempDir(), "is not a regular file"},
 		{"fifo", fifo, "is not a regular file"},
 		{"mode 0644", udWrite(t, "m644", []byte(udContent), 0o644), "must be mode 0600 or stricter"},
+		{"mode 0700", udWrite(t, "m700", []byte(udContent), 0o700), "must be mode 0600 or stricter"},
+		{"mode 0500", udWrite(t, "m500", []byte(udContent), 0o500), "must be mode 0600 or stricter"},
 		{"symlink", link, "is a symbolic link"},
 		{"too large", udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600), "is larger than"},
 		{"empty", udWrite(t, "empty", nil, 0o600), "is empty"},
@@ -353,6 +394,17 @@ func TestReadUserDataFileReasons(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assertRefusalReason(t, tc.path, tc.reason)
 		})
+	}
+	for _, sp := range []struct {
+		name string
+		bit  os.FileMode
+	}{{"setuid", os.ModeSetuid}, {"setgid", os.ModeSetgid}, {"sticky", os.ModeSticky}} {
+		sp := sp
+		if p := udWriteSpecial(t, sp.name, sp.bit); p != "" {
+			t.Run("mode 0600 + "+sp.name, func(t *testing.T) {
+				assertRefusalReason(t, p, "must be mode 0600 or stricter")
+			})
+		}
 	}
 	t.Run("another owner", func(t *testing.T) {
 		old := userDataUID
