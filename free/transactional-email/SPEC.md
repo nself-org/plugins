@@ -23,7 +23,7 @@
 
 - **Service shape:** Go binary, Docker container, port 3822.
 - **Hasura Remote Schema:** Yes — exposes `sendEmail`, `getEmailStatus`, `listDomains`, `upsertDomain` mutations/queries.
-- **Database schema:** Role `np_email`, schema `np_email`.
+- **Database schema:** Role `np_temail`, schema `np_temail`. The prefix is `np_temail`, not `np_email`: the free `email` plugin owns `np_email_*`, and both plugins can be installed in one project.
 - **Provider abstraction:**
 
 ```
@@ -47,10 +47,10 @@ Hasura Action
 
 - **NEVER** use `source_account_id` to separate Cloud customers.
 - **NEVER** use `tenant_id` for multi-app isolation within one deploy.
-- All `np_email.*` tables carry both columns.
+- All `np_temail.*` tables carry both columns.
 - Hasura row filter enforces `tenant_id` isolation for Cloud tenants.
 - Reference: `.claude/docs/architecture/multi-tenant-conventions.md`
-- **Enforcement:** `nself doctor --deep` check `PERM-RLS-01` verifies both columns and Hasura row filters are present on all `np_email.*` tables.
+- **Enforcement:** `nself doctor --deep` check `PERM-RLS-01` verifies both columns and Hasura row filters are present on all `np_temail.*` tables.
 
 ---
 
@@ -58,7 +58,7 @@ Hasura Action
 
 ```sql
 -- Domain configuration
-CREATE TABLE np_email.domains (
+CREATE TABLE np_temail.domains (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID,
   source_account_id TEXT NOT NULL DEFAULT 'primary',
@@ -73,14 +73,14 @@ CREATE TABLE np_email.domains (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, source_account_id, domain)
 );
-CREATE INDEX idx_email_domains_tenant ON np_email.domains (tenant_id, source_account_id);
+CREATE INDEX idx_email_domains_tenant ON np_temail.domains (tenant_id, source_account_id);
 
 -- Outbound message log
-CREATE TABLE np_email.messages (
+CREATE TABLE np_temail.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID,
   source_account_id TEXT NOT NULL DEFAULT 'primary',
-  domain_id UUID NOT NULL REFERENCES np_email.domains(id),
+  domain_id UUID NOT NULL REFERENCES np_temail.domains(id),
   to_addresses TEXT[] NOT NULL,
   subject TEXT NOT NULL,
   template_id TEXT,
@@ -94,11 +94,11 @@ CREATE TABLE np_email.messages (
   error_detail TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_email_messages_tenant ON np_email.messages (tenant_id, source_account_id, created_at DESC);
-CREATE INDEX idx_email_messages_status ON np_email.messages (status, created_at);
+CREATE INDEX idx_email_messages_tenant ON np_temail.messages (tenant_id, source_account_id, created_at DESC);
+CREATE INDEX idx_email_messages_status ON np_temail.messages (status, created_at);
 
 -- Templates
-CREATE TABLE np_email.templates (
+CREATE TABLE np_temail.templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID,
   source_account_id TEXT NOT NULL DEFAULT 'primary',
@@ -113,7 +113,7 @@ CREATE TABLE np_email.templates (
 );
 ```
 
-**Rollback:** `DROP SCHEMA np_email CASCADE; DROP ROLE np_email;`
+**Rollback:** `DROP SCHEMA np_temail CASCADE; DROP ROLE np_temail;`
 
 ---
 
@@ -218,9 +218,9 @@ nSelf's transactional-email plugin is self-hosted with no per-email cost from nS
   "tier": "pro",
   "bundle": ["shared"],
   "tables": [
-    "np_email_domains",
-    "np_email_messages",
-    "np_email_templates"
+    "np_temail_domains",
+    "np_temail_messages",
+    "np_temail_templates"
   ],
   "hasuraRemoteSchema": true,
   "systemDependencies": [],
@@ -299,7 +299,7 @@ No system-level binary dependencies. All provider calls are pure HTTP or SMTP vi
 - `PLUGIN-EMAIL-01`: `EMAIL_DEFAULT_PROVIDER` is one of `elastic_email | smtp | postmark`
 - `PLUGIN-EMAIL-02`: If `elastic_email`, verify `EMAIL_ELASTIC_API_KEY` is non-empty
 - `PLUGIN-EMAIL-03`: If `smtp`, verify `EMAIL_SMTP_HOST` and `EMAIL_SMTP_USER` are non-empty
-- `PLUGIN-EMAIL-04`: At least one sender domain configured in `np_email.domains`
+- `PLUGIN-EMAIL-04`: At least one sender domain configured in `np_temail.domains`
 
 ---
 
@@ -313,7 +313,7 @@ No system-level binary dependencies. All provider calls are pure HTTP or SMTP vi
 
 **Integration tests:**
 - Docker Compose: real Postgres + SMTP4Dev mock
-- Send via `POST /email/send` → verify `np_email.messages.status = 'sent'`
+- Send via `POST /email/send` → verify `np_temail.messages.status = 'sent'`
 - Send via `POST /email/send-template` → verify template rendered in stored `body_html`
 - Inbound delivery webhook relay → verify `messages.status = 'delivered'`
 
@@ -326,7 +326,7 @@ No system-level binary dependencies. All provider calls are pure HTTP or SMTP vi
 
 ## §14 Migration
 
-- Schema applied by `nself plugin install transactional-email` — creates `np_email` schema and role.
+- Schema applied by `nself plugin install transactional-email` — creates `np_temail` schema and role.
 - No breaking changes to existing tables.
 - Backwards compat: existing Ummat direct Elastic Email calls continue until the tenant migrates domain config to this plugin.
 - Ummat migration ticket: `ummat/.claude/inbox/msg-2026-04-30-migrate-to-nself-email.md` (to be filed post-P98).

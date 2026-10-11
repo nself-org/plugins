@@ -13,7 +13,7 @@
   "repository": "https://github.com/nself-org/plugins",
   "minNselfVersion": "1.0.9",
   "category": "integrations",
-  "language": "config",
+  "language": "go",
   "tags": [
     "ai",
     "llm",

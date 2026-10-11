@@ -51,7 +51,7 @@ func Delete(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input D
 
 	// Mark as deleting.
 	if _, err := pool.Exec(ctx,
-		`UPDATE nself_controller.projects SET status = 'deleting', updated_at = now() WHERE slug = $1`,
+		`UPDATE np_tenant_controller.projects SET status = 'deleting', updated_at = now() WHERE slug = $1`,
 		input.Slug,
 	); err != nil {
 		return fmt.Errorf("mark deleting: %w", err)
@@ -93,7 +93,7 @@ func Delete(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input D
 
 	// 11. Remove project row (hard delete — audit log preserved).
 	if _, err := pool.Exec(ctx,
-		`DELETE FROM nself_controller.projects WHERE slug = $1`, input.Slug,
+		`DELETE FROM np_tenant_controller.projects WHERE slug = $1`, input.Slug,
 	); err != nil {
 		slog.Warn("remove project row failed (non-fatal)", "slug", input.Slug, "err", err)
 	}
@@ -122,7 +122,7 @@ func GetProject(ctx context.Context, pool *pgxpool.Pool, slug string) (*Project,
 	err := pool.QueryRow(ctx, `
 		SELECT id, slug, domain, schema_name, role_name, hasura_source, hasura_port,
 		       status, created_at, updated_at, deleted_at
-		FROM nself_controller.projects
+		FROM np_tenant_controller.projects
 		WHERE slug = $1 AND deleted_at IS NULL
 	`, slug).Scan(
 		&p.ID, &p.Slug, &p.Domain, &p.SchemaName, &p.RoleName, &p.HasuraSource, &p.HasuraPort,
