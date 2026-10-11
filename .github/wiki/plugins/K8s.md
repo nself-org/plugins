@@ -12,7 +12,7 @@ No license key required.
 
 ## Description
 
-Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.
+Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm, plus backup and restore of the postgres database with content fingerprints.
 
 This is a CLI plugin: it installs the `nself-k8s` binary into your plugin path and runs as a command, not a background service.
 
@@ -34,9 +34,11 @@ Category: `infrastructure`. Current version: `1.0.0`.
 - `nself-k8s upgrade`
 - `nself-k8s status`
 - `nself-k8s uninstall [--yes]`
+- `nself-k8s backup [--output FILE] [--tag TAG]`
+- `nself-k8s restore <file> --yes`
 
 Every subcommand accepts `--json` (see [JSON output and exit classes](#json-output-and-exit-classes)). The manifest declares
-the same surface in its `commands` block, so `nself help --json k8s` lists the five subcommands with canon `plugin`.
+the same surface in its `commands` block, so `nself help --json k8s` lists the seven subcommands with canon `plugin`.
 
 ## Chart values from the compose model
 
@@ -176,6 +178,66 @@ destructive, so it needs confirmation:
 
 Persistent volumes the chart created are not deleted by helm: check the cluster before you reuse the namespace.
 
+## Backup and restore
+
+`nself k8s backup` streams `pg_dump -Fc` out of the postgres pod through `kubectl exec` into the nSelf backup layout.
+`nself k8s restore <file> --yes` streams it back with `pg_restore --clean --if-exists` and reports success only when the
+data it finds equals what the backup recorded. Both need `kubectl` on `PATH` and one running postgres pod of the release
+(found by the chart's labels `app.kubernetes.io/name=postgres` and `app.kubernetes.io/instance=<release>`).
+
+| Flag | Command | Meaning |
+|------|---------|---------|
+| `--cluster` | both | Path to the kubeconfig (default: kubectl's own) |
+| `--namespace` | both | Namespace of the release (default: the kubeconfig context's namespace) |
+| `--release` | both | Helm release name (default `nself`) |
+| `--output` | backup | Write the dump to exactly this file; it must not exist |
+| `--tag` | backup | Label appended to the file name (`[A-Za-z0-9._-]`) |
+| `--project-dir` | backup | Project directory that holds `.env` (default `.`); `BACKUP_DIR` is relative to it |
+| `--yes` | restore | Required. Without it restore exits 4 (E403) in every mode and runs nothing |
+
+### File layout and sidecar
+
+The dump is `<BACKUP_DIR>/<PROJECT_NAME>_full_<YYYYMMDD_HHMMSS>[_<tag>].dump` (mode 0600, directory 0700). `PROJECT_NAME` and
+`BACKUP_DIR` (default `./backups`) come from the process environment, else from the project `.env`. An existing file is never
+replaced. Next to the dump, `<dir>/.meta/<file>.json` (mode 0600) records the metadata:
+
+```json
+{"schema_version": "1", "kind": "k8s-backup", "project": "myapp", "file": "myapp_full_20261011_040506.dump",
+ "bytes": 123456, "sha256": "<hex>", "created_at": "2026-10-11T04:05:06Z", "server_version": "160004",
+ "release": "nself", "namespace": "default",
+ "fingerprints": [{"schema": "auth", "table": "users", "rows": 2, "sum": "-123"}]}
+```
+
+It holds no password, no token and no host name. `nself backup list` and `nself backup restore latest` read only the files in
+the backup directory, so the `.meta` subdirectory does not change them.
+
+### Fingerprints
+
+For every ordinary table (partitions included) in every schema except `pg_catalog`, `information_schema`, `pg_toast*` and
+`pg_temp_*`, so `auth` and `storage` are covered, backup records `count(*)` and the sum of the first 64 bits of
+`md5(<row as text>)`. The sum does not depend on row order and never builds one large value. The statements are generated
+inside SQL from `pg_catalog` with `format('%I', ...)`, so odd table names are quoted by the database and never built from
+input. The session pins `TimeZone`, `DateStyle`, `IntervalStyle`, `extra_float_digits` and `bytea_output` so a row has the same
+text at backup and at restore.
+
+Backup reads the fingerprints in a `REPEATABLE READ READ ONLY` session that exports a snapshot, and `pg_dump --snapshot` streams
+from that snapshot, so dump and fingerprints describe the same moment even while the database is written. Restore reads the
+fingerprints in one `REPEATABLE READ` transaction after `pg_restore` and compares them with the sidecar. A writer that changes
+data during the restore makes them differ: stop the writers first (scale the apps down) or expect E737.
+
+### Restore order
+
+1. The dump must exist and its sidecar must be valid (E734). A dump made by `nself backup create` has no sidecar and is refused.
+2. The size and sha256 of the file must equal the sidecar's (E735). A tampered or truncated file stops here; nothing ran in the pod.
+3. `pg_restore --clean --if-exists` runs. Any `pg_restore: error:` line or a non-zero exit is E736.
+4. The fingerprints are compared (E737 on any difference, up to 20 listed). Success is printed only after this step.
+
+### Compatibility with `nself backup`
+
+The dump is a plain `pg_dump -Fc` file in the core naming, so `nself backup restore <file>` restores it into a compose stack.
+The other way round does not work with `nself k8s restore`: a core-made dump has no sidecar and is refused (core does not write
+one yet). Postgres major versions must match as for any `pg_restore`.
+
 ## JSON output and exit classes
 
 `--json` on any subcommand makes stdout carry exactly one v1 envelope (`schema_version`, `command`, then `data` or `error`, plus
@@ -189,15 +251,17 @@ the progress lines go to stderr, so a script can pipe stdout into `jq`. Without 
 | `upgrade` | `release`, `upgraded` |
 | `status` | `name`, `namespace`, `version`, `chart_version`, `status` (never helm's config or manifest) |
 | `uninstall` | `release`, `uninstalled` |
+| `backup` | `file`, `metadata_file`, `bytes`, `sha256`, `tables[]` (`schema`, `table`, `rows`) |
+| `restore` | `file`, `verified` (always `true`), `tables[]` (`schema`, `table`, `rows`) |
 
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
 status equals `exit_code`. Messages never carry a secret, the licence key or helm's release JSON. Without `--json` every
-failure still prints `Error: <message>` and exits 1, except the uninstall refusal (exit 4).
+failure still prints `Error: <message>` and exits 1, except the uninstall and restore refusals (exit 4) and the integrity failures E735 and E737 (exit 2).
 
 | Code | Class (exit) | Meaning |
 |------|--------------|---------|
 | E401 | user (1) | Usage: unknown or missing flag (install without `--domain`), unexpected argument, a `--release` that is not a helm release name (always for `uninstall`; for the others under `--json` only). Core code |
-| E403 | destructive_blocked (4) | `uninstall` without confirmation; nothing was removed. Core code |
+| E403 | destructive_blocked (4) | `uninstall` or `restore` without confirmation; nothing was changed. Core code |
 | E720 | infra (2) | `helm` is not on `PATH` |
 | E721 | user (1) | Generated chart values not found: run `nself k8s values` |
 | E722 | infra (2) | A helm command failed (`cause` is the exit status). For install, upgrade and uninstall helm's output is on stderr; `status` does not show it (run `helm status` yourself) |
@@ -207,8 +271,17 @@ failure still prints `Error: <message>` and exits 1, except the uninstall refusa
 | E726 | infra (2) | `helm status` printed something that is not a release document |
 | E727 | user (1) | Generated values unusable: `secrets.yaml` readable by others, unreadable, or an invalid `values.yaml` |
 | E729 | infra (2) | Unexpected failure (a temp directory, a write) |
+| E730 | infra (2) | `kubectl` is not on `PATH` (`backup`, `restore`) |
+| E731 | user (1) | The postgres pod of the release was not found, is not unique, or is not running and ready; the message says how many were found. Check `--cluster`, `--namespace`, `--release` |
+| E732 | infra (2) | The backup stream failed. The partial dump is removed and no sidecar is written |
+| E733 | infra (2) | The fingerprint query failed (before the dump, or after a restore) |
+| E734 | user (1) | The backup file or its `.meta` sidecar is missing, unreadable or invalid. Nothing ran in the pod |
+| E735 | infra (2) | The dump does not match the checksum or size in its sidecar. Nothing was restored |
+| E736 | infra (2) | `pg_restore` printed an error line or exited non-zero (`cause` is the first error line). The database state is not verified |
+| E737 | infra (2) | After the restore the fingerprints differ from the backup's (`cause` lists up to 20 tables). Never reported as success |
+| E738 | user (1) | The backup target cannot be resolved: `PROJECT_NAME` missing or not a plain name, a bad `--tag`, or the output file already exists |
 
-The plugin owns E720 to E739; E728 and E730 to E739 are free. E401 and E403 are the core registry's codes, reused because a
+The plugin owns E720 to E739; E728 and E739 are free. E401 and E403 are the core registry's codes, reused because a
 plugin cannot register new ones.
 
 ### Troubleshooting
@@ -234,7 +307,13 @@ bash free/k8s/tests/kind/run.sh
 ```
 
 The workflow runs on pull requests that touch `free/k8s/**` and by `workflow_dispatch` with inputs `source` (`branch`, or
-`registry` once the registry leg exists), `cli_ref` and `leg` (`install`; `day2` follows with backup and restore).
+`registry` once the registry leg exists), `cli_ref` and `leg` (`install` or `day2`). A pull request runs both legs.
+
+The `day2` leg (`LEG=day2 bash free/k8s/tests/kind/run.sh`) installs into a dedicated namespace, seeds three tables with 1,000 rows,
+runs `nself k8s backup --json` (the envelope names the dump and every table's count), deletes the namespace, installs again,
+checks that `restore` without `--yes` exits 4, runs `restore --yes --json` (`verified: true`) and then compares the row counts and
+a content digest read directly with `psql` in the pod. The unit step of the workflow also runs the integration test
+`internal/ops/pg_integration_test.go` (`NSELF_K8S_PG_TEST=1`, needs docker) against a postgres:16 container with a 5-million-row table.
 
 ## Source
 

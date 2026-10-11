@@ -1,6 +1,7 @@
 name: k8s-kind
 
-# Proves `nself k8s values|install|upgrade` on a kind cluster (P7-DEPL-05, EPIC D7).
+# Proves `nself k8s values|install|upgrade` on a kind cluster (P7-DEPL-05, EPIC D7) and the
+# day-2 cycle `backup`, delete the namespace, install again, `restore --yes` (P7-DEPL-08, EPIC D8).
 # The job runs free/k8s/tests/kind/run.sh, the same script a developer runs locally:
 # it builds nself from nself-org/cli at cli_ref, lays the branch's k8s plugin out as
 # `nself add` does, generates the chart values, installs the embedded chart, waits for
@@ -8,8 +9,12 @@ name: k8s-kind
 # checks the machine contract (P7-DEPL-07): `nself help --json k8s` lists the subtree with
 # canon plugin, `nself k8s status --json` is a v1 envelope, `nself k8s uninstall` without
 # --yes exits 4 and leaves the release, and `uninstall --yes --json` removes it.
-# Legs: source=branch + leg=install is proven here; source=registry belongs to
-# P7-DEPL-99 and leg=day2 to P7-DEPL-07, so run.sh fails those loudly (exit 3).
+# Legs: source=branch with leg=install (the proof above) or leg=day2: seed three tables with
+# 1,000 rows, `nself k8s backup --json` (the envelope names the dump and every table's count),
+# delete the namespace, install again, `restore` without --yes exits 4, `restore --yes --json`
+# verifies the fingerprints, and an independent psql check agrees. A pull request runs both legs;
+# workflow_dispatch runs the leg input. source=registry belongs to P7-DEPL-99, so run.sh fails it
+# loudly (exit 3). The unit step also runs the postgres integration test (docker is on the runner).
 
 on:
   workflow_dispatch:
@@ -36,15 +41,19 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: k8s-kind-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   kind:
-    name: kind (${{ inputs.leg || 'install' }})
+    name: kind (${{ matrix.leg }})
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    concurrency:
+      group: k8s-kind-${{ github.ref }}-${{ matrix.leg }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # workflow_dispatch runs the one leg picked in the input; a pull request runs both.
+        leg: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.leg)) || fromJSON('["install","day2"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -57,12 +66,15 @@ jobs:
 
       - name: Plugin unit tests
         working-directory: free/k8s
+        env:
+          # Starts a throwaway postgres:16 container (internal/ops/pg_integration_test.go).
+          NSELF_K8S_PG_TEST: "1"
         run: CGO_ENABLED=0 go test -count=1 ./...
 
-      - name: kind install proof
+      - name: kind ${{ matrix.leg }} proof
         env:
           SOURCE: ${{ inputs.source || 'branch' }}
-          LEG: ${{ inputs.leg || 'install' }}
+          LEG: ${{ matrix.leg }}
           CLI_REF: ${{ inputs.cli_ref }}
           # setup-go pins GOTOOLCHAIN=local; the cli build needs a newer Go than the plugin module.
           GOTOOLCHAIN_CLI: auto
