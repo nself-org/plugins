@@ -372,6 +372,8 @@ Query parameters:
 
 All tables include `source_account_id` for multi-app isolation.
 
+`np_tokens_signing_keys` and `np_tokens_encryption_keys` hold key material and are private to the plugin: they are reachable only through its REST API, are not listed in the manifest `tables`, and are never tracked in Hasura.
+
 ## Usage Examples
 
 ### Issue a token for a user who just purchased access

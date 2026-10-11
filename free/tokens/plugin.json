@@ -90,9 +90,7 @@
   },
   "status": "stable",
   "tables": [
-    "np_tokens_signing_keys",
     "np_tokens_issued",
-    "np_tokens_encryption_keys",
     "np_tokens_entitlements",
     "np_tokens_webhook_events"
   ],
