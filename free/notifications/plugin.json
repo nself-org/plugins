@@ -1,18 +1,135 @@
 {
-  "name": "notifications",
-  "version": "1.2.6",
-  "description": "Email notification service (SMTP). Push and SMS channels are always-error placeholders \u2014 they accept requests but return 501 Not Implemented. Use the 'notify' plugin for real push notifications. Deprecated since v1.1.0; replacement: notify.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.9.9",
+  "capabilities": [
+    "email"
+  ],
   "category": "communication",
+  "deprecation": {
+    "announcedDate": "2026-05-07",
+    "eolDate": "2026-11-07",
+    "migrationGuide": "https://github.com/nself-org/plugins/wiki/Notify",
+    "replacedBy": "notify",
+    "state": "deprecated"
+  },
+  "description": "Email notification service (SMTP). Push and SMS channels are always-error placeholders — they accept requests but return 501 Not Implemented. Use the 'notify' plugin for real push notifications. Deprecated since v1.1.0; replacement: notify.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_USER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_PASSWORD",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_FROM",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NOTIFICATIONS_PUSH_PROVIDER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NOTIFICATIONS_PUSH_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NOTIFICATIONS_SMS_PROVIDER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NOTIFICATIONS_SMS_AUTH_TOKEN",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NOTIFICATIONS_SMS_FROM",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "deferred",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "0.9.9",
+  "multiApp": {
+    "supported": false
+  },
+  "name": "notifications",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "filesystem": [],
+    "network": [
+      "outbound"
+    ]
+  },
+  "port": 3102,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=0.9.9"
+  },
+  "schema": "np_notifications",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3102
+  },
+  "status": "deprecated",
+  "tables": [
+    "np_notifications_notifications",
+    "np_notifications_templates",
+    "np_notifications_preferences"
+  ],
   "tags": [
     "notifications",
     "email",
@@ -21,86 +138,6 @@
     "templates",
     "preferences"
   ],
-  "tables": [
-    "np_notifications_notifications",
-    "np_notifications_templates",
-    "np_notifications_preferences"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "optionalDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PORT",
-      "PLUGIN_INTERNAL_SECRET",
-      "SMTP_HOST",
-      "SMTP_PORT",
-      "SMTP_USER",
-      "SMTP_PASSWORD",
-      "SMTP_FROM",
-      "NOTIFICATIONS_PUSH_PROVIDER",
-      "NOTIFICATIONS_PUSH_API_KEY",
-      "NOTIFICATIONS_SMS_PROVIDER",
-      "NOTIFICATIONS_SMS_AUTH_TOKEN",
-      "NOTIFICATIONS_SMS_FROM"
-    ]
-  },
-  "config": {
-    "defaultPort": 3102
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": false
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update"
-    ],
-    "network": [
-      "outbound"
-    ],
-    "filesystem": []
-  },
-  "port": 3102,
-  "deprecated": true,
-  "deprecated_in": "v1.1.0",
-  "deprecatedSince": "1.1.0",
-  "replacement": "notify",
-  "replacedBy": "notify",
-  "removal_target": "v2.0.0",
-  "status": "deprecated",
-  "capabilities": [
-    "email"
-  ],
-  "binary_name": "notifications",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target",
   "tier": "free",
-  "deprecation": {
-    "announcedDate": "2026-05-07",
-    "eolDate": "2026-11-07",
-    "replacedBy": "notify",
-    "migrationGuide": "https://github.com/nself-org/plugins/wiki/Notify"
-  },
-  "migrations": {
-    "dir": "migrations",
-    "apply": "boot"
-  }
+  "version": "1.2.6"
 }
