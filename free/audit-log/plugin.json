@@ -73,5 +73,10 @@
   ],
   "min_memory_mb": 64,
   "systemd_after": "network.target",
-  "tier": "free"
+  "tier": "free",
+  "schema": "np_audit_log",
+  "migrations": {
+    "dir": "migrations",
+    "apply": "boot"
+  }
 }

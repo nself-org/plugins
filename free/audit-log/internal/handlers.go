@@ -47,11 +47,12 @@ func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
 			httpStatus = http.StatusServiceUnavailable
 		}
 
-		sdk.Respond(w, httpStatus, map[string]string{
-			"status":  status,
-			"plugin":  "audit-log",
-			"version": "1.0.0",
-			"db":      dbStatus,
+		sdk.Respond(w, httpStatus, map[string]any{
+			"status":     status,
+			"plugin":     "audit-log",
+			"version":    "1.0.0",
+			"db":         dbStatus,
+			"migrations": bootMigrationsHealth(),
 		})
 	}
 }
