@@ -32,6 +32,8 @@ while [ $# -gt 0 ]; do case $1 in
   --plugins) list=$2; shift;; --basis-dir) basis=$2; shift;; --sequential) ;;
   *) echo "unknown argument $1" >&2; exit 2;; esac; shift; done
 [ -n "$list" ] && [ -n "$basis" ] || { echo "usage: tables-upgrade.sh --plugins a,b --basis-dir DIR [--sequential]" >&2; echo "tables-upgrade: FAIL"; exit 2; }
+n=0; for p in $(printf '%s' "$list" | tr ',' ' '); do n=$((n+1)); done
+[ $n -gt 0 ] || { echo "FAIL --plugins '$list' names no plugin (a check that ran nothing)"; echo "tables-upgrade: FAIL"; exit 2; }
 basis=$(cd "$basis" 2>/dev/null && pwd) || { echo "FAIL basis dir does not exist"; echo "tables-upgrade: FAIL"; exit 1; }
 W=$(conf_work)/tables-upgrade; rm -rf "$W"; mkdir -p "$W"; rc=0; pid=$$; net=nself-tu-$pid; pg=nself-tu-pg-$pid; root=$CONF_ROOT/free
 
