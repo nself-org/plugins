@@ -62,7 +62,8 @@ def walk(v):
     elif isinstance(v, list):
         for x in v: walk(x)
     elif isinstance(v, str) and "://" in v:
-        u = urllib.parse.urlsplit(v)
+        # `compose config` prints a literal $ as $$; undo that output escape.
+        u = urllib.parse.urlsplit(v.replace("$$", "$"))
         if u.password is None and u.username is None: return
         host = (u.hostname or "")
         if host not in want:
