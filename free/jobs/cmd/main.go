@@ -35,6 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
+	mustBootMigrations(ctx, pool)
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
@@ -44,18 +45,13 @@ func main() {
 
 	db := internal.NewDB(pool)
 
-	if err := db.EnsureTables(ctx); err != nil {
-		log.Fatalf("failed to create tables: %v", err)
-	}
-	log.Println("tables verified")
-
 	h := internal.NewHandlers(db)
 
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth()})
 	})
 
 	r.Route("/v1", func(r chi.Router) {
@@ -129,4 +125,3 @@ func envInt(key string, fallback int) int {
 	}
 	return fallback
 }
-

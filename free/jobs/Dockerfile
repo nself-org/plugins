@@ -3,12 +3,14 @@ FROM golang:1.26-alpine AS builder
 WORKDIR /build
 
 COPY go.mod go.sum ./
-RUN go mod download
 
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY migrations/ migrations/
+COPY third_party/ third_party/
+COPY vendor/ vendor/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /nself-jobs ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /nself-jobs ./cmd
 
 FROM alpine:3.20
 
