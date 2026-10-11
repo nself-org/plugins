@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
 
@@ -61,24 +60,26 @@ func reportLegacyTables(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
-// reportParkedTables logs each TS-era table migration 001 parked under its np_flags_ name, with its row count: the data is
-// kept but this plugin never reads it. SELECTs only; a failed check or count is logged, never hidden.
+// reportParkedTables logs each TS-era table migration 001 parked under its np_flags_ name, with the planner's row estimate
+// (pg_class.reltuples; never a count(*), the parked evaluation log can be huge and this runs before the server starts): the data
+// is kept but this plugin never reads it. SELECTs only; a failed check is logged, never hidden.
 func reportParkedTables(ctx context.Context, pool *pgxpool.Pool) {
 	for _, t := range legacyTables {
 		var present bool
-		if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+t.renamed).Scan(&present); err != nil {
+		var est float64
+		err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL, coalesce((SELECT reltuples::float8 FROM pg_class WHERE oid = to_regclass($1)), -1)", "public."+t.renamed).Scan(&present, &est)
+		if err != nil {
 			log.Printf("migrations: cannot check TS-era table public.%s: %v", t.renamed, err)
 			continue
 		}
 		if !present {
 			continue
 		}
-		var n int64
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+pgx.Identifier{"public", t.renamed}.Sanitize()).Scan(&n); err != nil {
-			log.Printf("migrations: cannot count rows of TS-era table public.%s: %v", t.renamed, err)
+		if est <= 0 {
+			log.Printf("migrations: TS-era table public.%s has no row estimate (unknown or empty), parked and not read by this plugin (see README)", t.renamed)
 			continue
 		}
-		log.Printf("migrations: TS-era table public.%s holds %d row(s), parked and not read by this plugin (see README)", t.renamed, n)
+		log.Printf("migrations: TS-era table public.%s holds about %d row(s), parked and not read by this plugin (see README)", t.renamed, int64(est))
 	}
 }
 
