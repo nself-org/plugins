@@ -42,6 +42,17 @@ Production-ready multi-channel notification system with email, push, and SMS sup
 - **Analytics** - Delivery rates, engagement, provider health
 - **GraphQL Actions** - `sendNotification()` mutation
 
+## Boot-applied migrations
+
+`notifications` applies its own `migrations/*.sql` when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`):
+files run in file-name order, one transaction per file, recorded in `np_notifications.schema_migrations`. The manifest declares
+`migrations.apply: boot`, and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates
+tables from Go code. The three `np_notifications_*` tables live in `public`.
+
+**Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
+over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
+ledger is created and every file is recorded. The migration also adds the `source_account_id` column (default `primary`) to tables created by earlier versions, which did not have it.
+
 ## Supported Providers
 
 ### Email ✅ **IMPLEMENTED**

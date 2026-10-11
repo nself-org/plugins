@@ -99,7 +99,6 @@
     "replacedBy": "notify",
     "migrationGuide": "https://github.com/nself-org/plugins/wiki/Notify"
   },
-  "schema": "np_notifications",
   "migrations": {
     "dir": "migrations",
     "apply": "boot"
