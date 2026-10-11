@@ -18,7 +18,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 
 FROM alpine:3.19
-# No apk at build time (the tarball build runs with the network off): the CA bundle come from the builder stage.
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plugin /plugin
 EXPOSE 3102
