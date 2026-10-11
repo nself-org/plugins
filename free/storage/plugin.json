@@ -10,7 +10,7 @@
   "requiredEntitlements": [],
   "requires_license": false,
   "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
+  "repository": "https://github.com/nself-org/plugins",
   "minNselfVersion": "1.1.0",
   "port": 9007,
   "category": "infrastructure",
@@ -37,5 +37,10 @@
   "dependencies": {
     "required": [],
     "optional": []
-  }
+  },
+  "migrations": {
+    "dir": "migrations",
+    "apply": "boot"
+  },
+  "schema": "np_storage"
 }

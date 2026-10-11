@@ -1,14 +1,16 @@
 -- jobs plugin: initial schema
--- CODE WINS: table names from internal/db_schema.go
 -- 3 tables: np_jobs_queues, np_jobs_jobs (with source_account_id), np_jobs_history
+-- Boot-applied by sdk/go/migrate with search_path pinned to np_jobs, so every object is schema-qualified:
+-- the tables live in public (the cli tracking rule). Idempotent: the ALTERs below carry the columns the old
+-- Go code added to warm installs (S18 upgrade), so a table created before them gains them in place.
 
-CREATE TABLE IF NOT EXISTS np_jobs_queues (
+CREATE TABLE IF NOT EXISTS public.np_jobs_queues (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS np_jobs_jobs (
+CREATE TABLE IF NOT EXISTS public.np_jobs_jobs (
     id               TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     queue            TEXT NOT NULL DEFAULT 'default',
     payload          JSONB NOT NULL DEFAULT '{}',
@@ -30,7 +32,14 @@ CREATE TABLE IF NOT EXISTS np_jobs_jobs (
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS np_jobs_history (
+ALTER TABLE public.np_jobs_jobs ADD COLUMN IF NOT EXISTS callback_url TEXT;
+ALTER TABLE public.np_jobs_jobs ADD COLUMN IF NOT EXISTS sign_payload BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.np_jobs_jobs ADD COLUMN IF NOT EXISTS last_status_code INTEGER;
+ALTER TABLE public.np_jobs_jobs ADD COLUMN IF NOT EXISTS last_duration_ms BIGINT;
+ALTER TABLE public.np_jobs_jobs ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
+ALTER TABLE public.np_jobs_jobs ADD COLUMN IF NOT EXISTS dlq BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS public.np_jobs_history (
     id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     job_id       TEXT NOT NULL,
     attempt      INTEGER NOT NULL,
@@ -41,10 +50,10 @@ CREATE TABLE IF NOT EXISTS np_jobs_history (
     triggered_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_status ON np_jobs_jobs(status);
-CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_queue ON np_jobs_jobs(queue);
-CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_scheduled ON np_jobs_jobs(scheduled_at) WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_priority ON np_jobs_jobs(priority DESC);
-CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_source_account ON np_jobs_jobs(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_jobs_history_job_id ON np_jobs_history(job_id);
-CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_dlq ON np_jobs_jobs(dlq) WHERE dlq = TRUE;
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_status ON public.np_jobs_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_queue ON public.np_jobs_jobs(queue);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_scheduled ON public.np_jobs_jobs(scheduled_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_priority ON public.np_jobs_jobs(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_source_account ON public.np_jobs_jobs(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_history_job_id ON public.np_jobs_history(job_id);
+CREATE INDEX IF NOT EXISTS idx_np_jobs_jobs_dlq ON public.np_jobs_jobs(dlq) WHERE dlq = TRUE;

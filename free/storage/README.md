@@ -53,3 +53,14 @@ nself plugin install storage
 | `np_storage_buckets` | Bucket registry per account |
 | `np_storage_objects` | Object metadata (key, size, content-type, etag) |
 | `np_storage_metadata` | Arbitrary key-value metadata per object |
+
+## Boot-applied migrations
+
+`plugin-storage` applies its own `migrations/*.sql` when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`):
+files run in file-name order, one transaction per file, recorded in `np_storage.schema_migrations`. The manifest declares
+`migrations.apply: boot`, and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates
+tables from Go code. The tables `np_storage_buckets`, `np_storage_objects` and `np_storage_metadata` live in `public`. Earlier versions never created them at start-up (the SQL had to be applied by hand); a fresh install now has them without any manual step.
+
+**Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
+over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables.

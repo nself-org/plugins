@@ -1,32 +1,33 @@
 -- tokens plugin: initial schema
--- CODE WINS: table names from internal/db.go (np_tokens_* prefix)
+-- Table names match the manifest (np_tokens_* prefix). Boot-applied by sdk/go/migrate with search_path pinned to
+-- np_tokens, so every object is schema-qualified: the tables live in public (the cli tracking rule). Idempotent.
 -- 5 tables: np_tokens_signing_keys, np_tokens_issued, np_tokens_encryption_keys,
 --           np_tokens_entitlements, np_tokens_webhook_events
 -- Security: np_tokens_encryption_keys and np_tokens_signing_keys NOT tracked in Hasura
 --           (key_material_encrypted never accessible via GraphQL — REST API only)
 
-CREATE TABLE IF NOT EXISTS np_tokens_signing_keys (
+CREATE TABLE IF NOT EXISTS public.np_tokens_signing_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     name VARCHAR(255) NOT NULL,
     algorithm VARCHAR(20) NOT NULL DEFAULT 'hmac-sha256',
     key_material_encrypted TEXT NOT NULL,
     is_active BOOLEAN DEFAULT true,
-    rotated_from UUID REFERENCES np_tokens_signing_keys(id),
+    rotated_from UUID REFERENCES public.np_tokens_signing_keys(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     rotated_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
     UNIQUE(source_account_id, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_tokens_signing_keys_source_app ON np_tokens_signing_keys(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_signing_keys_source_app ON public.np_tokens_signing_keys(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_tokens_issued (
+CREATE TABLE IF NOT EXISTS public.np_tokens_issued (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     token_hash VARCHAR(128) NOT NULL,
     token_type VARCHAR(50) NOT NULL DEFAULT 'playback',
-    signing_key_id UUID REFERENCES np_tokens_signing_keys(id),
+    signing_key_id UUID REFERENCES public.np_tokens_signing_keys(id),
     user_id VARCHAR(255) NOT NULL,
     device_id VARCHAR(255),
     content_id VARCHAR(255) NOT NULL,
@@ -42,13 +43,13 @@ CREATE TABLE IF NOT EXISTS np_tokens_issued (
     use_count INTEGER DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_source_app ON np_tokens_issued(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_hash ON np_tokens_issued(token_hash);
-CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_user ON np_tokens_issued(source_account_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_content ON np_tokens_issued(source_account_id, content_id);
-CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_active ON np_tokens_issued(source_account_id, revoked, expires_at);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_source_app ON public.np_tokens_issued(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_hash ON public.np_tokens_issued(token_hash);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_user ON public.np_tokens_issued(source_account_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_content ON public.np_tokens_issued(source_account_id, content_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_issued_active ON public.np_tokens_issued(source_account_id, revoked, expires_at);
 
-CREATE TABLE IF NOT EXISTS np_tokens_encryption_keys (
+CREATE TABLE IF NOT EXISTS public.np_tokens_encryption_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     content_id VARCHAR(255) NOT NULL,
@@ -62,10 +63,10 @@ CREATE TABLE IF NOT EXISTS np_tokens_encryption_keys (
     expires_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_source_app ON np_tokens_encryption_keys(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_content ON np_tokens_encryption_keys(source_account_id, content_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_source_app ON public.np_tokens_encryption_keys(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_tokens_enc_keys_content ON public.np_tokens_encryption_keys(source_account_id, content_id, is_active);
 
-CREATE TABLE IF NOT EXISTS np_tokens_entitlements (
+CREATE TABLE IF NOT EXISTS public.np_tokens_entitlements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     user_id VARCHAR(255) NOT NULL,
@@ -80,10 +81,10 @@ CREATE TABLE IF NOT EXISTS np_tokens_entitlements (
     UNIQUE(source_account_id, user_id, content_id, entitlement_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_tokens_entitlements_source_app ON np_tokens_entitlements(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_tokens_entitlements_user ON np_tokens_entitlements(source_account_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_entitlements_source_app ON public.np_tokens_entitlements(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_entitlements_user ON public.np_tokens_entitlements(source_account_id, user_id);
 
-CREATE TABLE IF NOT EXISTS np_tokens_webhook_events (
+CREATE TABLE IF NOT EXISTS public.np_tokens_webhook_events (
     id VARCHAR(255) PRIMARY KEY,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     event_type VARCHAR(128) NOT NULL,
@@ -95,4 +96,4 @@ CREATE TABLE IF NOT EXISTS np_tokens_webhook_events (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_tokens_webhook_events_source_app ON np_tokens_webhook_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_tokens_webhook_events_source_app ON public.np_tokens_webhook_events(source_account_id);

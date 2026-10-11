@@ -479,3 +479,14 @@ The entitlement system integrates with billing — when a user purchases access,
 - IP and device restriction support on tokens
 - Multi-app isolation via `source_account_id`
 - API key authentication and rate limiting
+
+## Boot-applied migrations
+
+`tokens` applies its own `migrations/*.sql` when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`):
+files run in file-name order, one transaction per file, recorded in `np_tokens.schema_migrations`. The manifest declares
+`migrations.apply: boot`, and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates
+tables from Go code. The five `np_tokens_*` tables live in `public`.
+
+**Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
+over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables.
