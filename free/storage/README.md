@@ -63,4 +63,4 @@ tables from Go code. The tables `np_storage_buckets`, `np_storage_objects` and `
 
 **Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
 over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
-ledger is created and every file is recorded.
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables.

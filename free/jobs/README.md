@@ -837,7 +837,7 @@ tables from Go code. The `np_jobs_jobs`, `np_jobs_queues` and `np_jobs_history` 
 
 **Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
 over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
-ledger is created and every file is recorded. The columns earlier versions added in Go (`callback_url`, `sign_payload`, `last_status_code`, `last_duration_ms`, `source_account_id`, `dlq`) are added by the migration to a table that predates them.
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables. The columns earlier versions added in Go (`callback_url`, `sign_payload`, `last_status_code`, `last_duration_ms`, `source_account_id`, `dlq`) are added by the migration to a table that predates them.
 
 ## Support
 

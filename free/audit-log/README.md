@@ -45,7 +45,7 @@ and `GET /health` reports `migrations: {applied, expected}`. The plugin no longe
 
 **Upgrading an existing install.** The files are idempotent (`IF NOT EXISTS`, guarded policy blocks), so they apply over a
 table an earlier version created: no data is touched or dropped. The first start of the new version creates the ledger and
-adds the columns older tables lack (`tenant_id`).
+adds the columns older tables lack (`tenant_id`). The first start after upgrading builds indexes on existing tables and can take minutes on large tables.
 
 | File | Description |
 |---|---|

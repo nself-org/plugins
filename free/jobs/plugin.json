@@ -71,7 +71,8 @@
   "status": "stable",
   "tables": [
     "np_jobs_jobs",
-    "np_jobs_queues"
+    "np_jobs_queues",
+    "np_jobs_history"
   ],
   "tags": [
     "jobs",

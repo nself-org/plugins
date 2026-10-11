@@ -51,7 +51,7 @@ tables from Go code. The three `np_notifications_*` tables live in `public`.
 
 **Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
 over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
-ledger is created and every file is recorded. The migration also adds the `source_account_id` column (default `primary`) to tables created by earlier versions, which did not have it.
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables. The migration also adds the `source_account_id` column (default `primary`) to tables created by earlier versions, which did not have it.
 
 ## Supported Providers
 
