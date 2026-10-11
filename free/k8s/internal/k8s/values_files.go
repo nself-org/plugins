@@ -2,7 +2,7 @@
 // file, so no secret and no licence key ever reaches a process argv.
 //
 // Inputs: the project directory (holds .nself/generated/k8s), the domain,
-// licence key and plugin list of an install.
+// licence Secret name and plugin list of an install.
 //
 // Outputs: absolute paths of values.yaml and secrets.yaml, and the install
 // overlay as YAML bytes (piped to helm on stdin, never written to disk).
@@ -10,8 +10,9 @@
 // Constraints: install and upgrade refuse (exit 1, "run nself k8s values")
 // when either generated file is missing, and refuse a secrets.yaml that group
 // or others can read. Any other stat error (permissions) is reported as is. The
-// licence key is not part of the overlay: the chart does not read it yet
-// (D-0311) and helm would store it in every release revision Secret.
+// overlay carries the NAME of a licence Secret (license.secretName), never the
+// licence key: helm stores every value in the release revision Secret, so the
+// key lives only in a Secret the user created in the cluster.
 package k8s
 
 import (
@@ -69,25 +70,37 @@ func ResolveValues(dir string) (ValuesFiles, error) {
 }
 
 // overrides is the install-time values overlay. Field names follow the chart
-// keys domain and plugins.install. There is no licence key field on purpose.
+// keys domain, plugins.install and license.secretName. There is no licence key
+// field on purpose.
 type overrides struct {
-	Domain  string          `yaml:"domain,omitempty"`
-	Plugins *overridePlugin `yaml:"plugins,omitempty"`
+	Domain  string           `yaml:"domain,omitempty"`
+	Plugins *overridePlugin  `yaml:"plugins,omitempty"`
+	License *overrideLicense `yaml:"license,omitempty"`
 }
 
 type overridePlugin struct {
 	Install []string `yaml:"install"`
 }
 
+type overrideLicense struct {
+	SecretName string `yaml:"secretName"`
+}
+
 // overridesYAML returns the overlay for helm's stdin, or nil when there is
 // nothing to override. plugins.install is a YAML list, so its indices are
-// 0..n-1 by construction.
+// 0..n-1 by construction. An invalid licence Secret name is an error.
 func overridesYAML(opts InstallOptions) ([]byte, error) {
+	if err := ValidateLicenseSecret(opts.LicenseSecret); err != nil {
+		return nil, err
+	}
 	o := overrides{Domain: opts.Domain}
 	if len(opts.Plugins) > 0 {
 		o.Plugins = &overridePlugin{Install: opts.Plugins}
 	}
-	if o.Domain == "" && o.Plugins == nil {
+	if opts.LicenseSecret != "" {
+		o.License = &overrideLicense{SecretName: opts.LicenseSecret}
+	}
+	if o.Domain == "" && o.Plugins == nil && o.License == nil {
 		return nil, nil
 	}
 	data, err := yaml.Marshal(o)

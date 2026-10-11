@@ -4,5 +4,6 @@ exit: 0
 STUB-HELM upgrade stdout
 [0;32m✓[0m nSelf upgraded successfully.
 --- stderr ---
+[0;33m⚠[0m --domain has no effect: the generated values have no baseDomain; run nself k8s values again
 k8s: target kubeconfig ~/.kube/config (current context)
 STUB-HELM upgrade stderr

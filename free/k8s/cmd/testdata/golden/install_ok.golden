@@ -1,9 +1,10 @@
 exit: 0
 --- stdout ---
-[0;34mℹ[0m Installing nSelf chart (domain=app.example.test, recorded in the release values only)...
+[0;34mℹ[0m Installing nSelf chart (domain=app.example.test)...
 STUB-HELM install stdout
 [0;32m✓[0m nSelf installed. Ingress hosts: https://api.example.test
 --- stderr ---
-[0;33m⚠[0m NSELF_PLUGIN_LICENSE_KEY is set but not written to the release: the chart does not read it yet (D-0311)
+[0;33m⚠[0m NSELF_PLUGIN_LICENSE_KEY is set but is not sent to the cluster. Create a Secret without putting the key on a command line, for example: kubectl create secret generic nself-license --from-env-file=<file holding NSELF_PLUGIN_LICENSE_KEY=...>, then pass --license-secret nself-license on every install and upgrade
+[0;33m⚠[0m --domain has no effect: the generated values have no baseDomain; run nself k8s values again
 k8s: target kubeconfig ~/.kube/config (current context)
 STUB-HELM install stderr

@@ -1,18 +1,21 @@
 // Purpose: `nself-k8s install` installs the nSelf Helm chart that is embedded
 // in this binary, with the values `nself k8s values` generated.
 //
-// Inputs: --domain (required), --cluster, --release, --plugins, --project-dir,
-// --wait, --timeout, the NSELF_PLUGIN_LICENSE_KEY env var, and the project's
+// Inputs: --domain (required), --cluster, --release, --plugins,
+// --license-secret, --project-dir, --wait, --timeout, the
+// NSELF_PLUGIN_LICENSE_KEY env var (only to warn), and the project's
 // .nself/generated/k8s/values.yaml and secrets.yaml.
 //
 // Outputs: helm's own stdout/stderr (inherited), plus an Info/Success line
 // from the tui package around the helm invocation; the success line lists the
-// ingress hosts of the generated values, or no URL. Exit 1 when the generated
-// values are missing ("run nself k8s values").
+// ingress hosts of the generated values with --domain applied, or no URL. Exit
+// 1 when the generated values are missing ("run nself k8s values").
 //
 // Constraints: no chart repository, no secret and no licence key on argv (they
-// travel in values files or helm's stdin; the licence key is not passed until
-// the chart reads it, D-0311); the shared flag helpers also serve upgrade.go.
+// travel in values files or helm's stdin). The licence key itself is never
+// passed to helm: --license-secret names a Secret that already exists in the
+// cluster, and only that name reaches the chart. The shared flag helpers also
+// serve upgrade.go.
 package main
 
 import (
@@ -34,21 +37,25 @@ var installCmd = &cobra.Command{
 The chart is embedded in this plugin and is installed from a temporary
 directory with the values that 'nself k8s values' generated
 (.nself/generated/k8s/values.yaml and secrets.yaml). Run that command first.
-The licence key (NSELF_PLUGIN_LICENSE_KEY) and the secrets reach helm through
-values files, never on the command line.
+The secrets reach helm through values files, never on the command line.
 
-Not consumed yet: --domain and --plugins are recorded in the release values,
-but the embedded chart does not read them (D-0311). The licence key
-(NSELF_PLUGIN_LICENSE_KEY) is not written to the release at all until the chart
-reads it: helm keeps every value in the release Secret. The hosts
-the stack answers on come from the generated ingress rules.
+--domain replaces the project's BASE_DOMAIN in the ingress hosts (api.<base>
+becomes api.<domain>). --plugins lists plugins the chart checks against the
+generated values: each must be a plugin service there, or the install fails.
+
+The licence key is never sent to helm (helm keeps every value in the release
+Secret). Create a Secret in the cluster, without the key on a command line:
+  kubectl create secret generic nself-license --from-env-file=<file holding NSELF_PLUGIN_LICENSE_KEY=...>
+then pass --license-secret nself-license: every plugin workload reads the key
+from that Secret.
 
 TLS is managed by cert-manager (must be pre-installed in the cluster).
 
 Example:
   nself k8s values
   nself k8s install --domain myapp.com
-  nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself`,
+  nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself
+  nself k8s install --domain myapp.com --plugins cron,ai --license-secret nself-license`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true // a missing values file is not a usage error
 		r := newInvocation(cmd, "install")
@@ -63,16 +70,20 @@ Example:
 		if opts.Domain == "" {
 			return r.usageFail("--domain is required")
 		}
-		warnUnusedLicence(r, opts)
-		r.info(fmt.Sprintf("Installing nSelf chart (domain=%s, recorded in the release values only)...", opts.Domain))
+		if err := k8s.ValidateLicenseSecret(opts.LicenseSecret); err != nil {
+			return r.usageFail(err.Error())
+		}
+		warnLicenceUnsent(r, opts)
+		warnDomainNoEffect(r, opts)
+		r.info(fmt.Sprintf("Installing nSelf chart (domain=%s)...", opts.Domain))
 		if err := k8s.Install(cmd.Context(), opts); err != nil {
 			return r.fail(err)
 		}
-		r.success(installedLine(opts.ProjectDir))
+		r.success(installedLine(opts.ProjectDir, opts.Domain))
 		return r.done(map[string]any{
 			"release":       releaseOrDefault(opts.ReleaseName),
 			"installed":     true,
-			"ingress_hosts": ingressHosts(opts.ProjectDir),
+			"ingress_hosts": ingressHosts(opts.ProjectDir, opts.Domain),
 		})
 	},
 }
@@ -86,8 +97,8 @@ func releaseOrDefault(name string) string {
 }
 
 // ingressHosts lists the generated ingress hosts (never nil, so JSON has []).
-func ingressHosts(projectDir string) []string {
-	hosts, err := k8s.IngressHosts(projectDir)
+func ingressHosts(projectDir, domain string) []string {
+	hosts, err := k8s.IngressHosts(projectDir, domain)
 	if err != nil || hosts == nil {
 		return []string{}
 	}
@@ -95,10 +106,10 @@ func ingressHosts(projectDir string) []string {
 }
 
 // installedLine is the success line: the ingress hosts of the generated
-// values, or no URL when the project routes none. --domain is not used here
-// because the chart does not consume it yet (D-0311).
-func installedLine(projectDir string) string {
-	hosts, err := k8s.IngressHosts(projectDir)
+// values with the install domain applied (as the chart renders them), or no URL
+// when the project routes none.
+func installedLine(projectDir, domain string) string {
+	hosts, err := k8s.IngressHosts(projectDir, domain)
 	if err != nil || len(hosts) == 0 {
 		return "nSelf installed. The generated values route no ingress host."
 	}
@@ -109,10 +120,19 @@ func installedLine(projectDir string) string {
 	return "nSelf installed. Ingress hosts: " + strings.Join(urls, ", ")
 }
 
-// warnUnusedLicence says that a licence key in the environment is not passed.
-func warnUnusedLicence(r *invocation, opts k8s.InstallOptions) {
-	if k8s.HasUnusedLicence(opts) {
-		r.warn("NSELF_PLUGIN_LICENSE_KEY is set but not written to the release: the chart does not read it yet (D-0311)")
+// warnDomainNoEffect says that --domain changes nothing because the generated
+// values carry no baseDomain.
+func warnDomainNoEffect(r *invocation, opts k8s.InstallOptions) {
+	if k8s.DomainHasNoEffect(opts.ProjectDir, opts.Domain) {
+		r.warn(k8s.DomainNoEffectHint)
+	}
+}
+
+// warnLicenceUnsent says that a licence key in the environment does not reach
+// the cluster because no --license-secret was given.
+func warnLicenceUnsent(r *invocation, opts k8s.InstallOptions) {
+	if k8s.LicenseKeyUnsent(opts) {
+		r.warn(k8s.LicenseSecretHint)
 	}
 }
 
@@ -120,7 +140,8 @@ func warnUnusedLicence(r *invocation, opts k8s.InstallOptions) {
 func addInstallFlags(c *cobra.Command) {
 	c.Flags().String("cluster", "", "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)")
 	c.Flags().String("release", k8s.HelmReleaseName, "Helm release name")
-	c.Flags().String("plugins", "", "Comma-separated plugins, recorded in the release values (the chart does not consume them yet, D-0311)")
+	c.Flags().String("plugins", "", "Comma-separated plugins the chart checks against the generated values (each must be a plugin service there)")
+	c.Flags().String("license-secret", "", "Name of an existing Secret that holds NSELF_PLUGIN_LICENSE_KEY; plugin workloads read the key from it (the key itself is never sent)")
 	c.Flags().String("project-dir", ".", "nSelf project directory (holds .nself/generated/k8s)")
 	c.Flags().Bool("wait", true, "Wait until every workload is ready")
 	c.Flags().String("timeout", k8s.DefaultTimeout, "How long helm waits for readiness")
@@ -132,6 +153,7 @@ func installOptions(cmd *cobra.Command) k8s.InstallOptions {
 	cluster, _ := cmd.Flags().GetString("cluster")
 	release, _ := cmd.Flags().GetString("release")
 	pluginsRaw, _ := cmd.Flags().GetString("plugins")
+	licenseSecret, _ := cmd.Flags().GetString("license-secret")
 	dir, _ := cmd.Flags().GetString("project-dir")
 	wait, _ := cmd.Flags().GetBool("wait")
 	timeout, _ := cmd.Flags().GetString("timeout")
@@ -142,21 +164,22 @@ func installOptions(cmd *cobra.Command) k8s.InstallOptions {
 		}
 	}
 	return k8s.InstallOptions{
-		ReleaseName: release,
-		Domain:      domain,
-		Kubeconfig:  cluster,
-		LicenseKey:  os.Getenv("NSELF_PLUGIN_LICENSE_KEY"),
-		Plugins:     plugins,
-		ProjectDir:  dir,
-		Chart:       nselfk8s.Chart,
-		ChartRoot:   nselfk8s.ChartRoot,
-		Wait:        wait,
-		Timeout:     timeout,
+		ReleaseName:   release,
+		Domain:        domain,
+		Kubeconfig:    cluster,
+		LicenseKey:    os.Getenv(k8s.LicenseEnv),
+		LicenseSecret: licenseSecret,
+		Plugins:       plugins,
+		ProjectDir:    dir,
+		Chart:         nselfk8s.Chart,
+		ChartRoot:     nselfk8s.ChartRoot,
+		Wait:          wait,
+		Timeout:       timeout,
 	}
 }
 
 func init() {
 	addJSONFlag(installCmd)
-	installCmd.Flags().String("domain", "", "Domain, recorded in the release values (required; the chart does not consume it yet, D-0311)")
+	installCmd.Flags().String("domain", "", "Domain that replaces the project's BASE_DOMAIN in the ingress hosts (required)")
 	addInstallFlags(installCmd)
 }

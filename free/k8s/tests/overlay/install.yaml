@@ -1,0 +1,31 @@
+# Install-time overlay for tests/template-check.sh: what `nself k8s install
+# --domain shop.example.org --plugins cron,mux --license-secret fake-licence-secret`
+# pipes to helm, plus two plugin services as `nself k8s values` would generate
+# them (one named plugin-cron, one bare "mux" marked plugin: mux). Fake values only.
+domain: shop.example.org
+license:
+  secretName: fake-licence-secret
+plugins:
+  install: [cron, mux]
+services:
+  plugin-cron:
+    kind: deployment
+    image: registry.example.test/fake/cron
+    tag: "0.0.1"
+    plugin: cron
+    env: [PORT]
+    ports:
+      - {port: 3051, protocol: TCP}
+  mux:
+    kind: deployment
+    image: registry.example.test/fake/mux
+    tag: "0.0.1"
+    plugin: mux
+    env: [PORT]
+    ports:
+      - {port: 3711, protocol: TCP}
+secrets:
+  plugin-cron:
+    PORT: "3051"
+  mux:
+    PORT: "3711"

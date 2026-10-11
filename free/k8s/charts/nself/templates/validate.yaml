@@ -1,0 +1,30 @@
+{{- /*
+Renders nothing. Fails the render when plugins.install names a plugin that the
+generated values do not carry. A plugin workload is a service named plugin-<name>
+or a service marked `plugin: <name>` (most plugin compose fragments use a bare
+service name, and `nself k8s values` reads the plugin-<name> hostname the CLI
+gives them). A plugin whose service is in .Values.unsupported fails with its
+reason.
+
+It also fails, always, when any service lists NSELF_PLUGIN_LICENSE_KEY as an env
+name: values generated before the licence key was kept out of values.
+*/ -}}
+{{- $known := dict }}
+{{- range $svcName, $svc := .Values.services }}
+{{- if has "NSELF_PLUGIN_LICENSE_KEY" (default list $svc.env) }}
+{{- fail (printf "service %s lists NSELF_PLUGIN_LICENSE_KEY: the licence key may not travel as a value; run nself k8s values again and pass --license-secret" $svcName) }}
+{{- end }}
+{{- if hasPrefix "plugin-" $svcName }}{{ $_ := set $known (trimPrefix "plugin-" $svcName) true }}{{ end }}
+{{- if $svc.plugin }}{{ $_ := set $known $svc.plugin true }}{{ end }}
+{{- end }}
+{{- range .Values.plugins.install }}
+{{- if not (hasKey $known .) }}
+{{- $plugin := . }}
+{{- range $.Values.unsupported }}
+{{- if or (eq .name (printf "plugin-%s" $plugin)) (eq .name $plugin) }}
+{{- fail (printf "plugin %s cannot be deployed to Kubernetes: service %s: %s" $plugin .name .reason) }}
+{{- end }}
+{{- end }}
+{{- fail (printf "plugin %s is not in the generated values: run nself plugin install %s, then nself k8s values" $plugin $plugin) }}
+{{- end }}
+{{- end }}

@@ -15,7 +15,9 @@
 // an unresolved "${" in an image or env value is an error that names the
 // service and variable, never the value. Image references are only split,
 // never invented: no tag is added, and an untagged, undigested image is
-// refused (k8s would pull a moving latest). Every mapped workload carries
+// refused (k8s would pull a moving latest). The licence key env var
+// NSELF_PLUGIN_LICENSE_KEY is dropped (name and value) and listed notMapped.
+// Every mapped workload carries
 // pullPolicy IfNotPresent.
 package values
 
@@ -29,10 +31,17 @@ import (
 
 var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
-// Map projects the model. routes may be nil (no routes.json).
+// Map projects the model with the production options (init scripts are read
+// from the real disk). routes may be nil (no routes.json).
 func Map(m *Model, routes []Route) (*Values, *Secrets, error) {
+	return MapWith(m, routes, MapOptions{})
+}
+
+// MapWith is Map with explicit options (tests inject the init-script source).
+func MapWith(m *Model, routes []Route, o MapOptions) (*Values, *Secrets, error) {
 	v := &Values{
 		Project:       m.Name,
+		BaseDomain:    baseDomain(m),
 		Services:      map[string]Service{},
 		Volumes:       map[string]Volume{},
 		Unsupported:   []Unsupported{},
@@ -53,6 +62,9 @@ func Map(m *Model, routes []Route) (*Values, *Secrets, error) {
 		if svc.Kind == "" {
 			v.Unsupported = append(v.Unsupported, Unsupported{Name: name, Reason: svc.Image})
 			continue
+		}
+		if err := addInitDB(name, cs, &svc, sec, o.initFS()); err != nil {
+			return nil, nil, err
 		}
 		v.Services[name] = svc
 		if len(env) > 0 {
@@ -111,12 +123,18 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 		return svc, nil, nil
 	}
 	svc.PullPolicy = PullIfNotPresent
+	svc.Plugin = pluginOf(name, cs)
 	svc.Entrypoint, svc.Command = cs.Entrypoint, cs.Command
 	env := map[string]string{}
+	licenceDropped := false
 	for _, k := range sortedKeys(cs.Environment) {
 		val := ""
 		if cs.Environment[k] != nil {
 			val = *cs.Environment[k]
+		}
+		if k == LicenseEnvName {
+			licenceDropped = true // never a value (even an unresolved one): the chart reads it from --license-secret
+			continue
 		}
 		if strings.Contains(val, "${") {
 			return Service{}, nil, fmt.Errorf("service %s: env %s has an unresolved interpolation", name, k)
@@ -127,6 +145,9 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 	svc.Ports = mapPorts(cs)
 	var notMapped []string
 	for _, mt := range cs.Volumes {
+		if isInitDB(mt) {
+			continue // carried by addInitDB
+		}
 		if mt.Type != "volume" {
 			notMapped = append(notMapped, mt.Type+"-mount:"+mt.Target)
 			continue
@@ -141,11 +162,34 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 	for _, t := range cs.Tmpfs {
 		notMapped = append(notMapped, "tmpfs-mount:"+t)
 	}
+	if licenceDropped {
+		notMapped = append(notMapped, "env:"+LicenseEnvName+" (pass --license-secret)")
+	}
 	notMapped = append(notMapped, hostFeatures(cs)...)
 	svc.Probe, notMapped = mapProbe(cs.Healthcheck, notMapped)
 	sort.Strings(notMapped)
 	svc.NotMapped = notMapped
 	return svc, env, nil
+}
+
+// LicenseEnvName is the licence key env var. It is never mapped as a value: its
+// name is dropped from the service env and its value from secrets.yaml, because
+// helm stores every value in the release Secret. The chart gives plugin
+// workloads the key from the Secret named by --license-secret.
+const LicenseEnvName = "NSELF_PLUGIN_LICENSE_KEY"
+
+// pluginPrefix names plugin services and the hostname the CLI gives them.
+const pluginPrefix = "plugin-"
+
+// pluginOf returns the plugin name of a plugin workload, or "".
+func pluginOf(name string, cs ComposeSvc) string {
+	if n := strings.TrimPrefix(name, pluginPrefix); n != name && n != "" {
+		return n
+	}
+	if n := strings.TrimPrefix(cs.Hostname, pluginPrefix); n != cs.Hostname && n != "" {
+		return n
+	}
+	return ""
 }
 
 func kindOf(name, repo string, cs ComposeSvc) string {

@@ -45,6 +45,57 @@ for fx in full interp; do
   checked=$((checked + 1))
 done
 
+# The install-time overlay (tests/overlay/install.yaml: domain, plugins.install,
+# license.secretName, two plugin services) must render, validate, and apply the
+# domain rewrite, the initdb Secret and mount, and the licence secretKeyRef.
+g=testdata/full/golden
+out="$(helm template nself charts/nself -f $g/values.yaml -f $g/secrets.yaml -f tests/overlay/install.yaml)" || { echo "FAIL: helm template with the install overlay" >&2; fail=1; out=""; }
+if [ -n "$out" ]; then
+  printf '%s\n' "$out" | kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" - || fail=1
+  expect() { printf '%s\n' "$out" | grep -qF -- "$1" || { echo "FAIL: overlay render lacks: $1" >&2; fail=1; }; }
+  expect "- host: api.shop.example.org"
+  expect "name: nself-postgres-initdb"
+  expect "mountPath: /docker-entrypoint-initdb.d"
+  expect "secretName: nself-postgres-initdb"
+  expect "name: fake-licence-secret"
+  # Every plugin workload (plugin-cron by name, mux by its plugin marker) gets the
+  # licence env, always under the name NSELF_PLUGIN_LICENSE_KEY.
+  n="$(printf '%s\n' "$out" | grep -c 'name: fake-licence-secret')"
+  [ "$n" -eq 2 ] || { echo "FAIL: $n plugin workloads read the licence Secret, want 2" >&2; fail=1; }
+  if printf '%s\n' "$out" | grep -q 'fake-licence-0000'; then
+    echo "FAIL: a licence key value was rendered" >&2; fail=1
+  fi
+  # No Ingress host or TLS host may keep the generated base domain.
+  if printf '%s\n' "$out" | grep -E '^ +(- )?host: [^ ]*example\.test$|^ +- [a-z-]+\.example\.test$'; then
+    echo "FAIL: an ingress host kept the base domain" >&2; fail=1
+  fi
+fi
+
+# plugins.install of an absent plugin fails with the run-this message.
+if msg="$(helm template nself charts/nself -f $g/values.yaml -f $g/secrets.yaml --set 'plugins.install[0]=ghost' 2>&1)"; then
+  echo "FAIL: plugins.install of an absent plugin rendered" >&2; fail=1
+elif ! printf '%s' "$msg" | grep -q "plugin ghost is not in the generated values: run nself plugin install ghost, then nself k8s values"; then
+  echo "FAIL: absent plugin gave the wrong message: $msg" >&2; fail=1
+fi
+
+# Values generated before the licence key was kept out of values (a service lists
+# NSELF_PLUGIN_LICENSE_KEY) fail the render, with or without license.secretName.
+for extra in "" "--set license.secretName=fake-licence-secret"; do
+  # shellcheck disable=SC2086
+  if msg="$(helm template nself charts/nself -f $g/values.yaml -f $g/secrets.yaml --set 'services.postgres.env[0]=NSELF_PLUGIN_LICENSE_KEY' $extra 2>&1)"; then
+    echo "FAIL: a service env listing the licence key rendered ($extra)" >&2; fail=1
+  elif ! printf '%s' "$msg" | grep -q "service postgres lists NSELF_PLUGIN_LICENSE_KEY: the licence key may not travel as a value; run nself k8s values again and pass --license-secret"; then
+    echo "FAIL: licence-key env gave the wrong message: $msg" >&2; fail=1
+  fi
+done
+
+# An initdb name without content in secrets.yaml fails, naming the file.
+if msg="$(helm template nself charts/nself -f $g/values.yaml -f $g/secrets.yaml --set 'initdb.postgres=null' 2>&1)"; then
+  echo "FAIL: initdb names without secrets content rendered" >&2; fail=1
+elif ! printf '%s' "$msg" | grep -q "has no initdb content for 00-extensions.sql of service postgres"; then
+  echo "FAIL: missing initdb content gave the wrong message: $msg" >&2; fail=1
+fi
+
 # A render without secrets.yaml must fail loudly, never emit empty Secrets.
 if helm template nself charts/nself -f testdata/full/golden/values.yaml >/dev/null 2>&1; then
   echo "FAIL: render without secrets.yaml succeeded" >&2

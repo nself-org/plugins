@@ -27,7 +27,7 @@ func fullValuesBytes(t *testing.T) ([]byte, *Model) {
 
 func TestCheckCleanOnFixture(t *testing.T) {
 	b, m := fullValuesBytes(t)
-	diffs, err := Check(b, m)
+	diffs, err := CheckWith(b, m, fixtureOpts("full"))
 	if err != nil || len(diffs) != 0 {
 		t.Fatalf("diffs=%v err=%v", diffs, err)
 	}
@@ -36,7 +36,7 @@ func TestCheckCleanOnFixture(t *testing.T) {
 func TestCheckNamesAddedService(t *testing.T) {
 	b, m := fullValuesBytes(t)
 	m.Services["brand-new"] = ComposeSvc{Image: "busybox:1.36"}
-	diffs, _ := Check(b, m)
+	diffs, _ := CheckWith(b, m, fixtureOpts("full"))
 	if len(diffs) != 1 || diffs[0].Service != "brand-new" || diffs[0].Kind != DiffMissing {
 		t.Fatalf("diffs = %v", diffs)
 	}
@@ -45,7 +45,7 @@ func TestCheckNamesAddedService(t *testing.T) {
 func TestCheckNamesRemovedService(t *testing.T) {
 	b, m := fullValuesBytes(t)
 	delete(m.Services, "mailpit")
-	diffs, _ := Check(b, m)
+	diffs, _ := CheckWith(b, m, fixtureOpts("full"))
 	if len(diffs) != 1 || diffs[0].Service != "mailpit" || diffs[0].Kind != DiffExtra {
 		t.Fatalf("diffs = %v", diffs)
 	}
@@ -56,7 +56,7 @@ func TestCheckNamesChangedTag(t *testing.T) {
 	h := m.Services["hasura"]
 	h.Image = "hasura/graphql-engine:v9.9.9"
 	m.Services["hasura"] = h
-	diffs, _ := Check(b, m)
+	diffs, _ := CheckWith(b, m, fixtureOpts("full"))
 	if len(diffs) != 1 || diffs[0].Service != "hasura" || diffs[0].Kind != DiffDiffers ||
 		!strings.Contains(diffs[0].Detail, "v9.9.9") {
 		t.Fatalf("diffs = %v", diffs)
@@ -66,7 +66,7 @@ func TestCheckNamesChangedTag(t *testing.T) {
 func TestCheckUnsupportedCountsAsPresent(t *testing.T) {
 	b, m := fullValuesBytes(t)
 	delete(m.Services, "worker-one")
-	diffs, _ := Check(b, m)
+	diffs, _ := CheckWith(b, m, fixtureOpts("full"))
 	if len(diffs) != 1 || diffs[0].Service != "worker-one" || diffs[0].Kind != DiffExtra {
 		t.Fatalf("diffs = %v", diffs)
 	}

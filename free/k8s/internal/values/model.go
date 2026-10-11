@@ -28,6 +28,7 @@ type ComposeSvc struct {
 	Image       string             `json:"image"`
 	Build       json.RawMessage    `json:"build"`
 	Restart     string             `json:"restart"`
+	Hostname    string             `json:"hostname"`
 	Entrypoint  []string           `json:"entrypoint"`
 	Command     []string           `json:"command"`
 	Environment map[string]*string `json:"environment"`

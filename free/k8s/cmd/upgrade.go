@@ -9,7 +9,7 @@
 // values are missing ("run nself k8s values").
 //
 // Constraints: values are applied afresh, not with --reuse-values, so pass the
-// same --domain and --plugins as at install time.
+// same --domain, --plugins and --license-secret as at install time.
 package main
 
 import (
@@ -27,10 +27,11 @@ var upgradeCmd = &cobra.Command{
 
 Run 'nself k8s values' first so the generated values match the compose model.
 The values are applied afresh (no --reuse-values): a service removed from the
-compose model leaves the release. Pass the same --domain and --plugins as at
-install time; the upgrade prints the
-values it is not passing. The embedded chart does not consume domain or plugins
-yet (D-0311), and the licence key is not written to the release at all until it does.`,
+compose model leaves the release. Pass the same --domain, --plugins and
+--license-secret as at install time: a value left out is not passed, and the
+upgrade prints the ones it is not passing. The licence key itself is never sent
+to helm; --license-secret names the cluster Secret that holds it (see
+'nself k8s install --help').`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true // a missing values file is not a usage error
 		r := newInvocation(cmd, "upgrade")
@@ -42,7 +43,11 @@ yet (D-0311), and the licence key is not written to the release at all until it 
 		if err := r.checkRelease(releaseOrDefault(opts.ReleaseName), false); err != nil {
 			return err
 		}
-		warnUnusedLicence(r, opts)
+		if err := k8s.ValidateLicenseSecret(opts.LicenseSecret); err != nil {
+			return r.usageFail(err.Error())
+		}
+		warnLicenceUnsent(r, opts)
+		warnDomainNoEffect(r, opts)
 		if missing := k8s.NotPassed(opts); len(missing) > 0 {
 			r.warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
 		}
@@ -57,6 +62,6 @@ yet (D-0311), and the licence key is not written to the release at all until it 
 
 func init() {
 	addJSONFlag(upgradeCmd)
-	upgradeCmd.Flags().String("domain", "", "Domain, recorded in the release values (the chart does not consume it yet, D-0311)")
+	upgradeCmd.Flags().String("domain", "", "Domain that replaces the project's BASE_DOMAIN in the ingress hosts")
 	addInstallFlags(upgradeCmd)
 }

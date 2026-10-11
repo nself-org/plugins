@@ -22,7 +22,7 @@ Category: `infrastructure`. Current version: `1.0.0`.
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `NSELF_PLUGIN_LICENSE_KEY` | — | Optional. Not written to the release until the chart reads it (D-0311) |
+| `NSELF_PLUGIN_LICENSE_KEY` | — | Optional. Never sent to the cluster; install and upgrade only warn when it is set. Put it in a Secret and pass `--license-secret` |
 | `KUBECONFIG` | *(see plugin.json)* | Optional. |
 
 ## Commands
@@ -135,38 +135,57 @@ Both commands refuse (exit 1, `run nself k8s values`) when `values.yaml` or `sec
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--domain` | none | Required for install. Recorded in the release values only: the chart does not read it yet (D-0311) |
+| `--domain` | none | Required for install. Replaces the project's `BASE_DOMAIN` in the ingress hosts and TLS hosts (see below) |
 | `--cluster` | none | Path to a kubeconfig. Without it helm reads `KUBECONFIG` or `~/.kube/config` |
 | `--release` | `nself` | Helm release name. A name that starts with `-` is refused in every mode (helm would read it as a flag) |
-| `--plugins` | none | Comma-separated plugins, recorded in the release values (`plugins.install`). The chart does not read them yet (D-0311) |
+| `--plugins` | none | Comma-separated plugins (`plugins.install`). The chart checks each against the generated values and fails the render when one is missing |
+| `--license-secret` | none | Name of an existing Secret that holds `NSELF_PLUGIN_LICENSE_KEY`. Plugin workloads read the key from it. Must be a valid Secret name |
 | `--project-dir` | `.` | Project directory that holds `.nself/generated/k8s` |
 | `--wait` | on | Wait until every workload is ready |
 | `--timeout` | `10m` | How long helm waits |
 
-What it passes to helm: `--values values.yaml --values secrets.yaml` and, when you set `--domain` or `--plugins`, a third
-overlay that goes to helm on stdin (`--values -`), so it is never written to disk. Secrets travel in `secrets.yaml`, never on
+What it passes to helm: `--values values.yaml --values secrets.yaml` and, when you set `--domain`, `--plugins` or `--license-secret`, a third
+overlay (domain, plugins, the licence Secret name) that goes to helm on stdin (`--values -`), so it is never written to disk. Secrets travel in `secrets.yaml`, never on
 the command line, and never through `--set`. helm runs with a cleaned environment: every `NSELF_*` variable is removed and
 `HELM_DEBUG` is forced to `false` (with it set, helm prints every value and rendered Secret to the log). Before it runs, the
 command prints which kubeconfig helm will use. `upgrade` applies the current values afresh (no `--reuse-values`), so a service
-you removed from the compose model leaves the release; pass the same `--domain` and `--plugins` as at install time; `upgrade`
+you removed from the compose model leaves the release; pass the same `--domain`, `--plugins` and `--license-secret` as at install time; `upgrade`
 prints one line naming the values it is not passing.
 
 `nself k8s status` prints only the release name, namespace, revision, chart version and status. It never prints helm's release
 config or manifest, which hold every secret of the stack.
 
-**Not consumed yet.** The embedded chart reads none of `domain`, `license.key` and `plugins.install` (tracked as D-0311), so
-`--domain` and `--plugins` are recorded in the release values and change nothing in the cluster. `NSELF_PLUGIN_LICENSE_KEY` is
-**not written to the release at all** until the chart reads it: helm stores every value in the release Secret
-(`sh.helm.release.v1.<release>.vN`, one per revision), so anyone who can read Secrets in the namespace could read the key,
-and the key would buy nothing. When the variable is set, install and upgrade say so. The licence key returns to the overlay
-with D-0311.
-The hosts the stack answers on come from the generated `ingress.rules`; the success line of `install` lists those hosts as
-URLs, or no URL when the project routes none.
+**What the chart reads.**
 
-**Postgres init scripts are not carried yet.** `nself k8s values` lists the postgres init-script mount under `notMapped`
-(D-0308), so a plain install leaves hasura-auth crash-looping on `schema auth does not exist`. The kind proof applies
-`postgres/init/*.sql` by hand while it waits (`init_postgres` in `run.sh`). Until D-0308 closes, do not read the kind result as
-"nSelf on Kubernetes works".
+- `domain`: `nself k8s values` writes the project's `BASE_DOMAIN` as `baseDomain` (from the resolved compose environment: nginx's
+  value, or the one value every service agrees on; it writes nothing when there is none or they conflict). With `--domain` set
+  and different, every ingress host equal to `baseDomain` becomes the domain, and `api.<base>` becomes `api.<domain>`. Other
+  hosts stay. The TLS hosts, the routes in the install notes and the hosts in the `install` success line follow the same rule.
+- `plugins.install`: each name must be a plugin service in the generated values (a service called `plugin-<name>`, or one the
+  CLI gave the hostname `plugin-<name>`), otherwise the render fails with `plugin <name> is not in the generated values: run
+  nself plugin install <name>, then nself k8s values`. A plugin that has no Kubernetes mapping fails with its reason. The list
+  adds no workload by itself.
+- `license.secretName`: the licence key is **never** a chart value. helm stores every value in the release Secret
+  (`sh.helm.release.v1.<release>.vN`, one per revision), so anyone who can read Secrets in the namespace could read the key.
+  Create a Secret yourself, without the key on a command line, for example
+  `kubectl create secret generic nself-license --from-env-file=<file holding NSELF_PLUGIN_LICENSE_KEY=...>`, then pass
+  `--license-secret nself-license` on every install and upgrade. Every plugin workload gets `NSELF_PLUGIN_LICENSE_KEY` from
+  that Secret (`secretKeyRef`, env name always `NSELF_PLUGIN_LICENSE_KEY`, key from `license.secretKey`). `nself k8s values`
+  never writes `NSELF_PLUGIN_LICENSE_KEY` as a value: it drops the env from the service and lists it under `notMapped`.
+  With the variable set and no `--license-secret`, install and upgrade warn that the key is not sent.
+
+With `--domain` and no `baseDomain` in the generated values, install and upgrade warn that `--domain` has no effect
+(run `nself k8s values` again). The success line of `install` lists the ingress hosts as URLs (with `--domain` applied), or no URL when the project routes none.
+
+**Postgres init scripts.** The compose bind mount `./postgres/init:/docker-entrypoint-initdb.d` is carried. `nself k8s values`
+reads the `*.sql`, `*.sql.gz` and `*.sh` files of that directory (not recursive, sorted by name), writes only their names to
+`values.yaml` (`initdb`) and their contents to `secrets.yaml` (mode 0600, because an init script can hold a password). The
+chart renders one Secret `<release>-postgres-initdb` and mounts it read-only at `/docker-entrypoint-initdb.d`, so postgres runs
+the scripts on its first start (an existing data volume is not initialised again) and hasura-auth finds its schema. Other files
+are listed under `notMapped` as `initdb:<name>`. The scripts of one service may total at most 512 KiB (helm keeps every value, `secrets.yaml` included, in one release Secret capped near 1 MiB, and a `.sql.gz`
+is stored as base64);
+`values` stops with the file name when they do not fit. Two such mounts on one service are an error. Pass `-f secrets.yaml` to helm as always: a name in `values.yaml`
+without content in `secrets.yaml` fails the render. `values --check` compares the script names, `baseDomain` and the plugin marker of each service, not script contents.
 
 ## Uninstall
 

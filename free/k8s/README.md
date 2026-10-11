@@ -31,10 +31,15 @@ Requires `helm` to be installed: https://helm.sh
 ```bash
 nself k8s install --domain myapp.com
 nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself
+nself k8s install --domain myapp.com --plugins cron --license-secret nself-license
 nself k8s status
 nself k8s upgrade
 nself k8s uninstall --yes
 ```
+
+`--domain` replaces the project's `BASE_DOMAIN` in the ingress hosts. The licence
+key is never sent to helm: create a Secret that holds `NSELF_PLUGIN_LICENSE_KEY`
+and pass its name with `--license-secret` (see `nself k8s install --help`).
 
 The chart is embedded in the plugin binary (source in `charts/nself/` in this
 repo); there is no chart repository.

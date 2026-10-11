@@ -4,11 +4,19 @@ nSelf has been installed.
 
 Routes:
 {{- range .Values.ingress.rules }}
-  {{ if $.Values.tls.enabled }}https{{ else }}http{{ end }}://{{ .host }}  ->  {{ .service }}:{{ .port }}
+  {{ if $.Values.tls.enabled }}https{{ else }}http{{ end }}://{{ include "nself.host" (dict "root" $ "host" .host) }}  ->  {{ .service }}:{{ .port }}
 {{- end }}
 {{- else }}
 
 No Ingress rules were generated (the project has no nginx routes that map to a workload).
+{{- end }}
+{{- if .Values.plugins.install }}
+
+Plugins checked against the generated values: {{ join ", " .Values.plugins.install }}
+{{- end }}
+{{- if .Values.license.secretName }}
+
+Plugin workloads read the licence key from Secret "{{ .Values.license.secretName }}", key {{ .Values.license.secretKey }}.
 {{- end }}
 {{- if .Values.unsupported }}
 
