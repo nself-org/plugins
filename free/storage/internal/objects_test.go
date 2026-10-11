@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
@@ -267,24 +268,57 @@ func TestValidateObject_physicalKeyLength(t *testing.T) {
 	}
 }
 
-type fakeDeadline struct{ calls int }
+// fakeDeadline records every SetReadDeadline call: the zero time is a clear.
+type fakeDeadline struct{ calls []time.Time }
 
-func (f *fakeDeadline) set(time.Time) error { f.calls++; return nil }
+func (f *fakeDeadline) set(d time.Time) error { f.calls = append(f.calls, d); return nil }
 
-func TestIdleReader_extendsAfterReadsWithData(t *testing.T) {
+func TestIdleReader_deadlineSetBeforeReadAndClearedAfter(t *testing.T) {
 	d := &fakeDeadline{}
-	ir := &idleReader{r: strings.NewReader("abcdef"), idle: time.Minute, setDeadline: d.set}
+	ir := &idleReader{r: strings.NewReader("abcd"), idle: time.Minute, setDeadline: d.set}
+	if len(d.calls) != 0 {
+		t.Fatal("a deadline was set before the first read")
+	}
+	before := time.Now()
+	if _, err := ir.Read(make([]byte, 2)); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.calls) != 2 || d.calls[0].Before(before.Add(time.Minute)) || !d.calls[1].IsZero() {
+		t.Fatalf("calls = %v, want [now+idle, zero]", d.calls)
+	}
+}
+
+func TestIdleReader_clearedOnEOFAndError(t *testing.T) {
+	for _, src := range []io.Reader{strings.NewReader(""), &failingBody{sent: true}} {
+		d := &fakeDeadline{}
+		ir := &idleReader{r: src, idle: time.Minute, setDeadline: d.set}
+		if _, err := ir.Read(make([]byte, 4)); err == nil {
+			t.Fatal("expected EOF or an error")
+		}
+		if len(d.calls) != 2 || !d.calls[1].IsZero() {
+			t.Fatalf("calls = %v: the deadline must be cleared after EOF/error", d.calls)
+		}
+	}
+}
+
+// Time the server spends between reads (S3 calls, slot waits) must not count as client silence: after every
+// Read returns, no deadline is armed and nothing arms one until the next Read.
+func TestIdleReader_slowConsumerBetweenReadsIsNotClientSilence(t *testing.T) {
+	d := &fakeDeadline{}
+	ir := &idleReader{r: strings.NewReader("abcdef"), idle: 10 * time.Millisecond, setDeadline: d.set}
 	buf := make([]byte, 2)
 	for i := 0; i < 3; i++ {
 		if _, err := ir.Read(buf); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if d.calls != 3 {
-		t.Fatalf("deadline extended %d times, want 3", d.calls)
-	}
-	if _, err := ir.Read(buf); err != io.EOF || d.calls != 3 {
-		t.Fatalf("EOF read: err %v calls %d", err, d.calls)
+		n := len(d.calls)
+		if !d.calls[n-1].IsZero() {
+			t.Fatalf("read %d: a deadline stays armed while the consumer works", i)
+		}
+		time.Sleep(30 * time.Millisecond) // the consumer is slower than the idle window
+		if len(d.calls) != n {
+			t.Fatalf("read %d: a deadline call happened between reads", i)
+		}
 	}
 }
 
@@ -293,6 +327,27 @@ func TestNewIdleReader_unsupportedWriterIsIgnored(t *testing.T) {
 	b, _ := io.ReadAll(ir)
 	if string(b) != "x" {
 		t.Fatal("body lost")
+	}
+}
+
+func TestWriteLookupError(t *testing.T) {
+	cases := []struct {
+		err  error
+		code int
+		body string
+	}{
+		{pgx.ErrNoRows, 404, "bucket not found"},
+		{fmt.Errorf("wrapped: %w", pgx.ErrNoRows), 404, "bucket not found"},
+		{errors.New("connection refused"), 500, "db error"},
+		{context.DeadlineExceeded, 500, "db error"},
+		{pgx.ErrTxClosed, 500, "db error"},
+	}
+	for _, c := range cases {
+		rr := httptest.NewRecorder()
+		writeLookupError(rr, c.err, `{"error":"bucket not found"}`, "test")
+		if rr.Code != c.code || !strings.Contains(rr.Body.String(), c.body) {
+			t.Errorf("%v: %d %s", c.err, rr.Code, rr.Body.String())
+		}
 	}
 }
 

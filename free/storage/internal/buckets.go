@@ -2,12 +2,14 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 var ipShaped = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$`)
@@ -102,6 +104,21 @@ func (s *Server) handleListBuckets(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteBucket(w http.ResponseWriter, r *http.Request) {
 	sai := sourceAccountID(r)
 	bucket := chi.URLParam(r, "bucket")
+
+	// Only a bucket this account registered may touch S3: an unknown bucket is a no-op, so an account cannot sweep
+	// its prefix in a bucket it never created.
+	var bucketID string
+	err := s.db.QueryRow(r.Context(),
+		`SELECT id FROM np_storage_buckets WHERE source_account_id = $1 AND name = $2`, sai, bucket).Scan(&bucketID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		log.Printf("storage: delete bucket %s: row lookup: %v", bucket, err)
+		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
+		return
+	}
 
 	rows, err := s.db.Query(r.Context(),
 		`SELECT o.key FROM np_storage_objects o

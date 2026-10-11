@@ -8,6 +8,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
 
@@ -18,8 +20,9 @@ const uploadIdleTimeout = 60 * time.Second
 // own WriteTimeout started when the request arrived and may have run out during a long upload).
 const downloadWriteTimeout = 60 * time.Second
 
-// idleReader extends a read deadline after every read that returned data, so a body that keeps flowing may take
-// as long as it needs while one that stalls for idle fails (and the caller's slot is released).
+// idleReader bounds how long the CLIENT may stay silent. The read deadline is set (now + idle) right before each
+// body read and cleared right after it returns, so time the server spends elsewhere between reads (S3 calls,
+// slot waits) never counts as client silence, and the first deadline starts with the first read.
 type idleReader struct {
 	r           io.Reader
 	idle        time.Duration
@@ -27,21 +30,25 @@ type idleReader struct {
 }
 
 func newIdleReader(w http.ResponseWriter, body io.Reader, idle time.Duration) *idleReader {
-	rc := http.NewResponseController(w)
-	ir := &idleReader{r: body, idle: idle, setDeadline: rc.SetReadDeadline}
-	ir.extend()
-	return ir
+	return &idleReader{r: body, idle: idle, setDeadline: http.NewResponseController(w).SetReadDeadline}
 }
 
-// extend pushes the read deadline idle into the future; unsupported servers (tests) are ignored.
-func (i *idleReader) extend() { _ = i.setDeadline(time.Now().Add(i.idle)) }
-
 func (i *idleReader) Read(p []byte) (int, error) {
+	_ = i.setDeadline(time.Now().Add(i.idle)) // errors: the server does not support deadlines (tests)
 	n, err := i.r.Read(p)
-	if n > 0 {
-		i.extend()
-	}
+	_ = i.setDeadline(time.Time{})
 	return n, err
+}
+
+// writeLookupError answers a failed single-row DB lookup: no row is 404 with notFound, anything else is 500
+// (a database outage must not look like a missing bucket or object).
+func writeLookupError(w http.ResponseWriter, err error, notFound, what string) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, notFound, http.StatusNotFound)
+		return
+	}
+	log.Printf("storage: %s: %v", what, err)
+	http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
 }
 
 // writePutError maps an s3store.Put failure to the HTTP answer.

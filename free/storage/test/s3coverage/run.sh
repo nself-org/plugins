@@ -5,7 +5,7 @@
 # Usage:   TMPDIR=/some/scratch bash run.sh seaweedfs|minio
 # Needs:   docker and openssl on the host (nothing else). TMPDIR must be set (scratch work dir lives under it).
 # Secrets: random per run; they reach containers only through files (docker --env-file mode 600, the SeaweedFS
-#          identity JSON bind-mounted read-only); they are never on a docker or go command line.
+#          identity JSON copied in with docker cp); they are never on a docker or go command line.
 # Output:  resolved image digests, one PASS/FAIL line per TestOp_*/TestPlugin_*, then
 #          "s3coverage <image>: ok|FAIL (n passed, m failed)". Exit 1 on any failure.
 set -euo pipefail
@@ -32,9 +32,10 @@ RUN_ID="s3cov-$(openssl rand -hex 4)"
 NET="$RUN_ID"
 C_S3="$RUN_ID-s3"
 C_DB="$RUN_ID-db"
+C_RUN="$RUN_ID-run"
 
 cleanup() {
-  docker rm -f -v "$C_S3" "$C_DB" >/dev/null 2>&1 || true
+  docker rm -f -v "$C_S3" "$C_DB" "$C_RUN" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
@@ -79,10 +80,12 @@ if [ "$KIND" = seaweedfs ]; then
 JSONEOF
   # The container user is not the host user; the file sits in a mode-700 work dir, so 644 here exposes it to nobody else.
   chmod 644 "$WORK/s3.json"
-  docker run -d --name "$C_S3" --network "$NET" --network-alias s3 \
-    -v "$WORK/s3.json:/etc/seaweedfs/s3.json:ro" "$S3_IMAGE" \
+  # docker cp, not a bind mount: a remote docker host cannot see this machine's paths.
+  docker create --name "$C_S3" --network "$NET" --network-alias s3 "$S3_IMAGE" \
     server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json \
     -master.volumeSizeLimitMB=256 -volume.max=200 >/dev/null
+  docker cp "$WORK/s3.json" "$C_S3:/etc/seaweedfs/s3.json"
+  docker start "$C_S3" >/dev/null
 else
   cat >"$WORK/minio.env" <<ENVEOF
 MINIO_ROOT_USER=${ACCESS_KEY}
@@ -93,13 +96,16 @@ fi
 
 echo "== running the suite against $KIND"
 rc=0
-docker run --rm --network "$NET" --env-file "$WORK/runner.env" \
-  -v "$MODROOT:/src:ro" -w /src \
+# The module is copied into the runner container (docker cp, not a bind mount: a remote docker host cannot see this
+# machine's paths). Credentials stay in the env-file; nothing secret is on a command line.
+docker create --name "$C_RUN" --network "$NET" --env-file "$WORK/runner.env" -w /src \
   -e CGO_ENABLED=0 -e GOFLAGS=-mod=vendor -e GOCACHE=/tmp/gocache -e GOTMPDIR=/tmp -e GOTOOLCHAIN=local \
   "$RUNNER_IMAGE" \
   sh -c 'go test -mod=vendor -tags s3coverage -list "^Test(Op|Plugin)_" ./test/s3coverage/ >/tmp/list.txt 2>&1 || { cat /tmp/list.txt; exit 1; }
     echo "S3COV_EXPECTED=$(grep -c "^Test" /tmp/list.txt)"
-    go test -mod=vendor -tags s3coverage -count=1 -v -timeout 25m ./test/s3coverage/' >"$WORK/out.txt" 2>&1 || rc=$?
+    go test -mod=vendor -tags s3coverage -count=1 -v -timeout 25m ./test/s3coverage/' >/dev/null
+docker cp "$MODROOT/." "$C_RUN:/src"
+docker start -a "$C_RUN" >"$WORK/out.txt" 2>&1 || rc=$?
 
 grep -E '^(S3COV_EXPECTED|--- (PASS|FAIL|SKIP)|PASS$|FAIL|ok |panic|\s+[a-z0-9_]+\.go:[0-9]+:)' "$WORK/out.txt" || true
 passed=$(grep -cE '^--- PASS: Test(Op|Plugin)_' "$WORK/out.txt" || true)

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
@@ -45,12 +44,7 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 		 FROM np_storage_buckets b WHERE b.source_account_id = $1 AND b.name = $2`,
 		sai, bucket, key).Scan(&bucketID, &existed)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, `{"error":"bucket not found"}`, http.StatusNotFound)
-		} else {
-			log.Printf("storage: put %s/%s: bucket lookup: %v", bucket, key, err)
-			http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
-		}
+		writeLookupError(w, err, `{"error":"bucket not found"}`, "put "+bucket+"/"+key+": bucket lookup")
 		return
 	}
 
@@ -112,12 +106,7 @@ func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 		sai, bucket, key,
 	).Scan(&obj.ID, &obj.SourceAccountID, &obj.BucketID, &obj.Key, &obj.SizeBytes, &obj.ContentType, &obj.Etag, &obj.CreatedAt)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-		} else {
-			log.Printf("storage: get %s/%s: row lookup: %v", bucket, key, err)
-			http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
-		}
+		writeLookupError(w, err, `{"error":"not found"}`, "get "+bucket+"/"+key+": row lookup")
 		return
 	}
 	if wantMeta {

@@ -539,3 +539,40 @@ func TestPlugin_KeyEncoding(t *testing.T) {
 		t.Errorf("key with a newline: %d, want 400", code)
 	}
 }
+
+// An account that never registered a bucket must not be able to sweep its prefix in it: DELETE is a no-op (204)
+// and objects planted under that account's prefix stay.
+func TestPlugin_DeleteUnregisteredBucketTouchesNothing(t *testing.T) {
+	p := newPlugin(t)
+	bucket := p.createBucket(t, "owner")
+	putBytes(t, bucket, "ghost/planted.txt", []byte("planted"))
+	putBytes(t, bucket, "owner/own.txt", []byte("own"))
+	if code, _, body := p.call(t, "ghost", http.MethodDelete, "/storage/buckets/"+bucket, nil, ""); code != http.StatusNoContent {
+		t.Fatalf("DELETE of an unregistered bucket: %d %s, want 204", code, body)
+	}
+	for _, k := range []string{"ghost/planted.txt", "owner/own.txt"} {
+		if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(k)}); err != nil {
+			t.Errorf("object %s was removed by an account that never registered the bucket: %v", k, err)
+		}
+	}
+	if rowCount(t, bucket, "") != 1 {
+		t.Error("the owner's bucket row changed")
+	}
+}
+
+// The Content-Type stored with the bytes in S3 wins over the row, which can be stale after racing PUTs.
+func TestPlugin_DownloadContentTypeComesFromS3(t *testing.T) {
+	p := newPlugin(t)
+	bucket := p.createBucket(t, "")
+	if code, _, _ := p.call(t, "", http.MethodPut, "/storage/buckets/"+bucket+"/objects/t.txt", strings.NewReader("hi"), "text/plain"); code != 200 {
+		t.Fatalf("PUT: %d", code)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE np_storage_objects o SET content_type = 'application/x-stale' FROM np_storage_buckets b
+		WHERE b.id = o.bucket_id AND b.name = $1 AND o.key = 't.txt'`, bucket); err != nil {
+		t.Fatal(err)
+	}
+	_, hdr, body := p.call(t, "", http.MethodGet, "/storage/buckets/"+bucket+"/objects/t.txt", nil, "")
+	if string(body) != "hi" || hdr.Get("Content-Type") != "text/plain" {
+		t.Fatalf("GET with a stale row: body %q type %q, want the S3 type text/plain", body, hdr.Get("Content-Type"))
+	}
+}
