@@ -679,7 +679,7 @@ The jobs service has no built-in authentication. Anyone who reaches it can creat
 - On the host the port is published on `127.0.0.1:3105` only. Remote operators tunnel: `ssh -L 3105:127.0.0.1:3105 user@production-server`.
 - The `jobs.<BASE_DOMAIN>` server block that `nself build` installs carries `allow 127.0.0.1; allow ::1; deny all;`, so every other caller gets `403`. Private ranges are not allowed: behind Docker's userland proxy (IPv6 clients, Docker Desktop, rootless Docker) or a tunnel container, internet traffic arrives from a private address.
 
-To expose it on purpose, add your own server block under a different name in `nginx/conf.d/` (never touched by `nself build`), with an allow list and `auth_basic` in front of `http://nself-jobs:3105`. The full example is in the [plugin README](https://github.com/nself-org/plugins/blob/main/free/jobs/README.md#access-private-by-default). Do not reuse `jobs.<BASE_DOMAIN>`: the plugin's block already serves that name.
+To expose it on purpose, add your own server block under a different name in your own file in `nginx/conf.d/` (hand-managed; `nself build` leaves files it did not write alone), with an allow list and `auth_basic` in front of `http://nself-jobs:3105`. The full example is in the [plugin README](https://github.com/nself-org/plugins/blob/main/free/jobs/README.md#access-private-by-default). Do not reuse `jobs.<BASE_DOMAIN>`: the plugin's block already serves that name. Keep `auth_basic` even with the allow line. Behind Docker's userland proxy nginx sees the Docker gateway address instead of your admin address, so do not "fix" a refused allow line by widening it to private ranges.
 
 ### Job Data Security
 

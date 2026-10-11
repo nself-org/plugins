@@ -11,16 +11,21 @@ Runs under unittest (no third-party packages, no docker, no network) and
 under pytest. The systemic sweep of the other plugins (D-0616) adds files to
 GATED.
 """
+import glob
 import os
 import unittest
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
-GATED = ["free/cron/nginx/cron.conf", "free/jobs/nginx/jobs.conf"]
+# Every conf the CLI would inject for these plugins (it globs nginx/*.conf).
+GATED_PLUGINS = ["cron", "jobs"]
 LOOPBACK = {"127.0.0.1", "::1"}
 # Directives that answer, redirect or re-route a request before or instead of
 # the access phase, or that let a request through some other way.
+# real_ip directives rewrite $remote_addr from a header, so a spoofed
+# X-Forwarded-For: 127.0.0.1 would pass the loopback allow.
 BYPASS = {"if", "rewrite", "break", "return", "include", "error_page",
-          "access_by_lua", "access_by_lua_block", "access_by_lua_file"}
+          "access_by_lua", "access_by_lua_block", "access_by_lua_file",
+          "set_real_ip_from", "real_ip_header", "real_ip_recursive"}
 
 
 def tokens(text):
@@ -28,9 +33,17 @@ def tokens(text):
     out, word, i, n = [], "", 0, len(text)
     while i < n:
         c = text[i]
-        if c in "\"'":
-            j = text.index(c, i + 1)
-            word += text[i + 1:j]
+        if c == "\\":  # nginx keeps the escaped character literally
+            word += text[i + 1:i + 2]
+            i += 2
+            continue
+        if c in "\"'":  # quoted string, honouring \" escapes as nginx does
+            j = i + 1
+            while text[j] != c:
+                j += 2 if text[j] == "\\" else 1
+                if j >= n:
+                    raise ValueError("unterminated quote")
+            word += text[i + 1:j].replace("\\" + c, c)
             i = j + 1
             continue
         if c == "$" and text.startswith("{", i + 1):  # ${NAME} stays one word
@@ -153,10 +166,13 @@ UNGATED_166 = """server {
 
 class AccessGate(unittest.TestCase):
     def test_shipped_confs_are_gated(self):
-        for rel in GATED:
-            with self.subTest(conf=rel):
-                with open(os.path.join(ROOT, rel)) as fh:
-                    self.assertEqual(gate_problems(fh.read()), [])
+        for plugin in GATED_PLUGINS:
+            confs = glob.glob(os.path.join(ROOT, "free", plugin, "nginx", "*.conf"))
+            self.assertTrue(confs, "free/%s/nginx has no .conf" % plugin)
+            for path in confs:
+                with self.subTest(conf=os.path.relpath(path, ROOT)):
+                    with open(path) as fh:
+                        self.assertEqual(gate_problems(fh.read()), [])
 
     def test_accepts_loopback_gate(self):
         self.assertEqual(gate_problems(GOOD), [])
@@ -179,6 +195,10 @@ class AccessGate(unittest.TestCase):
             "if": ("proxy_pass $upstream;", "if ($arg_x) { set $a 1; } proxy_pass $upstream;"),
             "satisfy any": ("deny all;", "deny all; satisfy any;"),
             "include": ("deny all;", "deny all; include /etc/nginx/x.conf;"),
+            "real_ip": ("deny all;", "deny all; set_real_ip_from 0.0.0.0/0; "
+                                     "real_ip_header X-Forwarded-For;"),
+            "escaped quote hides deny": ("deny all;",
+                                         'set $n "a\\" ; deny all ; x \\"c";'),
         }
         texts = {name: GOOD.replace(old, new, 1) for name, (old, new) in cases.items()}
         texts["second ungated server"] = GOOD + UNGATED_166

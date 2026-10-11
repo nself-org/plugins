@@ -72,7 +72,7 @@ The API has no authentication: whoever reaches it can create jobs with any callb
 - On the host, it listens on `127.0.0.1:3051` only. From your machine, tunnel to it: `ssh -L 3051:127.0.0.1:3051 <server>`, then use `http://127.0.0.1:3051`.
 - `nself build` installs `nginx/cron.conf` as the `cron.<BASE_DOMAIN>` server block. That block answers `403` to every caller except the nginx container's own loopback (`allow 127.0.0.1; allow ::1; deny all;`). Private address ranges are not allowed: behind Docker's userland proxy (IPv6 clients, Docker Desktop, rootless Docker) or a tunnel container, internet traffic arrives from a private address.
 
-To expose the API on purpose, add your own server block under another name in `nginx/conf.d/` (hand-managed; `nself build` never touches it) and put authentication in front of it. Do not reuse `cron.<BASE_DOMAIN>`: the plugin's block already serves that name. For example, `nginx/conf.d/cron-admin.conf`:
+To expose the API on purpose, add your own server block under another name in your own file in `nginx/conf.d/` (hand-managed; `nself build` leaves files it did not write alone) and put authentication in front of it. Do not reuse `cron.<BASE_DOMAIN>`: the plugin's block already serves that name. For example, `nginx/conf.d/cron-admin.conf`:
 
 ```nginx
 server {
@@ -92,6 +92,8 @@ server {
     location /v1/ { proxy_pass $upstream; }
 }
 ```
+
+Keep `auth_basic` even with the allow line. Behind Docker's userland proxy nginx sees the Docker gateway address instead of your admin address, so do not "fix" a refused allow line by widening it to private ranges.
 
 ## Database Tables
 
