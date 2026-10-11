@@ -8,7 +8,8 @@
 //
 // Constraints: "interactive" is stdin being a character device other than
 // /dev/null (stdlib only, no terminal package). The check sits behind a
-// variable so tests can drive both branches without a pty.
+// variable so tests can drive both branches without a pty. The answer is read
+// through a 4096-byte limit, so a stdin without a newline cannot grow memory.
 package main
 
 import (
@@ -32,10 +33,14 @@ var stdinIsTTY = func() bool {
 	return true
 }
 
+// maxConfirmBytes bounds the confirmation read. A release name is at most 53
+// bytes; anything longer is not a match.
+const maxConfirmBytes = 4096
+
 // confirmRelease asks the user to type the release name and reports whether
 // the answer matches it exactly.
 func confirmRelease(in io.Reader, out io.Writer, release string) bool {
-	fmt.Fprintf(out, "This removes the Helm release %q and everything it deployed.\nType the release name to confirm: ", release)
-	line, _ := bufio.NewReader(in).ReadString('\n')
+	fmt.Fprintf(out, "This removes the Helm release %q and its workloads. Its PersistentVolumeClaims are kept.\nType the release name to confirm: ", release)
+	line, _ := bufio.NewReader(io.LimitReader(in, maxConfirmBytes)).ReadString('\n')
 	return strings.TrimSpace(line) == release
 }
