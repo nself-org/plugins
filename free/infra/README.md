@@ -1,6 +1,6 @@
 # nself-infra
 
-Provision nSelf infrastructure with Terraform.
+Provision nSelf infrastructure with OpenTofu or Terraform.
 
 This is the `nself infra` command family, moved out of the CLI core under
 CLI-R11. The core covers the self-hosted backend lifecycle; provisioning cloud
@@ -18,12 +18,28 @@ the command to this plugin's binary.
 ## Commands
 
 ```bash
-nself infra plan    --provider hetzner --domain myapp.com
-nself infra apply   --provider hetzner --domain myapp.com --force
-nself infra destroy --provider hetzner --auto-approve
+nself infra validate --provider hetzner
+nself infra plan     --provider hetzner --domain myapp.com
+nself infra apply    --provider hetzner --domain myapp.com --i-accept-cloud-spend
+nself infra destroy  --provider hetzner --auto-approve --i-accept-cloud-spend
 ```
 
-Providers: `aws`, `gcp`, `azure`, `hetzner`, `do`, `linode`.
+Hetzner is the only shipped provider. `aws`, `gcp`, `azure`, `do` and `linode` are
+recognised and exit 1 with "not shipped (DEF-005)"; any other value is a usage error.
+
+`apply` and `destroy` spend money or delete servers, so they need
+`--i-accept-cloud-spend` and an interactive terminal on stdin; without either they
+refuse and exit 4 before OpenTofu or Terraform is touched. Once past that gate,
+`apply` without `--auto-approve` hands your terminal to `tofu` (or `terraform`), so
+you answer its own approval prompt. `destroy` also requires `--auto-approve`; the
+flag is the confirmation, there is no second prompt. With `--json` the prompt goes to
+stderr and stdout carries only the envelope.
+
+`--help --json` (`--help` or `-h` as a flag, not as another flag's value and not after `--`, with `--json`, on the root or
+any subcommand) prints one ok v1 envelope with
+`command` (for example `infra plan`) and `data.help`, the same text `--help` prints,
+and exits 0. Plain `--help` is unchanged. The hidden `help` subcommand (`nself infra help plan --json`) is not covered:
+it gives the usual E401 unknown-flag envelope.
 
 ### Hetzner Cloud servers: `nself infra server`
 
@@ -69,18 +85,24 @@ never read from a project `.env` file (`--token-env NSELF_INFRA_TERRAFORM_HCLOUD
 envelope, which is not wired yet).
 
 Parity with core is checked by `scripts/parity-server.sh` (builds core `nself`
-from cli origin/main and diffs help, refusals and exit codes).
+from cli origin/main and diffs help, refusals, exit codes and the full request
+sequence). `--json` cases are not byte-compared: the plugin prints a v1 envelope and
+core its legacy JSON, so `scripts/parity-envelope.py` checks the envelope contract,
+the exit class and the data mapping, while the request sequence stays byte-exact.
+The header of the script lists every documented difference.
 
 ## Requirements
 
-Terraform must be on your `PATH`. This plugin does not bundle it — see
-https://developer.hashicorp.com/terraform for installation.
+OpenTofu or Terraform must be on your `PATH`. The plugin runs `tofu` when it finds
+it and falls back to `terraform`. It bundles neither: see
+https://opentofu.org/docs/intro/install/ or https://developer.hashicorp.com/terraform.
+The Hetzner module is embedded in the plugin and extracted to your user cache
+directory on first use.
 
 ## Status
 
-`planned`. `nself infra apply` is gated and refuses to run without `--force`,
-which is how it shipped in the CLI. `plan` and `destroy` are unrestricted,
-though `destroy` requires `--auto-approve`.
+Hetzner is shipped. `apply` and `destroy` are behind the spend gate above.
+`--force` on `apply` is accepted and ignored (old scripts still parse).
 
 ## Environment
 

@@ -63,7 +63,7 @@
           {
             "name": "state-bucket",
             "type": "string",
-            "usage": "S3/GCS bucket for Terraform state (optional)"
+            "usage": "State bucket, passed as -backend-config=bucket=<name> (optional; the embedded Hetzner module uses local state)"
           }
         ],
         "json": "legacy",
@@ -126,7 +126,7 @@
           {
             "name": "state-bucket",
             "type": "string",
-            "usage": "S3/GCS bucket for Terraform state (optional)"
+            "usage": "State bucket, passed as -backend-config=bucket=<name> (optional; the embedded Hetzner module uses local state)"
           }
         ],
         "json": "legacy",

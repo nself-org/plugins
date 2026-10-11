@@ -1,15 +1,18 @@
-// nself-infra — Terraform-based infrastructure provisioning for nSelf.
+// nself-infra — OpenTofu/Terraform-based infrastructure provisioning for nSelf.
 //
 // Purpose: this is the `nself infra` command family, moved out of the CLI core
 // under CLI-R11. The core has to cover the self-hosted backend lifecycle with
-// no added complexity; provisioning cloud infrastructure with Terraform is not
-// part of that lifecycle, and the users who need it can install it.
+// no added complexity; provisioning cloud infrastructure with OpenTofu or
+// Terraform is not part of that lifecycle, and the users who need it can
+// install it.
 //
 // Inputs: the same flags and subcommands as `nself infra` — plan, apply and
-// destroy, each taking --provider and --domain.
+// destroy, each taking --provider and --domain. Hetzner is the only shipped
+// provider.
 //
 // Outputs: identical to the pre-extraction command, including the spend gate
-// on apply and the --auto-approve requirement on destroy.
+// on apply and destroy (--i-accept-cloud-spend and a terminal) and the
+// --auto-approve requirement on destroy.
 //
 // Constraints: the CLI proxies `nself infra ...` to this binary once installed,
 // so the command tree here is rooted at `infra` and every flag name, default
@@ -39,12 +42,19 @@ import (
 
 var infraCmd = &cobra.Command{
 	Use:   "infra",
-	Short: "Provision nSelf infrastructure via Terraform",
-	Long: `Provision cloud infrastructure for nSelf using provider-specific Terraform modules.
+	Short: "Provision nSelf infrastructure via OpenTofu/Terraform",
+	Long: `Provision cloud infrastructure for nSelf with the embedded Hetzner module.
 
-Supported providers: aws, gcp, azure, hetzner, do, linode
+Hetzner is the only shipped provider. aws, gcp, azure, do and linode are
+recognised and exit with "not shipped (DEF-005)".
 
-Requires terraform to be installed: https://developer.hashicorp.com/terraform
+Requires OpenTofu (https://opentofu.org) or Terraform
+(https://developer.hashicorp.com/terraform) on your PATH; tofu is used first,
+terraform is the fallback.
+
+apply and destroy spend money or delete servers: they need
+--i-accept-cloud-spend and an interactive terminal. Without --auto-approve,
+apply asks tofu or terraform to prompt you on that terminal.
 
 Examples:
   nself infra plan  --provider hetzner --domain myapp.com
@@ -57,8 +67,8 @@ Examples:
 
 var infraPlanCmd = &cobra.Command{
 	Use:   "plan",
-	Short: "Show the Terraform plan for the given provider",
-	Long: `Run 'terraform plan' for the nSelf module matching the given provider.
+	Short: "Show the OpenTofu/Terraform plan for the given provider",
+	Long: `Run 'tofu plan' (or 'terraform plan') for the nSelf module matching the given provider.
 
 The plan shows what infrastructure will be created without making any changes.`,
 	// RunE is set in plan.go.
@@ -66,8 +76,8 @@ The plan shows what infrastructure will be created without making any changes.`,
 
 var infraApplyCmd = &cobra.Command{
 	Use:   "apply",
-	Short: "Provision nSelf infrastructure via Terraform",
-	Long: `Run 'terraform apply' for the nSelf module matching the given provider.
+	Short: "Provision nSelf infrastructure via OpenTofu/Terraform",
+	Long: `Run 'tofu apply' (or 'terraform apply') for the nSelf module matching the given provider.
 
 Outputs include NSELF_URL, ssh_host, and postgres_url after provisioning.`,
 	// RunE is set in apply.go.
@@ -76,7 +86,7 @@ Outputs include NSELF_URL, ssh_host, and postgres_url after provisioning.`,
 var infraDestroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy nSelf infrastructure",
-	Long: `Run 'terraform destroy' for the nSelf module matching the given provider.
+	Long: `Run 'tofu destroy' (or 'terraform destroy') for the nSelf module matching the given provider.
 
 WARNING: This removes all provisioned cloud resources. Data will be lost
 unless you have taken a backup via 'nself backup'.`,
@@ -84,20 +94,20 @@ unless you have taken a backup via 'nself backup'.`,
 }
 
 func init() {
-	infraPlanCmd.Flags().String("provider", "", "Cloud provider (aws, gcp, azure, hetzner, do, linode)")
+	infraPlanCmd.Flags().String("provider", "", "Cloud provider (hetzner)")
 	infraPlanCmd.Flags().String("domain", "", "Domain for the nSelf deployment")
-	infraPlanCmd.Flags().String("state-bucket", "", "S3/GCS bucket for Terraform state (optional)")
+	infraPlanCmd.Flags().String("state-bucket", "", "State bucket, passed as -backend-config=bucket=<name> (optional; the embedded Hetzner module uses local state)")
 
-	infraApplyCmd.Flags().String("provider", "", "Cloud provider (aws, gcp, azure, hetzner, do, linode)")
+	infraApplyCmd.Flags().String("provider", "", "Cloud provider (hetzner)")
 	infraApplyCmd.Flags().String("domain", "", "Domain for the nSelf deployment")
-	infraApplyCmd.Flags().String("state-bucket", "", "S3/GCS bucket for Terraform state (optional)")
+	infraApplyCmd.Flags().String("state-bucket", "", "State bucket, passed as -backend-config=bucket=<name> (optional; the embedded Hetzner module uses local state)")
 	infraApplyCmd.Flags().Bool("auto-approve", false, "Skip interactive approval")
 	infraApplyCmd.Flags().Bool("force", false, "Ignored; kept so old scripts still parse (the PLANNED gate was removed)")
 	infraApplyCmd.Flags().String("location", "", "Hetzner datacenter location (e.g. nbg1, fsn1, hel1) — passed as TF var")
 	infraApplyCmd.Flags().String("server-type", "", "Hetzner server type (e.g. cpx21, cx22) — passed as TF var")
 	infraApplyCmd.Flags().String("deploy-pubkey", "", "SSH public key content for the nself deploy user's authorized_keys — passed as TF var deploy_ssh_pubkey")
 
-	infraDestroyCmd.Flags().String("provider", "", "Cloud provider (aws, gcp, azure, hetzner, do, linode)")
+	infraDestroyCmd.Flags().String("provider", "", "Cloud provider (hetzner)")
 	infraDestroyCmd.Flags().String("domain", "", "Domain for the nSelf deployment")
 	infraDestroyCmd.Flags().Bool("auto-approve", false, "Confirm destruction without prompt")
 
@@ -116,7 +126,17 @@ func main() {
 		// cobra from printing them; report prints the envelope instead.
 		infraCmd.SilenceErrors = true
 	}
-	os.Exit(report(infraCmd.Execute(), js, os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], js, os.Stdout, os.Stderr))
+}
+
+// run executes args and returns the process exit code: `--help --json` first
+// (help_json.go), then the normal command run. main and the test harness both
+// call it, so a test exercises the same wiring the binary has.
+func run(args []string, js bool, stdout, stderr io.Writer) int {
+	if handled, code := helpJSON(infraCmd, args, stdout, stderr); handled {
+		return code
+	}
+	return report(infraCmd.Execute(), js, args, stdout, stderr)
 }
 
 // report turns the result of Execute into the process exit code. Human mode:

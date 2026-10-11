@@ -48,6 +48,32 @@ The `apply` and `destroy` commands incur cloud spend or delete infrastructure. T
 - `nself infra apply`
 - `nself infra destroy`
 - `nself-infra server provision|list|resize|destroy` (`nself infra server ...`): Hetzner Cloud server lifecycle.
+- `nself infra server provision --user-data-file <path>`: send a cloud-init user-data file to the new server (see below).
+
+### Providers
+
+Hetzner is the only shipped provider. `aws`, `gcp`, `azure`, `do` and `linode` are recognised and exit 1 with
+"not shipped (DEF-005)" (an E401 envelope under `--json`); any other value is a usage error. The Hetzner module is
+embedded in the plugin and extracted to the user cache directory on first use. `--state-bucket` is passed to the tool as
+`-backend-config=bucket=<name>`; the embedded module keeps local state.
+
+### Approval prompt
+
+`apply` and `destroy` need `--i-accept-cloud-spend` and an interactive terminal on stdin, in both human and `--json` mode;
+otherwise they exit 4 before OpenTofu or Terraform runs. Past that gate the child tool gets your stdin. `apply` without
+`--auto-approve` therefore shows the tool's own approval prompt and waits for you to type `yes` (under `--json` the prompt
+is on stderr and stdout stays the envelope). `plan`, `validate` and `init` get no stdin. `destroy` also requires
+`--auto-approve`: that flag is the confirmation, and without it the command refuses (exit 1, or 4 with `--json`).
+
+### Server provision: `--user-data-file`
+
+`nself infra server provision --user-data-file <path>` sends the file to Hetzner as the new server's `user_data`
+(cloud-init). The file is opened without following a symlink (a symlink as the final path component is refused), and the
+checks run on the open file, not on the path. It must be a regular file, owned by the current user, with no group or other
+permission bits (mode 0600 or stricter), non-empty, valid UTF-8 and at most 32768 bytes. Any other file is refused with
+E401 before the provider is called. The content can hold a pairing code, so it is never printed or logged. When user data
+was sent, the provider error message is withheld and only the HTTP status is shown. Linux and macOS only: on any other OS
+the flag is refused.
 
 ### Server destroy safety
 
@@ -62,8 +88,8 @@ step stops before the delete. The token comes from `--token`, `--token-env` (def
 `server destroy`) makes stdout carry exactly one v1 envelope (`schema_version`, `command`, then `data` or `error`), written
 through `sdk/go/output`. `command` is `infra <subcommand>`, for example `infra plan` or `infra server list`. OpenTofu/Terraform
 output and the progress lines go to stderr, so a script can pipe stdout into `jq`. Without `--json` the output is unchanged.
-`apply --json` still needs a terminal and `--i-accept-cloud-spend`; pass `--auto-approve` too, because nothing can answer
-terraform's prompt. The manifest declares these subcommands `json: legacy` because the pinned manifest schema accepts only
+`apply --json` still needs a terminal and `--i-accept-cloud-spend`. Without `--auto-approve` the tool's approval prompt
+appears on stderr and you answer it on that terminal; stdout stays the envelope. The manifest declares these subcommands `json: legacy` because the pinned manifest schema accepts only
 `none` and `legacy` today (the k8s plugin has the same limit); each prints the v1 envelope.
 
 | Subcommand | `data` |
@@ -73,9 +99,16 @@ terraform's prompt. The manifest declares these subcommands `json: legacy` becau
 | `apply` | `provider`, `domain`, `status` (`applied`), `auto_approve` |
 | `destroy` | `provider`, `domain`, `status` (`destroyed`) |
 | `server list` | `servers[]` (`id`, `name`, `status`, `server_type`, `location`, `created`, `ipv4`, `ipv6`, `labels`), `count` |
-| `server provision` | `server` (same fields as a list entry) |
+| `server provision` | `server` (same fields as a list entry), `user_data` (boolean: whether a user-data file was sent; the content is never reported) |
 | `server resize` | `server_id`, `target_type`, `action` (`id`, `status`, `command`, `progress`) |
 | `server destroy` | `server_id`, `snapshot_id` (0 when none), `retained_ips[]`, `released_ips[]` (`id`, `ip`, `type`, `assignee_id`, `auto_delete`) |
+
+`--help --json` (`--help` or `-h` as a flag, not as another flag's value and not after `--`, together with `--json`, on the
+root or any subcommand, for example `nself infra plan --help --json`) prints one ok
+envelope instead of help text: `command` is the command path (`infra`, `infra plan`, `infra server list`), `data` is
+`{"help": "<the text plain --help prints>"}`, and the exit status is 0. Plain `--help` is unchanged. The hidden `help`
+subcommand (`nself infra help plan --json`) is not covered and gives the usual E401 unknown-flag envelope. The `k8s` plugin
+behaves the same way (`command` is `k8s` or `k8s <subcommand>`).
 
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
 status equals `exit_code`. Messages are fixed text: they never carry a token, an environment value or a raw provider or
@@ -125,6 +158,9 @@ nself-infra apply
   exit class instead of plain text. The plugin is `planned` and ungated, so there is no compatibility window.
 - `validate`, `plan`, `apply` and `destroy` gain `--json` with the same envelope.
 - The isatty check is covered by unit tests for every non-terminal input; the positive control (a real terminal passes) is manual, under a pty, for example with `script`.
+- `apply` and `destroy` now pass your terminal to `tofu`/`terraform`, so `apply` without `--auto-approve` shows the tool's
+  approval prompt instead of failing. `--help --json` prints a v1 envelope. Help text and README name Hetzner as the only
+  shipped provider and OpenTofu first. The "neither tofu nor terraform" message names OpenTofu first.
 - `apply --help` no longer carries the stale "gated as PLANNED" paragraph; `--force` is accepted and ignored. Redacted stderr diagnostics also cut at "password", "secret", "api_key", "apikey" and "x-auth" and are capped at 300 characters.
 - `--json` takes the last value given, like every other flag (`--json=false --json` is on). Failures without terraform output of their own print a redacted diagnostic on stderr.
 - The terminal check of `apply` and `destroy` is now a real isatty test. A stdin of `/dev/null` (what a program gives a child by
