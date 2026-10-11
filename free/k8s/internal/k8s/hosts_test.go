@@ -131,6 +131,9 @@ func TestRewriteHost(t *testing.T) {
 		{"nested prefix", "a.b.example.test", "example.test", "shop.org", "a.b.shop.org"},
 		{"other host unchanged", "mail.other.test", "example.test", "shop.org", "mail.other.test"},
 		{"suffix without dot is not a subdomain", "notexample.test", "example.test", "shop.org", "notexample.test"},
+		{"case-insensitive apex", "Example.TEST", "example.test", "shop.org", "shop.org"},
+		{"case-insensitive subdomain", "API.Example.Test", "EXAMPLE.test", "shop.org", "api.shop.org"},
+		{"same domain, other case", "api.example.test", "example.test", "EXAMPLE.test", "api.example.test"},
 		{"no domain", "api.example.test", "example.test", "", "api.example.test"},
 		{"no base domain", "api.example.test", "", "shop.org", "api.example.test"},
 		{"same domain", "api.example.test", "example.test", "example.test", "api.example.test"},
@@ -160,5 +163,26 @@ func TestIngressHostsAppliesDomain(t *testing.T) {
 	hosts, _ = IngressHosts(dir, "")
 	if got := strings.Join(hosts, ","); got != "a.example.test,b.example.test,mail.other.test" {
 		t.Errorf("no domain: hosts = %q", got)
+	}
+}
+
+// TestDomainHasNoEffect: --domain with values that have no baseDomain is
+// reported; with a baseDomain, without --domain, or with unreadable values it is not.
+func TestDomainHasNoEffect(t *testing.T) {
+	dir := project(t, true, true)
+	vals := filepath.Join(dir, filepath.FromSlash(GeneratedDir), "values.yaml")
+	writeFile(t, vals, valuesWithRules, 0o644)
+	if !DomainHasNoEffect(dir, "shop.org") {
+		t.Error("no baseDomain and a domain: want a report")
+	}
+	if DomainHasNoEffect(dir, "") {
+		t.Error("no domain: nothing to report")
+	}
+	writeFile(t, vals, "baseDomain: example.test\n"+valuesWithRules, 0o644)
+	if DomainHasNoEffect(dir, "shop.org") {
+		t.Error("baseDomain present: nothing to report")
+	}
+	if DomainHasNoEffect(project(t, false, false), "shop.org") {
+		t.Error("missing values: reported by install itself, not here")
 	}
 }

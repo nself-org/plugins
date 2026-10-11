@@ -74,6 +74,7 @@ Example:
 			return r.usageFail(err.Error())
 		}
 		warnLicenceUnsent(r, opts)
+		warnDomainNoEffect(r, opts)
 		r.info(fmt.Sprintf("Installing nSelf chart (domain=%s)...", opts.Domain))
 		if err := k8s.Install(cmd.Context(), opts); err != nil {
 			return r.fail(err)
@@ -117,6 +118,14 @@ func installedLine(projectDir, domain string) string {
 		urls[i] = "https://" + h
 	}
 	return "nSelf installed. Ingress hosts: " + strings.Join(urls, ", ")
+}
+
+// warnDomainNoEffect says that --domain changes nothing because the generated
+// values carry no baseDomain.
+func warnDomainNoEffect(r *invocation, opts k8s.InstallOptions) {
+	if k8s.DomainHasNoEffect(opts.ProjectDir, opts.Domain) {
+		r.warn(k8s.DomainNoEffectHint)
+	}
 }
 
 // warnLicenceUnsent says that a licence key in the environment does not reach

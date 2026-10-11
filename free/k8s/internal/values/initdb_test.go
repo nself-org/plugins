@@ -110,16 +110,22 @@ func TestInitDBContentsOnlyInSecrets(t *testing.T) {
 }
 
 func TestInitDBLimitAndEncoding(t *testing.T) {
-	big := strings.Repeat("x", 600<<10)
+	half := strings.Repeat("x", 256<<10)
 	cases := []struct {
 		name    string
 		fsys    fstest.MapFS
 		wantErr string
 	}{
-		{"within limit", fstest.MapFS{"a.sql": {Data: []byte(big)}}, ""},
-		{"over limit names the file", fstest.MapFS{
-			"a.sql": {Data: []byte(big)}, "b.sql": {Data: []byte(big)},
-		}, "initdb file b.sql"},
+		{"exactly at the limit", fstest.MapFS{
+			"a.sql": {Data: []byte(half)}, "b.sql": {Data: []byte(half)},
+		}, ""},
+		{"one byte over names the file", fstest.MapFS{
+			"a.sql": {Data: []byte(half)}, "b.sql": {Data: []byte(half + "y")},
+		}, "initdb file b.sql takes the scripts over 512 KiB"},
+		{"base64 size counts for gz", fstest.MapFS{
+			"a.sql":    {Data: []byte(half)},
+			"b.sql.gz": {Data: make([]byte, 200<<10)}, // 200 KiB raw is about 267 KiB stored
+		}, "initdb file b.sql.gz"},
 		{"not utf8", fstest.MapFS{"a.sql": {Data: []byte{0xff, 0xfe}}}, "initdb file a.sql is not valid UTF-8"},
 	}
 	for _, c := range cases {
@@ -135,6 +141,17 @@ func TestInitDBLimitAndEncoding(t *testing.T) {
 				t.Error("the error echoes file content")
 			}
 		})
+	}
+}
+
+func TestInitDBTwoMountsIsAnError(t *testing.T) {
+	m := initModel("/p/init")
+	cs := m.Services["postgres"]
+	cs.Volumes = append(cs.Volumes, ComposeMount{Type: "bind", Source: "/p/other", Target: "/docker-entrypoint-initdb.d/"})
+	m.Services["postgres"] = cs
+	_, _, err := MapWith(m, nil, memFS(fstest.MapFS{}))
+	if err == nil || !strings.Contains(err.Error(), "service postgres: more than one bind mount") {
+		t.Errorf("err = %v, want an error naming the service", err)
 	}
 }
 
@@ -198,5 +215,53 @@ func TestBaseDomain(t *testing.T) {
 	_, v, _ := mapFixture(t, "full")
 	if v.BaseDomain != "example.test" {
 		t.Errorf("fixture baseDomain = %q", v.BaseDomain)
+	}
+}
+
+func TestLicenceKeyIsNeverAValue(t *testing.T) {
+	const key = "fake-licence-0000"
+	k, other := key, "3711"
+	m := &Model{Name: "p", Services: map[string]ComposeSvc{
+		"mux": {Image: "x/mux:1", Hostname: "plugin-mux", Environment: map[string]*string{
+			"NSELF_PLUGIN_LICENSE_KEY": &k, "PORT": &other}},
+	}}
+	v, s, err := Map(m, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := v.Services["mux"]
+	if got := strings.Join(svc.Env, ","); got != "PORT" {
+		t.Errorf("env names = %q, want only PORT", got)
+	}
+	if _, ok := s.Secrets["mux"]["NSELF_PLUGIN_LICENSE_KEY"]; ok {
+		t.Error("the licence key env is in secrets.yaml")
+	}
+	if got := strings.Join(svc.NotMapped, "|"); got != "env:NSELF_PLUGIN_LICENSE_KEY (pass --license-secret)" {
+		t.Errorf("notMapped = %q", got)
+	}
+	vb, _ := MarshalValues(v)
+	sb, _ := MarshalSecrets(s)
+	if strings.Contains(string(vb), key) || strings.Contains(string(sb), key) {
+		t.Error("the licence key value reached values.yaml or secrets.yaml")
+	}
+}
+
+func TestCheckComparesBaseDomainAndPluginMarker(t *testing.T) {
+	b, m := fullValuesBytes(t)
+	opts := fixtureOpts("full")
+	// baseDomain differs.
+	edited := strings.Replace(string(b), "baseDomain: example.test", "baseDomain: other.test", 1)
+	diffs, err := CheckWith([]byte(edited), m, opts)
+	if err != nil || len(diffs) != 1 || diffs[0].Service != ProjectDiff || !strings.Contains(diffs[0].Detail, "baseDomain") {
+		t.Errorf("baseDomain: diffs = %v, err = %v", diffs, err)
+	}
+	// plugin marker differs: add one to hasura in values, compose has none.
+	edited = strings.Replace(string(b), "  hasura:\n    kind: deployment\n", "  hasura:\n    kind: deployment\n    plugin: ghost\n", 1)
+	if edited == string(b) {
+		t.Fatal("fixture layout changed: hasura block not found")
+	}
+	diffs, err = CheckWith([]byte(edited), m, opts)
+	if err != nil || len(diffs) != 1 || diffs[0].Service != "hasura" || !strings.Contains(diffs[0].Detail, "plugin marker") {
+		t.Errorf("plugin marker: diffs = %v, err = %v", diffs, err)
 	}
 }

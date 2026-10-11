@@ -77,6 +77,15 @@ func goldenCases() []goldenCase {
 			args: func(d string) []string {
 				return []string{"upgrade", "--domain", "x.test", "--plugins", "a", "--project-dir", d}
 			}},
+		{name: "install_domain_rewrite", run: cliRun{Helm: "ok"}, setup: "generated",
+			args: func(d string) []string {
+				return []string{"install", "--domain", "shop.example.org", "--project-dir", d}
+			},
+			prepare: func(t *testing.T, d string) {
+				p := filepath.Join(d, ".nself", "generated", "k8s", "values.yaml")
+				b, _ := os.ReadFile(p)
+				writeFile(t, p, "baseDomain: example.test\n"+string(b), 0o644)
+			}},
 		{name: "install_ok_cluster", run: cliRun{Helm: "ok"}, setup: "generated",
 			args: func(d string) []string {
 				return []string{"install", "--domain", "app.example.test", "--cluster", "/k/cfg", "--release", "r1", "--project-dir", d}

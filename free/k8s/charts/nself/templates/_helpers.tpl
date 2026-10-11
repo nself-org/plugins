@@ -11,17 +11,19 @@ a Secret that already exists in the cluster.
 nself.host: an ingress host after the install --domain is applied. Input: dict
 root, host. When .Values.domain and .Values.baseDomain (the project's
 BASE_DOMAIN, generated) are both set and differ, the host equal to baseDomain
-becomes domain, and a host ending in ".<baseDomain>" keeps its prefix with the
-new domain. Any other host is unchanged. internal/k8s/hosts.go (RewriteHost)
+becomes domain, and a host ending in ".<baseDomain>" keeps its prefix (lower
+cased) with the new domain. Hosts are compared case-insensitively. Any other
+host is unchanged. internal/k8s/hosts.go (RewriteHost)
 does the same for the hosts the CLI prints.
 */}}
 {{- define "nself.host" -}}
 {{- $domain := default "" .root.Values.domain -}}
-{{- $base := default "" .root.Values.baseDomain -}}
-{{- if and $domain $base (ne $domain $base) (eq .host $base) -}}
+{{- $base := lower (default "" .root.Values.baseDomain) -}}
+{{- $host := lower .host -}}
+{{- if and $domain $base (ne (lower $domain) $base) (eq $host $base) -}}
 {{ $domain }}
-{{- else if and $domain $base (ne $domain $base) (hasSuffix (printf ".%s" $base) .host) -}}
-{{ trimSuffix $base .host }}{{ $domain }}
+{{- else if and $domain $base (ne (lower $domain) $base) (hasSuffix (printf ".%s" $base) $host) -}}
+{{ trimSuffix $base $host }}{{ $domain }}
 {{- else -}}
 {{ .host }}
 {{- end -}}
@@ -29,13 +31,14 @@ does the same for the hosts the CLI prints.
 
 {{/*
 nself.licenseEnv: "true" when the pod of service `name` gets the licence key
-from the Secret named by .Values.license.secretName: a plugin workload (named
-plugin-*, or marked `plugin` in the generated values) that does not already
-list the env name. Input: dict root, name, svc.
+from the Secret named by .Values.license.secretName: every plugin workload
+(named plugin-*, or marked `plugin` in the generated values). `nself k8s values`
+never maps NSELF_PLUGIN_LICENSE_KEY into a service env, so there is no clash.
+Input: dict root, name, svc.
 */}}
 {{- define "nself.licenseEnv" -}}
 {{- $lic := default dict .root.Values.license -}}
-{{- if and $lic.secretName (or (hasPrefix "plugin-" .name) (default "" .svc.plugin)) (not (has (default "NSELF_PLUGIN_LICENSE_KEY" $lic.secretKey) (default list .svc.env))) -}}
+{{- if and $lic.secretName (or (hasPrefix "plugin-" .name) (default "" .svc.plugin)) -}}
 true
 {{- end -}}
 {{- end -}}
@@ -92,7 +95,7 @@ containers:
       {{- end }}
       {{- if $licenseEnv }}
       {{- $lic := $root.Values.license }}
-      - name: {{ default "NSELF_PLUGIN_LICENSE_KEY" $lic.secretKey }}
+      - name: NSELF_PLUGIN_LICENSE_KEY
         valueFrom:
           secretKeyRef:
             name: {{ $lic.secretName }}

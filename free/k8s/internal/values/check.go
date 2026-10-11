@@ -6,8 +6,9 @@
 // Outputs: []Diff, empty when the file matches the model.
 //
 // Constraints: reports a service that is missing from the values file, extra
-// in it, or whose image, tag or init-script names differ (secrets.yaml is not
-// read: script contents are compared by name only). A service listed under unsupported
+// in it, or whose image, tag, plugin marker or init-script names differ, and a
+// differing baseDomain. secrets.yaml is not read: init-script bodies are
+// compared by name only, never by content. A service listed under unsupported
 // counts as present (it is accounted for). Diffs are sorted by service then
 // kind and never include env values.
 package values
@@ -27,6 +28,9 @@ const (
 	DiffExtra   = "extra"
 	DiffDiffers = "differs"
 )
+
+// ProjectDiff is the Diff.Service of a difference that belongs to no service.
+const ProjectDiff = "(project)"
 
 // Diff is one parity difference.
 type Diff struct {
@@ -56,6 +60,10 @@ func CheckWith(existing []byte, m *Model, o MapOptions) ([]Diff, error) {
 		return nil, err
 	}
 	var diffs []Diff
+	if have.BaseDomain != want.BaseDomain {
+		diffs = append(diffs, Diff{ProjectDiff, DiffDiffers,
+			fmt.Sprintf("baseDomain: values %q, compose %q", have.BaseDomain, want.BaseDomain)})
+	}
 	for _, name := range sortedKeys(m.Services) {
 		_, mapped := have.Services[name]
 		if !mapped && !hasUnsupported(have.Unsupported, name) {
@@ -66,10 +74,15 @@ func CheckWith(existing []byte, m *Model, o MapOptions) ([]Diff, error) {
 		if !ok || !mapped {
 			continue
 		}
-		if h := have.Services[name]; h.Image != w.Image || h.Tag != w.Tag || h.Digest != w.Digest {
+		h := have.Services[name]
+		switch {
+		case h.Image != w.Image || h.Tag != w.Tag || h.Digest != w.Digest:
 			diffs = append(diffs, Diff{name, DiffDiffers,
 				fmt.Sprintf("values %s, compose %s", ref(h), ref(w))})
-		} else if !equalNames(h.InitDB, w.InitDB) {
+		case h.Plugin != w.Plugin:
+			diffs = append(diffs, Diff{name, DiffDiffers,
+				fmt.Sprintf("plugin marker: values %q, compose %q", h.Plugin, w.Plugin)})
+		case !equalNames(h.InitDB, w.InitDB):
 			diffs = append(diffs, Diff{name, DiffDiffers,
 				fmt.Sprintf("initdb scripts: values [%s], compose [%s]", strings.Join(h.InitDB, " "), strings.Join(w.InitDB, " "))})
 		}

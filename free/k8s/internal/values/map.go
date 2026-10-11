@@ -15,7 +15,9 @@
 // an unresolved "${" in an image or env value is an error that names the
 // service and variable, never the value. Image references are only split,
 // never invented: no tag is added, and an untagged, undigested image is
-// refused (k8s would pull a moving latest). Every mapped workload carries
+// refused (k8s would pull a moving latest). The licence key env var
+// NSELF_PLUGIN_LICENSE_KEY is dropped (name and value) and listed notMapped.
+// Every mapped workload carries
 // pullPolicy IfNotPresent.
 package values
 
@@ -124,6 +126,7 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 	svc.Plugin = pluginOf(name, cs)
 	svc.Entrypoint, svc.Command = cs.Entrypoint, cs.Command
 	env := map[string]string{}
+	licenceDropped := false
 	for _, k := range sortedKeys(cs.Environment) {
 		val := ""
 		if cs.Environment[k] != nil {
@@ -131,6 +134,10 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 		}
 		if strings.Contains(val, "${") {
 			return Service{}, nil, fmt.Errorf("service %s: env %s has an unresolved interpolation", name, k)
+		}
+		if k == LicenseEnvName {
+			licenceDropped = true // never a value: the chart reads it from --license-secret
+			continue
 		}
 		svc.Env = append(svc.Env, k)
 		env[k] = val
@@ -155,12 +162,21 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 	for _, t := range cs.Tmpfs {
 		notMapped = append(notMapped, "tmpfs-mount:"+t)
 	}
+	if licenceDropped {
+		notMapped = append(notMapped, "env:"+LicenseEnvName+" (pass --license-secret)")
+	}
 	notMapped = append(notMapped, hostFeatures(cs)...)
 	svc.Probe, notMapped = mapProbe(cs.Healthcheck, notMapped)
 	sort.Strings(notMapped)
 	svc.NotMapped = notMapped
 	return svc, env, nil
 }
+
+// LicenseEnvName is the licence key env var. It is never mapped as a value: its
+// name is dropped from the service env and its value from secrets.yaml, because
+// helm stores every value in the release Secret. The chart gives plugin
+// workloads the key from the Secret named by --license-secret.
+const LicenseEnvName = "NSELF_PLUGIN_LICENSE_KEY"
 
 // pluginPrefix names plugin services and the hostname the CLI gives them.
 const pluginPrefix = "plugin-"

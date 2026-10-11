@@ -58,6 +58,13 @@ if [ -n "$out" ]; then
   expect "mountPath: /docker-entrypoint-initdb.d"
   expect "secretName: nself-postgres-initdb"
   expect "name: fake-licence-secret"
+  # Every plugin workload (plugin-cron by name, mux by its plugin marker) gets the
+  # licence env, always under the name NSELF_PLUGIN_LICENSE_KEY.
+  n="$(printf '%s\n' "$out" | grep -c 'name: fake-licence-secret')"
+  [ "$n" -eq 2 ] || { echo "FAIL: $n plugin workloads read the licence Secret, want 2" >&2; fail=1; }
+  if printf '%s\n' "$out" | grep -q 'fake-licence-0000'; then
+    echo "FAIL: a licence key value was rendered" >&2; fail=1
+  fi
   # No Ingress host or TLS host may keep the generated base domain.
   if printf '%s\n' "$out" | grep -E '^ +(- )?host: [^ ]*example\.test$|^ +- [a-z-]+\.example\.test$'; then
     echo "FAIL: an ingress host kept the base domain" >&2; fail=1

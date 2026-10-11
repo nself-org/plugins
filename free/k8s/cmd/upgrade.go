@@ -47,6 +47,7 @@ to helm; --license-secret names the cluster Secret that holds it (see
 			return r.usageFail(err.Error())
 		}
 		warnLicenceUnsent(r, opts)
+		warnDomainNoEffect(r, opts)
 		if missing := k8s.NotPassed(opts); len(missing) > 0 {
 			r.warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
 		}

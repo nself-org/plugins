@@ -4,7 +4,7 @@
 // Inputs: the generated values.yaml (baseDomain, ingress.rules[].host), the
 // install --domain, and InstallOptions.
 //
-// Outputs: IngressHosts (sorted, unique hosts the chart routes, with the domain
+// Outputs: DomainHasNoEffect, IngressHosts (sorted, unique hosts the chart routes, with the domain
 // rewrite applied), RewriteHost and NotPassed (names of the install-time values
 // an upgrade will not pass).
 //
@@ -25,42 +25,55 @@ import (
 // RewriteHost applies the install domain to one generated ingress host. When
 // domain and baseDomain are both set and differ, the host equal to baseDomain
 // becomes domain, and a host ending in "."+baseDomain keeps its prefix with
-// the new domain. Any other host is returned unchanged.
+// the new domain (the prefix is lower-cased). Hosts are compared
+// case-insensitively. Any other host is returned unchanged.
 func RewriteHost(host, baseDomain, domain string) string {
-	if domain == "" || baseDomain == "" || domain == baseDomain {
+	if domain == "" || baseDomain == "" || strings.EqualFold(domain, baseDomain) {
 		return host
 	}
+	lh, lb := strings.ToLower(host), strings.ToLower(baseDomain)
 	switch {
-	case host == baseDomain:
+	case lh == lb:
 		return domain
-	case strings.HasSuffix(host, "."+baseDomain):
-		return strings.TrimSuffix(host, baseDomain) + domain
+	case strings.HasSuffix(lh, "."+lb):
+		return strings.TrimSuffix(lh, lb) + domain
 	}
 	return host
+}
+
+// hostsDoc is the part of the generated values.yaml the host rewrite reads.
+type hostsDoc struct {
+	BaseDomain string `yaml:"baseDomain"`
+	Ingress    struct {
+		Rules []struct {
+			Host string `yaml:"host"`
+		} `yaml:"rules"`
+	} `yaml:"ingress"`
+}
+
+func readHostsDoc(dir string) (hostsDoc, error) {
+	var doc hostsDoc
+	vf, err := ResolveValues(dir)
+	if err != nil {
+		return doc, err
+	}
+	data, err := os.ReadFile(vf.Values)
+	if err != nil {
+		return doc, fmt.Errorf("k8s: read values: %w", err)
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return doc, fmt.Errorf("k8s: parse values: %w", err)
+	}
+	return doc, nil
 }
 
 // IngressHosts returns the sorted, unique hosts of ingress.rules in the
 // generated values.yaml of the project in dir, after RewriteHost with the
 // values' baseDomain and domain. No rule means no host (nil).
 func IngressHosts(dir, domain string) ([]string, error) {
-	vf, err := ResolveValues(dir)
+	doc, err := readHostsDoc(dir)
 	if err != nil {
 		return nil, err
-	}
-	data, err := os.ReadFile(vf.Values)
-	if err != nil {
-		return nil, fmt.Errorf("k8s: read values: %w", err)
-	}
-	var doc struct {
-		BaseDomain string `yaml:"baseDomain"`
-		Ingress    struct {
-			Rules []struct {
-				Host string `yaml:"host"`
-			} `yaml:"rules"`
-		} `yaml:"ingress"`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("k8s: parse values: %w", err)
 	}
 	seen := map[string]bool{}
 	var hosts []string
@@ -74,6 +87,20 @@ func IngressHosts(dir, domain string) ([]string, error) {
 	sort.Strings(hosts)
 	return hosts, nil
 }
+
+// DomainHasNoEffect reports that domain is set but the generated values carry
+// no baseDomain, so the chart has nothing to rewrite. An unreadable values file
+// is not reported here (install and upgrade fail on it themselves).
+func DomainHasNoEffect(dir, domain string) bool {
+	if domain == "" {
+		return false
+	}
+	doc, err := readHostsDoc(dir)
+	return err == nil && doc.BaseDomain == ""
+}
+
+// DomainNoEffectHint is the warning for DomainHasNoEffect.
+const DomainNoEffectHint = "--domain has no effect: the generated values have no baseDomain; run nself k8s values again"
 
 // NotPassed names the install-time values that opts leaves empty. An upgrade
 // applies values afresh, so these are not passed to helm. The licence Secret

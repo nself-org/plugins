@@ -21,7 +21,7 @@ services:
     image: registry.example.test/fake/mux
     tag: "0.0.1"
     plugin: mux
-    env: [PORT, NSELF_PLUGIN_LICENSE_KEY]
+    env: [PORT]
     ports:
       - {port: 3711, protocol: TCP}
 secrets:
@@ -29,4 +29,3 @@ secrets:
     PORT: "3051"
   mux:
     PORT: "3711"
-    NSELF_PLUGIN_LICENSE_KEY: fake-licence-0000

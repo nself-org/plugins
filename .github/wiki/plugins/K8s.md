@@ -170,19 +170,22 @@ config or manifest, which hold every secret of the stack.
   Create a Secret yourself, without the key on a command line, for example
   `kubectl create secret generic nself-license --from-env-file=<file holding NSELF_PLUGIN_LICENSE_KEY=...>`, then pass
   `--license-secret nself-license` on every install and upgrade. Every plugin workload gets `NSELF_PLUGIN_LICENSE_KEY` from
-  that Secret (`secretKeyRef`), unless the service already lists that env name. With the variable set and no
-  `--license-secret`, install and upgrade warn that the key is not sent.
+  that Secret (`secretKeyRef`, env name always `NSELF_PLUGIN_LICENSE_KEY`, key from `license.secretKey`). `nself k8s values`
+  never writes `NSELF_PLUGIN_LICENSE_KEY` as a value: it drops the env from the service and lists it under `notMapped`.
+  With the variable set and no `--license-secret`, install and upgrade warn that the key is not sent.
 
-The success line of `install` lists the ingress hosts as URLs (with `--domain` applied), or no URL when the project routes none.
+With `--domain` and no `baseDomain` in the generated values, install and upgrade warn that `--domain` has no effect
+(run `nself k8s values` again). The success line of `install` lists the ingress hosts as URLs (with `--domain` applied), or no URL when the project routes none.
 
 **Postgres init scripts.** The compose bind mount `./postgres/init:/docker-entrypoint-initdb.d` is carried. `nself k8s values`
 reads the `*.sql`, `*.sql.gz` and `*.sh` files of that directory (not recursive, sorted by name), writes only their names to
 `values.yaml` (`initdb`) and their contents to `secrets.yaml` (mode 0600, because an init script can hold a password). The
 chart renders one Secret `<release>-postgres-initdb` and mounts it read-only at `/docker-entrypoint-initdb.d`, so postgres runs
 the scripts on its first start (an existing data volume is not initialised again) and hasura-auth finds its schema. Other files
-are listed under `notMapped` as `initdb:<name>`. The scripts of one service may total at most 900 KiB (a Secret holds 1 MiB);
-`values` stops with the file name when they do not fit. Pass `-f secrets.yaml` to helm as always: a name in `values.yaml`
-without content in `secrets.yaml` fails the render. `values --check` compares the script names, not their contents.
+are listed under `notMapped` as `initdb:<name>`. The scripts of one service may total at most 512 KiB (helm keeps every value, `secrets.yaml` included, in one release Secret capped near 1 MiB, and a `.sql.gz`
+is stored as base64);
+`values` stops with the file name when they do not fit. Two such mounts on one service are an error. Pass `-f secrets.yaml` to helm as always: a name in `values.yaml`
+without content in `secrets.yaml` fails the render. `values --check` compares the script names, `baseDomain` and the plugin marker of each service, not script contents.
 
 ## Uninstall
 

@@ -17,8 +17,9 @@
 // UTF-8. Dot files are ignored (the postgres entrypoint glob never sees them);
 // every other entry (directory, symlink, other extension, unusual name) is
 // listed in notMapped. A missing source directory is an empty list plus
-// "initdb:source-missing". The scripts of one service may total at most 900 KiB
-// (a Secret holds 1 MiB); the error names the file and service, never content.
+// "initdb:source-missing". The scripts of one service may total at most 512 KiB
+// (see initDBLimit); the error names the file and service, never content. Two
+// initdb bind mounts on one service are an error.
 package values
 
 import (
@@ -38,8 +39,12 @@ const (
 	// initDBTarget is the container path the postgres image runs scripts from.
 	initDBTarget = "/docker-entrypoint-initdb.d"
 	// initDBLimit is the most the scripts of one service may total (bytes, as
-	// stored in the Secret).
-	initDBLimit = 900 << 10
+	// stored in secrets.yaml). It is 512 KiB, not the 1 MiB of a Secret, because
+	// helm keeps every value it is given, secrets.yaml included, in one release
+	// Secret that is capped near 1 MiB, and the rendered initdb Secret and the
+	// env Secrets are counted there too. A .sql.gz script is stored as base64,
+	// which adds a third and does not compress well in that release record.
+	initDBLimit = 512 << 10
 )
 
 // initDBName is what a Kubernetes Secret accepts as a data key.
@@ -71,10 +76,15 @@ func isInitDB(mt ComposeMount) bool {
 
 // addInitDB maps the init-script mount of cs, if it has one, onto svc and sec.
 func addInitDB(name string, cs ComposeSvc, svc *Service, sec *Secrets, open SourceFS) error {
+	seen := false
 	for _, mt := range cs.Volumes {
 		if !isInitDB(mt) {
 			continue
 		}
+		if seen {
+			return fmt.Errorf("service %s: more than one bind mount on %s", name, initDBTarget)
+		}
+		seen = true
 		fsys, err := open(mt.Source)
 		if err != nil {
 			return fmt.Errorf("service %s: initdb source directory cannot be opened: %w", name, err)

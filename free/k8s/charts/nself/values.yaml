@@ -14,9 +14,10 @@ domain: ""
 baseDomain: ""
 
 # license names a Kubernetes Secret that already exists in the release
-# namespace. When secretName is set, every workload named plugin-* gets the env
-# secretKey from it (secretKeyRef) unless it already lists that env name. The
-# key value is never a chart value: `nself k8s install --license-secret <name>`
+# namespace. When secretName is set, every plugin workload (named plugin-*, or
+# marked `plugin` in the generated values) gets the env NSELF_PLUGIN_LICENSE_KEY
+# from key secretKey of that Secret (secretKeyRef). `nself k8s values` never maps
+# that env as a value, so nothing else sets it. The key value is never a chart value: `nself k8s install --license-secret <name>`
 # writes only the Secret name here.
 license:
   secretName: ""
