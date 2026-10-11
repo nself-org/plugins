@@ -1,0 +1,66 @@
+name: k8s-kind
+
+# Proves `nself k8s values|install|upgrade` on a kind cluster (P7-DEPL-05, EPIC D7).
+# The job runs free/k8s/tests/kind/run.sh, the same script a developer runs locally:
+# it builds nself from nself-org/cli at cli_ref, lays the branch's k8s plugin out as
+# `nself add` does, generates the chart values, installs the embedded chart, waits for
+# every pod to be Ready and answers a GraphQL query. It never calls helm directly.
+# Legs: source=branch + leg=install is proven here; source=registry belongs to
+# P7-DEPL-99 and leg=day2 to P7-DEPL-07, so run.sh fails those loudly (exit 3).
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Where the k8s plugin comes from (registry runs in P7-DEPL-99)"
+        type: choice
+        options: [branch, registry]
+        default: branch
+      cli_ref:
+        description: "nself-org/cli commit to build (empty: CLI_REF_DEFAULT in free/k8s/tests/kind/tools.env)"
+        type: string
+        default: ""
+      leg:
+        description: "Which proof to run"
+        type: choice
+        options: [install, day2]
+        default: install
+  pull_request:
+    paths:
+      - "free/k8s/**"
+      - ".github/workflows/k8s-kind.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-kind-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind:
+    name: kind (${{ inputs.leg || 'install' }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/k8s/go.mod
+          cache: false
+
+      - name: Plugin unit tests
+        working-directory: free/k8s
+        run: CGO_ENABLED=0 go test -count=1 ./...
+
+      - name: kind install proof
+        env:
+          SOURCE: ${{ inputs.source || 'branch' }}
+          LEG: ${{ inputs.leg || 'install' }}
+          CLI_REF: ${{ inputs.cli_ref }}
+          # setup-go pins GOTOOLCHAIN=local; the cli build needs a newer Go than the plugin module.
+          GOTOOLCHAIN_CLI: auto
+        run: bash free/k8s/tests/kind/run.sh
