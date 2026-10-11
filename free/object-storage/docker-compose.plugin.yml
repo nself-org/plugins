@@ -21,7 +21,7 @@ services:
     volumes:
       - object_storage_data:/data/object-storage
     networks:
-      - nself_network
+      - ${DOCKER_NETWORK}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3301/health"]
       interval: 30s
@@ -31,7 +31,3 @@ services:
 
 volumes:
   object_storage_data:
-
-networks:
-  nself_network:
-    external: true
