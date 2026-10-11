@@ -22,12 +22,27 @@
 # Flags:   --self-test  prove the comparator and the gate: a planted difference must be flagged, a binary compared with
 #          itself must pass, and eight head mutants (destroy gate removed; primary IP step skipped; refusal text changed;
 #          snapshot timeout treated as available; snapshot action error ignored; snapshot failure ignored; primary IP
-#          write failure ignored; IPs released by default) must FAIL the parity run.
+#          write failure ignored; IPs released by default) must FAIL the parity run; for --json, the real head must pass,
+#          and an ok envelope where core failed, an extra request and a data difference must each be flagged.
 # Output:  "ok <case>" per case, DIFF blocks, "parity: PASS (N cases)" or "parity: FAIL".
 # Exit:    0 all equal, 1 a difference or an empty capture, 2 usage or build failure.
 # Documented differences (normalised, nothing else is): the usage path `nself infra server` is read as `nself server`;
 #   core's "Global Flags:" help block (root persistent flags a plugin root does not have) is dropped up to its blank
-#   line; header-box padding before the closing bar is collapsed; the fixture port is masked.
+#   line; header-box padding before the closing bar is collapsed; the fixture port is masked. Added with the v1
+#   envelope (P7-SURF-29) and --user-data-file (P7-SCHED-19, plugins#160), D-0416:
+#   - help cases only: the `--json` flag line (core: "output as JSON", plugin: the v1 envelope text) is dropped from
+#     both sides, the plugin-only `--user-data-file` flag line is dropped, and the run of spaces between a flag and its
+#     description is collapsed to one (the plugin-only flag widens pflag's column, which shifts every other line).
+#   - `--json` cases do NOT diff stdout with core. scripts/parity-envelope.py requires the head's stdout to be exactly
+#     one v1 envelope; core exit 0 <=> envelope ok and head exit 0; core exit 1 <=> error envelope, head exit equal to
+#     the envelope's exit_code, which must match its class (user 1, infra 2, auth 3, destructive_blocked 4; see
+#     cmd/errcodes.go) and not be 0. On success core's legacy JSON must equal the envelope data under the SURF-29
+#     mapping (provision: data.server; list: data.servers; resize: data.action; destroy: SnapshotID/RetainedIPs/
+#     ReleasedIPs = snapshot_id/retained_ips/released_ips, null = []; the extra data keys user_data, count, server_id,
+#     target_type must be present and nothing else). Error text is not compared (core: "Error: ..." on stderr; head: the
+#     envelope message), so stderr of a --json case is compared only when core succeeded.
+#   - NOT relaxed for any case, --json included: the full recorded request sequence is byte-exact (no extra call, no
+#     extra DELETE), and the per-case expectations (refuse: no request; nodelete: no DELETE; delete: DELETE last).
 set -euo pipefail
 
 MODE=run
@@ -87,9 +102,13 @@ runbin() {
   set +e
   env -i "${envs[@]}" "$bin" server "$@" </dev/null > "$pre.out" 2> "$pre.err"; echo $? > "$pre.rc"; set -e
 }
-norm() { # normalise stdin per the documented differences
+norm() { # normalise stdin per the documented differences; NORM_HELP=1 (help cases only) adds the plugin-only flag lines
   sed -E -e 's/nself infra server/nself server/g' -e "s#127\\.0\\.0\\.1:$PORT#127.0.0.1:PORT#g" -e 's/ +║/ ║/g' \
-    | awk 'BEGIN{skip=0} /^Global Flags:$/ {skip=1; next} skip && /^$/ {skip=0; next} !skip {print}' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+    | awk 'BEGIN{skip=0} /^Global Flags:$/ {skip=1; next} skip && /^$/ {skip=0; next} !skip {print}' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' \
+    | if [ "${NORM_HELP:-0}" = 1 ]; then
+        # drop exactly the --json and --user-data-file flag lines, then undo the column padding they change
+        grep -v -E '^ +--(json|user-data-file) ' | sed -E 's/^( +(-[A-Za-z], )?--[a-z][a-z-]*( [A-Za-z]+)?) {2,}/\1 /' || true
+      else cat; fi
 }
 
 # ---- preflight: both binaries must hit the fixture, or nothing network-capable runs -----------------------
@@ -108,13 +127,27 @@ pcase() {
   local name=$1 expect=$2 tok=$3; shift 3
   : > "$FLOG"; runbin "$CORE" "$WORK/c" "$tok" "$@"; cp "$FLOG" "$WORK/c.req"
   : > "$FLOG"; runbin "$HEADBIN" "$WORK/h" "$tok" "$@"; cp "$FLOG" "$WORK/h.req"
-  CASES=$((CASES + 1)); local bad=0 k
-  for k in out err; do
-    norm < "$WORK/c.$k" > "$WORK/c.$k.n"; norm < "$WORK/h.$k" > "$WORK/h.$k.n"
-    if ! $DIFF -u "$WORK/c.$k.n" "$WORK/h.$k.n" > "$WORK/d.$k"; then bad=1; echo "DIFF $name ($k):"; head -30 "$WORK/d.$k"; fi
-  done
+  CASES=$((CASES + 1)); local bad=0 k a js=0 hp=0
+  for a in "$@"; do [ "$a" = --json ] && js=1; [ "$a" = --help ] && hp=1; done
+  if [ "$js" = 1 ]; then
+    # --json: the head prints one v1 envelope, core its legacy JSON; check the contract and the SURF-29 mapping
+    if ! python3 "$HERE/scripts/parity-envelope.py" "$1" "$WORK/c.out" "$WORK/h.out" "$(cat "$WORK/c.rc")" "$(cat "$WORK/h.rc")" > "$WORK/d.env" 2>&1; then
+      bad=1; echo "DIFF $name (envelope):"; head -20 "$WORK/d.env"
+    fi
+    # stderr is compared when core succeeded; a core failure prints "Error: ..." there and the head's envelope replaces it
+    if [ "$(cat "$WORK/c.rc")" = 0 ]; then
+      norm < "$WORK/c.err" > "$WORK/c.err.n"; norm < "$WORK/h.err" > "$WORK/h.err.n"
+      if ! $DIFF -u "$WORK/c.err.n" "$WORK/h.err.n" > "$WORK/d.err"; then bad=1; echo "DIFF $name (err):"; head -30 "$WORK/d.err"; fi
+    fi
+  else
+    for k in out err; do
+      NORM_HELP=$hp norm < "$WORK/c.$k" > "$WORK/c.$k.n"; NORM_HELP=$hp norm < "$WORK/h.$k" > "$WORK/h.$k.n"
+      if ! $DIFF -u "$WORK/c.$k.n" "$WORK/h.$k.n" > "$WORK/d.$k"; then bad=1; echo "DIFF $name ($k):"; head -30 "$WORK/d.$k"; fi
+    done
+    if [ "$(cat "$WORK/c.rc")" != "$(cat "$WORK/h.rc")" ]; then bad=1; echo "DIFF $name (exit): core=$(cat "$WORK/c.rc") head=$(cat "$WORK/h.rc")"; fi
+  fi
+  # the request sequence is byte-exact for every case: it is the safety property (no extra DELETE, no extra call)
   if ! $DIFF -u "$WORK/c.req" "$WORK/h.req" > "$WORK/d.req"; then bad=1; echo "DIFF $name (request sequence):"; head -30 "$WORK/d.req"; fi
-  if [ "$(cat "$WORK/c.rc")" != "$(cat "$WORK/h.rc")" ]; then bad=1; echo "DIFF $name (exit): core=$(cat "$WORK/c.rc") head=$(cat "$WORK/h.rc")"; fi
   case $expect in
     refuse) [ ! -s "$WORK/h.req" ] || { bad=1; echo "DIFF $name: refusal path sent a request: $(head -1 "$WORK/h.req")"; };;
     nodelete) ! grep -q '^DELETE ' "$WORK/h.req" || { bad=1; echo "DIFF $name: a DELETE was sent on a must-not-delete path"; };;
@@ -204,6 +237,20 @@ case "$OUTB" in *DIFF*) echo "ok selftest: planted output difference flagged";; 
 printf '#!/bin/sh\nexec "%s" "$@" | sed "s/NOT deleted/deleted/"\n' "$CORE" > "$WORK/bin/nself-infra"
 OUTC=$(pcase "planted failure text" nodelete tok destroy --id 2 --snapshot 2>&1 || true)
 case "$OUTC" in *DIFF*) echo "ok selftest: planted failure-text difference flagged";; *) echo "SELFTEST FAIL: planted failure-text difference not flagged"; fails=$((fails + 1));; esac
+# (a2) --json cases: the head's real binary passes, and each planted --json difference is flagged
+cp "$WORK/bin/nself-infra.real" "$WORK/bin/nself-infra"
+OUTD=$(pcase "json control" nodelete tok list --json 2>&1 || true)
+case "$OUTD" in ok*) echo "ok selftest: real head passes a --json case";; *) echo "SELFTEST FAIL: real head fails a --json control: $OUTD"; fails=$((fails + 1));; esac
+printf '#!/bin/sh\nprintf "%%s\\n" '"'"'{"schema_version":"1","command":"infra server destroy","data":{}}'"'"'\nexit 0\n' > "$WORK/bin/nself-infra"
+OUTE=$(pcase "planted ok envelope" refuse tok destroy --id 1 --json 2>&1 || true)
+case "$OUTE" in *"DIFF planted ok envelope (envelope)"*) echo "ok selftest: ok envelope where core failed flagged";; *) echo "SELFTEST FAIL: ok envelope where core failed not flagged: $OUTE"; fails=$((fails + 1));; esac
+printf '#!/bin/sh\n"%s" "$@"; rc=$?\n/usr/bin/curl -s -o /dev/null "%s/servers"\nexit $rc\n' "$WORK/bin/nself-infra.real" "$BASEURL" > "$WORK/bin/nself-infra"
+OUTF=$(pcase "planted extra request" nodelete tok list --json 2>&1 || true)
+case "$OUTF" in *"DIFF planted extra request (request sequence)"*) echo "ok selftest: extra --json request flagged";; *) echo "SELFTEST FAIL: extra --json request not flagged: $OUTF"; fails=$((fails + 1));; esac
+printf '#!/bin/sh\n"%s" "$@" | sed "s/srv-1/srv-X/"\n' "$WORK/bin/nself-infra.real" > "$WORK/bin/nself-infra"
+OUTG=$(pcase "planted data difference" nodelete tok list --json 2>&1 || true)
+case "$OUTG" in *"DIFF planted data difference (envelope)"*) echo "ok selftest: --json data difference flagged";; *) echo "SELFTEST FAIL: --json data difference not flagged: $OUTG"; fails=$((fails + 1));; esac
+cp "$WORK/bin/nself-infra.real" "$WORK/bin/nself-infra"
 # (b) head mutants must fail the full parity run (core behaviour is the oracle); children reuse this core and port
 kill "$FIX_PID" 2>/dev/null || true; wait "$FIX_PID" 2>/dev/null || true; FIX_PID=
 mutant() { # mutant <label> <file under internal/server> <sed -E expr>
