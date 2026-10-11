@@ -29,6 +29,10 @@ const udMarker = "NSELFCI-FIXTURE-USERDATA"
 // udCode is a fake provider error code that must never reach output.
 const udCode = "nselfci_fixture_code"
 
+// udProbe is a fake lowercase token placed where a too-wide code capture would
+// take it; it must never reach output.
+const udProbe = "nselfci_capture_probe"
+
 const udContent = "#cloud-config\n# " + udMarker + " fake pairing code 000000\n"
 
 // udRecorder records the user data and the number of CreateServer calls.
@@ -128,22 +132,32 @@ func TestProvisionUserDataNoEcho(t *testing.T) {
 		jsonEsc := func(u string) string { b, _ := json.Marshal(u); return string(b) }
 		cases := []struct {
 			name  string
+			code  string // envelope code expected in --json mode
 			build func(u string) error
 		}{
-			{"plain echo", func(u string) error {
+			{"plain echo", "E744", func(u string) error {
 				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input: bad user_data %s", u)
 			}},
-			{"json-escaped echo", func(u string) error {
+			{"json-escaped echo", "E744", func(u string) error {
 				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input: bad user_data %s", jsonEsc(u))
 			}},
-			{"raw body fallback", func(u string) error {
+			{"raw body fallback", "E744", func(u string) error {
 				return fmt.Errorf("hetzner API POST /servers: 502: <html>%s</html>", u)
 			}},
-			{"network error", func(u string) error {
+			{"network error", "E744", func(u string) error {
 				return fmt.Errorf("hetzner API POST /servers: network error: %s", u)
 			}},
-			{"network error echoing a status-shaped line", func(u string) error {
+			{"network error echoing a status-shaped line", "E744", func(u string) error {
 				return fmt.Errorf("hetzner API POST /servers: network error: %s\nhetzner API GET /x: 200 %s", u, udCode)
+			}},
+			{"no status or network head (generic fallback)", "E749", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: decode response: %s", u)
+			}},
+			{"probe after status colon", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422: %s %s", udProbe, u)
+			}},
+			{"probe after code and space", "E744", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input %s: %s", udProbe, u)
 			}},
 		}
 		for _, tc := range cases {
@@ -155,7 +169,7 @@ func TestProvisionUserDataNoEcho(t *testing.T) {
 					args = append(args, "--json")
 				}
 				res, leaked := runCaptured(t, fc, args...)
-				if leaked || strings.Contains(res.Stdout+res.Stderr, udCode) {
+				if leaked || strings.Contains(res.Stdout+res.Stderr, udCode) || strings.Contains(res.Stdout+res.Stderr, udProbe) {
 					t.Fatalf("%s: marker or fake code found in output or log (json=%v)", tc.name, js)
 				}
 				if res.Exit == 0 || fc.calls != 1 {
@@ -163,8 +177,8 @@ func TestProvisionUserDataNoEcho(t *testing.T) {
 				}
 				if js {
 					d := decodeEnv(t, res.Stdout)
-					if d.Error == nil || d.Error.Code != "E744" {
-						t.Fatalf("%s: envelope has error=%v, want code E744", tc.name, d.Error != nil)
+					if d.Error == nil || d.Error.Code != tc.code {
+						t.Fatalf("%s: envelope has error=%v, want code %s", tc.name, d.Error != nil, tc.code)
 					}
 				}
 			}
