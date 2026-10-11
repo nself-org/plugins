@@ -59,7 +59,8 @@ type route struct {
 		HTTP  bool `json:"http"`
 		HTTPS bool `json:"https"`
 	} `json:"listen"`
-	TLS *struct {
+	HTTPToHTTPSRedirect bool `json:"http_to_https_redirect"`
+	TLS                 *struct {
 		SSLDir string `json:"ssl_dir"`
 	} `json:"tls"`
 	RateLimit *struct {
@@ -88,7 +89,8 @@ type route struct {
 		StaticRoot   *string `json:"static_root"`
 		MaxBodyBytes *int64  `json:"max_body_bytes"`
 		Return       *struct {
-			Status int `json:"status"`
+			Status int     `json:"status"`
+			To     *string `json:"to"`
 		} `json:"return"`
 	} `json:"locations"`
 }

@@ -214,14 +214,23 @@ func (b *builder) route(r contract.Route) {
 		// The server owns every path of its names: a path none of its locations matches is a 404
 		// here, never a fall-through to a wildcard route or to the default server. Like every other
 		// answer of the server it carries the security headers (nginx add_header ... always).
+		// nginx answers 413 on Content-Length before this 404 or redirect, so the server-level body
+		// limit leads both chains (the redirect uses the limit of its "/" return location).
+		defBuf := b.bufferIf(b.m.Defaults.MaxBodyBytes)
 		for _, ln := range ls {
-			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, withSec(sec, b.respondMW(404)), b.responder())
+			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, lead(defBuf, withSec(sec, b.respondMW(404))...), b.responder())
 		}
 		if r.HTTPToHTTPSRedirect && r.Listen.HTTP {
-			status := redirectStatus(r)
+			status, redirBuf := 301, defBuf
+			if rl := redirectLoc(r); rl != nil {
+				status = rl.Return.Status
+				if rl.MaxBodyBytes != nil {
+					redirBuf = b.bufferIf(*rl.MaxBodyBytes)
+				}
+			}
 			for _, l := range ls {
 				if !l.secure {
-					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, withSec(sec, b.redirectMW(r.ID, "http_to_https_redirect", status)), b.responder())
+					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, lead(redirBuf, withSec(sec, b.redirectMW(r.ID, "http_to_https_redirect", status))...), b.responder())
 				}
 			}
 		}
@@ -236,14 +245,14 @@ func withSec(sec string, mws ...string) []string {
 	return append([]string{sec}, mws...)
 }
 
-// redirectStatus is the status of the server-level https redirect: the Return.Status of the "/"
-// location that redirects to https://$host$request_uri, as the CLI sets the flag from that
-// return (301 when the model carries no such location).
-func redirectStatus(r contract.Route) int {
-	for _, l := range r.Locations {
+// redirectLoc is the "/" location that redirects to https://$host$request_uri, from which the CLI
+// sets the server-level https redirect (status and body limit); nil when the model carries none
+// (the redirect is then a 301 under the default body limit).
+func redirectLoc(r contract.Route) *contract.Location {
+	for i, l := range r.Locations {
 		if l.Path == "/" && l.Match == "prefix" && l.Return != nil && l.Return.To != nil && *l.Return.To == "https://$host$request_uri" {
-			return l.Return.Status
+			return &r.Locations[i]
 		}
 	}
-	return 301
+	return nil
 }

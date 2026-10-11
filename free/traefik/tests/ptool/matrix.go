@@ -183,7 +183,11 @@ func plain(q req) func() req { return func() req { return q } }
 
 // wsCheck performs an upgrade handshake and one echoed frame-less exchange against t.
 func dialRaw(t target, scheme, host string) (net.Conn, error) {
-	port := map[string]string{"http": "80", "https": "443"}[scheme]
+	return dialPort(t, scheme, host, map[string]string{"http": "80", "https": "443"}[scheme])
+}
+
+// dialPort is dialRaw to an explicit port (the Traefik upload entrypoint is 8444).
+func dialPort(t target, scheme, host, port string) (net.Conn, error) {
 	c, err := net.DialTimeout("tcp", t.name+":"+port, 5*time.Second)
 	if err != nil {
 		return nil, err
