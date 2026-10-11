@@ -46,6 +46,7 @@ func TestMain(m *testing.M) {
 
 // stubHelm records argv (one block per call, blocks end with "--"), drains
 // stdin, then behaves by STUB_HELM: "fail" exits 1 with a message on stderr;
+// "notfound" exits 1 with helm's release-not-found message;
 // status prints the file STUB_STATUS_FILE; anything else prints one line on
 // stdout and one on stderr and exits 0.
 const stubHelm = `#!/bin/sh
@@ -55,6 +56,10 @@ fi
 cat >/dev/null
 if [ "$STUB_HELM" = "fail" ]; then
   echo "stub helm: boom" >&2
+  exit 1
+fi
+if [ "$STUB_HELM" = "notfound" ]; then
+  echo "Error: release: not found" >&2
   exit 1
 fi
 if [ "$1" = "status" ]; then
@@ -81,7 +86,7 @@ const helmStatusJSON = `{"name":"nself","namespace":"default","version":3,"chart
 
 // cliRun configures one invocation.
 type cliRun struct {
-	Helm      string // "" (none on PATH), "ok", "fail"
+	Helm      string // "" (none on PATH), "ok", "fail", "notfound"
 	Docker    string // "" (none on PATH), "ok", "fail"
 	StatusDoc string // helm status output; default helmStatusJSON
 	Env       []string
@@ -124,8 +129,8 @@ func runCLI(t *testing.T, o cliRun, args ...string) cliResult {
 		"STUB_STATUS_FILE=" + status,
 		"STUB_COMPOSE_JSON=" + compose,
 	}
-	if o.Helm == "fail" {
-		env = append(env, "STUB_HELM=fail")
+	if o.Helm == "fail" || o.Helm == "notfound" {
+		env = append(env, "STUB_HELM="+o.Helm)
 	}
 	if o.Docker == "fail" {
 		env = append(env, "STUB_DOCKER=fail")
@@ -157,8 +162,7 @@ func writeFile(t *testing.T, path, body string, mode os.FileMode) {
 }
 
 // newProject copies the compose manifests of testdata/full into a temp project
-// (no generated values yet) and returns its absolute path. The compose JSON
-// path for the stub is relative to cmd/, so tests run it with Dir unset.
+// (no generated values yet) and returns its absolute path.
 func newProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

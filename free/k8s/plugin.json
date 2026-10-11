@@ -1,21 +1,253 @@
 {
-  "name": "k8s",
-  "version": "1.2.6",
-  "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: install, upgrade, and status commands wrapping helm.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.2.8",
-  "language": "go",
-  "pluginType": "cli",
-  "entryPoint": "cmd/",
   "binaryName": "nself-k8s",
   "category": "infrastructure",
+  "commands": {
+    "binary": "nself-k8s",
+    "command": "k8s",
+    "json": "legacy",
+    "output": "document",
+    "side_effect": "remote",
+    "subcommands": [
+      {
+        "flags": [
+          {
+            "default": "false",
+            "name": "check",
+            "type": "bool",
+            "usage": "Compare an existing values.yaml with the compose model; exit 1 on any difference"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "name": "out",
+            "type": "string",
+            "usage": "Output directory (default <project-dir>/.nself/generated/k8s)"
+          },
+          {
+            "default": ".",
+            "name": "project-dir",
+            "type": "string",
+            "usage": "nSelf project directory (holds .nself/generated/k8s)"
+          }
+        ],
+        "json": "legacy",
+        "name": "values",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Generate chart values from the project's compose model"
+      },
+      {
+        "flags": [
+          {
+            "name": "cluster",
+            "type": "string",
+            "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "name": "domain",
+            "type": "string",
+            "usage": "Domain, recorded in the release values (required for install; the chart does not consume it yet, D-0311)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "name": "plugins",
+            "type": "string",
+            "usage": "Comma-separated plugins, recorded in the release values (the chart does not consume them yet, D-0311)"
+          },
+          {
+            "default": ".",
+            "name": "project-dir",
+            "type": "string",
+            "usage": "nSelf project directory (holds .nself/generated/k8s)"
+          },
+          {
+            "default": "nself",
+            "name": "release",
+            "type": "string",
+            "usage": "Helm release name"
+          },
+          {
+            "default": "10m",
+            "name": "timeout",
+            "type": "string",
+            "usage": "How long helm waits for readiness"
+          },
+          {
+            "default": "true",
+            "name": "wait",
+            "type": "bool",
+            "usage": "Wait until every workload is ready"
+          }
+        ],
+        "json": "legacy",
+        "name": "install",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Install nSelf on a Kubernetes cluster"
+      },
+      {
+        "flags": [
+          {
+            "name": "cluster",
+            "type": "string",
+            "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "name": "domain",
+            "type": "string",
+            "usage": "Domain, recorded in the release values (required for install; the chart does not consume it yet, D-0311)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "name": "plugins",
+            "type": "string",
+            "usage": "Comma-separated plugins, recorded in the release values (the chart does not consume them yet, D-0311)"
+          },
+          {
+            "default": ".",
+            "name": "project-dir",
+            "type": "string",
+            "usage": "nSelf project directory (holds .nself/generated/k8s)"
+          },
+          {
+            "default": "nself",
+            "name": "release",
+            "type": "string",
+            "usage": "Helm release name"
+          },
+          {
+            "default": "10m",
+            "name": "timeout",
+            "type": "string",
+            "usage": "How long helm waits for readiness"
+          },
+          {
+            "default": "true",
+            "name": "wait",
+            "type": "bool",
+            "usage": "Wait until every workload is ready"
+          }
+        ],
+        "json": "legacy",
+        "name": "upgrade",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Upgrade the nSelf Helm release"
+      },
+      {
+        "flags": [
+          {
+            "name": "cluster",
+            "type": "string",
+            "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "default": "nself",
+            "name": "release",
+            "type": "string",
+            "usage": "Helm release name"
+          }
+        ],
+        "json": "legacy",
+        "name": "status",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the Helm release status"
+      },
+      {
+        "confirm": {
+          "flags": [
+            "yes"
+          ]
+        },
+        "flags": [
+          {
+            "name": "cluster",
+            "type": "string",
+            "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress and helm output go to stderr)"
+          },
+          {
+            "default": "nself",
+            "name": "release",
+            "type": "string",
+            "usage": "Helm release name"
+          },
+          {
+            "default": "false",
+            "name": "yes",
+            "shorthand": "y",
+            "type": "bool",
+            "usage": "Confirm the removal (required without a terminal)"
+          }
+        ],
+        "json": "legacy",
+        "name": "uninstall",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Remove the nSelf Helm release"
+      }
+    ],
+    "summary": "Deploy and manage nSelf on Kubernetes with the embedded Helm chart"
+  },
+  "description": "Deploy and manage nSelf on any Kubernetes cluster via the official Helm chart: values, install, upgrade, status and uninstall commands wrapping helm.",
+  "entryPoint": "cmd/",
+  "envVars": [
+    {
+      "description": "Optional. Not written to the release until the chart reads it (D-0311)",
+      "name": "NSELF_PLUGIN_LICENSE_KEY",
+      "required": false
+    },
+    {
+      "description": "Optional. Kubeconfig helm uses when --cluster is not given",
+      "name": "KUBECONFIG",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "planned",
+  "minNselfVersion": "1.2.8",
+  "name": "k8s",
+  "pluginType": "cli",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.2.8"
+  },
+  "service": {
+    "kind": "cli"
+  },
+  "status": "planned",
   "tags": [
     "kubernetes",
     "k8s",
@@ -23,30 +255,6 @@
     "deploy",
     "cluster"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {
-    "install": "Install the nSelf Helm chart on a Kubernetes cluster",
-    "upgrade": "Upgrade the nSelf Helm release with a rolling update",
-    "status": "Show the Helm release status"
-  },
-  "envVars": {
-    "required": [],
-    "optional": [
-      "NSELF_PLUGIN_LICENSE_KEY",
-      "KUBECONFIG"
-    ]
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "status": "planned",
   "tier": "free",
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install k8s` must place the built nself-k8s binary at ~/.nself/plugins/bin/nself-k8s, where internal/plugin/router.go's ProxyCommand execs it for `nself k8s <args>` with stdio inherited. Extracted from cli/cmd/commands/k8s.go, cli/internal/k8s/, and cli/charts/nself/ under CLI-R11. Status is 'planned' (not 'stable') because the source command itself was PLANNED \u2014 deferred pending UD-12 minor release approval. The chart has a Postgres StatefulSet+Service, a Hasura Deployment+Service, an Auth Deployment, and an nginx Ingress (+ optional cert-manager Certificate) \u2014 it has not been helm-lint/template validated against a real cluster since extraction."
+  "version": "1.2.6"
 }

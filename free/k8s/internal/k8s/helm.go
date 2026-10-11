@@ -24,6 +24,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -58,7 +59,32 @@ type InstallOptions struct {
 	// Wait makes helm wait until the release is ready; Timeout bounds it.
 	Wait    bool
 	Timeout string
+	// Stdout receives helm's standard output (default os.Stdout). The --json
+	// mode points it at stderr so stdout carries only the envelope.
+	Stdout io.Writer
 }
+
+// HelmError is a failed helm invocation. Error() is the exact text the plugin
+// printed before errors were classified; the fields let cmd pick an error code
+// without parsing that text.
+type HelmError struct {
+	Verb string // install, upgrade, status, uninstall
+	Err  error  // the exec error (an *exec.ExitError for a non-zero helm exit)
+	// NotFound is true when helm said the release does not exist.
+	NotFound bool
+	text     string
+}
+
+func (e *HelmError) Error() string { return e.text }
+func (e *HelmError) Unwrap() error { return e.Err }
+
+// ValuesError is a generated-values problem other than a missing file (a
+// secrets.yaml that others can read, an unreadable file). Error() is the inner
+// text, unchanged.
+type ValuesError struct{ Err error }
+
+func (e *ValuesError) Error() string { return e.Err.Error() }
+func (e *ValuesError) Unwrap() error { return e.Err }
 
 // helmBinary locates the helm binary.
 func helmBinary() (string, error) {
@@ -89,7 +115,10 @@ func run(ctx context.Context, verb string, opts InstallOptions) error {
 	}
 	vf, err := ResolveValues(opts.ProjectDir)
 	if err != nil {
-		return err
+		if errors.Is(err, ErrValuesMissing) {
+			return err
+		}
+		return &ValuesError{Err: err}
 	}
 	root := opts.ChartRoot
 	if root == "" {
@@ -107,7 +136,10 @@ func run(ctx context.Context, verb string, opts InstallOptions) error {
 	args := buildArgs(verb, opts, chartDir, vf, len(overlay) > 0)
 	announceTarget(os.Stderr, opts.Kubeconfig)
 	cmd := exec.CommandContext(ctx, helm, args...)
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = opts.Stdout
+	if cmd.Stdout == nil {
+		cmd.Stdout = os.Stdout
+	}
 	cmd.Stderr = os.Stderr
 	cmd.Env = helmEnv(os.Environ())
 	if len(overlay) > 0 {
@@ -124,15 +156,15 @@ func run(ctx context.Context, verb string, opts InstallOptions) error {
 // still in use") and upgrade ("has no deployed releases"), so say how to leave it.
 func runError(verb string, opts InstallOptions, err error) error {
 	if verb != "install" {
-		return fmt.Errorf("k8s: helm %s: %w", verb, err)
+		return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm %s: %v", verb, err)}
 	}
 	release := opts.ReleaseName
 	if release == "" {
 		release = HelmReleaseName
 	}
-	return fmt.Errorf("k8s: helm install: %w\nIf the release was left in a failed state, remove it with 'helm uninstall %s' "+
+	return &HelmError{Verb: verb, Err: err, text: fmt.Sprintf("k8s: helm install: %v\nIf the release was left in a failed state, remove it with 'helm uninstall %s' "+
 		"(add --kubeconfig for your cluster) and run 'nself k8s install' again; 'nself k8s upgrade' only works once a "+
-		"revision is deployed", err, release)
+		"revision is deployed", err, release)}
 }
 
 // announceTarget tells which kubeconfig helm will use, so a stale current
