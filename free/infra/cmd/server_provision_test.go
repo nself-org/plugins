@@ -227,7 +227,6 @@ func TestProvisionUserDataNoEcho(t *testing.T) {
 type refusalCase struct {
 	name string
 	args []string
-	env  bool // asserts the E401 envelope code in --json mode
 }
 
 // refusalCases builds the fixtures for every refused input. Files carry the marker
@@ -243,24 +242,24 @@ func refusalCases(t *testing.T) []refusalCase {
 	notUTF8 := append([]byte(udContent), 0xff, 0xfe)
 	flag := "--user-data-file"
 	cases := []refusalCase{
-		{"mode 0644", []string{flag, udWrite(t, "m644", []byte(udContent), 0o644)}, true},
-		{"mode 0640", []string{flag, udWrite(t, "m640", []byte(udContent), 0o640)}, true},
-		{"mode 0700", []string{flag, udWrite(t, "m700", []byte(udContent), 0o700)}, true},
-		{"mode 0500", []string{flag, udWrite(t, "m500", []byte(udContent), 0o500)}, true},
-		{"directory", []string{flag, t.TempDir()}, true},
-		{"symlink", []string{flag, link}, true},
-		{"too large", []string{flag, udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600)}, true},
-		{"empty", []string{flag, udWrite(t, "empty", nil, 0o600)}, true},
-		{"invalid utf-8", []string{flag, udWrite(t, "bin", notUTF8, 0o600)}, false},
-		{"missing", []string{flag, filepath.Join(dir, "absent")}, false},
-		{"empty path", []string{flag, ""}, false},
+		{"mode 0644", []string{flag, udWrite(t, "m644", []byte(udContent), 0o644)}},
+		{"mode 0640", []string{flag, udWrite(t, "m640", []byte(udContent), 0o640)}},
+		{"mode 0700", []string{flag, udWrite(t, "m700", []byte(udContent), 0o700)}},
+		{"mode 0500", []string{flag, udWrite(t, "m500", []byte(udContent), 0o500)}},
+		{"directory", []string{flag, t.TempDir()}},
+		{"symlink", []string{flag, link}},
+		{"too large", []string{flag, udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600)}},
+		{"empty", []string{flag, udWrite(t, "empty", nil, 0o600)}},
+		{"invalid utf-8", []string{flag, udWrite(t, "bin", notUTF8, 0o600)}},
+		{"missing", []string{flag, filepath.Join(dir, "absent")}},
+		{"empty path", []string{flag, ""}},
 	}
 	for _, sp := range []struct {
 		name string
 		bit  os.FileMode
 	}{{"setuid", os.ModeSetuid}, {"setgid", os.ModeSetgid}, {"sticky", os.ModeSticky}} {
 		if p := udWriteSpecial(t, sp.name, sp.bit); p != "" {
-			cases = append(cases, refusalCase{"mode 0600 + " + sp.name, []string{flag, p}, true})
+			cases = append(cases, refusalCase{"mode 0600 + " + sp.name, []string{flag, p}})
 		}
 	}
 	return cases
