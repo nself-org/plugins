@@ -92,7 +92,31 @@ func runGoGates(root string, timeout int, verbose bool) []GateResult {
 		runStep("go:vet", root, timeout, verbose, "go", "vet", "./..."),
 		runStep("go:test", root, timeout, verbose, "go", "test", "-count=1", "-timeout", fmt.Sprintf("%ds", goTestTimeout(timeout)), "./..."),
 	}
+	gates = append(gates, runRepoGoScripts(root, timeout, verbose)...)
 	markSubstantive(gates)
+	return gates
+}
+
+// repoGoScripts are gate scripts a Go repo owns. Each runs, with bash from the
+// repo root, only when the repo ships it, so nself ci and the repo's GitHub
+// workflow apply one rule. The cli ships both (D-0482, D-0483).
+var repoGoScripts = []struct{ name, path string }{
+	// vendor/ must equal `go mod vendor`: catches a replaced sdk module whose
+	// fix never reached the vendored copy the binary builds from.
+	{"go:vendor-sync", "scripts/ci/vendor-sync-check.sh"},
+	// sdk/go/remote mutation gate, driven by its allowlist header.
+	{"go:sdk-remote-mutation", "scripts/ci/sdk-remote-mutation.sh"},
+}
+
+// runRepoGoScripts runs every repoGoScripts entry present under root.
+func runRepoGoScripts(root string, timeout int, verbose bool) []GateResult {
+	var gates []GateResult
+	for _, s := range repoGoScripts {
+		if !fileExists(filepath.Join(root, filepath.FromSlash(s.path))) {
+			continue
+		}
+		gates = append(gates, runStep(s.name, root, timeout, verbose, "bash", s.path))
+	}
 	return gates
 }
 

@@ -185,3 +185,77 @@ func TestGitleaksE2E_CleanRepoWithGitignoredSecretLookalike(t *testing.T) {
 
 	t.Logf("gitleaks e2e: PASS in %s (git-mode correctly skipped gitignored build/output.js)", elapsed.Round(time.Millisecond))
 }
+
+// writeScript writes an executable-by-bash script at root/rel.
+func writeScript(t *testing.T, root, rel, body string) {
+	t.Helper()
+	p := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("#!/usr/bin/env bash\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A repo that ships no gate scripts gets no extra gates (and no skipped noise).
+func TestRunRepoGoScripts_NoneShipped(t *testing.T) {
+	if got := runRepoGoScripts(t.TempDir(), 30, false); len(got) != 0 {
+		t.Fatalf("want no gates for a repo without scripts, got %+v", got)
+	}
+}
+
+// D-0482/D-0483: a shipped script runs from the repo root and its exit code is
+// the verdict; a failing script fails the gate.
+func TestRunRepoGoScripts_ShippedScriptsDecide(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("skip: bash not on PATH")
+	}
+	root := t.TempDir()
+	writeScript(t, root, "scripts/ci/vendor-sync-check.sh", `[ -f go.mod ] || exit 3; echo in-sync`)
+	writeScript(t, root, "scripts/ci/sdk-remote-mutation.sh", `echo "LIVED mutant"; exit 1`)
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := runRepoGoScripts(root, 30, false)
+	if len(got) != 2 {
+		t.Fatalf("want 2 gates, got %+v", got)
+	}
+	if got[0].Name != "go:vendor-sync" || !got[0].Passed || got[0].Output != "in-sync" {
+		t.Errorf("vendor-sync gate: %+v", got[0])
+	}
+	if got[1].Name != "go:sdk-remote-mutation" || got[1].Passed || !strings.Contains(got[1].Output, "LIVED") {
+		t.Errorf("mutation gate must fail on exit 1: %+v", got[1])
+	}
+}
+
+// The scripts are part of the Go stack's gates and count as substantive, so a
+// red vendor check fails the run like a red go test.
+func TestRunGoGates_IncludesRepoScripts(t *testing.T) {
+	for _, bin := range []string{"bash", "go", "gofmt"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("skip: %s not on PATH", bin)
+		}
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/x\n\ngo 1.21\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "x.go"), []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeScript(t, root, "scripts/ci/vendor-sync-check.sh", `echo drift; exit 1`)
+	var vendor *GateResult
+	gates := runGoGates(root, 120, false)
+	for i := range gates {
+		if gates[i].Name == "go:vendor-sync" {
+			vendor = &gates[i]
+		}
+	}
+	if vendor == nil {
+		t.Fatalf("go:vendor-sync missing from %+v", gates)
+	}
+	if vendor.Passed || !vendor.Substantive {
+		t.Errorf("want a failed, substantive vendor gate, got %+v", *vendor)
+	}
+}
