@@ -28,6 +28,7 @@ import (
 // env holds the suite configuration read once in TestMain.
 var env struct {
 	endpoint, access, secret, region, dbURL string
+	target                                  string // seaweedfs | minio (S3COV_TARGET)
 	baseURL                                 string // endpoint with scheme, no trailing slash
 }
 
@@ -99,6 +100,11 @@ func TestMain(m *testing.M) {
 	env.access = mustEnv("S3COV_ACCESS_KEY")
 	env.secret = mustEnv("S3COV_SECRET_KEY")
 	env.dbURL = mustEnv("S3COV_DB_URL")
+	env.target = mustEnv("S3COV_TARGET")
+	if env.target != "seaweedfs" && env.target != "minio" {
+		fmt.Fprintf(os.Stderr, "s3coverage: S3COV_TARGET must be seaweedfs or minio, got %q\n", env.target)
+		os.Exit(1)
+	}
 	env.region = os.Getenv("S3COV_REGION")
 	if env.region == "" {
 		env.region = "us-east-1"

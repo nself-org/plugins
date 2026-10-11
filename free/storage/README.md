@@ -74,6 +74,11 @@ for large uploads.
 `PutBucketPolicy`/`GetBucketPolicy`, `PutBucketCors`/`GetBucketCors`, `PutBucketVersioning` and `ListObjectVersions`;
 the coverage suite below checks those too.
 
+**Known gap on MinIO.** `pgsty/minio` (MinIO community) has no bucket CORS API: `PutBucketCors` answers `501 NotImplemented`.
+The suite pins this as a declared expectation (`test/s3coverage/unsupported_test.go`) and still checks that a preflight
+gets `Access-Control-Allow-Origin`. Apps on MinIO get CORS from the server-wide setting (`MINIO_API_CORS_ALLOW_ORIGIN`,
+default `*`), not per bucket. SeaweedFS honours per-bucket CORS rules.
+
 ## S3 coverage suite
 
 `test/s3coverage` (build tag `s3coverage`) runs one test per operation (`TestOp_*`) and the plugin end to end
@@ -97,7 +102,7 @@ Pinned images (OCI index digests, also in `run.sh`):
 | Database | `postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d` |
 
 To point the suite at another endpoint, set `S3COV_ENDPOINT`, `S3COV_ACCESS_KEY`, `S3COV_SECRET_KEY`, `S3COV_DB_URL`
-(and optionally `S3COV_REGION`) and run `go test -mod=vendor -tags s3coverage -count=1 -v ./test/s3coverage/` in this
+`S3COV_TARGET` (`seaweedfs` or `minio`, selects the declared-unsupported table) (and optionally `S3COV_REGION`) and run `go test -mod=vendor -tags s3coverage -count=1 -v ./test/s3coverage/` in this
 directory. Unit tests (`go test -mod=vendor ./...`) need no network, docker or database.
 
 ## Security

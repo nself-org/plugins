@@ -51,6 +51,7 @@ S3COV_ENDPOINT=http://s3:${S3_PORT}
 S3COV_ACCESS_KEY=${ACCESS_KEY}
 S3COV_SECRET_KEY=${SECRET_KEY}
 S3COV_REGION=us-east-1
+S3COV_TARGET=${KIND}
 S3COV_DB_URL=postgres://s3cov:${DB_PASS}@db:5432/s3cov?sslmode=disable
 ENVEOF
 cat >"$WORK/db.env" <<ENVEOF
@@ -101,12 +102,15 @@ docker run --rm --network "$NET" --env-file "$WORK/runner.env" \
 grep -E '^(=== RUN|--- (PASS|FAIL|SKIP)|PASS$|FAIL|ok |panic|\s+[a-z0-9_]+\.go:[0-9]+:)' "$WORK/out.txt" | grep -v '^=== RUN' || true
 passed=$(grep -cE '^--- PASS: Test(Op|Plugin)_' "$WORK/out.txt" || true)
 failed=$(grep -cE '^--- FAIL: Test' "$WORK/out.txt" || true)
+# Declared-unsupported ops are logged by the tests as "declared unsupported: <target> <Op> (<Code>); ...".
+declared=$(sed -n 's/.*declared unsupported: [a-z]* \([A-Za-z]*\) (.*/\1/p' "$WORK/out.txt" | sort -u | paste -sd, -)
+[ -n "$declared" ] || declared=none
 if [ "$rc" -ne 0 ] || [ "$failed" -ne 0 ] || [ "$passed" -eq 0 ]; then
   echo "== full test output"
   cat "$WORK/out.txt"
   echo "== $KIND server log (tail)"
   docker logs --tail 60 "$C_S3" 2>&1 || true
-  echo "s3coverage $KIND: FAIL ($passed passed, $failed failed)"
+  echo "s3coverage $KIND: FAIL ($passed passed, $failed failed) declared-unsupported: $declared"
   exit 1
 fi
-echo "s3coverage $KIND: ok ($passed passed, $failed failed)"
+echo "s3coverage $KIND: ok ($passed passed, $failed failed) declared-unsupported: $declared"

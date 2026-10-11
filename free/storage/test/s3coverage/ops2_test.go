@@ -132,6 +132,16 @@ func TestOp_PutBucketCors(t *testing.T) {
 			AllowedHeaders: []string{"*"}, ExposeHeaders: []string{"ETag"}, MaxAgeSeconds: aws.Int32(3600),
 		}},
 	}})
+	if expectUnsupported(t, "PutBucketCors", err) {
+		// No bucket CORS API: the endpoint's server-wide CORS setting must still answer a preflight.
+		code, hdr, _ := preflight(t, b, origin)
+		acao := hdr.Get("Access-Control-Allow-Origin")
+		if (code != 200 && code != 204) || acao == "" {
+			t.Fatalf("server-wide CORS preflight: status %d, Access-Control-Allow-Origin %q", code, acao)
+		}
+		t.Logf("declared unsupported: %s PutBucketCors (NotImplemented); preflight ACAO=%s", env.target, acao)
+		return
+	}
 	if err != nil {
 		t.Fatalf("PutBucketCors: %v", err)
 	}
@@ -139,9 +149,7 @@ func TestOp_PutBucketCors(t *testing.T) {
 	if err != nil || len(gc.CORSRules) != 1 || len(gc.CORSRules[0].AllowedOrigins) != 1 || gc.CORSRules[0].AllowedOrigins[0] != origin {
 		t.Fatalf("GetBucketCors did not return the rule that was set: %v %+v", err, gc)
 	}
-	code, hdr, _ := httpDo(t, http.MethodOptions, objectURL(b, "up.bin"), nil, map[string]string{
-		"Origin": origin, "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "content-type",
-	})
+	code, hdr, _ := preflight(t, b, origin)
 	if code != 200 && code != 204 {
 		t.Fatalf("preflight status %d", code)
 	}
@@ -149,10 +157,16 @@ func TestOp_PutBucketCors(t *testing.T) {
 		t.Fatalf("preflight Access-Control-Allow-Origin = %q, want %q", got, origin)
 	}
 	// Informational: an origin the rule does not list. Servers with a global CORS setting answer "*" here.
-	_, other, _ := httpDo(t, http.MethodOptions, objectURL(b, "up.bin"), nil, map[string]string{
-		"Origin": "https://other.example.test", "Access-Control-Request-Method": "PUT",
-	})
+	_, other, _ := preflight(t, b, "https://other.example.test")
 	t.Logf("preflight ACAO: listed origin %q, unlisted origin %q", hdr.Get("Access-Control-Allow-Origin"), other.Get("Access-Control-Allow-Origin"))
+}
+
+// preflight sends an OPTIONS preflight (Origin + Access-Control-Request-Method: PUT) for an object in bucket b.
+func preflight(t *testing.T, b, origin string) (int, http.Header, []byte) {
+	t.Helper()
+	return httpDo(t, http.MethodOptions, objectURL(b, "up.bin"), nil, map[string]string{
+		"Origin": origin, "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "content-type",
+	})
 }
 
 func TestOp_ListObjectVersions(t *testing.T) {
