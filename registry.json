@@ -3252,11 +3252,7 @@
       "name": "email",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [
-        "np_email_messages",
-        "np_email_templates",
-        "np_email_events"
-      ],
+      "tables": [],
       "releaseTag": "v1.2.6",
       "checksum": "28648697b8530ac87e0d1ea14dc99f841963e79ea307b39558e1896f3d8e82de",
       "checksums": {
@@ -4740,11 +4736,7 @@
       "name": "transactional-email",
       "author": "nself",
       "minNselfVersion": "1.1.0",
-      "tables": [
-        "np_email_domains",
-        "np_email_messages",
-        "np_email_templates"
-      ],
+      "tables": [],
       "releaseTag": "v1.2.6",
       "checksum": "b5163bfa249b99960b28fd5232d006917b87d5e2f1c3793dd97e5f71395f4a72",
       "checksums": {
