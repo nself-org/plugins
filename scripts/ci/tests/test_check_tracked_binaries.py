@@ -64,6 +64,17 @@ class CheckTrackedBinaries(unittest.TestCase):
     def test_fat(self):
         self.assert_hit(b"\xca\xfe\xba\xbe\x00\x00\x00\x02" + b"\x00" * 40, "Mach-O fat")
 
+    def test_fat_nfat_arch_boundaries(self):
+        # D-0238: nfat_arch 1..30 is fat; 0 and 31 pass (31+ reads as Java).
+        for magic in (b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbf"):
+            for count, fat in ((0, False), (1, True), (30, True), (31, False)):
+                with self.subTest(magic=magic.hex(), nfat_arch=count):
+                    data = magic + count.to_bytes(4, "big") + b"\x00" * 40
+                    if fat:
+                        self.assert_hit(data, "Mach-O fat")
+                    else:
+                        self.assert_clean(data)
+
     def test_java_class_is_not_fat(self):
         # 0xCAFEBABE + minor 0 + major 52 (Java 8): not a compiled binary.
         self.assert_clean(b"\xca\xfe\xba\xbe\x00\x00\x00\x34" + b"\x01" * 40)
@@ -76,6 +87,22 @@ class CheckTrackedBinaries(unittest.TestCase):
 
     def test_pe_signature_past_prefix(self):
         self.assert_hit(pe_image(True, e_lfanew=9000), "PE")
+
+    def test_pe_signature_above_one_mib(self):
+        # D-0238: e_lfanew above the old 1 MiB cap is still read.
+        self.assert_hit(pe_image(True, e_lfanew=(1 << 20) + 16), "PE")
+
+    def test_pe_signature_at_last_four_bytes(self):
+        blob = pe_image(False, e_lfanew=9000)[:9000] + b"PE\x00\x00"
+        self.assert_hit(blob, "PE")
+
+    def test_pe_offset_past_end_passes(self):
+        # A pointer past the end of the blob is bounded by its size, not read.
+        for offset in (9000, 0xFFFFFFFF):
+            with self.subTest(e_lfanew=offset):
+                blob = bytearray(b"MZ" + b"\x00" * 200)
+                blob[0x3C:0x40] = offset.to_bytes(4, "little")
+                self.assert_clean(bytes(blob))
 
     def test_executable_with_nul(self):
         self.assert_hit(b"#!/bin/sh\n\x00\x01\x02", "mode 100755 with NUL byte",
