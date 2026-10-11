@@ -13,16 +13,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/nself-org/nself-infra/internal/server"
 )
 
 const udMarker = "NSELFCI-FIXTURE-USERDATA"
+
+// udCode is a fake provider error code that must never reach output.
+const udCode = "nselfci_fixture_code"
 
 const udContent = "#cloud-config\n# " + udMarker + " fake pairing code 000000\n"
 
@@ -39,13 +44,17 @@ func (c *udRecorder) CreateServer(ctx context.Context, req server.ProvisionReque
 	return c.fakeServerClient.CreateServer(ctx, req)
 }
 
-// failingCreateClient is a udRecorder whose provider call fails.
-type failingCreateClient struct{ *udRecorder }
+// echoingFailClient is a udRecorder whose provider call fails with a text built
+// from the request's user data, as a provider that echoes the body would.
+type echoingFailClient struct {
+	*udRecorder
+	build func(userData string) error
+}
 
-func (c *failingCreateClient) CreateServer(ctx context.Context, req server.ProvisionRequest) (*server.Server, error) {
+func (c *echoingFailClient) CreateServer(ctx context.Context, req server.ProvisionRequest) (*server.Server, error) {
 	c.calls++
 	c.userData = req.UserData
-	return nil, errors.New("provider says no")
+	return nil, c.build(req.UserData)
 }
 
 func newRecorder() *udRecorder { return &udRecorder{fakeServerClient: newFakeServerClient()} }
@@ -115,20 +124,49 @@ func TestProvisionUserDataNoEcho(t *testing.T) {
 			t.Fatalf("exit=%d err=%v user_data=%v calls=%d exactMatch=%v", res.Exit, d.Error != nil, d.Data["user_data"], rc.calls, rc.userData == udContent)
 		}
 	})
-	t.Run("provider failure", func(t *testing.T) {
-		for _, js := range []bool{false, true} {
-			fc := &failingCreateClient{newRecorder()}
-			p := udWrite(t, "ud", []byte(udContent), 0o600)
-			args := provisionArgs("--user-data-file", p)
-			if js {
-				args = append(args, "--json")
-			}
-			res, leaked := runCaptured(t, fc, args...)
-			if leaked {
-				t.Fatalf("marker found in output or log (json=%v)", js)
-			}
-			if res.Exit == 0 || fc.calls != 1 {
-				t.Fatalf("json=%v exit=%d calls=%d", js, res.Exit, fc.calls)
+	t.Run("provider failure echoing user data", func(t *testing.T) {
+		jsonEsc := func(u string) string { b, _ := json.Marshal(u); return string(b) }
+		cases := []struct {
+			name  string
+			build func(u string) error
+		}{
+			{"plain echo", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input: bad user_data %s", u)
+			}},
+			{"json-escaped echo", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 422 invalid_input: bad user_data %s", jsonEsc(u))
+			}},
+			{"raw body fallback", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: 502: <html>%s</html>", u)
+			}},
+			{"network error", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: network error: %s", u)
+			}},
+			{"network error echoing a status-shaped line", func(u string) error {
+				return fmt.Errorf("hetzner API POST /servers: network error: %s\nhetzner API GET /x: 200 %s", u, udCode)
+			}},
+		}
+		for _, tc := range cases {
+			for _, js := range []bool{false, true} {
+				fc := &echoingFailClient{udRecorder: newRecorder(), build: tc.build}
+				p := udWrite(t, "ud", []byte(udContent), 0o600)
+				args := provisionArgs("--user-data-file", p)
+				if js {
+					args = append(args, "--json")
+				}
+				res, leaked := runCaptured(t, fc, args...)
+				if leaked || strings.Contains(res.Stdout+res.Stderr, udCode) {
+					t.Fatalf("%s: marker or fake code found in output or log (json=%v)", tc.name, js)
+				}
+				if res.Exit == 0 || fc.calls != 1 {
+					t.Fatalf("%s: json=%v exit=%d calls=%d", tc.name, js, res.Exit, fc.calls)
+				}
+				if js {
+					d := decodeEnv(t, res.Stdout)
+					if d.Error == nil || d.Error.Code != "E744" {
+						t.Fatalf("%s: envelope has error=%v, want code E744", tc.name, d.Error != nil)
+					}
+				}
 			}
 		}
 	})
@@ -238,5 +276,88 @@ func TestProvisionWithoutUserDataUnchanged(t *testing.T) {
 	}
 	if v, ok := d.Data["user_data"]; !ok || v != false {
 		t.Fatalf("data.user_data = %v (present=%v), want false", v, ok)
+	}
+}
+
+// TestProvisionProviderErrorUnchangedWithoutUserData proves the provider text is
+// still shown when no --user-data-file was given.
+func TestProvisionProviderErrorUnchangedWithoutUserData(t *testing.T) {
+	fc := &echoingFailClient{udRecorder: newRecorder(), build: func(string) error {
+		return errors.New("hetzner API POST /servers: 422 invalid_input: provider-detail-text")
+	}}
+	res := runCLI(t, cliEnv{Client: fc}, provisionArgs()...)
+	if res.Exit == 0 || fc.calls != 1 {
+		t.Fatalf("exit=%d calls=%d", res.Exit, fc.calls)
+	}
+	if !strings.Contains(res.Stderr, "provider-detail-text") || strings.Contains(res.Stderr, "withheld") {
+		t.Fatalf("stderr keeps provider text=%v, has withheld note=%v",
+			strings.Contains(res.Stderr, "provider-detail-text"), strings.Contains(res.Stderr, "withheld"))
+	}
+}
+
+// TestProvisionWithheldErrorKeepsCauseChain checks that errors.As and errors.Is
+// still reach the original error through the withheld wrapper.
+func TestProvisionWithheldErrorKeepsCauseChain(t *testing.T) {
+	cause := errors.New("hetzner API POST /servers: 401 unauthorized: secret-echo")
+	err := withheldProviderError("web", cause)
+	var pe *userDataProviderError
+	if !errors.As(err, &pe) || !errors.Is(err, cause) {
+		t.Fatalf("as=%v is=%v", errors.As(err, &pe), errors.Is(err, cause))
+	}
+	if strings.Contains(err.Error(), "secret-echo") {
+		t.Fatal("withheld error text carries the provider message")
+	}
+	if got := classify(err, "server provision").Code; got != CodeTokenRejected {
+		t.Fatalf("classify code = %q, want %q", got, CodeTokenRejected)
+	}
+}
+
+// TestReadUserDataFileReasons pins the refusal reason of each check by calling
+// readUserDataFile directly. The usageError msg holds only the path and reason.
+func TestReadUserDataFileReasons(t *testing.T) {
+	dir := t.TempDir()
+	good := udWrite(t, "target", []byte(udContent), 0o600)
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(good, link); err != nil {
+		t.Fatal(err)
+	}
+	fifo := filepath.Join(dir, "fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ name, path, reason string }{
+		{"directory", t.TempDir(), "is not a regular file"},
+		{"fifo", fifo, "is not a regular file"},
+		{"mode 0644", udWrite(t, "m644", []byte(udContent), 0o644), "must be mode 0600 or stricter"},
+		{"symlink", link, "is a symbolic link"},
+		{"too large", udWrite(t, "big", bytes.Repeat([]byte("a"), maxUserDataBytes+1), 0o600), "is larger than"},
+		{"empty", udWrite(t, "empty", nil, 0o600), "is empty"},
+		{"invalid utf-8", udWrite(t, "bin", append([]byte(udContent), 0xff, 0xfe), 0o600), "is not valid UTF-8"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			assertRefusalReason(t, tc.path, tc.reason)
+		})
+	}
+	t.Run("another owner", func(t *testing.T) {
+		old := userDataUID
+		userDataUID = func() int { return os.Getuid() + 1 }
+		defer func() { userDataUID = old }()
+		assertRefusalReason(t, good, "is not owned by you")
+	})
+}
+
+// assertRefusalReason requires readUserDataFile(path) to fail with a usageError
+// whose msg holds reason. Failures print booleans only.
+func assertRefusalReason(t *testing.T, path, reason string) {
+	t.Helper()
+	_, err := readUserDataFile(path)
+	var ue *usageError
+	if !errors.As(err, &ue) {
+		t.Fatalf("error is a usageError = false (err nil = %v)", err == nil)
+	}
+	if !strings.Contains(ue.msg, reason) {
+		t.Fatalf("msg has reason %q = false", reason)
 	}
 }

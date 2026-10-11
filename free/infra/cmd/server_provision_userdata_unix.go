@@ -8,7 +8,8 @@
 // Outputs: an open *os.File, or a coded usage error (E401) with no content.
 //
 // Constraints: O_NOFOLLOW makes a symlink fail with ELOOP; O_NONBLOCK keeps a
-// FIFO from hanging the open (the regular-file check then refuses it).
+// FIFO from hanging the open (the regular-file check then refuses it);
+// O_NOCTTY keeps a terminal device from becoming the controlling terminal.
 package main
 
 import (
@@ -23,7 +24,7 @@ var userDataUID = os.Getuid
 
 // openUserDataFile opens path read-only without following a final symlink.
 func openUserDataFile(path string) (*os.File, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 	if err == nil {
 		return f, nil
 	}

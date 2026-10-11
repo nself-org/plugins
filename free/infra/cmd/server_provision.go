@@ -9,12 +9,15 @@ package main
 // any validation, resolution, or provider failure.
 // Constraints: the --user-data-file content may hold a single-use pairing code, so
 // it is never printed, logged or returned, and no message carries its bytes or size.
+// A provider error is reported from its HTTP status and error code only when user
+// data was sent, because a provider can echo the request body in its message.
 
 import (
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -46,7 +49,7 @@ func init() {
 	f.String("image", "", "OS image, e.g. ubuntu-24.04 (required)")
 	f.StringArray("ssh-key", nil, "Hetzner SSH key name to authorize (repeatable)")
 	f.StringArray("label", nil, "label as key=value (repeatable)")
-	f.String("user-data-file", "", "path to a cloud-init user-data file sent as user_data; must be a regular file, mode 0600 or stricter, owned by you, at most 32768 bytes; the content is never printed")
+	f.String("user-data-file", "", "path to a cloud-init user-data file sent as user_data; must be a regular, non-empty, valid UTF-8 file, mode 0600 or stricter, owned by you, at most 32768 bytes; the content is never printed")
 	addJSONFlag(serverProvisionCmd)
 }
 
@@ -84,6 +87,9 @@ func runServerProvision(cmd *cobra.Command, args []string) error {
 		SSHKeys: sshKeys, Labels: labels, UserData: userData,
 	})
 	if err != nil {
+		if withUserData {
+			return r.fail(withheldProviderError(name, err))
+		}
 		return r.fail(fmt.Errorf("provision %s: %w", name, err))
 	}
 
@@ -118,7 +124,59 @@ func parseLabels(args []string) (map[string]string, error) {
 const maxUserDataBytes = 32768
 
 // userDataSafe is the fixed envelope text for every --user-data-file refusal.
-const userDataSafe = "--user-data-file must be a regular file, mode 0600 or stricter, owned by you, at most 32768 bytes"
+const userDataSafe = "--user-data-file must be a regular, non-empty, valid UTF-8 file, mode 0600 or stricter, owned by you, at most 32768 bytes"
+
+// userDataProviderError is a provider failure after user data was sent. Error
+// shows only the safe text; Unwrap keeps the cause for errors.As and errors.Is.
+type userDataProviderError struct {
+	shown string
+	cause error
+}
+
+func (e *userDataProviderError) Error() string { return e.shown }
+func (e *userDataProviderError) Unwrap() error { return e.cause }
+
+// statusRe is the status and code head of the client's HTTP error text; codes
+// are fixed identifiers such as invalid_input. netRe is the network-error head.
+var (
+	statusRe = regexp.MustCompile(`hetzner API [A-Z]+ \S+: \d{3}( [a-z_]+)?`)
+	netRe    = regexp.MustCompile(`hetzner API [A-Z]+ \S+: network error`)
+)
+
+const withheldNote = " (provider message withheld: the request carried user data)"
+
+// earliestHead returns the status or network-error head that starts first in
+// text. The client's own head always precedes any echoed content, so a
+// status-shaped fragment inside an echo never wins. "" when neither matches.
+func earliestHead(text string) string {
+	best, bestAt := "", -1
+	for _, re := range []*regexp.Regexp{statusRe, netRe} {
+		if loc := re.FindStringIndex(text); loc != nil && (bestAt < 0 || loc[0] < bestAt) {
+			best, bestAt = text[loc[0]:loc[1]], loc[0]
+		}
+	}
+	return best
+}
+
+// withheldProviderError builds the error shown when server.Provision fails and
+// user data was sent: the provider text is cut to its status and code (or the
+// network-error head) so an echoed request body never reaches output. The
+// server's own flag-validation messages carry no user data and pass through.
+// classify sees the same E744/E747 class through the shown text.
+func withheldProviderError(name string, err error) error {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if _, ok := usageText(e.Error()); ok {
+			return fmt.Errorf("provision %s: %w", name, err)
+		}
+	}
+	text := err.Error()
+	head := earliestHead(text)
+	shown := "provision " + name + ": the provider call failed" + withheldNote
+	if head != "" {
+		shown = "provision " + name + ": " + head + withheldNote
+	}
+	return &userDataProviderError{shown: shown, cause: err}
+}
 
 // userDataFromFlag returns the user-data content when --user-data-file was set.
 // An explicitly empty path is a usage error. The bool says the flag was used.
