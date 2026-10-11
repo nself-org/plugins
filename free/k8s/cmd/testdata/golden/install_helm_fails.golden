@@ -1,0 +1,10 @@
+exit: 1
+--- stdout ---
+[0;34mℹ[0m Installing nSelf chart (domain=x.test, recorded in the release values only)...
+--- stderr ---
+k8s: target kubeconfig ~/.kube/config (current context)
+stub helm: boom
+Error: k8s: helm install: exit status 1
+If the release was left in a failed state, remove it with 'helm uninstall nself' (add --kubeconfig for your cluster) and run 'nself k8s install' again; 'nself k8s upgrade' only works once a revision is deployed
+Error: k8s: helm install: exit status 1
+If the release was left in a failed state, remove it with 'helm uninstall nself' (add --kubeconfig for your cluster) and run 'nself k8s install' again; 'nself k8s upgrade' only works once a revision is deployed
