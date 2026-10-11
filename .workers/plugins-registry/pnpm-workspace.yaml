@@ -1,0 +1,21 @@
+# pnpm >= 10 reads install settings from this file; pnpm >= 11 reads them
+# ONLY from here (package.json "pnpm" is ignored). pnpm 9, which the
+# GitHub nself-ci workflow and the CI hosts run, reads package.json, so
+# settings sync via package.json pnpm.onlyBuiltDependencies for pnpm 9.
+# packages: ['.'] keeps this directory its own one-package workspace.
+packages:
+  - '.'
+# Build scripts: esbuild and workerd must run postinstall for wrangler.
+# sharp is an optional dep of miniflare/wrangler for image handling; the
+# registry worker does not process images, so it is not needed at runtime.
+# pnpm 10 reads onlyBuiltDependencies/ignoredBuiltDependencies; pnpm >= 11
+# reads allowBuilds and fails the install on any build not listed there.
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+ignoredBuiltDependencies:
+  - sharp
+allowBuilds:
+  esbuild: true
+  workerd: true
+  sharp: false
