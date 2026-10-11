@@ -114,9 +114,9 @@ func TestWriteModes(t *testing.T) {
 func TestSplitImage(t *testing.T) {
 	cases := []struct{ in, repo, tag, digest string }{
 		{"postgres:16-alpine", "postgres", "16-alpine", ""},
-		{"nginx", "nginx", "latest", ""},
+		{"nginx", "nginx", "", ""},
 		{"localhost:5000/app:2", "localhost:5000/app", "2", ""},
-		{"localhost:5000/app", "localhost:5000/app", "latest", ""},
+		{"localhost:5000/app", "localhost:5000/app", "", ""},
 		{"ghcr.io/o/i:1@sha256:abc", "ghcr.io/o/i", "1", "sha256:abc"},
 		{"ghcr.io/o/i@sha256:abc", "ghcr.io/o/i", "", "sha256:abc"},
 	}

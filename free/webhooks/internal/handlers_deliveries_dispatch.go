@@ -3,11 +3,11 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"github.com/jackc/pgx/v5/pgxpool"
+	sdk "github.com/nself-org/plugin-sdk"
 	"net/http"
 	"strconv"
 	"time"
-	"github.com/jackc/pgx/v5/pgxpool"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func handleListDeliveries(pool *pgxpool.Pool) http.HandlerFunc {

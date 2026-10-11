@@ -1,0 +1,17 @@
+# pnpm >= 10 reads install settings from this file; pnpm >= 11 reads them
+# ONLY from here (package.json "pnpm" is ignored). pnpm 9, which the
+# GitHub nself-ci workflow and the CI hosts run, reads package.json, so
+# the overrides below are kept identical to package.json pnpm.overrides.
+# packages: ['.'] keeps this directory its own one-package workspace.
+packages:
+  - '.'
+overrides:
+  fast-uri: '>=3.1.5'
+  find-my-way: '>=9.7.0'
+  fast-xml-parser: '>=5.10.1'
+# esbuild (via tsx) has a postinstall; pnpm 10 uses onlyBuiltDependencies,
+# pnpm >= 11 uses allowBuilds and fails the install on an unapproved build.
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true

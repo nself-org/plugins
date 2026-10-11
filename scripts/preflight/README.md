@@ -40,7 +40,7 @@ The first failing stage names the class.
 | `extract` | not a gzip tarball, an absolute or `..` member path, or `tar -x` failed |
 | `manifest` | no `plugin.json`, not a JSON object, or `name`/`version` differ from the registry entry |
 | `fragment` | a service plugin (`pluginType` is not `cli`, no bare `binaryName`) lacks `docker-compose.plugin.yml` or `Dockerfile` |
-| `build` | `docker build` of the extracted tree alone failed (or a CLI plugin has no `Dockerfile`) |
+| `build` | `docker build` of the extracted tree alone failed. A CLI plugin with no `Dockerfile` ships per-platform binaries, so it is built with the release recipe instead (`docker.sh` `pf_cli_dockerfile`: `CGO_ENABLED=0 go build` of each `nself-<command>` from `cmd/<command>/` or `cmd/`, in `golang:<go.mod go>-alpine`); it fails here when it has no `go.mod` or no command to build |
 | `drift` | served registry differs from `registry.json` at main (version, checksum, or slug absent). Checked first for every entry and it wins: an entry that also fails another stage is reported as `drift` with `; also <class>: <reason>`, so P7-PLUG-35 routing is never masked |
 
 `installable:false` entries with no `tarball` are asserted (declared, nothing to
@@ -58,7 +58,8 @@ the served bytes, so two runs over the same bytes are identical after
 `jq -S 'del(.header)'`. `summary.pass` is true only when no entry is `fail` or
 `skip`. The markdown (`--md`, default next to `--out`) lists every non-pass
 entry with its follow-up: served drift goes to P7-PLUG-35, a plugin goes to its
-batch Ticket (`owners.tsv`, P7-PLUG-40..47), an unowned slug needs a new debt id.
+batch Ticket (`owners.tsv`, P7-PLUG-40..47, or the open Ticket owning the manifest of a plugin outside
+those batches, e.g. ci: P7-CI-62), an unowned slug needs a new debt id.
 
 Exit status, read this before gating on it: **0 means the report was written,
 not that the tier passes.** Gate on `--strict` (exit 1 when `summary.pass` is

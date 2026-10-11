@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0.0",
   "generated_at": "2026-09-21T21:11:03.046357Z",
-  "plugins_count": 131,
+  "plugins_count": 132,
   "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
@@ -854,7 +854,8 @@
       "minNselfVersion": "1.0.0",
       "tables": [
         "np_feature_flags_flags",
-        "np_feature_flags_segments"
+        "np_feature_flags_segments",
+        "np_feature_flags_audit"
       ],
       "implementation": {
         "language": "go",
@@ -1332,7 +1333,8 @@
       "minNselfVersion": "0.9.9",
       "tables": [
         "np_jobs_jobs",
-        "np_jobs_queues"
+        "np_jobs_queues",
+        "np_jobs_history"
       ],
       "implementation": {
         "language": "go",
@@ -2028,10 +2030,7 @@
       "minNselfVersion": "0.9.9",
       "tables": [
         "np_search_indexes",
-        "np_search_documents",
-        "np_search_synonyms",
-        "np_search_queries",
-        "np_search_webhook_events"
+        "np_search_documents"
       ],
       "implementation": {
         "language": "go",
@@ -2462,6 +2461,37 @@
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/torrent-manager-1.2.6.tar.gz"
     },
+    "traefik": {
+      "version": "1.2.7",
+      "description": "Traefik reverse proxy from the nSelf route model: file-provider configuration rendered from routes.json at route, TLS and upstream parity with nginx. No Docker socket, certificates from core.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.4.12",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/traefik-1.2.7.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/traefik/tarball",
+      "requires_license": false,
+      "language": "go",
+      "tags": [
+        "traefik",
+        "proxy",
+        "reverse-proxy",
+        "tls",
+        "routes"
+      ],
+      "dependencies": [],
+      "name": "traefik",
+      "author": "nself",
+      "minNselfVersion": "1.4.12",
+      "tables": [],
+      "implementation": {
+        "language": "go",
+        "runtime": "go",
+        "entryPoint": "cmd/render"
+      },
+      "releaseTag": "v1.2.7",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/traefik-1.2.7.tar.gz"
+    },
     "vpn": {
       "version": "1.2.6",
       "description": "Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin.",
@@ -2665,7 +2695,14 @@
       "name": "access-controls",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_acl_roles",
+        "np_acl_permissions",
+        "np_acl_role_permissions",
+        "np_acl_user_roles",
+        "np_acl_policies",
+        "np_acl_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "0f7af763a7d179eb0a50851eff2a0abda86799df44b48837d19701d3d6fea6fe",
       "checksums": {
@@ -2695,7 +2732,10 @@
       "name": "admin-api",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_admin_metrics_snapshots",
+        "np_admin_dashboard_config"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "d54d0950888af54db8d06c2400fd039a330b85872e25b813c9c14a2294f082ce",
       "checksums": {
@@ -2725,7 +2765,14 @@
       "name": "analytics",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_analytics_events",
+        "np_analytics_counters",
+        "np_analytics_funnels",
+        "np_analytics_quotas",
+        "np_analytics_quota_violations",
+        "np_analytics_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "b953fdb5332235b4c0061a8d42eaf651beec62caa7075d4cc7ce7112771356a9",
       "checksums": {
@@ -2759,7 +2806,10 @@
       "name": "audit-analytics",
       "author": "nself",
       "minNselfVersion": "1.0.9",
-      "tables": [],
+      "tables": [
+        "np_audit_anomalies",
+        "np_audit_privileged_reviews"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "c7ca775a5b05cc7e9b27e221ff7c1a9bcbead03b499ff6ca18c8f9ac9092a44f",
       "checksums": {
@@ -2783,7 +2833,14 @@
       "name": "auth-enterprise",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_mfa_enrollments",
+        "np_mfa_recovery_codes",
+        "np_mfa_policies",
+        "np_sso_providers",
+        "np_sso_sessions",
+        "np_sso_state_cache"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "28167f317d9a569a055488cbc0e7af795b710c0fa434bff23a61bade421a2356",
       "checksums": {
@@ -2818,7 +2875,11 @@
       "name": "byok",
       "author": "nself",
       "minNselfVersion": "1.0.9",
-      "tables": [],
+      "tables": [
+        "np_kms_configs",
+        "np_encrypted_values",
+        "np_encryption_key_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "27658a621ed1d4e87e5689926778e1ae010a9221107e8c7c375db9eef8ebd92e",
       "checksums": {
@@ -2848,7 +2909,10 @@
       "name": "cdc",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_cdc_streams",
+        "np_cdc_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "53da0bae080b3254bdb41800e6ae45fba2a392d46ac74aa11987020ab17f9b9e",
       "checksums": {
@@ -2878,7 +2942,12 @@
       "name": "cdn",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_cdn_zones",
+        "np_cdn_purge_requests",
+        "np_cdn_analytics",
+        "np_cdn_signed_urls"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "e399f4e6f66c84d994fb554d5e857ad235e93e5a991601a2d3ae5031b3ecd6f7",
       "checksums": {
@@ -2909,7 +2978,14 @@
       "name": "cloudflare",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_cf_zones",
+        "np_cf_dns_records",
+        "np_cf_r2_buckets",
+        "np_cf_cache_purge_log",
+        "np_cf_analytics",
+        "np_cf_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "66535e70d4e774dcf7567cfe394b93c411ff71d3ed16ad28351e8d727d905cef",
       "checksums": {
@@ -2949,7 +3025,25 @@
       "name": "compliance",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_compliance_dsars",
+        "np_compliance_dsar_activities",
+        "np_compliance_consents",
+        "np_compliance_consent_history",
+        "np_compliance_privacy_policies",
+        "np_compliance_policy_acceptances",
+        "np_compliance_retention_policies",
+        "np_compliance_retention_executions",
+        "np_compliance_processing_records",
+        "np_compliance_data_processors",
+        "np_compliance_data_breaches",
+        "np_compliance_breach_notifications",
+        "np_compliance_audit_log",
+        "np_compliance_audit_events",
+        "np_compliance_audit_retention_policies",
+        "np_compliance_audit_alert_rules",
+        "np_compliance_audit_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "9131630961325d8113bb0d000c02e9e8132030c2897699b949e8c3b4fb52ac3d",
       "checksums": {
@@ -2980,7 +3074,17 @@
       "name": "content-safety",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_cs_evidence",
+        "np_cs_legal_holds",
+        "np_cs_evidence_exports",
+        "np_cs_spam_rules",
+        "np_cs_spam_configs",
+        "np_cs_rate_limit_violations",
+        "np_cs_raid_events",
+        "np_cs_lockdowns",
+        "np_cs_abuse_scores"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "c984710a4d441f964852f577e33776670d033c67dcdbc4740264b868a2a39a1c",
       "checksums": {
@@ -3013,7 +3117,10 @@
       "name": "crdt",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_crdt_documents",
+        "np_crdt_updates"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "0e69d52fb33933db7ee8fa415dfa636ee68e3e8450f8c2899923e50d9955e4a7",
       "checksums": {
@@ -3044,7 +3151,10 @@
       "name": "ddns",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_ddns_config",
+        "np_ddns_update_log"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "197fba375daac4ddd2818f2da038a0a9fd4969aebdd5cd3647b0321361dc7f9e",
       "checksums": {
@@ -3075,7 +3185,13 @@
       "name": "devices",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_dev_devices",
+        "np_dev_commands",
+        "np_dev_telemetry",
+        "np_dev_ingest_sessions",
+        "np_dev_audit_log"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "c46030fa8d35b8403ba87fddb3162679360a86b36ecfefcfefce42cb7fc16ac7",
       "checksums": {
@@ -3106,7 +3222,13 @@
       "name": "documents",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_documents_documents",
+        "np_documents_templates",
+        "np_documents_versions",
+        "np_documents_shares",
+        "np_documents_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "bacf5922849f7f2a3f6563f64450308c1489d436cd025ca2e583474133a99d84",
       "checksums": {
@@ -3198,7 +3320,16 @@
       "name": "entitlements",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_entitlements_plans",
+        "np_entitlements_subscriptions",
+        "np_entitlements_features",
+        "np_entitlements_quotas",
+        "np_entitlements_usage",
+        "np_entitlements_addons",
+        "np_entitlements_grants",
+        "np_entitlements_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "816fef9169ab01ac99545c2f1210621e6e286455fc621278ce2c82f640c431a9",
       "checksums": {
@@ -3227,7 +3358,9 @@
       "name": "event-bus",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_event_bus_stats"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "a861ab784ad5823479291a100a3145d090e4692401915920be7b8d343c26770d",
       "checksums": {
@@ -3415,7 +3548,12 @@
       "name": "functions-v8",
       "author": "nself",
       "minNselfVersion": "1.0.9",
-      "tables": [],
+      "tables": [
+        "np_edge_functions",
+        "np_edge_function_versions",
+        "np_edge_function_env",
+        "np_function_logs"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "ab68e9c44dab92b84aef7c681038b55abfc4b4596d1105c6369bc0b445e0b06b",
       "checksums": {
@@ -3448,7 +3586,11 @@
       "name": "hipaa",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_phi_columns",
+        "np_phi_audit_log",
+        "np_baa_records"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "c2a115183c27bce4dc4146c207f632de2e724e860b9ce6ef1611e489ef473852",
       "checksums": {
@@ -3478,7 +3620,11 @@
       "name": "home",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_home_connections",
+        "np_home_devices",
+        "np_home_command_log"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "7c3afef68296579aef081928e185e42d3031c1036bee1790ee69aa70f0d068b5",
       "checksums": {
@@ -3510,7 +3656,13 @@
       "name": "idme",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_idme_verifications",
+        "np_idme_groups",
+        "np_idme_badges",
+        "np_idme_attributes",
+        "np_idme_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "08f8cd9cb23f44e4ce081f9c14bb71bb5486df2dccf2c3384033ca7a0fc80187",
       "checksums": {
@@ -3539,7 +3691,10 @@
       "name": "job-queue",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_jobqueue_jobs",
+        "np_jobqueue_runs"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "8cc0a3a74bd7b67ea02b1e99242a89761581778e04478c7d165aad7c01fe9f04",
       "checksums": {
@@ -3569,7 +3724,10 @@
       "name": "linkedin",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_linkedin_tokens",
+        "np_linkedin_posts"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "1d5264f719b2727debfc19a81c543855c5daf15027763c0ba715838daf2856fe",
       "checksums": {
@@ -3638,7 +3796,17 @@
       "name": "meetings",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_meetings_events",
+        "np_meetings_attendees",
+        "np_meetings_rooms",
+        "np_meetings_calendars",
+        "np_meetings_calendar_shares",
+        "np_meetings_external_calendars",
+        "np_meetings_templates",
+        "np_meetings_reminders",
+        "np_meetings_waitlist"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "d815d01e5dd31a419af064cddc8e4aca42f3fe9ed8348c42535467a2352af30f",
       "checksums": {
@@ -3667,7 +3835,14 @@
       "name": "nself-cloud",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_cloud_tenants",
+        "np_cloud_instances",
+        "np_cloud_billing_events",
+        "np_cloud_domains",
+        "np_cloud_invitations",
+        "np_cloud_team_memberships"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "cff71f3b5999132baea7d74abddc46cdd01edca323e53d59e62cb2d96c165a88",
       "checksums": {
@@ -3697,7 +3872,12 @@
       "name": "nself-eval-gate",
       "author": "nself",
       "minNselfVersion": "1.1.1",
-      "tables": [],
+      "tables": [
+        "np_eval_suites",
+        "np_eval_tasks",
+        "np_eval_runs",
+        "np_eval_thresholds"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "dce7ee9465ce6ec2f2fcb5d01c100ec1f8edb0705bbe92ea1ba21e17b25d8a53",
       "checksums": {
@@ -3728,7 +3908,10 @@
       "name": "nself-geo",
       "author": "nself",
       "minNselfVersion": "1.1.0",
-      "tables": [],
+      "tables": [
+        "np_geo.forward_cache",
+        "np_geo.reverse_cache"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "0f35c93a597839cc4983c1051572778edb788e769e885acc03177c01d267713d",
       "checksums": {
@@ -3764,7 +3947,9 @@
       "name": "nself-image",
       "author": "nself",
       "minNselfVersion": "1.2.0",
-      "tables": [],
+      "tables": [
+        "np_image.jobs"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "1817c670945c8f511d60646bcaa10823afd35a37c1fff5f3966ab44740a2d9a5",
       "checksums": {
@@ -3937,7 +4122,13 @@
       "name": "object-storage",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_objstore_buckets",
+        "np_objstore_objects",
+        "np_objstore_upload_sessions",
+        "np_objstore_access_logs",
+        "np_objstore_webhook_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "7da5cb8e8d89bc6d8c2ff9a5c095164f770b21d1019b6cf0b8bccdc48f98f548",
       "checksums": {
@@ -3967,7 +4158,11 @@
       "name": "observability",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_observability_services",
+        "np_observability_health_history",
+        "np_observability_watchdog_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "7ce400a9cd039d1d8f8e4c34ec90508421f6ed2d82fa3761f2df0ea47792feed",
       "checksums": {
@@ -3997,7 +4192,10 @@
       "name": "payments",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_payments_orders",
+        "np_payments_transactions"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "351b03463630ddbc97f246d7a3b669bf7931dc4ee661005913730921101d0339",
       "checksums": {
@@ -4027,7 +4225,9 @@
       "name": "pentest",
       "author": "nself",
       "minNselfVersion": "1.0.9",
-      "tables": [],
+      "tables": [
+        "np_pentest_findings"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "28ad457574e937e915558d4a0153a959eaf8e428c58b3590d89041f8ddcfe0cf",
       "checksums": {
@@ -4087,7 +4287,10 @@
       "name": "plugin-clawde",
       "author": "nself",
       "minNselfVersion": "1.1.1",
-      "tables": [],
+      "tables": [
+        "np_clawde_sessions",
+        "np_clawde_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "5c963a4cf53208601bd3680cbe4bd2facbb02445f4f07a0c21a23384684dbc56",
       "checksums": {
@@ -4168,7 +4371,10 @@
       "name": "plugin-llm-gateway",
       "author": "nself",
       "minNselfVersion": "1.1.1",
-      "tables": [],
+      "tables": [
+        "np_llm_gateway_requests",
+        "np_llm_gateway_quota_usage"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "68d3e4d3433b8c5dfb6ebbb1a7e52063a766bc1f01df66e130aa538c4fe3d5e0",
       "checksums": {
@@ -4192,7 +4398,10 @@
       "name": "plugin-pty",
       "author": "nself",
       "minNselfVersion": "1.1.1",
-      "tables": [],
+      "tables": [
+        "np_pty_sessions",
+        "np_pty_audit_log"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "4e979ab08aaa6a387007ea27c1dadb469030fb9b14f325f8b8a67d72c67304d2",
       "checksums": {
@@ -4216,7 +4425,10 @@
       "name": "plugin-retrieval",
       "author": "nself",
       "minNselfVersion": "1.1.1",
-      "tables": [],
+      "tables": [
+        "np_retrieval_documents",
+        "np_retrieval_embeddings"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "0881ded54755aa5dea62fc6c71e8b1d25b02465a0dbf2c52b7cf8f48fe6a830a",
       "checksums": {
@@ -4250,7 +4462,10 @@
       "name": "post",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_post_accounts",
+        "np_post_queue"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "38ea2612023df4224431f97ecaf5e3b98dd0e2182caa6667d0d35f34df03f07b",
       "checksums": {
@@ -4283,7 +4498,14 @@
       "name": "retro-gaming",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_retrogame_roms",
+        "np_retrogame_save_states",
+        "np_retrogame_play_sessions",
+        "np_retrogame_emulator_cores",
+        "np_retrogame_controller_configs",
+        "np_retrogame_core_installations"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "7bc363ad1b2cc0920d15bad65d5a19ec5279e98333042c1286b951daae7cd365",
       "checksums": {
@@ -4316,7 +4538,12 @@
       "name": "rom-discovery",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_romdisc_metadata",
+        "np_romdisc_download_queue",
+        "np_romdisc_scraper_jobs",
+        "np_romdisc_popularity"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "f5f3b850805fdc55301dfa61ff592581d7c4ee39e7e16d22257608611c56e50e",
       "checksums": {
@@ -4350,7 +4577,10 @@
       "name": "siem",
       "author": "nself",
       "minNselfVersion": "1.0.9",
-      "tables": [],
+      "tables": [
+        "np_siem_destinations",
+        "np_siem_ship_log"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "7d5f90fc479fe799bbdb388a18e12f8d38b91209d942d774ac1ca4038b1ef494",
       "checksums": {
@@ -4374,7 +4604,10 @@
       "name": "sms",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_sms_messages",
+        "np_sms_opt_outs"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "93022b3f08cb1c2e4f6ccb0fd99e4a950fa8e8b465edf445a55477fa4e5489a9",
       "checksums": {
@@ -4404,7 +4637,11 @@
       "name": "storage",
       "author": "nself",
       "minNselfVersion": "1.1.0",
-      "tables": [],
+      "tables": [
+        "np_storage_buckets",
+        "np_storage_objects",
+        "np_storage_metadata"
+      ],
       "checksum": "f2ef45269304450d70245b4f04b8d495b0dfbac82a732782232118f55d00d20d",
       "checksums": {
         "sha256": "f2ef45269304450d70245b4f04b8d495b0dfbac82a732782232118f55d00d20d"
@@ -4529,7 +4766,10 @@
       "name": "warehouse",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_warehouse_sync_jobs",
+        "np_warehouse_tables"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "1bc88a4298e1d386c812104090db332bed3e06d4a56223d132735b74100a0b63",
       "checksums": {
@@ -4562,7 +4802,20 @@
       "name": "web3",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_web3_wallets",
+        "np_web3_nfts",
+        "np_web3_collections",
+        "np_web3_tokens",
+        "np_web3_token_balances",
+        "np_web3_token_gates",
+        "np_web3_gate_checks",
+        "np_web3_daos",
+        "np_web3_proposals",
+        "np_web3_votes",
+        "np_web3_transactions",
+        "np_web3_events"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "e8ae4a3ae7dc67e093993259ae2cddc90d709e2d3c83df7c0ffedca4ff9c964d",
       "checksums": {
@@ -4594,7 +4847,17 @@
       "name": "workflows",
       "author": "nself",
       "minNselfVersion": "1.0.0",
-      "tables": [],
+      "tables": [
+        "np_workflows_workflows",
+        "np_workflows_executions",
+        "np_workflows_execution_steps",
+        "np_workflows_triggers",
+        "np_workflows_actions",
+        "np_workflows_templates",
+        "np_workflows_variables",
+        "np_workflows_webhook_logs",
+        "np_workflows_approvals"
+      ],
       "releaseTag": "v1.2.6",
       "checksum": "dbc416f1f6115773d76e91fd4939d2dd3e8195a5401a284a35e87516faf1af28",
       "checksums": {

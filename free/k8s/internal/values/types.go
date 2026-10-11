@@ -4,12 +4,15 @@
 //
 // Inputs: none (type definitions only).
 //
-// Outputs: Values, Secrets and their parts; Kind constants.
+// Outputs: Values, Secrets and their parts; Kind and pull-policy constants.
 //
 // Constraints: values.yaml carries env NAMES only; secrets.yaml carries every
 // env VALUE. Field order here is the emitted order; maps are emitted with
 // sorted keys, so the output is byte-stable.
 package values
+
+// PullIfNotPresent is the pull policy set on every mapped workload.
+const PullIfNotPresent = "IfNotPresent"
 
 // Service kinds. The chart picks the workload template by this field.
 const (
@@ -36,10 +39,14 @@ type Values struct {
 
 // Service is one compose service projected to a workload.
 type Service struct {
-	Kind       string   `yaml:"kind"`
-	Image      string   `yaml:"image"`
-	Tag        string   `yaml:"tag,omitempty"`
-	Digest     string   `yaml:"digest,omitempty"`
+	Kind   string `yaml:"kind"`
+	Image  string `yaml:"image"`
+	Tag    string `yaml:"tag,omitempty"`
+	Digest string `yaml:"digest,omitempty"`
+	// PullPolicy is the image pull policy of a workload (never set on the
+	// Ingress kind). The chart does not read it yet; a follow-up wires it to
+	// imagePullPolicy.
+	PullPolicy string   `yaml:"pullPolicy,omitempty"`
 	Entrypoint []string `yaml:"entrypoint,omitempty"`
 	Command    []string `yaml:"command,omitempty"`
 	Env        []string `yaml:"env,omitempty"`

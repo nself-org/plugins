@@ -449,6 +449,23 @@ curl "http://localhost:3403/v1/deliveries?endpoint_id=<id>&status=failed"
 3. Check endpoint timeout settings
 4. Review dead letter queue for patterns
 
+## Boot-applied migrations
+
+`webhooks` applies its own `migrations/*.sql` when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`):
+files run in file-name order, one transaction per file, recorded in `np_webhooks.schema_migrations`. The manifest declares
+`migrations.apply: boot`, and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates
+tables from Go code; a fresh database gets the two manifest tables `np_webhooks_endpoints` and `np_webhooks_deliveries` from the migration files alone.
+
+**Upgrading an existing install.** The migrations are idempotent (`IF NOT EXISTS`, guarded blocks), so they apply
+over tables an earlier version already created: no data is touched or dropped. On the first start of the new version the
+ledger is created and every file is recorded. The first start after upgrading builds indexes on existing tables and can take minutes on large tables; until it finishes the plugin does not answer /health, so the container shows as unhealthy and an install readiness wait can time out: re-run it once the migration log line appears.
+
+**Old unprefixed tables.** Installs from the TypeScript era hold `webhook_endpoints`, `webhook_deliveries`, `webhook_event_types` and `webhook_dead_letters`; migration `001` renames them (and their `idx_webhook_*` indexes) to `np_webhooks_*`, and migration `002` normalises `source_account_id`. These migrations change existing rows and constraints: (1) a `NULL` `source_account_id` becomes `'primary'` (those rows become visible to the `primary` app); (2) the column becomes `TEXT NOT NULL DEFAULT 'primary'` on `np_webhooks_endpoints` and `np_webhooks_deliveries`; (3) the dead-letter foreign keys to deliveries and endpoints become `ON DELETE SET NULL`, so deleting an endpoint now nulls `delivery_id` and `endpoint_id` on its dead letters instead of failing. Two cases are skipped with a `WARNING` in the database log and never stop the boot: a dead-letter foreign key that is `DEFERRABLE` or `NOT VALID` stays `NO ACTION` (recreate it yourself if you want `SET NULL`), and a column used by a view, rule or policy keeps its old type (it still becomes `NOT NULL` with the `'primary'` default). The event-type and dead-letter tables are kept for their data but nothing in this plugin reads or writes them.
+Each rename runs only when the old table exists and the new name is free. If both names exist, both are left as they are:
+nothing is merged and nothing is dropped, and the plugin log prints one line per such table:
+`migrations: legacy table public.<old> kept beside public.<new>: both existed, nothing merged or dropped`. Move the data by hand
+if you want it, then drop the old table.
+
 ## License
 
 Source-Available License

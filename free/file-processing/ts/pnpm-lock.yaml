@@ -40,8 +40,8 @@ importers:
         specifier: ^7.7.0
         version: 7.19.0
       '@nself/plugin-utils':
-        specifier: file:../../../shared
-        version: file:../../../shared(fastify@4.29.1)
+        specifier: link:../../../shared
+        version: link:../../../shared
       bullmq:
         specifier: ^5.0.0
         version: 5.69.2
@@ -723,11 +723,6 @@ packages:
 
   '@nodable/entities@3.0.0':
     resolution: {integrity: sha512-8L9xFeTYKhm49xfIypoe2W5wV1m/3Z58kT+7kR9A8OyFxcPduI4VmxaUMQyKYrRjUoLLSXv6EKKID5Tvj9cUVw==}
-
-  '@nself/plugin-utils@file:../../../shared':
-    resolution: {directory: ../../../shared, type: directory}
-    peerDependencies:
-      fastify: ^4.24.0
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -2560,14 +2555,6 @@ snapshots:
     optional: true
 
   '@nodable/entities@3.0.0': {}
-
-  '@nself/plugin-utils@file:../../../shared(fastify@4.29.1)':
-    dependencies:
-      dotenv: 16.6.1
-      fastify: 4.29.1
-      pg: 8.18.0
-    transitivePeerDependencies:
-      - pg-native
 
   '@pinojs/redact@0.4.0': {}
 

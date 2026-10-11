@@ -13,14 +13,16 @@ WORKDIR /build
 # Copy the vendored SDK first for layer caching (go.mod's replace target).
 COPY sdk/ sdk/
 COPY go.mod go.sum ./
-RUN go mod download
 # Copy the rest of the plugin source.
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /feature-flags ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /feature-flags ./cmd/main.go
 
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 COPY --from=builder /feature-flags /usr/local/bin/feature-flags
 
 EXPOSE 3305
