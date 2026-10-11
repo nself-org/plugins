@@ -179,6 +179,12 @@ func (b *builder) addRouter(name, rule string, pri int, l listener, mws []string
 
 func (b *builder) route(r contract.Route) {
 	b.cur, b.tier = r.ID, 0
+	if apiDocsRoute(r) {
+		// Accepted difference (DEPL lead ruling 2026-10-11): nginx serves docs.<base> by aliasing
+		// host files, which Traefik cannot do. The route is skipped, never refused; nothing warns
+		// about it yet (the cli proxy provider, P7-DEPL-03, is to warn). Serving it is debt D-0598.
+		return
+	}
 	if len(r.Unmodelled) > 0 {
 		b.refuse(r.ID, "unmodelled", fmt.Sprintf("%d directive(s) outside the closed vocabulary, first: %q", len(r.Unmodelled), r.Unmodelled[0]))
 	}
@@ -266,4 +272,21 @@ func redirectLoc(r contract.Route) *contract.Location {
 		}
 	}
 	return nil
+}
+
+// apiDocsRouteID is the route id the cli gives the API docs server (nginx/sites/api-docs.conf).
+const apiDocsRouteID = "core:api-docs"
+
+// apiDocsRoute reports whether r is the API docs route: that id, with every location a
+// single-file alias (static_file). Any other shape is rendered or refused as usual.
+func apiDocsRoute(r contract.Route) bool {
+	if r.ID != apiDocsRouteID || len(r.Locations) == 0 {
+		return false
+	}
+	for _, l := range r.Locations {
+		if l.StaticFile == nil {
+			return false
+		}
+	}
+	return true
 }

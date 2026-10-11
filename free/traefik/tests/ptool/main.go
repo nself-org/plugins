@@ -106,6 +106,15 @@ func loadRoutes(path string) routes {
 	if err := json.Unmarshal(b, &r); err != nil {
 		die(err)
 	}
+	// core:api-docs is skipped by the traefik renderer (accepted difference, DEPL lead ruling
+	// 2026-10-11) and removed from the nginx reference, so no suite probes docs.<base>.
+	kept := r.Routes[:0]
+	for _, rt := range r.Routes {
+		if rt.ID != "core:api-docs" {
+			kept = append(kept, rt)
+		}
+	}
+	r.Routes = kept
 	return r
 }
 

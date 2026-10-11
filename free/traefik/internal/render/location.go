@@ -56,6 +56,9 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 		b.refuse(r.ID, field, fmt.Sprintf("path of %d characters is too long to rank below the next priority class", len(l.Path)))
 		return
 	}
+	if !b.contractExtras(r, l, field) {
+		return
+	}
 	var mws []string
 	add := func(n string) {
 		if n != "" {
