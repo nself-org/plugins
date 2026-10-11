@@ -38,21 +38,22 @@ func init() {
 	f.Int64("id", 0, "server ID (required)")
 	f.String("type", "", "target server type, e.g. cx41 (required)")
 	f.Bool("upgrade-disk", false, "also grow the disk to match the new type (irreversible)")
-	f.Bool("json", false, "output as JSON")
+	addJSONFlag(serverResizeCmd)
 }
 
 func runServerResize(cmd *cobra.Command, args []string) error {
+	r := begin(cmd)
+	defer r.end()
 	id, _ := cmd.Flags().GetInt64("id")
 	targetType, _ := cmd.Flags().GetString("type")
 	upgradeDisk, _ := cmd.Flags().GetBool("upgrade-disk")
-	jsonOut, _ := cmd.Flags().GetBool("json")
 
 	client, err := newServerClient(cmd)
 	if err != nil {
-		return err
+		return r.fail(err)
 	}
 
-	if !jsonOut {
+	if !r.json {
 		ui.CommandHeader("nself infra server resize", fmt.Sprintf("server %d -> %s", id, targetType))
 	}
 
@@ -61,13 +62,13 @@ func runServerResize(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		if errors.Is(err, server.ErrDiskShrink) {
-			return err // already carries the full explanation, don't wrap again
+			return r.fail(err) // already carries the full explanation, don't wrap again
 		}
-		return fmt.Errorf("resize server %d: %w", id, err)
+		return r.fail(fmt.Errorf("resize server %d: %w", id, err))
 	}
 
-	if jsonOut {
-		return ui.PrintJSON(action)
+	if r.json {
+		return r.done(map[string]any{"server_id": id, "target_type": targetType, "action": action})
 	}
 
 	ui.Success(fmt.Sprintf("Started resize of server %d to %s (action %d, status %s)", id, targetType, action.ID, action.Status))

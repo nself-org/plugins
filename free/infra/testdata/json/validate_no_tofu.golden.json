@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra validate",
+  "error": {
+    "code": "E740",
+    "message": "neither tofu nor terraform was found on PATH",
+    "remediation": "install OpenTofu (https://opentofu.org) or Terraform",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

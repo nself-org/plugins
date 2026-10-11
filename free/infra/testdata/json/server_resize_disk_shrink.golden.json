@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra server resize",
+  "error": {
+    "code": "E746",
+    "message": "Hetzner Cloud cannot shrink a server's disk, the resize was refused",
+    "remediation": "snapshot the server, provision a smaller one from the snapshot, then destroy the original",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

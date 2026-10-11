@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "infra server resize",
+  "error": {
+    "code": "E745",
+    "message": "the server was not found",
+    "cause": "HTTP 404",
+    "remediation": "check the id with nself infra server list",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra server provision",
+  "error": {
+    "code": "E401",
+    "message": "provision: --name is required",
+    "remediation": "run nself infra <command> --help",
+    "exit_code": 1,
+    "class": "user"
+  }
+}
