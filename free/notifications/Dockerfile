@@ -13,10 +13,9 @@ WORKDIR /build
 # Copy the vendored SDK first for layer caching (go.mod's replace target).
 COPY sdk/ sdk/
 COPY go.mod go.sum ./
-RUN go mod download
 # Copy the rest of the plugin source.
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /plugin ./cmd/
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates wget
