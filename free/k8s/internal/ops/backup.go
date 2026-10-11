@@ -163,11 +163,22 @@ func Backup(ctx context.Context, o BackupOptions) (BackupResult, error) {
 	meta := Meta{SchemaVersion: metaVersion, Kind: metaKind, Project: o.Project, File: filepath.Base(o.Path),
 		Bytes: cw.n, SHA256: hex.EncodeToString(h.Sum(nil)), CreatedAt: o.Now().UTC().Format(time.RFC3339),
 		ServerVersion: version, Release: o.Release, Namespace: podNamespace(o), Fingerprints: fps}
-	if werr := writeMeta(o.Path, meta); werr != nil {
-		err = errBackup("the metadata file could not be written")
+	// A file with the final name may have appeared while the dump ran (two backups in the
+	// same second, a user-made --output): do not write a sidecar next to it.
+	if _, serr := os.Lstat(o.Path); serr == nil {
+		err = errExists()
 		return res, err
 	}
-	metaWritten = true
+	if werr := writeMeta(o.Path, meta); werr != nil {
+		var oe *Error
+		if errors.As(werr, &oe) {
+			err = oe // an existing sidecar is left alone; metaWritten stays false
+		} else {
+			err = errBackup("the metadata file could not be written")
+		}
+		return res, err
+	}
+	metaWritten = true // our own link succeeded: the cleanup may remove this sidecar
 	if err = publish(partial, o.Path); err != nil {
 		return res, err
 	}

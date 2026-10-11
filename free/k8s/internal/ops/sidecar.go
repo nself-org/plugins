@@ -16,6 +16,7 @@ package ops
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
@@ -48,7 +49,8 @@ func MetaPath(dump string) string {
 	return filepath.Join(filepath.Dir(dump), metaDir, filepath.Base(dump)+".json")
 }
 
-// writeMeta writes m as the sidecar of dump: temp file in .meta, then rename.
+// writeMeta writes m as the sidecar of dump: temp file in .meta, then a link that never
+// replaces an existing sidecar (errExists, E738).
 func writeMeta(dump string, m Meta) error {
 	final := MetaPath(dump)
 	dir := filepath.Dir(final)
@@ -67,7 +69,7 @@ func writeMeta(dump string, m Meta) error {
 	ok := false
 	defer func() {
 		if !ok {
-			_ = os.Remove(name)
+			_ = os.Remove(name) // also after a successful link: the temp name is not needed
 		}
 	}()
 	if _, err := tmp.Write(append(b, '\n')); err != nil {
@@ -85,11 +87,24 @@ func writeMeta(dump string, m Meta) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(name, final); err != nil {
-		return err
+	// Publish without replacing: a sidecar that already exists belongs to another backup.
+	// A hard link fails if final exists; the temp name is removed either way (ok stays
+	// false). A file system without hard links falls back to rename after an Lstat check.
+	switch lerr := os.Link(name, final); {
+	case lerr == nil:
+		return nil
+	case errors.Is(lerr, os.ErrExist):
+		return errExists()
+	default:
+		if _, serr := os.Lstat(final); serr == nil {
+			return errExists()
+		}
+		if rerr := os.Rename(name, final); rerr != nil {
+			return rerr
+		}
+		ok = true
+		return nil
 	}
-	ok = true
-	return nil
 }
 
 // readMeta reads and validates the sidecar of dump (E734 on any problem).

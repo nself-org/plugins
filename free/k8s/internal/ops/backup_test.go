@@ -512,3 +512,48 @@ func TestErrorDetailIsMaskedForHumansAndNeverInTheCause(t *testing.T) {
 		t.Error("an unterminated quote must mask the rest of the line")
 	}
 }
+
+func TestBackupLeavesAnotherBackupsSidecarAlone(t *testing.T) {
+	f := newFake()
+	o := backupOpts(f, t.TempDir())
+	dir := filepath.Dir(o.Path)
+	const other = `{"schema_version":"1","kind":"k8s-backup","note":"the other backup"}`
+	f.onDump = func() {
+		_ = os.MkdirAll(filepath.Join(dir, metaDir), 0o700)
+		_ = os.WriteFile(o.Path, []byte("the other dump"), 0o600)
+		_ = os.WriteFile(MetaPath(o.Path), []byte(other), 0o600)
+	}
+	_, err := Backup(context.Background(), o)
+	wantCode(t, err, CodeTarget)
+	if b, _ := os.ReadFile(MetaPath(o.Path)); string(b) != other {
+		t.Errorf("the other sidecar changed: %q", b)
+	}
+	if b, _ := os.ReadFile(o.Path); string(b) != "the other dump" {
+		t.Error("the other dump changed")
+	}
+	if p := partialsIn(t, dir); len(p) != 0 {
+		t.Errorf("partial left: %v", p)
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, metaDir, ".tmp-*")); len(m) != 0 {
+		t.Errorf("temp sidecar left: %v", m)
+	}
+}
+
+func TestBackupSidecarAppearingAloneIsNotReplaced(t *testing.T) {
+	// Only a sidecar (no dump) appears mid-dump: writeMeta must not replace it either.
+	f := newFake()
+	o := backupOpts(f, t.TempDir())
+	dir := filepath.Dir(o.Path)
+	f.onDump = func() {
+		_ = os.MkdirAll(filepath.Join(dir, metaDir), 0o700)
+		_ = os.WriteFile(MetaPath(o.Path), []byte("keep"), 0o600)
+	}
+	_, err := Backup(context.Background(), o)
+	wantCode(t, err, CodeTarget)
+	if b, _ := os.ReadFile(MetaPath(o.Path)); string(b) != "keep" {
+		t.Errorf("sidecar replaced or removed: %q", b)
+	}
+	if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
+		t.Error("a dump was published next to a foreign sidecar")
+	}
+}
