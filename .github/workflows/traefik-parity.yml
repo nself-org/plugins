@@ -1,0 +1,38 @@
+name: Traefik Parity
+
+# Request-level parity between nginx (the cli golden confs) and Traefik (rendered from routes.json), P7-DEPL-02.
+# The job's run step is the same script the Ticket runs locally: free/traefik/tests/parity.sh.
+on:
+  pull_request:
+    paths:
+      - 'free/traefik/**'
+      - 'images.d/traefik.json'
+      - '.github/workflows/traefik-parity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/traefik/go.mod
+
+      - name: Go tests and vet
+        working-directory: free/traefik
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+
+      - name: Parity suite (nginx vs Traefik, Linux containers)
+        run: bash free/traefik/tests/parity.sh
