@@ -1,18 +1,80 @@
 {
-  "name": "audit-log",
-  "version": "1.2.6",
-  "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.0",
   "category": "compliance",
+  "description": "Append-only audit log for security-relevant events: auth, privilege change, secret access, plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HASURA_GRAPHQL_ADMIN_SECRET",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "audit-log",
+  "permissions": {
+    "database": [
+      "create",
+      "read"
+    ],
+    "filesystem": [],
+    "network": [
+      "inbound"
+    ]
+  },
+  "port": 3308,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_audit_log",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3308
+  },
+  "status": "stable",
+  "tables": [
+    "np_auditlog_events"
+  ],
   "tags": [
     "audit",
     "security",
@@ -20,63 +82,6 @@
     "logging",
     "events"
   ],
-  "tables": [
-    "np_auditlog_events"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "optionalDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "PLUGIN_INTERNAL_SECRET"
-    ],
-    "optional": [
-      "PORT",
-      "HASURA_GRAPHQL_ADMIN_SECRET"
-    ]
-  },
-  "config": {
-    "defaultPort": 3308
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read"
-    ],
-    "network": [
-      "inbound"
-    ],
-    "filesystem": []
-  },
-  "port": 3308,
-  "status": "stable",
-  "binary_name": "audit-log",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target",
   "tier": "free",
-  "schema": "np_audit_log",
-  "migrations": {
-    "dir": "migrations",
-    "apply": "boot"
-  }
+  "version": "1.2.6"
 }

@@ -38,6 +38,15 @@ The `user` role `select` permission uses an `_or` clause:
 
 ## Migrations
 
+`audit-log` applies these files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_audit_log.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates the table from Go code, and
+`np_auditlog_events` lives in `public`.
+
+**Upgrading an existing install.** The files are idempotent (`IF NOT EXISTS`, guarded policy blocks), so they apply over a
+table an earlier version created: no data is touched or dropped. The first start of the new version creates the ledger and
+adds the columns older tables lack (`tenant_id`).
+
 | File | Description |
 |---|---|
 | `001_audit_log_init.sql` | Creates `np_auditlog_events` (partitioned, append-only, RLS) |
