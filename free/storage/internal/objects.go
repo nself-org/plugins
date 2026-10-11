@@ -37,22 +37,44 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var bucketID string
-	var existed bool // a row for this key exists already: an overwrite keeps its bytes if the row write fails
-	err := s.db.QueryRow(r.Context(),
-		`SELECT b.id, EXISTS (SELECT 1 FROM np_storage_objects o WHERE o.bucket_id = b.id AND o.key = $3)
-		 FROM np_storage_buckets b WHERE b.source_account_id = $1 AND b.name = $2`,
-		sai, bucket, key).Scan(&bucketID, &existed)
+	// Cheap refusal first: an announced length over the cap needs no DB round trip.
+	if r.ContentLength > s.maxObjectBytes() {
+		writePutLimit(w, errObjectTooLarge)
+		return
+	}
+	quota := s.accountQuotaBytes()
+	look, err := s.lookupPut(r.Context(), sai, bucket, key, quota)
 	if err != nil {
 		writeLookupError(w, err, `{"error":"bucket not found"}`, "put "+bucket+"/"+key+": bucket lookup")
 		return
 	}
+	bucketID := look.bucketID
+	existed := look.oldSize != nil
+	var overwrite int64
+	if existed {
+		overwrite = *look.oldSize
+	}
+	plan, err := planPut(s.maxObjectBytes(), quota, look.used, overwrite, r.ContentLength)
+	if err != nil {
+		writePutLimit(w, err)
+		return
+	}
 
 	defer r.Body.Close()
-	body := newIdleReader(w, r.Body, uploadIdleTimeout)
+	// The limit reader stops a chunked or understated body at the budget; the idle reader sits outside it.
+	body := newIdleReader(w, http.MaxBytesReader(w, r.Body, plan.limit), uploadIdleTimeout)
 	res, err := s.store.Put(r.Context(), bucket, objectKey(sai, key), body, contentType, r.ContentLength)
 	if err != nil {
 		log.Printf("storage: put %s/%s: %v", bucket, key, err)
+		if isTooLarge(err) {
+			if plan.quotaBinds {
+				err = errQuotaExceeded
+			} else {
+				err = errObjectTooLarge
+			}
+			writePutLimit(w, err)
+			return
+		}
 		writePutError(w, err)
 		return
 	}

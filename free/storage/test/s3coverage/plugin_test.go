@@ -27,6 +27,9 @@ import (
 	"github.com/nself-org/plugin-storage/internal/s3store"
 )
 
+// testInternalSecret is the fake PLUGIN_INTERNAL_SECRET the harness server expects in X-Plugin-Secret.
+const testInternalSecret = "test-internal-secret"
+
 // pluginHarness is the real internal.Server on the suite database and S3 endpoint, behind httptest.
 type pluginHarness struct {
 	url string
@@ -103,7 +106,7 @@ func newPluginWrapped(t *testing.T) (*pluginHarness, *failStore) {
 	rec := &recorder{}
 	fs := &failStore{ObjectStore: newStore(t, rec)}
 	r := chi.NewRouter()
-	internal.NewServer(pool, &internal.Config{Port: "0"}, fs).Routes(r)
+	internal.NewServer(pool, &internal.Config{Port: "0", InternalSecret: testInternalSecret}, fs).Routes(r)
 	ts := httptest.NewServer(r)
 	t.Cleanup(ts.Close)
 	return &pluginHarness{url: ts.URL, rec: rec}, fs
@@ -116,6 +119,7 @@ func (p *pluginHarness) call(t *testing.T, tenant, method, path string, body io.
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("X-Plugin-Secret", testInternalSecret)
 	if tenant != "" {
 		req.Header.Set("X-Hasura-Source-Account-Id", tenant)
 	}

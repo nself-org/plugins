@@ -1,7 +1,7 @@
 // Package main is the entrypoint for plugin-storage.
 //
 // Purpose: Start the plugin-storage HTTP server.
-// Inputs: Environment variables (NSELF_DB_URL, STORAGE_PLUGIN_PORT, S3_* vars).
+// Inputs: Environment variables (NSELF_DB_URL, STORAGE_PLUGIN_PORT, PLUGIN_INTERNAL_SECRET, STORAGE_* limits, S3_* vars).
 // Outputs: HTTP server on STORAGE_PLUGIN_PORT (default 9007).
 // Constraints:
 //   - S3_ENDPOINT is config-only; never user-overridable per request (SSRF guard).
@@ -64,6 +64,10 @@ func main() {
 		log.Fatalf("s3 config error: set both S3_ACCESS_KEY and S3_SECRET_KEY, or neither")
 	} else {
 		log.Printf("s3: not configured (S3_ACCESS_KEY/S3_SECRET_KEY unset); object routes answer 503")
+	}
+
+	if cfg.InternalSecret == "" {
+		log.Printf("auth: PLUGIN_INTERNAL_SECRET unset; /storage/* routes answer 503 until it is set")
 	}
 
 	srv := internal.NewServer(db, cfg, store)

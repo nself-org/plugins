@@ -38,6 +38,9 @@ Check this plugin with `curl http://127.0.0.1:9007/health`.
 |----------|----------|---------|-------------|
 | `NSELF_DB_URL` | Yes | — | PostgreSQL connection string |
 | `STORAGE_PLUGIN_PORT` | No | `9007` | HTTP server port |
+| `PLUGIN_INTERNAL_SECRET` | For `/storage/*` | — | Shared secret every `/storage/*` request must carry in `X-Plugin-Secret`. The CLI generates it and injects it into the plugin; unset, the object routes answer `503` |
+| `STORAGE_MAX_OBJECT_BYTES` | No | `5368709120` (5 GiB) | Largest accepted object, positive integer bytes; larger uploads answer `413` |
+| `STORAGE_ACCOUNT_QUOTA_BYTES` | No | `0` (off) | Total bytes one account may store, non-negative integer bytes; `0` or unset disables the quota |
 | `STORAGE_MAX_UPLOADS` | No | `64` | Uploads of any size that may run at once; others wait |
 | `STORAGE_MAX_LARGE_UPLOADS` | No | `8` | Of those, uploads above 1 MiB that may run at once (each holds a 16 MiB buffer) |
 | `STORAGE_UPLOAD_SLOT_WAIT` | No | `30s` | How long an upload waits for a free slot before `503` |
@@ -52,6 +55,19 @@ Check this plugin with `curl http://127.0.0.1:9007/health`.
 (`GET ...?metadata=true`), but every route that needs S3 (create bucket, upload, download, delete) answers
 `503 {"error":"object storage not configured"}`. Setting only one of the two keys is a start-up error. A request that
 reaches S3 and fails there answers `502 {"error":"object storage error"}`.
+
+## Authentication
+
+The `/storage/*` routes are for trusted backend services, not end users. Every request must carry
+`X-Plugin-Secret: <PLUGIN_INTERNAL_SECRET>` (compared in constant time). The check runs before anything else, so the
+`X-Hasura-Source-Account-Id` header, which picks the tenant, is trusted only on requests that carry the secret.
+
+| Case | Answer |
+|------|--------|
+| `X-Plugin-Secret` missing or wrong | `401 {"error":"unauthorized"}` |
+| `PLUGIN_INTERNAL_SECRET` not set on the plugin | `503 {"error":"PLUGIN_INTERNAL_SECRET not configured"}` (fail closed; the plugin logs one line at start and `/health` stays up) |
+
+Do not hand the secret to browsers or mobile apps: a caller holding it can name any account.
 
 ## API
 
@@ -100,6 +116,14 @@ at most `STORAGE_MAX_LARGE_UPLOADS` hold a pooled 16 MiB buffer, so upload memor
 answers `503 {"error":"upload capacity reached, retry"}` with `Retry-After`. An upload body that sends nothing for 60
 seconds fails (`408`) and frees its slot; a body that keeps flowing may take as long as it needs. Downloads have no
 slot limit and are streamed; the server's write timeout caps a single download at 15 minutes.
+
+**Size limits.** A `PUT` whose `Content-Length` is above `STORAGE_MAX_OBJECT_BYTES` answers
+`413 {"error":"object too large"}` before any S3 call; a chunked body that grows past the limit is cut off the same way
+and an in-progress multipart upload is aborted. With `STORAGE_ACCOUNT_QUOTA_BYTES` set, the plugin sums the account's
+`np_storage_objects.size_bytes` before the S3 write (minus the object being overwritten) and answers
+`413 {"error":"account quota exceeded"}` when the upload does not fit; chunked bodies are limited to the remaining room.
+The quota is best effort: uploads running at the same time each see the same stored total, so a burst can overshoot it by
+up to `STORAGE_MAX_UPLOADS x STORAGE_MAX_OBJECT_BYTES`. It is not a hard reservation.
 
 **Truncated uploads never commit.** A body that ends early, or whose length differs from the declared
 `Content-Length`, answers `400 {"error":"request body incomplete"}`; nothing is stored and a multipart upload is
@@ -164,6 +188,7 @@ To point the suite at another endpoint, set `S3COV_ENDPOINT`, `S3COV_ACCESS_KEY`
 - Object keys are validated against path traversal (`..` sequences are rejected).
 - `S3_ENDPOINT` is configuration-only; no request parameter can override the endpoint.
 - S3 credentials come from the environment only.
+- `/storage/*` requires `X-Plugin-Secret` (see Authentication); the account header is trusted only with it.
 - All DB queries are scoped to `source_account_id` for multi-app isolation, and S3 keys carry the same prefix.
 - Hasura row filters enforce `source_account_id = X-Hasura-Source-Account-Id` on all tables.
 
