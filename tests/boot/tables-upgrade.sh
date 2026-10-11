@@ -12,12 +12,14 @@
 #                 basis build never created), then seed rows: free/<plugin>/tests/boot/seed.sql when present, else
 #                 INSERT ... DEFAULT VALUES into every manifest table. A plugin that ends with zero seeded rows FAILS.
 #                 Then boot the converted build on the SAME database and require applied == expected, every manifest
-#                 table present, and every seeded row still there (row counts per table did not drop).
+#                 table present, and every seeded row still there (by primary key).
 #
 # Basis image hook: free/<plugin>/tests/boot/basis-from (converted plugin dir; one line, an image ref) rewrites the image of
 # the basis Dockerfile's first `FROM golang:` line (an `AS name` is kept) to that ref before the basis image is built, and
 # prints a line saying so. For a basis tree that never built as shipped (storage: go.mod needs go >= 1.25, FROM golang:1.22);
 # everything else of the basis build stays as shipped. Test-only.
+# Row survival is checked by identity, not count: the primary-key values of every seeded row are saved before the upgrade
+# and each must still exist after the converted boot (a table without a primary key falls back to its row count).
 # Env hook, same as tests/boot/run.sh: free/<plugin>/tests/boot/env holds KEY=value lines passed as -e to every boot;
 # only $DATABASE_URL and $PORT (or ${...}) are expanded, by string replacement (no eval); dummy values only.
 # Basis tree: git archive "$(git merge-base origin/main HEAD)" free/<plugin>... | tar -x -C .boot-basis (never committed).
@@ -89,6 +91,16 @@ counts() {
   printf '%s\n' "$out"
 }
 
+# pkrows <db> <table> <file>: the primary-key values of every row ("(v1,v2)" text), sorted, into <file>. Returns 1 when the
+# table has no primary key (the caller then falls back to the row count).
+pkrows() {
+  local q cols
+  q=$(qualified "$2")
+  cols=$(sql "$1" "SELECT string_agg(format('%I', a.attname), ',' ORDER BY k.ord) FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ord) JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum WHERE i.indrelid = '$q'::regclass AND i.indisprimary" 2>/dev/null)
+  [ -n "$cols" ] || return 1
+  sql "$1" "SELECT ROW($cols)::text FROM $q" 2>/dev/null | LC_ALL=C sort > "$3"
+}
+
 docker network create "$net" >/dev/null
 docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD=boot -e POSTGRES_DB=boot postgres:16 >/dev/null
 for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/null 2>&1 && break; sleep 1; done
@@ -129,9 +141,17 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
   before=$(counts "$udb" $tables); seeded=0; unreadable=0
   for n in $before; do case $n in x) unreadable=1;; *) seeded=$((seeded + n));; esac; done
   if [ $seeded -lt 1 ] || [ $unreadable -eq 1 ]; then echo "FAIL  upgrade $p: seeded rows before the upgrade: counts '$before' (need at least one row, every manifest table readable)"; rc=1; continue; fi
+  i=0; nopk=" "
+  for t in $tables; do i=$((i + 1)); pkrows "$udb" "$t" "$W/pk-before-$i" || nopk="$nopk$i "; done
   boot "nself-tu-c-$pid" "$tag" "$udb" "$port"
   after=$(counts "$udb" $tables); lost=0; i=0
-  for n in $before; do i=$((i + 1)); a=$(printf '%s' "$after" | awk -v k=$i '{ print $k }'); case $a in x|'') lost=1;; *) [ "$a" -ge "$n" ] || lost=1;; esac; done
+  for t in $tables; do
+    i=$((i + 1)); n=$(printf '%s' "$before" | awk -v k=$i '{ print $k }'); a=$(printf '%s' "$after" | awk -v k=$i '{ print $k }')
+    case $nopk in
+      *" $i "*) case $a in x|'') lost=1;; *) [ "$a" -ge "$n" ] || { lost=1; echo "FAIL  upgrade $p: table $t lost rows (count $n -> $a)"; };; esac;;
+      *) if pkrows "$udb" "$t" "$W/pk-after-$i" && [ -z "$(LC_ALL=C comm -23 "$W/pk-before-$i" "$W/pk-after-$i")" ]; then :; else lost=1; echo "FAIL  upgrade $p: table $t lost or rewrote a seeded row (primary keys: $(LC_ALL=C comm -23 "$W/pk-before-$i" "$W/pk-after-$i" 2>/dev/null | head -3 | tr '\n' ' '))"; fi;;
+    esac
+  done
   if mig_ok "$expected" && tables_present "$udb" $tables && [ $lost -eq 0 ]; then echo "pass  upgrade $p: basis seeded $seeded row(s) (counts $before), converted boot applied=expected=$expected, counts after $after"
   else echo "FAIL  upgrade $p: want migrations $expected/$expected, tables present, no row lost; health='$H' counts before '$before' after '$after'"; printf '%s\n' "$LOGS" | tail -8; rc=1; fi
   docker rmi -f "$tag" "$btag" >/dev/null 2>&1
