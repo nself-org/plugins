@@ -5,7 +5,10 @@
 // Inputs: a routes.json byte stream. Outputs: Model. Constraints: field names
 // and meaning follow the contract. Load fails closed on any field the renderer
 // does not know (a new restriction would otherwise render as an unrestricted
-// route), and every field below is either rendered or refused.
+// route), and every field below is either rendered, refused, or (the core:api-docs route and
+// its static_file and headers_add fields) skipped as an accepted difference by the renderer.
+// Optional fields added to v1 (all omitempty): locations[].upstream.path and .query,
+// locations[].static_file and locations[].headers_add.
 package contract
 
 import (
@@ -108,6 +111,10 @@ type Location struct {
 		Scheme string `json:"scheme"`
 		Host   string `json:"host"`
 		Port   int    `json:"port"`
+		// Path is the escaped URL path of the proxy_pass target ("/" kept); Query is its raw
+		// query without the '?' (nil = no '?', "" = a bare '?'). Both are optional (omitempty).
+		Path  string  `json:"path,omitempty"`
+		Query *string `json:"query,omitempty"`
 	} `json:"upstream"`
 	RateLimit *struct {
 		Zone    string `json:"zone"`
@@ -132,6 +139,11 @@ type Location struct {
 	} `json:"return"`
 	StaticRoot  *string `json:"static_root"`
 	HealthProbe bool    `json:"health_probe"`
+	// StaticFile is the nginx alias of a single file; HeadersAdd are the response headers the
+	// location adds (nginx add_header). Both are optional (omitempty); only the core:api-docs
+	// route carries them today.
+	StaticFile *string           `json:"static_file,omitempty"`
+	HeadersAdd map[string]string `json:"headers_add,omitempty"`
 }
 
 // Load decodes and sanity-checks a routes.json.

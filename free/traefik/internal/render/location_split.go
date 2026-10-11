@@ -12,7 +12,7 @@ import (
 
 // oneKind refuses a location the renderer would otherwise render only in part: nginx applies
 // every directive of a location (an access rule before the content handler), the switch in
-// location picks one kind. More than one of static_root, deny_all, return and upstream is
+// location picks one kind. More than one of static_root, static_file, deny_all, return and upstream is
 // refused, and so is a field that has no meaning on a location that is not an upstream.
 // max_body_bytes is allowed: the CLI emits it on deny_all and return locations, and nginx
 // checks it against Content-Length before the deny or return runs, so location() renders it.
@@ -21,13 +21,13 @@ func (b *builder) oneKind(r contract.Route, l contract.Location, field string) b
 	for _, k := range []struct {
 		name string
 		set  bool
-	}{{"static_root", l.StaticRoot != nil}, {"deny_all", l.DenyAll}, {"return", l.Return != nil}, {"upstream", l.Upstream != nil}} {
+	}{{"static_root", l.StaticRoot != nil}, {"static_file", l.StaticFile != nil}, {"deny_all", l.DenyAll}, {"return", l.Return != nil}, {"upstream", l.Upstream != nil}} {
 		if k.set {
 			kinds = append(kinds, k.name)
 		}
 	}
 	if len(kinds) > 1 {
-		b.refuse(r.ID, field, fmt.Sprintf("more than one of static_root, deny_all, return and upstream is set (%s); nginx applies them together, this renderer would render one", strings.Join(kinds, ", ")))
+		b.refuse(r.ID, field, fmt.Sprintf("more than one of static_root, static_file, deny_all, return and upstream is set (%s); nginx applies them together, this renderer would render one", strings.Join(kinds, ", ")))
 		return false
 	}
 	if len(kinds) == 0 || l.Upstream != nil {
@@ -106,3 +106,30 @@ func returnStatusOK(st int) bool {
 }
 
 var methodRE = regexp.MustCompile(`^[A-Z]+$`)
+
+// contractExtras refuses the optional v1 fields this renderer cannot carry (fail closed). A
+// static_file or headers_add location is only the core:api-docs route, which route() skips before
+// it gets here. An upstream path or query changes what nginx proxy_pass sends (a "/" path replaces
+// the matched prefix), and Traefik's service URL cannot carry that.
+func (b *builder) contractExtras(r contract.Route, l contract.Location, field string) bool {
+	ok := true
+	if l.StaticFile != nil {
+		b.refuse(r.ID, field+".static_file", "an nginx alias of a single file has no Traefik equivalent (only the core:api-docs route uses it, and that route is skipped)")
+		ok = false
+	}
+	if len(l.HeadersAdd) > 0 {
+		b.refuse(r.ID, field+".headers_add", "nginx add_header on a location is not rendered (only the core:api-docs route uses it, and that route is skipped)")
+		ok = false
+	}
+	if l.Upstream != nil {
+		if l.Upstream.Path != "" {
+			b.refuse(r.ID, field+".upstream.path", fmt.Sprintf("proxy_pass URI %q: Traefik's service URL cannot carry nginx proxy_pass URI semantics (a path, even \"/\", replaces the matched prefix)", l.Upstream.Path))
+			ok = false
+		}
+		if l.Upstream.Query != nil {
+			b.refuse(r.ID, field+".upstream.query", fmt.Sprintf("proxy_pass query %q: Traefik's service URL cannot carry nginx proxy_pass URI semantics", *l.Upstream.Query))
+			ok = false
+		}
+	}
+	return ok
+}
