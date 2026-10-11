@@ -6,6 +6,10 @@
 //	ptool rawdata --url U                    every Traefik router/service/middleware must be enabled
 //	ptool serial  --addr A --sni H           leaf serial of the certificate served for H
 //	ptool matrix  --routes F --nginx H --traefik H [--tls]   request-level comparison
+//	ptool connhold  --routes F --target H [--secs N]   client A: hold conn_limit upgrades, expect 429 on the next request
+//	ptool wsidle    --routes F --target H --secs N     a websocket idle for N seconds must still echo
+//	ptool slowpost  --routes F --target H              an 80s trickle upload must still get 200
+//	ptool connprobe --routes F --target H              client B (another container): must still get 200
 //
 // stdlib only; exit 0 pass, 1 mismatch or failure.
 package main
@@ -57,8 +61,9 @@ type route struct {
 		SSLDir string `json:"ssl_dir"`
 	} `json:"tls"`
 	RateLimit *struct {
-		Zone  string `json:"zone"`
-		Burst int    `json:"burst"`
+		Zone      string `json:"zone"`
+		Burst     int    `json:"burst"`
+		ConnLimit int    `json:"conn_limit"`
 	} `json:"rate_limit"`
 	BlockedPaths []struct {
 		Status int `json:"status"`
@@ -67,6 +72,7 @@ type route struct {
 		Path      string `json:"path"`
 		Match     string `json:"match"`
 		WebSocket bool   `json:"websocket"`
+		DenyAll   bool   `json:"deny_all"`
 		Upstream  *struct {
 			Scheme string `json:"scheme"`
 			Host   string `json:"host"`
@@ -99,7 +105,7 @@ func die(err error) {
 
 func main() {
 	if len(os.Args) < 2 {
-		die(fmt.Errorf("usage: ptool plan|backend|gencert|rawdata|serial|matrix"))
+		die(fmt.Errorf("usage: ptool plan|backend|gencert|rawdata|serial|matrix|connhold|connprobe|wsidle|slowpost"))
 	}
 	cmd, args := os.Args[1], os.Args[2:]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
@@ -112,6 +118,9 @@ func main() {
 	ngx := fs.String("nginx", "nginx", "nginx container")
 	trf := fs.String("traefik", "traefik", "traefik container")
 	req := fs.String("require", "", "router that must exist (rawdata)")
+	tgt := fs.String("target", "", "proxy container (connhold, connprobe)")
+	secs := fs.Int("secs", 30, "seconds connhold keeps its connections, wsidle stays idle")
+	needTier := fs.Bool("need-tier", false, "matrix: fail unless a host-tier overlap was compared")
 	_ = fs.Parse(args)
 	switch cmd {
 	case "plan":
@@ -127,7 +136,15 @@ func main() {
 		must(err)
 		fmt.Println(s)
 	case "matrix":
-		matrix(loadRoutes(*rf), *ngx, *trf)
+		matrix(loadRoutes(*rf), *ngx, *trf, *needTier)
+	case "wsidle":
+		wsIdle(loadRoutes(*rf), *tgt, *secs)
+	case "slowpost":
+		slowPost(loadRoutes(*rf), *tgt)
+	case "connhold":
+		connHold(loadRoutes(*rf), *tgt, *secs)
+	case "connprobe":
+		connProbe(loadRoutes(*rf), *tgt)
 	default:
 		die(fmt.Errorf("unknown command %q", cmd))
 	}

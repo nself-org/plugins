@@ -71,9 +71,11 @@ func (b *builder) tlsSpec(route string, protocols []string, ciphers *string) (ma
 				return nil, false
 			}
 		}
-		if len(suites) > 0 {
-			spec["cipherSuites"] = suites
+		if len(suites) == 0 {
+			b.refuse(route, "tls.ciphers", fmt.Sprintf("%q leaves no cipher Go implements; Go would fall back to its broader defaults", *ciphers))
+			return nil, false
 		}
+		spec["cipherSuites"] = suites
 	}
 	return spec, true
 }

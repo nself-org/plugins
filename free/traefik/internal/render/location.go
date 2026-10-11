@@ -21,6 +21,8 @@ const (
 
 func (b *builder) location(r contract.Route, i int, l contract.Location, host string, ls []listener, sec string) {
 	field := fmt.Sprintf("locations[%d](%s)", i, l.Path)
+	b.noLog = !l.AccessLog
+	defer func() { b.noLog = false }()
 	if strings.ContainsAny(l.Path, "`") || !strings.HasPrefix(l.Path, "/") || (l.Match != "prefix" && l.Match != "exact") {
 		b.refuse(r.ID, field, "path or match is not expressible")
 		return
@@ -70,7 +72,7 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 		return
 	}
 	for _, ln := range ls {
-		b.addRouter(fmt.Sprintf("%s-l%d", safe(r.ID), i), rule, (class+len(l.Path))*2, ln, mws, svc)
+		b.addRouter(fmt.Sprintf("%s-l%d", rname(r.ID), i), rule, (class+len(l.Path))*2, ln, mws, svc)
 	}
 }
 
@@ -89,12 +91,20 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 	} else if rl := r.RateLimit; rl != nil && l.Path == "/" && l.Match == "prefix" {
 		add(b.rateMW(r.ID, "rate_limit", rl.Zone, rl.Burst, true))
 	}
+	if rl := r.RateLimit; rl != nil && rl.ConnLimit < 0 {
+		b.refuse(r.ID, "rate_limit.conn_limit", fmt.Sprintf("%d is negative", rl.ConnLimit))
+		return false
+	}
 	if rl := r.RateLimit; rl != nil && rl.ConnLimit > 0 && l.Path == "/" && l.Match == "prefix" {
 		add(b.connMW(rl.ConnLimit))
 	}
 	limit := b.m.Defaults.MaxBodyBytes
 	if l.MaxBodyBytes != nil {
 		limit = *l.MaxBodyBytes
+	}
+	if limit < 0 {
+		b.refuse(r.ID, field+".max_body_bytes", fmt.Sprintf("%d is negative", limit))
+		return false
 	}
 	if limit > 0 {
 		add(b.bufferMW(limit))
@@ -106,7 +116,7 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 		return false
 	}
 	pri := (class + len(l.Path)) * 2
-	name := fmt.Sprintf("%s-l%d", safe(r.ID), i)
+	name := fmt.Sprintf("%s-l%d", rname(r.ID), i)
 	for _, ln := range ls {
 		if len(l.Methods) == 0 || l.HealthProbe {
 			b.addRouter(name, rule, pri, ln, mws, svc)
@@ -153,7 +163,7 @@ func (b *builder) blocked(r contract.Route, host string, ls []listener, sec stri
 		}
 		mws = append(mws, b.respondMW(bp.Status))
 		for _, ln := range ls {
-			b.addRouter(fmt.Sprintf("%s-b%d", safe(r.ID), i), host+" && PathRegexp(`"+bp.Regex+"`)", classBlocked*2, ln, mws, b.responder())
+			b.addRouter(fmt.Sprintf("%s-b%d", rname(r.ID), i), host+" && PathRegexp(`"+bp.Regex+"`)", classBlocked*2, ln, mws, b.responder())
 		}
 	}
 }

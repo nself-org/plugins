@@ -8,3 +8,4 @@ projects: ENV/BASE_DOMAIN/SSL_MODE per fixture name:
   plugin-unmodelled dev; plugin idme snippet holding a directive outside the vocabulary
   plugin-tls-server prod; MONITORING_ENABLED
   hand              dev; nginx/conf.d/custom.conf with an http-level map (unmodelled_global)
+  host-tier         NOT cli output: plugin-modelled plus one hand-written wildcard route (*.example.test, /api/ and /quiet/ with access_log off) and its nginx conf; proves exact hosts beat a wildcard with a longer path

@@ -28,7 +28,14 @@ func (b *builder) rateMW(route, field, zone string, burst int, nodelay bool) str
 		return ""
 	}
 	var avg int
-	_, _ = fmt.Sscan(m[1], &avg)
+	if _, err := fmt.Sscan(m[1], &avg); err != nil || avg <= 0 {
+		b.refuse(route, field, fmt.Sprintf("zone rate %q is zero or unreadable; Traefik treats average 0 as no limit while nginx refuses to load it", *z.Rate))
+		return ""
+	}
+	if burst < 0 {
+		b.refuse(route, field, fmt.Sprintf("burst %d is negative", burst))
+		return ""
+	}
 	period := "1s"
 	if m[2] == "m" {
 		period = "1m"
@@ -36,10 +43,11 @@ func (b *builder) rateMW(route, field, zone string, burst int, nodelay bool) str
 	spec := map[string]any{"average": avg, "period": period, "burst": burst + 1}
 	switch z.Key {
 	case "$binary_remote_addr":
-	case "$http_authorization":
-		spec["sourceCriterion"] = map[string]any{"requestHeaderName": "Authorization"}
-	case "$http_x_tenant_id":
-		spec["sourceCriterion"] = map[string]any{"requestHeaderName": "X-Tenant-ID"}
+	case "$http_authorization", "$http_x_tenant_id":
+		// nginx does not count a request whose key is empty; Traefik would put every request without
+		// the header into one shared bucket, so one anonymous client could throttle all of them.
+		b.refuse(route, field, fmt.Sprintf("zone key %q: requests without the header are unlimited on nginx but share one bucket on Traefik", z.Key))
+		return ""
 	default:
 		b.refuse(route, field, fmt.Sprintf("zone key %q has no Traefik source criterion", z.Key))
 		return ""
@@ -48,7 +56,9 @@ func (b *builder) rateMW(route, field, zone string, burst int, nodelay bool) str
 }
 
 func (b *builder) connMW(n int) string {
-	return b.mw("inFlightReq", map[string]any{"amount": n})
+	// limit_conn counts per client address ($binary_remote_addr). Traefik groups by Host unless a
+	// sourceCriterion is set; depth 0 is the remote address (an empty ipStrategy fails to load).
+	return b.mw("inFlightReq", map[string]any{"amount": n, "sourceCriterion": map[string]any{"ipStrategy": map[string]any{"depth": 0}}})
 }
 
 func (b *builder) bufferMW(limit int64) string {
@@ -90,6 +100,10 @@ func (b *builder) reqHeaders(route, field string, l contract.Location) string {
 		}
 		if strings.Contains(v, "$") {
 			b.refuse(route, field+".headers_set."+k, fmt.Sprintf("value %q holds an nginx variable", v))
+			continue
+		}
+		if !headerOK(k, v) {
+			b.refuse(route, field+".headers_set."+k, "header name is not a token or the value holds a control character")
 			continue
 		}
 		custom[k] = v

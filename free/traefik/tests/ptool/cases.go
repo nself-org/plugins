@@ -26,14 +26,14 @@ func scheme(rt route) string {
 	return "http"
 }
 
-func matrix(m routes, ngx, trf string) {
+func matrix(m routes, ngx, trf string, needTier bool) {
 	r := &runner{n: target{ngx}, t: target{trf}}
 	hasTLS := false
 	for _, rt := range m.Routes {
 		hasTLS = hasTLS || rt.Listen.HTTPS
 	}
 	get := func(rt route, path string) req {
-		return req{scheme: scheme(rt), host: rt.ServerNames[0], method: "GET", path: path}
+		return req{scheme: scheme(rt), host: hostOf(rt), method: "GET", path: path}
 	}
 	compressed := false
 	for _, rt := range m.Routes {
@@ -72,8 +72,8 @@ func matrix(m routes, ngx, trf string) {
 		if rt.Listen.HTTP || rt.Listen.HTTPS {
 			for _, l := range rt.Locations {
 				if l.Path == "/" && l.WebSocket {
-					a, ea := wsCheck(r.n, scheme(rt), rt.ServerNames[0])
-					b, eb := wsCheck(r.t, scheme(rt), rt.ServerNames[0])
+					a, ea := wsCheck(r.n, scheme(rt), hostOf(rt))
+					b, eb := wsCheck(r.t, scheme(rt), hostOf(rt))
 					if ea != nil || eb != nil || a != b || !strings.HasPrefix(a, "101") {
 						r.fail(rt.ID+" websocket", fmt.Sprintf("nginx=%q (%v) traefik=%q (%v)", a, ea, b, eb))
 					} else {
@@ -98,6 +98,8 @@ func matrix(m routes, ngx, trf string) {
 	if hasTLS {
 		sans(r, m)
 	}
+	encodedSlash(r, m)
+	hostTier(r, m, needTier)
 	bodyLimit(r, m, get)
 	rates(r, m, get)
 	fmt.Printf("\nmatrix: %d checks passed, %d failed\n", r.checks, len(r.fails))
@@ -171,15 +173,15 @@ func unknownHost(r *runner, m routes, hasTLS bool) {
 func sans(r *runner, m routes) {
 	seen := map[string]bool{}
 	for _, rt := range m.Routes {
-		if rt.TLS == nil || seen[rt.ServerNames[0]] {
+		if rt.TLS == nil || seen[hostOf(rt)] {
 			continue
 		}
-		seen[rt.ServerNames[0]] = true
-		a, b := r.n.do(req{scheme: "https", host: rt.ServerNames[0], method: "GET", path: "/healthz"}), r.t.do(req{scheme: "https", host: rt.ServerNames[0], method: "GET", path: "/healthz"})
+		seen[hostOf(rt)] = true
+		a, b := r.n.do(req{scheme: "https", host: hostOf(rt), method: "GET", path: "/healthz"}), r.t.do(req{scheme: "https", host: hostOf(rt), method: "GET", path: "/healthz"})
 		if strings.Join(a.sans, ",") != strings.Join(b.sans, ",") || len(a.sans) == 0 {
-			r.fail("SANs "+rt.ServerNames[0], fmt.Sprintf("nginx=%v traefik=%v", a.sans, b.sans))
+			r.fail("SANs "+hostOf(rt), fmt.Sprintf("nginx=%v traefik=%v", a.sans, b.sans))
 		} else {
-			r.ok(fmt.Sprintf("SANs %s (%d names)", rt.ServerNames[0], len(a.sans)))
+			r.ok(fmt.Sprintf("SANs %s (%d names)", hostOf(rt), len(a.sans)))
 		}
 	}
 	if a, b := serialOf(r.n.name), serialOf(r.t.name); a != b {
@@ -203,8 +205,8 @@ func bodyLimit(r *runner, m routes, get func(route, string) req) {
 			continue
 		}
 		n := m.Defaults.MaxBodyBytes + 1
-		a, ea := declaredTooLarge(r.n, scheme(rt), rt.ServerNames[0], n)
-		b, eb := declaredTooLarge(r.t, scheme(rt), rt.ServerNames[0], n)
+		a, ea := declaredTooLarge(r.n, scheme(rt), hostOf(rt), n)
+		b, eb := declaredTooLarge(r.t, scheme(rt), hostOf(rt), n)
 		if ea != nil || eb != nil || a != 413 || b != 413 {
 			r.fail(rt.ID+" body over defaults.max_body_bytes", fmt.Sprintf("nginx=%d (%v) traefik=%d (%v), want 413", a, ea, b, eb))
 		} else {

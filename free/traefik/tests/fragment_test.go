@@ -92,6 +92,16 @@ func TestStaticConfigPolicy(t *testing.T) {
 		if _, ok := prov["docker"]; ok || len(prov) != 1 || get(st, "providers", "file", "directory") != "/dynamic" || get(st, "providers", "file", "watch") != true {
 			t.Errorf("%s: providers must be the file directory provider only: %v", rel, prov)
 		}
+		for _, ep := range []string{"web", "websecure"} {
+			if v, ok := get(st, "entryPoints", ep, "http", "encodedCharacters", "allowEncodedSlash").(bool); !ok || v {
+				t.Errorf("%s: entryPoints.%s must set http.encodedCharacters.allowEncodedSlash: false (blocked-path bypass via %%2F)", rel, ep)
+			}
+		}
+		for _, ep := range []string{"web", "websecure"} {
+			if got := get(st, "entryPoints", ep, "transport", "respondingTimeouts", "readTimeout"); got != "0s" {
+				t.Errorf("%s: entryPoints.%s readTimeout must be 0s (Traefik's 60s total read deadline cuts websockets and slow uploads), got %v", rel, ep, got)
+			}
+		}
 		if get(st, "certificatesResolvers") != nil {
 			t.Errorf("%s: certificatesResolvers present (certificates come from ssl/)", rel)
 		}

@@ -3,11 +3,28 @@
 global:
   checkNewVersion: false
   sendAnonymousUsage: false
+# allowEncodedSlash: false makes %2F a 400. nginx decodes it and merges the path before matching, so blocked paths and
+# deny_all prefixes hold there; Traefik matches the still-encoded path, so /x/..%2f.env would reach the upstream.
+# readTimeout: 0s because Traefik v3 defaults to 60s as a TOTAL read deadline, which cuts websockets (it stays on
+# hijacked connections) and slow uploads; nginx only times the gap between reads. Upstream timeouts come from the
+# rendered serversTransports.
 entryPoints:
   web:
     address: ":80"
+    http:
+      encodedCharacters:
+        allowEncodedSlash: false
+    transport:
+      respondingTimeouts:
+        readTimeout: 0s
   websecure:
     address: ":443"
+    http:
+      encodedCharacters:
+        allowEncodedSlash: false
+    transport:
+      respondingTimeouts:
+        readTimeout: 0s
   traefik:
     address: ":8082"
 ping:

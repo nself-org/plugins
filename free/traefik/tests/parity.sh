@@ -12,7 +12,7 @@ NGINX_IMG=nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e5
 TRAEFIK_IMG=$(jq -r .image "$REPO/images.d/traefik.json")
 NET=nself-traefik-parity-$$; PTOOL=nself-traefik-ptool:p$$; RENDER=nself-traefik-render:p$$; LABEL=nself-parity=$$
 ME="$(id -u):$(id -g)"
-FIXTURES=${PARITY_FIXTURES:-"http-full tls-full plugin-modelled"}
+FIXTURES=${PARITY_FIXTURES:-"http-full tls-full plugin-modelled host-tier"}
 cleanup() {
   for c in $(docker ps -aq --filter "label=$LABEL"); do docker rm -f "$c" >/dev/null 2>&1 || true; done
   docker network rm "$NET" >/dev/null 2>&1 || true
@@ -62,7 +62,41 @@ for f in $FIXTURES; do
   [ "$ok" = 1 ] || { docker logs traefik 2>&1 | tail -30; echo "traefik never reported every router and service enabled"; exit 1; }
   docker exec nginx nginx -t 2>&1 | tail -2 || { docker logs nginx 2>&1 | tail -20; exit 1; }
   sleep 2
-  ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" matrix --routes /routes.json --nginx nginx --traefik traefik
+  tier=(); [ "$f" = host-tier ] && tier=(--need-tier)
+  ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" matrix --routes /routes.json --nginx nginx --traefik traefik "${tier[@]}"
+
+  if [ "$f" = http-full ]; then
+    log "websocket idle 75s and 80s trickle upload (Traefik v3 default total read deadline is 60s)"
+    for T in nginx traefik; do
+      docker run -d --name "idle-$T" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" wsidle --routes /routes.json --target "$T" --secs 75 >/dev/null
+    done
+    for T in nginx traefik; do
+      docker run -d --name "slow-$T" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" slowpost --routes /routes.json --target "$T" >/dev/null
+    done
+    for T in nginx traefik; do
+      rc=$(docker wait "idle-$T"); docker logs "idle-$T" 2>&1
+      [ "$rc" = 0 ] || { echo "FAIL: websocket via $T did not survive 75s idle"; exit 1; }
+      docker rm -f "idle-$T" >/dev/null
+      rc=$(docker wait "slow-$T"); docker logs "slow-$T" 2>&1
+      [ "$rc" = 0 ] || { echo "FAIL: slow upload via $T did not survive (Traefik read deadline?)"; exit 1; }
+      docker rm -f "slow-$T" >/dev/null
+    done
+  fi
+
+  log "per-client connection limit (two source addresses)"
+  for T in nginx traefik; do
+    docker run -d --name "hold-$T" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" connhold --routes /routes.json --target "$T" --secs 40 >/dev/null
+    for _ in $(seq 1 30); do
+      docker logs "hold-$T" 2>&1 | grep -qE '^(HELD|SKIP)' && break
+      [ "$(docker inspect -f '{{.State.Running}}' "hold-$T")" = true ] || break
+      sleep 1
+    done
+    docker logs "hold-$T" 2>&1
+    docker logs "hold-$T" 2>&1 | grep -q '^HELD' || { echo "FAIL: client A did not hold the connection limit on $T"; exit 1; }
+    docker logs "hold-$T" 2>&1 | grep -q '^A over limit: 429$' || { echo "FAIL: client A was not limited on $T"; exit 1; }
+    ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" connprobe --routes /routes.json --target "$T"
+    docker rm -f "hold-$T" >/dev/null
+  done
 
   if [ "$f" = tls-full ]; then
     log "certificate generation switch"

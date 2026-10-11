@@ -65,7 +65,7 @@ func renderFixture(t *testing.T, name string) ([]byte, error) {
 }
 
 func TestGoldens(t *testing.T) {
-	for _, name := range []string{"http-full", "tls-full", "plugin-modelled", "plugin-tls-server"} {
+	for _, name := range []string{"http-full", "tls-full", "plugin-modelled", "plugin-tls-server", "host-tier"} {
 		t.Run(name, func(t *testing.T) {
 			got, err := renderFixture(t, name)
 			if err != nil {

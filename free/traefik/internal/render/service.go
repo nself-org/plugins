@@ -49,11 +49,11 @@ func (b *builder) service(route, field string, l contract.Location, passHost boo
 		tr["insecureSkipVerify"] = true
 	}
 	tname := "transport-" + h8(tr)
-	b.transports[tname] = tr
-	name := fmt.Sprintf("svc-%s-%s-%d-%s", u.Scheme, safe(u.Host), u.Port, h8([]any{tname, passHost}))
-	b.services[name] = map[string]any{"loadBalancer": map[string]any{
+	b.put(b.transports, "serversTransport", tname, tr, false)
+	name := fmt.Sprintf("svc-%s-%s-%d-%s", u.Scheme, safe(u.Host), u.Port, h8([]any{tname, passHost, u.Host}))
+	b.put(b.services, "service", name, map[string]any{"loadBalancer": map[string]any{
 		"servers":          []any{map[string]any{"url": fmt.Sprintf("%s://%s:%d", u.Scheme, u.Host, u.Port)}},
 		"passHostHeader":   passHost,
-		"serversTransport": tname}}
+		"serversTransport": tname}}, false)
 	return name
 }

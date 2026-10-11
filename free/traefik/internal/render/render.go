@@ -42,6 +42,10 @@ type builder struct {
 	zones                                     map[string]contract.Zone
 	refs                                      []Refusal
 	hasTLS                                    bool
+	cur                                       string            // id of the route being rendered ("-" for globals)
+	hosts                                     map[string]string // entrypoint|server name -> route id
+	tier                                      int               // host specificity added to every router priority of the route
+	noLog                                     bool              // the location under render has access_log off
 }
 
 var unsafeRE = regexp.MustCompile(`[^A-Za-z0-9]+`)
@@ -67,16 +71,20 @@ func Render(m *contract.Model, o Options) ([]byte, error) {
 		o.CertRoot = o.SSLRoot
 	}
 	b := &builder{m: m, o: o, routers: map[string]any{}, services: map[string]any{}, mws: map[string]any{},
-		transports: map[string]any{}, tlsOp: map[string]any{}, certs: map[string][2]string{}, zones: map[string]contract.Zone{}}
+		transports: map[string]any{}, tlsOp: map[string]any{}, certs: map[string][2]string{}, zones: map[string]contract.Zone{}, cur: "-", hosts: map[string]string{}}
 	for _, z := range m.Zones {
 		b.zones[z.Name] = z
 	}
 	if len(m.UnmodelledGlobal) > 0 {
 		b.refuse("-", "unmodelled_global", fmt.Sprintf("%d http-level directive(s), first: %q", len(m.UnmodelledGlobal), m.UnmodelledGlobal[0]))
 	}
+	if m.Defaults.MaxBodyBytes < 0 {
+		b.refuse("-", "defaults.max_body_bytes", fmt.Sprintf("%d is negative", m.Defaults.MaxBodyBytes))
+	}
 	for _, r := range m.Routes {
 		b.route(r)
 	}
+	b.cur, b.tier, b.noLog = "-", 0, false
 	b.defaultServer()
 	if len(b.refs) > 0 {
 		sort.SliceStable(b.refs, func(i, j int) bool {
@@ -133,12 +141,15 @@ func m1(s string) string { return strings.ReplaceAll(strings.ReplaceAll(s, "\n",
 // mw registers a middleware once, named by kind and content hash, and returns its name.
 func (b *builder) mw(kind string, spec any) string {
 	name := kind + "-" + h8(spec)
-	b.mws[name] = map[string]any{kind: spec}
+	b.put(b.mws, "middleware", name, map[string]any{kind: spec}, false)
 	return name
 }
 
 func (b *builder) addRouter(name, rule string, pri int, l listener, mws []string, svc string) {
-	spec := map[string]any{"rule": rule, "entryPoints": []string{l.entry}, "service": svc, "priority": pri}
+	spec := map[string]any{"rule": rule, "entryPoints": []string{l.entry}, "service": svc, "priority": pri + b.tier}
+	if b.noLog {
+		spec["observability"] = map[string]any{"accessLogs": false}
+	}
 	if len(mws) > 0 {
 		spec["middlewares"] = mws
 	}
@@ -149,10 +160,11 @@ func (b *builder) addRouter(name, rule string, pri int, l listener, mws []string
 		}
 		spec["tls"] = t
 	}
-	b.routers[name+"-"+l.tag] = spec
+	b.put(b.routers, "router", name+"-"+l.tag, spec, true)
 }
 
 func (b *builder) route(r contract.Route) {
+	b.cur, b.tier = r.ID, hostTier(r)
 	if len(r.Unmodelled) > 0 {
 		b.refuse(r.ID, "unmodelled", fmt.Sprintf("%d directive(s) outside the closed vocabulary, first: %q", len(r.Unmodelled), r.Unmodelled[0]))
 	}
@@ -164,12 +176,18 @@ func (b *builder) route(r contract.Route) {
 		return
 	}
 	ls := b.listeners(r)
+	if !b.hostsFree(r, ls) {
+		return
+	}
 	sec := ""
 	if len(r.SecurityHeaders) > 0 {
 		hdr := map[string]string{}
 		for k, v := range r.SecurityHeaders {
 			if strings.Contains(v, "$") {
 				b.refuse(r.ID, "security_headers."+k, "value holds an nginx variable")
+			}
+			if !headerOK(k, v) {
+				b.refuse(r.ID, "security_headers."+k, "header name is not a token or the value holds a control character")
 			}
 			hdr[k] = v
 		}
@@ -182,14 +200,40 @@ func (b *builder) route(r contract.Route) {
 	if r.HTTPToHTTPSRedirect && r.Listen.HTTP {
 		for _, l := range ls {
 			if !l.secure {
-				b.addRouter(safe(r.ID)+"-redirect", host+" && PathPrefix(`/`)", 200000, l, []string{b.redirectMW(r.ID, "http_to_https_redirect", 301)}, b.responder())
+				b.addRouter(rname(r.ID)+"-redirect", host+" && PathPrefix(`/`)", 200000, l, []string{b.redirectMW(r.ID, "http_to_https_redirect", 301)}, b.responder())
 			}
 		}
 	}
 }
 
+// hostsFree refuses a server name that another route already serves on the same
+// entrypoint: Traefik would pick one of two equal rules at random, nginx keeps
+// the first and warns. It also refuses a custom TLS option on a wildcard name,
+// because Traefik selects TLS options by SNI from Host() rules only.
+func (b *builder) hostsFree(r contract.Route, ls []listener) bool {
+	ok := true
+	for _, l := range ls {
+		for _, n := range r.ServerNames {
+			key := l.entry + "|" + n
+			if prev, dup := b.hosts[key]; dup && prev != r.ID {
+				b.refuse(r.ID, "server_names", fmt.Sprintf("%q on %s is already served by route %s", n, l.entry, prev))
+				ok = false
+			}
+			b.hosts[key] = r.ID
+			if l.opt != "" && !nameRE.MatchString(n) {
+				b.refuse(r.ID, "tls", fmt.Sprintf("wildcard %q with non-default protocols or ciphers: Traefik picks TLS options by SNI from Host() rules only", n))
+				ok = false
+			}
+		}
+	}
+	return ok
+}
+
 func (b *builder) listeners(r contract.Route) []listener {
 	var ls []listener
+	if !r.Listen.HTTP && !r.Listen.HTTPS {
+		b.refuse(r.ID, "listen", "neither http nor https (nginx would listen on *:80); the route is not guessed")
+	}
 	if r.Listen.HTTP {
 		ls = append(ls, listener{entry: "web", tag: "web"})
 	}
@@ -203,7 +247,29 @@ func (b *builder) listeners(r contract.Route) []listener {
 }
 
 var wildRE = regexp.MustCompile(`^\*\.[A-Za-z0-9.-]+$`)
-var nameRE = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
+
+// dotRE is nginx's ".example.test": the name itself plus every subdomain.
+var dotRE = regexp.MustCompile(`^\.[A-Za-z0-9][A-Za-z0-9.-]*$`)
+
+// tierExact outranks every wildcard route: nginx picks the server by exact name
+// before any wildcard, and only then the location, so path length must never let a
+// wildcard route's location beat an exact host. Larger than the biggest location
+// priority, smaller than the 200000 redirect.
+const tierExact = 100000
+
+// hostTier is tierExact when every server name is a plain name.
+func hostTier(r contract.Route) int {
+	if len(r.ServerNames) == 0 {
+		return 0
+	}
+	for _, n := range r.ServerNames {
+		if !nameRE.MatchString(n) {
+			return 0
+		}
+	}
+	return tierExact
+}
 
 func (b *builder) hostRule(r contract.Route) (string, bool) {
 	if len(r.ServerNames) == 0 {
@@ -215,6 +281,8 @@ func (b *builder) hostRule(r contract.Route) (string, bool) {
 		switch {
 		case nameRE.MatchString(n):
 			parts = append(parts, "Host(`"+n+"`)")
+		case dotRE.MatchString(n):
+			parts = append(parts, "Host(`"+n[1:]+"`)", "HostRegexp(`^.+"+regexp.QuoteMeta(n)+"$`)")
 		case wildRE.MatchString(n):
 			parts = append(parts, "HostRegexp(`^.+"+regexp.QuoteMeta(n[1:])+"$`)")
 		default:
