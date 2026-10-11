@@ -45,6 +45,7 @@ type builder struct {
 	cur                                       string            // id of the route being rendered ("-" for globals)
 	hosts                                     map[string]string // entrypoint|server name -> route id
 	tier                                      int               // host specificity added to every router priority of the route
+	pfx                                       string            // router name prefix of the route (and host group) under render
 	noLog                                     bool              // the location under render has access_log off
 }
 
@@ -59,7 +60,13 @@ func h8(v any) string {
 }
 
 func (b *builder) refuse(route, field, reason string) {
-	b.refs = append(b.refs, Refusal{Route: route, Field: field, Reason: reason})
+	f := Refusal{Route: route, Field: field, Reason: reason}
+	for _, x := range b.refs { // a route rendered once per host group repeats its refusals
+		if x == f {
+			return
+		}
+	}
+	b.refs = append(b.refs, f)
 }
 
 // Render produces dynamic.yml for m, or a *RefusalError.
@@ -164,14 +171,14 @@ func (b *builder) addRouter(name, rule string, pri int, l listener, mws []string
 }
 
 func (b *builder) route(r contract.Route) {
-	b.cur, b.tier = r.ID, hostTier(r)
+	b.cur, b.tier = r.ID, 0
 	if len(r.Unmodelled) > 0 {
 		b.refuse(r.ID, "unmodelled", fmt.Sprintf("%d directive(s) outside the closed vocabulary, first: %q", len(r.Unmodelled), r.Unmodelled[0]))
 	}
 	if r.ShadowedBy != nil {
 		b.refuse(r.ID, "shadowed_by", "suppressed by hand-managed "+*r.ShadowedBy)
 	}
-	host, ok := b.hostRule(r)
+	groups, ok := b.hostGroups(r)
 	if !ok || len(r.Unmodelled) > 0 || r.ShadowedBy != nil {
 		return
 	}
@@ -193,105 +200,28 @@ func (b *builder) route(r contract.Route) {
 		}
 		sec = b.mw("headers", map[string]any{"customResponseHeaders": hdr})
 	}
-	for i, l := range r.Locations {
-		b.location(r, i, l, host, ls, sec)
-	}
-	b.blocked(r, host, ls, sec)
-	if r.HTTPToHTTPSRedirect && r.Listen.HTTP {
-		for _, l := range ls {
-			if !l.secure {
-				b.addRouter(rname(r.ID)+"-redirect", host+" && PathPrefix(`/`)", 200000, l, []string{b.redirectMW(r.ID, "http_to_https_redirect", 301)}, b.responder())
+	// nginx picks the server by name class first (exact, then the longest wildcard) and only
+	// then the location, so a route is rendered once per class of its names, each at its own tier.
+	for gi, g := range groups {
+		b.tier, b.pfx = g.tier, rname(r.ID)
+		if len(groups) > 1 {
+			b.pfx += fmt.Sprintf("-g%d", gi)
+		}
+		for i, l := range r.Locations {
+			b.location(r, i, l, g.rule, ls, sec)
+		}
+		b.blocked(r, g.rule, ls, sec)
+		// The server owns every path of its names: a path none of its locations matches is a 404
+		// here, never a fall-through to a wildcard route or to the default server.
+		for _, ln := range ls {
+			b.addRouter(b.pfx+"-catchall", g.rule, 1, ln, []string{b.respondMW(404)}, b.responder())
+		}
+		if r.HTTPToHTTPSRedirect && r.Listen.HTTP {
+			for _, l := range ls {
+				if !l.secure {
+					b.addRouter(b.pfx+"-redirect", g.rule+" && PathPrefix(`/`)", redirectPri, l, []string{b.redirectMW(r.ID, "http_to_https_redirect", 301)}, b.responder())
+				}
 			}
 		}
 	}
-}
-
-// hostsFree refuses a server name that another route already serves on the same
-// entrypoint: Traefik would pick one of two equal rules at random, nginx keeps
-// the first and warns. It also refuses a custom TLS option on a wildcard name,
-// because Traefik selects TLS options by SNI from Host() rules only.
-func (b *builder) hostsFree(r contract.Route, ls []listener) bool {
-	ok := true
-	for _, l := range ls {
-		for _, n := range r.ServerNames {
-			key := l.entry + "|" + n
-			if prev, dup := b.hosts[key]; dup && prev != r.ID {
-				b.refuse(r.ID, "server_names", fmt.Sprintf("%q on %s is already served by route %s", n, l.entry, prev))
-				ok = false
-			}
-			b.hosts[key] = r.ID
-			if l.opt != "" && !nameRE.MatchString(n) {
-				b.refuse(r.ID, "tls", fmt.Sprintf("wildcard %q with non-default protocols or ciphers: Traefik picks TLS options by SNI from Host() rules only", n))
-				ok = false
-			}
-		}
-	}
-	return ok
-}
-
-func (b *builder) listeners(r contract.Route) []listener {
-	var ls []listener
-	if !r.Listen.HTTP && !r.Listen.HTTPS {
-		b.refuse(r.ID, "listen", "neither http nor https (nginx would listen on *:80); the route is not guessed")
-	}
-	if r.Listen.HTTP {
-		ls = append(ls, listener{entry: "web", tag: "web"})
-	}
-	if r.Listen.HTTPS {
-		opt, ok := b.tlsFor(r)
-		if ok {
-			ls = append(ls, listener{entry: "websecure", tag: "tls", opt: opt, secure: true})
-		}
-	}
-	return ls
-}
-
-var wildRE = regexp.MustCompile(`^\*\.[A-Za-z0-9.-]+$`)
-var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
-
-// dotRE is nginx's ".example.test": the name itself plus every subdomain.
-var dotRE = regexp.MustCompile(`^\.[A-Za-z0-9][A-Za-z0-9.-]*$`)
-
-// tierExact outranks every wildcard route: nginx picks the server by exact name
-// before any wildcard, and only then the location, so path length must never let a
-// wildcard route's location beat an exact host. Larger than the biggest location
-// priority, smaller than the 200000 redirect.
-const tierExact = 100000
-
-// hostTier is tierExact when every server name is a plain name.
-func hostTier(r contract.Route) int {
-	if len(r.ServerNames) == 0 {
-		return 0
-	}
-	for _, n := range r.ServerNames {
-		if !nameRE.MatchString(n) {
-			return 0
-		}
-	}
-	return tierExact
-}
-
-func (b *builder) hostRule(r contract.Route) (string, bool) {
-	if len(r.ServerNames) == 0 {
-		b.refuse(r.ID, "server_names", "empty")
-		return "", false
-	}
-	var parts []string
-	for _, n := range r.ServerNames {
-		switch {
-		case nameRE.MatchString(n):
-			parts = append(parts, "Host(`"+n+"`)")
-		case dotRE.MatchString(n):
-			parts = append(parts, "Host(`"+n[1:]+"`)", "HostRegexp(`^.+"+regexp.QuoteMeta(n)+"$`)")
-		case wildRE.MatchString(n):
-			parts = append(parts, "HostRegexp(`^.+"+regexp.QuoteMeta(n[1:])+"$`)")
-		default:
-			b.refuse(r.ID, "server_names", fmt.Sprintf("%q is not a plain or leading-wildcard name", n))
-			return "", false
-		}
-	}
-	if len(parts) == 1 {
-		return parts[0], true
-	}
-	return "(" + strings.Join(parts, " || ") + ")", true
 }

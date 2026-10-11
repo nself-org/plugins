@@ -238,35 +238,55 @@ func wsIdle(m routes, name string, secs int) {
 	fmt.Printf("websocket via %s survived %ds idle\n", name, secs)
 }
 
-// slowPost sends a 20-byte body one byte every 4s (about 80s). nginx times only the gap
-// between reads; Traefik's entrypoint readTimeout is a total deadline, so its v3 default
-// of 60s answers this with a cut connection instead of 200.
-func slowPost(m routes, name string) {
-	var rt route
-	found := false
-	for _, x := range m.Routes {
-		if !found && hasRoot(x) && (x.Listen.HTTP || x.Listen.HTTPS) {
-			rt, found = x, true
+// hostCase: nginx lowercases the Host header before choosing a server, and Traefik's Host() and
+// HostRegexp() must too: an upper-case Host reaches the same route on both.
+func hostCase(r *runner, m routes) {
+	n := 0
+	for _, rt := range m.Routes {
+		if !hasRoot(rt) || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
+			continue
+		}
+		q := req{scheme: scheme(rt), host: strings.ToUpper(hostOf(rt)), method: "GET", path: "/"}
+		a, b := r.n.do(q), r.t.do(q)
+		switch {
+		case a.err != nil || b.err != nil:
+			r.fail(rt.ID+" upper-case Host", fmt.Sprintf("transport error nginx=%v traefik=%v", a.err, b.err))
+		case a.status == 429 || b.status == 429: // earlier traffic drained this bucket: nothing to compare
+		case a.status != b.status:
+			r.fail(rt.ID+" upper-case Host", fmt.Sprintf("status nginx=%d traefik=%d", a.status, b.status))
+		default:
+			n++
+			r.ok(fmt.Sprintf("%s upper-case Host %s -> %d", rt.ID, q.host, a.status))
 		}
 	}
-	if !found {
-		die(fmt.Errorf("no route with an upstream on /"))
+	if n == 0 {
+		r.fail("upper-case Host", "no route compared")
 	}
-	c, err := dialRaw(target{name}, scheme(rt), hostOf(rt))
-	must(err)
-	defer c.Close()
-	_ = c.SetDeadline(time.Now().Add(150 * time.Second))
-	fmt.Fprintf(c, "POST / HTTP/1.1\r\nHost: %s\r\nContent-Type: text/plain\r\nContent-Length: 20\r\nConnection: close\r\n\r\n", hostOf(rt))
-	for i := 0; i < 20; i++ {
-		_, err := c.Write([]byte("x"))
-		must(err)
-		time.Sleep(4 * time.Second)
+}
+
+// healthMethod: nginx forces GET upstream on a health_probe location, so a DELETE there is
+// answered 200 by the upstream's health endpoint. Traefik cannot rewrite the method, so it answers
+// 403 and never forwards it (an accepted difference, wiki). Asserted on Traefik only.
+func healthMethod(r *runner, m routes) {
+	n := 0
+	for _, rt := range m.Routes {
+		for _, l := range rt.Locations {
+			if !l.HealthProbe || l.Upstream == nil || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
+				continue
+			}
+			for _, method := range []string{"DELETE", "POST", "PUT"} {
+				q := req{scheme: scheme(rt), host: hostOf(rt), method: method, path: l.Path, body: strings.NewReader("x=1")}
+				a, b := r.n.do(q), r.t.do(q)
+				if b.err != nil || b.status != 403 {
+					r.fail(fmt.Sprintf("%s %s %s", rt.ID, method, l.Path), fmt.Sprintf("Traefik must answer 403 (nginx answered %d); got status %d err %v", a.status, b.status, b.err))
+					continue
+				}
+				n++
+				r.ok(fmt.Sprintf("%s %s %s -> traefik 403 (nginx %d, documented)", rt.ID, method, l.Path, a.status))
+			}
+		}
 	}
-	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
-	must(err)
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		die(fmt.Errorf("slow upload via %s on %s: status %d, want 200", name, rt.ID, resp.StatusCode))
+	if n == 0 {
+		r.fail("health probe methods", "no health_probe location compared")
 	}
-	fmt.Printf("slow upload (80s) via %s on %s: 200\n", name, rt.ID)
 }

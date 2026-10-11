@@ -258,8 +258,12 @@ func TestLeadingDotServerNameMatchesNameAndSubdomains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "(Host(`dot.example.test`) || HostRegexp(`^.+\\.dot\\.example\\.test$`)) && PathPrefix(`/`)"
-	priorityOf(t, out, want)
+	// the bare name is an exact server name, the subdomains are a wildcard: two tiers (host classes)
+	exact := priorityOf(t, out, "Host(`dot.example.test`) && PathPrefix(`/`)")
+	wild := priorityOf(t, out, "HostRegexp(`^.+\\.dot\\.example\\.test$`) && PathPrefix(`/`)")
+	if exact <= wild {
+		t.Fatalf("the bare name (%d) must outrank the subdomain wildcard (%d)", exact, wild)
+	}
 }
 
 // Second-opinion should-fix 9: access_log off must not be dropped silently.

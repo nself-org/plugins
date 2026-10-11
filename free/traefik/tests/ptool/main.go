@@ -8,7 +8,8 @@
 //	ptool matrix  --routes F --nginx H --traefik H [--tls]   request-level comparison
 //	ptool connhold  --routes F --target H [--secs N]   client A: hold conn_limit upgrades, expect 429 on the next request
 //	ptool wsidle    --routes F --target H --secs N     a websocket idle for N seconds must still echo
-//	ptool slowpost  --routes F --target H              an 80s trickle upload must still get 200
+//	ptool slowpost  --routes F --target H --secs N --expect ok|cut   a trickle upload of N seconds
+//	ptool slowheader --routes F --target H --mode idle|trickle       a partial header must be closed after about 60s
 //	ptool connprobe --routes F --target H              client B (another container): must still get 200
 //
 // stdlib only; exit 0 pass, 1 mismatch or failure.
@@ -69,11 +70,12 @@ type route struct {
 		Status int `json:"status"`
 	} `json:"blocked_paths"`
 	Locations []struct {
-		Path      string `json:"path"`
-		Match     string `json:"match"`
-		WebSocket bool   `json:"websocket"`
-		DenyAll   bool   `json:"deny_all"`
-		Upstream  *struct {
+		Path        string `json:"path"`
+		Match       string `json:"match"`
+		WebSocket   bool   `json:"websocket"`
+		DenyAll     bool   `json:"deny_all"`
+		HealthProbe bool   `json:"health_probe"`
+		Upstream    *struct {
 			Scheme string `json:"scheme"`
 			Host   string `json:"host"`
 			Port   int    `json:"port"`
@@ -105,7 +107,7 @@ func die(err error) {
 
 func main() {
 	if len(os.Args) < 2 {
-		die(fmt.Errorf("usage: ptool plan|backend|gencert|rawdata|serial|matrix|connhold|connprobe|wsidle|slowpost"))
+		die(fmt.Errorf("usage: ptool plan|backend|gencert|rawdata|serial|matrix|connhold|connprobe|wsidle|slowpost|slowheader"))
 	}
 	cmd, args := os.Args[1], os.Args[2:]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
@@ -120,6 +122,8 @@ func main() {
 	req := fs.String("require", "", "router that must exist (rawdata)")
 	tgt := fs.String("target", "", "proxy container (connhold, connprobe)")
 	secs := fs.Int("secs", 30, "seconds connhold keeps its connections, wsidle stays idle")
+	mode := fs.String("mode", "idle", "slowheader: idle (send nothing more) or trickle (one header line every 20s)")
+	expect := fs.String("expect", "ok", "slowpost: ok (200) or cut (the proxy ends the upload)")
 	needTier := fs.Bool("need-tier", false, "matrix: fail unless a host-tier overlap was compared")
 	_ = fs.Parse(args)
 	switch cmd {
@@ -140,7 +144,9 @@ func main() {
 	case "wsidle":
 		wsIdle(loadRoutes(*rf), *tgt, *secs)
 	case "slowpost":
-		slowPost(loadRoutes(*rf), *tgt)
+		slowPost(loadRoutes(*rf), *tgt, *secs, *expect)
+	case "slowheader":
+		slowHeader(loadRoutes(*rf), *tgt, *mode)
 	case "connhold":
 		connHold(loadRoutes(*rf), *tgt, *secs)
 	case "connprobe":

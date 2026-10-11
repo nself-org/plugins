@@ -100,6 +100,8 @@ func matrix(m routes, ngx, trf string, needTier bool) {
 	}
 	encodedSlash(r, m)
 	hostTier(r, m, needTier)
+	hostCase(r, m)
+	healthMethod(r, m)
 	bodyLimit(r, m, get)
 	rates(r, m, get)
 	fmt.Printf("\nmatrix: %d checks passed, %d failed\n", r.checks, len(r.fails))

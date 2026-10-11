@@ -5,9 +5,13 @@ global:
   sendAnonymousUsage: false
 # allowEncodedSlash: false makes %2F a 400. nginx decodes it and merges the path before matching, so blocked paths and
 # deny_all prefixes hold there; Traefik matches the still-encoded path, so /x/..%2f.env would reach the upstream.
-# readTimeout: 0s because Traefik v3 defaults to 60s as a TOTAL read deadline, which cuts websockets (it stays on
-# hijacked connections) and slow uploads; nginx only times the gap between reads. Upstream timeouts come from the
-# rendered serversTransports.
+# Timeouts follow nginx where Traefik can. readTimeout 60s is the nginx client_header_timeout: a request whose
+# headers are not complete after 60 s is closed (Traefik v3 has no separate header timeout, so a finite readTimeout is
+# the only slowloris guard; 0s would keep such connections open forever). It is also a TOTAL deadline for the body,
+# where nginx client_body_timeout times each gap between reads: an upload must finish within 60 s (accepted
+# difference, wiki). Hijacked connections (websockets) lose the deadline, so an idle websocket survives. idleTimeout
+# 65s is nginx keepalive_timeout 65. writeTimeout 0s: nginx send_timeout times each gap between writes, a total
+# deadline here would cut large downloads. Upstream timeouts come from the rendered serversTransports.
 entryPoints:
   web:
     address: ":80"
@@ -16,7 +20,9 @@ entryPoints:
         allowEncodedSlash: false
     transport:
       respondingTimeouts:
-        readTimeout: 0s
+        readTimeout: 60s
+        writeTimeout: 0s
+        idleTimeout: 65s
   websecure:
     address: ":443"
     http:
@@ -24,7 +30,9 @@ entryPoints:
         allowEncodedSlash: false
     transport:
       respondingTimeouts:
-        readTimeout: 0s
+        readTimeout: 60s
+        writeTimeout: 0s
+        idleTimeout: 65s
   traefik:
     address: ":8082"
 ping:

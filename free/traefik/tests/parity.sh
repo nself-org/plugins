@@ -66,34 +66,39 @@ for f in $FIXTURES; do
   ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" matrix --routes /routes.json --nginx nginx --traefik traefik "${tier[@]}"
 
   if [ "$f" = http-full ]; then
-    log "websocket idle 75s and 80s trickle upload (Traefik v3 default total read deadline is 60s)"
+    log "timeouts: websocket idle 75s, partial headers closed at 60s, trickle uploads (Traefik readTimeout is a total deadline)"
+    # name:ptool args. A 40s upload passes on both; an 80s one passes on nginx (it times each gap) and is cut by Traefik (accepted).
     for T in nginx traefik; do
-      docker run -d --name "idle-$T" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" wsidle --routes /routes.json --target "$T" --secs 75 >/dev/null
+      cut=ok; [ "$T" = traefik ] && cut=cut
+      for spec in "idle-$T:wsidle --secs 75" "up40-$T:slowpost --secs 40 --expect ok" "up80-$T:slowpost --secs 80 --expect $cut" \
+        "hdr-idle-$T:slowheader --mode idle" "hdr-trickle-$T:slowheader --mode trickle"; do
+        # shellcheck disable=SC2086
+        docker run -d --name "${spec%%:*}" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" ${spec#*:} --routes /routes.json --target "$T" >/dev/null
+      done
     done
     for T in nginx traefik; do
-      docker run -d --name "slow-$T" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" slowpost --routes /routes.json --target "$T" >/dev/null
-    done
-    for T in nginx traefik; do
-      rc=$(docker wait "idle-$T"); docker logs "idle-$T" 2>&1
-      [ "$rc" = 0 ] || { echo "FAIL: websocket via $T did not survive 75s idle"; exit 1; }
-      docker rm -f "idle-$T" >/dev/null
-      rc=$(docker wait "slow-$T"); docker logs "slow-$T" 2>&1
-      [ "$rc" = 0 ] || { echo "FAIL: slow upload via $T did not survive (Traefik read deadline?)"; exit 1; }
-      docker rm -f "slow-$T" >/dev/null
+      for n in idle up40 up80 hdr-idle hdr-trickle; do
+        rc=$(docker wait "$n-$T"); docker logs "$n-$T" 2>&1
+        [ "$rc" = 0 ] || { echo "FAIL: $n via $T (timeouts differ from the documented behaviour)"; exit 1; }
+        docker rm -f "$n-$T" >/dev/null
+      done
     done
   fi
 
   log "per-client connection limit (two source addresses)"
   for T in nginx traefik; do
     docker run -d --name "hold-$T" --label "$LABEL" --network "$NET" -v "$F/routes.json:/routes.json:ro" "$PTOOL" connhold --routes /routes.json --target "$T" --secs 40 >/dev/null
+    # Capture the log first: "docker logs | grep -q" under pipefail fails at random (grep exits early, docker logs gets SIGPIPE).
     for _ in $(seq 1 30); do
-      docker logs "hold-$T" 2>&1 | grep -qE '^(HELD|SKIP)' && break
+      hold=$(docker logs "hold-$T" 2>&1 || true)
+      grep -qE '^(HELD|SKIP)' <<<"$hold" && break
       [ "$(docker inspect -f '{{.State.Running}}' "hold-$T")" = true ] || break
       sleep 1
     done
-    docker logs "hold-$T" 2>&1
-    docker logs "hold-$T" 2>&1 | grep -q '^HELD' || { echo "FAIL: client A did not hold the connection limit on $T"; exit 1; }
-    docker logs "hold-$T" 2>&1 | grep -q '^A over limit: 429$' || { echo "FAIL: client A was not limited on $T"; exit 1; }
+    hold=$(docker logs "hold-$T" 2>&1 || true)
+    printf '%s\n' "$hold"
+    grep -q '^HELD' <<<"$hold" || { echo "FAIL: client A did not hold the connection limit on $T"; exit 1; }
+    grep -q '^A over limit: 429$' <<<"$hold" || { echo "FAIL: client A was not limited on $T"; exit 1; }
     ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" connprobe --routes /routes.json --target "$T"
     docker rm -f "hold-$T" >/dev/null
   done

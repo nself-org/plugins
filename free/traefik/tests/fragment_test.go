@@ -98,8 +98,11 @@ func TestStaticConfigPolicy(t *testing.T) {
 			}
 		}
 		for _, ep := range []string{"web", "websecure"} {
-			if got := get(st, "entryPoints", ep, "transport", "respondingTimeouts", "readTimeout"); got != "0s" {
-				t.Errorf("%s: entryPoints.%s readTimeout must be 0s (Traefik's 60s total read deadline cuts websockets and slow uploads), got %v", rel, ep, got)
+			// nginx client_header_timeout 60s; 0s (no deadline) leaves slowloris connections open forever.
+			for key, want := range map[string]string{"readTimeout": "60s", "writeTimeout": "0s", "idleTimeout": "65s"} {
+				if got := get(st, "entryPoints", ep, "transport", "respondingTimeouts", key); got != want {
+					t.Errorf("%s: entryPoints.%s %s must be %s (nginx client_header_timeout 60s, keepalive_timeout 65, no total write cap), got %v", rel, ep, key, want, got)
+				}
 			}
 		}
 		if get(st, "certificatesResolvers") != nil {

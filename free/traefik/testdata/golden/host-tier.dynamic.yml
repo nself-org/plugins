@@ -100,7 +100,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`auth.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-auth-fcf1e097-b1-web:
@@ -109,8 +109,16 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`auth.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+        core-auth-fcf1e097-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`auth.example.test`)
             service: responder
         core-auth-fcf1e097-l0-web:
             entryPoints:
@@ -120,9 +128,18 @@ http:
                 - compress-6dedd647
                 - rateLimit-f9f47695
                 - buffering-8642699b
-            priority: 160022
+            priority: 25660022
             rule: Host(`auth.example.test`) && Path(`/auth/login`)
             service: svc-http-auth-4000-efeded9d
+        core-auth-fcf1e097-l1-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`auth.example.test`) && Path(`/healthz`)
+            service: responder
         core-auth-fcf1e097-l1-web:
             entryPoints:
                 - web
@@ -130,8 +147,8 @@ http:
                 - headers-25c21423
                 - compress-6dedd647
                 - buffering-8642699b
-            priority: 160016
-            rule: Host(`auth.example.test`) && Path(`/healthz`)
+            priority: 25660017
+            rule: Host(`auth.example.test`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
             service: svc-http-auth-4000-efeded9d
         core-auth-fcf1e097-l2-web:
             entryPoints:
@@ -142,7 +159,7 @@ http:
                 - rateLimit-dc354fa7
                 - inFlightReq-2ddcbcc7
                 - buffering-8642699b
-            priority: 102002
+            priority: 25602002
             rule: Host(`auth.example.test`) && PathPrefix(`/`)
             service: svc-http-auth-4000-efeded9d
         core-auth-fcf1e097-l3-web:
@@ -150,7 +167,7 @@ http:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 140056
+            priority: 25640056
             rule: Host(`auth.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
             service: responder
         core-auth-fcf1e097-l4-web:
@@ -161,7 +178,7 @@ http:
                 - compress-6dedd647
                 - rateLimit-8291d82c
                 - buffering-8642699b
-            priority: 102010
+            priority: 25602010
             rule: Host(`auth.example.test`) && PathPrefix(`/api/`)
             service: svc-http-auth-4000-efeded9d
         core-hasura-fd45e43a-b0-web:
@@ -170,7 +187,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`api.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-hasura-fd45e43a-b1-web:
@@ -179,8 +196,16 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`api.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+        core-hasura-fd45e43a-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`api.example.test`)
             service: responder
         core-hasura-fd45e43a-l0-web:
             entryPoints:
@@ -190,9 +215,18 @@ http:
                 - compress-6dedd647
                 - rateLimit-f9f47695
                 - buffering-8642699b
-            priority: 160022
+            priority: 25660022
             rule: Host(`api.example.test`) && Path(`/auth/login`)
             service: svc-http-hasura-8080-78493bcd
+        core-hasura-fd45e43a-l1-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`api.example.test`) && Path(`/healthz`)
+            service: responder
         core-hasura-fd45e43a-l1-web:
             entryPoints:
                 - web
@@ -200,8 +234,8 @@ http:
                 - headers-25c21423
                 - compress-6dedd647
                 - buffering-8642699b
-            priority: 160016
-            rule: Host(`api.example.test`) && Path(`/healthz`)
+            priority: 25660017
+            rule: Host(`api.example.test`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
             service: svc-http-hasura-8080-78493bcd
         core-hasura-fd45e43a-l2-web:
             entryPoints:
@@ -212,7 +246,7 @@ http:
                 - rateLimit-bdb6e689
                 - inFlightReq-fef96462
                 - buffering-8642699b
-            priority: 102002
+            priority: 25602002
             rule: Host(`api.example.test`) && PathPrefix(`/`)
             service: svc-http-hasura-8080-fbc40eb9
         core-hasura-fd45e43a-l3-web:
@@ -220,7 +254,7 @@ http:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 140056
+            priority: 25640056
             rule: Host(`api.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
             service: responder
         core-hasura-fd45e43a-l4-web:
@@ -231,7 +265,7 @@ http:
                 - compress-6dedd647
                 - rateLimit-8291d82c
                 - buffering-8642699b
-            priority: 102010
+            priority: 25602010
             rule: Host(`api.example.test`) && PathPrefix(`/api/`)
             service: svc-http-hasura-8080-78493bcd
         core-storage-6cd68f54-b0-web:
@@ -240,7 +274,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`storage.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-storage-6cd68f54-b1-web:
@@ -249,8 +283,16 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`storage.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+        core-storage-6cd68f54-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`storage.example.test`)
             service: responder
         core-storage-6cd68f54-l0-web:
             entryPoints:
@@ -260,9 +302,18 @@ http:
                 - compress-6dedd647
                 - rateLimit-f9f47695
                 - buffering-8642699b
-            priority: 160022
+            priority: 25660022
             rule: Host(`storage.example.test`) && Path(`/auth/login`)
             service: svc-http-minio-9000-60586f1a
+        core-storage-6cd68f54-l1-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`storage.example.test`) && Path(`/healthz`)
+            service: responder
         core-storage-6cd68f54-l1-web:
             entryPoints:
                 - web
@@ -270,8 +321,8 @@ http:
                 - headers-25c21423
                 - compress-6dedd647
                 - buffering-8642699b
-            priority: 160016
-            rule: Host(`storage.example.test`) && Path(`/healthz`)
+            priority: 25660017
+            rule: Host(`storage.example.test`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
             service: svc-http-minio-9000-60586f1a
         core-storage-6cd68f54-l2-web:
             entryPoints:
@@ -282,7 +333,7 @@ http:
                 - rateLimit-65bf1d7a
                 - inFlightReq-2ddcbcc7
                 - buffering-8642699b
-            priority: 102002
+            priority: 25602002
             rule: Host(`storage.example.test`) && PathPrefix(`/`)
             service: svc-http-minio-9000-60586f1a
         core-storage-6cd68f54-l3-web:
@@ -290,7 +341,7 @@ http:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 140056
+            priority: 25640056
             rule: Host(`storage.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
             service: responder
         core-storage-6cd68f54-l4-web:
@@ -301,7 +352,7 @@ http:
                 - compress-6dedd647
                 - rateLimit-8291d82c
                 - buffering-8642699b
-            priority: 102010
+            priority: 25602010
             rule: Host(`storage.example.test`) && PathPrefix(`/api/`)
             service: svc-http-minio-9000-60586f1a
         core-storage-console-cf94819c-b0-web:
@@ -310,7 +361,7 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`storage-console.example.test`) && PathRegexp(`/\.(env|git|svn|htaccess|htpasswd|dockerignore)`)
             service: responder
         core-storage-console-cf94819c-b1-web:
@@ -319,8 +370,16 @@ http:
             middlewares:
                 - headers-25c21423
                 - replacePath-8861c4ed
-            priority: 120000
+            priority: 25620000
             rule: Host(`storage-console.example.test`) && PathRegexp(`^/(docker-compose|Dockerfile)`)
+            service: responder
+        core-storage-console-cf94819c-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`storage-console.example.test`)
             service: responder
         core-storage-console-cf94819c-l0-web:
             entryPoints:
@@ -330,9 +389,18 @@ http:
                 - compress-6dedd647
                 - rateLimit-f9f47695
                 - buffering-8642699b
-            priority: 160022
+            priority: 25660022
             rule: Host(`storage-console.example.test`) && Path(`/auth/login`)
             service: svc-http-minio-9001-60586f1a
+        core-storage-console-cf94819c-l1-deny-web:
+            entryPoints:
+                - web
+            middlewares:
+                - headers-25c21423
+                - replacePath-1c0314cc
+            priority: 25660016
+            rule: Host(`storage-console.example.test`) && Path(`/healthz`)
+            service: responder
         core-storage-console-cf94819c-l1-web:
             entryPoints:
                 - web
@@ -340,8 +408,8 @@ http:
                 - headers-25c21423
                 - compress-6dedd647
                 - buffering-8642699b
-            priority: 160016
-            rule: Host(`storage-console.example.test`) && Path(`/healthz`)
+            priority: 25660017
+            rule: Host(`storage-console.example.test`) && Path(`/healthz`) && (Method(`GET`) || Method(`HEAD`))
             service: svc-http-minio-9001-60586f1a
         core-storage-console-cf94819c-l2-web:
             entryPoints:
@@ -350,7 +418,7 @@ http:
                 - headers-25c21423
                 - compress-6dedd647
                 - buffering-8642699b
-            priority: 102002
+            priority: 25602002
             rule: Host(`storage-console.example.test`) && PathPrefix(`/`)
             service: svc-http-minio-9001-60586f1a
         core-storage-console-cf94819c-l3-web:
@@ -358,7 +426,7 @@ http:
                 - web
             middlewares:
                 - headers-25c21423
-            priority: 140056
+            priority: 25640056
             rule: Host(`storage-console.example.test`) && PathPrefix(`/.well-known/acme-challenge/`)
             service: responder
         core-storage-console-cf94819c-l4-web:
@@ -369,7 +437,7 @@ http:
                 - compress-6dedd647
                 - rateLimit-8291d82c
                 - buffering-8642699b
-            priority: 102010
+            priority: 25602010
             rule: Host(`storage-console.example.test`) && PathPrefix(`/api/`)
             service: svc-http-minio-9001-60586f1a
         default-acme-web:
@@ -394,13 +462,21 @@ http:
             priority: 1
             rule: PathPrefix(`/`)
             service: responder
+        plugin-notes-notes-conf-1-de416032-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`notes.example.test`)
+            service: responder
         plugin-notes-notes-conf-1-de416032-l0-web:
             entryPoints:
                 - web
             middlewares:
                 - ipAllowList-14f28fd9
                 - replacePath-1c0314cc
-            priority: 160018
+            priority: 25660018
             rule: Host(`notes.example.test`) && Path(`/internal`)
             service: responder
         plugin-notes-notes-conf-1-de416032-l1-web:
@@ -410,7 +486,7 @@ http:
                 - compress-6dedd647
                 - buffering-3fa19d10
                 - headers-402582bf
-            priority: 102002
+            priority: 25602002
             rule: Host(`notes.example.test`) && PathPrefix(`/`)
             service: svc-http-notes-3040-6873a85d
         plugin-notes-notes-conf-1-de416032-l2-web:
@@ -418,8 +494,16 @@ http:
                 - web
             middlewares:
                 - redirectRegex-15538fe9
-            priority: 102010
+            priority: 25602010
             rule: Host(`notes.example.test`) && PathPrefix(`/old/`)
+            service: responder
+        plugin-wild-wild-wild-conf-1-86043692-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - replacePath-8861c4ed
+            priority: 1400001
+            rule: HostRegexp(`^.+\.example\.test$`)
             service: responder
         plugin-wild-wild-wild-conf-1-86043692-l0-web:
             entryPoints:
@@ -427,7 +511,7 @@ http:
             middlewares:
                 - compress-6dedd647
                 - buffering-3fa19d10
-            priority: 2010
+            priority: 1402010
             rule: HostRegexp(`^.+\.example\.test$`) && PathPrefix(`/api/`)
             service: svc-http-wildapi-3050-58459b67
         plugin-wild-wild-wild-conf-1-86043692-l1-web:
@@ -438,7 +522,7 @@ http:
                 - buffering-3fa19d10
             observability:
                 accessLogs: false
-            priority: 2014
+            priority: 1402014
             rule: HostRegexp(`^.+\.example\.test$`) && PathPrefix(`/quiet/`)
             service: svc-http-wildapi-3050-58459b67
         plugin-wild-wild-wild-conf-1-86043692-l2-web:
@@ -447,7 +531,7 @@ http:
             middlewares:
                 - compress-6dedd647
                 - buffering-3fa19d10
-            priority: 2002
+            priority: 1402002
             rule: HostRegexp(`^.+\.example\.test$`) && PathPrefix(`/`)
             service: svc-http-wildapi-3050-58459b67
     serversTransports:

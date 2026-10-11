@@ -31,6 +31,11 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 	if l.Match == "exact" {
 		class, rule = classExact, host+" && Path(`"+l.Path+"`)"
 	}
+	// A priority past the tier step would let this location outrank another route's host class.
+	if (class+len(l.Path))*2+1 > maxLocPri {
+		b.refuse(r.ID, field, fmt.Sprintf("path of %d characters is too long to rank below the next host tier", len(l.Path)))
+		return
+	}
 	var mws []string
 	add := func(n string) {
 		if n != "" {
@@ -54,6 +59,10 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 	case l.Return != nil:
 		add(sec)
 		if l.Return.To == nil {
+			if !returnStatusOK(l.Return.Status) {
+				b.refuse(r.ID, field+".return.status", fmt.Sprintf("%d: only 200-599 except 204, 205, 304 and 444 can be answered with a fixed status", l.Return.Status))
+				return
+			}
 			add(b.respondMW(l.Return.Status))
 		} else if *l.Return.To == "https://$host$request_uri" {
 			add(b.redirectMW(r.ID, field+".return", l.Return.Status))
@@ -72,7 +81,7 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 		return
 	}
 	for _, ln := range ls {
-		b.addRouter(fmt.Sprintf("%s-l%d", rname(r.ID), i), rule, (class+len(l.Path))*2, ln, mws, svc)
+		b.addRouter(fmt.Sprintf("%s-l%d", b.pfx, i), rule, (class+len(l.Path))*2, ln, mws, svc)
 	}
 }
 
@@ -116,14 +125,26 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 		return false
 	}
 	pri := (class + len(l.Path)) * 2
-	name := fmt.Sprintf("%s-l%d", rname(r.ID), i)
+	name := fmt.Sprintf("%s-l%d", b.pfx, i)
+	// nginx forces GET on a health probe and drops the body; Traefik cannot, so only GET (and
+	// HEAD) pass and every other method is a 403 (an accepted difference, in the wiki).
+	methods := l.Methods
+	if l.HealthProbe {
+		for _, m := range methods {
+			if m != "GET" && m != "HEAD" {
+				b.refuse(r.ID, field+".methods", fmt.Sprintf("health_probe with method %q: nginx would still send GET upstream", m))
+				return false
+			}
+		}
+		methods = []string{"GET"}
+	}
 	for _, ln := range ls {
-		if len(l.Methods) == 0 || l.HealthProbe {
+		if len(methods) == 0 {
 			b.addRouter(name, rule, pri, ln, mws, svc)
 			continue
 		}
 		var ms []string
-		for _, m := range l.Methods {
+		for _, m := range methods {
 			if !methodRE.MatchString(m) {
 				b.refuse(r.ID, field+".methods", fmt.Sprintf("method %q", m))
 				return false
@@ -141,6 +162,13 @@ func (b *builder) proxied(r contract.Route, i int, l contract.Location, field st
 		b.addRouter(name+"-deny", rule, pri, ln, append(deny, b.respondMW(403)), b.responder())
 	}
 	return true
+}
+
+// returnStatusOK reports whether the responder can answer a fixed status the way
+// nginx `return <code>` does: 204, 205 and 304 carry no body, 444 closes the
+// connection, and anything under 200 or over 599 is not a final status.
+func returnStatusOK(st int) bool {
+	return st >= 200 && st <= 599 && st != 204 && st != 205 && st != 304 && st != 444
 }
 
 var methodRE = regexp.MustCompile(`^[A-Z]+$`)
@@ -163,7 +191,7 @@ func (b *builder) blocked(r contract.Route, host string, ls []listener, sec stri
 		}
 		mws = append(mws, b.respondMW(bp.Status))
 		for _, ln := range ls {
-			b.addRouter(fmt.Sprintf("%s-b%d", rname(r.ID), i), host+" && PathRegexp(`"+bp.Regex+"`)", classBlocked*2, ln, mws, b.responder())
+			b.addRouter(fmt.Sprintf("%s-b%d", b.pfx, i), host+" && PathRegexp(`"+bp.Regex+"`)", classBlocked*2, ln, mws, b.responder())
 		}
 	}
 }
