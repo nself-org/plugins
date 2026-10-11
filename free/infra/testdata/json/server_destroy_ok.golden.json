@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "command": "infra server destroy",
+  "data": {
+    "released_ips": [],
+    "retained_ips": [
+      {
+        "id": 10,
+        "ip": "203.0.113.10",
+        "type": "ipv4",
+        "assignee_id": 1,
+        "auto_delete": false
+      }
+    ],
+    "server_id": 1,
+    "snapshot_id": 500
+  }
+}

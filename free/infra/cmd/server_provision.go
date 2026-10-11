@@ -4,7 +4,7 @@ package main
 // server.ProvisionRequest, and reports the created server back.
 // Inputs: --name, --type, --location, --image, --ssh-key (repeatable),
 // --label (repeatable key=value), --token, --token-env, --json.
-// Outputs: printed confirmation (or JSON) with the new server's ID and IP;
+// Outputs: printed confirmation (or the v1 envelope) with the new server's ID and IP;
 // a non-nil error on any validation, resolution, or provider failure.
 
 import (
@@ -39,29 +39,30 @@ func init() {
 	f.String("image", "", "OS image, e.g. ubuntu-24.04 (required)")
 	f.StringArray("ssh-key", nil, "Hetzner SSH key name to authorize (repeatable)")
 	f.StringArray("label", nil, "label as key=value (repeatable)")
-	f.Bool("json", false, "output as JSON")
+	addJSONFlag(serverProvisionCmd)
 }
 
 func runServerProvision(cmd *cobra.Command, args []string) error {
+	r := begin(cmd)
+	defer r.end()
 	name, _ := cmd.Flags().GetString("name")
 	serverType, _ := cmd.Flags().GetString("type")
 	location, _ := cmd.Flags().GetString("location")
 	image, _ := cmd.Flags().GetString("image")
 	sshKeys, _ := cmd.Flags().GetStringArray("ssh-key")
 	labelArgs, _ := cmd.Flags().GetStringArray("label")
-	jsonOut, _ := cmd.Flags().GetBool("json")
 
 	labels, err := parseLabels(labelArgs)
 	if err != nil {
-		return err
+		return r.fail(err)
 	}
 
 	client, err := newServerClient(cmd)
 	if err != nil {
-		return err
+		return r.fail(err)
 	}
 
-	if !jsonOut {
+	if !r.json {
 		ui.CommandHeader("nself infra server provision", fmt.Sprintf("%s (%s, %s)", name, serverType, location))
 	}
 
@@ -70,11 +71,11 @@ func runServerProvision(cmd *cobra.Command, args []string) error {
 		SSHKeys: sshKeys, Labels: labels,
 	})
 	if err != nil {
-		return fmt.Errorf("provision %s: %w", name, err)
+		return r.fail(fmt.Errorf("provision %s: %w", name, err))
 	}
 
-	if jsonOut {
-		return ui.PrintJSON(srv)
+	if r.json {
+		return r.done(map[string]any{"server": srv})
 	}
 
 	ui.Success(fmt.Sprintf("Created server %q (id %d)", srv.Name, srv.ID))
@@ -93,7 +94,7 @@ func parseLabels(args []string) (map[string]string, error) {
 	for _, a := range args {
 		k, v, ok := strings.Cut(a, "=")
 		if !ok || k == "" {
-			return nil, fmt.Errorf("--label must be key=value, got %q", a)
+			return nil, &usageError{fmt.Sprintf("--label must be key=value, got %q", a)}
 		}
 		labels[k] = v
 	}

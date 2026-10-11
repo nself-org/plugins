@@ -1,0 +1,9 @@
+{
+  "schema_version": "1",
+  "command": "infra plan",
+  "data": {
+    "domain": "example.test",
+    "provider": "hetzner",
+    "status": "planned"
+  }
+}

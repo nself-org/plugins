@@ -24,12 +24,19 @@
       {
         "flags": [
           {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
+          },
+          {
+            "default": "hetzner",
             "name": "provider",
             "type": "string",
             "usage": "Cloud provider (hetzner)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "validate",
         "output": "document",
         "side_effect": "read",
@@ -43,6 +50,12 @@
             "usage": "Domain for the nSelf deployment"
           },
           {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
+          },
+          {
             "name": "provider",
             "type": "string",
             "usage": "Cloud provider (hetzner)"
@@ -53,7 +66,7 @@
             "usage": "S3/GCS bucket for Terraform state (optional)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "plan",
         "output": "document",
         "side_effect": "read",
@@ -79,9 +92,21 @@
           },
           {
             "default": "false",
+            "name": "force",
+            "type": "bool",
+            "usage": "Bypass the PLANNED gate and run terraform against real infrastructure"
+          },
+          {
+            "default": "false",
             "name": "i-accept-cloud-spend",
             "type": "bool",
             "usage": "Accept that this command provisions real cloud resources and incurs cost"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
           },
           {
             "name": "location",
@@ -104,7 +129,7 @@
             "usage": "S3/GCS bucket for Terraform state (optional)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "apply",
         "output": "document",
         "side_effect": "remote",
@@ -129,18 +154,24 @@
             "usage": "Domain for the nSelf deployment"
           },
           {
-            "name": "provider",
-            "type": "string",
-            "usage": "Cloud provider (hetzner)"
-          },
-          {
             "default": "false",
             "name": "i-accept-cloud-spend",
             "type": "bool",
             "usage": "Accept that this command destroys real cloud resources and affects running systems"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
+          },
+          {
+            "name": "provider",
+            "type": "string",
+            "usage": "Cloud provider (hetzner)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "destroy",
         "output": "document",
         "side_effect": "destructive",
@@ -157,7 +188,7 @@
             "default": "false",
             "name": "json",
             "type": "bool",
-            "usage": "output as JSON"
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
           },
           {
             "name": "label",
@@ -197,7 +228,7 @@
             "usage": "server type, e.g. cx22 (required)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "server provision",
         "output": "document",
         "side_effect": "remote",
@@ -210,7 +241,7 @@
             "default": "false",
             "name": "json",
             "type": "bool",
-            "usage": "output as JSON"
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
           },
           {
             "name": "label-selector",
@@ -230,7 +261,7 @@
             "usage": "env var to read the API token from"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "server list",
         "output": "document",
         "side_effect": "read",
@@ -251,7 +282,7 @@
             "default": "false",
             "name": "json",
             "type": "bool",
-            "usage": "output as JSON"
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
           },
           {
             "name": "token",
@@ -277,7 +308,7 @@
             "usage": "also grow the disk to match the new type (irreversible)"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "server resize",
         "output": "document",
         "side_effect": "remote",
@@ -306,7 +337,7 @@
             "default": "false",
             "name": "json",
             "type": "bool",
-            "usage": "output as JSON"
+            "usage": "Print one v1 JSON envelope on stdout (progress lines and terraform output go to stderr)"
           },
           {
             "default": "false",
@@ -339,7 +370,7 @@
             "usage": "env var to read the API token from"
           }
         ],
-        "json": "none",
+        "json": "legacy",
         "name": "server destroy",
         "output": "document",
         "side_effect": "destructive",

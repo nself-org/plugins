@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "infra server destroy",
+  "error": {
+    "code": "E744",
+    "message": "the Hetzner Cloud operation failed",
+    "cause": "HTTP 503",
+    "remediation": "check the server with nself infra server list before retrying",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

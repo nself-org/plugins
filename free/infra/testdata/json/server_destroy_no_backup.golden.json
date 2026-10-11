@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "infra server destroy",
+  "error": {
+    "code": "E403",
+    "message": "destroy refused: no verified backup was requested, the server was not deleted",
+    "remediation": "pass --snapshot to take one first, or --force-no-backup to proceed without one",
+    "exit_code": 4,
+    "class": "destructive_blocked"
+  }
+}
