@@ -67,8 +67,8 @@ func Status(ctx context.Context, releaseName, kubeconfig string) (string, error)
 
 // ReleaseStatus runs `helm status` and returns the five-field summary. A
 // helm failure is a *HelmError; NotFound is set when helm's stderr says the
-// release does not exist. helm's stderr (trimmed, last 512 bytes) is part of the
-// error text so an unreachable cluster or a bad context is diagnosable;.
+// release does not exist. helm's stderr (trimmed, last 512 bytes) is kept in
+// HelmError.Stderr so an unreachable cluster or a bad context is diagnosable.
 func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (ReleaseSummary, error) {
 	helm, err := helmBinary()
 	if err != nil {

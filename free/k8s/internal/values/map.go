@@ -1,9 +1,10 @@
 // Purpose: map the resolved compose model to the k8s values and secrets
 // documents. Mapping (EPIC D7): long-running service -> Deployment, postgres
 // -> StatefulSet, restart "no" -> Job, nginx -> Ingress rules, a service with
-// a build context and no image, an image with neither tag nor digest, or with
-// host-level compose features, -> unsupported with a reason. Every compose
-// service lands in Services or in Unsupported; nothing is approximated silently (per-service NotMapped lists
+// a build context and no image, an image with neither tag nor digest (not the
+// nginx Ingress, which is never pulled), or with host-level compose features,
+// -> unsupported with a reason. Every compose service lands in Services or in
+// Unsupported; nothing is approximated silently (per-service NotMapped lists
 // the compose features that have no counterpart).
 //
 // Inputs: Model, optional Routes.
@@ -76,20 +77,24 @@ func unsupportedReason(name string, cs ComposeSvc) string {
 		return "pid or ipc namespace sharing has no mapping"
 	case len(cs.Devices) > 0:
 		return "host devices have no mapping"
-	case noTagOrDigest(cs.Image):
+	case noTagOrDigest(name, cs):
 		return "image has no tag or digest (k8s would pull a moving latest); pin a tag or digest in compose"
 	}
 	return ""
 }
 
-// noTagOrDigest reports whether image is a reference with neither tag nor
-// digest. An image with an unresolved "${" is not judged here: mapService
-// rejects it with its own error.
-func noTagOrDigest(image string) bool {
-	if strings.Contains(image, "${") {
+// noTagOrDigest reports whether the service's image is a reference with
+// neither tag nor digest. An image with an unresolved "${" is not judged here
+// (mapService rejects it with its own error), and the service that becomes the
+// Ingress is skipped: it is never pulled as a workload.
+func noTagOrDigest(name string, cs ComposeSvc) bool {
+	if strings.Contains(cs.Image, "${") {
 		return false
 	}
-	_, tag, digest := SplitImage(image)
+	repo, tag, digest := SplitImage(cs.Image)
+	if kindOf(name, repo, cs) == KindIngress {
+		return false
+	}
 	return tag == "" && digest == ""
 }
 

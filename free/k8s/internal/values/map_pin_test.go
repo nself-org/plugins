@@ -32,6 +32,7 @@ func TestMapImagePinning(t *testing.T) {
 		{"statefulset", "postgres", "postgres:16", KindStatefulSet, "16", "", PullIfNotPresent},
 		{"job", "migrate", "busybox:1.36", KindJob, "1.36", "", PullIfNotPresent},
 		{"ingress has no policy", "nginx", "nginx:1.27", KindIngress, "1.27", "", ""},
+		{"untagged ingress is not refused", "nginx", "nginx", KindIngress, "", "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
