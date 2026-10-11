@@ -2,7 +2,7 @@
 // internal/plugin/router.go execs this binary as `nself-k8s <args...>` with
 // the leading "k8s" argument already stripped, so this root command takes
 // the place `nself k8s` used to occupy in the core binary — its subcommands
-// (install, upgrade, status, values, uninstall) are what `nself k8s install` /
+// (install, upgrade, status, values, uninstall, backup, restore) are what `nself k8s install` /
 // `nself k8s upgrade` / `nself k8s status` resolve to today.
 //
 // Inputs: os.Args, as passed through by the plugin router.
@@ -34,6 +34,8 @@ Examples:
   nself k8s install --domain myapp.com
   nself k8s status
   nself k8s upgrade
+  nself k8s backup
+  nself k8s restore backups/myapp_full_20261011_040506.dump --yes
   nself k8s uninstall --yes`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
@@ -41,5 +43,5 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(installCmd, upgradeCmd, statusCmd, valuesCmd, uninstallCmd)
+	rootCmd.AddCommand(installCmd, upgradeCmd, statusCmd, valuesCmd, uninstallCmd, backupCmd, restoreCmd)
 }

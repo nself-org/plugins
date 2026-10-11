@@ -1,0 +1,133 @@
+// Purpose: black-box tests of `nself-k8s restore`: the --yes gate, the integrity
+// failures (tampered dump, fingerprint mismatch) and the verified success.
+//
+// Inputs: runK8s and the fixtures of backup_test.go.
+//
+// Outputs: test results.
+//
+// Constraints: restore reports success only after equal fingerprints; every refusal
+// asserts that the stub kubectl was never called.
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/nself-org/cli/sdk/go/v2/output"
+)
+
+// madeBackup runs a backup through the binary and returns the dump path.
+func madeBackup(t *testing.T, dir string) string {
+	t.Helper()
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "backup", Dump: "PGDMP-synthetic", Fps: fpLines}, "backup", "--json")
+	d := wantSuccess(t, r.cliResult, "k8s backup")
+	return d.Data["file"].(string)
+}
+
+func TestRestoreWithoutYesIsRefusedAndRunsNothing(t *testing.T) {
+	dir := project(t)
+	file := madeBackup(t, dir)
+	for _, args := range [][]string{{"restore", file}, {"restore", file, "--json"}} {
+		// stdin is /dev/null: not a terminal, so no prompt could save it.
+		r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, args...)
+		if r.Exit != 4 {
+			t.Errorf("%v: exit = %d, want 4\n%s%s", args, r.Exit, r.Stdout, r.Stderr)
+		}
+		if r.Calls != 0 {
+			t.Errorf("%v: kubectl ran %d time(s)", args, r.Calls)
+		}
+		if strings.Contains(r.Stdout+r.Stderr, "Restored") {
+			t.Errorf("%v: printed success", args)
+		}
+		if len(args) == 3 {
+			wantFailure(t, r.cliResult, "k8s restore", "E403", output.ClassDestructiveBlocked)
+		}
+	}
+	// No kubectl on PATH at all: the refusal still comes first.
+	r := runK8s(t, k8sRun{Dir: dir, NoKubectl: true}, "restore", file, "--json")
+	wantFailure(t, r.cliResult, "k8s restore", "E403", output.ClassDestructiveBlocked)
+}
+
+func TestRestoreVerifiedSuccess(t *testing.T) {
+	dir := project(t)
+	file := madeBackup(t, dir)
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes", "--json")
+	d := wantSuccess(t, r.cliResult, "k8s restore")
+	if d.Data["verified"] != true || d.Data["file"] != file || len(d.Data["tables"].([]any)) != 3 {
+		t.Errorf("data = %v", d.Data)
+	}
+	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "-y")
+	if h.Exit != 0 || !strings.Contains(h.Stdout+h.Stderr, "3 tables verified") {
+		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
+	}
+}
+
+func TestRestoreTamperedDumpExits2WithoutSuccess(t *testing.T) {
+	dir := project(t)
+	file := madeBackup(t, dir)
+	b, _ := os.ReadFile(file)
+	b[3] ^= 0x01
+	if err := os.WriteFile(file, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes", "--json")
+	wantFailure(t, r.cliResult, "k8s restore", "E735", output.ClassInfra)
+	if strings.Contains(r.Stdout, `"verified"`) {
+		t.Error("stdout carries a success")
+	}
+	// pg_restore never ran: the only kubectl call is the pod lookup.
+	if r.Calls != 1 {
+		t.Errorf("kubectl calls = %d, want 1 (get pods)", r.Calls)
+	}
+	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", file, "--yes")
+	if h.Exit != 2 || !strings.Contains(h.Stderr, "E735") || strings.Contains(h.Stdout+h.Stderr, "Restored") {
+		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
+	}
+}
+
+func TestRestoreFingerprintMismatchExits2WithoutSuccess(t *testing.T) {
+	dir := project(t)
+	file := madeBackup(t, dir)
+	changed := strings.Replace(fpLines, `"rows":1000`, `"rows":999`, 1)
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: changed}, "restore", file, "--yes", "--json")
+	d := wantFailure(t, r.cliResult, "k8s restore", "E737", output.ClassInfra)
+	if !strings.Contains(d.Error.Cause, "rows 1000 != 999") || strings.Contains(r.Stdout, `"verified"`) {
+		t.Errorf("cause = %q\n%s", d.Error.Cause, r.Stdout)
+	}
+	h := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: changed}, "restore", file, "--yes")
+	if h.Exit != 2 || !strings.Contains(h.Stderr, "E737") || strings.Contains(h.Stdout+h.Stderr, "Restored") {
+		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
+	}
+}
+
+func TestRestoreRefusesDumpWithoutSidecar(t *testing.T) {
+	dir := project(t)
+	core := filepath.Join(dir, "core_full_20261011_040506.dump")
+	writeFile(t, core, "PGDMP-made-by-nself-backup-create", 0o600)
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines}, "restore", core, "--yes", "--json")
+	d := wantFailure(t, r.cliResult, "k8s restore", "E734", output.ClassUser)
+	if !strings.Contains(d.Error.Message, "no metadata") {
+		t.Errorf("message = %q", d.Error.Message)
+	}
+	if r.Calls != 1 {
+		t.Errorf("kubectl calls = %d, want only the pod lookup", r.Calls)
+	}
+}
+
+func TestRestorePgRestoreErrorIsE736(t *testing.T) {
+	dir := project(t)
+	file := madeBackup(t, dir)
+	r := runK8s(t, k8sRun{Dir: dir, Mode: "restore", PostFps: fpLines, RestoreErr: "pg_restore: error: could not execute query: ERROR:  boom"}, "restore", file, "--yes", "--json")
+	wantFailure(t, r.cliResult, "k8s restore", "E736", output.ClassInfra)
+}
+
+func TestRestoreUsageErrors(t *testing.T) {
+	dir := project(t)
+	r := runK8s(t, k8sRun{Dir: dir}, "restore", "--json")
+	wantFailure(t, r.cliResult, "k8s restore", "E401", output.ClassUser)
+	if r.Calls != 0 {
+		t.Error("kubectl ran")
+	}
+}
