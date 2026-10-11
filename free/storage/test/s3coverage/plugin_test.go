@@ -229,7 +229,12 @@ func TestPlugin_UploadLargeObjectViaS3(t *testing.T) {
 	}
 
 	// GET returns identical bytes with the right headers.
-	resp, err := http.Get(p.url + "/storage/buckets/" + bucket + "/objects/big.bin")
+	req, err := http.NewRequest(http.MethodGet, p.url+"/storage/buckets/"+bucket+"/objects/big.bin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Plugin-Secret", testInternalSecret)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +462,7 @@ func TestPlugin_TruncatedUploadCommitsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Fprintf(conn, "PUT /storage/buckets/%s/objects/trunc.bin HTTP/1.1\r\nHost: plugin\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", bucket, 40<<20)
+	fmt.Fprintf(conn, "PUT /storage/buckets/%s/objects/trunc.bin HTTP/1.1\r\nHost: plugin\r\nX-Plugin-Secret: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n", bucket, testInternalSecret, 40<<20)
 	if _, err := io.Copy(conn, &patternStream{n: 20 << 20}); err != nil {
 		t.Fatalf("sending the partial body: %v", err)
 	}
