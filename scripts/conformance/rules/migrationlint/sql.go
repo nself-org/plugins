@@ -112,16 +112,32 @@ func stripPL(t []tok) []tok {
 	return r
 }
 
-// stripPLn is stripPL that also reports how many IF branches the stripped prefix opened (ELSIF opens none).
-func stripPLn(t []tok) ([]tok, int) {
-	opened := 0
+// pl counts the plpgsql scopes a stripped prefix opened.
+type pl struct{ ifs, loops, cases, begins int }
+
+// stripPLn is stripPL that also reports the scopes the stripped prefix opened (ELSIF, WHEN and ELSE open none).
+func stripPLn(t []tok) ([]tok, pl) {
+	var n pl
 	for len(t) > 0 {
 		switch w(t, 0) {
-		case "BEGIN", "ELSE", "LOOP", "DECLARE", "EXCEPTION":
+		case "BEGIN":
+			n.begins++
 			t = t[1:]
-		case "IF", "ELSIF", "ELSEIF", "WHILE", "FOR", "FOREACH", "WHEN":
-			if w(t, 0) == "IF" {
-				opened++
+		case "LOOP":
+			n.loops++
+			t = t[1:]
+		case "ELSE", "DECLARE", "EXCEPTION":
+			t = t[1:]
+		case "IF", "ELSIF", "ELSEIF", "WHILE", "FOR", "FOREACH", "WHEN", "CASE":
+			end := "THEN" // IF, ELSIF, WHEN and CASE head end at THEN; a FOR/WHILE head ends at LOOP
+			switch w(t, 0) {
+			case "IF":
+				n.ifs++
+			case "CASE":
+				n.cases++
+			case "WHILE", "FOR", "FOREACH":
+				n.loops++
+				end = "LOOP"
 			}
 			depth, k := 0, 1
 			for ; k < len(t); k++ {
@@ -129,21 +145,21 @@ func stripPLn(t []tok) ([]tok, int) {
 					depth++
 				} else if isPunct(t, k, ")") {
 					depth--
-				} else if depth == 0 && (w(t, k) == "THEN" || w(t, k) == "LOOP") {
+				} else if depth == 0 && w(t, k) == end {
 					break
 				}
 			}
 			if k >= len(t) {
-				return nil, opened
+				return nil, n
 			}
 			t = t[k+1:]
 		case "END":
-			return nil, opened
+			return nil, n
 		default:
-			return t, opened
+			return t, n
 		}
 	}
-	return nil, opened
+	return nil, n
 }
 
 // onTable returns the table named by the first ON keyword at or after from (CREATE/DROP TRIGGER and POLICY).
