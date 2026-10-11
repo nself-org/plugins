@@ -26,7 +26,7 @@ plant() {
   rm -rf "$mut/$id"; mkdir -p "$mut/$id"; cp -R "$conv/$p" "$mut/$id/$p"
   ( cd "$mut/$id/$p" && eval "$snip" )
   local out; out=$(bash "$CONF_DIR/check.sh" --root "$mut/$id" --plugins "$p" --rules "$rule" --migration-base "$mig" "$@" 2>&1); local r=$?
-  if [ $r -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL $rule "; then echo "pass  defect $id fails rule $rule"
+  if [ $r -ne 0 ] && printf '%s\n' "$out" | grep -qE "FAIL $rule .*(${PLANT_MSG:-.})"; then echo "pass  defect $id fails rule $rule"
   else echo "FAIL  defect $id: rule $rule did not fail (rc=$r)"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
 }
 # pass_plant <id> <plugin> <rules> <snippet> [extra check.sh args]: apply the snippet to a copy, require the rules to PASS.
@@ -52,7 +52,9 @@ plant unvendored-build alpha build "rm -rf vendor"
 plant sock-in-named-fragment beta docker-socket "mkdir deploy; mv docker-compose.plugin.yml deploy/plugin.yml; jqe '.service.compose = \"deploy/plugin.yml\"'; sock deploy/plugin.yml"
 plant sock-in-other-yaml beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - /var/run/docker.sock:/s\n' > extra/override.yaml"
 plant sock-var-run beta docker-socket "mkdir extra; printf 'services:\n  x:\n    volumes:\n      - \"/var/run:/host-run\"\n' > extra/run.yml"
-# Rule port-bind (D-0453): every published port binds the literal 127.0.0.1.
+# Rule port-bind (D-0453): every published port binds the literal 127.0.0.1. PLANT_MSG pins the failure to a real finding,
+# not a tool or parse error.
+PLANT_MSG='publishes|network_mode'
 plant port-all-interfaces beta port-bind "setport '      - \"3902:3902\"'"
 plant port-any-ip beta port-bind "setport '      - \"0.0.0.0:3902:3902\"'"
 plant port-container-only beta port-bind "setport '      - \"3902\"'"
@@ -67,6 +69,7 @@ pass_plant port-long-loopback beta port-bind "setport '      - target: 3902\n   
 pass_plant port-newline-filename beta port-bind "mkdir meta; printf 'a: 1\n' > 'meta/x
 y.yaml'"
 pass_plant port-k8s-yaml beta port-bind "mkdir k8s; printf 'kind: Deployment\nspec:\n  template:\n    spec:\n      containers:\n        - name: x\n          ports:\n            - containerPort: 3902\n' > k8s/deploy.yaml"
+PLANT_MSG=
 # Rule boot-schema (D-0453): migrations.apply boot needs schema np_<name>, and the Go boot code must agree.
 plant boot-no-schema alpha boot-schema "jqe 'del(.schema)'"
 plant boot-wrong-schema alpha boot-schema "jqe '.schema = \"np_other\"'"
