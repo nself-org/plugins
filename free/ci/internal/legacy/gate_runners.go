@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -108,14 +109,27 @@ var repoGoScripts = []struct{ name, path string }{
 	{"go:sdk-remote-mutation", "scripts/ci/sdk-remote-mutation.sh"},
 }
 
-// runRepoGoScripts runs every repoGoScripts entry present under root.
+// repoScriptDeadline bounds one repo gate script. runStep has no deadline of
+// its own, and the mutation gate needs the module proxy and a few minutes, so
+// a hang must end as a failed gate, not a stuck run. A var so tests can shrink it.
+var repoScriptDeadline = 30 * time.Minute
+
+// runRepoGoScripts runs every repoGoScripts entry present under root. Each is
+// a required gate: offline or timed out reads as failed, never as skipped.
 func runRepoGoScripts(root string, timeout int, verbose bool) []GateResult {
 	var gates []GateResult
 	for _, s := range repoGoScripts {
 		if !fileExists(filepath.Join(root, filepath.FromSlash(s.path))) {
 			continue
 		}
-		gates = append(gates, runStep(s.name, root, timeout, verbose, "bash", s.path))
+		ctx, cancel := context.WithTimeout(context.Background(), repoScriptDeadline)
+		gr := runStepCtx(ctx, s.name, root, verbose, "bash", s.path)
+		if ctx.Err() == context.DeadlineExceeded {
+			gr.Passed = false
+			gr.Output = strings.TrimSpace(fmt.Sprintf("timed out after %s\n%s", repoScriptDeadline, gr.Output))
+		}
+		cancel()
+		gates = append(gates, gr)
 	}
 	return gates
 }
@@ -199,6 +213,12 @@ func runGatewayRoutingCheck(gatewayBase string, timeout int, verbose bool) []Gat
 // runStep executes a single gate command and returns its result.
 // For gofmt specifically, success means no output (unlinted files print their path).
 func runStep(name, root string, timeout int, verbose bool, cmd string, args ...string) GateResult {
+	return runStepCtx(context.Background(), name, root, verbose, cmd, args...)
+}
+
+// runStepCtx is runStep under ctx: when ctx ends the command is killed, and
+// its output pipes are closed WaitDelay later even if a child still holds them.
+func runStepCtx(ctx context.Context, name, root string, verbose bool, cmd string, args ...string) GateResult {
 	start := time.Now()
 	gr := GateResult{Name: name}
 
@@ -215,7 +235,8 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 		fmt.Fprintf(os.Stderr, "[nself-ci] running: %s %s\n", cmd, strings.Join(args, " "))
 	}
 
-	c := exec.Command(cmd, args...)
+	c := exec.CommandContext(ctx, cmd, args...)
+	c.WaitDelay = 10 * time.Second
 	c.Dir = root
 
 	var buf bytes.Buffer

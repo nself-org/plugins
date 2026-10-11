@@ -259,3 +259,23 @@ func TestRunGoGates_IncludesRepoScripts(t *testing.T) {
 		t.Errorf("want a failed, substantive vendor gate, got %+v", *vendor)
 	}
 }
+
+// A hung repo script ends as a failed gate at the deadline, not a stuck run.
+func TestRunRepoGoScripts_DeadlineFailsTheGate(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("skip: bash not on PATH")
+	}
+	old := repoScriptDeadline
+	repoScriptDeadline = 300 * time.Millisecond
+	t.Cleanup(func() { repoScriptDeadline = old })
+	root := t.TempDir()
+	writeScript(t, root, "scripts/ci/vendor-sync-check.sh", `exec sleep 30`)
+	start := time.Now()
+	got := runRepoGoScripts(root, 30, false)
+	if len(got) != 1 || got[0].Passed || !strings.Contains(got[0].Output, "timed out after") {
+		t.Fatalf("want one failed, timed-out gate, got %+v", got)
+	}
+	if el := time.Since(start); el > 15*time.Second {
+		t.Errorf("deadline not enforced: took %s", el)
+	}
+}
