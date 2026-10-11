@@ -132,12 +132,12 @@ func mapService(name string, cs ComposeSvc, v *Values) (Service, map[string]stri
 		if cs.Environment[k] != nil {
 			val = *cs.Environment[k]
 		}
+		if k == LicenseEnvName {
+			licenceDropped = true // never a value (even an unresolved one): the chart reads it from --license-secret
+			continue
+		}
 		if strings.Contains(val, "${") {
 			return Service{}, nil, fmt.Errorf("service %s: env %s has an unresolved interpolation", name, k)
-		}
-		if k == LicenseEnvName {
-			licenceDropped = true // never a value: the chart reads it from --license-secret
-			continue
 		}
 		svc.Env = append(svc.Env, k)
 		env[k] = val

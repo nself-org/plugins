@@ -265,3 +265,41 @@ func TestCheckComparesBaseDomainAndPluginMarker(t *testing.T) {
 		t.Errorf("plugin marker: diffs = %v, err = %v", diffs, err)
 	}
 }
+
+// TestLicenceEnvDroppedBeforeInterpolationCheck: the licence env is dropped even
+// when its value is an unresolved interpolation; any other env with "${" still errors.
+func TestLicenceEnvDroppedBeforeInterpolationCheck(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+	}{
+		{"literal interpolation is dropped", map[string]string{"NSELF_PLUGIN_LICENSE_KEY": "${NSELF_PLUGIN_LICENSE_KEY}", "PORT": "1"}, false},
+		{"resolved value is dropped", map[string]string{"NSELF_PLUGIN_LICENSE_KEY": "fake-licence-0000"}, false},
+		{"other env still errors", map[string]string{"NSELF_PLUGIN_LICENSE_KEY": "${X}", "OTHER": "${Y}"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			env := map[string]*string{}
+			for k, v := range c.env {
+				v := v
+				env[k] = &v
+			}
+			v, s, err := Map(&Model{Name: "p", Services: map[string]ComposeSvc{"mux": {Image: "x/mux:1", Environment: env}}}, nil)
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, c.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			for _, n := range v.Services["mux"].Env {
+				if n == "NSELF_PLUGIN_LICENSE_KEY" {
+					t.Error("licence env name kept")
+				}
+			}
+			if _, ok := s.Secrets["mux"]["NSELF_PLUGIN_LICENSE_KEY"]; ok {
+				t.Error("licence env value kept")
+			}
+		})
+	}
+}

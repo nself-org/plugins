@@ -78,6 +78,17 @@ elif ! printf '%s' "$msg" | grep -q "plugin ghost is not in the generated values
   echo "FAIL: absent plugin gave the wrong message: $msg" >&2; fail=1
 fi
 
+# Values generated before the licence key was kept out of values (a service lists
+# NSELF_PLUGIN_LICENSE_KEY) fail the render, with or without license.secretName.
+for extra in "" "--set license.secretName=fake-licence-secret"; do
+  # shellcheck disable=SC2086
+  if msg="$(helm template nself charts/nself -f $g/values.yaml -f $g/secrets.yaml --set 'services.postgres.env[0]=NSELF_PLUGIN_LICENSE_KEY' $extra 2>&1)"; then
+    echo "FAIL: a service env listing the licence key rendered ($extra)" >&2; fail=1
+  elif ! printf '%s' "$msg" | grep -q "service postgres lists NSELF_PLUGIN_LICENSE_KEY: the licence key may not travel as a value; run nself k8s values again and pass --license-secret"; then
+    echo "FAIL: licence-key env gave the wrong message: $msg" >&2; fail=1
+  fi
+done
+
 # An initdb name without content in secrets.yaml fails, naming the file.
 if msg="$(helm template nself charts/nself -f $g/values.yaml -f $g/secrets.yaml --set 'initdb.postgres=null' 2>&1)"; then
   echo "FAIL: initdb names without secrets content rendered" >&2; fail=1
