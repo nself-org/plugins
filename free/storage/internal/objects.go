@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -18,9 +19,9 @@ import (
 func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 	sai := sourceAccountID(r)
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "key")
+	key, keyOK := objectKeyParam(r)
 
-	if err := validateObject(sai, key); err != nil {
+	if err := validateObject(sai, key); !keyOK || err != nil {
 		http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 		return
 	}
@@ -38,9 +39,11 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var bucketID string
+	var existed bool // a row for this key exists already: an overwrite keeps its bytes if the row write fails
 	err := s.db.QueryRow(r.Context(),
-		`SELECT id FROM np_storage_buckets WHERE source_account_id = $1 AND name = $2`,
-		sai, bucket).Scan(&bucketID)
+		`SELECT b.id, EXISTS (SELECT 1 FROM np_storage_objects o WHERE o.bucket_id = b.id AND o.key = $3)
+		 FROM np_storage_buckets b WHERE b.source_account_id = $1 AND b.name = $2`,
+		sai, bucket, key).Scan(&bucketID, &existed)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, `{"error":"bucket not found"}`, http.StatusNotFound)
@@ -74,6 +77,9 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 	).Scan(&id)
 	if err != nil {
 		log.Printf("storage: put %s/%s: metadata upsert failed after the S3 write: %v", bucket, key, err)
+		if !existed {
+			s.removeOrphan(bucket, objectKey(sai, key))
+		}
 		http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -85,9 +91,9 @@ func (s *Server) handlePutObject(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetObject(w http.ResponseWriter, r *http.Request) {
 	sai := sourceAccountID(r)
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "key")
+	key, keyOK := objectKeyParam(r)
 
-	if err := validateObject(sai, key); err != nil {
+	if err := validateObject(sai, key); !keyOK || err != nil {
 		http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 		return
 	}
@@ -159,9 +165,9 @@ func setObjectHeaders(w http.ResponseWriter, contentType string, size int64, eta
 func (s *Server) handleDeleteObject(w http.ResponseWriter, r *http.Request) {
 	sai := sourceAccountID(r)
 	bucket := chi.URLParam(r, "bucket")
-	key := chi.URLParam(r, "key")
+	key, keyOK := objectKeyParam(r)
 
-	if err := validateObject(sai, key); err != nil {
+	if err := validateObject(sai, key); !keyOK || err != nil {
 		http.Error(w, `{"error":"invalid key"}`, http.StatusBadRequest)
 		return
 	}
@@ -230,4 +236,16 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		objects = []objectRow{}
 	}
 	writeJSON(w, http.StatusOK, objects)
+}
+
+// removeOrphan deletes bytes that were written to S3 but never got a metadata row (best effort, detached from the
+// request so a client that hung up does not leave them behind). An overwrite is never cleaned up this way.
+func (s *Server) removeOrphan(bucket, physicalKey string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := s.store.Delete(ctx, bucket, physicalKey); err != nil {
+		log.Printf("storage: orphan cleanup of %s/%s failed: %v", bucket, physicalKey, err)
+		return
+	}
+	log.Printf("storage: orphan cleanup removed %s/%s (metadata row was not written)", bucket, physicalKey)
 }

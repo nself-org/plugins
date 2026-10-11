@@ -55,6 +55,7 @@ func newPlugin(t *testing.T) *pluginHarness {
 type failStore struct {
 	internal.ObjectStore
 	failPut, failDelete, deleteNotFound, failDeleteObjects, failDeletePrefix atomic.Bool
+	afterPut                                                                 atomic.Pointer[func()] // runs after a successful S3 write, before the handler writes the row
 }
 
 var errInjected = errors.New("injected S3 failure")
@@ -63,7 +64,13 @@ func (f *failStore) Put(c context.Context, bucket, key string, body io.Reader, c
 	if f.failPut.Load() {
 		return s3store.PutResult{}, errInjected
 	}
-	return f.ObjectStore.Put(c, bucket, key, body, ct, declared)
+	res, err := f.ObjectStore.Put(c, bucket, key, body, ct, declared)
+	if err == nil {
+		if hook := f.afterPut.Load(); hook != nil {
+			(*hook)()
+		}
+	}
+	return res, err
 }
 
 func (f *failStore) Delete(c context.Context, bucket, key string) error {
@@ -471,5 +478,64 @@ func TestPlugin_TruncatedUploadCommitsNothing(t *testing.T) {
 	}
 	if n := p.rec.count(func(q reqRecord) bool { return q.Method == http.MethodPost && strings.Contains(q.Query, "uploadId=") }); n != 0 {
 		t.Fatalf("CompleteMultipartUpload was sent %d time(s) for a truncated body", n)
+	}
+}
+
+// If the metadata row cannot be written after the S3 write, a NEW key's bytes are removed again (no orphan), while
+// an overwrite keeps its bytes.
+func TestPlugin_OrphanCleanupWhenMetadataWriteFails(t *testing.T) {
+	p, fs := newPluginWrapped(t)
+	dropBucketRow := func(bucket string) *func() {
+		f := func() {
+			if _, err := pool.Exec(ctx, `DELETE FROM np_storage_buckets WHERE name = $1`, bucket); err != nil {
+				t.Errorf("dropping the bucket row: %v", err)
+			}
+		}
+		return &f
+	}
+
+	b1 := p.createBucket(t, "")
+	fs.afterPut.Store(dropBucketRow(b1))
+	if code, _, _ := p.call(t, "", http.MethodPut, "/storage/buckets/"+b1+"/objects/orphan.txt", strings.NewReader("new"), "text/plain"); code != http.StatusInternalServerError {
+		t.Fatalf("PUT with the row write failing: %d, want 500", code)
+	}
+	if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(b1), Key: aws.String("primary/orphan.txt")}); !is404(err) {
+		t.Fatalf("orphan bytes of a new key were left in S3: %v", err)
+	}
+
+	fs.afterPut.Store(nil)
+	b2 := p.createBucket(t, "")
+	if code, _, _ := p.call(t, "", http.MethodPut, "/storage/buckets/"+b2+"/objects/keep.txt", strings.NewReader("old"), "text/plain"); code != 200 {
+		t.Fatalf("first PUT: %d", code)
+	}
+	fs.afterPut.Store(dropBucketRow(b2))
+	if code, _, _ := p.call(t, "", http.MethodPut, "/storage/buckets/"+b2+"/objects/keep.txt", strings.NewReader("overwritten"), "text/plain"); code != http.StatusInternalServerError {
+		t.Fatalf("overwrite with the row write failing: %d, want 500", code)
+	}
+	if got := getBytes(t, b2, "primary/keep.txt"); string(got) != "overwritten" {
+		t.Fatalf("an overwrite must keep its bytes, S3 holds %q", got)
+	}
+}
+
+// "/" inside a key travels as %2F and the key is decoded exactly once.
+func TestPlugin_KeyEncoding(t *testing.T) {
+	p := newPlugin(t)
+	bucket := p.createBucket(t, "")
+	base := "/storage/buckets/" + bucket + "/objects/"
+	p.call(t, "", http.MethodPut, base+"a%2Fb", strings.NewReader("slash"), "text/plain")
+	p.call(t, "", http.MethodPut, base+"a%252Fb", strings.NewReader("percent"), "text/plain")
+	if _, _, b := p.call(t, "", http.MethodGet, base+"a%2Fb", nil, ""); string(b) != "slash" {
+		t.Errorf("a%%2Fb reads %q", b)
+	}
+	if _, _, b := p.call(t, "", http.MethodGet, base+"a%252Fb", nil, ""); string(b) != "percent" {
+		t.Errorf("a%%252Fb reads %q", b)
+	}
+	for _, k := range []string{"primary/a/b", "primary/a%2Fb"} {
+		if _, err := direct.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(k)}); err != nil {
+			t.Errorf("physical key %q missing: %v", k, err)
+		}
+	}
+	if code, _, _ := p.call(t, "", http.MethodPut, base+"x%0Ay", strings.NewReader("no"), "text/plain"); code != http.StatusBadRequest {
+		t.Errorf("key with a newline: %d, want 400", code)
 	}
 }

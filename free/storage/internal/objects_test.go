@@ -323,3 +323,54 @@ func TestStreamBody_okCopies(t *testing.T) {
 		t.Fatal(sb.String())
 	}
 }
+
+func TestObjectKeyParam_decodesExactlyOnce(t *testing.T) {
+	cases := []struct {
+		path, want string
+		ok         bool
+	}{
+		{"/storage/buckets/bkt/objects/a%2Fb", "a/b", true},
+		{"/storage/buckets/bkt/objects/a%252Fb", "a%2Fb", true},
+		{"/storage/buckets/bkt/objects/%41bc", "Abc", true},
+		{"/storage/buckets/bkt/objects/a%25b", "a%b", true},
+		{"/storage/buckets/bkt/objects/plain.txt", "plain.txt", true},
+		{"/storage/buckets/bkt/objects/sp%20ace", "sp ace", true},
+		{"/storage/buckets/objects/objects/k", "k", true},
+		{"/storage/buckets/bkt/objects", "", false},
+	}
+	for _, c := range cases {
+		req := httptest.NewRequest(http.MethodGet, c.path, nil)
+		got, ok := objectKeyParam(req)
+		if ok != c.ok || got != c.want {
+			t.Errorf("%s -> %q, %v; want %q, %v", c.path, got, ok, c.want, c.ok)
+		}
+	}
+	a, _ := objectKeyParam(httptest.NewRequest(http.MethodGet, "/storage/buckets/b/objects/a%2Fb", nil))
+	b, _ := objectKeyParam(httptest.NewRequest(http.MethodGet, "/storage/buckets/b/objects/a%252Fb", nil))
+	if a == b {
+		t.Fatal("a%2Fb and a%252Fb must be different keys")
+	}
+}
+
+func TestObjectRoutes_rejectBadKeysBeforeAnyBackend(t *testing.T) {
+	h := newRouter(&Server{store: &fakeStore{}})
+	for _, p := range []string{"x%0Ay", "x%00y", "x%7Fy", "a%2E%2E", "%2E", "a%2F%2E"} {
+		for _, m := range []string{http.MethodPut, http.MethodGet, http.MethodDelete} {
+			rr := do(h, m, "/storage/buckets/bkt/objects/"+p, "x")
+			if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "invalid key") {
+				t.Errorf("%s key %q: %d %s", m, p, rr.Code, rr.Body.String())
+			}
+		}
+	}
+}
+
+func TestValidateKey_controlCharacters(t *testing.T) {
+	for _, k := range []string{"a\nb", "a\rb", "a\x00b", "\x1f", "a\x7fb"} {
+		if validateKey(k) != ErrInvalidKey {
+			t.Errorf("%q must be rejected", k)
+		}
+	}
+	if validateKey("a/b c\u00e9") != nil {
+		t.Error("slash, space and non-ASCII letters are fine")
+	}
+}

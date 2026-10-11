@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -528,5 +530,59 @@ func TestDeletePrefix_paginates(t *testing.T) {
 	// 1200 + 1200 + 100 keys, each page below the 1000-key DeleteObjects limit only by batching: 2+2+1 calls.
 	if f.deleteCalls != 5 {
 		t.Fatalf("delete calls = %d, want 5 (%v)", f.deleteCalls, f.deleteBatchSizes)
+	}
+}
+
+// countReader counts Read calls (a body that must not be touched while the upload waits for capacity).
+type countReader struct{ reads int }
+
+func (c *countReader) Read([]byte) (int, error) { c.reads++; return 0, io.EOF }
+
+func TestPut_largeDeclaredBodyWaitsForSlotBeforeReading(t *testing.T) {
+	f := &fakeAPI{}
+	st := &Store{api: f, slots: make(chan struct{}, 1), slotWait: 20 * time.Millisecond}
+	st.slots <- struct{}{}
+	body := &countReader{}
+	_, err := st.Put(context.Background(), "b", "k", body, "", 5<<20)
+	if !errors.Is(err, ErrBusy) {
+		t.Fatalf("want ErrBusy, got %v", err)
+	}
+	if body.reads != 0 {
+		t.Fatalf("the body was read %d time(s) while waiting for a slot", body.reads)
+	}
+}
+
+func TestPut_declaredLargeBodyHoldsOneSlot(t *testing.T) {
+	st := &Store{api: &fakeAPI{}, slots: make(chan struct{}, 1)}
+	if _, err := st.Put(context.Background(), "b", "k", newPattern(2<<20), "", 2<<20); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.slots) != 0 {
+		t.Fatal("slot leaked")
+	}
+	// understated length: the slot is still taken (once) when the head turns out larger
+	if _, err := st.Put(context.Background(), "b", "k", newPattern(2<<20), "", -1); err != nil || len(st.slots) != 0 {
+		t.Fatalf("unknown length: %v slots %d", err, len(st.slots))
+	}
+}
+
+type abortFailAPI struct{ fakeAPI }
+
+func (a *abortFailAPI) AbortMultipartUpload(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
+	return nil, errors.New("abort refused")
+}
+
+func TestPut_abortFailureIsLoggedNotSwallowed(t *testing.T) {
+	var buf strings.Builder
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	a := &abortFailAPI{fakeAPI{failPart: 2}}
+	_, err := (&Store{api: a}).Put(context.Background(), "bkt", "k", newPattern(17<<20), "", -1)
+	if err == nil {
+		t.Fatal("expected the upload to fail")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "abort multipart upload failed") || !strings.Contains(out, "bucket bkt") || !strings.Contains(out, "upload id u1") || !strings.Contains(out, "abort refused") {
+		t.Fatalf("log = %q", out)
 	}
 }

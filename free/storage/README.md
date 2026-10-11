@@ -78,7 +78,7 @@ one part in memory, and are aborted on any failure. The client is path-style wit
 
 **What is bounded.** At most `STORAGE_MAX_UPLOADS` uploads run at once; each holds its first MiB in memory. Of those,
 at most `STORAGE_MAX_LARGE_UPLOADS` hold a pooled 16 MiB buffer, so upload memory is about
-`64 x 1 MiB + 8 x 16 MiB` at the defaults. An upload that finds no free slot waits `STORAGE_UPLOAD_SLOT_WAIT`, then
+`64 x 1 MiB + 8 x 16 MiB` at the defaults. A body announced as larger than 1 MiB takes its large slot before any byte is read. An upload that finds no free slot waits `STORAGE_UPLOAD_SLOT_WAIT`, then
 answers `503 {"error":"upload capacity reached, retry"}` with `Retry-After`. An upload body that sends nothing for 60
 seconds fails (`408`) and frees its slot; a body that keeps flowing may take as long as it needs. Downloads have no
 slot limit and are streamed; the server's write timeout caps a single download at 15 minutes.
@@ -86,6 +86,14 @@ slot limit and are streamed; the server's write timeout caps a single download a
 **Truncated uploads never commit.** A body that ends early, or whose length differs from the declared
 `Content-Length`, answers `400 {"error":"request body incomplete"}`; nothing is stored and a multipart upload is
 aborted.
+
+**Keys in URLs.** The key in `/objects/{key}` is percent-decoded exactly once. A `/` inside a key must be sent as
+`%2F` (`a%2Fb` is the key `a/b`); `a%252Fb` is the different key `a%2Fb`. Keys containing control characters (a
+newline, NUL, DEL) are `400 {"error":"invalid key"}`. This replaces the earlier behaviour where the encoded form was
+stored literally, so keys written by an older version with `%` sequences are now addressed by their decoded form.
+
+**Failed metadata write.** If the S3 write succeeds but the Postgres row cannot be written, bytes of a new key are
+deleted again (best effort, logged); an overwrite keeps its new bytes.
 
 **Concurrent writes.** Two simultaneous PUTs of one key can reach S3 and Postgres in opposite orders. A download uses
 the `Content-Type` stored with the bytes in S3, but the object list and `?metadata=true` (Postgres) may briefly show the

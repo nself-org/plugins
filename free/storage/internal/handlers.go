@@ -91,11 +91,16 @@ func sourceAccountID(r *http.Request) string {
 // maxKeyBytes is the S3 object key length limit.
 const maxKeyBytes = 1024
 
-// validateKey blocks path traversal in object keys and rejects empty or over-long keys.
+// validateKey blocks path traversal in object keys and rejects empty, over-long and control-character keys.
 // path.Clean resolves ".." so we compare the cleaned path against the key to detect traversal.
 func validateKey(key string) error {
 	if key == "" || len(key) > maxKeyBytes || key == "." || strings.HasSuffix(key, "/.") {
 		return ErrInvalidKey
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x20 || key[i] == 0x7f { // no newline in logs or in an S3 key
+			return ErrInvalidKey
+		}
 	}
 	if strings.Contains(key, "..") {
 		return ErrInvalidKey

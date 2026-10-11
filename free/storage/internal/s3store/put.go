@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -46,6 +47,19 @@ func (s *Store) Put(ctx context.Context, bucket, key string, body io.Reader, con
 		return PutResult{}, err
 	}
 	defer releaseSmall()
+	// A body announced as larger than firstChunk takes its large slot before any byte is read, so waiters hold no
+	// head buffer and a stalled sender cannot queue up memory.
+	var release func()
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
+	if declared > firstChunk {
+		if release, err = s.acquire(ctx, s.slots); err != nil {
+			return PutResult{}, err
+		}
+	}
 	body = &strictReader{r: body}
 
 	head, rerr := io.ReadAll(io.LimitReader(body, firstChunk+1))
@@ -56,11 +70,11 @@ func (s *Store) Put(ctx context.Context, bucket, key string, body io.Reader, con
 		return s.putSingle(ctx, bucket, key, head, contentType, declared)
 	}
 
-	release, aerr := s.acquire(ctx, s.slots)
-	if aerr != nil {
-		return PutResult{}, aerr
+	if release == nil { // length unknown (chunked) or understated: take the large slot now
+		if release, err = s.acquire(ctx, s.slots); err != nil {
+			return PutResult{}, err
+		}
 	}
-	defer release()
 	bp := getBuf()
 	defer func() {
 		// After a failure the transport may still hold a slice of the buffer; only a clean run recycles it.
@@ -127,9 +141,12 @@ func (s *Store) putMultipart(ctx context.Context, bucket, key string, br io.Read
 		}
 		actx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		_, _ = s.api.AbortMultipartUpload(actx, &s3.AbortMultipartUploadInput{
+		if _, aerr := s.api.AbortMultipartUpload(actx, &s3.AbortMultipartUploadInput{
 			Bucket: aws.String(bucket), Key: aws.String(key), UploadId: uploadID,
-		})
+		}); aerr != nil {
+			// The incomplete upload stays on the S3 side until someone aborts it: make that visible.
+			log.Printf("s3store: abort multipart upload failed (bucket %s, upload id %s): %v", bucket, aws.ToString(uploadID), aerr)
+		}
 	}()
 
 	var parts []s3types.CompletedPart
