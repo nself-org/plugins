@@ -23,9 +23,7 @@ set -u
 # Files allowed to keep a literal for now. Matched by path suffix, so absolute
 # and relative paths both work. Delete an entry once its file is converted.
 ALLOWED="
-free/traefik/docker-compose.plugin.yml
 "
-# ^ open PR plugins#164 owns this file; convert after it merges (D-0326 note)
 
 if [ "$#" -gt 0 ]; then
   files="$*"

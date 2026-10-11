@@ -37,7 +37,7 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks:
-      - nself_network
+      - ${DOCKER_NETWORK}
 
   traefik-acme:
     # explicit build: the cli rewrites a service-level "image: nself/..." without build: into its own per-project build,
@@ -64,7 +64,7 @@ services:
       traefik-config:
         condition: service_completed_successfully
     networks:
-      - nself_network
+      - ${DOCKER_NETWORK}
 
   traefik:
     image: traefik:v3.7.14@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c
@@ -98,8 +98,4 @@ services:
       traefik-acme:
         condition: service_healthy
     networks:
-      - nself_network
-
-networks:
-  nself_network:
-    external: true
+      - ${DOCKER_NETWORK}
