@@ -8,7 +8,7 @@ set -u
 work=$(conf_work)/gate-fixtures; conv=$work/converted; mut=$work/mut; rc=0
 mig=$work/migbase; rm -rf "$work"; mkdir -p "$work"
 bash "$CONF_ROOT/scripts/codemods/run.sh" --fixtures --out "$conv" >"$work/codemods.log" 2>&1 || { cat "$work/codemods.log"; echo "fixtures: codemods failed"; exit 1; }
-cp -R "$conv" "$mig"; mkdir -p "$work/migempty"
+cp -R "$conv" "$mig"; mkdir -p "$work/migempty/zzz" "$work/empty"; echo '{"name":"zzz"}' > "$work/migempty/zzz/plugin.json"   # an older release without alpha
 for p in alpha beta gamma; do
   if out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins "$p" --migration-base "$mig" 2>&1); then echo "pass  converted fixture $p"
   else echo "FAIL  converted fixture $p should pass:"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
@@ -84,6 +84,25 @@ pass_plant rename-dynamic-with-fixture alpha migration-idempotent,legacy-renames
 a2 b2"'
 printf 'exceptions:\n  - rule: migration-immutable\n    plugin: alpha\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2026-12-31\n' > "$work/exc-imm.yaml"
 pass_plant edit-released-with-exception alpha migration-immutable "echo '-- touched' >> migrations/001_init.sql" --exceptions "$work/exc-imm.yaml"
+# Round 1 (plugins#168 review). S1: a baseline that is not a directory of plugin trees must fail, not pass silently.
+for b in "$work/nonexistent" "$work/empty"; do
+  if out=$(bash "$CONF_DIR/check.sh" --root "$mut/edit-released" --plugins alpha --rules migration-immutable --migration-base "$b" 2>&1); then echo "FAIL  --migration-base $b passed"; rc=1
+  elif printf '%s\n' "$out" | grep -q 'FAIL check: migration baseline'; then echo "pass  bad --migration-base ${b#$work/} fails the gate"; else echo "FAIL  bad --migration-base failed without the baseline message"; rc=1; fi
+done
+# S2: the resolved-tag cache is keyed by the tag's commit; a partial directory is never trusted, the filled one is marked complete.
+tag=$(git -C "$CONF_ROOT" describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null); sha=$([ -z "$tag" ] || git -C "$CONF_ROOT" rev-parse "$tag^{commit}" 2>/dev/null)
+if [ -n "$sha" ]; then
+  wd=$work/wd; rm -rf "$wd"; mkdir -p "$wd/migbase-$sha/free"
+  out=$(CONF_WORKDIR=$wd bash "$CONF_DIR/check.sh" --root "$mut/edit-released" --plugins alpha --rules migration-immutable 2>&1)
+  if [ -f "$wd/migbase-$sha/.complete" ] && ls "$wd/migbase-$sha"/free/*/plugin.json >/dev/null 2>&1 && ! ls "$wd" | grep -q '\.tmp\.' && printf '%s\n' "$out" | grep -q "migration baseline: $tag"; then echo "pass  partial baseline cache is rebuilt, keyed by commit"
+  else echo "FAIL  partial baseline cache was trusted or left a tmp dir"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
+fi
+# N4: a fixture field that is a glob stays literal (set -f), so the pair mismatch is reported, not a cwd expansion.
+rm -rf "$mut/glob"; mkdir -p "$mut/glob"; cp -R "$conv/alpha" "$mut/glob/alpha"
+( cd "$mut/glob/alpha" && newsql 003_rename.sql "$RENAME" && renfx "alpha_items np_alpha_items2
+alpha_items *" )
+out=$(cd "$CONF_ROOT" && bash "$CONF_DIR/check.sh" --root "$mut/glob" --plugins alpha --rules legacy-renames 2>&1)
+if printf '%s\n' "$out" | grep -q 'in tests/boot/legacy-renames but not in the migrations: alpha_items \*'; then echo "pass  glob in legacy-renames stays literal"; else echo "FAIL  glob in legacy-renames was expanded"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; fi
 # A gate that checks no plugin fails; a named plugin that does not exist fails.
 mkdir -p "$work/empty"
 for args in "--plugins nonexistent" "--all --root $work/empty"; do

@@ -36,7 +36,7 @@ fi
 fxp=
 while IFS= read -r line || [ -n "$line" ]; do
   case $line in ''|'#'*) continue;; esac
-  set -- $line
+  set -f; set -- $line; set +f   # no globbing: a field like * must stay literal
   if [ $# -ne 2 ]; then fail legacy-renames "$name" "tests/boot/legacy-renames line '$line' is not 'old new'"; rc=1; continue; fi
   fxp="$fxp$1 $2
 "

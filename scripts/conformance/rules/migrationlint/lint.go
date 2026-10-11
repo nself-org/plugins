@@ -13,14 +13,19 @@ type viol struct {
 }
 
 // ctx remembers the DROP ... IF EXISTS statements seen so far in the file.
-type ctx struct{ trig, pol, cons map[string]bool }
+type ctx struct {
+	trig, pol, cons map[string]bool
+	inDO            bool // linting the body of a DO block (SELECT .. INTO is a plpgsql assignment there)
+}
 
-func newCtx() *ctx { return &ctx{map[string]bool{}, map[string]bool{}, map[string]bool{}} }
+func newCtx() *ctx {
+	return &ctx{trig: map[string]bool{}, pol: map[string]bool{}, cons: map[string]bool{}}
+}
 
 func lintFile(src string) []viol {
 	c := newCtx()
 	var out []viol
-	for _, st := range split(lex(src, 1)) {
+	for _, st := range split(lexFile(src)) {
 		out = append(out, lintStmt(st, c)...)
 	}
 	return out
@@ -46,9 +51,9 @@ func lintStmt(t []tok, c *ctx) []viol {
 		if n := ident(t, k+2); n != "" {
 			switch w(t, 1) {
 			case "TRIGGER":
-				c.trig[n] = true
+				c.trig[key(n, onTable(t, k+3))] = true
 			case "POLICY":
-				c.pol[n] = true
+				c.pol[key(n, onTable(t, k+3))] = true
 			}
 		}
 	case "INSERT":
@@ -56,6 +61,10 @@ func lintStmt(t []tok, c *ctx) []viol {
 	case "WITH":
 		if contains(t, "INSERT", "INTO") {
 			lintInsert(t, bad)
+		}
+	case "SELECT":
+		if !c.inDO && selectInto(t) {
+			bad("SELECT ... INTO creates a table and fails when it exists: use CREATE TABLE IF NOT EXISTS ... AS")
 		}
 	case "DO":
 		return lintDO(t, c)
@@ -104,12 +113,12 @@ func lintCreate(t []tok, c *ctx, bad func(string, ...any)) {
 			bad("CREATE %s needs CREATE OR REPLACE", obj)
 		}
 	case "TRIGGER":
-		if !orRep && !c.trig[ident(t, i+1)] {
-			bad("CREATE TRIGGER %s needs OR REPLACE or an earlier DROP TRIGGER IF EXISTS %s", ident(t, i+1), ident(t, i+1))
+		if !orRep && !c.trig[key(ident(t, i+1), onTable(t, i+2))] {
+			bad("CREATE TRIGGER %s needs OR REPLACE or an earlier DROP TRIGGER IF EXISTS %s ON the same table", ident(t, i+1), ident(t, i+1))
 		}
 	case "POLICY":
-		if !c.pol[ident(t, i+1)] {
-			bad("CREATE POLICY %s needs an earlier DROP POLICY IF EXISTS %s", ident(t, i+1), ident(t, i+1))
+		if !c.pol[key(ident(t, i+1), onTable(t, i+2))] {
+			bad("CREATE POLICY %s needs an earlier DROP POLICY IF EXISTS %s ON the same table", ident(t, i+1), ident(t, i+1))
 		}
 	case "TYPE", "DOMAIN":
 		bad("CREATE %s fails when it already exists: wrap it in a guarded DO block", obj)
@@ -134,14 +143,23 @@ func lintAlter(t []tok, c *ctx, bad func(string, ...any)) {
 		if w(t, i) == "ONLY" {
 			i++
 		}
-		_, _, i = qname(t, i)
+		_, tbl, i := qname(t, i)
 		for _, a := range splitTop(t[min(i, len(t)):]) {
-			lintAction(a, ex, c, bad)
+			lintAction(a, ex, tbl, c, bad)
+		}
+	case "TYPE":
+		for i := range t {
+			if has(t, i, "ADD", "VALUE") && !ine(t, i+2) {
+				bad("ALTER TYPE ... ADD VALUE needs IF NOT EXISTS")
+			}
+			if has(t, i, "RENAME", "VALUE") {
+				bad("ALTER TYPE ... RENAME VALUE fails on replay: do it in a guarded DO block")
+			}
 		}
 	}
 }
 
-func lintAction(a []tok, ex bool, c *ctx, bad func(string, ...any)) {
+func lintAction(a []tok, ex bool, tbl string, c *ctx, bad func(string, ...any)) {
 	if len(a) == 0 {
 		return
 	}
@@ -157,7 +175,7 @@ func lintAction(a []tok, ex bool, c *ctx, bad func(string, ...any)) {
 		}
 		switch w(a, k) {
 		case "CONSTRAINT":
-			if n := ident(a, k+1); !c.cons[n] {
+			if n := ident(a, k+1); !c.cons[key(n, tbl)] {
 				bad("ADD CONSTRAINT %s needs an earlier DROP CONSTRAINT IF EXISTS %s", n, n)
 			}
 		case "PRIMARY", "UNIQUE", "FOREIGN", "CHECK", "EXCLUDE":
@@ -177,7 +195,17 @@ func lintAction(a []tok, ex bool, c *ctx, bad func(string, ...any)) {
 			return
 		}
 		if w(a, 1) == "CONSTRAINT" {
-			c.cons[ident(a, k+2)] = true
+			c.cons[key(ident(a, k+2), tbl)] = true
+		}
+	case "SET":
+		if w(a, 1) == "SCHEMA" && !ex {
+			bad("ALTER TABLE ... SET SCHEMA fails on replay: use ALTER TABLE IF EXISTS or a guarded DO block")
+		}
+	case "ATTACH":
+		bad("ATTACH PARTITION fails on replay: do it in a guarded DO block")
+	case "ALTER":
+		if contains(a, "ADD", "GENERATED") {
+			bad("ADD GENERATED ... AS IDENTITY fails when the column is already an identity: do it in a guarded DO block")
 		}
 	case "RENAME":
 		if w(a, 1) == "TO" {
@@ -188,68 +216,4 @@ func lintAction(a []tok, ex bool, c *ctx, bad func(string, ...any)) {
 		}
 		bad("RENAME %s fails on replay: do it in a guarded DO block", w(a, 1))
 	}
-}
-
-// guarded reports whether a DO body is replay-safe by itself: it handles errors (EXCEPTION WHEN) or branches (IF)
-// on an existence probe. DDL "IF [NOT] EXISTS name" is not a branch and not a probe: EXISTS counts only before "(".
-func guarded(body []tok) bool {
-	if contains(body, "EXCEPTION", "WHEN") {
-		return true
-	}
-	branch, probe := false, false
-	for i := range body {
-		switch w(body, i) {
-		case "IF", "ELSIF", "ELSEIF":
-			j := i + 1
-			if has(body, j, "NOT", "EXISTS") {
-				j++
-			}
-			if w(body, j) != "EXISTS" || isPunct(body, j+1, "(") {
-				branch = true
-			}
-		case "EXISTS":
-			probe = probe || isPunct(body, i+1, "(")
-		case "TO_REGCLASS", "TO_REGTYPE", "TO_REGPROC", "TO_REGNAMESPACE", "INFORMATION_SCHEMA", "PG_CATALOG",
-			"PG_CLASS", "PG_INDEXES", "PG_CONSTRAINT", "PG_TYPE", "PG_TRIGGER", "PG_POLICIES":
-			probe = true
-		}
-	}
-	return branch && probe
-}
-
-// doBody returns the tokens of a DO statement's body: its $$ body, else its last string literal.
-func doBody(t []tok) ([]tok, bool) {
-	pick := -1
-	for i, x := range t {
-		if x.K == kBody {
-			return lex(x.U, x.BodyLine), true
-		}
-		if x.K == kStr {
-			pick = i
-		}
-	}
-	if pick < 0 {
-		return nil, false
-	}
-	return lex(t[pick].U, t[pick].Line), true
-}
-
-func lintDO(t []tok, c *ctx) []viol {
-	body, ok := doBody(t)
-	if !ok {
-		return []viol{{t[0].Line, "DO statement with no body to check"}}
-	}
-	if guarded(body) {
-		return nil
-	}
-	var out []viol
-	for _, b := range body {
-		if b.K == kWord && b.U == "EXECUTE" {
-			out = append(out, viol{b.Line, "unguarded dynamic SQL: EXECUTE in a DO block with no EXCEPTION WHEN or existence-checked IF"})
-		}
-	}
-	for _, st := range split(body) {
-		out = append(out, lintStmt(stripPL(st), c)...)
-	}
-	return out
 }

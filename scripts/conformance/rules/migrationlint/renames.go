@@ -52,18 +52,12 @@ func renames(src string) ([]string, []viol) {
 			errs = append(errs, viol{st[0].Line, "unrecognised RENAME TO (not a table, index, sequence or view rename)"})
 		}
 	}
-	for _, st := range split(lex(src, 1)) {
-		if w(st, 0) != "DO" {
-			lit(st)
-			continue
-		}
-		body, ok := doBody(st)
-		if !ok {
-			continue
-		}
+	// body scans one dollar-quoted (or DO string) body: literal renames, strings that rename dynamically, and nested bodies.
+	var body func(toks []tok)
+	body = func(toks []tok) {
 		dyn := 0
-		for _, x := range body {
-			if x.K != kStr {
+		for _, x := range toks {
+			if x.K != kStr && x.K != kBody {
 				continue
 			}
 			switch renameString(x.U) {
@@ -72,19 +66,38 @@ func renames(src string) ([]string, []viol) {
 					dyn = x.Line
 				}
 			case "bad":
-				errs = append(errs, viol{x.Line, "unrecognised RENAME TO inside a string of a DO block"})
+				errs = append(errs, viol{x.Line, "unrecognised RENAME TO inside a string or body"})
+			case "":
+				if x.K == kBody {
+					body(lex(x.U, x.BodyLine))
+				}
 			}
 		}
-		for _, b := range split(body) {
+		for _, b := range split(toks) {
 			lit(stripPL(b))
 		}
 		if dyn > 0 {
-			ps := valuePairs(body)
+			ps := valuePairs(toks)
 			if len(ps) == 0 {
 				errs = append(errs, viol{dyn, "dynamic table rename with no (VALUES ('old', 'new'), ...) list to read the pairs from"})
 			}
 			for _, p := range ps {
 				seen[p] = true
+			}
+		}
+	}
+	for _, st := range split(lexFile(src)) {
+		lit(st)
+		if w(st, 0) == "DO" {
+			if b, ok := doBody(st); ok {
+				body(b)
+			}
+			continue
+		}
+		fn := (w(st, 0) == "CREATE" && (contains(st[:min(4, len(st))], "FUNCTION") || contains(st[:min(4, len(st))], "PROCEDURE")))
+		for _, x := range st {
+			if x.K == kBody || (fn && x.K == kStr) {
+				body(lex(x.U, x.Line))
 			}
 		}
 	}

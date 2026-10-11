@@ -177,6 +177,9 @@ func scanString(src string, i int, esc bool) (string, int, int) {
 	return b.String(), j, nl
 }
 
+// lexFile tokenises a whole file: a leading UTF-8 byte order mark is dropped (it would glue itself to the first keyword).
+func lexFile(src string) []tok { return lex(strings.TrimPrefix(src, "\xef\xbb\xbf"), 1) }
+
 // split cuts toks into statements at ';' (string and body contents are single tokens, so only real separators split).
 func split(toks []tok) [][]tok {
 	var out [][]tok

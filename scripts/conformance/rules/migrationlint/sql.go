@@ -108,11 +108,21 @@ func splitTop(t []tok) [][]tok {
 // stripPL drops the plpgsql scaffolding at the start of a body statement (BEGIN, ELSE, LOOP, IF .. THEN, FOR .. LOOP,
 // END IF ...) so the SQL command that follows can be classified. It returns nil for pure control statements.
 func stripPL(t []tok) []tok {
+	r, _ := stripPLn(t)
+	return r
+}
+
+// stripPLn is stripPL that also reports how many IF branches the stripped prefix opened (ELSIF opens none).
+func stripPLn(t []tok) ([]tok, int) {
+	opened := 0
 	for len(t) > 0 {
 		switch w(t, 0) {
 		case "BEGIN", "ELSE", "LOOP", "DECLARE", "EXCEPTION":
 			t = t[1:]
 		case "IF", "ELSIF", "ELSEIF", "WHILE", "FOR", "FOREACH", "WHEN":
+			if w(t, 0) == "IF" {
+				opened++
+			}
 			depth, k := 0, 1
 			for ; k < len(t); k++ {
 				if isPunct(t, k, "(") {
@@ -124,14 +134,28 @@ func stripPL(t []tok) []tok {
 				}
 			}
 			if k >= len(t) {
-				return nil
+				return nil, opened
 			}
 			t = t[k+1:]
 		case "END":
-			return nil
+			return nil, opened
 		default:
-			return t
+			return t, opened
 		}
 	}
-	return nil
+	return nil, opened
 }
+
+// onTable returns the table named by the first ON keyword at or after from (CREATE/DROP TRIGGER and POLICY).
+func onTable(t []tok, from int) string {
+	for i := from; i < len(t); i++ {
+		if w(t, i) == "ON" {
+			_, n, _ := qname(t, i+1)
+			return n
+		}
+	}
+	return ""
+}
+
+// key joins an object name and its table: a DROP .. IF EXISTS only licenses the CREATE/ADD on the same table.
+func key(name, table string) string { return name + "|" + table }

@@ -35,15 +35,24 @@ case " $rules " in *" migration-immutable "*|*" migration-idempotent "*)
   if [ -n "$migbase" ]; then export CONF_MIG_LABEL=$migbase
   else
     tag=$(git -C "$CONF_ROOT" describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null)
-    if [ -z "$tag" ]; then echo "FAIL check: cannot resolve the last release tag (fetch tags)"; rc=1
+    sha=$([ -z "$tag" ] || git -C "$CONF_ROOT" rev-parse "$tag^{commit}" 2>/dev/null)
+    if [ -z "$tag" ] || [ -z "$sha" ]; then echo "FAIL check: cannot resolve the last release tag (fetch tags)"; rc=1
     else
-      migbase=$(conf_work)/migbase-$tag
-      if [ ! -d "$migbase/free" ]; then
-        rm -rf "$migbase"; mkdir -p "$migbase"
-        git -C "$CONF_ROOT" archive "$tag" free | tar -x -C "$migbase" || { echo "FAIL check: cannot extract free from $tag"; rc=1; }
+      # The cache is keyed by the tag's commit and filled atomically: extract aside, mark complete, mv into place.
+      d=$(conf_work)/migbase-$sha
+      if [ ! -f "$d/.complete" ]; then
+        rm -rf "$d" "$d.tmp.$$"; mkdir -p "$d.tmp.$$"
+        if git -C "$CONF_ROOT" archive "$tag" free | tar -x -C "$d.tmp.$$" && touch "$d.tmp.$$/.complete"; then
+          mv "$d.tmp.$$" "$d" 2>/dev/null || [ -f "$d/.complete" ] || { echo "FAIL check: cannot place the baseline of $tag"; rc=1; }
+        else echo "FAIL check: cannot extract free from $tag"; rc=1; fi
+        rm -rf "$d.tmp.$$"
       fi
-      migbase=$migbase/free; export CONF_MIG_LABEL=$tag
+      migbase=; [ -f "$d/.complete" ] && migbase=$d/free; export CONF_MIG_LABEL=$tag
     fi
+  fi
+  # A baseline that is not a directory of plugin trees would make every plugin look unreleased (fail open): refuse it.
+  if [ -n "$migbase" ] && ! ls "$migbase"/*/plugin.json >/dev/null 2>&1; then
+    echo "FAIL check: migration baseline $migbase is not a directory holding <plugin>/plugin.json trees"; rc=1; migbase=
   fi
   [ -z "$migbase" ] || echo "migration baseline: $CONF_MIG_LABEL";;
 esac
