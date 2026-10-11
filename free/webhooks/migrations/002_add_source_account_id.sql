@@ -66,7 +66,8 @@ CREATE INDEX IF NOT EXISTS idx_np_webhooks_deliveries_created
 
 -- source_account_id must end up TEXT NOT NULL DEFAULT 'primary' on both tables. A TS-era table (renamed by 001) has it as a
 -- nullable VARCHAR(128): add it where missing, fill NULLs with 'primary', then fix type, default and nullability. Each step is
--- skipped when the column is already (text, NOT NULL). The single-column account index is created only when no index on
+-- skipped when the column is already (text, NOT NULL); the type change is skipped with a WARNING when a view, rule or policy
+-- depends on the column. The single-column account index is created only when no index on
 -- exactly (source_account_id) exists (001 renames the TS-era one, which would otherwise be duplicated).
 DO $$
 DECLARE
@@ -81,9 +82,24 @@ BEGIN
         AND data_type = 'text' AND is_nullable = 'NO'
     ) THEN
       EXECUTE format('UPDATE public.%I SET source_account_id = %L WHERE source_account_id IS NULL', t, 'primary');
-      EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id TYPE TEXT', t);
       EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id SET DEFAULT %L', t, 'primary');
-      EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id SET NOT NULL', t);
+      -- A user view, rule or policy on the column blocks a type change and a boot error would loop on every restart:
+      -- warn and keep the column as it is (varchar(128) behaves the same for the account filter).
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = t AND column_name = 'source_account_id' AND data_type = 'text'
+      ) THEN
+        BEGIN
+          EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id TYPE TEXT', t);
+        EXCEPTION WHEN dependent_objects_still_exist OR feature_not_supported THEN
+          RAISE WARNING 'migration 002: public.%.source_account_id keeps its type: a view, rule or policy depends on it (%)', t, SQLERRM;
+        END;
+      END IF;
+      BEGIN
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN source_account_id SET NOT NULL', t);
+      EXCEPTION WHEN dependent_objects_still_exist OR feature_not_supported THEN
+        RAISE WARNING 'migration 002: public.%.source_account_id stays nullable (%)', t, SQLERRM;
+      END;
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]

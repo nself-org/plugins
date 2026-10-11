@@ -44,7 +44,9 @@ END $$;
 -- The TS-era dead-letter table references deliveries and endpoints with the default NO ACTION, which would make deleting an
 -- endpoint (cascading to its deliveries) fail once dead letters exist. Replace each such foreign key, found by the table it
 -- references whatever its name, with the same key ON DELETE SET NULL. Data is kept. Idempotent: a key already SET NULL (or any
--- other explicit ON DELETE rule) is skipped, and nothing happens when the dead-letter table does not exist.
+-- other explicit ON DELETE rule) is skipped, and nothing happens when the dead-letter table does not exist. A key that is
+-- DEFERRABLE or NOT VALID cannot be rebuilt by appending the action to its definition, so it is skipped with a WARNING naming it
+-- (delete the parent rows by hand, or recreate that key yourself).
 DO $$
 DECLARE
   c RECORD;
@@ -55,13 +57,17 @@ BEGIN
     RETURN;
   END IF;
   FOR c IN
-    SELECT conname, pg_get_constraintdef(oid) AS def
+    SELECT conname, pg_get_constraintdef(oid) AS def, condeferrable, convalidated
     FROM pg_constraint
     WHERE conrelid = 'public.np_webhooks_dead_letters'::regclass
       AND contype = 'f'
       AND confrelid IN ('public.np_webhooks_deliveries'::regclass, 'public.np_webhooks_endpoints'::regclass)
       AND confdeltype = 'a'
   LOOP
+    IF c.condeferrable OR NOT c.convalidated THEN
+      RAISE WARNING 'migration 001: dead-letter foreign key % is DEFERRABLE or NOT VALID and was left as it is (ON DELETE NO ACTION): deleting a webhook endpoint that has dead letters will fail until you recreate it ON DELETE SET NULL', c.conname;
+      CONTINUE;
+    END IF;
     EXECUTE format('ALTER TABLE public.np_webhooks_dead_letters DROP CONSTRAINT %I', c.conname);
     EXECUTE format('ALTER TABLE public.np_webhooks_dead_letters ADD CONSTRAINT %I %s ON DELETE SET NULL', c.conname, c.def);
   END LOOP;
