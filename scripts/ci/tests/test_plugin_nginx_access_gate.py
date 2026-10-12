@@ -9,7 +9,7 @@ redirect a request around it.
 
 Runs under unittest (no third-party packages, no docker, no network) and
 under pytest. The systemic sweep of the other plugins (D-0616) adds files to
-GATED.
+GATED_PLUGINS; test_plugin_nginx_server_ratchet.py stops new ungated confs.
 """
 import glob
 import os
