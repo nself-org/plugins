@@ -60,8 +60,12 @@ func report(err error, js bool, args []string, stdout, stderr io.Writer) int {
 		if sub := subcommandOf(args); sub != "" {
 			name += " " + sub
 		}
+		// An envelope that could not be written (stdout closed or full) is an
+		// infra failure, as in invocation.emit, not the usage class (D-0447).
 		if werr := output.WriteError(stdout, name, d, nil); werr != nil {
 			fmt.Fprintln(stderr, "Error:", err)
+			fmt.Fprintln(stderr, "Error: writing the JSON envelope:", werr)
+			return output.ExitInfra
 		}
 		return d.ExitCode
 	}

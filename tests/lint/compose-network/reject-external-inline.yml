@@ -1,0 +1,12 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0477).
+# A top-level network the fragment does not own (external, inline map).
+# Must be flagged.
+services:
+  example:
+    image: example/app:0
+    networks:
+      - ${DOCKER_NETWORK}
+      - shared_net
+
+networks:
+  shared_net: { external: true }

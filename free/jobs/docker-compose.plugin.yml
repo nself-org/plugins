@@ -18,7 +18,3 @@ services:
         condition: service_healthy
     networks:
       - ${DOCKER_NETWORK}
-
-networks:
-  ${DOCKER_NETWORK}:
-    external: true

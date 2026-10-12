@@ -10,9 +10,19 @@
 #     networks:
 #       - ${DOCKER_NETWORK}
 #   and must not redefine the project network at the top level (D-0326).
+#   Two shapes are refused for the same reason (D-0531, D-0477): a variable as
+#   a network key ("${DOCKER_NETWORK}:"; compose never interpolates mapping
+#   keys, so it names a network called "${DOCKER_NETWORK}", and compose 5.6
+#   rejects the file) and a top-level network marked external (the fragment
+#   does not own it; the CLI's main compose file declares the project network).
+#   A fragment may still declare a network it owns, such as forgejo's
+#   ${COMPOSE_PROJECT_NAME:-nself}_forgejo_runner_net.
 #   A ${DOCKER_NETWORK:-<literal>} default is not flagged by design: the CLI
 #   rewrites it to ${DOCKER_NETWORK} (internal/build/plugins_network_normalize.go).
 # Inputs: fragment paths as arguments; default free/*/docker-compose.plugin.yml.
+#   The default run also lints the fixtures in tests/lint/compose-network/: each
+#   reject-*.yml must be flagged and each accept-*.yml must pass, so a rule that
+#   stops matching fails the gate instead of reading as clean.
 # Outputs: one "file:line: ..." line per offence on stderr; exit 1 if any. An
 #   excepted file that still holds a literal is reported on stdout as
 #   "allowed: <file> (D-0326)". An excepted file with no literal left is stale
@@ -25,11 +35,13 @@ set -u
 ALLOWED="
 "
 
+selftest=0
 if [ "$#" -gt 0 ]; then
   files="$*"
 else
   root="$(cd "$(dirname "$0")/.." && pwd)"
   files="$(ls "$root"/free/*/docker-compose.plugin.yml 2>/dev/null)"
+  selftest=1
 fi
 if [ -z "$files" ]; then
   echo "lint-compose-network-literals: no fragments found" >&2
@@ -90,13 +102,22 @@ scan() {
         if (lit(v)) print NR ": network name is the literal \"" v "\"; use ${DOCKER_NETWORK}"
         next
       }
+      # A top-level network is a key at the child indent; external marks one
+      # the fragment does not own (block "external: true" or inline map).
+      if (net_indent == 0 && indent > child && body ~ /^external[ \t]*:/) {
+        v = body; sub(/^external[ \t]*:/, "", v); v = clean(v)
+        if (v == "true") print NR ": top-level network \"" key "\" is external; join the project network by - ${DOCKER_NETWORK} and declare only networks the plugin owns"
+        next
+      }
       if (indent != child) next
       if (body ~ /^-/) {
         v = body; sub(/^-[ \t]*/, "", v); v = clean(v)
         if (lit(v)) print NR ": service joins the literal network \"" v "\"; use ${DOCKER_NETWORK}"
       } else if (body ~ /^[^ \t:][^:]*:/) {
-        k = body; sub(/:.*$/, "", k); k = clean(k)
+        k = body; sub(/:.*$/, "", k); k = clean(k); key = k
         if (lit(k)) print NR ": network key is the literal \"" k "\"; join by ${DOCKER_NETWORK} and do not redefine it"
+        else if (k ~ /\$/) print NR ": network key \"" k "\" is a variable; compose does not interpolate keys, so join by - ${DOCKER_NETWORK} and do not redefine it"
+        if (net_indent == 0 && body ~ /[{,][ \t]*external[ \t]*:[ \t]*true/) print NR ": top-level network \"" k "\" is external; join the project network by - ${DOCKER_NETWORK} and declare only networks the plugin owns"
       }
     }
   ' "$1"
@@ -141,8 +162,24 @@ EOT
   bad=1
 done
 
+# Positive control on the default run: the rules must still bite.
+fixtures=0
+if [ "$selftest" -eq 1 ]; then
+  for f in "$root"/tests/lint/compose-network/*.yml; do
+    [ -f "$f" ] || continue
+    fixtures=$((fixtures + 1))
+    if ! hits="$(scan "$f")"; then echo "$f: awk failed" >&2; bad=1; continue; fi
+    case "$(basename "$f")" in
+      reject-*) [ -n "$hits" ] || { echo "$f: fixture must be flagged and was not; a rule stopped matching" >&2; bad=1; } ;;
+      accept-*) [ -z "$hits" ] || { echo "$f: fixture must pass and was flagged:" >&2; echo "$hits" >&2; bad=1; } ;;
+      *) echo "$f: fixture name must start with reject- or accept-" >&2; bad=1 ;;
+    esac
+  done
+  [ "$fixtures" -gt 0 ] || { echo "lint-compose-network-literals: no fixtures in tests/lint/compose-network" >&2; bad=1; }
+fi
+
 if [ "$bad" -ne 0 ]; then
   echo "lint-compose-network-literals: FAILED" >&2
   exit 1
 fi
-echo "lint-compose-network-literals: OK ($checked fragments)"
+echo "lint-compose-network-literals: OK ($checked fragments, $fixtures fixtures)"

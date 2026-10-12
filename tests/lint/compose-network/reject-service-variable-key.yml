@@ -1,0 +1,11 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0531).
+# A service joins by the mapping form with a variable key. Compose does not
+# interpolate keys, so this names a network called "${DOCKER_NETWORK}".
+# Must be flagged.
+services:
+  example:
+    image: example/app:0
+    networks:
+      ${DOCKER_NETWORK}:
+        aliases:
+          - example

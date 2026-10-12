@@ -157,21 +157,26 @@ type plainError struct{ msg string }
 
 func (e *plainError) Error() string { return e.msg }
 
-// wantsJSON reports whether args carry --json (before any "--").
+// wantsJSON reports whether args carry --json (before any "--"). The last
+// spelling wins, as it does for cobra, which sets the flag once per occurrence
+// (D-0447): "--json=false --json" is JSON mode, "--json --json=false" is not.
+// A value pflag would refuse (--json=maybe) changes nothing here.
 func wantsJSON(args []string) bool {
+	js := false
 	for _, a := range args {
 		if a == "--" {
-			return false
+			break
 		}
 		if a == "--json" {
-			return true
+			js = true
+			continue
 		}
 		// Every form pflag accepts for a bool: 1, t, T, TRUE, true, True, 0, f, ...
 		if v, ok := strings.CutPrefix(a, "--json="); ok {
 			if b, err := strconv.ParseBool(v); err == nil {
-				return b
+				js = b
 			}
 		}
 	}
-	return false
+	return js
 }

@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-nself plugin install functions-edge
+nself plugin install functions-v8
 ```
 
 No license key required.
