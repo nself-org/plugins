@@ -209,16 +209,6 @@
       "description": "Trigger metadata enrichment"
     }
   ],
-  "cliCommands": [
-    {
-      "name": "server",
-      "description": "Start the retro-gaming API server"
-    },
-    {
-      "name": "stats",
-      "description": "Show overall plugin statistics"
-    }
-  ],
   "status": "stable",
   "tier": "free",
   "routes": [
