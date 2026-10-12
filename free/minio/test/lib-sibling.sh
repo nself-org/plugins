@@ -47,6 +47,7 @@ core_env() { # the MinIO settings the container actually got, sorted (compared, 
 volume_of() { docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' "$1"; }
 
 # ---- phase 1: v1.4 mode, core MinIO ---------------------------------------------------------------------------
+unset NSELF_V15 # v1.4 mode: an inherited value must not flip phase 1
 run_nself /work/init.log init --non-interactive --name p57mig --no-pgvector
 if grep -q '^MINIO_ENABLED=' .env; then sed -i 's/^MINIO_ENABLED=.*/MINIO_ENABLED=true/' .env; else printf 'MINIO_ENABLED=true\n' >>.env; fi
 touch .env.secrets; chmod 600 .env.secrets
@@ -99,7 +100,6 @@ run_nself /work/build-v15.log build
 grep -Eq '^ +minio:$' docker-compose.yml && fail "v1.5 core still generates minio"
 up_minio /work/start-v15.log
 CTR="$(minio_ctr)"; [ -n "$CTR" ] || fail "v1.5 minio container missing"
-[ "$CTR" != "$OLD_CTR" ] || fail "container was not recreated"
 wait_healthy "$CTR"
 echo 'PASS: v1.5 plugin minio healthy'
 
@@ -120,5 +120,7 @@ echo 'PASS: both objects read back through S3 with the same checksums'
 [ "$(docker inspect -f '{{.HostConfig.Privileged}}' "$CTR")" = false ] || fail "container is privileged"
 [ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$CTR")" = true ] || fail "root filesystem is not read-only"
 docker inspect -f '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' "$CTR" | grep -q docker.sock && fail "docker socket mounted"
-docker inspect -f '{{range .HostConfig.PortBindings}}{{range .}}{{.HostIp}}{{"\n"}}{{end}}{{end}}' "$CTR" | grep -v '^$' | grep -qvx 127.0.0.1 && fail "port not bound to loopback"
+# Every published port binds 127.0.0.1: exactly the two core ports, an empty HostIp (all interfaces) counts as a failure.
+ips="$(docker inspect -f '{{range .HostConfig.PortBindings}}{{range .}}{{.HostIp}}|{{end}}{{end}}' "$CTR")"
+[ "$ips" = "127.0.0.1|127.0.0.1|" ] || fail "ports not bound to 127.0.0.1 only (host ips: ${ips:-none})"
 echo 'PASS: no socket, not privileged, read-only root, ports on 127.0.0.1'

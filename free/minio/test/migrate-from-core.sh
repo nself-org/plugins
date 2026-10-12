@@ -6,7 +6,8 @@
 # Usage:   migrate-from-core.sh
 # Env:     NSELF   path of the nself checkout: either the cli directory itself or its parent holding cli/
 #                  (default: ../../../../cli relative to the plugins repo, then ~/Sites/nself).
-#          TMPDIR  optional scratch parent (default /tmp).
+#          TMPDIR  optional scratch parent (default /tmp; nSelf maintainers point it at their scratch dir).
+#          MINIO_E2E_INSTALL_DOCKER=1  inside a root container only: apt-get the docker client when missing.
 # Needs:   Go, openssl, tar, awk, a Docker daemon that can run a privileged docker:dind sibling (Linux containers).
 # Outputs: PASS/FAIL lines; the last line is PASS on success.
 # Exit:    0 PASS, 1 FAIL, 2 usage, 3 missing precondition.
@@ -35,10 +36,12 @@ fi
 [ -f "$CLI/internal/compose/images.lock.json" ] || need "no cli checkout at NSELF (internal/compose/images.lock.json missing)"
 CLI="$(cd "$CLI" && pwd)"
 
-if ! command -v docker >/dev/null 2>&1; then
-  if [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq docker.io >/dev/null 2>&1 || true
-  fi
+# Inside a throwaway container (golang image, root) the docker client may be installed on request; a developer
+# machine is never changed: without docker the script exits 3.
+if ! command -v docker >/dev/null 2>&1 && [ "${MINIO_E2E_INSTALL_DOCKER:-}" = 1 ] && [ -f /.dockerenv ] \
+  && [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1; then
+  echo "installing the docker client in this container (MINIO_E2E_INSTALL_DOCKER=1)"
+  apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq docker.io >/dev/null 2>&1 || true
 fi
 for tool in docker go openssl tar awk; do
   command -v "$tool" >/dev/null 2>&1 || need "missing $tool"
