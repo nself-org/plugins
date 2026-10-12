@@ -6,8 +6,9 @@
 // an interactive terminal (and not --json) is asked to type the release name;
 // anything else is refused.
 //
-// Constraints: "interactive" is stdin being a character device other than
-// /dev/null (stdlib only, no terminal package). The check sits behind a
+// Constraints: "interactive" is stdin answering the terminal ioctl
+// (isTerminal in confirm_tty_*.go, stdlib only, no terminal package), so
+// /dev/null, /dev/zero, files and pipes are refused. The check sits behind a
 // variable so tests can drive both branches without a pty. The answer is read
 // through a 4096-byte limit, so a stdin without a newline cannot grow memory.
 package main
@@ -20,18 +21,10 @@ import (
 	"strings"
 )
 
-// stdinIsTTY reports whether stdin is an interactive terminal. Tests replace it.
-var stdinIsTTY = func() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	// /dev/null is a character device too, and is not a person to ask.
-	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(fi, null) {
-		return false
-	}
-	return true
-}
+// stdinIsTTY reports whether stdin is an interactive terminal. A character
+// device is not enough: /dev/null and /dev/zero are character devices and are
+// not a person to ask (D-0447). Tests replace it.
+var stdinIsTTY = func() bool { return isTerminal(os.Stdin.Fd()) }
 
 // maxConfirmBytes bounds the confirmation read. A release name is at most 53
 // bytes; anything longer is not a match.

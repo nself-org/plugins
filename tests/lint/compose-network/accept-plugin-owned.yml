@@ -1,0 +1,19 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0531, D-0477).
+# The accepted shapes: services join by - ${DOCKER_NETWORK}, and the fragment
+# declares only a network it owns, with a project-scoped name (the forgejo
+# runner network pattern). Must pass.
+services:
+  example:
+    image: example/app:0
+    networks:
+      - ${DOCKER_NETWORK}
+      - example_runner_net
+  runner:
+    image: example/runner:0
+    networks: [example_runner_net]
+
+networks:
+  example_runner_net:
+    name: ${COMPOSE_PROJECT_NAME:-nself}_example_runner_net
+    driver: bridge
+    external: false

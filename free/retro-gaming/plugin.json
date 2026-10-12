@@ -14,6 +14,7 @@
   "minNselfVersion": "1.0.0",
   "language": "go",
   "entryPoint": "binary",
+  "pluginType": "service",
   "port": 3124,
   "category": "media",
   "tags": [
@@ -206,36 +207,6 @@
       "method": "POST",
       "path": "/api/games/roms/:id/enrich",
       "description": "Trigger metadata enrichment"
-    }
-  ],
-  "cliCommands": [
-    {
-      "name": "server",
-      "description": "Start the retro-gaming API server"
-    },
-    {
-      "name": "roms list",
-      "description": "List ROMs in the library"
-    },
-    {
-      "name": "roms stats",
-      "description": "Show ROM library statistics"
-    },
-    {
-      "name": "cores list",
-      "description": "List emulator cores"
-    },
-    {
-      "name": "cores seed",
-      "description": "Seed default emulator cores"
-    },
-    {
-      "name": "sessions recent",
-      "description": "Show recent play sessions"
-    },
-    {
-      "name": "stats",
-      "description": "Show overall plugin statistics"
     }
   ],
   "status": "stable",

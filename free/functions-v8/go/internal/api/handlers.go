@@ -1,4 +1,4 @@
-// Package api provides HTTP handlers for the functions-edge plugin.
+// Package api provides HTTP handlers for the functions-v8 plugin.
 package api
 
 import (

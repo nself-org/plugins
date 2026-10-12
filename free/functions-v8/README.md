@@ -1,11 +1,11 @@
-# functions-edge
+# functions-v8
 
 Edge Functions V8 Runtime. Deploy short-lived TypeScript functions with a Deno V8 isolate pool. HTTP-trigger, <50ms cold-start, allowlist-only env injection, Prometheus metrics, SSE log streaming.
 
 ## Details
 
 - **Category:** infrastructure
-- **Tier:** pro
+- **Tier:** free
 - **Language:** go
 - **Port:** 3088
 - **License:** MIT
@@ -45,5 +45,5 @@ Edge Functions V8 Runtime. Deploy short-lived TypeScript functions with a Deno V
 ## Install
 
 ```bash
-nself plugin install functions-edge
+nself plugin install functions-v8
 ```

@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-// Config holds runtime configuration for the functions-edge plugin.
+// Config holds runtime configuration for the functions-v8 plugin.
 type Config struct {
 	DatabaseURL       string
 	Port              int

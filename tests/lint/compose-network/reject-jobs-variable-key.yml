@@ -1,0 +1,12 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0531, D-0477).
+# The free/jobs shape before the fix: a variable top-level network key that is
+# also external. Must be flagged.
+services:
+  nself-jobs:
+    image: example/jobs:0
+    networks:
+      - ${DOCKER_NETWORK}
+
+networks:
+  ${DOCKER_NETWORK}:
+    external: true
