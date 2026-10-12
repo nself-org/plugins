@@ -12,7 +12,13 @@ Use it if all of these are true:
 
 In v1.5 mode a project that wants MinIO without this plugin stops with **E138** before any file changes. The message names three ways out. This plugin is the first one.
 
-Do not install it if the project never used MinIO. Plugins are machine-wide: `nself build` adds this fragment to every project built on the machine, whether or not it declares MinIO. A project without MinIO intent then gets its own empty `<project>_minio` container on the same loopback ports, and two such projects running at once clash on port 9000. Only the `S3_*` variables for custom services follow MinIO intent (`MINIO_ENABLED=true`). `nself plugin disable minio` turns the plugin off for every project on the machine, so keep MinIO projects and other projects apart, or set `MINIO_PORT` and `MINIO_CONSOLE_PORT` per project.
+Do not install it if the project never used MinIO.
+
+Plugins are machine-wide. `nself build` adds this fragment to every project built on the machine, whether or not the project declares MinIO. Only the `S3_*` variables for custom services follow MinIO intent (`MINIO_ENABLED=true`).
+
+So a project without MinIO still gets its own empty `<project>_minio` container on the same loopback ports, and two such projects running at once clash on port 9000.
+
+`nself plugin disable minio` takes effect on the next `nself build`, but it also applies to every project on the machine. Keep MinIO projects and other projects on separate machines, or give each project its own `MINIO_PORT` and `MINIO_CONSOLE_PORT`.
 
 ## Data continuity
 
@@ -41,19 +47,20 @@ Do this when you are ready to leave MinIO. Take your time. Nothing here is urgen
 
 1. **Back up first.** Take a backup of the `minio_data` volume or mirror the buckets to storage you control. Do not start the move without one.
 2. **Run both stores.** In v1.5 mode keep the plugin installed with `MINIO_ENABLED=true`, and add `OBJECT_STORAGE_ENABLED=true` plus `S3_ACCESS_KEY` and `S3_SECRET_KEY` in `.env.secrets`. SeaweedFS starts with its own empty `seaweedfs_data` volume. Run `nself build` and `nself start`. From this build on, custom services get `S3_ENDPOINT=http://seaweedfs:8333`, which is still empty. Pause writes in your applications until the switch, or accept that new objects land in SeaweedFS while old ones are still in MinIO.
-3. **Copy.** From a one-off container on the project network, or from the host through `127.0.0.1:<MINIO_PORT>` and `127.0.0.1:<SEAWEEDFS_PORT>`. Give `mc` the two endpoints through a `0600` env file, so no key appears on a command line:
+3. **Copy.** Run `mc` in a one-off container on the project network, so `minio:9000` and `seaweedfs:8333` resolve. Give it the two endpoints through a `0600` env file, so no key appears on a command line:
 
    ```bash
-   # mirror.env (chmod 600), one line per store:
+   # mirror.env (chmod 600), one line per store, no quotes:
    #   MC_HOST_old=http://<MINIO_ROOT_USER>:<MINIO_ROOT_PASSWORD>@minio:9000
    #   MC_HOST_new=http://<S3_ACCESS_KEY>:<S3_SECRET_KEY>@seaweedfs:8333
-   set -a; . ./mirror.env; set +a
-   mc mirror old/<bucket> new/<bucket>
+   docker run --rm --network <project>_network --env-file mirror.env \
+     --entrypoint mc docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z \
+     mirror old/<bucket> new/<bucket>
    ```
 
-   Repeat for every bucket. Delete `mirror.env` when you are done.
+   Each line is a URL, so percent-encode special characters in a key or password (`/` becomes `%2F`, `+` becomes `%2B`, `@` becomes `%40`). Repeat for every bucket. Delete `mirror.env` when you are done.
 4. **Verify.** For each bucket, compare the object count and the total size on both sides (`mc ls --recursive` and `mc du`). Spot-check a few objects by checksum. Test your application against the SeaweedFS endpoint. Recreate bucket policies and any CORS settings by hand: they do not travel with `mc mirror`.
-5. **Switch.** Point applications at `http://seaweedfs:8333`. Set `OBJECT_STORAGE_ENABLED=true` and `MINIO_ENABLED=false` in `.env`. The `MINIO_ROOT_*` keys alone still read as MinIO intent, so keep `MINIO_ENABLED=false` explicit.
+5. **Finish the switch.** Custom services already read the SeaweedFS endpoint since step 2. Point any application that talks to MinIO directly at `http://seaweedfs:8333`, then set `MINIO_ENABLED=false` in `.env`. The `MINIO_ROOT_*` keys alone still read as MinIO intent, so keep `MINIO_ENABLED=false` explicit.
 6. **Remove the plugin.** `nself remove minio`, then `nself build`. The `minio_data` volume is left on disk. When you are sure the copy is good, delete it yourself with `docker volume rm <project>_minio_data`.
 
 ## Known gaps
