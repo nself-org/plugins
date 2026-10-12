@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Sanity-check free registry.json is well-formed and non-empty
         run: |
@@ -88,11 +88,11 @@ jobs:
 
       - name: Checkout plugins (this repo)
         if: steps.check-token.outputs.has-token == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Checkout plugins-pro
         if: steps.check-token.outputs.has-token == 'true'
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           repository: nself-org/plugins-pro
           path: ../plugins-pro
