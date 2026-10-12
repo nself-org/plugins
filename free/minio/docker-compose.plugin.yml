@@ -1,0 +1,67 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
+# minio plugin (ADR 0028): the v1.4 core MinIO service, unchanged, for projects that already hold data in it.
+# Mirrors cli internal/compose/optional_services.go buildMinioService: same service name (minio), container name,
+# environment, command, port publishing, tmpfs and health check, and the same minio_data volume, so the existing
+# <project>_minio_data volume attaches with its data. The image is pinned by tag and digest; it must equal the
+# minio index_digest in cli internal/compose/images.lock.json (test/migrate-from-core.sh fails on drift).
+# Compose reads ${...} values from the project .env and .nself/compose.env. The fallbacks below equal the core
+# defaults, so an unset key renders the same value core rendered. No Docker socket, no privileged mode.
+services:
+  minio:
+    # The digest is the pin (equal to the cli lock). The tag is informational: it names the same index on Docker Hub.
+    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
+    container_name: ${COMPOSE_PROJECT_NAME}_minio
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS:-uploads,public,private,temp}
+      # Extended attributes off: Docker Desktop on macOS (VirtioFS) has none and MinIO refuses to start without this.
+      MINIO_DISABLE_XATTR: "on"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    tmpfs:
+      - /tmp
+      - /run
+    # Hardening core applied to this service after rendering (internal/compose/security.go MinioSecurity and the
+    # postProcess defaults). Plugin fragments skip that step, so it is spelled out here.
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+          pids: 100
+        reservations:
+          memory: 256m
+    # Log rotation and stop grace as core postProcess renders them (DOCKER_LOG_MAX_SIZE, DOCKER_LOG_MAX_FILE,
+    # DOCKER_STOP_GRACE_PERIOD; defaults 10m, 3, 30s).
+    logging:
+      driver: json-file
+      options:
+        max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+        max-file: "${DOCKER_LOG_MAX_FILE:-3}"
+    stop_grace_period: ${DOCKER_STOP_GRACE_PERIOD:-30s}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  minio_data:

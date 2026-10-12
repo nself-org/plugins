@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0.0",
   "generated_at": "2026-09-21T21:11:03.046357Z",
-  "plugins_count": 132,
+  "plugins_count": 133,
   "last_updated": "2026-09-21",
   "tier": "free",
   "checksum_algorithm": "sha256",
@@ -1510,6 +1510,36 @@
         "sha256": "2610439c1c60ca52cdf5b7b6f69f85a5aefc6d3c7dc545cffdbc74cade5dcb9b"
       },
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/mdns-1.2.6.tar.gz"
+    },
+    "minio": {
+      "version": "1.2.7",
+      "description": "MinIO compatibility service for projects that already store data in the core MinIO volume. Keeps the minio service name and the minio_data volume under v1.5, so existing objects stay readable through S3. New projects use the core SeaweedFS store.",
+      "category": "infrastructure",
+      "tier": "free",
+      "license": "MIT",
+      "min_nself_version": "1.4.14",
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/minio-1.2.7.tar.gz",
+      "download_url": "https://plugins.nself.org/plugins/minio/tarball",
+      "requires_license": false,
+      "language": "config",
+      "tags": [
+        "object-storage",
+        "s3",
+        "minio",
+        "compatibility"
+      ],
+      "dependencies": [],
+      "name": "minio",
+      "author": "nself",
+      "minNselfVersion": "1.4.14",
+      "tables": [],
+      "implementation": {
+        "language": "config",
+        "runtime": "compose",
+        "entryPoint": "docker-compose.plugin.yml"
+      },
+      "releaseTag": "v1.2.7",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/minio-1.2.7.tar.gz"
     },
     "mlflow": {
       "version": "1.2.6",
