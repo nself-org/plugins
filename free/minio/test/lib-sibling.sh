@@ -65,8 +65,8 @@ mc_run mb --ignore-existing p57/uploads >/dev/null || fail "bucket create"
 head -c 1048576 /dev/urandom >/work/payload.bin
 printf 'continuity check\n' >/work/note.txt
 want_payload="$(sha256sum /work/payload.bin | cut -d' ' -f1)"; want_note="$(sha256sum /work/note.txt | cut -d' ' -f1)"
-mc_run pipe p57/uploads/plug57/payload.bin </work/payload.bin >/dev/null 2>&1 || fail "put payload"
-mc_run pipe p57/uploads/plug57/note.txt </work/note.txt >/dev/null 2>&1 || fail "put note"
+mc_run pipe p57/uploads/plug57/payload.bin </work/payload.bin >/work/put.log 2>&1 || { tail -5 /work/put.log; fail "put payload"; }
+mc_run pipe p57/uploads/plug57/note.txt </work/note.txt >/work/put.log 2>&1 || { tail -5 /work/put.log; fail "put note"; }
 [ "$(sha_of_object payload.bin)" = "$want_payload" ] || fail "v1.4 read-back checksum (payload)"
 echo 'PASS: object stored through S3 on core MinIO and read back'
 OLD_CTR="$CTR"
