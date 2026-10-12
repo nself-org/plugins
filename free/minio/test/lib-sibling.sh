@@ -2,10 +2,10 @@
 # Purpose: the in-sibling half of migrate-from-core.sh. Runs inside the isolated dind container.
 # Usage:   bash /work/lib-sibling.sh   (migrate-from-core.sh copies it in; do not run it on a developer machine)
 # Env:     reads /work/run.env (synthetic MinIO root credentials, archive checksum, expected image reference).
-# Needs:   /work/nself (static CLI), /work/minio.tgz (plugin archive), docker with compose, bash, openssl.
+# Needs:   /work/nself (static CLI), /work/minio.tgz (plugin archive), docker with compose, bash, openssl, httpd (busybox-extras).
 # Outputs: PASS lines per check; exits 1 with a FAIL line on the first failure.
 # Constraints: bash 3.2 compatible. Credentials stay in files; the S3 client gets them through docker --env-file.
-#          Only the minio service is started (nself service start minio), not the whole stack.
+#          Only the minio service is started (docker compose up --no-deps over the build's recorded files), not the whole stack.
 set -euo pipefail
 umask 022 # known CLI debt D-0664: nself build fails under umask 077 (E452); secret files get chmod 600 below
 export DOCKER_HOST=unix:///var/run/docker.sock HOME=/work/home NSELF_PLUGIN_DIR=/work/plugins
@@ -20,6 +20,14 @@ run_nself() { # run_nself LOG ARGS...: run the CLI, show the log tail and fail o
   local log=$1; shift
   "$NSELF" "$@" >"$log" 2>&1 || { tail -40 "$log"; fail "nself $1"; }
 }
+# `nself service start` runs compose without the project env files (empty MinIO credentials, so MinIO falls back to
+# minioadmin: a CLI gap reported with this Ticket). Start the way nself start does: the files the build recorded.
+up_minio() { # up_minio LOG: docker compose up -d --no-deps minio over .nself/compose-files.txt and compose-env-files.txt
+  local args=() f
+  while IFS= read -r f; do [ -n "$f" ] && args+=(--env-file "$f"); done <.nself/compose-env-files.txt
+  while IFS= read -r f; do [ -n "$f" ] && args+=(-f "$f"); done <.nself/compose-files.txt
+  docker compose "${args[@]}" up -d --no-deps minio >"$1" 2>&1 || { tail -40 "$1"; fail "compose up minio"; }
+}
 minio_ctr() { docker ps -aq --filter label=com.docker.compose.service=minio | head -1; }
 wait_healthy() { # wait_healthy CONTAINER
   local n=0
@@ -28,7 +36,7 @@ wait_healthy() { # wait_healthy CONTAINER
     sleep 2
   done
 }
-mc_run() { docker exec -i --env-file /work/mc.env "$CTR" mc --config-dir /tmp/mc-config "$@"; }
+mc_run() { docker exec -i --env-file /work/mc.env "$CTR" mc --quiet --config-dir /tmp/mc-config "$@"; }
 sha_of_object() { mc_run cat "p57/uploads/plug57/$1" | sha256sum | cut -d' ' -f1; }
 core_env() { # the MinIO settings the container actually got, sorted (compared, never printed)
   docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" \
@@ -44,8 +52,8 @@ printf 'MINIO_ROOT_USER=%s\nMINIO_ROOT_PASSWORD=%s\n' "$MINIO_ROOT_USER" "$MINIO
 printf 'MC_HOST_p57=http://%s:%s@127.0.0.1:9000\n' "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/work/mc.env
 chmod 600 /work/mc.env
 run_nself /work/build-v14.log build
-grep -q '^  minio:' docker-compose.yml || fail "v1.4 build did not generate core minio"
-run_nself /work/start-v14.log service start minio
+grep -Eq '^ +minio:$' docker-compose.yml || fail "v1.4 build did not generate core minio"
+up_minio /work/start-v14.log
 CTR="$(minio_ctr)"; [ -n "$CTR" ] || fail "v1.4 minio container missing"
 wait_healthy "$CTR"
 VOL="$(volume_of "$CTR")"; [ -n "$VOL" ] || fail "v1.4 minio has no /data volume"
@@ -57,8 +65,8 @@ mc_run mb --ignore-existing p57/uploads >/dev/null || fail "bucket create"
 head -c 1048576 /dev/urandom >/work/payload.bin
 printf 'continuity check\n' >/work/note.txt
 want_payload="$(sha256sum /work/payload.bin | cut -d' ' -f1)"; want_note="$(sha256sum /work/note.txt | cut -d' ' -f1)"
-mc_run pipe p57/uploads/plug57/payload.bin </work/payload.bin || fail "put payload"
-mc_run pipe p57/uploads/plug57/note.txt </work/note.txt || fail "put note"
+mc_run pipe p57/uploads/plug57/payload.bin </work/payload.bin >/dev/null 2>&1 || fail "put payload"
+mc_run pipe p57/uploads/plug57/note.txt </work/note.txt >/dev/null 2>&1 || fail "put note"
 [ "$(sha_of_object payload.bin)" = "$want_payload" ] || fail "v1.4 read-back checksum (payload)"
 echo 'PASS: object stored through S3 on core MinIO and read back'
 OLD_CTR="$CTR"
@@ -77,15 +85,15 @@ grep -q E138 /work/e138.out && grep -q 'nself add minio' /work/e138.out || fail 
 [ "$(sha256sum docker-compose.yml | cut -d' ' -f1)" = "$before" ] || fail "E138 changed docker-compose.yml"
 echo 'PASS: v1.5 without the plugin stops with E138 and the remedy, files unchanged'
 
-httpd -p 127.0.0.1:18099 -h /work/serve 2>/dev/null || busybox httpd -p 127.0.0.1:18099 -h /work/serve || fail "local archive server"
+httpd -p 127.0.0.1:18099 -h /work/serve || fail "local archive server"
 cp /work/minio.tgz /work/serve/minio.tgz
 run_nself /work/add.log add http://127.0.0.1:18099/minio.tgz --yes --checksum "$ARCHIVE_SUM"
 [ -f "$NSELF_PLUGIN_DIR/minio/plugin.json" ] && [ -f "$NSELF_PLUGIN_DIR/minio/docker-compose.plugin.yml" ] || fail "plugin files not installed"
 echo 'PASS: plugin installed from the local archive (checksum verified)'
 
 run_nself /work/build-v15.log build
-grep -q '^  minio:' docker-compose.yml && fail "v1.5 core still generates minio"
-run_nself /work/start-v15.log service start minio
+grep -Eq '^ +minio:$' docker-compose.yml && fail "v1.5 core still generates minio"
+up_minio /work/start-v15.log
 CTR="$(minio_ctr)"; [ -n "$CTR" ] || fail "v1.5 minio container missing"
 [ "$CTR" != "$OLD_CTR" ] || fail "container was not recreated"
 wait_healthy "$CTR"
@@ -108,5 +116,5 @@ echo 'PASS: both objects read back through S3 with the same checksums'
 [ "$(docker inspect -f '{{.HostConfig.Privileged}}' "$CTR")" = false ] || fail "container is privileged"
 [ "$(docker inspect -f '{{.HostConfig.ReadonlyRootfs}}' "$CTR")" = true ] || fail "root filesystem is not read-only"
 docker inspect -f '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' "$CTR" | grep -q docker.sock && fail "docker socket mounted"
-docker inspect -f '{{range .HostConfig.PortBindings}}{{range .}}{{.HostIp}}{{"\n"}}{{end}}{{end}}' "$CTR" | grep -qvx 127.0.0.1 && fail "port not bound to loopback"
+docker inspect -f '{{range .HostConfig.PortBindings}}{{range .}}{{.HostIp}}{{"\n"}}{{end}}{{end}}' "$CTR" | grep -v '^$' | grep -qvx 127.0.0.1 && fail "port not bound to loopback"
 echo 'PASS: no socket, not privileged, read-only root, ports on 127.0.0.1'

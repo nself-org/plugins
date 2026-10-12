@@ -113,7 +113,7 @@ until docker exec "$SIBLING" docker info >/dev/null 2>&1; do
   n=$((n + 1)); [ "$n" -le 60 ] || fail "dind daemon timeout"
   sleep 1
 done
-docker exec "$SIBLING" apk add --no-cache bash openssl >/dev/null || fail "dind dependencies"
+docker exec "$SIBLING" apk add --no-cache bash openssl busybox-extras >/dev/null || fail "dind dependencies"
 docker exec "$SIBLING" mkdir -p /work
 docker cp "$WORK/nself" "$SIBLING:/work/nself"
 docker cp "$WORK/minio.tgz" "$SIBLING:/work/minio.tgz"
