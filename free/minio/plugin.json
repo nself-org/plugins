@@ -1,0 +1,60 @@
+{
+  "author": "nself",
+  "category": "infrastructure",
+  "description": "MinIO compatibility service for projects that already store data in the core MinIO volume. Keeps the minio service name and the minio_data volume under v1.5, so existing objects stay readable through S3. New projects use the core SeaweedFS store.",
+  "envVars": [
+    {
+      "description": "Root user of the MinIO server. Read from the project .env or .env.secrets; falls back to minioadmin, the core default.",
+      "name": "MINIO_ROOT_USER",
+      "required": false
+    },
+    {
+      "description": "Root password of the MinIO server. Read from .env.secrets through .nself/compose.env; falls back to minioadmin, the core default. Keep the value the data was created with.",
+      "name": "MINIO_ROOT_PASSWORD",
+      "required": false
+    },
+    {
+      "description": "Comma-separated buckets MinIO creates at start when missing; default uploads,public,private,temp (the core default).",
+      "name": "MINIO_DEFAULT_BUCKETS",
+      "required": false
+    },
+    {
+      "description": "Host port of the S3 API, published on 127.0.0.1 only; default 9000.",
+      "name": "MINIO_PORT",
+      "required": false
+    },
+    {
+      "description": "Host port of the MinIO console, published on 127.0.0.1 only; default 9001.",
+      "name": "MINIO_CONSOLE_PORT",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.4.14",
+  "name": "minio",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.4.14"
+  },
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "mc ready local",
+    "image": "docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372",
+    "kind": "compose",
+    "port": 9000
+  },
+  "status": "stable",
+  "tags": [
+    "object-storage",
+    "s3",
+    "minio",
+    "compatibility"
+  ],
+  "tier": "free",
+  "version": "1.2.7"
+}
