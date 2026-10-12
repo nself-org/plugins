@@ -36,7 +36,9 @@ wait_healthy() { # wait_healthy CONTAINER
     sleep 2
   done
 }
-mc_run() { docker exec -i --env-file /work/mc.env "$CTR" mc --quiet --config-dir /tmp/mc-config "$@"; }
+# A separate S3 client: the pinned image run as mc in the minio container's network namespace (127.0.0.1:9000).
+# Uploads go as files from /work/io, never through docker exec stdin (an exec -i pipe failed at random, no error).
+mc_run() { docker run --rm --network "container:$CTR" -v /work/io:/io:ro --env-file /work/mc.env --entrypoint mc "$EXPECT_IMAGE" --quiet --config-dir /tmp/mc-config "$@"; }
 sha_of_object() { mc_run cat "p57/uploads/plug57/$1" | sha256sum | cut -d' ' -f1; }
 core_env() { # the MinIO settings the container actually got, sorted (compared, never printed)
   docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" \
@@ -62,12 +64,14 @@ core_env "$CTR" >/work/env-v14
 echo "PASS: v1.4 core MinIO healthy on volume $VOL"
 
 mc_run mb --ignore-existing p57/uploads >/dev/null || fail "bucket create"
-head -c 1048576 /dev/urandom >/work/payload.bin
-printf 'continuity check\n' >/work/note.txt
-want_payload="$(sha256sum /work/payload.bin | cut -d' ' -f1)"; want_note="$(sha256sum /work/note.txt | cut -d' ' -f1)"
-mc_run pipe p57/uploads/plug57/payload.bin </work/payload.bin >/work/put.log 2>&1 || { tail -5 /work/put.log; fail "put payload"; }
-mc_run pipe p57/uploads/plug57/note.txt </work/note.txt >/work/put.log 2>&1 || { tail -5 /work/put.log; fail "put note"; }
+mkdir -p /work/io
+head -c 1048576 /dev/urandom >/work/io/payload.bin
+printf 'continuity check\n' >/work/io/note.txt
+want_payload="$(sha256sum /work/io/payload.bin | cut -d' ' -f1)"; want_note="$(sha256sum /work/io/note.txt | cut -d' ' -f1)"
+mc_run cp /io/payload.bin p57/uploads/plug57/payload.bin >/work/put.log 2>&1 || { tail -5 /work/put.log; fail "put payload"; }
+mc_run cp /io/note.txt p57/uploads/plug57/note.txt >/work/put.log 2>&1 || { tail -5 /work/put.log; fail "put note"; }
 [ "$(sha_of_object payload.bin)" = "$want_payload" ] || fail "v1.4 read-back checksum (payload)"
+[ "$(sha_of_object note.txt)" = "$want_note" ] || fail "v1.4 read-back checksum (note)"
 echo 'PASS: object stored through S3 on core MinIO and read back'
 OLD_CTR="$CTR"
 docker rm -f "$OLD_CTR" >/dev/null || fail "remove v1.4 container"
