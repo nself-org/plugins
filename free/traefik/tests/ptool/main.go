@@ -5,6 +5,7 @@
 //	ptool gencert --routes F --out D [--gen N]   self-signed lineages like P7-LIVE-15 writes them
 //	ptool rawdata --url U                    every Traefik router/service/middleware must be enabled
 //	ptool serial  --addr A --sni H           leaf serial of the certificate served for H
+//	ptool tlsserve --routes F --target H     every https server name is served with a certificate listing it as a SAN
 //	ptool matrix  --routes F --nginx H --traefik H [--tls]   request-level comparison
 //	ptool connhold  --routes F --target H [--secs N]   client A: hold conn_limit upgrades, expect 429 on the next request
 //	ptool wsidle    --routes F --target H --secs N     a websocket idle for N seconds must still echo
@@ -125,7 +126,7 @@ func die(err error) {
 
 func main() {
 	if len(os.Args) < 2 {
-		die(fmt.Errorf("usage: ptool plan|backend|gencert|rawdata|serial|matrix|connhold|connprobe|wsidle|slowpost|slowheader"))
+		die(fmt.Errorf("usage: ptool plan|backend|gencert|rawdata|serial|tlsserve|matrix|connhold|connprobe|wsidle|slowpost|slowheader"))
 	}
 	cmd, args := os.Args[1], os.Args[2:]
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
@@ -159,6 +160,8 @@ func main() {
 		s, err := serialErr(*addr, *sni)
 		must(err)
 		fmt.Println(s)
+	case "tlsserve":
+		tlsServe(loadRoutes(*rf), *tgt)
 	case "matrix":
 		matrix(loadRoutes(*rf), *ngx, *trf, *needTier)
 	case "wsidle":
