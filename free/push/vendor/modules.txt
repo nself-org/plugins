@@ -1,8 +1,8 @@
 # cloud.google.com/go/compute/metadata v0.3.0
 ## explicit; go 1.19
 cloud.google.com/go/compute/metadata
-# github.com/go-chi/chi/v5 v5.2.2
-## explicit; go 1.20
+# github.com/go-chi/chi/v5 v5.3.0
+## explicit; go 1.23
 github.com/go-chi/chi/v5
 # github.com/golang-jwt/jwt/v5 v5.3.1
 ## explicit; go 1.21
