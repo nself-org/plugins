@@ -8,6 +8,7 @@
 # defaults, so an unset key renders the same value core rendered. No Docker socket, no privileged mode.
 services:
   minio:
+    # The digest is the pin (equal to the cli lock). The tag is informational: it names the same index on Docker Hub.
     image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     container_name: ${COMPOSE_PROJECT_NAME}_minio
     restart: unless-stopped
@@ -47,6 +48,14 @@ services:
           pids: 100
         reservations:
           memory: 256m
+    # Log rotation and stop grace as core postProcess renders them (DOCKER_LOG_MAX_SIZE, DOCKER_LOG_MAX_FILE,
+    # DOCKER_STOP_GRACE_PERIOD; defaults 10m, 3, 30s).
+    logging:
+      driver: json-file
+      options:
+        max-size: "${DOCKER_LOG_MAX_SIZE:-10m}"
+        max-file: "${DOCKER_LOG_MAX_FILE:-3}"
+    stop_grace_period: ${DOCKER_STOP_GRACE_PERIOD:-30s}
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 30s

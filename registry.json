@@ -1534,8 +1534,8 @@
       "minNselfVersion": "1.4.14",
       "tables": [],
       "implementation": {
-        "language": "shell",
-        "runtime": "docker",
+        "language": "config",
+        "runtime": "compose",
         "entryPoint": "docker-compose.plugin.yml"
       },
       "releaseTag": "v1.2.7",

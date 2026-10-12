@@ -44,6 +44,9 @@ core_env() { # the MinIO settings the container actually got, sorted (compared, 
   docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$1" \
     | grep -E '^MINIO_(ROOT_USER|ROOT_PASSWORD|DEFAULT_BUCKETS|DISABLE_XATTR)=' | LC_ALL=C sort
 }
+runtime_of() { # the host-side settings core stamps on every service: log rotation, stop grace, limits, caps
+  docker inspect -f '{{json .HostConfig.LogConfig}} {{.Config.StopTimeout}} {{.HostConfig.Memory}} {{.HostConfig.NanoCpus}} {{.HostConfig.PidsLimit}} {{json .HostConfig.CapAdd}} {{json .HostConfig.CapDrop}} {{json .HostConfig.Tmpfs}}' "$1"
+}
 volume_of() { docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' "$1"; }
 
 # ---- phase 1: v1.4 mode, core MinIO ---------------------------------------------------------------------------
@@ -60,6 +63,7 @@ up_minio /work/start-v14.log
 CTR="$(minio_ctr)"; [ -n "$CTR" ] || fail "v1.4 minio container missing"
 wait_healthy "$CTR"
 VOL="$(volume_of "$CTR")"; [ -n "$VOL" ] || fail "v1.4 minio has no /data volume"
+runtime_of "$CTR" >/work/runtime-v14
 VOL_CREATED="$(docker volume inspect -f '{{.CreatedAt}}' "$VOL")"
 core_env "$CTR" >/work/env-v14
 echo "PASS: v1.4 core MinIO healthy on volume $VOL"
@@ -101,7 +105,8 @@ grep -Eq '^ +minio:$' docker-compose.yml && fail "v1.5 core still generates mini
 up_minio /work/start-v15.log
 CTR="$(minio_ctr)"; [ -n "$CTR" ] || fail "v1.5 minio container missing"
 wait_healthy "$CTR"
-echo 'PASS: v1.5 plugin minio healthy'
+[ "$(docker inspect -f '{{.Name}}' "$CTR")" = "/p57mig_minio" ] || fail "container name is not <project>_minio"
+echo 'PASS: v1.5 plugin minio healthy, container name <project>_minio'
 
 [ "$(volume_of "$CTR")" = "$VOL" ] || fail "different data volume"
 [ "$(docker volume inspect -f '{{.CreatedAt}}' "$VOL")" = "$VOL_CREATED" ] || fail "volume was recreated"
@@ -111,7 +116,8 @@ docker image inspect -f '{{join .RepoDigests " "}}' "$EXPECT_IMAGE" | grep -q "$
 echo 'PASS: container runs the pinned tag and digest'
 core_env "$CTR" >/work/env-v15
 cmp -s /work/env-v14 /work/env-v15 || fail "MinIO root and bucket settings differ from core (same .env)"
-echo 'PASS: root credentials and settings equal core'
+runtime_of "$CTR" | cmp -s - /work/runtime-v14 || { echo "v1.4: $(cat /work/runtime-v14)"; echo "v1.5: $(runtime_of "$CTR")"; fail "runtime settings differ from core"; }
+echo 'PASS: root credentials, settings, log rotation, stop grace, limits and caps equal core'
 
 [ "$(sha_of_object payload.bin)" = "$want_payload" ] || fail "v1.5 read-back checksum (payload)"
 [ "$(sha_of_object note.txt)" = "$want_note" ] || fail "v1.5 read-back checksum (note)"
