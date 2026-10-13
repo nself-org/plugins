@@ -115,12 +115,13 @@ jobs:
   deploy-worker:
     needs: validate
     runs-on: ubuntu-latest
-    # Deploy worker when .workers changes, or when manually triggered with deploy_worker=true
+    # Deploy worker when .workers changes, or when manually triggered with deploy_worker=true. A release tag does NOT deploy the
+    # production worker: a worker deploy is its own owner-named action (workflow_dispatch deploy_worker=true), never a side effect
+    # of cutting a plugins release (a deploy must not depend on a tag push).
     if: |
       (github.event_name == 'push' && github.event.head_commit != null && contains(toJSON(github.event.head_commit.modified), '.workers/')) ||
       (github.event_name == 'push' && github.event.head_commit != null && contains(toJSON(github.event.head_commit.added), '.workers/')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_worker == 'true') ||
-      startsWith(github.ref, 'refs/tags/')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_worker == 'true')
     steps:
       - uses: actions/checkout@v7.0.1
 
