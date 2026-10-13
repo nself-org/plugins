@@ -12,6 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./
 
 # pg_dump and pg_restore (client 16, as before with postgresql16-client) come from the postgres image: apk needs the
 # network and the tarball build runs with it off. The image's entrypoint script is cleared; the plugin is the only process.
+# The base also declares VOLUME /var/lib/postgresql/data (an unused anonymous volume per container) and floats on 16-alpine.
 FROM postgres:16-alpine
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plugin /plugin

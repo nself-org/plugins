@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 
 	sdk "github.com/nself-org/plugin-sdk"
@@ -11,7 +10,7 @@ import (
 	"github.com/nself-org/nself-backup/internal"
 )
 
-// Size-cap exception: plugin entry-point main() — 66L startup wiring (env/db/router/server); single invocation, not a reusable unit.
+// Size-cap exception: plugin entry-point main() — 68L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	cfg := sdk.LoadConfig()
 	if cfg.DatabaseURL == "" {
@@ -64,7 +63,7 @@ func main() {
 
 	// Own /health so it can report the boot migration counts (sdk only adds a plain liveness default).
 	r.Get("/health", internal.HealthHandler)
-	r.Head("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	r.Head("/health", internal.HealthHandler)
 
 	r.Post("/v1/backups", h.CreateBackup)
 	r.Get("/v1/backups", h.ListBackups)

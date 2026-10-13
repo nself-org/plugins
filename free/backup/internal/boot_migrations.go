@@ -35,8 +35,10 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
-func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+func bootMigrationsHealth(ctx context.Context, w http.ResponseWriter) map[string]int {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -49,8 +51,8 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 func BootMigrations(ctx context.Context, pool *pgxpool.Pool) { mustBootMigrations(ctx, pool) }
 
 // HealthHandler answers /health with the plugin name and the boot migration counts (503 when the ledger cannot be read).
-func HealthHandler(w http.ResponseWriter, _ *http.Request) {
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	mig := bootMigrationsHealth(w)
+	mig := bootMigrationsHealth(r.Context(), w)
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "backup", "migrations": mig})
 }

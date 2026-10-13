@@ -38,6 +38,21 @@
       "description": "",
       "name": "CORS_ALLOWED_ORIGIN",
       "required": false
+    },
+    {
+      "description": "Minimum database pool connections to keep alive (default: 2)",
+      "name": "DB_POOL_MIN",
+      "required": false
+    },
+    {
+      "description": "Maximum database pool size (default: 10)",
+      "name": "DB_POOL_MAX",
+      "required": false
+    },
+    {
+      "description": "Idle connection timeout in milliseconds (default: 30000)",
+      "name": "DB_POOL_IDLE_TIMEOUT",
+      "required": false
     }
   ],
   "homepage": "https://nself.org/plugins",
