@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -17,7 +18,8 @@ var bootPool *pgxpool.Pool
 
 func bootOptions() migrate.Options {
 	// SearchPath keeps public on the pinned path: the rename migration addresses the legacy stripe_* tables unqualified.
-	return migrate.Options{Schema: "np_stripe", FS: migrations.FS, SearchPath: []string{"public"}}
+	// LockTimeout: the rename takes ACCESS EXCLUSIVE locks while the previous container may still hold the tables.
+	return migrate.Options{Schema: "np_stripe", FS: migrations.FS, SearchPath: []string{"public"}, LockTimeout: time.Minute}
 }
 
 // mustBootMigrations applies the plugin's own migrations before it serves; a failure is fatal.
