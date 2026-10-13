@@ -179,7 +179,8 @@ while IFS= read -r name; do
     binaries_json="[]"
     linux_tar="${WORK_DIR}/${name}-${VERSION}-linux-amd64.tar.gz"
     if [ -f "$linux_tar" ]; then
-      binaries_json="$(tar -tzf "$linux_tar" | awk -F/ '{print $NF}' | grep -E "$BINARY_RE" | sort -u | jq -R . | jq -sc .)"
+      binaries_json="$( { tar -tzf "$linux_tar" | awk -F/ '{print $NF}' | grep -E "$BINARY_RE" || true; } | sort -u | jq -R . | jq -sc .)"
+      [ "$binaries_json" != "[]" ] || log "WARNING: ${name}-${VERSION}-linux-amd64.tar.gz holds no nself-* binary; the row gets no binaries list"
     fi
     RELEASES_JSON="$(jq --arg n "$name" --arg v "$VERSION" --arg tag "$TAG" --arg sha "$computed_sha" \
       --arg url "https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}" \

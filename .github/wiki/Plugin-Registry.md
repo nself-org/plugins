@@ -17,6 +17,11 @@ and checked by `shared/validate-registry.sh`.
 | Publish a release | Upload the assets, then `scripts/verify-published-checksums.sh --write <tag>` (writes `releases.json` from the published bytes), then `bash scripts/plugin-counts.sh` |
 | Check for drift | `bash scripts/plugin-counts.sh --check` (needs a bundles clone; CI without the token runs `--check --free-only`) |
 
+The generator does not write `generated_at`, `last_updated` or a `note`; nothing in this repo or the marketplace worker reads them.
+A dependency edge (required or optional) whose target is not a registry entry of either tier is left off the `registry.json` wire
+and named on stderr by `plugin-counts.sh`: released CLIs install every listed edge and fail on a name they cannot fetch (an
+unreleased plugin such as `minio`, or a core service such as `database`). The manifest keeps the edge.
+
 A plugin with no row in `releases.json` has no published bytes and is left out of `registry.json`
 until the release pipeline adds a row. Checksums, tarball URLs and per-platform checksums live
 in `releases.json` only.

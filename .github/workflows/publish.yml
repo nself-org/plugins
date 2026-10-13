@@ -66,6 +66,8 @@ jobs:
             manifest_version=$(jq -r '.version' "$plugin_dir/plugin.json")
             registry_version=$(jq -r ".plugins.\"$plugin_name\".version" registry.json)
 
+            # registry.json is generated: an unreleased plugin (no releases.json row) has no entry; nothing to compare.
+            [[ "$registry_version" != "null" ]] || continue
             if [[ "$manifest_version" != "$registry_version" ]]; then
               echo "WARNING: Version mismatch for $plugin_name"
               echo "  plugin.json: $manifest_version"

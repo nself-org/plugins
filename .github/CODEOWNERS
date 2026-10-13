@@ -10,6 +10,10 @@
 
 # Plugin registry
 /registry.json @aric-nself
+/catalog.json @aric-nself
+/counts.json @aric-nself
+/releases.json @aric-nself
+/scripts/bundles.ref @aric-nself
 
 # Individual plugin directories
 /free/ @aric-nself

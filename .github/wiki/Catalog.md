@@ -50,6 +50,8 @@ bash scripts/plugin-counts.sh --check --free-only  # CI without the bundles toke
 verified, with the bundle membership and licensed slugs read back from the committed `catalog.json`; the job log says
 catalog and counts were not verified.
 
+`bash scripts/plugin-counts.sh --json` prints the generated `counts.json` on stdout and writes nothing (the read-only use the cli shim relies on).
+
 Exit codes: 0 ok, 1 drift or expired carry, 2 usage or generator failure, 3 precondition missing (no clone, no pinned commit).
 
 ## Counts

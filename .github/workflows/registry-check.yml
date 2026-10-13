@@ -357,6 +357,7 @@ jobs:
           repository: nself-org/bundles
           ref: ${{ steps.pin.outputs.bundles-ref }}
           path: bundles-checkout
+          persist-credentials: false
           token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
 
       - name: Projections match the generator (Mode A, registry.json + catalog.json + counts.json)

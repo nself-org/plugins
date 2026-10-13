@@ -80,6 +80,7 @@ jobs:
           repository: nself-org/bundles
           ref: ${{ steps.pins.outputs.bundles-ref }}
           path: bundles-checkout
+          persist-credentials: false
           token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
 
       - name: Mode A, registry.json + catalog.json + counts.json match the generator
