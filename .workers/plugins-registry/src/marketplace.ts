@@ -73,7 +73,8 @@ export interface RatingResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Bundle data — canonical from SPORT F06-BUNDLE-INVENTORY
+// Bundle data — the six canonical Bundles (task, chat, claw, family, sentry, clawde),
+// the membership the deployed index.js served; mirrors bundles.json (ADR-P6-03)
 // ---------------------------------------------------------------------------
 
 interface BundleDefinition {
@@ -84,35 +85,29 @@ interface BundleDefinition {
 }
 
 const BUNDLES: Record<string, BundleDefinition> = {
-  nclaw: {
-    name: "ɳClaw Bundle",
-    price: "$0.99/mo",
-    plugins: ["ai", "claw", "claw-web", "mux", "voice", "browser", "google", "notify", "cron"],
-    description: "Full AI assistant: email, calendar, news, budget, tools",
+  task: {
+    name: "ɳTask Bundle", price: "$0", description: "Free task-app backend: storage, jobs, search, webhooks, tokens",
+    plugins: ["storage", "notifications", "jobs", "search", "feature-flags", "audit-log", "webhooks", "tokens"],
+  },
+  chat: {
+    name: "ɳChat Bundle", price: "$0.99/mo", description: "Messaging with video calls, bots, SMS and support",
+    plugins: ["bots", "livekit", "nself-sms", "support"],
+  },
+  claw: {
+    name: "ɳClaw Bundle", price: "$0.99/mo", description: "Full AI assistant: email, calendar, news, budget, tools",
+    plugins: ["ai", "browser", "claw", "claw-budget", "claw-news", "claw-web", "cron", "google", "knowledge-base", "mcp", "mux", "notify", "voice"],
+  },
+  family: {
+    name: "ɳFamily Bundle", price: "$0.99/mo", description: "Private family social, photo sharing, activity feeds",
+    plugins: ["activity-feed", "calendar", "chat", "family", "family-geni", "geolocation", "moderation", "nself-csam", "photos", "social"],
+  },
+  sentry: {
+    name: "ɳSentry Bundle", price: "$0.99/mo", description: "Error tracking, uptime, status pages and on-call",
+    plugins: ["nself-alert-router", "nself-anomaly", "nself-audit", "nself-crash", "nself-cron-monitor", "nself-errors", "nself-incident-mgmt", "nself-oncall", "nself-rum", "nself-saas-gateway", "nself-slo-tracker", "nself-status-page", "nself-stripe", "nself-synthetic-monitor", "nself-uptime-monitor"],
   },
   clawde: {
-    name: "ClawDE+ Bundle",
-    price: "$1.99/mo",
-    plugins: ["realtime", "auth", "cms", "notify"],
-    description: "Cloud sync, premium models, team features",
-  },
-  ntv: {
-    name: "nTV Bundle",
-    price: "$0.99/mo",
-    plugins: ["media-processing", "streaming", "epg", "tmdb", "torrent-manager", "content-acquisition"],
-    description: "Media downloading, encoding, streaming, metadata",
-  },
-  nfamily: {
-    name: "nFamily Bundle",
-    price: "$0.99/mo",
-    plugins: ["social", "photos", "activity-feed", "moderation", "realtime", "cms", "chat"],
-    description: "Private family social, photo sharing, activity feeds",
-  },
-  nchat: {
-    name: "nChat Bundle",
-    price: "$0.99/mo",
-    plugins: ["chat", "livekit", "recording", "moderation", "bots", "realtime", "auth"],
-    description: "Messaging with video calls, bots, moderation",
+    name: "ClawDE Bundle", price: "$0.99/mo", description: "Cloud sync, premium models, team features",
+    plugins: ["auth", "cms", "realtime"],
   },
 };
 
@@ -135,7 +130,7 @@ const RECENCY_MAX = 15;
 const RECENCY_DECAY_DAYS = 60; // half-life for recency boost
 
 // AI-suite bundle slugs that get the maximum bundle boost
-const AI_BUNDLE_SLUGS: ReadonlySet<string> = new Set(["nclaw"]);
+const AI_BUNDLE_SLUGS: ReadonlySet<string> = new Set(["claw"]);
 
 function bundleBoost(bundle: string | null): number {
   if (!bundle) return BUNDLE_BOOST_NONE;
@@ -234,7 +229,8 @@ function categoryIcon(category: string): string {
 }
 
 function normaliseTier(tier: string): "free" | "pro" {
-  return tier === "pro" ? "pro" : "free";
+  // Fail closed: only the literal "free" is free; pro, max and anything else is licensed.
+  return tier === "free" ? "free" : "pro";
 }
 
 /** Validate a userHash — must be a 64-char lowercase hex string (SHA-256). */

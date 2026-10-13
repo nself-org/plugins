@@ -236,6 +236,46 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     assert.equal(res.status, 200);
   });
 
+  test('/marketplace uses the six canonical Bundles and filters by them', async () => {
+    const all = await (await call('/marketplace')).json();
+    assert.deepEqual(all.bundles.map((b) => b.slug), ['task', 'chat', 'claw', 'family', 'sentry', 'clawde']);
+    for (const old of ['nclaw', 'ntv', 'nfamily', 'nchat']) assert.ok(!all.bundles.some((b) => b.slug === old), old);
+    const task = await (await call('/marketplace?bundle=task')).json();
+    assert.deepEqual(task.plugins.map((p) => p.name), ['jobs']);
+    const claw = await (await call('/marketplace?bundle=claw')).json();
+    assert.ok(claw.plugins.length > 0 && claw.plugins.every((p) => ['ai', 'claw', 'notify'].includes(p.name)));
+  });
+
+  test('/marketplace never lists a licensed plugin as free (max tier -> licensed, excluded from tier=free)', async () => {
+    const all = await (await call('/marketplace')).json();
+    const ai = all.plugins.find((p) => p.name === 'ai');
+    assert.equal(ai.tier, 'pro');
+    assert.equal(ai.licenseRequired, true);
+    const free = await (await call('/marketplace?tier=free')).json();
+    assert.ok(!free.plugins.some((p) => p.name === 'ai' || p.name === 'claw'));
+    assert.ok(free.plugins.every((p) => p.licenseRequired === false));
+  });
+
+  test('/marketplace keeps the CLI fields (plugins, bundles, categories, stats) and the old envelope fields', async () => {
+    const body = await (await call('/marketplace')).json();
+    for (const k of ['plugins', 'bundles', 'categories', 'stats', 'version', 'fetchedAt', 'total']) assert.ok(k in body, k);
+    assert.equal(body.total, body.stats.total);
+    for (const k of ['total', 'free', 'pro', 'updatedAt']) assert.ok(k in body.stats, `stats.${k}`);
+  });
+
+  test('a rejecting KV inside a route is a JSON 500, never an unhandled rejection', async () => {
+    const kv = registryKv();
+    kv.delete = async () => { throw new Error('kv down'); };
+    const ctx = fakeCtx();
+    const res = await worker.fetch(
+      req('/api/sync', { method: 'POST', headers: { Authorization: 'Bearer fake-sync-token' } }),
+      { PLUGINS_KV: kv, GITHUB_SYNC_TOKEN: 'fake-sync-token' },
+      ctx,
+    );
+    assert.equal(res.status, 500);
+    assert.equal((await res.json()).error, 'internal server error');
+  });
+
   test('a cached pro registry serves without GH_ACCESS_TOKEN (cache-first, as index.js did)', async () => {
     const body = await (await call('/plugins')).json();
     assert.ok(body.plugins.some((p) => p.name === 'ai'));

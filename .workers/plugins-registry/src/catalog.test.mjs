@@ -10,6 +10,7 @@
 
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker from '../dist-test/index.mjs';
 import {
   fakeKv, fakeCtx, envelope, sha256, contentsResponse, sampleCatalog, req,
@@ -55,6 +56,30 @@ describe('GET /catalog.json', () => {
     assert.equal(res.headers.get('Cache-Control'), 'public, max-age=300');
     assert.match(res.headers.get('Content-Type'), /^application\/json/);
     assert.equal(res.headers.get('X-Cache'), 'MISS');
+  });
+
+  test('the real committed catalog.json is served: 200, ETag, then 304 (numeric schema_version)', async () => {
+    const real = JSON.parse(readFileSync(new URL('../../../catalog.json', import.meta.url), 'utf8'));
+    assert.equal(typeof real.schema_version, 'number', 'fixture check: the committed catalog uses a numeric schema_version');
+    for (const env of [{ PLUGINS_KV: fakeKv() }, { PLUGINS_KV: fakeKv(), GH_ACCESS_TOKEN: 'fake-token' }]) {
+      stubUpstream(real);
+      const first = await get('/catalog.json', env);
+      assert.equal(first.status, 200);
+      const body = await first.text();
+      assert.equal(body, JSON.stringify(real));
+      const tag = first.headers.get('ETag');
+      assert.equal(tag, `"${sha256(body)}"`);
+      assert.equal((await get('/catalog.json', env, { 'If-None-Match': tag })).status, 304);
+    }
+  });
+
+  test('CORS: preflight allows If-None-Match and the response exposes ETag', async () => {
+    stubUpstream(sampleCatalog());
+    const pre = await get('/catalog.json', {}, {});
+    assert.match(pre.headers.get('Access-Control-Expose-Headers'), /ETag/);
+    const ctx = fakeCtx();
+    const opt = await worker.fetch(req('/catalog.json', { method: 'OPTIONS' }), {}, ctx);
+    assert.match(opt.headers.get('Access-Control-Allow-Headers'), /If-None-Match/);
   });
 
   test('uses the Contents API with a token and the raw URL without one', async () => {

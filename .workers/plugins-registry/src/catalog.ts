@@ -54,14 +54,16 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 /**
- * True for a plausible catalog: an object with a schema_version string and a
+ * True for a plausible catalog: an object with a schema_version (number or string) and a
  * non-empty plugins collection. An empty or unversioned body is an upstream
  * failure, not a catalog, so it can never replace a good copy.
  */
 function looksLikeCatalog(data: unknown): data is Record<string, unknown> {
   if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
   const obj = data as Record<string, unknown>;
-  if (typeof obj["schema_version"] !== "string") return false;
+  // The committed catalog carries a numeric schema_version (1); accept a string too.
+  const version = obj["schema_version"];
+  if (typeof version !== "string" && typeof version !== "number") return false;
   const plugins = obj["plugins"];
   if (typeof plugins !== "object" || plugins === null) return false;
   return Object.keys(plugins).length > 0;

@@ -119,64 +119,64 @@ export default {
       // Route matching uses resolvedPath (strips /v1 prefix if present)
       // Health
       if (method === "GET" && resolvedPath === "/health") {
-        return handleHealth(env);
+        return await handleHealth(env);
       }
 
       // Registry (legacy compat)
       if (method === "GET" && (resolvedPath === "/registry.json" || resolvedPath === "/registry" || resolvedPath === "/")) {
-        return handleRegistry(url, env, ctx);
+        return await handleRegistry(url, env, ctx);
       }
 
       // Plugin list — must appear before /plugins/:name to prevent shadowing
       // S67-T02: /registry/list is an alias with explicit 60s CF edge cache header
       if (method === "GET" && (resolvedPath === "/plugins" || resolvedPath === "/registry/list")) {
-        return handlePluginList(url, env, ctx);
+        return await handlePluginList(url, env, ctx);
       }
 
       // Revocations — must appear before /plugins/:name to prevent "revocations" being
       // treated as a plugin name
       if (method === "GET" && resolvedPath === "/plugins/revocations") {
-        return handleRevocations(env);
+        return await handleRevocations(env);
       }
 
       // S58-T09: Author CRL endpoint.
       // CLI checks this on every plugin install and via daily cron.
       // Append-only: once revoked, entries are never removed.
       if (method === "GET" && resolvedPath === "/.well-known/revoked-authors.json") {
-        return handleRevokedAuthors(env);
+        return await handleRevokedAuthors(env);
       }
 
       // Single plugin (and sub-resources: /tarball, /signature, /:version)
       if (method === "GET" && resolvedPath.startsWith("/plugins/")) {
-        return handlePlugin(resolvedPath, env, ctx);
+        return await handlePlugin(resolvedPath, env, ctx);
       }
 
       // Categories
       if (method === "GET" && resolvedPath === "/categories") {
-        return handleCategories(env, ctx);
+        return await handleCategories(env, ctx);
       }
 
       // Manifest (CLI compat)
       if (method === "GET" && resolvedPath === "/manifest.json") {
-        return handleManifest(env, ctx);
+        return await handleManifest(env, ctx);
       }
 
       // Catalog — P7-PLUG-08 (strong ETag, 304)
       if (method === "GET" && resolvedPath === "/catalog.json") {
-        return handleCatalog(request, env, ctx);
+        return await handleCatalog(request, env, ctx);
       }
 
       // Bundles — P6-E4-W3-S3-T8 / ADR-P6-03
       if (method === "GET" && resolvedPath === "/bundles.json") {
-        return handleBundlesJson(env, ctx);
+        return await handleBundlesJson(env, ctx);
       }
       if (method === "GET" && resolvedPath === "/bundles-schema.json") {
-        return handleBundlesSchema(env, ctx);
+        return await handleBundlesSchema(env, ctx);
       }
 
       // Stats
       if (method === "GET" && resolvedPath === "/stats") {
-        return handleStats(env);
+        return await handleStats(env);
       }
 
       // Marketplace — GET /marketplace/ratings/:name (must appear before /marketplace)
@@ -267,14 +267,15 @@ export default {
         payload.stats.free = free.length;
         payload.stats.pro = pro.length;
         payload.stats.total = all.length;
-        return jsonResponse(payload, 200, {
+        // version, fetchedAt and total are the retired index.js envelope fields, kept additively.
+        return jsonResponse({ ...payload, version: "1.0.0", fetchedAt: payload.stats.updatedAt, total: all.length }, 200, {
           "Cache-Control": `public, max-age=${cacheTtl(env)}`,
         });
       }
 
       // Sync webhook
       if (method === "POST" && resolvedPath === "/api/sync") {
-        return handleSync(request, env, ctx);
+        return await handleSync(request, env, ctx);
       }
 
       return jsonResponse(
