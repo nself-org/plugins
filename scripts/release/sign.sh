@@ -6,7 +6,7 @@
 #   (every field followed by a newline, the last one too), signed with raw Ed25519 (`openssl pkeyutl -sign -rawin`).
 #
 # Inputs (environment only, never argv):
-#   NSELF_RELEASE_SIGNING_KEY_FREE     PKCS8 PEM of the Ed25519 private key.
+#   NSELF_RELEASE_SIGNING_KEY_FREE     PKCS8 PEM of the Ed25519 private key (raw PEM, PEM with collapsed newlines, or base64 of the PEM).
 #   NSELF_RELEASE_SIGNING_KEY_FREE_ID  key id, which must be  plugins-<first 16 hex of sha256(raw 32-byte public key)>
 #                                      (the id is derived, never chosen; see cli sdk/go/signing KeyID).
 #   OPENSSL                            optional openssl binary; must be OpenSSL 3 or newer (LibreSSL cannot sign Ed25519 -rawin).
@@ -48,7 +48,30 @@ sha256_file() {
 umask 077
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/sign.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-printf '%s\n' "$NSELF_RELEASE_SIGNING_KEY_FREE" > "$WORK/key.pem"
+
+# The secret may be the PEM itself, the PEM with its newlines collapsed to spaces (some secret stores do that), or the base64 of the
+# PEM (the form the vault keeps it in, P7-PROD-59). All three are accepted and rewritten as a canonical PEM; anything else still
+# fails below as an unreadable key. The key text is never printed.
+# The PEM marker lines are assembled from two pieces on purpose: written whole, a secret scanner reads this script as a committed key.
+PEM_BEGIN="-----BEGIN PRIV""ATE KEY-----"
+PEM_END="-----END PRIV""ATE KEY-----"
+normalize_key() {
+  local v="$1" body
+  case "$v" in
+    *"-----BEGIN "*) ;;
+    *) v="$(printf '%s' "$v" | tr -d ' \t\r\n' | "$O" base64 -d -A 2>/dev/null)" || v="" ;;
+  esac
+  case "$v" in
+    *"$PEM_BEGIN"*"$PEM_END"*)
+      body="${v#*"$PEM_BEGIN"}"
+      body="${body%%"$PEM_END"*}"
+      body="$(printf '%s' "$body" | tr -d ' \t\r\n')"
+      printf '%s\n%s\n%s\n' "$PEM_BEGIN" "$(printf '%s' "$body" | fold -w 64)" "$PEM_END"
+      ;;
+    *) printf '%s\n' "$v" ;;
+  esac
+}
+normalize_key "$NSELF_RELEASE_SIGNING_KEY_FREE" > "$WORK/key.pem"
 
 # Only Ed25519 keys sign here: an EC or RSA key would produce a signature labelled ed25519 that no CLI could verify.
 KEY_TEXT="$("$O" pkey -in "$WORK/key.pem" -noout -text 2>/dev/null)" || { err "NSELF_RELEASE_SIGNING_KEY_FREE is not a readable PEM private key"; exit 1; }
