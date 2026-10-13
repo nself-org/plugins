@@ -757,9 +757,9 @@
         "service_kind": "cli"
       },
       "category": "development",
-      "checksum": "d602d6df2b80264e8cb06c40f5e8a1dd9dc2d986b9accb8bdc657243f4004c96",
+      "checksum": "28dc4561c1275c6eaf53c472fc1ccbc85db5ad11cdfac057c6f0bb08fb5425e9",
       "checksums": {
-        "sha256": "d602d6df2b80264e8cb06c40f5e8a1dd9dc2d986b9accb8bdc657243f4004c96"
+        "sha256": "28dc4561c1275c6eaf53c472fc1ccbc85db5ad11cdfac057c6f0bb08fb5425e9"
       },
       "dependencies": [],
       "description": "Local CI gate runner: detects repo stack (Go/Node/Flutter/Dart), runs lint+test+build, scans secrets with gitleaks, then posts a GitHub commit status (nself-ci) via gh OAuth. Replaces billing-blocked GitHub Actions as the merge gate.",
@@ -774,6 +774,11 @@
       "min_nself_version": "1.4.12",
       "name": "ci",
       "releaseTag": "v1.2.7",
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "1AAx7LRTuzN1msPwkKImnq+YNGbYb/i1ly5DpqYu8cnNrMvBTP6nBNtXS8AQEyXGLMFZxrk5hY8ZNJMS143IBw=="
+      },
       "requires_license": false,
       "tables": [],
       "tags": [
@@ -2298,6 +2303,56 @@
       "tier": "free",
       "version": "1.2.6"
     },
+    "functions": {
+      "author": "nself",
+      "catalog": {
+        "commands": {
+          "command": "functions",
+          "subcommands": [
+            "delete",
+            "deploy",
+            "invoke",
+            "list",
+            "logs"
+          ]
+        },
+        "maturity": "implemented",
+        "requires": {
+          "nself": ">=1.4.12"
+        },
+        "service_kind": "cli"
+      },
+      "category": "utilities",
+      "checksum": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1",
+      "checksums": {
+        "sha256": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1"
+      },
+      "dependencies": [],
+      "description": "Deploy and manage nself serverless functions",
+      "download_url": "https://plugins.nself.org/plugins/functions/tarball",
+      "implementation": {
+        "entryPoint": "cmd/",
+        "language": "go"
+      },
+      "language": "go",
+      "license": "free",
+      "minNselfVersion": "1.4.12",
+      "min_nself_version": "1.4.12",
+      "name": "functions",
+      "releaseTag": "v1.2.7",
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "wmE4ZYQvOAAsXX9Kd01veLgy7O4YrtGqaEZ6QuKYZHE3LJMii+dZCv/qq7qvozBBt8w344K1Gq2Ua2bYH8YPBg=="
+      },
+      "requires_license": false,
+      "tables": [],
+      "tags": [],
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/functions-1.2.7.tar.gz",
+      "tier": "free",
+      "version": "1.2.7"
+    },
     "functions-v8": {
       "author": "nself",
       "catalog": {
@@ -3473,6 +3528,47 @@
       "tier": "free",
       "version": "1.2.6"
     },
+    "minio": {
+      "author": "nself",
+      "catalog": {
+        "maturity": "implemented",
+        "requires": {
+          "nself": ">=1.4.14"
+        },
+        "service_kind": "compose"
+      },
+      "category": "infrastructure",
+      "checksum": "045a82802a4d1fce7982212ba65c3c3ea15bf696e081acb02f68229bca726a77",
+      "checksums": {
+        "sha256": "045a82802a4d1fce7982212ba65c3c3ea15bf696e081acb02f68229bca726a77"
+      },
+      "dependencies": [],
+      "description": "MinIO compatibility service for projects that already store data in the core MinIO volume. Keeps the minio service name and the minio_data volume under v1.5, so existing objects stay readable through S3. New projects use the core SeaweedFS store.",
+      "download_url": "https://plugins.nself.org/plugins/minio/tarball",
+      "license": "MIT",
+      "minNselfVersion": "1.4.14",
+      "min_nself_version": "1.4.14",
+      "name": "minio",
+      "port": 9000,
+      "releaseTag": "v1.2.7",
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "VgefLQIuhQLv2fCDDJCOmR3j3dmuEN25Qz6yrMZB2+38dHSY/agwWmMRfjrbrOZ/yNTFzvoTMST2nlvz2hFhAg=="
+      },
+      "requires_license": false,
+      "tables": [],
+      "tags": [
+        "object-storage",
+        "s3",
+        "minio",
+        "compatibility"
+      ],
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/minio-1.2.7.tar.gz",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/minio-1.2.7.tar.gz",
+      "tier": "free",
+      "version": "1.2.7"
+    },
     "mlflow": {
       "author": "nself",
       "catalog": {
@@ -3910,7 +4006,9 @@
       "checksums": {
         "sha256": "1817c670945c8f511d60646bcaa10823afd35a37c1fff5f3966ab44740a2d9a5"
       },
-      "dependencies": [],
+      "dependencies": [
+        "minio"
+      ],
       "description": "Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization.",
       "download_url": "https://plugins.nself.org/plugins/nself-image/tarball",
       "language": "rust",
@@ -3956,7 +4054,9 @@
       "checksums": {
         "sha256": "c6c44b1dcfeaada6c34785cc78827b0f91c6e6c34f249678642eaffb7f7de583"
       },
-      "dependencies": [],
+      "dependencies": [
+        "minio"
+      ],
       "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
       "download_url": "https://plugins.nself.org/plugins/nself-pdf/tarball",
       "language": "go",
@@ -4460,6 +4560,75 @@
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-clawde-1.2.6.tar.gz",
       "tier": "free",
       "version": "1.2.6"
+    },
+    "plugin-dev": {
+      "author": "nself",
+      "catalog": {
+        "commands": {
+          "command": "plugin-dev",
+          "subcommands": [
+            "debug",
+            "dev",
+            "init",
+            "link",
+            "new",
+            "test",
+            "unlink"
+          ]
+        },
+        "maturity": "implemented",
+        "requires": {
+          "nself": ">=1.0.0"
+        },
+        "service_kind": "cli"
+      },
+      "category": "development",
+      "checksum": "9de14b9a6d20981d2cfe84e84fcc8d43180777b115a2b3e8cdc800b189224ecb",
+      "checksums": {
+        "platforms": {
+          "darwin-amd64": "8d1437a6f82509a7736638a18f949671e86cf9c57e4345f6263e18916d27d828",
+          "darwin-arm64": "8894871fdbddd89df1587d8eece12d98ad3cac30f4d075b6ab49652a9e1d7db6",
+          "linux-amd64": "53d6abcbbb74016dc91cca401730d776bb99a34218a15498717d7e66f8635844",
+          "linux-arm64": "da2c0500c510735d4044a5aac07b3e25c5c801423c8625438ec7af0d37c5c34e",
+          "windows-amd64": "5ffa2e2881851320140ce9819f9d61a693de8e67cee7d17b17c398e3854a9769"
+        },
+        "sha256": "9de14b9a6d20981d2cfe84e84fcc8d43180777b115a2b3e8cdc800b189224ecb"
+      },
+      "dependencies": [],
+      "description": "Plugin author tools: scaffold a plugin (init, new), link and unlink a local plugin directory, run it with hot reload (dev), attach a debugger (debug) and run its tests (test). Broken out of the core nself plugin command.",
+      "download_url": "https://plugins.nself.org/plugins/plugin-dev/tarball",
+      "implementation": {
+        "binaryName": "nself-plugin-dev",
+        "entryPoint": "cmd/",
+        "language": "go",
+        "pluginType": "cli"
+      },
+      "language": "go",
+      "license": "MIT",
+      "minNselfVersion": "1.0.0",
+      "min_nself_version": "1.0.0",
+      "name": "plugin-dev",
+      "releaseTag": "v1.2.7",
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "5w7OdIBA5kkiZ3KBZGPL8QjUbsfAtqcGxkBu7IqbuWlPb6uPmSOkcbKP1uk9Gdil3AHuHwhl8QwS8VPj3gssCw=="
+      },
+      "requires_license": false,
+      "tables": [],
+      "tags": [
+        "plugin",
+        "author",
+        "scaffold",
+        "dev",
+        "debug",
+        "test",
+        "link"
+      ],
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/plugin-dev-1.2.7.tar.gz",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/plugin-dev-1.2.7.tar.gz",
+      "tier": "free",
+      "version": "1.2.7"
     },
     "plugin-gauth": {
       "author": "nSelf",
@@ -5853,6 +6022,47 @@
       "tier": "free",
       "version": "1.2.6"
     },
+    "traefik": {
+      "author": "nself",
+      "catalog": {
+        "maturity": "experimental",
+        "requires": {
+          "nself": ">=1.4.12"
+        },
+        "service_kind": "compose"
+      },
+      "category": "infrastructure",
+      "checksum": "5df068fda09dd5000e0a7723635581238b844f994805f9d1b574977a3a0a4241",
+      "checksums": {
+        "sha256": "5df068fda09dd5000e0a7723635581238b844f994805f9d1b574977a3a0a4241"
+      },
+      "dependencies": [],
+      "description": "Traefik reverse proxy from the nSelf route model: file-provider configuration rendered from routes.json at route, TLS and upstream parity with nginx. No Docker socket, certificates from core.",
+      "download_url": "https://plugins.nself.org/plugins/traefik/tarball",
+      "implementation": {
+        "entryPoint": "cmd/render",
+        "language": "go"
+      },
+      "language": "go",
+      "license": "free",
+      "minNselfVersion": "1.4.12",
+      "min_nself_version": "1.4.12",
+      "name": "traefik",
+      "port": 8082,
+      "releaseTag": "v1.2.7",
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "fE4mGj4BUSzd316gWrOfDOxaqU0p/5y6Wj3HHMtKHR8ePfmD4emPH8VH7xBuX2LDgZO7ldnORg0VonkikwdoAA=="
+      },
+      "requires_license": false,
+      "tables": [],
+      "tags": [],
+      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.7/traefik-1.2.7.tar.gz",
+      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.7/traefik-1.2.7.tar.gz",
+      "tier": "free",
+      "version": "1.2.7"
+    },
     "transactional-email": {
       "author": "nself",
       "catalog": {
@@ -6261,7 +6471,7 @@
       "version": "1.2.6"
     }
   },
-  "plugins_count": 129,
+  "plugins_count": 133,
   "schema_version": "2.0.0",
   "tier": "free"
 }
