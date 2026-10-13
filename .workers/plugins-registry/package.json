@@ -2,7 +2,7 @@
   "name": "nself-plugin-registry",
   "version": "1.0.0",
   "description": "Cloudflare Worker for nself plugin registry API",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -14,9 +14,11 @@
     "secret:sync-token": "wrangler secret put GITHUB_SYNC_TOKEN",
     "whoami": "wrangler whoami",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/*.test.mjs"
+    "build:test": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=dist-test/index.mjs --log-level=warning",
+    "test": "pnpm run build:test && node --test src/*.test.mjs"
   },
   "devDependencies": {
+    "esbuild": "0.17.19",
     "wrangler": "^3.0.0",
     "typescript": "^5.9.0",
     "@cloudflare/workers-types": "^4.20250101.0"

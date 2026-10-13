@@ -9,6 +9,48 @@ A drift gate (`plugin-counts.yml`, `registry-check.yml`) fails when a committed 
 what the generator produces. Its shape is defined by the JSON Schema at `registry-schema.json`
 and checked by `shared/validate-registry.sh`.
 
+## Worker endpoints
+
+`plugins.nself.org` is the Cloudflare worker in `.workers/plugins-registry/`. It has one source,
+`src/index.ts` (plus the modules it imports); `wrangler.toml` deploys `main = "src/index.ts"`.
+Every path also answers under a `/v1` prefix. Tests run with `pnpm test` there: it bundles
+`src/index.ts` with esbuild and runs `node --test` against the bundle.
+
+| Route | What it serves |
+|---|---|
+| `GET /catalog.json` | The generated catalog, compact JSON, see below |
+| `GET /registry.json`, `/registry`, `/` | Combined free + licensed registry (`?tier=free\|pro`, `?nocache=1`) |
+| `GET /plugins`, `/registry/list` | Plugin list (`?tier`, `?category`) |
+| `GET /plugins/:name`, `/plugins/:name/:version` | One plugin |
+| `GET /plugins/:name/tarball` | 302 to the free tarball (R2 first, GitHub Releases fallback). **401 for every tier other than `free`** |
+| `GET /plugins/:name/signature` | Ed25519 signature metadata |
+| `GET /plugins/revocations` | Revoked plugin versions (`revoked`; `revocations` is the same list under the old key) |
+| `GET /.well-known/revoked-authors.json` | Revoked author keys |
+| `GET /categories`, `/manifest.json`, `/stats`, `/health` | Categories, flat manifest, counters, health |
+| `GET /bundles.json`, `/bundles-schema.json` | Bundle membership map and its schema (`X-Cache` HIT or MISS) |
+| `GET /marketplace`, `/marketplace/ratings/:name` | Marketplace view and ratings |
+| `POST /marketplace/ratings/:name`, `/plugins/:name/install-event` | Submit a rating, count an install |
+| `POST /api/sync` | Bearer `GITHUB_SYNC_TOKEN`; drops every KV cache key (including `catalog:json`) and refetches |
+
+### `/catalog.json`
+
+The worker reads `catalog.json` from the plugins repo (GitHub Contents API with the token, else the raw URL),
+serialises it compactly (no indentation), and keeps the body and its hash together in KV (`catalog:json`, fresh for
+`CACHE_TTL`, 300 s).
+
+- `ETag: "<sha256 hex of the exact body bytes>"`: a strong tag. The same catalog gives the same tag from either source; any change to the catalog changes it.
+- `If-None-Match` with that tag (also a list of tags, a `W/` form, or `*`) returns `304` with an empty body and the same `ETag`.
+- `Cache-Control: public, max-age=300`, `Content-Type: application/json`, `X-Cache: HIT | MISS | STALE`.
+- If GitHub cannot be reached and an expired copy exists, the worker serves it as `STALE` (`max-age=60`); with no copy at all it returns `502`.
+- A fetched body that is not a catalog (not an object with a `plugins` collection) is never cached or served.
+
+### Licensed tarballs stay behind the licence gate
+
+`/plugins/:name/tarball` hands out a redirect only when the registry entry's tier is exactly `free`. `pro`, `max`, an unknown or
+future tier, an odd spelling (`FREE`, `free `) and a missing tier on a licensed registry all get `401` with a pointer to
+`ping.nself.org/plugins/:name/download`, before the revocation check runs. The route tests cover encoded slashes and dots,
+dot segments, case changes, version aliases, doubled slashes, `/v1` prefixes, other methods and hostile headers.
+
 ## Changing the registry
 
 | You want to | Do this |

@@ -8,7 +8,7 @@
  * Returns a full marketplace view consumed by Admin UI and web/cloud.
  */
 
-import type { Env, PluginEntry } from "./registry.ts";
+import { ratingsKv, type Env, type PluginEntry } from "./registry.ts";
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -257,7 +257,7 @@ async function readRatingAggregate(
 ): Promise<RatingAggregate> {
   const key = `rating:${sanitisePluginName(pluginName)}`;
   try {
-    const raw = await env.RATINGS_KV.get<RatingAggregate>(key, "json");
+    const raw = await ratingsKv(env).get<RatingAggregate>(key, "json");
     if (raw) return raw;
   } catch {
     // fall through to default
@@ -271,7 +271,7 @@ async function writeRatingAggregate(
   aggregate: RatingAggregate,
 ): Promise<void> {
   const key = `rating:${sanitisePluginName(pluginName)}`;
-  await env.RATINGS_KV.put(key, JSON.stringify(aggregate));
+  await ratingsKv(env).put(key, JSON.stringify(aggregate));
 }
 
 // ---------------------------------------------------------------------------
@@ -647,7 +647,7 @@ async function isGetRateLimited(
 
   let count = 0;
   try {
-    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    const raw = await ratingsKv(env).get<{ count: number }>(key, "json");
     count = raw?.count ?? 0;
   } catch {
     return { limited: false, retryAfter: 60 }; // KV read failure — allow through
@@ -663,7 +663,7 @@ async function isGetRateLimited(
 
   // Increment counter with 90s TTL (covers window overlap)
   try {
-    await env.RATINGS_KV.put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
+    await ratingsKv(env).put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
   } catch {
     // Best-effort counter increment — not fatal
   }
@@ -687,7 +687,7 @@ async function isRateLimited(env: MarketplaceEnv, ip: string): Promise<{ limited
 
   let count = 0;
   try {
-    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    const raw = await ratingsKv(env).get<{ count: number }>(key, "json");
     count = raw?.count ?? 0;
   } catch {
     return { limited: false, retryAfter: 60 }; // KV read failure — allow through
@@ -704,7 +704,7 @@ async function isRateLimited(env: MarketplaceEnv, ip: string): Promise<{ limited
 
   // Increment counter with 90s TTL
   try {
-    await env.RATINGS_KV.put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
+    await ratingsKv(env).put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
   } catch {
     // Best-effort counter increment — not fatal
   }
@@ -724,7 +724,7 @@ async function isUserHashDedupBlocked(
 ): Promise<boolean> {
   const key = `rl:uh:${sanitisePluginName(pluginName)}:${userHash}`;
   try {
-    const raw = await env.RATINGS_KV.get(key, "text");
+    const raw = await ratingsKv(env).get(key, "text");
     return raw !== null; // exists = submitted within 7 days
   } catch {
     return false; // KV read failure — allow through
@@ -741,7 +741,7 @@ async function writeUserHashDedup(
 ): Promise<void> {
   const key = `rl:uh:${sanitisePluginName(pluginName)}:${userHash}`;
   try {
-    await env.RATINGS_KV.put(key, "1", { expirationTtl: 7 * 24 * 60 * 60 });
+    await ratingsKv(env).put(key, "1", { expirationTtl: 7 * 24 * 60 * 60 });
   } catch {
     // Best-effort
   }
@@ -887,7 +887,7 @@ async function readInstallCount(
 ): Promise<number> {
   const key = `${KV_INSTALL_PREFIX}${sanitisePluginName(pluginName)}`;
   try {
-    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    const raw = await ratingsKv(env).get<{ count: number }>(key, "json");
     return raw?.count ?? 0;
   } catch {
     return 0;
@@ -962,7 +962,7 @@ export async function handleInstallEvent(
 
   // Check dedup — KV free tier: ~1K writes/day. Using presence check (get returns null on miss).
   try {
-    const existing = await env.RATINGS_KV.get(dedupKey, "text");
+    const existing = await ratingsKv(env).get(dedupKey, "text");
     if (existing !== null) {
       // Already counted this week — no-op
       const count = await readInstallCount(env, safePlugin);
@@ -976,16 +976,16 @@ export async function handleInstallEvent(
   const countKey = `${KV_INSTALL_PREFIX}${safePlugin}`;
   let newCount = 1;
   try {
-    const current = await env.RATINGS_KV.get<{ count: number }>(countKey, "json");
+    const current = await ratingsKv(env).get<{ count: number }>(countKey, "json");
     newCount = (current?.count ?? 0) + 1;
-    await env.RATINGS_KV.put(countKey, JSON.stringify({ count: newCount, lastUpdated: new Date().toISOString() }));
+    await ratingsKv(env).put(countKey, JSON.stringify({ count: newCount, lastUpdated: new Date().toISOString() }));
   } catch {
     return { ok: false, status: 500, error: "Failed to update install count" };
   }
 
   // Write dedup key with 8-day TTL (covers full week + buffer)
   try {
-    await env.RATINGS_KV.put(dedupKey, "1", { expirationTtl: 8 * 24 * 60 * 60 });
+    await ratingsKv(env).put(dedupKey, "1", { expirationTtl: 8 * 24 * 60 * 60 });
   } catch {
     // Best-effort dedup — not fatal
   }

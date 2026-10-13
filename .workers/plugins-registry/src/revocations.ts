@@ -28,7 +28,11 @@ async function getRevocationList(env: Env): Promise<RevocationEntry[]> {
     const raw = await kv.get(KV_REVOCATIONS, "text");
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as RevocationEntry[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    // The retired index.js wrote { plugin, version, ... }; read both spellings.
+    return (parsed as Array<RevocationEntry & { plugin?: string }>).map((r) =>
+      r.name === undefined && r.plugin !== undefined ? { ...r, name: r.plugin } : r,
+    );
   } catch {
     return [];
   }
@@ -42,8 +46,11 @@ async function getRevocationList(env: Env): Promise<RevocationEntry[]> {
 export async function handleRevocations(env: Env): Promise<Response> {
   const list = await getRevocationList(env);
 
-  const body: RevocationListResponse = {
+  // `revoked` is the key the CLI reads; `revocations` is the retired index.js
+  // spelling, kept so any client written against the deployed worker still parses.
+  const body: RevocationListResponse & { revocations: RevocationEntry[] } = {
     revoked: list,
+    revocations: list,
     fetchedAt: new Date().toISOString(),
     count: list.length,
   };

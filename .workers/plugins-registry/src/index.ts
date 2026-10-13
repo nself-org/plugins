@@ -14,8 +14,14 @@
  *   GET /plugins/revocations             — Revocation list (polled hourly by CLI)
  *   GET /registry.json                   — Combined registry (legacy CLI compat)
  *   GET /registry                        — Alias for /registry.json
+ *   GET /registry/list                   — Alias for /plugins with a 60 s edge cache
+ *   GET /marketplace/ratings/:name       — Ratings for one plugin
+ *   POST /marketplace/ratings/:name      — Submit a rating
+ *   POST /plugins/:name/install-event    — Install counter (fire-and-forget from the CLI)
+ *   (every path also answers under /v1/…)
  *   GET /categories                      — Category list
  *   GET /manifest.json                   — Flat CLI manifest for nself plugin outdated
+ *   GET /catalog.json                    — Free + licensed catalog (strong ETag, 304 on If-None-Match)
  *   GET /bundles.json                    — Bundle-to-plugin map (ADR-P6-03)
  *   GET /bundles-schema.json             — Schema for /bundles.json
  *   GET /marketplace                     — Enriched marketplace view
@@ -29,6 +35,7 @@
  *   registry:combined  — merged output (timestamp envelope)
  *   bundles-json-v1    — bundles.json (timestamp envelope)
  *   bundles-schema-v1  — bundles-schema.json (timestamp envelope)
+ *   catalog:json       — catalog.json: compact body + sha256 ETag (timestamp envelope)
  *   revocations:list   — JSON array of RevocationEntry
  *   revocations:authors — JSON array of RevokedAuthorEntry (S58-T09)
  *   stats:global       — request counters
@@ -36,18 +43,20 @@
  * Secrets (set via `wrangler secret put`):
  *   SIGNING_PRIVATE_KEY  — Ed25519 seed, 32 bytes as 64 lowercase hex chars
  *   PUBLIC_KEY_HEX       — Ed25519 public key, 32 bytes as 64 lowercase hex chars
+ *                          (SIGNING_PUBLIC_KEY, the retired index.js name, is accepted as an alias)
  *   GH_ACCESS_TOKEN      — Fine-grained PAT (contents:read on plugins + bundles)
  *   GITHUB_SYNC_TOKEN    — Bearer token for POST /api/sync
  */
 
 import { signPlugin, canonicalPluginString } from "./sign.ts";
+import { corsHeaders, jsonResponse } from "./http.ts";
+import { handleBundlesJson, handleBundlesSchema } from "./bundles.ts";
+import { handleCatalog, fetchCatalog, KV_CATALOG } from "./catalog.ts";
 import { handleRevocations, isRevoked } from "./revocations.ts";
 import {
   fetchFreeRegistry,
   fetchProRegistry,
   fetchAllPlugins,
-  fetchBundlesJson,
-  fetchBundlesSchema,
   validateBundlesJson,
   KV_BUNDLES_JSON,
   KV_BUNDLES_SCHEMA,
@@ -75,33 +84,6 @@ import {
 } from "./marketplace.ts";
 import type { MarketplaceEnv } from "./marketplace.ts";
 import { resolveApiVersion, addApiVersionHeader } from "./middleware/api-version.ts";
-
-// ---------------------------------------------------------------------------
-// CORS helpers
-// ---------------------------------------------------------------------------
-
-function corsHeaders(): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
-}
-
-function jsonResponse(
-  body: unknown,
-  status = 200,
-  extra: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body, null, 2), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders(),
-      ...extra,
-    },
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Main fetch handler
@@ -179,6 +161,11 @@ export default {
       // Manifest (CLI compat)
       if (method === "GET" && resolvedPath === "/manifest.json") {
         return handleManifest(env, ctx);
+      }
+
+      // Catalog — P7-PLUG-08 (strong ETag, 304)
+      if (method === "GET" && resolvedPath === "/catalog.json") {
+        return handleCatalog(request, env, ctx);
       }
 
       // Bundles — P6-E4-W3-S3-T8 / ADR-P6-03
@@ -296,8 +283,11 @@ export default {
             "GET /plugins/:name/:version",
             "GET /plugins/revocations",
             "GET /registry.json",
+            "GET /registry/list",
+            "GET /.well-known/revoked-authors.json",
             "GET /categories",
             "GET /manifest.json",
+            "GET /catalog.json",
             "GET /bundles.json",
             "GET /bundles-schema.json",
             "GET /marketplace",
@@ -321,14 +311,32 @@ export default {
 // GET /health
 // ---------------------------------------------------------------------------
 
+/** Ed25519 public key hex: PUBLIC_KEY_HEX, or the retired index.js name SIGNING_PUBLIC_KEY. */
+function publicKeyHex(env: Env): string | undefined {
+  return env.PUBLIC_KEY_HEX ?? env.SIGNING_PUBLIC_KEY;
+}
+
 function handleHealth(env: Env): Response {
   return jsonResponse({
     status: "ok",
     service: "nself-plugin-registry",
     version: env.PLUGIN_REGISTRY_VERSION ?? env.REGISTRY_VERSION ?? "1.0.0",
     ts: new Date().toISOString(),
+    // `timestamp` and `features` are the retired index.js health fields.
+    timestamp: new Date().toISOString(),
+    features: [
+      "dual-registry",
+      "kv-cache",
+      "tier-filter",
+      "github-api-fetch",
+      "plugin-list",
+      "tarball-redirect",
+      "ed25519-signatures",
+      "revocations",
+      "catalog-etag",
+    ],
     signing: {
-      configured: Boolean(env.SIGNING_PRIVATE_KEY && env.PUBLIC_KEY_HEX),
+      configured: Boolean(env.SIGNING_PRIVATE_KEY && publicKeyHex(env)),
     },
   });
 }
@@ -434,10 +442,11 @@ async function handlePlugin(path: string, env: Env, ctx: ExecutionContext): Prom
 // below. This switch is exhaustive over PluginTier: adding a 4th tier
 // without adding a case here is a TypeScript compile error (via the `never`
 // assignment in `default`), so the guard cannot silently miss a new paid
-// tier the way it missed "max". index.js — the file wrangler.toml actually
-// deploys (`main = "src/index.js"`) — carries a runtime-fail-safe twin of
-// this same rule (isDirectDownloadTier); that file, not this one, is what
-// serves plugins.nself.org today.
+// tier the way it missed "max". It is also fail-safe at runtime: registry
+// data is not type-checked, so any value that is not the literal "free"
+// (a future tier, a typo, undefined) is refused. This is the only source
+// (src/index.js was collapsed into it in P7-PLUG-08), and it is what
+// wrangler.toml deploys.
 function isDirectDownloadTier(tier: PluginTier): boolean {
   switch (tier) {
     case "free":
@@ -447,7 +456,8 @@ function isDirectDownloadTier(tier: PluginTier): boolean {
       return false;
     default: {
       const _exhaustive: never = tier;
-      return _exhaustive;
+      void _exhaustive;
+      return false;
     }
   }
 }
@@ -540,7 +550,7 @@ async function handlePluginSignature(plugin: PluginEntry, env: Env): Promise<Res
       tarballURL,
       signature,
       algorithm: "ed25519",
-      publicKey: env.PUBLIC_KEY_HEX ?? null,
+      publicKey: publicKeyHex(env) ?? null,
       signedFor: canonicalPluginString(name, version, tarballURL),
     },
     200,
@@ -651,58 +661,6 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
 }
 
 // ---------------------------------------------------------------------------
-// GET /bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03).
-//
-// Serves the bundle-to-plugin membership map from the Bundles repo (today; the
-// nself-org/bundles repo after the rename lands), cached in PLUGINS_KV under
-// its own key (bundles-json-v1, distinct from the registry:* keys) so a
-// stale registry cache and a stale bundles.json cache invalidate
-// independently. Cache-Control matches the ticket guide's stated convention
-// (s-maxage + stale-while-revalidate) rather than this worker's usual plain
-// max-age, since bundles.json is fetched by CDN edges more aggressively than
-// the per-request registry endpoints.
-// ---------------------------------------------------------------------------
-
-const BUNDLES_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
-
-async function handleBundlesJson(env: Env, ctx: ExecutionContext): Promise<Response> {
-  const data = await fetchBundlesJson(env, ctx);
-  if (data === null) {
-    return jsonResponse(
-      { error: "bundles.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset" },
-      502,
-    );
-  }
-
-  const { valid, errors } = validateBundlesJson(data);
-  if (!valid) {
-    console.error("bundles.json failed schema validation:", errors.join("; "));
-    return jsonResponse(
-      { error: "bundles.json failed schema validation", details: errors },
-      502,
-    );
-  }
-
-  return jsonResponse(data, 200, { "Cache-Control": BUNDLES_CACHE_CONTROL });
-}
-
-// ---------------------------------------------------------------------------
-// GET /bundles-schema.json — the schema bundles.json validates against.
-// Passthrough + cache only; not itself schema-validated.
-// ---------------------------------------------------------------------------
-
-async function handleBundlesSchema(env: Env, ctx: ExecutionContext): Promise<Response> {
-  const data = await fetchBundlesSchema(env, ctx);
-  if (data === null) {
-    return jsonResponse(
-      { error: "bundles-schema.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset" },
-      502,
-    );
-  }
-  return jsonResponse(data, 200, { "Cache-Control": BUNDLES_CACHE_CONTROL });
-}
-
-// ---------------------------------------------------------------------------
 // GET /.well-known/revoked-authors.json — Author Certificate Revocation List
 // (S58-T09)
 //
@@ -799,14 +757,16 @@ async function handleSync(
       kv.delete("registry:pro"),
       kv.delete(KV_COMBINED),
       kv.delete(KV_MANIFEST),
+      kv.delete(KV_CATALOG),
       kv.delete(KV_BUNDLES_JSON),
       kv.delete(KV_BUNDLES_SCHEMA),
     ]);
   }
 
-  const [freeResult, proResult] = await Promise.allSettled([
+  const [freeResult, proResult, catalogResult] = await Promise.allSettled([
     fetchFreeRegistry(env, ctx, true),
     fetchProRegistry(env, ctx, true),
+    fetchCatalog(env, ctx, true),
   ]);
 
   const freeCount = freeResult.status === "fulfilled" ? freeResult.value.length : 0;
@@ -836,6 +796,7 @@ async function handleSync(
     totalCount: freeCount + proCount,
     freeError,
     proError,
+    catalogSynced: catalogResult.status === "fulfilled" && catalogResult.value?.cache === "MISS",
     timestamp: new Date().toISOString(),
   });
 }
@@ -873,4 +834,4 @@ function toTitleCase(str: string): string {
 
 // Re-export types for external consumers
 export type { Env, PluginEntry, PluginListResponse, KVEnvelope };
-export { isDirectDownloadTier, handlePluginTarball };
+export { isDirectDownloadTier, handlePluginTarball, validateBundlesJson, handleBundlesJson, handleCatalog };
