@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
 
-	sdk "github.com/nself-org/plugin-sdk"
 	"github.com/nself-org/nself-content-acquisition/internal"
+	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func main() {
@@ -32,6 +33,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	internal.MustBootMigrations(context.Background(), pool)
+
 	db := internal.NewDB(pool)
 	if err := db.InitSchema(); err != nil {
 		log.Fatalf("content-acquisition: schema init failed: %v", err)
@@ -43,6 +46,7 @@ func main() {
 	r.Use(sdk.Logger)
 	r.Use(sdk.Recovery)
 	r.Use(sdk.RequestID)
+	r.Get("/health", internal.BootHealthHandler(pool))
 
 	internal.RegisterRoutes(r, db)
 

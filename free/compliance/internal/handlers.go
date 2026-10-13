@@ -46,10 +46,11 @@ func decode(r *http.Request, dst any) error {
 // -------------------------------------------------------------------------
 
 func HealthHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":    "ok",
-		"plugin":    "compliance",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":     "ok",
+		"plugin":     "compliance",
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"migrations": bootMigrationsHealth(w),
 	})
 }
 

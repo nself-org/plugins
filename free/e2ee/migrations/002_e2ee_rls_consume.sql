@@ -17,6 +17,7 @@
 -- Allow any same-app authenticated user to consume an unconsumed one-time prekey.
 -- WITH CHECK forces the post-image to remain in-app and to be the consumed state,
 -- so this policy cannot be used to un-consume or to move a row to another app.
+DROP POLICY IF EXISTS np_e2ee_one_time_prekeys_consume ON np_e2ee_one_time_prekeys;
 CREATE POLICY np_e2ee_one_time_prekeys_consume ON np_e2ee_one_time_prekeys
     FOR UPDATE
     USING (
@@ -29,6 +30,7 @@ CREATE POLICY np_e2ee_one_time_prekeys_consume ON np_e2ee_one_time_prekeys
     );
 
 -- Same for Kyber (ML-KEM-1024) one-time prekeys.
+DROP POLICY IF EXISTS np_e2ee_kyber_prekeys_consume ON np_e2ee_kyber_prekeys;
 CREATE POLICY np_e2ee_kyber_prekeys_consume ON np_e2ee_kyber_prekeys
     FOR UPDATE
     USING (
@@ -43,6 +45,7 @@ CREATE POLICY np_e2ee_kyber_prekeys_consume ON np_e2ee_kyber_prekeys
 -- The served-bundle audit row is INSERTed by the REQUESTER (not the key owner),
 -- so 001's owner-only default would deny it. Allow a same-app requester to
 -- record their own served-bundle audit row.
+DROP POLICY IF EXISTS np_e2ee_prekey_bundles_served_insert ON np_e2ee_prekey_bundles_served;
 CREATE POLICY np_e2ee_prekey_bundles_served_insert ON np_e2ee_prekey_bundles_served
     FOR INSERT
     WITH CHECK (

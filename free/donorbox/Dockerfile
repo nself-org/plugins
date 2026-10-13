@@ -14,7 +14,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /donorbox ./cmd/
 
 FROM alpine:3.20
-RUN apk --no-cache add ca-certificates tzdata wget
+# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 COPY --from=builder /donorbox /usr/local/bin/donorbox
 EXPOSE 3074
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

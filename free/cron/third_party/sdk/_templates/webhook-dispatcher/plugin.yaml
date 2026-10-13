@@ -1,0 +1,27 @@
+name: webhook-dispatcher
+version: 0.1.0
+tier: free
+license: MIT
+description: Webhook dispatcher plugin — receives events and fans out to configured endpoints.
+author: your-name
+port: 3901
+schema: np_webhook_dispatcher
+health: /webhook-dispatcher/healthz
+endpoints:
+  - POST /webhook-dispatcher/ingest
+  - GET  /webhook-dispatcher/targets
+  - POST /webhook-dispatcher/targets
+  - DELETE /webhook-dispatcher/targets/:id
+systemDependencies:
+  - postgres
+  - redis
+depends: []
+env:
+  WEBHOOK_DISPATCHER_SECRET:
+    required: true
+    description: HMAC signing secret for inbound webhook validation
+    default: ""
+  WEBHOOK_DISPATCHER_MAX_RETRIES:
+    required: false
+    description: Max delivery retries per target (default 3)
+    default: "3"

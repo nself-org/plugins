@@ -3,14 +3,14 @@
 # ~/.nself/plugins/bin/nself-costs and execs it directly; this Dockerfile
 # exists only so CI can build+lint the plugin the same way service plugins
 # are built, and to hand the resulting /plugin binary to the release pipeline.
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.* ./
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /plugin ./cmd/
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
+# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plugin /plugin
 ENTRYPOINT ["/plugin"]

@@ -12,11 +12,12 @@ import (
 
 // Health returns 200 OK with plugin metadata.
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":    "ok",
-		"plugin":    "e2ee",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version":   "1.0.0",
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":     "ok",
+		"plugin":     "e2ee",
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"version":    "1.0.0",
+		"migrations": bootMigrationsHealth(w),
 	})
 }
 

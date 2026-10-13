@@ -13,7 +13,7 @@
 # Stage 1: builder
 FROM golang:1.26-alpine AS builder
 
-RUN apk add --no-cache git
+# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
 
 WORKDIR /build
 
@@ -26,7 +26,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /nself-cron ./cmd/main.go
 # Stage 2: runtime
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates wget
+# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 COPY --from=builder /nself-cron /usr/local/bin/nself-cron
 

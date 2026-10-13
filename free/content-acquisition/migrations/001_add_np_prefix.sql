@@ -2,7 +2,6 @@
 -- Run this on existing installations before upgrading to the latest plugin version.
 -- These tables did not have the required np_ prefix in earlier releases.
 
-BEGIN;
 
 ALTER TABLE IF EXISTS acquisition_queue RENAME TO np_contentacquisition_acquisition_queue;
 ALTER TABLE IF EXISTS acquisition_history RENAME TO np_contentacquisition_acquisition_history;
@@ -16,4 +15,3 @@ BEGIN
   END IF;
 END $$;
 
-COMMIT;
