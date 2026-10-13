@@ -103,22 +103,24 @@ for f in "$DIR"/*.tar.gz; do
     continue
   fi
 
-  sig_json="$(jq -c --arg s "$slug" '.releases[$s].release_signature // empty' "$RELEASES")"
-  if [ -z "$sig_json" ]; then
+  # jq compares the exact strings (a trailing newline in key_id or alg is a different string) and reads sig with -j so nothing is trimmed.
+  # sig must be canonical base64 of 64 bytes: 86 characters and "==", the same text cli sdk/go/signing EncodeSig writes and DecodeSig accepts.
+  if [ "$(jq -r --arg s "$slug" '.releases[$s].release_signature | type' "$RELEASES")" = "null" ]; then
     err "unsigned: $slug $version"
     fail=1
     continue
   fi
-  alg="$(jq -r '.alg // ""' <<<"$sig_json")"
-  key_id="$(jq -r '.key_id // ""' <<<"$sig_json")"
-  sig="$(jq -r '.sig // ""' <<<"$sig_json")"
-  if [ "$alg" != "ed25519" ] || [ "$key_id" != "$EXPECTED_ID" ] || [ -z "$sig" ]; then
+  sig="$(jq -j --arg s "$slug" --arg id "$EXPECTED_ID" '.releases[$s].release_signature
+    | select(type == "object" and .alg == "ed25519" and .key_id == $id and (.sig | type) == "string" and (.sig | test("\\A[A-Za-z0-9+/]{86}==\\z")))
+    | .sig' "$RELEASES")"
+  if [ -z "$sig" ]; then
     err "signature mismatch: $slug $version"
     fail=1
     continue
   fi
   printf 'nself-plugin-v1\n%s\n%s\n%s\n' "$slug" "$version" "$actual" > "$WORK/msg"
   if ! printf '%s' "$sig" | "$O" base64 -d -A > "$WORK/sig" 2>/dev/null || [ "$(wc -c < "$WORK/sig" | tr -d ' ')" != "64" ] ||
+     [ "$("$O" base64 -A -in "$WORK/sig")" != "$sig" ] ||
      ! "$O" pkeyutl -verify -rawin -pubin -inkey "$PUB" -in "$WORK/msg" -sigfile "$WORK/sig" >/dev/null 2>&1; then
     err "signature mismatch: $slug $version"
     fail=1

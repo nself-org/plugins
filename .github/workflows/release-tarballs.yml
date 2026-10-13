@@ -3,11 +3,13 @@ name: Release Plugin Tarballs (Free)
 # One tag push (v*) or manual dispatch with a tag runs four jobs, each with only the permissions and secrets it needs:
 #   build         deterministic source + per-platform tarballs (scripts/deterministic-tar.sh); no secrets, read-only token.
 #   publish       uploads the missing tarballs to the GitHub Release (never --clobber), writes the .sha256 files from the PUBLISHED
-#                 bytes and mirrors those bytes to Cloudflare R2; holds the R2 secrets, never the signing key.
+#                 bytes, mirrors those bytes to Cloudflare R2 and attests build provenance for the tarballs this run built and the
+#                 Release serves unchanged; records the published sha256 list the signer is held to. Holds the R2 secrets, never the
+#                 signing key.
 #   sign          bound to the protected Environment `release-signing` (required reviewer): the only job that can read the free-tier
-#                 signing key (NSELF_RELEASE_SIGNING_KEY_FREE + _ID). Downloads what is on the Release, signs the source tarballs
-#                 per hq PLUG D7 (scripts/release/sign.sh) and attaches GitHub build-provenance attestations. The licensed key is
-#                 never here. Runs the workflow's own commit of sign.sh, the code the reviewer approved.
+#                 signing key (NSELF_RELEASE_SIGNING_KEY_FREE + _ID). Downloads what is on the Release, refuses it unless it is
+#                 byte-for-byte what publish recorded, and signs the source tarballs per hq PLUG D7 (scripts/release/sign.sh). The
+#                 licensed key is never here. Runs the tag's own commit of sign.sh, the code the reviewer approved.
 #   release-data  re-downloads the published bytes, writes sha256 + release_signature into releases.json
 #                 (scripts/verify-published-checksums.sh --write --signatures) and opens the release-data PR with the workflow's own
 #                 GITHUB_TOKEN. No PAT, no cross-repo trigger. The projections (registry.json, catalog.json, counts.json) need the
@@ -44,7 +46,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
           persist-credentials: false
 
       - name: Resolve release tag
@@ -56,6 +57,12 @@ jobs:
           TAG="${INPUT_TAG:-$REF_NAME}"
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
             echo "ERROR: '$TAG' is not a release tag (vMAJOR.MINOR.PATCH[-suffix])"
+            exit 1
+          fi
+          # Every job checks out the commit the run started from, and the concurrency group is that ref. A manual run must therefore
+          # start from the tag itself ("Use workflow from: Tag"), so the code that builds, signs and records is the tag's code.
+          if [ "$GITHUB_REF" != "refs/tags/${TAG}" ]; then
+            echo "ERROR: start this workflow from the tag ${TAG} (ref is ${GITHUB_REF})"
             exit 1
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -281,6 +288,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       TAG: ${{ needs.build.outputs.tag }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -364,18 +373,54 @@ jobs:
           mkdir -p published
           gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir published --pattern '*.tar.gz'
           fail=0
+          mkdir -p attest
+          : > not-attested.txt
           for f in dist/*.tar.gz; do
             name="$(basename "$f")"
             if [ ! -f "published/${name}" ]; then
               echo "ERROR: ${name} is not on release ${TAG} after the upload"
               fail=1
-            elif ! cmp -s "$f" "published/${name}"; then
-              # An earlier upload of this tag wins (never --clobber); everything below describes it.
-              echo "NOTE: ${name} on the release differs from this run's rebuild; the published bytes are used"
+            elif cmp -s "$f" "published/${name}"; then
+              cp "$f" "attest/${name}"
+            else
+              # An earlier upload of this tag wins (never --clobber); everything below describes it, but this run built other bytes,
+              # so it cannot vouch for where they came from: they get no provenance attestation.
+              echo "NOTE: ${name} on the release differs from this run's rebuild; the published bytes are used, not attested"
+              echo "$name" >> not-attested.txt
             fi
           done
           [ "$fail" -eq 0 ] || exit 1
-          echo "Published tarballs: $(find published -name '*.tar.gz' | wc -l)"
+          echo "Published tarballs: $(find published -name '*.tar.gz' | wc -l); attestable (built by this run): $(find attest -name '*.tar.gz' | wc -l)"
+
+      # What the reviewer of the `sign` job approves: the sha256 of every tarball the Release serves right now. `sign` refuses any
+      # tarball that is not in this list with this hash, so an asset swapped while the approval waits is never signed.
+      - name: Record the published checksums
+        run: |
+          (cd published && sha256sum -- *.tar.gz) > published-sha256.txt
+          {
+            echo "### Published tarballs for ${TAG}"
+            echo
+            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested)."
+            echo
+            echo '```'
+            cat published-sha256.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Provenance only for bytes this run built and the Release serves unchanged.
+      - name: Attest build provenance
+        if: hashFiles('attest/*.tar.gz') != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: attest/*.tar.gz
+
+      - name: Hand the published checksums to the sign job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-sha256
+          path: published-sha256.txt
+          retention-days: 30
+          if-no-files-found: error
 
       # The .sha256 files describe the bytes on the Release, so they are computed from published/ and only the missing ones are
       # uploaded; a checksum file from this run's rebuild would not match an older asset of record.
@@ -430,8 +475,9 @@ jobs:
 
           for tarball in published/*.tar.gz; do
             file="$(basename "$tarball")"
-            plugin_name="$(basename "$tarball" "-${VERSION}.tar.gz")"
-            r2_key="plugins/${plugin_name}/${plugin_name}-${VERSION}.tar.gz"
+            # <slug>-<version>.tar.gz and <slug>-<version>-<platform>.tar.gz both live under plugins/<slug>/.
+            plugin_name="${file%%-"${VERSION}"*}"
+            r2_key="plugins/${plugin_name}/${file}"
             url="https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/objects/${r2_key}"
 
             HTTP_STATUS=$(curl -s -o r2_upload_out.txt -w "%{http_code}" \
@@ -472,14 +518,12 @@ jobs:
   # The only job bound to the `release-signing` Environment (required reviewer, set up by the owner in P7-PROD-59). It reads the
   # free-tier signing key and nothing else secret, has no write access to the repository and no R2 access.
   sign:
-    name: Sign and attest (release-signing)
+    name: Sign (release-signing)
     needs: [build, publish]
     runs-on: ubuntu-latest
     environment: release-signing
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     env:
       TAG: ${{ needs.build.outputs.tag }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -490,15 +534,23 @@ jobs:
         with:
           persist-credentials: false
 
-      # What the Release serves is the artifact of record, so that is what gets signed and attested (no artifact hand-off to expire
-      # while the reviewer decides). release-data re-downloads once more and refuses any row whose bytes changed in between.
-      - name: Download the published tarballs
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: published-sha256
+          path: expected
+
+      # What the Release serves is the artifact of record, so that is what gets signed (no artifact hand-off to expire while the
+      # reviewer decides). But only the bytes the publish job recorded: an asset replaced while this job waited for approval is refused.
+      - name: Download the published tarballs and compare them with what publish recorded
         run: |
           mkdir -p published
           gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir published --pattern '*.tar.gz'
+          (cd published && sha256sum -- *.tar.gz) | sort > actual-sha256.txt
+          sort expected/published-sha256.txt | diff - actual-sha256.txt || { echo "ERROR: the Release no longer serves the bytes the publish job recorded; nothing is signed"; exit 1; }
 
       # Source tarballs only (<slug>-<version>.tar.gz): the signed message names slug, version and the source tarball's sha256.
-      # Binary tarballs (<slug>-<version>-<platform>.tar.gz) are covered by platform_checksums and the provenance attestation.
+      # Binary tarballs (<slug>-<version>-<platform>.tar.gz) are covered by platform_checksums and, when this run built them, the
+      # provenance attestation made in the publish job.
       - name: Sign the published source tarballs (hq PLUG D7)
         env:
           NSELF_RELEASE_SIGNING_KEY_FREE: ${{ secrets.NSELF_RELEASE_SIGNING_KEY_FREE }}
@@ -533,10 +585,23 @@ jobs:
           rm -f signatures.ndjson
           echo "Signed ${count} source tarball(s)"
 
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: published/*.tar.gz
+          # Once a release public key is committed (P7-PLUG-69 commits the first), only a committed key may have signed.
+          stage="$(mktemp -d)"
+          jq --arg v "$VERSION" 'map_values(. + {version: $v}) | {releases: .}' signatures.json > "$stage/releases.json"
+          for slug in $(jq -r 'keys[]' signatures.json); do
+            ln -s "${PWD}/published/${slug}-${VERSION}.tar.gz" "$stage/"
+          done
+          pinned=0
+          ok=0
+          for k in scripts/release/keys/plugins-release-free-*.pub; do
+            [ -e "$k" ] || continue
+            pinned=1
+            if bash scripts/release/verify-signatures.sh --pub "$k" "$stage" >/dev/null 2>&1; then ok=1; fi
+          done
+          if [ "$pinned" -eq 1 ] && [ "$ok" -ne 1 ]; then
+            echo "ERROR: the signatures do not verify against any committed release key in scripts/release/keys/; the signing secret is not a pinned key"
+            exit 1
+          fi
 
       - name: Hand the signatures to the release-data job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -581,12 +646,17 @@ jobs:
             echo "releases.json already holds ${TAG}; nothing to open"
             exit 0
           fi
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            # A maintainer may already have pushed the regenerated projections to it; a re-run must not wipe that.
+            echo "::notice::${branch} already exists; left untouched. Delete it and re-run to regenerate."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git add releases.json
           git commit -m "chore(release): release data for ${TAG}"
-          git push --force origin "HEAD:refs/heads/${branch}"
+          git push origin "HEAD:refs/heads/${branch}"
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
             {
               echo "Written by the release workflow from the bytes published on ${TAG}: sha256 and release_signature per plugin. Review the diff against the Release assets; do not edit by hand."

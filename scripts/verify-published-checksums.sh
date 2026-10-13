@@ -97,6 +97,7 @@ MISMATCHES=0
 MISSING_ASSETS=0
 DOWNLOAD_ERRORS=0
 UNSIGNED=0
+ROLLBACKS=0
 CHECKED=0
 WRITTEN=0
 
@@ -197,6 +198,13 @@ while IFS= read -r name; do
 
   sig_json="null"
   if [ "$WRITE" = "true" ] && [ -n "$SIGNATURES_FILE" ]; then
+    # A run for an older tag must not roll a newer row back (the manifest-version guard is off in this mode).
+    row_version="$(jq -r '.version // ""' <<<"$row")"
+    if [ -n "$row_version" ] && [ "$row_version" != "$VERSION" ] && [ "$(printf '%s\n%s\n' "$row_version" "$VERSION" | sort -V | tail -1)" = "$row_version" ]; then
+      printf "ROLLBACK %s: releases.json already holds %s, newer than %s\n" "$name" "$row_version" "$VERSION"
+      ROLLBACKS=$((ROLLBACKS + 1))
+      continue
+    fi
     sig_json="$(jq -c --arg n "$name" --arg sha "$computed_sha" '.[$n] | select(. != null and .sha256 == $sha) | .release_signature // empty' "$SIGNATURES_FILE")"
     if [ -z "$sig_json" ]; then
       printf "UNSIGNED %s: %s has no signature for the published sha256 %s\n" "$name" "$SIGNATURES_FILE" "$computed_sha"
@@ -227,7 +235,7 @@ while IFS= read -r name; do
   fi
 done <<<"$(printf '%s\n' "$candidates" | sort -u)"
 
-if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ]; then
+if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
   [ "$WRITE" != "true" ] || log "releases.json NOT written: an expected asset is missing, failed to download or is unsigned."
 elif [ "$WRITE" = "true" ]; then
   jq -S --indent 2 . <<<"$RELEASES_JSON" > "${RELEASES_FILE}.tmp" && mv "${RELEASES_FILE}.tmp" "$RELEASES_FILE"
@@ -249,7 +257,10 @@ fi
 if [ "$UNSIGNED" -gt 0 ]; then
   err "${UNSIGNED} row(s) have no signature over the published bytes; the signing job must sign what is on the release."
 fi
-if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ]; then
+if [ "$ROLLBACKS" -gt 0 ]; then
+  err "${ROLLBACKS} row(s) already hold a newer version than ${TAG}; releases.json is not rolled back."
+fi
+if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ] || [ "$UNSIGNED" -gt 0 ] || [ "$ROLLBACKS" -gt 0 ]; then
   exit 1
 fi
 log "Done."
