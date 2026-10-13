@@ -4,13 +4,11 @@
 -- Constraints: np_ prefix required; source_account_id isolates multi-app installs.
 -- SPORT: web3 plugin schema v1.
 
-BEGIN;
-
 -- ============================================================
 -- Tables
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS np_web3_wallets (
+CREATE TABLE IF NOT EXISTS public.np_web3_wallets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     user_id VARCHAR(255) NOT NULL,
@@ -32,7 +30,7 @@ CREATE TABLE IF NOT EXISTS np_web3_wallets (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_collections (
+CREATE TABLE IF NOT EXISTS public.np_web3_collections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     contract_address TEXT NOT NULL,
@@ -64,7 +62,7 @@ CREATE TABLE IF NOT EXISTS np_web3_collections (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_nfts (
+CREATE TABLE IF NOT EXISTS public.np_web3_nfts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     contract_address TEXT NOT NULL,
@@ -82,7 +80,7 @@ CREATE TABLE IF NOT EXISTS np_web3_nfts (
     attributes JSONB,
     metadata_uri TEXT,
     metadata JSONB,
-    collection_id UUID REFERENCES np_web3_collections(id) ON DELETE SET NULL,
+    collection_id UUID REFERENCES public.np_web3_collections(id) ON DELETE SET NULL,
     rarity_score DECIMAL(10,2),
     rarity_rank INTEGER,
     is_verified BOOLEAN DEFAULT false,
@@ -94,7 +92,7 @@ CREATE TABLE IF NOT EXISTS np_web3_nfts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_tokens (
+CREATE TABLE IF NOT EXISTS public.np_web3_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     contract_address TEXT NOT NULL,
@@ -115,12 +113,12 @@ CREATE TABLE IF NOT EXISTS np_web3_tokens (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_token_balances (
+CREATE TABLE IF NOT EXISTS public.np_web3_token_balances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     wallet_address TEXT NOT NULL,
     user_id VARCHAR(255),
-    token_id UUID NOT NULL REFERENCES np_web3_tokens(id) ON DELETE CASCADE,
+    token_id UUID NOT NULL REFERENCES public.np_web3_tokens(id) ON DELETE CASCADE,
     balance TEXT NOT NULL,
     balance_formatted DECIMAL(30,8),
     value_usd DECIMAL(20,2),
@@ -128,7 +126,7 @@ CREATE TABLE IF NOT EXISTS np_web3_token_balances (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_token_gates (
+CREATE TABLE IF NOT EXISTS public.np_web3_token_gates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     workspace_id VARCHAR(255) NOT NULL,
@@ -144,10 +142,10 @@ CREATE TABLE IF NOT EXISTS np_web3_token_gates (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_gate_checks (
+CREATE TABLE IF NOT EXISTS public.np_web3_gate_checks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-    gate_id UUID NOT NULL REFERENCES np_web3_token_gates(id) ON DELETE CASCADE,
+    gate_id UUID NOT NULL REFERENCES public.np_web3_token_gates(id) ON DELETE CASCADE,
     user_id VARCHAR(255) NOT NULL,
     wallet_address TEXT NOT NULL,
     passed BOOLEAN NOT NULL,
@@ -157,7 +155,7 @@ CREATE TABLE IF NOT EXISTS np_web3_gate_checks (
     checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_daos (
+CREATE TABLE IF NOT EXISTS public.np_web3_daos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     workspace_id VARCHAR(255),
@@ -180,10 +178,10 @@ CREATE TABLE IF NOT EXISTS np_web3_daos (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_proposals (
+CREATE TABLE IF NOT EXISTS public.np_web3_proposals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-    dao_id UUID NOT NULL REFERENCES np_web3_daos(id) ON DELETE CASCADE,
+    dao_id UUID NOT NULL REFERENCES public.np_web3_daos(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     proposer_address TEXT NOT NULL,
@@ -206,10 +204,10 @@ CREATE TABLE IF NOT EXISTS np_web3_proposals (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_votes (
+CREATE TABLE IF NOT EXISTS public.np_web3_votes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-    proposal_id UUID NOT NULL REFERENCES np_web3_proposals(id) ON DELETE CASCADE,
+    proposal_id UUID NOT NULL REFERENCES public.np_web3_proposals(id) ON DELETE CASCADE,
     voter_address TEXT NOT NULL,
     voter_user_id VARCHAR(255),
     support TEXT NOT NULL CHECK (support IN ('for', 'against', 'abstain')),
@@ -220,7 +218,7 @@ CREATE TABLE IF NOT EXISTS np_web3_votes (
     voted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_transactions (
+CREATE TABLE IF NOT EXISTS public.np_web3_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     transaction_hash TEXT NOT NULL,
@@ -242,7 +240,7 @@ CREATE TABLE IF NOT EXISTS np_web3_transactions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS np_web3_events (
+CREATE TABLE IF NOT EXISTS public.np_web3_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     event_name TEXT NOT NULL,
@@ -254,7 +252,7 @@ CREATE TABLE IF NOT EXISTS np_web3_events (
     block_timestamp TIMESTAMPTZ,
     event_data JSONB NOT NULL,
     decoded_data JSONB,
-    related_nft_id UUID REFERENCES np_web3_nfts(id) ON DELETE SET NULL,
+    related_nft_id UUID REFERENCES public.np_web3_nfts(id) ON DELETE SET NULL,
     related_user_id VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -263,107 +261,119 @@ CREATE TABLE IF NOT EXISTS np_web3_events (
 -- Indexes
 -- ============================================================
 
-CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_source ON np_web3_wallets(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_user ON np_web3_wallets(source_account_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_address ON np_web3_wallets(source_account_id, address);
-CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_chain ON np_web3_wallets(source_account_id, chain_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_ens ON np_web3_wallets(ens_name) WHERE ens_name IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_np_web3_collections_source ON np_web3_collections(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_collections_contract ON np_web3_collections(source_account_id, contract_address, chain_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_collections_slug ON np_web3_collections(source_account_id, slug);
-CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_source ON np_web3_nfts(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_contract ON np_web3_nfts(source_account_id, contract_address, chain_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_owner ON np_web3_nfts(source_account_id, owner_address);
-CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_collection ON np_web3_nfts(source_account_id, collection_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_attributes ON np_web3_nfts USING GIN(attributes);
-CREATE INDEX IF NOT EXISTS idx_np_web3_tokens_source ON np_web3_tokens(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_tokens_contract ON np_web3_tokens(source_account_id, contract_address, chain_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_tokens_symbol ON np_web3_tokens(source_account_id, symbol);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_balances_source ON np_web3_token_balances(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_balances_wallet ON np_web3_token_balances(source_account_id, wallet_address);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_balances_user ON np_web3_token_balances(source_account_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_source ON np_web3_token_gates(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_workspace ON np_web3_token_gates(source_account_id, workspace_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_target ON np_web3_token_gates(source_account_id, target_type, target_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_rules ON np_web3_token_gates USING GIN(rules);
-CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_source ON np_web3_gate_checks(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_gate ON np_web3_gate_checks(source_account_id, gate_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_user ON np_web3_gate_checks(source_account_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_expires ON np_web3_gate_checks(expires_at) WHERE expires_at IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_np_web3_daos_source ON np_web3_daos(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_daos_workspace ON np_web3_daos(source_account_id, workspace_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_daos_slug ON np_web3_daos(source_account_id, slug);
-CREATE INDEX IF NOT EXISTS idx_np_web3_proposals_source ON np_web3_proposals(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_proposals_dao ON np_web3_proposals(source_account_id, dao_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_proposals_status ON np_web3_proposals(source_account_id, status);
-CREATE INDEX IF NOT EXISTS idx_np_web3_votes_source ON np_web3_votes(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_votes_proposal ON np_web3_votes(source_account_id, proposal_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_votes_voter ON np_web3_votes(source_account_id, voter_address);
-CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_source ON np_web3_transactions(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_hash ON np_web3_transactions(source_account_id, transaction_hash);
-CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_chain ON np_web3_transactions(source_account_id, chain_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_from ON np_web3_transactions(source_account_id, from_address);
-CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_to ON np_web3_transactions(source_account_id, to_address);
-CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_block ON np_web3_transactions(block_number DESC);
-CREATE INDEX IF NOT EXISTS idx_np_web3_events_source ON np_web3_events(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_events_contract ON np_web3_events(source_account_id, contract_address, chain_id);
-CREATE INDEX IF NOT EXISTS idx_np_web3_events_name ON np_web3_events(source_account_id, event_name);
-CREATE INDEX IF NOT EXISTS idx_np_web3_events_tx ON np_web3_events(source_account_id, transaction_hash);
-CREATE INDEX IF NOT EXISTS idx_np_web3_events_block ON np_web3_events(block_number DESC);
-CREATE INDEX IF NOT EXISTS idx_np_web3_events_data ON np_web3_events USING GIN(event_data);
+CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_source ON public.np_web3_wallets(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_user ON public.np_web3_wallets(source_account_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_address ON public.np_web3_wallets(source_account_id, address);
+CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_chain ON public.np_web3_wallets(source_account_id, chain_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_wallets_ens ON public.np_web3_wallets(ens_name) WHERE ens_name IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_np_web3_collections_source ON public.np_web3_collections(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_collections_contract ON public.np_web3_collections(source_account_id, contract_address, chain_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_collections_slug ON public.np_web3_collections(source_account_id, slug);
+CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_source ON public.np_web3_nfts(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_contract ON public.np_web3_nfts(source_account_id, contract_address, chain_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_owner ON public.np_web3_nfts(source_account_id, owner_address);
+CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_collection ON public.np_web3_nfts(source_account_id, collection_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_nfts_attributes ON public.np_web3_nfts USING GIN(attributes);
+CREATE INDEX IF NOT EXISTS idx_np_web3_tokens_source ON public.np_web3_tokens(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_tokens_contract ON public.np_web3_tokens(source_account_id, contract_address, chain_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_tokens_symbol ON public.np_web3_tokens(source_account_id, symbol);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_balances_source ON public.np_web3_token_balances(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_balances_wallet ON public.np_web3_token_balances(source_account_id, wallet_address);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_balances_user ON public.np_web3_token_balances(source_account_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_source ON public.np_web3_token_gates(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_workspace ON public.np_web3_token_gates(source_account_id, workspace_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_target ON public.np_web3_token_gates(source_account_id, target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_token_gates_rules ON public.np_web3_token_gates USING GIN(rules);
+CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_source ON public.np_web3_gate_checks(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_gate ON public.np_web3_gate_checks(source_account_id, gate_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_user ON public.np_web3_gate_checks(source_account_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_gate_checks_expires ON public.np_web3_gate_checks(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_np_web3_daos_source ON public.np_web3_daos(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_daos_workspace ON public.np_web3_daos(source_account_id, workspace_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_daos_slug ON public.np_web3_daos(source_account_id, slug);
+CREATE INDEX IF NOT EXISTS idx_np_web3_proposals_source ON public.np_web3_proposals(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_proposals_dao ON public.np_web3_proposals(source_account_id, dao_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_proposals_status ON public.np_web3_proposals(source_account_id, status);
+CREATE INDEX IF NOT EXISTS idx_np_web3_votes_source ON public.np_web3_votes(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_votes_proposal ON public.np_web3_votes(source_account_id, proposal_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_votes_voter ON public.np_web3_votes(source_account_id, voter_address);
+CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_source ON public.np_web3_transactions(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_hash ON public.np_web3_transactions(source_account_id, transaction_hash);
+CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_chain ON public.np_web3_transactions(source_account_id, chain_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_from ON public.np_web3_transactions(source_account_id, from_address);
+CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_to ON public.np_web3_transactions(source_account_id, to_address);
+CREATE INDEX IF NOT EXISTS idx_np_web3_transactions_block ON public.np_web3_transactions(block_number DESC);
+CREATE INDEX IF NOT EXISTS idx_np_web3_events_source ON public.np_web3_events(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_events_contract ON public.np_web3_events(source_account_id, contract_address, chain_id);
+CREATE INDEX IF NOT EXISTS idx_np_web3_events_name ON public.np_web3_events(source_account_id, event_name);
+CREATE INDEX IF NOT EXISTS idx_np_web3_events_tx ON public.np_web3_events(source_account_id, transaction_hash);
+CREATE INDEX IF NOT EXISTS idx_np_web3_events_block ON public.np_web3_events(block_number DESC);
+CREATE INDEX IF NOT EXISTS idx_np_web3_events_data ON public.np_web3_events USING GIN(event_data);
 
 -- ============================================================
 -- Row-Level Security (source_account_id isolation)
 -- Convention: Multi-App Isolation per multi-tenant-conventions.md
 -- ============================================================
 
-ALTER TABLE np_web3_wallets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_collections ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_nfts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_tokens ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_token_balances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_token_gates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_gate_checks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_daos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_proposals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_votes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_web3_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_wallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_nfts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_token_balances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_token_gates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_gate_checks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_daos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_web3_events ENABLE ROW LEVEL SECURITY;
 
 -- Service role bypasses RLS; app role enforces source_account_id isolation.
--- Policies created only if the nself_app role exists; skipped otherwise.
+-- Policies created only if the nself_app role exists; skipped otherwise. Dropped first so a replay (reinstall over kept tables) recreates them.
+
+DROP POLICY IF EXISTS np_web3_wallets_isolation ON public.np_web3_wallets;
+DROP POLICY IF EXISTS np_web3_collections_isolation ON public.np_web3_collections;
+DROP POLICY IF EXISTS np_web3_nfts_isolation ON public.np_web3_nfts;
+DROP POLICY IF EXISTS np_web3_tokens_isolation ON public.np_web3_tokens;
+DROP POLICY IF EXISTS np_web3_token_balances_isolation ON public.np_web3_token_balances;
+DROP POLICY IF EXISTS np_web3_token_gates_isolation ON public.np_web3_token_gates;
+DROP POLICY IF EXISTS np_web3_gate_checks_isolation ON public.np_web3_gate_checks;
+DROP POLICY IF EXISTS np_web3_daos_isolation ON public.np_web3_daos;
+DROP POLICY IF EXISTS np_web3_proposals_isolation ON public.np_web3_proposals;
+DROP POLICY IF EXISTS np_web3_votes_isolation ON public.np_web3_votes;
+DROP POLICY IF EXISTS np_web3_transactions_isolation ON public.np_web3_transactions;
+DROP POLICY IF EXISTS np_web3_events_isolation ON public.np_web3_events;
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nself_app') THEN
     EXECUTE $p$
-      CREATE POLICY np_web3_wallets_isolation ON np_web3_wallets
+      CREATE POLICY np_web3_wallets_isolation ON public.np_web3_wallets
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_collections_isolation ON np_web3_collections
+      CREATE POLICY np_web3_collections_isolation ON public.np_web3_collections
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_nfts_isolation ON np_web3_nfts
+      CREATE POLICY np_web3_nfts_isolation ON public.np_web3_nfts
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_tokens_isolation ON np_web3_tokens
+      CREATE POLICY np_web3_tokens_isolation ON public.np_web3_tokens
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_token_balances_isolation ON np_web3_token_balances
+      CREATE POLICY np_web3_token_balances_isolation ON public.np_web3_token_balances
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_token_gates_isolation ON np_web3_token_gates
+      CREATE POLICY np_web3_token_gates_isolation ON public.np_web3_token_gates
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_gate_checks_isolation ON np_web3_gate_checks
+      CREATE POLICY np_web3_gate_checks_isolation ON public.np_web3_gate_checks
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_daos_isolation ON np_web3_daos
+      CREATE POLICY np_web3_daos_isolation ON public.np_web3_daos
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_proposals_isolation ON np_web3_proposals
+      CREATE POLICY np_web3_proposals_isolation ON public.np_web3_proposals
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_votes_isolation ON np_web3_votes
+      CREATE POLICY np_web3_votes_isolation ON public.np_web3_votes
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_transactions_isolation ON np_web3_transactions
+      CREATE POLICY np_web3_transactions_isolation ON public.np_web3_transactions
         USING (source_account_id = current_setting('nself.source_account_id', true));
-      CREATE POLICY np_web3_events_isolation ON np_web3_events
+      CREATE POLICY np_web3_events_isolation ON public.np_web3_events
         USING (source_account_id = current_setting('nself.source_account_id', true));
     $p$;
   END IF;
 END;
 $$;
 
-COMMIT;

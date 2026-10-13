@@ -31,15 +31,16 @@ func TestNewRouter_Health(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	r.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	// No boot-migrations pool in this test: /health answers 503 (never a false 200) and still names the plugin.
+	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var out map[string]string
+	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if out["plugin"] != "web3" {
-		t.Errorf("plugin = %q", out["plugin"])
+		t.Errorf("plugin = %v", out["plugin"])
 	}
 }
 

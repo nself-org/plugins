@@ -7,24 +7,52 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nself-org/cli/sdk/go/v2/migrate"
 )
 
 func TestHealth(t *testing.T) {
+	old, oldPool := migrationStatus, bootPool
+	defer func() { migrationStatus, bootPool = old, oldPool }()
+	bootPool = &pgxpool.Pool{} // never used: migrationStatus is stubbed
+	migrationStatus = func(context.Context, *pgxpool.Pool, migrate.Options) (migrate.Progress, error) {
+		return migrate.Progress{Applied: 1, Expected: 1}, nil
+	}
 	h := &Handlers{}
 	rec := httptest.NewRecorder()
 	h.Health(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	var out map[string]string
+	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
 	if out["status"] != "ok" || out["plugin"] != "web3" {
 		t.Errorf("body = %v", out)
+	}
+	m, _ := out["migrations"].(map[string]any)
+	if m["applied"] != float64(1) || m["expected"] != float64(1) {
+		t.Errorf("migrations = %v", out["migrations"])
+	}
+}
+
+func TestHealth_StatusErrorIs503(t *testing.T) {
+	old, oldPool := migrationStatus, bootPool
+	defer func() { migrationStatus, bootPool = old, oldPool }()
+	bootPool = &pgxpool.Pool{}
+	migrationStatus = func(context.Context, *pgxpool.Pool, migrate.Options) (migrate.Progress, error) {
+		return migrate.Progress{}, errors.New("db down")
+	}
+	rec := httptest.NewRecorder()
+	(&Handlers{}).Health(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", rec.Code)
 	}
 }
 

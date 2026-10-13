@@ -15,6 +15,9 @@ import (
 
 var bootPool *pgxpool.Pool
 
+// migrationStatus is migrate.Status; tests replace it (no database in the handler tests).
+var migrationStatus = migrate.Status
+
 func bootOptions() migrate.Options {
 	return migrate.Options{Schema: "np_web3", FS: migrations.FS}
 }
@@ -33,7 +36,11 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
 func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+	if bootPool == nil { // no pool yet (handler tests): never a panic, never a false 200
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return map[string]int{"applied": -1, "expected": -1}
+	}
+	st, err := migrationStatus(context.Background(), bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
