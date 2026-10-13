@@ -42,7 +42,7 @@ serialises it compactly (no indentation), and keeps the body and its hash togeth
 - `If-None-Match` with that tag (also a list of tags, a `W/` form, or `*`) returns `304` with an empty body and the same `ETag`.
 - `Cache-Control: public, max-age=300` on a fresh fetch (a HIT promises only the time its KV copy has left), `Content-Type: application/json`, `X-Cache: HIT | MISS | STALE`.
 - If GitHub cannot be reached and an expired copy exists, the worker serves it as `STALE` (`max-age=60`) and retries GitHub about a minute later; with no copy at all it returns `502`. A Contents API failure of any kind falls back to the raw URL.
-- A fetched body that is not a catalog (not an object with a `plugins` collection) is never cached or served.
+- A fetched body that is not a catalog (an object with a `schema_version` string and a non-empty `plugins` collection) is never cached or served, and never replaces a good copy.
 
 ### Changes from the retired `src/index.js`
 
@@ -56,7 +56,8 @@ except where the CLI or a deploy check reads the old behaviour. For the deploy t
 | `/plugins/:name/signature` | 200 with `signature: null` when signing is not configured (was 503); `name` replaces `plugin` in the body |
 | `/plugins` | `free`/`pro` count the whole registry, `generatedAt` added |
 | `POST /marketplace/ratings/:name` | body `{rating, comment, userHash}` and reply `{name, rating, reviewCount}` (the admin app already sends this); the old `{stars, review}` body is rejected. Ratings live in per-plugin `rating:<name>` keys in `PLUGINS_KV` (no `RATINGS_KV` binding is needed); the old single `ratings:all` key is not read |
-| `GET /marketplace/ratings/:name` | `reviewCount`, plus the old `ratingCount`; 60 requests a minute per IP |
+| `GET /marketplace/ratings/:name` | `reviewCount`, plus the old `ratingCount`. The 60 requests a minute per-IP limiter runs only when a dedicated `RATINGS_KV` is bound (it writes a KV counter per request) |
+| `POST /plugins/:name/install-event` | counts only plugins that exist in the registry; an unknown name is a 404 and writes nothing |
 | 404 / error bodies | the message text is lower-case (`not found`) |
 | New | `/registry/list`, `/.well-known/revoked-authors.json`, `POST /plugins/:name/install-event`, `/v1/*` paths, and a 400 for an unsupported `X-API-Version` |
 | Unchanged | registry, manifest, categories, stats, bundles routes, `/api/sync`, the 401 gate and its order (gate, then revocation) |

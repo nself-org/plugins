@@ -173,12 +173,24 @@ describe('GET /catalog.json', () => {
   });
 
   test('upstream bodies that are not a catalog are never served or cached', async () => {
-    for (const bad of [[], 'text', 42, {}, { plugins: null }, { schema_version: '1.0.0' }]) {
+    for (const bad of [[], 'text', 42, {}, { plugins: null }, { schema_version: '1.0.0' }, { schema_version: '1.0.0', plugins: {} }, { schema_version: '1.0.0', plugins: [] }, { plugins: { a: {} } }]) {
       stubUpstream(bad);
       const kv = fakeKv();
       const res = await get('/catalog.json', { PLUGINS_KV: kv });
       assert.equal(res.status, 502, `bad body ${JSON.stringify(bad)}`);
       assert.equal(kv.store.has('catalog:json'), false);
+    }
+  });
+
+  test('an empty or unversioned upstream body never replaces a good (expired) copy: STALE', async () => {
+    const body = JSON.stringify(sampleCatalog());
+    for (const bad of [{ schema_version: '1.0.0', plugins: {} }, { plugins: { a: {} } }]) {
+      const kv = fakeKv({ 'catalog:json': envelope({ body, etag: sha256(body) }, 10 * 60 * 1000) });
+      stubUpstream(bad);
+      const res = await get('/catalog.json', { PLUGINS_KV: kv });
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get('X-Cache'), 'STALE');
+      assert.equal(await res.text(), body);
     }
   });
 

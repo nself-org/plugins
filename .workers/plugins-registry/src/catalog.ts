@@ -53,11 +53,18 @@ async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
-/** True for a plausible catalog: a JSON object that carries a plugins collection. */
+/**
+ * True for a plausible catalog: an object with a schema_version string and a
+ * non-empty plugins collection. An empty or unversioned body is an upstream
+ * failure, not a catalog, so it can never replace a good copy.
+ */
 function looksLikeCatalog(data: unknown): data is Record<string, unknown> {
   if (typeof data !== "object" || data === null || Array.isArray(data)) return false;
-  const plugins = (data as Record<string, unknown>)["plugins"];
-  return typeof plugins === "object" && plugins !== null;
+  const obj = data as Record<string, unknown>;
+  if (typeof obj["schema_version"] !== "string") return false;
+  const plugins = obj["plugins"];
+  if (typeof plugins !== "object" || plugins === null) return false;
+  return Object.keys(plugins).length > 0;
 }
 
 /** Compact-serialise a parsed catalog and hash the result. */

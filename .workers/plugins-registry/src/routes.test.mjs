@@ -17,7 +17,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../dist-test/index.mjs';
-import { fakeKv, fakeCtx, envelope, registryKv, req } from './test-helpers.mjs';
+import { fakeKv, fakeCtx, envelope, registryKv, req, sampleCatalog } from './test-helpers.mjs';
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -81,7 +81,7 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
   });
 
   test('GET /catalog.json (new) answers', async () => {
-    globalThis.fetch = async () => new Response(JSON.stringify({ plugins: {} }), { status: 200 });
+    globalThis.fetch = async () => new Response(JSON.stringify(sampleCatalog()), { status: 200 });
     assert.equal((await call('/catalog.json', {}, { PLUGINS_KV: fakeKv() })).status, 200);
   });
 
@@ -190,6 +190,50 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     const body = await (await call('/marketplace/ratings/jobs')).json();
     assert.ok('reviewCount' in body && 'ratingCount' in body);
     assert.equal(body.ratingCount, body.reviewCount);
+  });
+
+  test('install-event for an unknown plugin is a 404 and writes nothing; a known plugin is counted', async () => {
+    const kv = registryKv();
+    const before = kv.store.size;
+    const bad = await call('/plugins/zz-not-a-plugin/install-event', {
+      method: 'POST', body: JSON.stringify({ instanceId: 'a'.repeat(64) }),
+    }, { PLUGINS_KV: kv });
+    assert.equal(bad.status, 404);
+    assert.equal(kv.store.size, before);
+    const ok = await call('/plugins/jobs/install-event', {
+      method: 'POST', body: JSON.stringify({ instanceId: 'b'.repeat(64) }),
+    }, { PLUGINS_KV: kv });
+    assert.equal(ok.status, 200);
+    assert.ok(kv.store.size > before);
+  });
+
+  test('GET /marketplace writes nothing to KV on the deployed config (no RATINGS_KV, no GET limiter)', async () => {
+    const kv = registryKv();
+    let writes = 0;
+    const put = kv.put;
+    kv.put = async (...a) => { writes += 1; return put(...a); };
+    for (let i = 0; i < 5; i++) await call('/marketplace', {}, { PLUGINS_KV: kv });
+    await call('/marketplace/ratings/jobs', {}, { PLUGINS_KV: kv });
+    // the first /marketplace builds and caches the enriched view once; nothing per request
+    assert.ok(writes <= 1, `${writes} writes`);
+  });
+
+  test('/registry.json HIT promises the remaining TTL and reports X-Cache-Age', async () => {
+    const kv = registryKv({ 'registry:combined': envelope({ plugins: [], pluginCount: {} }, 100 * 1000) });
+    const res = await call('/registry.json', {}, { PLUGINS_KV: kv });
+    assert.equal(res.headers.get('X-Cache'), 'HIT');
+    const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('Cache-Control'))[1]);
+    assert.ok(maxAge >= 198 && maxAge <= 200, `max-age ${maxAge}`);
+    assert.ok(Number(res.headers.get('X-Cache-Age')) >= 100);
+  });
+
+  test('a thrown Contents API fetch falls back to the raw free registry URL', async () => {
+    globalThis.fetch = async (url) => {
+      if (String(url).startsWith('https://api.github.com/')) throw new Error('boom');
+      return new Response(JSON.stringify({ plugins: { jobs: { version: '1.2.0' } } }), { status: 200 });
+    };
+    const res = await call('/plugins/jobs', {}, { PLUGINS_KV: fakeKv(), GH_ACCESS_TOKEN: 'fake-token' });
+    assert.equal(res.status, 200);
   });
 
   test('a cached pro registry serves without GH_ACCESS_TOKEN (cache-first, as index.js did)', async () => {

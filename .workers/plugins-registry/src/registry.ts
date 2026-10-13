@@ -240,22 +240,23 @@ export async function fetchFreeRegistry(
   let data: RegistryWireFormat | null = null;
 
   if (env.GH_ACCESS_TOKEN) {
-    const resp = await fetch(FREE_REGISTRY_API_URL, {
-      headers: {
-        Authorization: `token ${env.GH_ACCESS_TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "nself-plugin-registry/2.0",
-      },
-    });
-    if (resp.ok) {
-      try {
+    try {
+      const resp = await fetch(FREE_REGISTRY_API_URL, {
+        headers: {
+          Authorization: `token ${env.GH_ACCESS_TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "nself-plugin-registry/2.0",
+        },
+      });
+      if (resp.ok) {
         const envelope = (await resp.json()) as GitHubContentsResponse;
         data = decodeGitHubContent(envelope.content) as RegistryWireFormat;
-      } catch (e) {
-        console.error("Failed to decode free registry content:", (e as Error).message);
+      } else {
+        console.warn(`Free registry GitHub API fetch failed: ${resp.status}`);
       }
-    } else {
-      console.warn(`Free registry GitHub API fetch failed: ${resp.status}`);
+    } catch (e) {
+      // A network or decode error falls through to the raw URL, like a non-200.
+      console.error("Free registry GitHub API fetch failed:", (e as Error).message);
     }
   }
 

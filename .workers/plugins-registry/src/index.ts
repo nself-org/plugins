@@ -52,7 +52,7 @@ import { signPlugin, canonicalPluginString } from "./sign.ts";
 import { corsHeaders, jsonResponse } from "./http.ts";
 import { handleBundlesJson, handleBundlesSchema } from "./bundles.ts";
 import { handleCatalog, fetchCatalog } from "./catalog.ts";
-import { handleRevocations, isRevoked } from "./revocations.ts";
+import { handleRevocations, handleRevokedAuthors, isRevoked } from "./revocations.ts";
 import {
   fetchFreeRegistry,
   fetchProRegistry,
@@ -72,8 +72,6 @@ import type {
   PluginListResponse,
   PluginTier,
   KVEnvelope,
-  RevokedAuthorEntry,
-  RevokedAuthorListResponse,
 } from "./registry.ts";
 import {
   handleMarketplace,
@@ -184,7 +182,7 @@ export default {
       // Marketplace — GET /marketplace/ratings/:name (must appear before /marketplace)
       if (method === "GET" && resolvedPath.startsWith("/marketplace/ratings/")) {
         // T-RATE-01: GET rate limit — 60 req/min per IP
-        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        const rlGet = await getRateLimit(request, env);
         if (rlGet.limited) {
           return jsonResponse(
             { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
@@ -212,6 +210,11 @@ export default {
         const pluginName = parts[1];
         if (!pluginName) {
           return jsonResponse({ error: "plugin name required" }, 400);
+        }
+        // Only count plugins that exist: an unknown name must not create KV keys.
+        const { all: known } = await fetchAllPlugins(env, ctx);
+        if (!known.some((p) => p.name === pluginName)) {
+          return jsonResponse({ error: "plugin not found", name: pluginName }, 404);
         }
         const result = await handleInstallEvent(pluginName, request, env as MarketplaceEnv);
         return jsonResponse(
@@ -250,7 +253,7 @@ export default {
       // Marketplace — GET /marketplace
       if (method === "GET" && resolvedPath === "/marketplace") {
         // T-RATE-01: GET rate limit — 60 req/min per IP
-        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        const rlGet = await getRateLimit(request, env);
         if (rlGet.limited) {
           return jsonResponse(
             { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
@@ -309,6 +312,14 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+// The GET limiter writes a KV counter per request. It runs only when a dedicated
+// RATINGS_KV is bound; on the deployed config (PLUGINS_KV only) it would put an
+// anonymous write on the registry namespace for every marketplace GET.
+async function getRateLimit(request: Request, env: Env): Promise<{ limited: boolean; retryAfter: number }> {
+  if (!env.RATINGS_KV) return { limited: false, retryAfter: 0 };
+  return checkGetRateLimit(request, env as MarketplaceEnv);
+}
 
 // ---------------------------------------------------------------------------
 // GET /health
@@ -590,9 +601,11 @@ async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promis
     const cached = await kvGet<CombinedRegistry>(kv, KV_COMBINED);
     if (cached && isFresh(cached, ttl)) {
       ctx.waitUntil(bumpStat(kv, "registryHits"));
+      const age = Math.max(0, Math.floor((Date.now() - cached.timestamp) / 1000));
       return jsonResponse(cached.data, 200, {
-        "Cache-Control": `public, max-age=${ttl}`,
+        "Cache-Control": `public, max-age=${Math.max(0, ttl - age)}`,
         "X-Cache": "HIT",
+        "X-Cache-Age": String(age),
         "X-Tier": "combined",
       });
     }
@@ -672,51 +685,6 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
     "Cache-Control": `public, max-age=${ttl}`,
     "X-Cache": "MISS",
   });
-}
-
-// ---------------------------------------------------------------------------
-// GET /.well-known/revoked-authors.json — Author Certificate Revocation List
-// (S58-T09)
-//
-// CLI checks this endpoint on every `nself plugin install` and via daily cron
-// to detect plugins whose author keys have been revoked (abuse, security
-// breach, license fraud). Short max-age (60 s) because revocations are
-// security-critical and must propagate quickly.
-//
-// KV key: revocations:authors  — JSON array of RevokedAuthorEntry
-// The list is append-only: once revoked, entries must never be deleted.
-// ---------------------------------------------------------------------------
-
-const KV_REVOKED_AUTHORS = "revocations:authors";
-
-async function handleRevokedAuthors(env: Env): Promise<Response> {
-  const kv = env.REGISTRY ?? env.PLUGINS_KV;
-  let revokedAuthors: RevokedAuthorEntry[] = [];
-
-  if (kv) {
-    try {
-      const raw = await kv.get(KV_REVOKED_AUTHORS, "text");
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          revokedAuthors = parsed as RevokedAuthorEntry[];
-        }
-      }
-    } catch {
-      // KV read failure — return empty list so CLI is not falsely blocked.
-      // Errors are surfaced via the /health endpoint instead.
-      revokedAuthors = [];
-    }
-  }
-
-  const body: RevokedAuthorListResponse = {
-    revokedAuthors,
-    fetchedAt: new Date().toISOString(),
-    count: revokedAuthors.length,
-  };
-
-  // Short TTL: revocations are security-critical. CLI must see them promptly.
-  return jsonResponse(body, 200, { "Cache-Control": "public, max-age=60" });
 }
 
 // ---------------------------------------------------------------------------
