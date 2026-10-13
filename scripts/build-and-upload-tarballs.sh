@@ -67,7 +67,6 @@ log "Found ${#PLUGIN_DIRS[@]} plugins to package"
 
 # Build tarballs and checksums
 BATCH=()
-REGISTRY_UPDATES=()
 
 for plugin_dir in "${PLUGIN_DIRS[@]}"; do
   plugin_name="$(basename "$plugin_dir")"
@@ -86,10 +85,6 @@ for plugin_dir in "${PLUGIN_DIRS[@]}"; do
   # Compute checksum
   sha256="$(sha256_file "$tarball_path")"
   printf "%s  %s\n" "$sha256" "$tarball_name" > "$checksum_path"
-
-  # Record for registry update
-  tarball_url="https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}"
-  REGISTRY_UPDATES+=("${plugin_name}:::${tarball_url}:::${sha256}:::${TAG}")
 
   # Skip upload if already present
   if printf '%s' "$EXISTING_ASSETS" | jq -e --arg n "$tarball_name" 'index($n) != null' >/dev/null 2>&1; then
@@ -122,40 +117,9 @@ if [ "${#BATCH[@]}" -gt 0 ]; then
   fi
 fi
 
-# Update registry.json with tarball URLs and checksums
-log "Updating registry.json with tarball metadata ..."
-REGISTRY_JSON="$(cat registry.json)"
-for update in "${REGISTRY_UPDATES[@]}"; do
-  plugin_name="${update%%:::*}"
-  rest="${update#*:::}"
-  tarball_url="${rest%%:::*}"
-  rest2="${rest#*:::}"
-  sha256="${rest2%%:::*}"
-  release_tag="${rest2##*:::}"
-
-  # NOTE (P6 checksum-field fix): the CLI installer's registry parser
-  # (nself-org/cli internal/plugin/registry_parse.go pluginEntry.Checksum,
-  # `json:"checksum"`) and installer_locked.go's verifyChecksum() read the
-  # FLAT `checksum` field, never the nested `checksums.sha256` below. Both
-  # are written here, raw lowercase hex with NO "sha256:" prefix, so they
-  # stay in sync (shared/validate-registry.sh CHECK-15 fails the registry if
-  # they ever disagree).
-  REGISTRY_JSON="$(printf '%s' "$REGISTRY_JSON" | jq \
-    --arg name "$plugin_name" \
-    --arg url "$tarball_url" \
-    --arg sha "$sha256" \
-    --arg tag "$release_tag" \
-    --arg sig "" \
-    '(.plugins[$name].tarballUrl) = $url |
-     (.plugins[$name].checksum) = $sha |
-     (.plugins[$name].checksums.sha256) = $sha |
-     (.plugins[$name].releaseTag) = $tag |
-     (.plugins[$name].signature) = $sig')"
-done
-
-# Write updated registry.json
-printf '%s\n' "$REGISTRY_JSON" > registry.json
-log "registry.json updated with tarball metadata for ${#REGISTRY_UPDATES[@]} plugins"
+# registry.json is a generated projection (scripts/plugin-counts.sh) and releases.json is written only from published bytes:
+# after the upload, run `scripts/verify-published-checksums.sh --write "$TAG"` and then `scripts/plugin-counts.sh`.
+log "registry.json and releases.json are not written here; run scripts/verify-published-checksums.sh --write $TAG next"
 
 # Verify
 log "Verifying upload ..."

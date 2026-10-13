@@ -19,7 +19,7 @@
 - [ ] CI checks pass
 - [ ] `nself plugin install <name>` succeeds end-to-end
 - [ ] Plugin manifest (`plugin.json`) is valid
-- [ ] `registry.json` updated (if adding or modifying a plugin)
+- [ ] `bash scripts/plugin-counts.sh` run and `registry.json`, `catalog.json`, `counts.json` committed (if adding or modifying a plugin; they are generated, never hand-edited)
 - [ ] Documentation updated (wiki page, README)
 - [ ] No AI attribution in commits or PR description
 - [ ] CHANGELOG entry added (if user-visible change)

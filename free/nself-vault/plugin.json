@@ -4,7 +4,7 @@
   "displayName": "Per-Row Encryption (Vault)",
   "version": "1.2.6",
   "tier": "free",
-  "category": "security",
+  "category": "infrastructure",
   "minNselfVersion": "1.0.0",
   "bundle": [
     "shared",

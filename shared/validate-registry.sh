@@ -427,15 +427,14 @@ else
 fi
 
 # =============================================================================
-# CHECK 13 — Dependencies use Shape A (array form, per registry-schema.json)
-# CHECK 7  — schema fields present
+# CHECK 13 — Dependencies are an array, or {required, optional} arrays (registry-schema.json)
 # =============================================================================
 section "CHECK 13 — dependencies type validation"
 DEPS_VIOLATIONS=0
 while IFS="$US" read -r name _tier _category _version _port _bundles deps_type _license; do
     [ -z "$name" ] && continue
-    if [ "$deps_type" = "string" ] || [ "$deps_type" = "number" ] || [ "$deps_type" = "boolean" ] || [ "$deps_type" = "object" ]; then
-        err "CHECK-13" "$name" "dependencies has invalid type '${deps_type}' — must be array of strings"
+    if [ "$deps_type" = "string" ] || [ "$deps_type" = "number" ] || [ "$deps_type" = "boolean" ] || { [ "$deps_type" = "object" ] && ! "$JQ" -e --arg n "$name" '.plugins[$n].dependencies | (keys - ["required","optional"] | length == 0) and all(.[]; type == "array")' "$REGISTRY_FILE" >/dev/null 2>&1; }; then
+        err "CHECK-13" "$name" "dependencies must be an array of strings, or an object of required/optional arrays (got '${deps_type}')"
         DEPS_VIOLATIONS=$((DEPS_VIOLATIONS + 1))
     fi
 done < "$ENTRIES_TSV"
@@ -777,6 +776,7 @@ else
     if [ -n "$MISSING_FROM_REGISTRY" ]; then
         while IFS= read -r missing; do
             [ -z "$missing" ] && continue
+            [ -f "$(dirname "$REGISTRY_FILE")/releases.json" ] && ! "$JQ" -e --arg n "$missing" '.releases[$n]' "$(dirname "$REGISTRY_FILE")/releases.json" >/dev/null 2>&1 && continue # unreleased: generated registry leaves it out
             err "CHECK-1" "$missing" "Plugin directory exists but no registry entry"
         done <<EOF
 $MISSING_FROM_REGISTRY

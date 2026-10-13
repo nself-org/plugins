@@ -1,0 +1,14 @@
+{
+  "_comment": "catalog blocks (the manifest-only columns of contract:plugins.catalog) for licensed registry entries that nself-org/bundles scripts/registry-carry.json carries without one. scripts/plugin-counts.sh adds a block only to an entry that lacks one, until the expiry date; after it the script fails. Remove an entry when its owner_ref lands in bundles and the manifest generates its own block. Values come from the entry's v1 manifest (status stable = maturity implemented).",
+  "expires": "2026-12-31",
+  "entries": {
+    "auth": {
+      "owner_ref": "P7-PLUG-50",
+      "catalog": { "maturity": "implemented", "service_kind": "compose", "requires": { "nself": ">=1.0.0" } }
+    },
+    "nself-audit": {
+      "owner_ref": "P7-PLUG-04 question 2 (owner placement ruling)",
+      "catalog": { "maturity": "implemented", "service_kind": "compose", "requires": { "nself": ">=1.1.0" }, "schema": "np_nself_audit" }
+    }
+  }
+}

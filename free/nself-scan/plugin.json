@@ -15,7 +15,7 @@
   "port": 3829,
   "service_type": "custom_service",
   "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred \u2014 requires partner agreement)",
-  "category": "security",
+  "category": "compliance",
   "license": "MIT",
   "tarball": "nself-scan-v0.1.0-linux-amd64.tar.gz",
   "download_url": "https://ping.nself.org/plugins/nself-scan/download",
