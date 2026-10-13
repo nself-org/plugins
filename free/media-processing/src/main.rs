@@ -1,6 +1,7 @@
 mod config;
 mod db;
 mod handlers;
+mod health;
 mod migrate;
 mod models;
 
@@ -44,7 +45,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(semaphore.clone()))
             .app_data(web::Data::new(job_permits.clone()))
             .wrap(middleware::Logger::default())
-            .route("/health", web::get().to(handlers::health))
+            .route("/health", web::get().to(health::health))
             .route("/ready", web::get().to(handlers::ready))
             // Encoding profiles
             .route("/api/v1/profiles", web::get().to(handlers::list_profiles))

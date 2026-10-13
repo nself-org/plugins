@@ -4,7 +4,7 @@
 --         external-calendars, templates, reminders, waitlist.
 -- DO NOT HAND EDIT — managed by nself migrate.
 
-CREATE TABLE IF NOT EXISTS meetings_calendars (
+CREATE TABLE IF NOT EXISTS public.meetings_calendars (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -19,11 +19,11 @@ CREATE TABLE IF NOT EXISTS meetings_calendars (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_calendars_owner
-    ON meetings_calendars (owner_id);
+    ON public.meetings_calendars (owner_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_calendars_source
-    ON meetings_calendars (source_account_id);
+    ON public.meetings_calendars (source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_rooms (
+CREATE TABLE IF NOT EXISTS public.meetings_rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -47,13 +47,13 @@ CREATE TABLE IF NOT EXISTS meetings_rooms (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_rooms_active
-    ON meetings_rooms (is_active);
+    ON public.meetings_rooms (is_active);
 CREATE INDEX IF NOT EXISTS idx_meetings_rooms_capacity
-    ON meetings_rooms (capacity);
+    ON public.meetings_rooms (capacity);
 CREATE INDEX IF NOT EXISTS idx_meetings_rooms_source
-    ON meetings_rooms (source_account_id);
+    ON public.meetings_rooms (source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_events (
+CREATE TABLE IF NOT EXISTS public.meetings_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -68,10 +68,10 @@ CREATE TABLE IF NOT EXISTS meetings_events (
     timezone TEXT NOT NULL DEFAULT 'UTC',
     is_recurring BOOLEAN DEFAULT FALSE,
     recurrence_rule JSONB,
-    recurrence_parent_id UUID REFERENCES meetings_events(id) ON DELETE CASCADE,
+    recurrence_parent_id UUID REFERENCES public.meetings_events(id) ON DELETE CASCADE,
     organizer_id TEXT NOT NULL,
-    calendar_id UUID REFERENCES meetings_calendars(id) ON DELETE SET NULL,
-    room_id UUID REFERENCES meetings_rooms(id) ON DELETE SET NULL,
+    calendar_id UUID REFERENCES public.meetings_calendars(id) ON DELETE SET NULL,
+    room_id UUID REFERENCES public.meetings_rooms(id) ON DELETE SET NULL,
     status TEXT NOT NULL DEFAULT 'confirmed'
         CHECK (status IN ('confirmed', 'tentative', 'cancelled')),
     visibility TEXT NOT NULL DEFAULT 'public'
@@ -84,32 +84,32 @@ CREATE TABLE IF NOT EXISTS meetings_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_events_organizer
-    ON meetings_events (organizer_id);
+    ON public.meetings_events (organizer_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_events_start_time
-    ON meetings_events (start_time);
+    ON public.meetings_events (start_time);
 CREATE INDEX IF NOT EXISTS idx_meetings_events_end_time
-    ON meetings_events (end_time);
+    ON public.meetings_events (end_time);
 CREATE INDEX IF NOT EXISTS idx_meetings_events_calendar
-    ON meetings_events (calendar_id);
+    ON public.meetings_events (calendar_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_events_room
-    ON meetings_events (room_id);
+    ON public.meetings_events (room_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_events_status
-    ON meetings_events (status);
+    ON public.meetings_events (status);
 CREATE INDEX IF NOT EXISTS idx_meetings_events_source
-    ON meetings_events (source_account_id);
+    ON public.meetings_events (source_account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_meetings_events_google_id
-    ON meetings_events (source_account_id, google_event_id)
+    ON public.meetings_events (source_account_id, google_event_id)
     WHERE google_event_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_meetings_events_outlook_id
-    ON meetings_events (source_account_id, outlook_event_id)
+    ON public.meetings_events (source_account_id, outlook_event_id)
     WHERE outlook_event_id IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS meetings_attendees (
+CREATE TABLE IF NOT EXISTS public.meetings_attendees (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    event_id UUID NOT NULL REFERENCES meetings_events(id) ON DELETE CASCADE,
+    event_id UUID NOT NULL REFERENCES public.meetings_events(id) ON DELETE CASCADE,
     user_id TEXT,
     external_email TEXT,
     external_name TEXT,
@@ -122,32 +122,32 @@ CREATE TABLE IF NOT EXISTS meetings_attendees (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_attendees_event
-    ON meetings_attendees (event_id);
+    ON public.meetings_attendees (event_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_attendees_user
-    ON meetings_attendees (user_id);
+    ON public.meetings_attendees (user_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_attendees_status
-    ON meetings_attendees (status);
+    ON public.meetings_attendees (status);
 CREATE INDEX IF NOT EXISTS idx_meetings_attendees_source
-    ON meetings_attendees (source_account_id);
+    ON public.meetings_attendees (source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_calendar_shares (
+CREATE TABLE IF NOT EXISTS public.meetings_calendar_shares (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    calendar_id UUID NOT NULL REFERENCES meetings_calendars(id) ON DELETE CASCADE,
+    calendar_id UUID NOT NULL REFERENCES public.meetings_calendars(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
     permission TEXT NOT NULL DEFAULT 'read'
         CHECK (permission IN ('read', 'write', 'admin'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_calendar_shares_calendar
-    ON meetings_calendar_shares (calendar_id);
+    ON public.meetings_calendar_shares (calendar_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_calendar_shares_user
-    ON meetings_calendar_shares (user_id);
+    ON public.meetings_calendar_shares (user_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_calendar_shares_source
-    ON meetings_calendar_shares (source_account_id);
+    ON public.meetings_calendar_shares (source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_external_calendars (
+CREATE TABLE IF NOT EXISTS public.meetings_external_calendars (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -167,15 +167,15 @@ CREATE TABLE IF NOT EXISTS meetings_external_calendars (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_external_calendars_user
-    ON meetings_external_calendars (user_id);
+    ON public.meetings_external_calendars (user_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_external_calendars_provider
-    ON meetings_external_calendars (provider);
+    ON public.meetings_external_calendars (provider);
 CREATE INDEX IF NOT EXISTS idx_meetings_external_calendars_source
-    ON meetings_external_calendars (source_account_id);
+    ON public.meetings_external_calendars (source_account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_meetings_external_calendars_unique
-    ON meetings_external_calendars (user_id, provider, source_account_id);
+    ON public.meetings_external_calendars (user_id, provider, source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_templates (
+CREATE TABLE IF NOT EXISTS public.meetings_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -194,17 +194,17 @@ CREATE TABLE IF NOT EXISTS meetings_templates (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_templates_creator
-    ON meetings_templates (created_by);
+    ON public.meetings_templates (created_by);
 CREATE INDEX IF NOT EXISTS idx_meetings_templates_public
-    ON meetings_templates (is_public);
+    ON public.meetings_templates (is_public);
 CREATE INDEX IF NOT EXISTS idx_meetings_templates_source
-    ON meetings_templates (source_account_id);
+    ON public.meetings_templates (source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_reminders (
+CREATE TABLE IF NOT EXISTS public.meetings_reminders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    event_id UUID NOT NULL REFERENCES meetings_events(id) ON DELETE CASCADE,
+    event_id UUID NOT NULL REFERENCES public.meetings_events(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
     remind_at TIMESTAMPTZ NOT NULL,
     minutes_before INT NOT NULL,
@@ -215,20 +215,20 @@ CREATE TABLE IF NOT EXISTS meetings_reminders (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_reminders_event
-    ON meetings_reminders (event_id);
+    ON public.meetings_reminders (event_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_reminders_user
-    ON meetings_reminders (user_id);
+    ON public.meetings_reminders (user_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_reminders_remind_at
-    ON meetings_reminders (remind_at) WHERE NOT sent;
+    ON public.meetings_reminders (remind_at) WHERE NOT sent;
 CREATE INDEX IF NOT EXISTS idx_meetings_reminders_source
-    ON meetings_reminders (source_account_id);
+    ON public.meetings_reminders (source_account_id);
 
-CREATE TABLE IF NOT EXISTS meetings_waitlist (
+CREATE TABLE IF NOT EXISTS public.meetings_waitlist (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    event_id UUID NOT NULL REFERENCES meetings_events(id) ON DELETE CASCADE,
-    room_id UUID NOT NULL REFERENCES meetings_rooms(id) ON DELETE CASCADE,
+    event_id UUID NOT NULL REFERENCES public.meetings_events(id) ON DELETE CASCADE,
+    room_id UUID NOT NULL REFERENCES public.meetings_rooms(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'waiting'
         CHECK (status IN ('waiting', 'confirmed', 'cancelled')),
@@ -236,8 +236,8 @@ CREATE TABLE IF NOT EXISTS meetings_waitlist (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_waitlist_room
-    ON meetings_waitlist (room_id);
+    ON public.meetings_waitlist (room_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_waitlist_status
-    ON meetings_waitlist (status);
+    ON public.meetings_waitlist (status);
 CREATE INDEX IF NOT EXISTS idx_meetings_waitlist_source
-    ON meetings_waitlist (source_account_id);
+    ON public.meetings_waitlist (source_account_id);
