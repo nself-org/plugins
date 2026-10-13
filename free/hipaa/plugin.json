@@ -1,18 +1,192 @@
 {
-  "name": "hipaa",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
   "category": "compliance",
+  "description": "HIPAA compliance add-on: PHI column registry, PHI access logging with 6-year retention, de-identification helpers (masking + tokenization), encryption-at-rest audit, and BAA workflow.",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA_BAA",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA_VAULT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA_VAULT_ADDR",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA_VAULT_TOKEN",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA_RETENTION_YEARS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_HIPAA_BAA_BUCKET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HIPAA_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HIPAA_PLUGIN_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HIPAA_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HIPAA_LOG_LEVEL",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "hipaa",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "filesystem": [
+      "logs"
+    ],
+    "network": []
+  },
+  "port": 3214,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit-log"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit-log/export"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/baa"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/baa/activate"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/baa/request"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/baa/terminate"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/deidentify"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/encryption-audit"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/phi-columns"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/phi-columns"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/phi-columns/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/ready"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/tokenize"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/tokenize/{token}"
+    }
+  ],
+  "schema": "np_hipaa",
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
+  "tables": [
+    "np_phi_columns",
+    "np_phi_audit_log",
+    "np_baa_records"
+  ],
   "tags": [
     "hipaa",
     "phi",
@@ -23,165 +197,14 @@
     "encryption",
     "deidentify"
   ],
-  "tables": [
-    "np_phi_columns",
-    "np_phi_audit_log",
-    "np_baa_records"
-  ],
-  "webhooks": {
-    "phi.accessed": "PHI column accessed \u2014 row written to np_phi_audit_log",
-    "phi.column.registered": "PHI column registered in registry",
-    "phi.column.unregistered": "PHI column unregistered",
-    "baa.requested": "BAA signing workflow initiated",
-    "baa.signed": "BAA marked active after signing",
-    "baa.terminated": "BAA terminated"
-  },
-  "actions": {
-    "init": "Initialize HIPAA database schema",
-    "server": "Start HIPAA HTTP server",
-    "phi-columns": "Manage PHI column registry",
-    "audit-log": "Query PHI access audit log",
-    "deidentify": "De-identify a dataset using registered PHI column rules",
-    "tokenize": "Tokenize or detokenize a PHI value",
-    "baa": "Manage BAA workflow and status",
-    "encryption-audit": "Verify pgcrypto and TLS-in-transit status"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "NSELF_HIPAA",
-      "NSELF_HIPAA_BAA",
-      "NSELF_HIPAA_VAULT",
-      "NSELF_HIPAA_VAULT_ADDR",
-      "NSELF_HIPAA_VAULT_TOKEN",
-      "NSELF_HIPAA_RETENTION_YEARS",
-      "NSELF_HIPAA_BAA_BUCKET",
-      "HIPAA_PLUGIN_PORT",
-      "HIPAA_PLUGIN_HOST",
-      "HIPAA_API_KEY",
-      "HIPAA_LOG_LEVEL"
-    ]
-  },
-  "config": {
-    "defaultPort": 3212,
-    "hipaaEnabled": true,
-    "baaEnabled": false,
-    "vaultEnabled": false,
-    "retentionYears": 6
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update"
-    ],
-    "network": [],
-    "filesystem": [
-      "logs"
-    ]
-  },
-  "port": 3214,
-  "status": "stable",
   "tier": "free",
-  "language": "go",
-  "entryPoint": "binary",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/audit-log",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit-log/export",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/baa",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/baa/activate",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/baa/request",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/baa/terminate",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/deidentify",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/encryption-audit",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/phi-columns",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/phi-columns",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/phi-columns/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/tokenize",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/tokenize/{token}",
-      "auth": "bearer"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "go/main.go",
-  "checksum": "59661970623dca8c4274044e7e7d5cdd736c45802de4fd15a2052bec7b9b9127",
-  "bundles": [
-    "nsentry"
+  "version": "1.2.6",
+  "webhooks": [
+    "baa.requested",
+    "baa.signed",
+    "baa.terminated",
+    "phi.accessed",
+    "phi.column.registered",
+    "phi.column.unregistered"
   ]
 }

@@ -25,7 +25,7 @@ GROUP_NAME=$(echo "$PAYLOAD" | grep -o '"group_name":"[^"]*"' | sed 's/"group_na
 
 # Get verification ID
 VERIFICATION_ID=$(plugin_db_query "
-    SELECT id FROM idme_verifications WHERE idme_user_id = '$IDME_USER_ID'
+    SELECT id FROM np_idme_verifications WHERE idme_user_id = '$IDME_USER_ID'
 " | tr -d '[:space:]')
 
 if [[ -z "$VERIFICATION_ID" ]]; then
@@ -35,12 +35,12 @@ fi
 
 # Get user ID
 USER_ID=$(plugin_db_query "
-    SELECT user_id FROM idme_verifications WHERE id = '$VERIFICATION_ID'
+    SELECT user_id FROM np_idme_verifications WHERE id = '$VERIFICATION_ID'
 " | tr -d '[:space:]')
 
 # Update or insert group
 plugin_db_query "
-    INSERT INTO idme_groups (verification_id, user_id, group_type, group_name, verified, verified_at)
+    INSERT INTO np_idme_groups (verification_id, user_id, group_type, group_name, verified, verified_at)
     VALUES ('$VERIFICATION_ID', '$USER_ID', '$GROUP_TYPE', '$GROUP_NAME', TRUE, NOW())
     ON CONFLICT (verification_id, group_type)
     DO UPDATE SET verified = TRUE, verified_at = NOW(), updated_at = NOW()
@@ -48,7 +48,7 @@ plugin_db_query "
 
 # Create badge
 plugin_db_query "
-    INSERT INTO idme_badges (verification_id, user_id, badge_type, badge_name, verified_at, active)
+    INSERT INTO np_idme_badges (verification_id, user_id, badge_type, badge_name, verified_at, active)
     VALUES ('$VERIFICATION_ID', '$USER_ID', '$GROUP_TYPE', '$GROUP_NAME', NOW(), TRUE)
     ON CONFLICT (verification_id, badge_type)
     DO UPDATE SET active = TRUE, verified_at = NOW(), updated_at = NOW()

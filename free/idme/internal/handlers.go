@@ -59,7 +59,7 @@ func CreateVerification(db *DB) http.HandlerFunc {
 		ctx := context.Background()
 		var v Verification
 		err := db.Pool.QueryRow(ctx, `
-			INSERT INTO idme_verifications
+			INSERT INTO np_idme_verifications
 				(source_account_id, user_id, idme_uuid, email, verified, verification_level, created_at, updated_at, last_synced_at)
 			VALUES ($1, $2, $3, '', false, $4, now(), now(), now())
 			RETURNING id, source_account_id, user_id, idme_uuid, email, verified, verification_level,
@@ -88,7 +88,7 @@ func ListVerifications(db *DB) http.HandlerFunc {
 			SELECT id, source_account_id, user_id, idme_uuid, email, verified, verification_level,
 			       first_name, last_name, birth_date, zip, phone, access_token, refresh_token,
 			       token_expires_at, verified_at, last_synced_at, created_at, updated_at
-			FROM idme_verifications
+			FROM np_idme_verifications
 			WHERE source_account_id = $1
 			ORDER BY created_at DESC`, sa(r))
 		if err != nil {
@@ -125,7 +125,7 @@ func GetVerification(db *DB) http.HandlerFunc {
 			SELECT id, source_account_id, user_id, idme_uuid, email, verified, verification_level,
 			       first_name, last_name, birth_date, zip, phone, access_token, refresh_token,
 			       token_expires_at, verified_at, last_synced_at, created_at, updated_at
-			FROM idme_verifications
+			FROM np_idme_verifications
 			WHERE id = $1 AND source_account_id = $2`, id, sa(r)).Scan(
 			&v.ID, &v.SourceAccountID, &v.UserID, &v.IDmeUUID, &v.Email, &v.Verified,
 			&v.VerificationLevel, &v.FirstName, &v.LastName, &v.BirthDate, &v.Zip, &v.Phone,
@@ -171,7 +171,7 @@ func VerificationCallback(db *DB, cfg Config) http.HandlerFunc {
 		now := time.Now().UTC()
 		var v Verification
 		err := db.Pool.QueryRow(ctx, `
-			INSERT INTO idme_verifications
+			INSERT INTO np_idme_verifications
 				(source_account_id, user_id, email, verified, verification_level, last_synced_at, created_at, updated_at)
 			VALUES ($1, $2, '', false, 'callback_received', $3, $3, $3)
 			RETURNING id, source_account_id, user_id, idme_uuid, email, verified, verification_level,
@@ -205,7 +205,7 @@ func ListGroups(db *DB) http.HandlerFunc {
 		rows, err := db.Pool.Query(ctx, `
 			SELECT id, source_account_id, verification_id, user_id, group_type, group_name,
 			       verified, verified_at, expires_at, affiliation, rank, status, created_at, updated_at
-			FROM idme_groups
+			FROM np_idme_groups
 			WHERE source_account_id = $1
 			ORDER BY created_at DESC`, sa(r))
 		if err != nil {
@@ -258,7 +258,7 @@ func CreateGroup(db *DB) http.HandlerFunc {
 		ctx := context.Background()
 		var g Group
 		err := db.Pool.QueryRow(ctx, `
-			INSERT INTO idme_groups
+			INSERT INTO np_idme_groups
 				(source_account_id, verification_id, user_id, group_type, group_name, verified,
 				 affiliation, rank, status, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8, now(), now())
@@ -298,7 +298,7 @@ func UpdateGroup(db *DB) http.HandlerFunc {
 		ctx := context.Background()
 		var g Group
 		err := db.Pool.QueryRow(ctx, `
-			UPDATE idme_groups SET
+			UPDATE np_idme_groups SET
 				group_type   = COALESCE($3, group_type),
 				group_name   = COALESCE($4, group_name),
 				verified     = COALESCE($5, verified),
@@ -334,7 +334,7 @@ func DeleteGroup(db *DB) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		ctx := context.Background()
 		tag, err := db.Pool.Exec(ctx,
-			`DELETE FROM idme_groups WHERE id = $1 AND source_account_id = $2`,
+			`DELETE FROM np_idme_groups WHERE id = $1 AND source_account_id = $2`,
 			id, sa(r))
 		if err != nil {
 			errJSON(w, http.StatusInternalServerError, "failed to delete group")
@@ -359,7 +359,7 @@ func GetUserVerifications(db *DB) http.HandlerFunc {
 			SELECT id, source_account_id, user_id, idme_uuid, email, verified, verification_level,
 			       first_name, last_name, birth_date, zip, phone, access_token, refresh_token,
 			       token_expires_at, verified_at, last_synced_at, created_at, updated_at
-			FROM idme_verifications
+			FROM np_idme_verifications
 			WHERE user_id = $1 AND source_account_id = $2
 			ORDER BY created_at DESC`, userID, sa(r))
 		if err != nil {
@@ -395,7 +395,7 @@ func GetUserBadges(db *DB) http.HandlerFunc {
 			SELECT id, source_account_id, verification_id, user_id, badge_type, badge_name,
 			       badge_icon, badge_color, verified_at, expires_at, active, display_order,
 			       created_at, updated_at
-			FROM idme_badges
+			FROM np_idme_badges
 			WHERE user_id = $1 AND source_account_id = $2
 			ORDER BY display_order ASC, created_at DESC`, userID, sa(r))
 		if err != nil {
@@ -431,7 +431,7 @@ func ListBadges(db *DB) http.HandlerFunc {
 			SELECT id, source_account_id, verification_id, user_id, badge_type, badge_name,
 			       badge_icon, badge_color, verified_at, expires_at, active, display_order,
 			       created_at, updated_at
-			FROM idme_badges
+			FROM np_idme_badges
 			WHERE source_account_id = $1
 			ORDER BY display_order ASC, created_at DESC`, sa(r))
 		if err != nil {
@@ -484,7 +484,7 @@ func CreateBadge(db *DB) http.HandlerFunc {
 		ctx := context.Background()
 		var b Badge
 		err := db.Pool.QueryRow(ctx, `
-			INSERT INTO idme_badges
+			INSERT INTO np_idme_badges
 				(source_account_id, verification_id, user_id, badge_type, badge_name,
 				 badge_icon, badge_color, active, display_order, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, now(), now())
@@ -519,11 +519,11 @@ func GetStats(db *DB) http.HandlerFunc {
 			dest  *int
 			query string
 		}{
-			{&s.TotalVerifications, `SELECT COUNT(*) FROM idme_verifications WHERE source_account_id = $1`},
-			{&s.VerifiedCount, `SELECT COUNT(*) FROM idme_verifications WHERE source_account_id = $1 AND verified = true`},
-			{&s.TotalGroups, `SELECT COUNT(*) FROM idme_groups WHERE source_account_id = $1`},
-			{&s.TotalBadges, `SELECT COUNT(*) FROM idme_badges WHERE source_account_id = $1`},
-			{&s.TotalWebhookEvents, `SELECT COUNT(*) FROM idme_webhook_events WHERE source_account_id = $1`},
+			{&s.TotalVerifications, `SELECT COUNT(*) FROM np_idme_verifications WHERE source_account_id = $1`},
+			{&s.VerifiedCount, `SELECT COUNT(*) FROM np_idme_verifications WHERE source_account_id = $1 AND verified = true`},
+			{&s.TotalGroups, `SELECT COUNT(*) FROM np_idme_groups WHERE source_account_id = $1`},
+			{&s.TotalBadges, `SELECT COUNT(*) FROM np_idme_badges WHERE source_account_id = $1`},
+			{&s.TotalWebhookEvents, `SELECT COUNT(*) FROM np_idme_webhook_events WHERE source_account_id = $1`},
 		}
 		for _, q := range queries {
 			if err := db.Pool.QueryRow(ctx, q.query, sourceAccountID).Scan(q.dest); err != nil {

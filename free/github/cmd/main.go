@@ -40,9 +40,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := internal.Migrate(pool); err != nil {
-		log.Fatalf("[nself-github] migration failed: %v", err)
-	}
+	// Boot migrations run once, after the pool answers, on a context with no short deadline: the
+	// first start after an upgrade can build indexes over existing rows.
+	internal.MustBootMigrations(context.Background(), pool)
 
 	srv := internal.NewServer(pool, cfg)
 	handler := srv.Router()
@@ -99,7 +99,6 @@ func connectDB(databaseURL string) (*pgxpool.Pool, error) {
 			}
 			continue
 		}
-		mustBootMigrations(ctx, pool)
 		err = pool.Ping(ctx)
 		cancel()
 		if err != nil {

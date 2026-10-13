@@ -200,11 +200,11 @@ await db.upsertVerification(userId, idmeUserId, profile, tokens, verification);
 
 | Table | Description |
 |-------|-------------|
-| `idme_verifications` | Main verification records with OAuth tokens |
-| `idme_groups` | Verification groups (military, veteran, etc.) |
-| `idme_badges` | Visual badges for verified groups |
-| `idme_attributes` | Additional verified attributes |
-| `idme_webhook_events` | Webhook event log |
+| `np_idme_verifications` | Main verification records with OAuth tokens |
+| `np_idme_groups` | Verification groups (military, veteran, etc.) |
+| `np_idme_badges` | Visual badges for verified groups |
+| `np_idme_attributes` | Additional verified attributes |
+| `np_idme_webhook_events` | Webhook event log |
 
 ### Views
 
@@ -224,16 +224,39 @@ SELECT * FROM idme_verified_users;
 SELECT * FROM idme_group_summary;
 
 -- Find military veterans
-SELECT * FROM idme_groups
+SELECT * FROM np_idme_groups
 WHERE group_type IN ('military', 'veteran')
   AND verified = TRUE;
 
 -- Get user's badges
-SELECT * FROM idme_badges
+SELECT * FROM np_idme_badges
 WHERE user_id = 'user-uuid-here'
   AND active = TRUE
 ORDER BY display_order;
 ```
+
+## Migrations
+
+`idme` applies these files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_idme.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The tables are `np_idme_*` and live in `public`; the three
+views keep their names (`idme_verified_users`, `idme_group_summary`, `idme_recent_verifications`).
+
+**Upgrading an existing install.** Earlier versions named the tables `idme_verifications`, `idme_groups`, `idme_badges`,
+`idme_attributes` and `idme_webhook_events`. Migration `000` renames each one to its `np_idme_*` name, together with its
+indexes, only when the old name exists and the new name is free; when both exist, both are left untouched. Rows are kept.
+Any SQL, Hasura metadata or script of your own that reads the old table names must be changed to the new names. The files
+are otherwise idempotent (`IF NOT EXISTS`, `OR REPLACE`, `DROP ... IF EXISTS` before `CREATE POLICY` and `CREATE TRIGGER`).
+The first start of the new version creates the ledger, adds `source_account_id` where an older table lacks it, and enables
+the row-level-security policies of `002_rls.sql` on `np_idme_verifications`. The first start after upgrading can build
+indexes on existing tables and can take minutes on large tables; until it finishes the plugin does not answer /health, so the
+container shows as unhealthy and an install readiness wait can time out: re-run it once the migration log line appears.
+
+| File | Description |
+|---|---|
+| `000_np_prefix_and_tables.sql` | Guarded rename of the old `idme_*` tables and indexes to `np_idme_*`, then creates the five tables, three views and the `updated_at` triggers (same statements as `schema/tables.sql`) |
+| `001_add_source_account_id.sql` | Adds the multi-app isolation column `source_account_id` and its indexes |
+| `002_rls.sql` | Row-level security policies on `np_idme_verifications` |
 
 ## Webhooks
 
@@ -394,7 +417,7 @@ nself plugin idme test
 
 ### Database Errors
 
-**Problem**: "relation idme_verifications does not exist"
+**Problem**: "relation np_idme_verifications does not exist"
 - **Solution**: Run `./install.sh` to create tables
 
 **Problem**: "Connection refused"

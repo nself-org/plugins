@@ -20,34 +20,6 @@ type LinkPreview struct {
 	ExpiresAt   *time.Time `json:"expires_at"`
 }
 
-// Migrate creates the required table if it does not exist.
-func Migrate(pool *pgxpool.Pool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS np_link_preview_cache (
-			id                TEXT PRIMARY KEY,
-			source_account_id TEXT NOT NULL DEFAULT 'primary',
-			url               TEXT NOT NULL,
-			title             TEXT,
-			description       TEXT,
-			image             TEXT,
-			site_name         TEXT,
-			type              TEXT,
-			fetched_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			expires_at        TIMESTAMPTZ
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_np_link_preview_cache_url
-			ON np_link_preview_cache (url);
-
-		CREATE INDEX IF NOT EXISTS idx_np_link_preview_cache_expires_at
-			ON np_link_preview_cache (expires_at);
-	`)
-	return err
-}
-
 // InsertPreview inserts or updates a cached preview.
 func InsertPreview(pool *pgxpool.Pool, p *LinkPreview) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

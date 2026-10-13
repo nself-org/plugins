@@ -203,16 +203,7 @@ func (s *Server) moveToDLQ(ctx context.Context, jobID, finalError string) {
 	}
 }
 
-// HTTP handlers
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	if err := s.rdb.Ping(r.Context()).Err(); err != nil {
-		http.Error(w, `{"status":"unhealthy","redis":"down"}`, http.StatusServiceUnavailable)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"ok"}`))
-}
+// HTTP handlers (handleHealth lives in health.go)
 
 func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

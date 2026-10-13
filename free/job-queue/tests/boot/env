@@ -1,0 +1,5 @@
+# Dummy values for the boot kit, never real secrets.
+NSELF_JOB_QUEUE=true
+JOBQUEUE_PORT=$PORT
+# the kit has no Redis; /health then skips the Redis probe (off by default)
+JOBQUEUE_HEALTH_IGNORE_REDIS=true

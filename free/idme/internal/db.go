@@ -31,7 +31,9 @@ func NewDB(ctx context.Context, connStr string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pgxpool.New: %w", err)
 	}
-	mustBootMigrations(ctx, pool)
+	// Migrations get their own context: the caller's ctx is a short connect deadline, and the first
+	// start after an upgrade can build indexes over existing rows.
+	mustBootMigrations(context.Background(), pool)
 	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("db ping: %w", err)
 	}

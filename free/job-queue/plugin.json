@@ -1,55 +1,66 @@
 {
-  "name": "job-queue",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Durable background job queue with priorities, retries, scheduled execution, and per-job progress tracking.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "port": 8213,
   "category": "infrastructure",
+  "description": "Durable background job queue with priorities, retries, scheduled execution, and per-job progress tracking.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "JOB_QUEUE_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "JOB_QUEUE_WORKERS",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
-  "tier": "free",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "job-queue",
+  "port": 8213,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "none",
+      "method": "GET",
+      "path": "/health"
+    }
+  ],
+  "schema": "np_job_queue",
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
+  "tables": [
+    "np_jobs",
+    "np_job_dlq",
+    "np_circuit_breakers"
+  ],
   "tags": [
     "jobs",
     "queue",
     "background",
     "workers"
   ],
-  "tables": [
-    "np_jobqueue_jobs",
-    "np_jobqueue_runs"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "JOB_QUEUE_PORT",
-      "JOB_QUEUE_WORKERS"
-    ]
-  },
-  "entry": "go/main.go",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "none"
-    }
-  ],
-  "health_endpoint": "/health",
-  "checksum": "52629b22df591b87e4029748d0f4e8071069ab53c6f3d4080429c0aef330888e",
-  "bundles": [
-    "clawde"
-  ]
+  "tier": "free",
+  "version": "1.2.6"
 }

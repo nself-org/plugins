@@ -154,6 +154,24 @@ SELECT * FROM github_recent_activity;
 SELECT * FROM github_workflow_stats;
 ```
 
+## Migrations
+
+`github` applies these files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_github.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates its tables from Go code, and the
+`np_github_*` tables live in `public`.
+
+**Upgrading an existing install.** The files are idempotent and guarded, so they apply over tables an earlier version
+created: no data is dropped. A table is renamed from the old `github_*` name only when the old name exists and the `np_github_*`
+name is free; when both exist, both are left untouched. The first start after upgrading builds any missing indexes on existing
+tables and can take minutes on large tables; until it finishes the plugin does not answer /health, so the container shows as
+unhealthy and an install readiness wait can time out: re-run it once the migration log line appears.
+
+| File | Description |
+|---|---|
+| `001_add_np_prefix.sql` | Guarded rename of the old `github_*` tables and indexes to `np_github_*` |
+| `002_github_schema.sql` | Creates the 23 `np_github_*` tables and their indexes (`IF NOT EXISTS`) |
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |

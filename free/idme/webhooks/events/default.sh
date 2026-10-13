@@ -26,7 +26,7 @@ plugin_info "Payload: $PAYLOAD"
 EVENT_ID=$(echo "$PAYLOAD" | grep -o '"id":"[^"]*"' | sed 's/"id":"\([^"]*\)"/\1/' || echo "unknown-$(date +%s)")
 
 plugin_db_query "
-    INSERT INTO idme_webhook_events (event_id, event_type, payload, received_at)
+    INSERT INTO np_idme_webhook_events (event_id, event_type, payload, received_at)
     VALUES ('$EVENT_ID', '$EVENT_TYPE', '$PAYLOAD'::jsonb, NOW())
     ON CONFLICT (event_id) DO NOTHING
 " || true

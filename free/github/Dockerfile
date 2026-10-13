@@ -1,7 +1,6 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.* ./
-COPY ../../sdk /sdk
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 

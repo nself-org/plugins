@@ -104,6 +104,18 @@ All `np_phi_*` tables include `source_account_id TEXT NOT NULL DEFAULT 'primary'
 
 ## Migrations
 
+`hipaa` applies these files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_hipaa.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The tables (`np_phi_columns`, `np_phi_audit_log`,
+`np_baa_records`) live in `public`.
+
+**Upgrading an existing install.** The files are idempotent (`IF NOT EXISTS`, guarded policy blocks), so they apply over
+tables an earlier version created: no data is touched or dropped. The first start of the new version creates the ledger.
+Migration 001 now computes `retain_until` from `accessed_at AT TIME ZONE 'UTC'`: the previous expression
+(`timestamptz + interval`) is not immutable and Postgres refused it, so the file could never have applied as shipped.
+
+The Go module root is the plugin root (`go.mod` next to `plugin.json`) so `migrations/` can be embedded; the entry point is `./go`.
+
 | File | Description |
 |---|---|
 | `001_hipaa_tables.sql` | PHI column registry, PHI audit log (with 6-year generated `retain_until`), BAA records |

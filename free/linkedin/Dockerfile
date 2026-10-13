@@ -1,17 +1,18 @@
 # nself-linkedin (Go) — multi-stage build
-# Build context: paid/linkedin/ directory
+# Build context: this plugin's own directory (docker build -f Dockerfile .); modules come from vendor/, no network needed.
 
 # Stage 1: builder
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
 
 COPY go.mod go.sum ./
+COPY vendor/ vendor/
 
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nself-linkedin ./cmd/
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -trimpath -ldflags="-s -w" -o /nself-linkedin ./cmd/
 
 # Stage 2: runtime
 FROM alpine:3.19

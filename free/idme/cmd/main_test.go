@@ -151,7 +151,7 @@ func TestNewRouter_UserBadgesRouteDispatch(t *testing.T) {
 func TestNewRouter_StatsRouteDispatch(t *testing.T) {
 	db, mock := newTestDB(t)
 	for i := 0; i < 5; i++ {
-		mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_").
+		mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_").
 			WithArgs(pgxmock.AnyArg()).
 			WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(0))
 	}
@@ -189,7 +189,7 @@ func TestNewRouter_CreateGroup_MissingFields(t *testing.T) {
 
 func TestNewRouter_DeleteGroup_RouteDispatch(t *testing.T) {
 	db, mock := newTestDB(t)
-	mock.ExpectExec("DELETE FROM idme_groups").
+	mock.ExpectExec("DELETE FROM np_idme_groups").
 		WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnResult(pgxmock.NewResult("DELETE", 1))
 

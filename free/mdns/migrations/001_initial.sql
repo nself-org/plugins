@@ -3,8 +3,10 @@
 -- Description: Creates np_mdns_services and np_mdns_discovery_log tables.
 -- Both tables have source_account_id per Multi-Tenant Convention Wall.
 -- Idempotent: uses CREATE TABLE IF NOT EXISTS.
+-- Boot-applied by sdk/go/migrate with search_path pinned to np_mdns, so every object is schema-qualified: the tables live in
+-- public (the cli tracking rule). This DDL used to run from Go code at start (InitSchema); it lives only here now.
 
-CREATE TABLE IF NOT EXISTS np_mdns_services (
+CREATE TABLE IF NOT EXISTS public.np_mdns_services (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     service_name      VARCHAR(255) NOT NULL,
@@ -23,15 +25,15 @@ CREATE TABLE IF NOT EXISTS np_mdns_services (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_mdns_services_account
-    ON np_mdns_services(source_account_id);
+    ON public.np_mdns_services(source_account_id);
 CREATE INDEX IF NOT EXISTS idx_np_mdns_services_type
-    ON np_mdns_services(service_type);
+    ON public.np_mdns_services(service_type);
 CREATE INDEX IF NOT EXISTS idx_np_mdns_services_active
-    ON np_mdns_services(is_active);
+    ON public.np_mdns_services(is_active);
 CREATE INDEX IF NOT EXISTS idx_np_mdns_services_advertised
-    ON np_mdns_services(is_advertised);
+    ON public.np_mdns_services(is_advertised);
 
-CREATE TABLE IF NOT EXISTS np_mdns_discovery_log (
+CREATE TABLE IF NOT EXISTS public.np_mdns_discovery_log (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     service_type      VARCHAR(128) NOT NULL,
@@ -48,8 +50,8 @@ CREATE TABLE IF NOT EXISTS np_mdns_discovery_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_mdns_discovery_account
-    ON np_mdns_discovery_log(source_account_id);
+    ON public.np_mdns_discovery_log(source_account_id);
 CREATE INDEX IF NOT EXISTS idx_np_mdns_discovery_type
-    ON np_mdns_discovery_log(service_type);
+    ON public.np_mdns_discovery_log(service_type);
 CREATE INDEX IF NOT EXISTS idx_np_mdns_discovery_available
-    ON np_mdns_discovery_log(is_available);
+    ON public.np_mdns_discovery_log(is_available);

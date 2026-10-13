@@ -39,8 +39,8 @@ list_user_groups() {
             g.affiliation,
             g.rank,
             g.status
-        FROM idme_groups g
-        JOIN idme_verifications v ON g.verification_id = v.id
+        FROM np_idme_groups g
+        JOIN np_idme_verifications v ON g.verification_id = v.id
         WHERE v.email = '$user_email'
         ORDER BY g.verified_at DESC
     " || plugin_error "Failed to fetch user groups"
@@ -59,8 +59,8 @@ list_group_type() {
             g.verified_at,
             g.affiliation,
             g.rank
-        FROM idme_groups g
-        JOIN idme_verifications v ON g.verification_id = v.id
+        FROM np_idme_groups g
+        JOIN np_idme_verifications v ON g.verification_id = v.id
         WHERE g.group_type = '$group_type' AND g.verified = TRUE
         ORDER BY g.verified_at DESC
     " || plugin_error "Failed to fetch group members"

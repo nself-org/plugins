@@ -19,4 +19,7 @@ COPY --from=builder /app/idme-plugin .
 
 EXPOSE 3010
 
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${PORT:-3010}/health || exit 1
+
 ENTRYPOINT ["/app/idme-plugin"]

@@ -281,6 +281,22 @@ nself-mdns status
 
 Both tables include `source_account_id` for multi-app isolation and unique constraints on `(source_account_id, service_name, service_type)` and `(source_account_id, service_name, service_type, host)` respectively.
 
+## Migrations
+
+`mdns` applies these files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_mdns.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates its tables from Go code. `np_mdns_services` and `np_mdns_discovery_log` live in `public`.
+
+**Upgrading an existing install.** The files are idempotent (`IF NOT EXISTS`, guarded renames), so they apply over tables an
+earlier version created: no data is touched or dropped. The one file is unchanged in content apart from schema-qualified names, so it applies cleanly over the tables the old Go code created. The first start of the new version creates the ledger. A first
+start that has to build indexes over a large existing table can take minutes; until it finishes the plugin does not answer
+`/health`, so the container shows as unhealthy and an install readiness wait can time out: re-run it once the migration log
+line appears.
+
+| File | Description |
+|---|---|
+| `001_initial.sql` | Creates `np_mdns_services` and `np_mdns_discovery_log` with their indexes |
+
 ## Usage Examples
 
 ### Register and advertise a service

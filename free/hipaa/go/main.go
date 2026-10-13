@@ -14,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/nself-org/nself-hipaa/handlers"
+	"github.com/nself-org/plugins/free/hipaa/go/handlers"
 )
 
 func main() {
@@ -45,6 +45,9 @@ func main() {
 		log.Fatalf("ping database: %v", err)
 	}
 
+	// Apply the plugin's own migrations before serving (own context: the 30s connect timeout above must not cap them).
+	mustBootMigrations(context.Background(), pool)
+
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
@@ -52,10 +55,7 @@ func main() {
 	r.Use(middleware.Timeout(60 * time.Second))
 	r.Use(apiKeyMiddleware)
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","plugin":"hipaa"}`))
-	})
+	r.Get("/health", handleHealth)
 	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)

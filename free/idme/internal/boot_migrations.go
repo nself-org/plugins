@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -16,7 +17,8 @@ import (
 var bootPool *pgxpool.Pool
 
 func bootOptions() migrate.Options {
-	return migrate.Options{Schema: "np_idme", FS: migrations.FS}
+	// Index builds over existing rows can outlast the 60s default per file; a timeout would be a fatal restart loop.
+	return migrate.Options{Schema: "np_idme", FS: migrations.FS, StatementTimeout: 30 * time.Minute}
 }
 
 // mustBootMigrations applies the plugin's own migrations before it serves; a failure is fatal.
@@ -29,10 +31,13 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 	log.Printf("migrations: applied %d", len(res.Applied))
 }
 
-// bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
+// BootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
-func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
+func BootMigrationsHealth(w http.ResponseWriter) map[string]int {
+	if bootPool == nil { // unit tests build the router without a database; boot always sets the pool
+		return map[string]int{"applied": 0, "expected": 0}
+	}
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)

@@ -56,6 +56,10 @@
   "license_spdx": "MIT",
   "manifest_version": 2,
   "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
   "minNselfVersion": "1.0.0",
   "multiApp": {
     "defaultValue": "primary",

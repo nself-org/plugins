@@ -66,11 +66,11 @@ Each group has custom badge with icon and color:
 
 ### 3. Database Schema
 5 tables + 3 views + triggers:
-- `idme_verifications` - Main verification records
-- `idme_groups` - Verification groups
-- `idme_badges` - Visual badges
-- `idme_attributes` - User attributes (branch, rank, etc.)
-- `idme_webhook_events` - Event log
+- `np_idme_verifications` - Main verification records
+- `np_idme_groups` - Verification groups
+- `np_idme_badges` - Visual badges
+- `np_idme_attributes` - User attributes (branch, rank, etc.)
+- `np_idme_webhook_events` - Event log
 
 ### 4. TypeScript Implementation
 - Full type safety
