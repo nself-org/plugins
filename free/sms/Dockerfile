@@ -1,12 +1,12 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o plugin-sms ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o plugin-sms ./cmd/main.go
 
 FROM alpine:3.19
-RUN apk add --no-cache wget ca-certificates
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 WORKDIR /app
 COPY --from=builder /app/plugin-sms .
 COPY migrations/ ./migrations/
