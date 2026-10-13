@@ -2,10 +2,8 @@
 -- Creates all 9 np_torrentmanager_* tables with source_account_id (Multi-App Isolation).
 -- Table + column names match db.go InitSchema exactly — CODE WINS.
 
-BEGIN;
-
 -- Torrent Clients Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_clients (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_torrent_clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     client_type VARCHAR(50) NOT NULL,
@@ -22,13 +20,13 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_clients (
 );
 
 CREATE INDEX IF NOT EXISTS idx_torrent_clients_account
-    ON np_torrentmanager_torrent_clients(source_account_id);
+    ON public.np_torrentmanager_torrent_clients(source_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_torrent_clients_type
-    ON np_torrentmanager_torrent_clients(client_type);
+    ON public.np_torrentmanager_torrent_clients(client_type);
 
 -- Torrent Sources Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_sources (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_sources (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     source_name VARCHAR(50) NOT NULL,
@@ -44,13 +42,13 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_sources (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_sources_active
-    ON np_torrentmanager_sources(is_active) WHERE is_active = TRUE;
+    ON public.np_torrentmanager_sources(is_active) WHERE is_active = TRUE;
 
 -- Torrent Downloads Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_downloads (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_torrent_downloads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
-    client_id UUID NOT NULL REFERENCES np_torrentmanager_torrent_clients(id) ON DELETE CASCADE,
+    client_id UUID NOT NULL REFERENCES public.np_torrentmanager_torrent_clients(id) ON DELETE CASCADE,
     client_torrent_id VARCHAR(255) NOT NULL,
     name VARCHAR(500) NOT NULL,
     info_hash VARCHAR(40) NOT NULL,
@@ -86,18 +84,18 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_downloads (
 );
 
 CREATE INDEX IF NOT EXISTS idx_torrent_downloads_account
-    ON np_torrentmanager_torrent_downloads(source_account_id);
+    ON public.np_torrentmanager_torrent_downloads(source_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_torrent_downloads_status
-    ON np_torrentmanager_torrent_downloads(status);
+    ON public.np_torrentmanager_torrent_downloads(status);
 
 CREATE INDEX IF NOT EXISTS idx_torrent_downloads_info_hash
-    ON np_torrentmanager_torrent_downloads(info_hash);
+    ON public.np_torrentmanager_torrent_downloads(info_hash);
 
 -- Torrent Files Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_files (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_torrent_files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    download_id UUID NOT NULL REFERENCES np_torrentmanager_torrent_downloads(id) ON DELETE CASCADE,
+    download_id UUID NOT NULL REFERENCES public.np_torrentmanager_torrent_downloads(id) ON DELETE CASCADE,
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     file_index INT NOT NULL,
     file_name VARCHAR(500) NOT NULL,
@@ -112,12 +110,12 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_torrent_files_download
-    ON np_torrentmanager_torrent_files(download_id);
+    ON public.np_torrentmanager_torrent_files(download_id);
 
 -- Torrent Trackers Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_trackers (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_torrent_trackers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    download_id UUID NOT NULL REFERENCES np_torrentmanager_torrent_downloads(id) ON DELETE CASCADE,
+    download_id UUID NOT NULL REFERENCES public.np_torrentmanager_torrent_downloads(id) ON DELETE CASCADE,
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     tracker_url VARCHAR(500) NOT NULL,
     tier INT NOT NULL,
@@ -131,10 +129,10 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_torrent_trackers (
 );
 
 CREATE INDEX IF NOT EXISTS idx_torrent_trackers_download
-    ON np_torrentmanager_torrent_trackers(download_id);
+    ON public.np_torrentmanager_torrent_trackers(download_id);
 
 -- Torrent Search Cache Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_search_cache (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_search_cache (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     query_hash VARCHAR(64) NOT NULL,
@@ -149,13 +147,13 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_search_cache (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_search_cache_hash
-    ON np_torrentmanager_search_cache(query_hash);
+    ON public.np_torrentmanager_search_cache(query_hash);
 
 CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_search_cache_expires
-    ON np_torrentmanager_search_cache(expires_at);
+    ON public.np_torrentmanager_search_cache(expires_at);
 
 -- Seeding Policy Table (global policies)
-CREATE TABLE IF NOT EXISTS np_torrentmanager_seeding_policy (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_seeding_policy (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     policy_name VARCHAR(255) NOT NULL,
@@ -173,7 +171,7 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_seeding_policy (
 );
 
 -- Torrent Stats Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_stats (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_stats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     total_downloads INT DEFAULT 0,
@@ -193,7 +191,7 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_stats (
 );
 
 -- Per-Download Seeding Policies Table
-CREATE TABLE IF NOT EXISTS np_torrentmanager_seeding_policies (
+CREATE TABLE IF NOT EXISTS public.np_torrentmanager_seeding_policies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(255) NOT NULL DEFAULT 'primary',
     download_id VARCHAR(255) NOT NULL,
@@ -207,16 +205,16 @@ CREATE TABLE IF NOT EXISTS np_torrentmanager_seeding_policies (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_np_torrentmanager_seeding_policies_download
-    ON np_torrentmanager_seeding_policies(download_id);
+    ON public.np_torrentmanager_seeding_policies(download_id);
 
 CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_seeding_policies_account
-    ON np_torrentmanager_seeding_policies(source_account_id);
+    ON public.np_torrentmanager_seeding_policies(source_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_np_torrentmanager_seeding_policies_favorite
-    ON np_torrentmanager_seeding_policies(favorite) WHERE favorite = TRUE;
+    ON public.np_torrentmanager_seeding_policies(favorite) WHERE favorite = TRUE;
 
 -- Views
-CREATE OR REPLACE VIEW torrent_active_downloads AS
+CREATE OR REPLACE VIEW public.torrent_active_downloads AS
 SELECT
     id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
     status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
@@ -224,11 +222,11 @@ SELECT
     download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
     error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
     stopped_at, created_at, updated_at
-FROM np_torrentmanager_torrent_downloads
+FROM public.np_torrentmanager_torrent_downloads
 WHERE status IN ('downloading', 'paused')
 ORDER BY added_at DESC;
 
-CREATE OR REPLACE VIEW torrent_completed_downloads AS
+CREATE OR REPLACE VIEW public.torrent_completed_downloads AS
 SELECT
     id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
     status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
@@ -236,11 +234,11 @@ SELECT
     download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
     error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
     stopped_at, created_at, updated_at
-FROM np_torrentmanager_torrent_downloads
+FROM public.np_torrentmanager_torrent_downloads
 WHERE status = 'completed'
 ORDER BY completed_at DESC;
 
-CREATE OR REPLACE VIEW torrent_seeding_torrents AS
+CREATE OR REPLACE VIEW public.torrent_seeding_torrents AS
 SELECT
     id, source_account_id, client_id, client_torrent_id, name, info_hash, magnet_uri,
     status, category, size_bytes, downloaded_bytes, uploaded_bytes, progress_percent,
@@ -248,8 +246,7 @@ SELECT
     download_path, files_count, stop_at_ratio, stop_at_time_hours, vpn_ip, vpn_interface,
     error_message, content_id, requested_by, metadata, added_at, started_at, completed_at,
     stopped_at, created_at, updated_at
-FROM np_torrentmanager_torrent_downloads
+FROM public.np_torrentmanager_torrent_downloads
 WHERE status = 'seeding'
 ORDER BY completed_at DESC;
 
-COMMIT;
