@@ -3839,8 +3839,7 @@
       },
       "dependencies": {
         "optional": [
-          "plugin-retrieval",
-          "nself-ai-gateway"
+          "plugin-retrieval"
         ],
         "required": []
       },
@@ -3934,9 +3933,7 @@
       "checksums": {
         "sha256": "1817c670945c8f511d60646bcaa10823afd35a37c1fff5f3966ab44740a2d9a5"
       },
-      "dependencies": [
-        "minio"
-      ],
+      "dependencies": [],
       "description": "Server-side image processing plugin for nSelf: resize, crop, format conversion (WebP/AVIF/JPEG/PNG), EXIF strip, and MinIO-integrated upload pipeline. Replaces per-app Sharp/Node.js usage across nFamily, nChat, and any consumer app needing image normalization.",
       "download_url": "https://plugins.nself.org/plugins/nself-image/tarball",
       "language": "rust",
@@ -3982,14 +3979,7 @@
       "checksums": {
         "sha256": "c6c44b1dcfeaada6c34785cc78827b0f91c6e6c34f249678642eaffb7f7de583"
       },
-      "dependencies": {
-        "optional": [
-          "database"
-        ],
-        "required": [
-          "minio"
-        ]
-      },
+      "dependencies": [],
       "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
       "download_url": "https://plugins.nself.org/plugins/nself-pdf/tarball",
       "language": "go",
@@ -4030,14 +4020,9 @@
       "checksums": {
         "sha256": "fa0a3c5a8885ead36ecd6288b572634f8b388a0b590b78025eeb06bc33346716"
       },
-      "dependencies": {
-        "optional": [
-          "database"
-        ],
-        "required": [
-          "object-storage"
-        ]
-      },
+      "dependencies": [
+        "object-storage"
+      ],
       "description": "Server-side file scanning for MinIO uploads: magic-byte MIME validation, ClamAV virus/malware scanning (always free, Security-Always-Free Doctrine), and optional CSAM hash detection (deferred — requires partner agreement)",
       "download_url": "https://plugins.nself.org/plugins/nself-scan/tarball",
       "language": "go",
