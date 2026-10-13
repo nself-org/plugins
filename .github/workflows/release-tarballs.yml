@@ -2,14 +2,16 @@ name: Release Plugin Tarballs (Free)
 
 # One tag push (v*) or manual dispatch with a tag runs four jobs, each with only the permissions and secrets it needs:
 #   build         deterministic source + per-platform tarballs (scripts/deterministic-tar.sh); no secrets, read-only token.
-#   publish       uploads the missing assets to the GitHub Release (never --clobber) and mirrors the PUBLISHED bytes to Cloudflare R2;
-#                 holds the R2 secrets, never the signing key. Hands the published bytes on as an artifact.
+#   publish       uploads the missing tarballs to the GitHub Release (never --clobber), writes the .sha256 files from the PUBLISHED
+#                 bytes and mirrors those bytes to Cloudflare R2; holds the R2 secrets, never the signing key.
 #   sign          bound to the protected Environment `release-signing` (required reviewer): the only job that can read the free-tier
-#                 signing key (NSELF_RELEASE_SIGNING_KEY_FREE + _ID). Signs the published source tarballs per hq PLUG D7
-#                 (scripts/release/sign.sh) and attaches GitHub build-provenance attestations. The licensed key is never here.
+#                 signing key (NSELF_RELEASE_SIGNING_KEY_FREE + _ID). Downloads what is on the Release, signs the source tarballs
+#                 per hq PLUG D7 (scripts/release/sign.sh) and attaches GitHub build-provenance attestations. The licensed key is
+#                 never here. Runs the workflow's own commit of sign.sh, the code the reviewer approved.
 #   release-data  re-downloads the published bytes, writes sha256 + release_signature into releases.json
-#                 (scripts/verify-published-checksums.sh --write --signatures), regenerates the projections and opens the
-#                 release-data PR with the workflow's own GITHUB_TOKEN. No PAT, no cross-repo trigger.
+#                 (scripts/verify-published-checksums.sh --write --signatures) and opens the release-data PR with the workflow's own
+#                 GITHUB_TOKEN. No PAT, no cross-repo trigger. The projections (registry.json, catalog.json, counts.json) need the
+#                 private bundles repo, which this token cannot read: the PR body tells the maintainer to regenerate them.
 # Checksums and signatures always describe the bytes on the Release, never a rebuild: the Release asset is the artifact of record.
 # Idempotent: re-running skips assets already present on the release. See .github/wiki/Releasing.md.
 
@@ -282,9 +284,6 @@ jobs:
     env:
       TAG: ${{ needs.build.outputs.tag }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      R2_BUCKET: nself-plugin-tarballs
-      R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
 
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -338,7 +337,7 @@ jobs:
 
           to_upload=()
           skipped=0
-          for f in dist/*.tar.gz dist/*.sha256; do
+          for f in dist/*.tar.gz; do
             [ -e "$f" ] || continue
             if printf '%s\n' "$existing" | grep -qxF "$(basename "$f")"; then
               skipped=$((skipped + 1))
@@ -378,13 +377,29 @@ jobs:
           [ "$fail" -eq 0 ] || exit 1
           echo "Published tarballs: $(find published -name '*.tar.gz' | wc -l)"
 
+      # The .sha256 files describe the bytes on the Release, so they are computed from published/ and only the missing ones are
+      # uploaded; a checksum file from this run's rebuild would not match an older asset of record.
+      - name: Publish checksum files from the published bytes
+        run: |
+          mkdir -p checksums
+          existing="$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name')"
+          to_upload=()
+          for f in published/*.tar.gz; do
+            name="$(basename "$f")"
+            printf "%s  %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$name" > "checksums/${name}.sha256"
+            printf '%s\n' "$existing" | grep -qxF "${name}.sha256" || to_upload+=("checksums/${name}.sha256")
+          done
+          if [ "${#to_upload[@]}" -gt 0 ]; then
+            gh release upload "$TAG" "${to_upload[@]}" --repo "${GITHUB_REPOSITORY}"
+          fi
+
       - name: Verify GitHub upload
         run: |
           ASSET_COUNT=$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" \
             --json assets --jq '.assets | length')
           echo "Total assets on release $TAG: $ASSET_COUNT"
-          # Everything this run built (tarballs and their .sha256 files) must be on the release.
-          want=$(find dist -type f | wc -l)
+          # Every tarball this run built and its .sha256 must be on the release.
+          want=$(( $(find dist -name '*.tar.gz' | wc -l) * 2 ))
           if [ "$ASSET_COUNT" -lt "$want" ]; then
             echo "ERROR: expected at least $want assets, found $ASSET_COUNT"
             exit 1
@@ -395,6 +410,10 @@ jobs:
       # release asset and its R2 copy can never disagree. Every object is read back and its sha256
       # compared; a failed upload or an object that cannot be read back fails the job.
       - name: Mirror the published tarballs to R2 and verify them (S67-T03)
+        env:
+          R2_BUCKET: nself-plugin-tarballs
+          R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
         run: |
           VERSION="${TAG#v}"
           FAIL=0
@@ -440,14 +459,6 @@ jobs:
             exit 1
           fi
 
-      - name: Hand the published bytes to the sign job
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: published
-          path: published/
-          retention-days: 7
-          if-no-files-found: error
-
   # The only job bound to the `release-signing` Environment (required reviewer, set up by the owner in P7-PROD-59). It reads the
   # free-tier signing key and nothing else secret, has no write access to the repository and no R2 access.
   sign:
@@ -461,17 +472,20 @@ jobs:
       attestations: write
     env:
       TAG: ${{ needs.build.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
+      # The workflow's own commit: the sign.sh that touches the key is the one the reviewer approved, whatever the tag points at.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
           persist-credentials: false
 
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: published
-          path: published
+      # What the Release serves is the artifact of record, so that is what gets signed and attested (no artifact hand-off to expire
+      # while the reviewer decides). release-data re-downloads once more and refuses any row whose bytes changed in between.
+      - name: Download the published tarballs
+        run: |
+          mkdir -p published
+          gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir published --pattern '*.tar.gz'
 
       # Source tarballs only (<slug>-<version>.tar.gz): the signed message names slug, version and the source tarball's sha256.
       # Binary tarballs (<slug>-<version>-<platform>.tar.gz) are covered by platform_checksums and the provenance attestation.
@@ -544,7 +558,6 @@ jobs:
       - name: Write releases.json from the published bytes
         run: |
           bash scripts/verify-published-checksums.sh --write --signatures signed/signatures.json "$TAG"
-          bash scripts/plugin-counts.sh
 
       - name: Open the release-data PR
         run: |
@@ -556,11 +569,18 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add releases.json registry.json catalog.json counts.json
+          git add releases.json
           git commit -m "chore(release): release data for ${TAG}"
           git push --force origin "HEAD:refs/heads/${branch}"
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
+            {
+              echo "Written by the release workflow from the bytes published on ${TAG}: sha256 and release_signature per plugin. Review the diff against the Release assets; do not edit by hand."
+              echo
+              echo "Before merging: registry.json, catalog.json and counts.json are projections of releases.json that need the private bundles repo, which the workflow token cannot read."
+              echo "Run bash scripts/plugin-counts.sh on a maintainer machine with the bundles checkout and push the result to this branch; the registry gate stays red until then."
+              echo "Pushing also starts the required checks, which a PR opened with the workflow token does not."
+            } > pr-body.md
             gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
               --title "chore(release): release data for ${TAG}" \
-              --body "Written by the release workflow from the bytes published on ${TAG}: sha256 and release_signature per plugin, then the projections regenerated by scripts/plugin-counts.sh. Review the diff against the Release assets; do not edit by hand."
+              --body-file pr-body.md
           fi

@@ -31,9 +31,9 @@ the chain uses the workflow's own `GITHUB_TOKEN` plus scoped repository secrets:
 | Job | Permissions | Secrets | Does |
 |---|---|---|---|
 | `build` | contents read | none | deterministic source and per-platform tarballs (`scripts/deterministic-tar.sh`) |
-| `publish` | contents write | Cloudflare R2 | uploads missing assets to the Release (never `--clobber`), re-downloads the published bytes, mirrors those bytes to R2 and reads each object back |
-| `sign` | contents read, id-token write, attestations write | free-tier signing key | bound to the `release-signing` Environment; signs the published source tarballs and attaches build-provenance attestations |
-| `release-data` | contents write, pull-requests write | none | writes `releases.json` from the published bytes, regenerates `registry.json`, `catalog.json`, `counts.json`, opens the release-data PR |
+| `publish` | contents write | Cloudflare R2 (R2 step only) | uploads missing tarballs to the Release (never `--clobber`), re-downloads the published bytes, writes the `.sha256` files from them, mirrors those bytes to R2 and reads each object back |
+| `sign` | contents read, id-token write, attestations write | free-tier signing key (signing step only) | bound to the `release-signing` Environment; downloads what the Release serves, signs the source tarballs and attaches build-provenance attestations; runs the workflow's own commit of `sign.sh` |
+| `release-data` | contents write, pull-requests write | none | writes `releases.json` from the published bytes and the signatures, opens the release-data PR |
 
 Checksums and signatures always describe the bytes on the Release, never a rebuild. Gzip output differs between machines, so an
 asset that is already on the Release stays the artifact of record and everything downstream follows it.
@@ -45,8 +45,9 @@ asset that is already on the Release stays the artifact of record and everything
 - `release_signature` in `releases.json` and the projections: `{"key_id": "plugins-<16 hex>", "alg": "ed25519", "sig": "<base64>"}`.
   `sig` is the 64-byte signature in standard padded base64 (the text `sdk/go/signing` `EncodeSig` produces). `key_id` is derived,
   never chosen: `plugins-` plus the first 16 hex of sha256 over the raw 32-byte public key. `sign.sh` refuses a key id that does not match its key.
-- Only the source tarball `<slug>-<version>.tar.gz` is signed. The per-platform binary tarballs are covered by `platform_checksums` and by the
-  provenance attestation; verify them with `gh attestation verify <file> --repo nself-org/plugins`.
+- Only the source tarball `<slug>-<version>.tar.gz` is signed. The per-platform binary tarballs are covered by `platform_checksums` (in the unsigned
+  `releases.json`) and by the provenance attestation; verify them with `gh attestation verify <file> --repo nself-org/plugins`.
+  `verify-signatures.sh` counts source tarballs (checksum + signature) and binary tarballs (checksum only) separately.
 - Verification order is checksum, then signature, both before extraction.
 
 ### Scripts (`scripts/release/`)
@@ -54,7 +55,7 @@ asset that is already on the Release stays the artifact of record and everything
 | Script | Use |
 |---|---|
 | `sign.sh SLUG VERSION TARBALL` | prints the `release_signature` JSON. Key from `NSELF_RELEASE_SIGNING_KEY_FREE` (PKCS8 PEM) and `NSELF_RELEASE_SIGNING_KEY_FREE_ID`, environment only; written to a 0600 temp file removed on exit |
-| `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `unsigned`, `signature mismatch`. No key discovery |
+| `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `missing tarball`, `unsigned`, `signature mismatch`. No key discovery |
 | `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
 | `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until the first real release (P7-PLUG-69) |
 
@@ -70,6 +71,7 @@ bash scripts/release/verify-signatures.sh --pub "$TMPDIR/rehearsal/rehearsal-tes
 
 The same directory fails against any other key (`signature mismatch`, including every committed key in `keys/`) and a one-byte change in any
 tarball fails with `checksum mismatch`. A check that only compared sha256 to `releases.json` would pass for any key; this one does not.
+The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no workflow runs them yet.
 
 ### Key custody and rotation
 
@@ -80,11 +82,15 @@ tarball fails with `checksum mismatch`. A check that only compared sha256 to `re
   release-data change, and ship a CLI that pins the new key id before the first release signed with it (P7-PLUG-71). Keep the old public key until every supported CLI
   knows the new one. A leaked key goes on the CLI's revoked list instead.
 - The private key never appears in a log, an artifact, a file in the repo or an argv.
+- Run a release from the tag push. A manual run (`workflow_dispatch`) executes on a branch ref, which an Environment limited to `v*` tags refuses, so it needs
+  that Environment rule widened for the run. The Release and the R2 mirror exist before the reviewer approves `sign`; trust travels in `releases.json`,
+  which only changes after the signatures exist.
 
 ### After a real release
 
 1. Approve the `sign` job in the Actions UI (the required reviewer).
-2. Merge the `release-data/<tag>` PR. A pull request opened with `GITHUB_TOKEN` does not start other workflows, so the required checks do not run
-   on their own: push an empty commit to the branch from a maintainer account (or close and reopen the PR) to start them.
+2. Check out the `release-data/<tag>` branch on a maintainer machine that has the private bundles checkout and run `bash scripts/plugin-counts.sh`: it
+   regenerates `registry.json`, `catalog.json` and `counts.json` from the new `releases.json`, and the workflow token cannot read the bundles repo.
+   Push the result to the branch. That push also starts the required checks, which a pull request opened with `GITHUB_TOKEN` does not. Then merge.
 3. The web `sources-lock` PR is a separate step (P7-PLUG-69).
 4. Repository setting needed once: Actions may create pull requests (Settings, Actions, General).

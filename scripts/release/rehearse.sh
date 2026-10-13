@@ -66,6 +66,7 @@ KEYDIR="$(mktemp -d "${TMPDIR:-/tmp}/rehearse-key.XXXXXX")"
 trap 'rm -rf "$KEYDIR"' EXIT
 "$O" genpkey -algorithm ed25519 -out "$KEYDIR/key.pem" 2>/dev/null
 "$O" pkey -in "$KEYDIR/key.pem" -pubout -out "$OUT/rehearsal-test.pub" 2>/dev/null
+chmod 644 "$OUT/rehearsal-test.pub"
 KEY_ID="plugins-$("$O" pkey -in "$KEYDIR/key.pem" -pubout -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
 umask 022
 

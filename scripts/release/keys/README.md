@@ -7,5 +7,5 @@ This directory holds no key until the first real signed release. The production 
 owner creates the key and the `release-signing` Environment (P7-PROD-59). Rehearsal keys are throwaway and are never committed:
 `scripts/release/rehearse.sh` writes its public half next to the tarballs it builds.
 
-The CI gate for this directory is the third verification line of P7-PLUG-21: a rehearsal signature must fail
+The third verification line of P7-PLUG-21 checks this directory: a rehearsal signature must fail
 `scripts/release/verify-signatures.sh` against every key committed here.

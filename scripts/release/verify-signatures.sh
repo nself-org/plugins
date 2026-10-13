@@ -10,11 +10,14 @@
 # Input: DIR holds tarballs and a releases.json in the release-data shape ({"releases": {"<slug>": {"version", "sha256",
 #   "platform_checksums", "release_signature": {"key_id", "alg", "sig"}}}}). rehearse.sh writes it; P7-PLUG-69 copies the
 #   published one. A tarball is matched to its row by name: <slug>-<version>.tar.gz is the source tarball (sha256 + signature),
-#   <slug>-<version>-<platform>.tar.gz is a binary tarball (platform_checksums only: the signature covers the source tarball).
+#   <slug>-<version>-<platform>.tar.gz is a binary tarball. LIMIT: a binary tarball is checked against platform_checksums in the
+#   same unsigned releases.json and nothing more (the signature covers the source tarball); its provenance is the GitHub attestation
+#   (`gh attestation verify`). The summary line counts the two kinds apart so this is never silent.
 #
 # Output (stderr, exit 1 on any failure; nothing on stdout but the summary), per tarball, in this order:
 #   checksum mismatch: <file>               sha256 of the file differs from releases.json
 #   missing release data: <file>            no releases.json row (or no checksum) for the file
+#   missing tarball: <file>                 releases.json names a tarball that is not in DIR (a dropped file never passes)
 #   unsigned: <slug> <version>              the row has no release_signature
 #   signature mismatch: <slug> <version>    bad alg, key id other than the one derived from --pub, or Ed25519 verification failed
 # Exit 0 only when every tarball passes. Exit 2 on usage errors.
@@ -52,8 +55,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/verify-sig.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 # The key id is derived from the public key exactly as cli sdk/go/signing KeyID does: plugins-<16 hex of sha256(raw 32 bytes)>.
-EXPECTED_ID="plugins-$("$O" pkey -pubin -in "$PUB" -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
 "$O" pkey -pubin -in "$PUB" -noout 2>/dev/null || { err "not a PEM public key: $PUB"; exit 2; }
+EXPECTED_ID="plugins-$("$O" pkey -pubin -in "$PUB" -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
 
 # Row lookup by file name: one jq pass writes "file<TAB>kind<TAB>slug<TAB>version<TAB>platform" for every known asset name.
 jq -r '.releases | to_entries[] | .key as $s | .value as $v | select($v.version != null) |
@@ -64,6 +67,8 @@ jq -r '.releases | to_entries[] | .key as $s | .value as $v | select($v.version 
 
 fail=0
 checked=0
+source_ok=0
+platform_ok=0
 shopt -s nullglob
 for f in "$DIR"/*.tar.gz; do
   name="$(basename "$f")"
@@ -92,7 +97,10 @@ for f in "$DIR"/*.tar.gz; do
     fail=1
     continue
   fi
-  [ "$kind" = "source" ] || continue
+  if [ "$kind" = "platform" ]; then
+    platform_ok=$((platform_ok + 1))
+    continue
+  fi
 
   sig_json="$(jq -c --arg s "$slug" '.releases[$s].release_signature // empty' "$RELEASES")"
   if [ -z "$sig_json" ]; then
@@ -113,8 +121,15 @@ for f in "$DIR"/*.tar.gz; do
      ! "$O" pkeyutl -verify -rawin -pubin -inkey "$PUB" -in "$WORK/msg" -sigfile "$WORK/sig" >/dev/null 2>&1; then
     err "signature mismatch: $slug $version"
     fail=1
+    continue
   fi
+  source_ok=$((source_ok + 1))
 done
+
+# Every tarball the release data names must be present: removing a signed file from DIR is a failure, not a smaller set.
+while IFS=$'\t' read -r name _; do
+  [ -f "$DIR/$name" ] || { err "missing tarball: $name"; fail=1; }
+done < "$WORK/index.tsv"
 
 if [ "$fail" -ne 0 ]; then
   exit 1
@@ -123,4 +138,4 @@ if [ "$checked" -eq 0 ]; then
   err "missing release data: no tarballs in $DIR"
   exit 1
 fi
-printf "verified %s tarball(s) against %s (%s)\n" "$checked" "$PUB" "$EXPECTED_ID"
+printf "verified %s source tarball(s) (checksum + signature) and %s binary tarball(s) (checksum only) against %s (%s)\n" "$source_ok" "$platform_ok" "$PUB" "$EXPECTED_ID"
