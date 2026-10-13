@@ -1,7 +1,7 @@
 {
   "author": "nself",
   "binaryName": "nself-functions",
-  "category": "utilities",
+  "category": "infrastructure",
   "cliCommands": [
     {
       "description": "",

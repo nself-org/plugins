@@ -248,6 +248,13 @@ jobs:
               continue
             fi
 
+            # A plugin whose binary the release deliberately does not build (a recorded cli-targets exception, e.g. a command that
+            # is still a core verb) has no per-platform assets to compare. The cli-targets gate owns that exception and its expiry.
+            if awk -v n="$name" '/^  - rule: /{r=$3; p=""} /^    plugin: /{p=$2} r=="cli-targets" && p==n {found=1} END{exit !found}' scripts/conformance/exceptions.yaml; then
+              SKIPPED_NO_BINARY=$((SKIPPED_NO_BINARY + 1))
+              continue
+            fi
+
             entry="$(jq -c --arg n "$name" '.plugins[$n] // empty' registry.json)"
             [ -z "$entry" ] && continue
 
