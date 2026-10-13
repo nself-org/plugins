@@ -1,34 +1,257 @@
 {
-  "name": "sports",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "language": "go",
-  "entryPoint": "binary",
-  "port": 3126,
   "category": "sports",
-  "tags": [
-    "sports",
-    "nfl",
-    "nba",
-    "mlb",
-    "scores",
-    "schedules",
-    "standings",
-    "live-data",
-    "espn",
-    "players",
-    "teams"
+  "description": "Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "SPORTS_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_APP_IDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_PROVIDER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_PROVIDERS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_ESPN_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_ESPN_API_URL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_SPORTSDATA_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_SPORTSDATA_API_URL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_LEAGUE_IDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_SYNC_INTERVAL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_LIVE_POLL_INTERVAL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_LIVE_GAME_POLL_SECONDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_ENABLED_SPORTS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_ENABLED_LEAGUES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_LOCK_WINDOW_MINUTES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_LOCK_AUTO",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_RECORDING_PLUGIN_URL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_AUTO_TRIGGER_RECORDINGS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_RECORDING_LEAD_TIME_MINUTES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_RECORDING_TRAIL_TIME_MINUTES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_CACHE_SCHEDULE_TTL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_CACHE_LIVE_TTL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_CACHE_ENABLED",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_RATE_LIMIT_MAX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SPORTS_RATE_LIMIT_WINDOW_MS",
+      "required": false
+    }
   ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "sports",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ],
+    "network": [
+      "site.api.espn.com",
+      "api.sportsdata.io",
+      "thesportsdb.com"
+    ]
+  },
+  "port": 3126,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/ready"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/sports/epg"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/sports/live"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/sports/sync/events"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/sports/sync/leagues"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/sports/sync/live"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/sports/sync/teams"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PUT",
+      "path": "/{id}"
+    }
+  ],
+  "schema": "np_sports",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3126
+  },
+  "status": "stable",
   "tables": [
     "np_sports_leagues",
     "np_sports_teams",
@@ -42,177 +265,28 @@
     "np_sports_sync_state",
     "np_sports_webhook_events"
   ],
+  "tags": [
+    "sports",
+    "nfl",
+    "nba",
+    "mlb",
+    "scores",
+    "schedules",
+    "standings",
+    "live-data",
+    "espn",
+    "players",
+    "teams"
+  ],
+  "tier": "free",
+  "version": "1.2.6",
   "views": [
     "np_sports_upcoming_events",
     "np_sports_live_events",
     "np_sports_untriggered_recordings"
   ],
-  "webhooks": {
-    "game.score_updated": "Live score update during game",
-    "game.started": "Game has started"
-  },
-  "actions": {
-    "init": "Initialize database schema",
-    "server": "Start the API server",
-    "sync": "Sync from all providers or specific provider/sport/league",
-    "reconcile": "Reconcile recent data",
-    "status": "Show sync statistics and status",
-    "sync-status": "Check detailed sync status",
-    "leagues": "List all leagues",
-    "teams": "List teams in a league",
-    "events": "Show events (today, live, upcoming)",
-    "games": "View games and scores",
-    "scores": "View latest scores",
-    "standings": "View league standings",
-    "players": "View player information",
-    "favorites": "Manage favorite teams",
-    "lock": "Lock an event",
-    "override": "Manual schedule override",
-    "cache": "Manage schedule cache",
-    "stats": "Show sports data statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "SPORTS_PLUGIN_PORT",
-      "SPORTS_APP_IDS",
-      "SPORTS_PROVIDER",
-      "SPORTS_PROVIDERS",
-      "SPORTS_ESPN_API_KEY",
-      "SPORTS_ESPN_API_URL",
-      "SPORTS_SPORTSDATA_API_KEY",
-      "SPORTS_SPORTSDATA_API_URL",
-      "SPORTS_LEAGUE_IDS",
-      "SPORTS_SYNC_INTERVAL",
-      "SPORTS_LIVE_POLL_INTERVAL",
-      "SPORTS_LIVE_GAME_POLL_SECONDS",
-      "SPORTS_ENABLED_SPORTS",
-      "SPORTS_ENABLED_LEAGUES",
-      "SPORTS_LOCK_WINDOW_MINUTES",
-      "SPORTS_LOCK_AUTO",
-      "SPORTS_RECORDING_PLUGIN_URL",
-      "SPORTS_AUTO_TRIGGER_RECORDINGS",
-      "SPORTS_RECORDING_LEAD_TIME_MINUTES",
-      "SPORTS_RECORDING_TRAIL_TIME_MINUTES",
-      "SPORTS_CACHE_SCHEDULE_TTL",
-      "SPORTS_CACHE_LIVE_TTL",
-      "SPORTS_CACHE_ENABLED",
-      "SPORTS_API_KEY",
-      "SPORTS_RATE_LIMIT_MAX",
-      "SPORTS_RATE_LIMIT_WINDOW_MS"
-    ]
-  },
-  "config": {
-    "webhookPath": "/webhooks/sports",
-    "retryAttempts": 3,
-    "retryDelay": 1000
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "site.api.espn.com",
-      "api.sportsdata.io",
-      "thesportsdb.com"
-    ],
-    "filesystem": [
-      "logs",
-      "cache"
-    ]
-  },
-  "status": "stable",
-  "tier": "free",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/sports/epg",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/sports/live",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/sports/sync/events",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/sports/sync/leagues",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/sports/sync/live",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/sports/sync/teams",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PUT",
-      "path": "/{id}",
-      "auth": "bearer"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "cmd/main.go",
-  "checksum": "c15b2d6c5b71407718f65ca23b83635ce800999ffd90ddefb760c06b9d61c4f3",
-  "bundles": [
-    "ntv"
+  "webhooks": [
+    "game.score_updated",
+    "game.started"
   ]
 }
