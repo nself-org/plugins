@@ -1,29 +1,159 @@
 {
-  "name": "workflows",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Automation engine providing trigger-action workflow chains, conditional logic, scheduled tasks, webhook integrations, and cross-plugin orchestration",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "language": "go",
-  "port": 3733,
   "category": "automation",
-  "tags": [
-    "workflows",
-    "automation",
-    "triggers",
-    "actions",
-    "scheduling",
-    "webhooks",
-    "orchestration"
+  "description": "Automation engine providing trigger-action workflow chains, conditional logic, scheduled tasks, webhook integrations, and cross-plugin orchestration",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "WORKFLOWS_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WORKFLOWS_DEFAULT_TIMEOUT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WORKFLOWS_MAX_CONCURRENT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WORKFLOWS_WORKER_POOL_SIZE",
+      "required": false
+    }
   ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "workflows",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ],
+    "network": [
+      "*"
+    ]
+  },
+  "port": 3733,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/ready"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/webhooks/{token}"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PUT",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/cancel"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/duplicate"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/execute"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}/executions"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/publish"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}/steps"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/test"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/unpublish"
+    }
+  ],
+  "schema": "np_workflows",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3733
+  },
+  "status": "stable",
   "tables": [
     "np_workflows_workflows",
     "np_workflows_executions",
@@ -35,165 +165,27 @@
     "np_workflows_webhook_logs",
     "np_workflows_approvals"
   ],
-  "webhooks": {
-    "workflow.created": "A workflow was created",
-    "workflow.published": "A workflow was published",
-    "workflow.archived": "A workflow was archived",
-    "execution.started": "A workflow execution started",
-    "execution.completed": "A workflow execution completed successfully",
-    "execution.failed": "A workflow execution failed",
-    "execution.timeout": "A workflow execution timed out",
-    "approval.required": "An approval gate requires attention",
-    "approval.responded": "An approval was approved or rejected",
-    "trigger.fired": "A trigger was fired"
-  },
-  "actions": {
-    "init": "Initialize workflows system",
-    "server": "Start workflows server",
-    "status": "View system status",
-    "workflows": "Manage workflows",
-    "executions": "Manage executions",
-    "triggers": "Manage triggers",
-    "templates": "Manage templates",
-    "variables": "Manage variables"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "WORKFLOWS_PLUGIN_PORT",
-      "WORKFLOWS_DEFAULT_TIMEOUT",
-      "WORKFLOWS_MAX_CONCURRENT",
-      "WORKFLOWS_WORKER_POOL_SIZE"
-    ]
-  },
-  "config": {
-    "webhookPath": "/webhooks/workflows",
-    "defaultTimeoutSeconds": 300,
-    "maxConcurrentExecutions": 10,
-    "historyRetentionDays": 90,
-    "workerPoolSize": 20,
-    "scheduleCheckInterval": 60,
-    "maxWebhooksPerWorkflow": 5
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "hooks": {
-    "postInstall": "install.sh",
-    "preUninstall": "uninstall.sh",
-    "postSync": null
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "*"
-    ],
-    "filesystem": [
-      "logs",
-      "cache"
-    ]
-  },
-  "status": "stable",
-  "tier": "free",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/webhooks/{token}",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PUT",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/cancel",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/duplicate",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/execute",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}/executions",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/publish",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}/steps",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/test",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/unpublish",
-      "auth": "bearer"
-    }
+  "tags": [
+    "workflows",
+    "automation",
+    "triggers",
+    "actions",
+    "scheduling",
+    "webhooks",
+    "orchestration"
   ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "cmd/main.go",
-  "checksum": "850a73c513d92e3877908021e8e47bf5b5722b0b44ae71efe8b5ec41d60da86f",
-  "bundles": [
-    "clawde"
+  "tier": "free",
+  "version": "1.2.6",
+  "webhooks": [
+    "approval.required",
+    "approval.responded",
+    "execution.completed",
+    "execution.failed",
+    "execution.started",
+    "execution.timeout",
+    "trigger.fired",
+    "workflow.archived",
+    "workflow.created",
+    "workflow.published"
   ]
 }
