@@ -267,8 +267,8 @@ export default {
         payload.stats.free = free.length;
         payload.stats.pro = pro.length;
         payload.stats.total = all.length;
-        // version, fetchedAt and total are the retired index.js envelope fields, kept additively.
-        return jsonResponse({ ...payload, version: "1.0.0", fetchedAt: payload.stats.updatedAt, total: all.length }, 200, {
+        // version, fetchedAt and total (the filtered count, as in index.js) are the retired envelope fields, kept additively.
+        return jsonResponse({ ...payload, version: "1.0.0", fetchedAt: payload.stats.updatedAt, total: payload.plugins.length }, 200, {
           "Cache-Control": `public, max-age=${cacheTtl(env)}`,
         });
       }

@@ -1,7 +1,7 @@
 .github/scripts/ops/disk-prune.sh	332
 .workers/plugins-registry/deploy.sh	316
 .workers/plugins-registry/src/index.ts	836
-.workers/plugins-registry/src/marketplace.ts	997
+.workers/plugins-registry/src/marketplace.ts	998
 .workers/plugins-registry/src/registry.ts	516
 free/access-controls/internal/handlers.go	1001
 free/admin-api/internal/db.go	403

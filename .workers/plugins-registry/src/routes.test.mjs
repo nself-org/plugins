@@ -259,8 +259,46 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
   test('/marketplace keeps the CLI fields (plugins, bundles, categories, stats) and the old envelope fields', async () => {
     const body = await (await call('/marketplace')).json();
     for (const k of ['plugins', 'bundles', 'categories', 'stats', 'version', 'fetchedAt', 'total']) assert.ok(k in body, k);
-    assert.equal(body.total, body.stats.total);
+    assert.equal(body.total, body.plugins.length);
     for (const k of ['total', 'free', 'pro', 'updatedAt']) assert.ok(k in body.stats, `stats.${k}`);
+  });
+
+  test('ratings stored by the retired index.js (ratings:all) are still served and are the base for the next rating', async () => {
+    const legacy = { jobs: { average: 4, count: 2, reviews: [{ stars: 4, review: 'fine', at: '2026-01-01T00:00:00.000Z' }] } };
+    for (const stored of [legacy, { data: legacy, timestamp: 1 }]) {
+      const kv = registryKv({ 'ratings:all': JSON.stringify(stored) });
+      const before = await (await call('/marketplace/ratings/jobs', {}, { PLUGINS_KV: kv })).json();
+      assert.equal(before.rating, 4);
+      assert.equal(before.reviewCount, 2);
+      assert.equal(before.reviews[0].comment, 'fine');
+      const post = await call('/marketplace/ratings/jobs', {
+        method: 'POST', headers: { 'CF-Connecting-IP': '203.0.113.9' },
+        body: JSON.stringify({ rating: 5, comment: 'new', userHash: 'c'.repeat(64) }),
+      }, { PLUGINS_KV: kv });
+      assert.equal(post.status, 200);
+      const after = await (await call('/marketplace/ratings/jobs', {}, { PLUGINS_KV: kv })).json();
+      assert.equal(after.reviewCount, 3);
+      assert.equal(after.rating, 4.33);
+      assert.equal(after.reviews.length, 2, 'the new review plus the legacy one');
+    }
+  });
+
+  test('a per-plugin rating key wins over the legacy record; an unrelated plugin is unaffected', async () => {
+    const kv = registryKv({
+      'ratings:all': JSON.stringify({ jobs: { average: 1, count: 9, reviews: [] } }),
+      'rating:jobs': JSON.stringify({ rating: 5, reviewCount: 1, reviews: [] }),
+    });
+    const jobs = await (await call('/marketplace/ratings/jobs', {}, { PLUGINS_KV: kv })).json();
+    assert.equal(jobs.rating, 5);
+    const other = await (await call('/marketplace/ratings/notify', {}, { PLUGINS_KV: kv })).json();
+    assert.equal(other.reviewCount, 0);
+  });
+
+  test('/marketplace top-level total is the filtered count (as in index.js); stats keep the registry totals', async () => {
+    const task = await (await call('/marketplace?bundle=task')).json();
+    assert.equal(task.total, task.plugins.length);
+    assert.equal(task.total, 1);
+    assert.ok(task.stats.total > task.total);
   });
 
   test('a rejecting KV inside a route is a JSON 500, never an unhandled rejection', async () => {

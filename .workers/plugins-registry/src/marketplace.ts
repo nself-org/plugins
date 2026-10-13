@@ -9,6 +9,7 @@
  */
 
 import { ratingsKv, type Env, type PluginEntry } from "./registry.ts";
+import { legacyRating } from "./legacy-ratings.ts";
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -256,9 +257,9 @@ async function readRatingAggregate(
     const raw = await ratingsKv(env).get<RatingAggregate>(key, "json");
     if (raw) return raw;
   } catch {
-    // fall through to default
+    // fall through to the legacy record, then the default
   }
-  return { rating: 0, reviewCount: 0, reviews: [] };
+  return (await legacyRating(env, pluginName)) ?? { rating: 0, reviewCount: 0, reviews: [] };
 }
 
 async function writeRatingAggregate(
