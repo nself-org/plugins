@@ -2453,7 +2453,7 @@
         "nself": ">=1.1.0"
       },
       "schema": "np_nself_cloud",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-cloud",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-cloud-1.2.6.tar.gz",
       "tier": "free",
@@ -2566,7 +2566,7 @@
         "nself": ">=1.1.1"
       },
       "schema": "np_nself_eval_gate",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-eval-gate",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-eval-gate-1.2.6.tar.gz",
       "tier": "free",
@@ -2587,7 +2587,7 @@
         "nself": ">=1.1.0"
       },
       "schema": "np_nself_geo",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-geo",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-geo-1.2.6.tar.gz",
       "tier": "free",
@@ -2608,7 +2608,7 @@
         "nself": ">=1.2.0"
       },
       "schema": "np_nself_image",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-image",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-image-1.2.6.tar.gz",
       "tier": "free",
@@ -2675,7 +2675,7 @@
         "nself": ">=1.1.0"
       },
       "schema": null,
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-pdf",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-pdf-1.2.6.tar.gz",
       "tier": "free",
@@ -2742,7 +2742,7 @@
         "nself": ">=1.1.0"
       },
       "schema": null,
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-scan",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-scan-1.2.6.tar.gz",
       "tier": "free",
@@ -2855,7 +2855,7 @@
         "nself": ">=1.1.1"
       },
       "schema": "np_nself_sync",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "nself-sync",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-sync-1.2.6.tar.gz",
       "tier": "free",
@@ -2921,8 +2921,8 @@
       "requires": {
         "nself": ">=1.0.0"
       },
-      "schema": null,
-      "service_kind": "compose",
+      "schema": "np_nself_vault",
+      "service_kind": "library",
       "slug": "nself-vault",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-vault-1.2.6.tar.gz",
       "tier": "free",
