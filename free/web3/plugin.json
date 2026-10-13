@@ -1,28 +1,161 @@
 {
-  "name": "web3",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
   "category": "integrations",
-  "tags": [
-    "web3",
-    "blockchain",
-    "nft",
-    "token-gating",
-    "dao",
-    "wallet",
-    "ethereum",
-    "defi"
+  "description": "Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "WEB3_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_DEFAULT_CHAIN_ID",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_SUPPORTED_CHAINS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_GATE_CHECK_CACHE_TTL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RATE_LIMIT_MAX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RATE_LIMIT_WINDOW_MS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RPC_URL_1",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RPC_URL_10",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RPC_URL_137",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RPC_URL_8453",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RPC_URL_42161",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEB3_RPC_URL_11155111",
+      "required": false
+    }
   ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "web3",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs"
+    ],
+    "network": []
+  },
+  "port": 3128,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/ready"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PUT",
+      "path": "/{id}"
+    }
+  ],
+  "schema": "np_web3",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3128
+  },
+  "status": "stable",
   "tables": [
     "np_web3_wallets",
     "np_web3_nfts",
@@ -37,126 +170,29 @@
     "np_web3_transactions",
     "np_web3_events"
   ],
-  "webhooks": {
-    "wallet.connected": "Wallet connected",
-    "wallet.verified": "Wallet verified",
-    "nft.transferred": "NFT ownership transferred",
-    "nft.minted": "NFT minted",
-    "collection.indexed": "Collection indexed",
-    "token_gate.passed": "Token gate check passed",
-    "token_gate.failed": "Token gate check failed",
-    "proposal.created": "DAO proposal created",
-    "proposal.executed": "DAO proposal executed",
-    "vote.cast": "DAO vote cast",
-    "transaction.confirmed": "Transaction confirmed"
-  },
-  "actions": {
-    "wallets": "Manage web3 wallets",
-    "nfts": "Browse and manage NFTs",
-    "collections": "Manage NFT collections",
-    "tokens": "Track ERC-20 tokens",
-    "token-gates": "Manage token-gated access",
-    "daos": "Manage DAOs",
-    "proposals": "Manage DAO proposals",
-    "transactions": "View blockchain transactions"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "WEB3_PLUGIN_PORT",
-      "WEB3_DEFAULT_CHAIN_ID",
-      "WEB3_SUPPORTED_CHAINS",
-      "WEB3_GATE_CHECK_CACHE_TTL",
-      "WEB3_API_KEY",
-      "WEB3_RATE_LIMIT_MAX",
-      "WEB3_RATE_LIMIT_WINDOW_MS",
-      "WEB3_RPC_URL_1",
-      "WEB3_RPC_URL_10",
-      "WEB3_RPC_URL_137",
-      "WEB3_RPC_URL_8453",
-      "WEB3_RPC_URL_42161",
-      "WEB3_RPC_URL_11155111"
-    ]
-  },
-  "config": {
-    "port": 3715,
-    "defaultChainId": 1,
-    "gateCheckCacheTtl": 300
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [],
-    "filesystem": [
-      "logs"
-    ]
-  },
-  "port": 3128,
-  "language": "go",
-  "entryPoint": "binary",
-  "status": "stable",
-  "tier": "free",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PUT",
-      "path": "/{id}",
-      "auth": "bearer"
-    }
+  "tags": [
+    "web3",
+    "blockchain",
+    "nft",
+    "token-gating",
+    "dao",
+    "wallet",
+    "ethereum",
+    "defi"
   ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "cmd/main.go",
-  "checksum": "1ed4de9e884c8512ecbe9082dc7789b742d3ef3c49a92d152d57e7220b0b878c",
-  "bundles": [
-    "clawde"
+  "tier": "free",
+  "version": "1.2.6",
+  "webhooks": [
+    "collection.indexed",
+    "nft.minted",
+    "nft.transferred",
+    "proposal.created",
+    "proposal.executed",
+    "token_gate.failed",
+    "token_gate.passed",
+    "transaction.confirmed",
+    "vote.cast",
+    "wallet.connected",
+    "wallet.verified"
   ]
 }

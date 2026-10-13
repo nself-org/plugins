@@ -14,7 +14,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 
 FROM alpine:3.20
-RUN apk --no-cache add ca-certificates wget tzdata
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage; busybox already ships wget.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 COPY --from=builder /plugin /plugin
 EXPOSE 3200
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

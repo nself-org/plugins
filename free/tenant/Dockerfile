@@ -5,16 +5,15 @@
 # are built, and to hand the resulting /plugin binary to the release pipeline.
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
-COPY go.* ./
-RUN go mod download
 COPY . .
 # Two binaries: this plugin provides both `nself tenant` and
 # `nself billing`.
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /nself-tenant ./cmd/tenant/ \
- && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /nself-billing ./cmd/billing/
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /nself-tenant ./cmd/tenant/ \
+ && CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /nself-billing ./cmd/billing/
 
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /nself-tenant /nself-tenant
 COPY --from=builder /nself-billing /nself-billing
 ENTRYPOINT ["/nself-tenant"]

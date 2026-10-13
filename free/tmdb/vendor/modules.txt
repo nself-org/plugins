@@ -28,7 +28,7 @@ github.com/jackc/pgx/v5/pgxpool
 ## explicit; go 1.19
 github.com/jackc/puddle/v2
 github.com/jackc/puddle/v2/internal/genstack
-# github.com/nself-org/plugins/free/shared-utils v0.0.0 => ../shared-utils
+# github.com/nself-org/plugins/free/shared-utils v0.0.0 => ./third_party/shared-utils
 ## explicit; go 1.25.0
 github.com/nself-org/plugins/free/shared-utils/httpclient
 github.com/nself-org/plugins/free/shared-utils/httpmid
@@ -53,4 +53,4 @@ golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/width
-# github.com/nself-org/plugins/free/shared-utils => ../shared-utils
+# github.com/nself-org/plugins/free/shared-utils => ./third_party/shared-utils
