@@ -85,8 +85,8 @@ The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no work
   Environment and both secrets (`NSELF_RELEASE_SIGNING_KEY_FREE`, `NSELF_RELEASE_SIGNING_KEY_FREE_ID`) in P7-PROD-59 and checks those settings; this page describes
   what must be true, not what is configured today. No other job can read the secrets.
 - The licensed key is never a GitHub secret and never available to this workflow; it stays on the owner's release machine (P7-PLUG-22).
-- Rotation: generate the new key offline, store it as the Environment secrets, commit the new public key as `keys/plugins-release-free-<id>.pub` in the same
-  release-data change, and ship a CLI that pins the new key id before the first release signed with it (P7-PLUG-71). Keep the old public key until every supported CLI
+- Rotation: generate the new key offline, commit its public half as `keys/plugins-release-free-<id>.pub` (the `sign` job refuses a key that is not committed), then
+  store it as the Environment secrets, and ship a CLI that pins the new key id before the first release signed with it (P7-PLUG-71). Keep the old public key until every supported CLI
   knows the new one. A leaked key goes on the CLI's revoked list instead.
 - The private key never appears in a log, an artifact, a file in the repo or an argv.
 - A release runs from the tag push. A manual run (`workflow_dispatch`) must start from the tag itself ("Use workflow from: Tag v1.2.3") and enter that same tag;
@@ -105,4 +105,4 @@ The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no work
    A re-run never overwrites an existing `release-data/<tag>` branch; delete it first to regenerate. `verify-published-checksums.sh --signatures` refuses to
    write a row over a newer version, so a late run for an older tag cannot roll `releases.json` back.
 3. The web `sources-lock` PR is a separate step (P7-PLUG-69).
-4. Repository setting needed once: Actions may create pull requests (Settings, Actions, General).
+4. The repository setting "Allow GitHub Actions to create and approve pull requests" (Settings, Actions, General) must stay on; the `release-data` job opens its PR with `GITHUB_TOKEN`.
