@@ -2,10 +2,10 @@
 --
 -- Boot-applied by sdk/go/migrate with search_path pinned to np_job_queue, so every object is schema-qualified:
 -- the tables live in public (the cli tracking rule). Idempotent (IF NOT EXISTS).
--- Creates np_jobs (visibility snapshot) and np_job_dlq (dead-letter queue).
+-- Creates np_jobqueue_jobs (visibility snapshot) and np_job_dlq (dead-letter queue).
 -- Redis is the primary execution store; Postgres provides durability and Admin UI visibility.
 
-CREATE TABLE IF NOT EXISTS public.np_jobs (
+CREATE TABLE IF NOT EXISTS public.np_jobqueue_jobs (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   queue          TEXT NOT NULL,
   job_type       TEXT NOT NULL,
@@ -22,18 +22,18 @@ CREATE TABLE IF NOT EXISTS public.np_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_np_jobs_queue_status
-  ON public.np_jobs (queue, status, scheduled_at);
+  ON public.np_jobqueue_jobs (queue, status, scheduled_at);
 
 CREATE INDEX IF NOT EXISTS idx_np_jobs_source_account
-  ON public.np_jobs (source_account_id, status);
+  ON public.np_jobqueue_jobs (source_account_id, status);
 
-COMMENT ON TABLE public.np_jobs IS 'Visibility snapshot of Redis job queue state. Written by job-queue plugin workers.';
-COMMENT ON COLUMN public.np_jobs.source_account_id IS 'Multi-app isolation key; default primary.';
+COMMENT ON TABLE public.np_jobqueue_jobs IS 'Visibility snapshot of Redis job queue state. Written by job-queue plugin workers.';
+COMMENT ON COLUMN public.np_jobqueue_jobs.source_account_id IS 'Multi-app isolation key; default primary.';
 
 -- Dead-letter queue: jobs that exhausted all retry attempts
 CREATE TABLE IF NOT EXISTS public.np_job_dlq (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_id      UUID NOT NULL REFERENCES public.np_jobs(id) ON DELETE CASCADE,
+  job_id      UUID NOT NULL REFERENCES public.np_jobqueue_jobs(id) ON DELETE CASCADE,
   final_error TEXT NOT NULL,
   dlq_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   source_account_id TEXT NOT NULL DEFAULT 'primary'

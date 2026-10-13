@@ -5,12 +5,7 @@
     "darwin-arm64"
   ],
   "author": "nself",
-  "binaryName": "nself-linkedin",
   "category": "content",
-  "commands": {
-    "binary": "nself-linkedin",
-    "command": "linkedin"
-  },
   "description": "LinkedIn publishing integration. OAuth 2.0 connection, post to LinkedIn feed with optional image attachments, post history, and Claw tool descriptor.",
   "entryPoint": "binary",
   "envVars": [
@@ -83,7 +78,6 @@
       "outbound"
     ]
   },
-  "pluginType": "cli",
   "repository": "https://github.com/nself-org/plugins",
   "requires": {
     "nself": ">=1.0.0"
@@ -132,7 +126,8 @@
   ],
   "schema": "np_linkedin",
   "service": {
-    "kind": "cli"
+    "kind": "library",
+    "port": 3722
   },
   "status": "stable",
   "tables": [

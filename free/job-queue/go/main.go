@@ -6,7 +6,7 @@
 // Constraints:
 //   - ctx.License.Valid() checked at startup: NSELF_JOB_QUEUE env var must be true.
 //   - Custom service slot CS_10.
-//   - source_account_id scopes all np_jobs/np_job_dlq queries (multi-tenant isolation).
+//   - source_account_id scopes all np_jobqueue_jobs/np_job_dlq queries (multi-tenant isolation).
 //   - Unregistered job types fail fast → retry/DLQ path (never silent completion).
 package main
 

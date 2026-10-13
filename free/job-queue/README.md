@@ -98,7 +98,7 @@ This plugin uses **CS_10** (custom service slot 10). Defined in `F08-SERVICE-INV
 
 | Table | Purpose |
 |---|---|
-| `np_jobs` | Visibility snapshot of Redis job state; written by workers |
+| `np_jobqueue_jobs` | Visibility snapshot of Redis job state; written by workers |
 | `np_job_dlq` | Jobs that exhausted `MAX_ATTEMPTS`; shown in Admin UI DLQ panel |
 | `np_circuit_breakers` | Persistent circuit breaker state |
 
@@ -117,7 +117,7 @@ The Go module root is the plugin root (`go.mod` next to `plugin.json`) so `migra
 
 | File | Description |
 |---|---|
-| `001_jobs.sql` | `np_jobs`, `np_job_dlq`, `np_circuit_breakers` |
+| `001_jobs.sql` | `np_jobqueue_jobs`, `np_job_dlq`, `np_circuit_breakers` |
 
 ## Multi-Tenant Isolation
 

@@ -1766,7 +1766,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_hipaa",
-      "service_kind": "cli",
+      "service_kind": "library",
       "slug": "hipaa",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/hipaa-1.2.6.tar.gz",
       "tier": "free",
@@ -1883,7 +1883,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_job_queue",
-      "service_kind": "cli",
+      "service_kind": "library",
       "slug": "job-queue",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/job-queue-1.2.6.tar.gz",
       "tier": "free",
@@ -1993,10 +1993,7 @@
       "bundles": [],
       "category": "content",
       "checksum": "1d5264f719b2727debfc19a81c543855c5daf15027763c0ba715838daf2856fe",
-      "commands": {
-        "command": "linkedin",
-        "subcommands": []
-      },
+      "commands": null,
       "description": "LinkedIn publishing integration. OAuth 2.0 connection, post to LinkedIn feed with optional image attachments, post history, and Claw tool descriptor.",
       "docs_url": null,
       "installable": true,
@@ -2006,7 +2003,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_linkedin",
-      "service_kind": "cli",
+      "service_kind": "library",
       "slug": "linkedin",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/linkedin-1.2.6.tar.gz",
       "tier": "free",

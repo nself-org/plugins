@@ -1,6 +1,6 @@
 // Package api implements the HTTP API and worker infrastructure for the
 // job-queue plugin. It uses Redis BRPOPLPUSH for at-least-once delivery
-// and writes visibility snapshots to Postgres np_jobs.
+// and writes visibility snapshots to Postgres np_jobqueue_jobs.
 package api
 
 import (
@@ -76,7 +76,7 @@ func (s *Server) StartWorkers(ctx context.Context) error {
 	return nil
 }
 
-// worker blocks on BRPOPLPUSH, processes each job, and updates np_jobs status.
+// worker blocks on BRPOPLPUSH, processes each job, and updates np_jobqueue_jobs status.
 func (s *Server) worker(ctx context.Context, queue string) {
 	qKey := "queue:" + queue
 	processingKey := "queue:" + queue + ":processing"
@@ -178,13 +178,13 @@ func (s *Server) updateJobStatus(ctx context.Context, id, status, errMsg string)
 	var args []interface{}
 	switch status {
 	case "active":
-		q = `UPDATE np_jobs SET status=$1, started_at=$2, attempt_count=attempt_count+1 WHERE id=$3`
+		q = `UPDATE np_jobqueue_jobs SET status=$1, started_at=$2, attempt_count=attempt_count+1 WHERE id=$3`
 		args = []interface{}{status, now, id}
 	case "completed":
-		q = `UPDATE np_jobs SET status=$1, completed_at=$2 WHERE id=$3`
+		q = `UPDATE np_jobqueue_jobs SET status=$1, completed_at=$2 WHERE id=$3`
 		args = []interface{}{status, now, id}
 	default:
-		q = `UPDATE np_jobs SET status=$1, error=$2 WHERE id=$3`
+		q = `UPDATE np_jobqueue_jobs SET status=$1, error=$2 WHERE id=$3`
 		args = []interface{}{status, nullStr(errMsg), id}
 	}
 	if _, err := s.db.ExecContext(ctx, q, args...); err != nil {
@@ -257,7 +257,7 @@ func (s *Server) handleListDLQ(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.db.QueryContext(r.Context(),
 		`SELECT j.id, j.queue, j.job_type, d.final_error, d.dlq_at
-		 FROM np_job_dlq d JOIN np_jobs j ON d.job_id = j.id
+		 FROM np_job_dlq d JOIN np_jobqueue_jobs j ON d.job_id = j.id
 		 ORDER BY d.dlq_at DESC LIMIT 100`)
 	if err != nil {
 		http.Error(w, "query failed", http.StatusInternalServerError)
@@ -298,7 +298,7 @@ func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reset job status to pending and delete from DLQ
-	s.db.ExecContext(r.Context(), `UPDATE np_jobs SET status='pending', error=NULL, attempt_count=0 WHERE id=$1`, req.JobID)
+	s.db.ExecContext(r.Context(), `UPDATE np_jobqueue_jobs SET status='pending', error=NULL, attempt_count=0 WHERE id=$1`, req.JobID)
 	s.db.ExecContext(r.Context(), `DELETE FROM np_job_dlq WHERE job_id=$1`, req.JobID)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -325,7 +325,7 @@ func (s *Server) handleDiscard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.db.ExecContext(r.Context(), `DELETE FROM np_job_dlq WHERE job_id=$1`, req.JobID)
-	s.db.ExecContext(r.Context(), `UPDATE np_jobs SET status='dead' WHERE id=$1`, req.JobID)
+	s.db.ExecContext(r.Context(), `UPDATE np_jobqueue_jobs SET status='dead' WHERE id=$1`, req.JobID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"discarded"}`))

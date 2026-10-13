@@ -47,11 +47,12 @@
   ],
   "schema": "np_job_queue",
   "service": {
-    "kind": "cli"
+    "kind": "library",
+    "port": 8213
   },
   "status": "stable",
   "tables": [
-    "np_jobs",
+    "np_jobqueue_jobs",
     "np_job_dlq",
     "np_circuit_breakers"
   ],

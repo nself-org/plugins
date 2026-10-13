@@ -179,7 +179,8 @@
   ],
   "schema": "np_hipaa",
   "service": {
-    "kind": "cli"
+    "kind": "library",
+    "port": 3214
   },
   "status": "stable",
   "tables": [
