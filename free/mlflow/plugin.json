@@ -1,14 +1,70 @@
 {
-  "name": "mlflow",
-  "version": "1.2.6",
-  "description": "MLflow experiment tracking and model registry",
   "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mlflow",
-  "repository": "https://github.com/nself-org/plugins",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
   "category": "data",
+  "description": "MLflow experiment tracking and model registry",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "MLFLOW_DEFAULT_ARTIFACT_ROOT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MLFLOW_BACKEND_STORE_URI",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MLFLOW_TRACKING_USERNAME",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MLFLOW_TRACKING_PASSWORD",
+      "required": false
+    }
+  ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mlflow",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "supported": false
+  },
+  "name": "mlflow",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "artifacts"
+    ],
+    "network": []
+  },
+  "port": 5000,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 5000
+  },
+  "status": "stable",
   "tags": [
     "mlflow",
     "ml",
@@ -17,57 +73,6 @@
     "model-registry",
     "mlops"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {
-    "experiments": "List and manage MLflow experiments",
-    "runs": "List and manage experiment runs",
-    "models": "Browse the model registry",
-    "artifacts": "View and download run artifacts"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "MLFLOW_DEFAULT_ARTIFACT_ROOT",
-      "MLFLOW_BACKEND_STORE_URI",
-      "MLFLOW_TRACKING_USERNAME",
-      "MLFLOW_TRACKING_PASSWORD"
-    ]
-  },
-  "config": {
-    "defaultPort": 5000,
-    "defaultArtifactRoot": "/mlflow/artifacts"
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": false
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [],
-    "filesystem": [
-      "artifacts"
-    ]
-  },
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "port": 5000,
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "tier": "free",
+  "version": "1.2.6"
 }

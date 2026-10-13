@@ -8,15 +8,15 @@ FROM golang:1.22-alpine AS builder
 WORKDIR /build
 
 COPY go.mod ./
-RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /monitoring-render ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /monitoring-render ./cmd
 
 # ----- runtime -----
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy rendered config sources into image
 COPY --from=builder /build/configs /monitoring/configs
