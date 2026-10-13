@@ -37,12 +37,12 @@ func NewDB(ctx context.Context, databaseURL string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open pool: %w", err)
 	}
-	mustBootMigrations(ctx, pool)
 
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
+	mustBootMigrations(ctx, pool)
 
 	return &DB{Pool: pool, closer: pool}, nil
 }

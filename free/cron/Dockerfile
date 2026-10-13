@@ -13,8 +13,6 @@
 # Stage 1: builder
 FROM golang:1.26-alpine AS builder
 
-# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
-
 WORKDIR /build
 
 # Copy plugin source, including the committed vendor/ dir (context root ==

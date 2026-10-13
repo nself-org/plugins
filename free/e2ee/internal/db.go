@@ -25,11 +25,11 @@ func NewPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
 	}
-	mustBootMigrations(ctx, pool)
 
 	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
+	mustBootMigrations(ctx, pool)
 
 	return pool, nil
 }

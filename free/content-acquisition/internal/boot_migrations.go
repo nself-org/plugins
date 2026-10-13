@@ -15,7 +15,8 @@ import (
 )
 
 func bootOptions() migrate.Options {
-	return migrate.Options{Schema: "np_content_acquisition", FS: migrations.FS}
+	// SearchPath keeps public on the pinned path: migration 001 qualifies every legacy object with public.
+	return migrate.Options{Schema: "np_content_acquisition", FS: migrations.FS, SearchPath: []string{"public"}}
 }
 
 // MustBootMigrations applies the plugin's own migrations before it serves; a failure is fatal.

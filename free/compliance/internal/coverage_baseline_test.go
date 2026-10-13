@@ -139,17 +139,21 @@ func TestDecode_Invalid(t *testing.T) {
 }
 
 func TestHealthHandler(t *testing.T) {
+	// No boot pool is wired in a unit test, so the migrations member is unreadable: 503 with -1 counts.
 	rec := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/health", nil)
 	HealthHandler(rec, r)
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 without a boot pool", rec.Code)
 	}
-	var out map[string]string
+	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
 	if out["status"] != "ok" || out["plugin"] != "compliance" {
 		t.Errorf("body = %v", out)
+	}
+	if mig, ok := out["migrations"].(map[string]any); !ok || mig["applied"] != float64(-1) {
+		t.Errorf("migrations = %v", out["migrations"])
 	}
 }
