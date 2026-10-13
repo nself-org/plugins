@@ -30,7 +30,7 @@ func getEnv(key, def string) string {
 }
 
 func main() {
-	port := getEnv("PORT", "3845")
+	port := getEnv("PORT", "3855")
 
 	// Optional DB pool for readiness check. When DATABASE_URL is set we
 	// open a pool and use it for /ready; otherwise /ready reports ready in
@@ -41,11 +41,12 @@ func main() {
 		pool, err := pgxpool.New(ctx, dsn)
 		cancel()
 		if err != nil {
-			log.Printf("nself-cloud: pgxpool.New failed (continuing without DB): %v", err)
-		} else {
-			dbPool.Store(pool)
-			defer pool.Close()
+			log.Fatalf("nself-cloud: pgxpool.New failed: %v", err)
 		}
+		dbPool.Store(pool)
+		defer pool.Close()
+		// Own migrations apply once, right after the pool exists; a failure is fatal (restart loop beats serving a half schema).
+		mustBootMigrations(context.Background(), pool)
 	}
 
 	r := chi.NewRouter()
@@ -109,8 +110,12 @@ func main() {
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"}) //nolint:errcheck
+	body := map[string]any{"status": "ok"}
+	// Bootstrap mode (no DATABASE_URL) has no pool and so no migrations member.
+	if dbPool.Load() != nil {
+		body["migrations"] = bootMigrationsHealth(w) // writes 503 on a status error, before the header below
+	}
+	json.NewEncoder(w).Encode(body) //nolint:errcheck
 }
 
 func handleReady(w http.ResponseWriter, r *http.Request) {

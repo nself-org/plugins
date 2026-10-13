@@ -10,19 +10,19 @@ DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.tables
-        WHERE table_name = 'nclaw_memory_facts'
+        WHERE table_schema = 'public' AND table_name = 'nclaw_memory_facts'
     ) THEN
-        ALTER TABLE nclaw_memory_facts
+        ALTER TABLE public.nclaw_memory_facts
             ADD COLUMN IF NOT EXISTS is_golden BOOLEAN NOT NULL DEFAULT false;
 
         -- Partial index for efficient golden-set lookups during eval
         IF NOT EXISTS (
             SELECT 1 FROM pg_indexes
-            WHERE tablename = 'nclaw_memory_facts'
+            WHERE schemaname = 'public' AND tablename = 'nclaw_memory_facts'
               AND indexname = 'nclaw_memory_facts_golden_idx'
         ) THEN
             CREATE INDEX nclaw_memory_facts_golden_idx
-                ON nclaw_memory_facts (is_golden)
+                ON public.nclaw_memory_facts (is_golden)
                 WHERE is_golden = true;
         END IF;
     END IF;

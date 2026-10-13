@@ -10,7 +10,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -31,17 +31,17 @@ import (
 // Outputs: passed to server, store, and scorer constructors.
 // Constraints: NSELF_EVAL_GATE_DB_URL is required; all other fields have defaults.
 type Config struct {
-	Port            string
-	DBUrl           string
-	RedisURL        string
-	JudgeModel      string
-	JudgeTimeoutS   int
-	EmbedTimeoutS   int
-	MaxConcurrency  int
-	CacheEmbedTTLH  int
-	CacheJudgeTTLH  int
-	RecallK         int
-	SchemaVersion   string
+	Port           string
+	DBUrl          string
+	RedisURL       string
+	JudgeModel     string
+	JudgeTimeoutS  int
+	EmbedTimeoutS  int
+	MaxConcurrency int
+	CacheEmbedTTLH int
+	CacheJudgeTTLH int
+	RecallK        int
+	SchemaVersion  string
 }
 
 func loadConfig() Config {
@@ -73,6 +73,9 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Own migrations apply once, right after the pool exists; a failure is fatal.
+	mustBootMigrations(context.Background(), pool)
+
 	store := db.NewPostgresStore(pool)
 	evalCache := cache.NewEvalCache(cfg.RedisURL)
 
@@ -90,7 +93,8 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"ok","plugin":"nself-eval-gate"}`)
+		mig := bootMigrationsHealth(w) // writes 503 on a status error, before the body below
+		json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "nself-eval-gate", "migrations": mig}) //nolint:errcheck
 	})
 
 	// Eval API routes (JWT auth middleware placeholder — wired per nSelf plugin convention).
