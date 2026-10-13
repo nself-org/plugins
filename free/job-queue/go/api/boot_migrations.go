@@ -7,6 +7,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,6 +17,10 @@ import (
 )
 
 var bootPool *pgxpool.Pool
+
+// bootLog writes the plain-text boot lines (`migrations: applied N`) the boot kit and operators grep for; main installs a
+// JSON slog default, which would wrap the standard logger output.
+var bootLog = log.New(os.Stderr, "", log.LstdFlags)
 
 func bootOptions() migrate.Options {
 	// Index builds over existing rows can outlast the 60s default per file; a timeout would be a fatal restart loop.
@@ -28,7 +33,7 @@ func bootOptions() migrate.Options {
 func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
-		log.Printf("migrations: status: %v", err)
+		bootLog.Printf("migrations: status: %v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return map[string]int{"applied": -1, "expected": -1}
 	}
@@ -41,7 +46,7 @@ func BootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 	bootPool = pool
 	res, err := migrate.Apply(ctx, pool, bootOptions())
 	if err != nil {
-		log.Fatalf("migrations: %v", err)
+		bootLog.Fatalf("migrations: %v", err)
 	}
-	log.Printf("migrations: applied %d", len(res.Applied))
+	bootLog.Printf("migrations: applied %d", len(res.Applied))
 }
