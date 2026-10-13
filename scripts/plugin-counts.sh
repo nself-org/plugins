@@ -4,7 +4,7 @@
 # Purpose: the three files are projections (ADR 0009, Epic P7-PLUG D3). The pinned cli tools/catalog generates them from
 #   free/*/plugin.json, releases.json and the licensed side (registry.json + bundles.json of nself-org/bundles at
 #   scripts/bundles.ref). Nobody edits them; this script is the one regenerate command and the drift gate.
-# Usage:   scripts/plugin-counts.sh [--check [--free-only]] | --json | --init-releases [--force]
+# Usage:   scripts/plugin-counts.sh [--check [--free-only]] | --json | --init-releases
 #   (none)            rewrite registry.json, catalog.json and counts.json
 #   --json            write nothing; print the generated counts.json on stdout (the old read-only use)
 #   --check           write nothing; exit 1 and print the diff when a projection is not what the generator produces
@@ -12,7 +12,8 @@
 #                     membership and the licensed slugs from the committed catalog.json (catalog.json and counts.json
 #                     are NOT verified; that needs the bundles checkout)
 #   --init-releases   one-time: write releases.json from the hand-kept registry.json now in the tree
-#                     (scripts/catalog/releases-from-registry.jq); refuses to overwrite unless --force
+#                     (scripts/catalog/releases-from-registry.jq); refuses when releases.json exists or registry.json is
+#                     already generated (releases.json is written only from published bytes, by verify-published-checksums.sh)
 # Inputs:  scripts/cli-tools.version (cli commit holding tools/catalog), scripts/bundles.ref, free/*/plugin.json,
 #          releases.json, scripts/catalog/licensed-catalog-carry.json.
 #   Env:   BUNDLES_DIR    a clone of nself-org/bundles (default ../bundles, ../plugins-pro, under $NSELF, or beside this repo from a worktree); only the pinned
@@ -20,21 +21,21 @@
 #          CATALOG_BIN    use this generator binary instead of building one (offline and test runs)
 #          CLI_TOOLS_SRC  build from this cli checkout instead of fetching the pinned commit
 #          TODAY          YYYY-MM-DD override for the carry expiry check
-# Wire:    a dependency edge (required or optional) whose target is not a registry entry of either tier is left off the
-#          registry.json wire and named on stderr: released CLIs (v1.4.x installLocked) install every listed edge and fail on
-#          a name they cannot fetch (an unreleased plugin, a core service such as `database`). The manifest keeps the edge.
+# Wire:    released CLIs (v1.4.x installLocked) install EVERY listed dependency edge, optional ones included, and fail the
+#          install on a name they cannot fetch or a licensed plugin without a licence. So registry.json lists only the
+#          required edges whose target is a free registry entry; every other edge (optional, licensed-tier, unreleased or a
+#          core service such as `database`) stays in the manifest and is left off the wire, named on stderr.
 # Exit:    0 ok, 1 drift or carry expired, 2 usage or generator failure, 3 precondition missing.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CARRY="$ROOT/scripts/catalog/licensed-catalog-carry.json"
-CHECK=0 FREE_ONLY=0 INIT=0 FORCE=0 JSON=0
+CHECK=0 FREE_ONLY=0 INIT=0 JSON=0
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK=1 ;;
     --free-only) FREE_ONLY=1 ;;
     --init-releases) INIT=1 ;;
-    --force) FORCE=1 ;;
     --json) JSON=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed '$d;s/^# \{0,1\}//'; exit 0 ;;
     *) echo "plugin-counts: unknown argument $arg (see --help)" >&2; exit 2 ;;
@@ -49,8 +50,8 @@ for tool in jq git diff; do
 done
 
 if [ "$INIT" -eq 1 ]; then
-  if [ -e "$ROOT/releases.json" ] && [ "$FORCE" -eq 0 ]; then
-    echo "plugin-counts: releases.json exists; --init-releases is a one-time extraction (--force to redo it)" >&2; exit 1
+  if [ -e "$ROOT/releases.json" ] || [ "$(jq -r 'has("_generated")' "$ROOT/registry.json")" = "true" ]; then
+    echo "plugin-counts: --init-releases is a one-time extraction from a hand-kept registry.json; releases.json is written by verify-published-checksums.sh" >&2; exit 1
   fi
   jq -S --indent 2 -f "$ROOT/scripts/catalog/releases-from-registry.jq" "$ROOT/registry.json" > "$ROOT/releases.json.tmp"
   mv "$ROOT/releases.json.tmp" "$ROOT/releases.json"
@@ -103,19 +104,15 @@ run_generator() {
 }
 run_generator -mode free -plugins "$ROOT/free" -releases "$ROOT/releases.json" -bundles "$WORK/bundles.json" \
   -peer-registry "$WORK/licensed.json" -bundles-ref "$BUNDLES_REF" -out "$WORK/out"
-# Wire correction (see Wire above): drop dependency edges that no registry entry backs, and name them.
-jq -r --slurpfile lic "$WORK/licensed.json" '([.plugins | keys[]] + [$lic[0].plugins | keys[]]) as $known
-  | .plugins | to_entries[] | .key as $k | .value.dependencies | (if type == "object" then .required + .optional else . end)[]
-  | select(. as $d | $known | index($d) | not) | "catalog: note: \($k) depends on \(.), which is not a registry entry; left off the wire"' \
+# Wire correction (see Wire above): keep required edges to free registry entries, name every other edge.
+jq -r --slurpfile lic "$WORK/licensed.json" '(.plugins | keys) as $free | .plugins | to_entries[] | .key as $k | .value.dependencies
+  | (if type == "object" then (.required | map({d: ., why: "required"})) + (.optional | map({d: ., why: "optional"})) else map({d: ., why: "required"}) end)[]
+  | select((.why == "optional") or (.d as $d | $free | index($d) | not))
+  | "catalog: note: \($k) \(.why) dependency \(.d) is not a required free registry entry; left off the wire"' \
   "$WORK/out/registry.json" >&2
-jq -S --indent 2 --slurpfile lic "$WORK/licensed.json" '
-  ([.plugins | keys[]] + [$lic[0].plugins | keys[]]) as $known
-  | def keep: map(select(. as $d | $known | index($d)));
-  .plugins |= map_values(
-    if (.dependencies | type) == "object" then
-      (.dependencies.required |= keep) | (.dependencies.optional |= keep)
-      | if (.dependencies.optional | length) == 0 then .dependencies = .dependencies.required else . end
-    else .dependencies |= keep end)' "$WORK/out/registry.json" > "$WORK/registry.wire.json"
+jq -S --indent 2 '(.plugins | keys) as $free
+  | .plugins |= map_values(.dependencies |= ((if type == "object" then .required else . end) | map(select(. as $d | $free | index($d)))))' \
+  "$WORK/out/registry.json" > "$WORK/registry.wire.json"
 mv "$WORK/registry.wire.json" "$WORK/out/registry.json"
 FILES=(registry.json)
 

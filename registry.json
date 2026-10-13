@@ -1839,9 +1839,7 @@
         "sha256": "9393ccf40ea29ab69ab9e8f27d9e57b3f2c098a8d9e573925496d319e3fb01dd"
       },
       "dependencies": [
-        "family",
-        "object-storage",
-        "photos"
+        "object-storage"
       ],
       "description": "Ancestry.com → nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
       "download_url": "https://plugins.nself.org/plugins/family-ancestry/tarball",
@@ -1886,9 +1884,7 @@
         "sha256": "6cd9bed5e4e0ca8de4ca66f787dac454d6746981e759a2fcadcec6c0acee2c89"
       },
       "dependencies": [
-        "family",
-        "object-storage",
-        "photos"
+        "object-storage"
       ],
       "description": "FamilySearch → nFamily migration helper (PLANNED). Free public API from FamilySearch (LDS). Lowest-friction next-step importer after family-geni.",
       "download_url": "https://plugins.nself.org/plugins/family-familysearch/tarball",
@@ -1977,9 +1973,7 @@
         "sha256": "03f26faeeb7cd94c9dc0dd619b249d5652348bb25351c17ed0c3b1029b4fa63c"
       },
       "dependencies": [
-        "family",
-        "object-storage",
-        "photos"
+        "object-storage"
       ],
       "description": "MyHeritage → nFamily migration helper (PLANNED). MyHeritage is Geni.com's parent company — lowest legal risk, potential partnership path.",
       "download_url": "https://plugins.nself.org/plugins/family-myheritage/tarball",
@@ -2024,9 +2018,7 @@
         "sha256": "f41d96107b4d2ec593dea3e2116b8dc7cf89f0b1c57c0b67161611eda16e1522"
       },
       "dependencies": [
-        "family",
-        "object-storage",
-        "photos"
+        "object-storage"
       ],
       "description": "WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
       "download_url": "https://plugins.nself.org/plugins/family-wikitree/tarball",
@@ -2789,12 +2781,7 @@
       "checksums": {
         "sha256": "7c3afef68296579aef081928e185e42d3031c1036bee1790ee69aa70f0d068b5"
       },
-      "dependencies": {
-        "optional": [
-          "claw"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "Home automation bridge. Connects Home Assistant and MQTT to ɳSelf, enabling smart device control, state monitoring, scene activation, and command logging.",
       "download_url": "https://plugins.nself.org/plugins/home/tarball",
       "implementation": {
@@ -3778,13 +3765,7 @@
       "checksums": {
         "sha256": "cff71f3b5999132baea7d74abddc46cdd01edca323e53d59e62cb2d96c165a88"
       },
-      "dependencies": {
-        "optional": [
-          "nself-stripe",
-          "transactional-email"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "ɳCloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.",
       "download_url": "https://plugins.nself.org/plugins/nself-cloud/tarball",
       "implementation": {
@@ -3837,12 +3818,7 @@
       "checksums": {
         "sha256": "dce7ee9465ce6ec2f2fcb5d01c100ec1f8edb0705bbe92ea1ba21e17b25d8a53"
       },
-      "dependencies": {
-        "optional": [
-          "plugin-retrieval"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality precision/recall/fact_f1 metrics, CI integration via nself ci eval, and autonomy-tier threshold enforcement.",
       "download_url": "https://plugins.nself.org/plugins/nself-eval-gate/tarball",
       "implementation": {
@@ -4271,13 +4247,7 @@
       "checksums": {
         "sha256": "351b03463630ddbc97f246d7a3b669bf7931dc4ee661005913730921101d0339"
       },
-      "dependencies": {
-        "optional": [
-          "stripe",
-          "paypal"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with webhook normalization.",
       "download_url": "https://plugins.nself.org/plugins/payments/tarball",
       "language": "go",
@@ -4377,12 +4347,7 @@
       "checksums": {
         "sha256": "28ad457574e937e915558d4a0153a959eaf8e428c58b3590d89041f8ddcfe0cf"
       },
-      "dependencies": {
-        "optional": [
-          "notify"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "Penetration-test readiness kit. Generates structured scope documents, provisions pentest credentials, tracks findings, and manages remediation. FREE — Security-Always-Free Doctrine.",
       "download_url": "https://plugins.nself.org/plugins/pentest/tarball",
       "language": "go",
@@ -5904,13 +5869,7 @@
       "checksums": {
         "sha256": "b5163bfa249b99960b28fd5232d006917b87d5e2f1c3793dd97e5f71395f4a72"
       },
-      "dependencies": {
-        "optional": [
-          "mux",
-          "notify"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay.",
       "download_url": "https://plugins.nself.org/plugins/transactional-email/tarball",
       "implementation": {
@@ -6055,12 +6014,7 @@
       "checksums": {
         "sha256": "1bc88a4298e1d386c812104090db332bed3e06d4a56223d132735b74100a0b63"
       },
-      "dependencies": {
-        "optional": [
-          "cron"
-        ],
-        "required": []
-      },
+      "dependencies": [],
       "description": "Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
       "download_url": "https://plugins.nself.org/plugins/warehouse/tarball",
       "language": "go",

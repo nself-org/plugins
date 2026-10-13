@@ -18,9 +18,10 @@ and checked by `shared/validate-registry.sh`.
 | Check for drift | `bash scripts/plugin-counts.sh --check` (needs a bundles clone; CI without the token runs `--check --free-only`) |
 
 The generator does not write `generated_at`, `last_updated` or a `note`; nothing in this repo or the marketplace worker reads them.
-A dependency edge (required or optional) whose target is not a registry entry of either tier is left off the `registry.json` wire
-and named on stderr by `plugin-counts.sh`: released CLIs install every listed edge and fail on a name they cannot fetch (an
-unreleased plugin such as `minio`, or a core service such as `database`). The manifest keeps the edge.
+Released CLIs install every listed dependency edge, optional ones included, and fail the install on a name they cannot fetch
+or on a licensed plugin without a licence. So `registry.json` lists only the required edges whose target is a free registry
+entry. Every other edge (optional, licensed-tier, unreleased such as `minio`, or a core service such as `database`) stays in the
+plugin's `plugin.json` and is left off the wire; `plugin-counts.sh` names each one on stderr.
 
 A plugin with no row in `releases.json` has no published bytes and is left out of `registry.json`
 until the release pipeline adds a row. Checksums, tarball URLs and per-platform checksums live

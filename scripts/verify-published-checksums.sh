@@ -185,7 +185,9 @@ while IFS= read -r name; do
     RELEASES_JSON="$(jq --arg n "$name" --arg v "$VERSION" --arg tag "$TAG" --arg sha "$computed_sha" \
       --arg url "https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}" \
       --argjson plat "$platforms_json" --argjson bins "$binaries_json" '
-      .releases[$n] = ((.releases[$n] // {release_signature: null}) + {version: $v, sha256: $sha, release_tag: $tag, tarball_url: $url}
+      .releases[$n] = ((.releases[$n] // {release_signature: null})
+        | (if .sha256 != $sha then .release_signature = null else . end)
+        | . + {version: $v, sha256: $sha, release_tag: $tag, tarball_url: $url}
         | del(.tarball)
         | if ($plat | length) > 0 then .platform_checksums = $plat else del(.platform_checksums) end
         | if ($bins | length) > 0 then .binaries = $bins else del(.binaries) end)' <<<"$RELEASES_JSON")"

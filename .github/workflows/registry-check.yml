@@ -193,8 +193,15 @@ jobs:
             fi
 
             if [ "$disk_version" != "$registry_version" ]; then
-              echo "ERROR: Version mismatch for '$plugin': plugin.json=$disk_version, registry.json=$registry_version"
-              errors=$((errors + 1))
+              # registry.json is generated and carries the RELEASED version: a manifest ahead of its release is the normal
+              # state of a version-bump PR. The row in releases.json must still agree with the registry.
+              row_version=$(jq -r --arg p "$plugin" '.releases[$p].version // ""' releases.json)
+              if [ "$row_version" != "$registry_version" ]; then
+                echo "ERROR: Version mismatch for '$plugin': registry.json=$registry_version, releases.json=$row_version"
+                errors=$((errors + 1))
+              else
+                echo "NOTE: '$plugin' manifest is $disk_version, released $registry_version; registry carries the release"
+              fi
             fi
           done < <(find free -name "plugin.json" | sort)
 
