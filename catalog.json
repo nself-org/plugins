@@ -3904,23 +3904,27 @@
         "task"
       ],
       "category": "media",
-      "checksum": "33f53b32fbdfecfc9c99b49216d6d3ea568b2104856a2b04467fd8a2af018d07",
+      "checksum": "58ee2302d25fa82daa30c50b0ec6370e3f473ae90eab346ae3508afd1c8b64b3",
       "commands": null,
       "description": "Secure content delivery tokens, HLS encryption key management, and entitlement checks",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
-      "release_signature": null,
+      "release_signature": {
+        "alg": "ed25519",
+        "key_id": "plugins-2ebca8dfad98e19e",
+        "sig": "OpttZGC89Sc5MNBgBugjg7tsjSAExBN4s09lDBeox2AQYaeb9T+MRjT3Sxvbc/pXYAuI5AIw5S5o3EVXp96HCQ=="
+      },
       "requires": {
         "nself": ">=1.0.0"
       },
       "schema": "np_tokens",
       "service_kind": "compose",
       "slug": "tokens",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/tokens-1.2.6.tar.gz",
+      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.9/tokens-1.2.9.tar.gz",
       "tier": "free",
       "tier_pair": false,
-      "version": "1.2.6"
+      "version": "1.2.9"
     },
     {
       "bundles": [],
