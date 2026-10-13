@@ -661,7 +661,8 @@ jobs:
           git checkout -b "$branch"
           git add releases.json
           git commit -m "chore(release): release data for ${TAG}"
-          git push origin "HEAD:refs/heads/${branch}"
+          # The empty expected value makes the push fail if the branch appeared since the check above.
+          git push --force-with-lease="refs/heads/${branch}:" origin "HEAD:refs/heads/${branch}"
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
             {
               echo "Written by the release workflow from the bytes published on ${TAG}: sha256 and release_signature per plugin. Review the diff against the Release assets; do not edit by hand."

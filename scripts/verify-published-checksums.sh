@@ -83,20 +83,37 @@ for tool in gh jq tar; do
 done
 [ -f "$RELEASES_FILE" ] || { err "releases.json not found at ${RELEASES_FILE} (run scripts/plugin-counts.sh --init-releases once)"; exit 1; }
 
-# version_is_newer A B: A is a strictly newer release than B. Numeric core first (sort -V); at an equal core a final release is
-# newer than any prerelease of it, and two prereleases compare by their suffix.
+# version_is_newer A B: A is a strictly newer release than B, by SemVer precedence (numeric core, then a final release beats any
+# prerelease of it, then prerelease identifiers left to right: numbers below words, numbers numerically, words by bytes, a shorter
+# list below a longer one). Build metadata after + is ignored. sort -V cannot do this.
 version_is_newer() {
-  local c1="${1%%[-+]*}" c2="${2%%[-+]*}" p1 p2
-  if [ "$c1" != "$c2" ]; then
-    [ "$(printf '%s\n%s\n' "$c1" "$c2" | sort -V | tail -1)" = "$c1" ]
-    return
-  fi
-  p1="${1#"$c1"}"
-  p2="${2#"$c2"}"
-  [ "$p1" != "$p2" ] || return 1
-  [ -n "$p2" ] || return 1
-  [ -n "$p1" ] || return 0
-  [ "$(printf '%s\n%s\n' "$p1" "$p2" | sort -V | tail -1)" = "$p1" ]
+  awk -v a="$1" -v b="$2" '
+    function isnum(s) { return s ~ /^[0-9]+$/ }
+    function parse(v, out,   i) {
+      sub(/\+.*/, "", v); i = index(v, "-")
+      if (i) { out["core"] = substr(v, 1, i - 1); out["pre"] = substr(v, i + 1) } else { out["core"] = v; out["pre"] = "" }
+    }
+    function cmp(x, y,   X, Y, xs, ys, nx, ny, n, i, p, q) {
+      parse(x, X); parse(y, Y)
+      nx = split(X["core"], xs, "."); ny = split(Y["core"], ys, ".")
+      n = (nx > ny) ? nx : ny
+      for (i = 1; i <= n; i++) { p = (i <= nx) ? xs[i] + 0 : 0; q = (i <= ny) ? ys[i] + 0 : 0; if (p != q) return (p > q) ? 1 : -1 }
+      if (X["pre"] == Y["pre"]) return 0
+      if (X["pre"] == "") return 1
+      if (Y["pre"] == "") return -1
+      nx = split(X["pre"], xs, "."); ny = split(Y["pre"], ys, ".")
+      n = (nx < ny) ? nx : ny
+      for (i = 1; i <= n; i++) {
+        if (xs[i] "" == ys[i] "") continue
+        if (isnum(xs[i]) && isnum(ys[i])) { p = xs[i] + 0; q = ys[i] + 0; if (p != q) return (p > q) ? 1 : -1; continue }
+        if (isnum(xs[i])) return -1
+        if (isnum(ys[i])) return 1
+        return ((xs[i] "") > (ys[i] "")) ? 1 : -1
+      }
+      if (nx == ny) return 0
+      return (nx > ny) ? 1 : -1
+    }
+    BEGIN { exit !(cmp(a, b) > 0) }'
 }
 
 sha256_file() {
