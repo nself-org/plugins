@@ -25,7 +25,8 @@
 #     linux-amd64 tarball) into releases.json, keeping an existing release_signature, then tells you to run
 #     scripts/plugin-counts.sh to regenerate registry.json. Exit 0 on success, exit 1 if any expected asset could not be
 #     downloaded (releases.json is not written then).
-#   --signatures FILE (with --write): FILE is the release workflow's signing output, {"<slug>": {"sha256", "release_signature"}}
+#   --signatures FILE (with --write): the plugins to write are exactly the signed ones (plus rows already on TAG), instead of the
+#     manifest-version scan. FILE is the release workflow's signing output, {"<slug>": {"sha256", "release_signature"}}
 #     (see scripts/release/sign.sh). A row's release_signature is taken from it only when its sha256 equals the freshly
 #     downloaded published bytes; a row with no matching signature is UNSIGNED and, like a missing asset, stops the write (exit 1),
 #     so a release can never land half-signed. Without the flag an existing release_signature is kept (nulled if the bytes changed).
@@ -120,8 +121,12 @@ fi
 rm -f "$dl_err"
 
 # Plugins to process, in a stable order: rows already on TAG, plus (with --write) manifests at this version with no row on TAG.
+# With --signatures the signed set decides instead: every signed source tarball must land as a row (or fail as MISSING), whatever
+# version the default branch's manifests say by now.
 candidates="$(jq -r --arg t "$TAG" '.releases | to_entries[] | select(.value.release_tag == $t) | .key' <<<"$RELEASES_JSON")"
-if [ "$WRITE" = "true" ]; then
+if [ -n "$SIGNATURES_FILE" ]; then
+  candidates="$(printf '%s\n%s' "$candidates" "$(jq -r 'keys[]' "$SIGNATURES_FILE")")"
+elif [ "$WRITE" = "true" ]; then
   for dir in "$PLUGINS_DIR"/*/; do
     name="$(basename "$dir")"
     [ -f "$dir/plugin.json" ] || continue

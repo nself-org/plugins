@@ -55,7 +55,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/verify-sig.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 # The key id is derived from the public key exactly as cli sdk/go/signing KeyID does: plugins-<16 hex of sha256(raw 32 bytes)>.
-"$O" pkey -pubin -in "$PUB" -noout 2>/dev/null || { err "not a PEM public key: $PUB"; exit 2; }
+PUB_TEXT="$("$O" pkey -pubin -in "$PUB" -noout -text 2>/dev/null)" || { err "not a PEM public key: $PUB"; exit 2; }
+case "$PUB_TEXT" in "ED25519 Public-Key:"*) ;; *) err "not an Ed25519 public key: $PUB"; exit 2 ;; esac
 EXPECTED_ID="plugins-$("$O" pkey -pubin -in "$PUB" -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
 
 # Row lookup by file name: one jq pass writes "file<TAB>kind<TAB>slug<TAB>version<TAB>platform" for every known asset name.

@@ -50,6 +50,10 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/sign.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 printf '%s\n' "$NSELF_RELEASE_SIGNING_KEY_FREE" > "$WORK/key.pem"
 
+# Only Ed25519 keys sign here: an EC or RSA key would produce a signature labelled ed25519 that no CLI could verify.
+KEY_TEXT="$("$O" pkey -in "$WORK/key.pem" -noout -text 2>/dev/null)" || { err "NSELF_RELEASE_SIGNING_KEY_FREE is not a readable PEM private key"; exit 1; }
+case "$KEY_TEXT" in "ED25519 Private-Key:"*) ;; *) err "NSELF_RELEASE_SIGNING_KEY_FREE is not an Ed25519 key"; exit 1 ;; esac
+
 # The id must be the one derived from this key, so a mis-set secret fails here and not in a user's install.
 if ! DERIVED="$("$O" pkey -in "$WORK/key.pem" -pubout -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)" || [ -z "$DERIVED" ]; then
   err "NSELF_RELEASE_SIGNING_KEY_FREE is not a readable PEM private key"

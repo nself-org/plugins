@@ -381,14 +381,24 @@ jobs:
       # uploaded; a checksum file from this run's rebuild would not match an older asset of record.
       - name: Publish checksum files from the published bytes
         run: |
-          mkdir -p checksums
+          mkdir -p checksums on-release
           existing="$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$existing" | grep -q '\.sha256$'; then
+            gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir on-release --pattern '*.sha256'
+          fi
           to_upload=()
+          fail=0
           for f in published/*.tar.gz; do
             name="$(basename "$f")"
             printf "%s  %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$name" > "checksums/${name}.sha256"
-            printf '%s\n' "$existing" | grep -qxF "${name}.sha256" || to_upload+=("checksums/${name}.sha256")
+            if [ -f "on-release/${name}.sha256" ]; then
+              # Never overwritten; a stale one is a defect to resolve by hand, not to hide.
+              cmp -s "checksums/${name}.sha256" "on-release/${name}.sha256" || { echo "ERROR: ${name}.sha256 on the release does not match the published ${name}"; fail=1; }
+            else
+              to_upload+=("checksums/${name}.sha256")
+            fi
           done
+          [ "$fail" -eq 0 ] || exit 1
           if [ "${#to_upload[@]}" -gt 0 ]; then
             gh release upload "$TAG" "${to_upload[@]}" --repo "${GITHUB_REPOSITORY}"
           fi
@@ -505,6 +515,11 @@ jobs:
           for f in published/*-"${VERSION}".tar.gz; do
             [ -e "$f" ] || continue
             slug="$(basename "$f" "-${VERSION}.tar.gz")"
+            # A tarball named for this tag whose manifest declares another version is not a release of that plugin: leave it unsigned.
+            if [ "$(jq -r '.version // ""' "free/${slug}/plugin.json" 2>/dev/null)" != "$VERSION" ]; then
+              echo "SKIP ${slug}: manifest version is not ${VERSION}"
+              continue
+            fi
             sig="$(bash scripts/release/sign.sh "$slug" "$VERSION" "$f")"
             sha="$(sha256sum "$f" | cut -d' ' -f1)"
             jq -nc --arg s "$slug" --arg sha "$sha" --argjson sig "$sig" '{($s): {sha256: $sha, release_signature: $sig}}' >> signatures.ndjson

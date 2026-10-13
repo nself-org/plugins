@@ -48,6 +48,8 @@ asset that is already on the Release stays the artifact of record and everything
 - Only the source tarball `<slug>-<version>.tar.gz` is signed. The per-platform binary tarballs are covered by `platform_checksums` (in the unsigned
   `releases.json`) and by the provenance attestation; verify them with `gh attestation verify <file> --repo nself-org/plugins`.
   `verify-signatures.sh` counts source tarballs (checksum + signature) and binary tarballs (checksum only) separately.
+- A source tarball is signed only when its plugin's manifest `version` equals the tag's version; the signed set is exactly the set of rows
+  `release-data` writes. Both scripts accept Ed25519 keys only and refuse anything else.
 - Verification order is checksum, then signature, both before extraction.
 
 ### Scripts (`scripts/release/`)
