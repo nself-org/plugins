@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"encoding/json"
+	"net/http"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -10,6 +12,11 @@ func RegisterRoutes(r chi.Router, db *DB, cfg *Config, osClient *OpenSubtitlesCl
 	syncer := NewSynchronizer(cfg)
 	qc := NewSubtitleQC()
 	norm := NewNormalizer()
+
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w)})
+	})
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/subtitles", handleListSubtitles(db))
@@ -29,4 +36,3 @@ func RegisterRoutes(r chi.Router, db *DB, cfg *Config, osClient *OpenSubtitlesCl
 // ---------------------------------------------------------------------------
 // GET /v1/subtitles
 // ---------------------------------------------------------------------------
-
