@@ -111,7 +111,11 @@ func main() {
 		if !ok {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "payments", "migrations": counts})
+		status := "ok"
+		if !ok {
+			status = "unhealthy"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "plugin": "payments", "migrations": counts})
 	})
 
 	// Start dunning engine.

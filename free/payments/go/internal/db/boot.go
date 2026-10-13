@@ -35,6 +35,9 @@ func BootMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 // BootMigrationsStatus is the "migrations" member of /health: applied and expected counts. ok is false when
 // the status query fails; the handler then answers 503 (a 200 with -1 counts is a contract violation).
 func BootMigrationsStatus(ctx context.Context) (counts map[string]int, ok bool) {
+	if bootPool == nil {
+		return map[string]int{"applied": -1, "expected": -1}, false
+	}
 	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)

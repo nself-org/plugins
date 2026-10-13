@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -16,7 +17,7 @@ import (
 var bootPool *pgxpool.Pool
 
 func bootOptions() migrate.Options {
-	return migrate.Options{Schema: "np_plugin_pty", FS: migrations.FS}
+	return migrate.Options{Schema: "np_plugin_pty", FS: migrations.FS, StatementTimeout: 30 * time.Minute}
 }
 
 // mustBootMigrations applies the plugin's own migrations before it serves; a failure is fatal.

@@ -4360,8 +4360,10 @@
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [
-        "np_payments_orders",
-        "np_payments_transactions"
+        "np_payment_events",
+        "np_stripe_idempotency",
+        "np_subscriptions",
+        "np_usage_records"
       ],
       "tags": [
         "payments",
@@ -4764,8 +4766,10 @@
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [
+        "np_embeddings",
         "np_retrieval_documents",
-        "np_retrieval_embeddings"
+        "np_retrieval_embeddings",
+        "np_retrieval_index"
       ],
       "tags": [],
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-retrieval-1.2.6.tar.gz",
@@ -4800,11 +4804,12 @@
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [
-        "np_podcast_podcasts",
+        "np_podcast_categories",
         "np_podcast_episodes",
-        "np_podcast_subscriptions",
         "np_podcast_playback_positions",
-        "np_podcast_categories"
+        "np_podcast_plays",
+        "np_podcast_podcasts",
+        "np_podcast_subscriptions"
       ],
       "tags": [
         "podcast",

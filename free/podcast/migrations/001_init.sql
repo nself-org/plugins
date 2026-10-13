@@ -2,9 +2,10 @@
 -- Convention Wall: source_account_id TEXT NOT NULL DEFAULT 'primary'
 -- Tables derived from db.go InitSchema (code wins)
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Boot-applied by sdk/go/migrate with search_path pinned to np_podcast: every object is qualified with public.
+-- gen_random_uuid() is built in (Postgres 13+), so no uuid-ossp extension is needed.
 
-CREATE TABLE IF NOT EXISTS np_podcast_podcasts (
+CREATE TABLE IF NOT EXISTS public.np_podcast_podcasts (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     title             TEXT        NOT NULL,
@@ -18,11 +19,11 @@ CREATE TABLE IF NOT EXISTS np_podcast_podcasts (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_podcast_podcasts_source_account ON np_podcast_podcasts(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_podcast_podcasts_source_account ON public.np_podcast_podcasts(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_podcast_episodes (
+CREATE TABLE IF NOT EXISTS public.np_podcast_episodes (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    podcast_id        UUID        NOT NULL REFERENCES np_podcast_podcasts(id) ON DELETE CASCADE,
+    podcast_id        UUID        NOT NULL REFERENCES public.np_podcast_podcasts(id) ON DELETE CASCADE,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     title             TEXT        NOT NULL,
     description       TEXT,
@@ -36,35 +37,35 @@ CREATE TABLE IF NOT EXISTS np_podcast_episodes (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_podcast_episodes_source_account ON np_podcast_episodes(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_podcast_episodes_source_account ON public.np_podcast_episodes(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_podcast_subscriptions (
+CREATE TABLE IF NOT EXISTS public.np_podcast_subscriptions (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    podcast_id        UUID        NOT NULL REFERENCES np_podcast_podcasts(id) ON DELETE CASCADE,
+    podcast_id        UUID        NOT NULL REFERENCES public.np_podcast_podcasts(id) ON DELETE CASCADE,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     user_id           TEXT        NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (podcast_id, source_account_id, user_id)
 );
-CREATE INDEX IF NOT EXISTS idx_np_podcast_subscriptions_source_account ON np_podcast_subscriptions(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_podcast_subscriptions_source_account ON public.np_podcast_subscriptions(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_podcast_playback_positions (
+CREATE TABLE IF NOT EXISTS public.np_podcast_playback_positions (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    episode_id        UUID        NOT NULL REFERENCES np_podcast_episodes(id) ON DELETE CASCADE,
+    episode_id        UUID        NOT NULL REFERENCES public.np_podcast_episodes(id) ON DELETE CASCADE,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     user_id           TEXT        NOT NULL,
     position_seconds  INT         NOT NULL DEFAULT 0,
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(episode_id, source_account_id, user_id)
 );
-CREATE INDEX IF NOT EXISTS idx_np_podcast_playback_source_account ON np_podcast_playback_positions(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_podcast_playback_source_account ON public.np_podcast_playback_positions(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_podcast_categories (
+CREATE TABLE IF NOT EXISTS public.np_podcast_categories (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     name              TEXT        NOT NULL,
     slug              TEXT        NOT NULL,
-    parent_id         UUID        REFERENCES np_podcast_categories(id) ON DELETE SET NULL,
+    parent_id         UUID        REFERENCES public.np_podcast_categories(id) ON DELETE SET NULL,
     UNIQUE(source_account_id, slug)
 );
-CREATE INDEX IF NOT EXISTS idx_np_podcast_categories_source_account ON np_podcast_categories(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_podcast_categories_source_account ON public.np_podcast_categories(source_account_id);

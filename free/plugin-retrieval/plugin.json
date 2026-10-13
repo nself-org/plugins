@@ -30,8 +30,10 @@
   },
   "status": "stable",
   "tables": [
+    "np_embeddings",
     "np_retrieval_documents",
-    "np_retrieval_embeddings"
+    "np_retrieval_embeddings",
+    "np_retrieval_index"
   ],
   "tier": "free",
   "version": "1.2.6"

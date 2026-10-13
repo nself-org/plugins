@@ -61,8 +61,10 @@
   },
   "status": "stable",
   "tables": [
-    "np_payments_orders",
-    "np_payments_transactions"
+    "np_payment_events",
+    "np_stripe_idempotency",
+    "np_subscriptions",
+    "np_usage_records"
   ],
   "tags": [
     "payments",
