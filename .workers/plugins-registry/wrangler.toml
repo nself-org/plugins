@@ -2,7 +2,7 @@
 # nself Plugin Registry — dual-registry architecture (free + pro combining Worker)
 
 name = "nself-plugin-registry"
-main = "src/index.js"
+main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 # Workers KV namespace for caching free, pro, and combined registries

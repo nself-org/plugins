@@ -9,6 +9,70 @@ A drift gate (`plugin-counts.yml`, `registry-check.yml`) fails when a committed 
 what the generator produces. Its shape is defined by the JSON Schema at `registry-schema.json`
 and checked by `shared/validate-registry.sh`.
 
+## Worker endpoints
+
+`plugins.nself.org` is the Cloudflare worker in `.workers/plugins-registry/`. It has one source,
+`src/index.ts` (plus the modules it imports); `wrangler.toml` deploys `main = "src/index.ts"`.
+Every path also answers under a `/v1` prefix. Tests run with `pnpm test` there: it bundles
+`src/index.ts` with esbuild and runs `node --test` against the bundle.
+
+| Route | What it serves |
+|---|---|
+| `GET /catalog.json` | The generated catalog, compact JSON, see below |
+| `GET /registry.json`, `/registry`, `/` | Combined free + licensed registry (`?tier=free\|pro`, `?nocache=1`) |
+| `GET /plugins`, `/registry/list` | Plugin list (`?tier`, `?category`) |
+| `GET /plugins/:name`, `/plugins/:name/:version` | One plugin |
+| `GET /plugins/:name/tarball` | 302 to the free tarball (R2 first, GitHub Releases fallback). **401 for every tier other than `free`** |
+| `GET /plugins/:name/signature` | Ed25519 signature metadata |
+| `GET /plugins/revocations` | Revoked plugin versions (`revoked`; `revocations` is the same list under the old key) |
+| `GET /.well-known/revoked-authors.json` | Revoked author keys |
+| `GET /categories`, `/manifest.json`, `/stats`, `/health` | Categories, flat manifest, counters, health |
+| `GET /bundles.json`, `/bundles-schema.json` | Bundle membership map and its schema (`X-Cache` HIT or MISS) |
+| `GET /marketplace`, `/marketplace/ratings/:name` | Marketplace view and ratings |
+| `POST /marketplace/ratings/:name`, `/plugins/:name/install-event` | Submit a rating, count an install |
+| `POST /api/sync` | Bearer `GITHUB_SYNC_TOKEN`; drops the registry, manifest and bundles KV keys and refetches them; `catalog:json` is refetched in place, so a failed refetch keeps the old copy |
+
+### `/catalog.json`
+
+The worker reads `catalog.json` from the plugins repo (GitHub Contents API with the token, else the raw URL),
+serialises it compactly (no indentation), and keeps the body and its hash together in KV (`catalog:json`, fresh for
+`CACHE_TTL`, 300 s).
+
+- `ETag: "<sha256 hex of the exact body bytes>"`: a strong tag, exposed to browsers (`Access-Control-Expose-Headers`; `If-None-Match` is allowed on preflight). The same catalog gives the same tag from either source; any change to the catalog changes it.
+- `If-None-Match` with that tag (also a list of tags, a `W/` form, or `*`) returns `304` with an empty body and the same `ETag`.
+- `Cache-Control: public, max-age=300` on a fresh fetch (a HIT promises only the time its KV copy has left), `Content-Type: application/json`, `X-Cache: HIT | MISS | STALE`.
+- If GitHub cannot be reached and an expired copy exists, the worker serves it as `STALE` (`max-age=60`) and retries GitHub about a minute later; with no copy at all it returns `502`. A Contents API failure of any kind falls back to the raw URL.
+- A fetched body that is not a catalog (an object with a `schema_version` string and a non-empty `plugins` collection) is never cached or served, and never replaces a good copy.
+
+### Changes from the retired `src/index.js`
+
+`index.js` was the deployed file; `index.ts` is now the only source. Where the two disagreed the TypeScript behaviour won,
+except where the CLI or a deploy check reads the old behaviour. For the deploy ticket (P7-PLUG-35):
+
+| Route | Now |
+|---|---|
+| `/health` | `status: "healthy"` (what `publish.yml` and `deploy.sh` check), plus `timestamp` and `features` |
+| `/plugins/revocations` | `revoked` (what the CLI reads) and `revocations` (old key), entries read with `name` or the old `plugin` |
+| `/plugins/:name/signature` | 200 with `signature: null` when signing is not configured (was 503); `name` replaces `plugin` in the body |
+| `/plugins` | `generatedAt` added; `total`, `free`, `pro` count the filtered list as before |
+| `POST /marketplace/ratings/:name` | body `{rating, comment, userHash}` and reply `{name, rating, reviewCount}` (the admin app already sends this); the old `{stars, review}` body is rejected. Ratings live in per-plugin `rating:<name>` keys in `PLUGINS_KV` (no `RATINGS_KV` binding is needed); ratings the old worker stored in the single `ratings:all` key are still served and are the base for the next rating |
+| `GET /marketplace/ratings/:name` | `reviewCount`, plus the old `ratingCount`. The 60 requests a minute per-IP limiter runs only when a dedicated `RATINGS_KV` is bound (it writes a KV counter per request) |
+| `GET /marketplace` | the payload the CLI reads (`plugins`, `bundles`, `categories`, `stats`) plus the old `version`, `fetchedAt`, `total` (the filtered count); the six canonical Bundles (task, chat, claw, family, sentry, clawde) as in `index.js`; only `free` is free, `pro` and `max` plugins are licensed (`licenseRequired`) |
+| `POST /plugins/:name/install-event` | counts only plugins that exist in the registry; an unknown name is a 404 and writes nothing |
+| 404 / error bodies | the message text is lower-case (`not found`) |
+| New | `/registry/list`, `/.well-known/revoked-authors.json`, `POST /plugins/:name/install-event`, `/v1/*` paths, and a 400 for an unsupported `X-API-Version` |
+| Unchanged | registry, manifest, categories, stats, bundles routes, `/api/sync`, the 401 gate and its order (gate, then revocation) |
+
+A name that exists in both registries (`cron`, `notify`) resolves to the free entry. Everything read from the licensed registry is
+treated as licensed whatever tier it claims.
+
+### Licensed tarballs stay behind the licence gate
+
+`/plugins/:name/tarball` hands out a redirect only when the registry entry's tier is exactly `free`. `pro`, `max`, an unknown or
+future tier, an odd spelling (`FREE`, `free `) and a missing tier on a licensed registry all get `401` with a pointer to
+`ping.nself.org/plugins/:name/download`, before the revocation check runs. The route tests cover encoded slashes and dots,
+dot segments, case changes, version aliases, doubled slashes, `/v1` prefixes, other methods and hostile headers.
+
 ## Changing the registry
 
 | You want to | Do this |

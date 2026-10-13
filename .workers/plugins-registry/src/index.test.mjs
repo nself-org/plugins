@@ -10,17 +10,18 @@
  * index.ts separately gained a tier==="pro"-only guard in PR #66, which
  * still missed "max" and was never the deployed file to begin with.
  *
- * This suite runs against index.js directly with Node's built-in test
- * runner — this package has zero test infrastructure (no vitest/jest; see
+ * This suite runs against the esbuild bundle of src/index.ts (dist-test/
+ * index.mjs, built by `pnpm test`; src/index.js was collapsed into index.ts
+ * in P7-PLUG-08) with Node's built-in test runner — this package has zero test infrastructure (no vitest/jest; see
  * the qa/bugs doc above), so this intentionally adds no new dependency.
  *
- * Run: node --test src/index.test.mjs
+ * Run: pnpm test
  * (from .workers/plugins-registry)
  */
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { isDirectDownloadTier, handlePluginTarball } from './index.js';
+import { isDirectDownloadTier, handlePluginTarball } from '../dist-test/index.mjs';
 
 // ---------------------------------------------------------------------------
 // isDirectDownloadTier — the guard predicate itself

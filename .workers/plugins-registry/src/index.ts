@@ -14,8 +14,14 @@
  *   GET /plugins/revocations             — Revocation list (polled hourly by CLI)
  *   GET /registry.json                   — Combined registry (legacy CLI compat)
  *   GET /registry                        — Alias for /registry.json
+ *   GET /registry/list                   — Alias for /plugins with a 60 s edge cache
+ *   GET /marketplace/ratings/:name       — Ratings for one plugin
+ *   POST /marketplace/ratings/:name      — Submit a rating
+ *   POST /plugins/:name/install-event    — Install counter (fire-and-forget from the CLI)
+ *   (every path also answers under /v1/…)
  *   GET /categories                      — Category list
  *   GET /manifest.json                   — Flat CLI manifest for nself plugin outdated
+ *   GET /catalog.json                    — Free + licensed catalog (strong ETag, 304 on If-None-Match)
  *   GET /bundles.json                    — Bundle-to-plugin map (ADR-P6-03)
  *   GET /bundles-schema.json             — Schema for /bundles.json
  *   GET /marketplace                     — Enriched marketplace view
@@ -29,6 +35,7 @@
  *   registry:combined  — merged output (timestamp envelope)
  *   bundles-json-v1    — bundles.json (timestamp envelope)
  *   bundles-schema-v1  — bundles-schema.json (timestamp envelope)
+ *   catalog:json       — catalog.json: compact body + sha256 ETag (timestamp envelope)
  *   revocations:list   — JSON array of RevocationEntry
  *   revocations:authors — JSON array of RevokedAuthorEntry (S58-T09)
  *   stats:global       — request counters
@@ -36,18 +43,20 @@
  * Secrets (set via `wrangler secret put`):
  *   SIGNING_PRIVATE_KEY  — Ed25519 seed, 32 bytes as 64 lowercase hex chars
  *   PUBLIC_KEY_HEX       — Ed25519 public key, 32 bytes as 64 lowercase hex chars
+ *                          (SIGNING_PUBLIC_KEY, the retired index.js name, is accepted as an alias)
  *   GH_ACCESS_TOKEN      — Fine-grained PAT (contents:read on plugins + bundles)
  *   GITHUB_SYNC_TOKEN    — Bearer token for POST /api/sync
  */
 
 import { signPlugin, canonicalPluginString } from "./sign.ts";
-import { handleRevocations, isRevoked } from "./revocations.ts";
+import { corsHeaders, jsonResponse } from "./http.ts";
+import { handleBundlesJson, handleBundlesSchema } from "./bundles.ts";
+import { handleCatalog, fetchCatalog } from "./catalog.ts";
+import { handleRevocations, handleRevokedAuthors, isRevoked } from "./revocations.ts";
 import {
   fetchFreeRegistry,
   fetchProRegistry,
   fetchAllPlugins,
-  fetchBundlesJson,
-  fetchBundlesSchema,
   validateBundlesJson,
   KV_BUNDLES_JSON,
   KV_BUNDLES_SCHEMA,
@@ -63,8 +72,6 @@ import type {
   PluginListResponse,
   PluginTier,
   KVEnvelope,
-  RevokedAuthorEntry,
-  RevokedAuthorListResponse,
 } from "./registry.ts";
 import {
   handleMarketplace,
@@ -75,33 +82,6 @@ import {
 } from "./marketplace.ts";
 import type { MarketplaceEnv } from "./marketplace.ts";
 import { resolveApiVersion, addApiVersionHeader } from "./middleware/api-version.ts";
-
-// ---------------------------------------------------------------------------
-// CORS helpers
-// ---------------------------------------------------------------------------
-
-function corsHeaders(): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
-}
-
-function jsonResponse(
-  body: unknown,
-  status = 200,
-  extra: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body, null, 2), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders(),
-      ...extra,
-    },
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Main fetch handler
@@ -139,65 +119,70 @@ export default {
       // Route matching uses resolvedPath (strips /v1 prefix if present)
       // Health
       if (method === "GET" && resolvedPath === "/health") {
-        return handleHealth(env);
+        return await handleHealth(env);
       }
 
       // Registry (legacy compat)
       if (method === "GET" && (resolvedPath === "/registry.json" || resolvedPath === "/registry" || resolvedPath === "/")) {
-        return handleRegistry(url, env, ctx);
+        return await handleRegistry(url, env, ctx);
       }
 
       // Plugin list — must appear before /plugins/:name to prevent shadowing
       // S67-T02: /registry/list is an alias with explicit 60s CF edge cache header
       if (method === "GET" && (resolvedPath === "/plugins" || resolvedPath === "/registry/list")) {
-        return handlePluginList(url, env, ctx);
+        return await handlePluginList(url, env, ctx);
       }
 
       // Revocations — must appear before /plugins/:name to prevent "revocations" being
       // treated as a plugin name
       if (method === "GET" && resolvedPath === "/plugins/revocations") {
-        return handleRevocations(env);
+        return await handleRevocations(env);
       }
 
       // S58-T09: Author CRL endpoint.
       // CLI checks this on every plugin install and via daily cron.
       // Append-only: once revoked, entries are never removed.
       if (method === "GET" && resolvedPath === "/.well-known/revoked-authors.json") {
-        return handleRevokedAuthors(env);
+        return await handleRevokedAuthors(env);
       }
 
       // Single plugin (and sub-resources: /tarball, /signature, /:version)
       if (method === "GET" && resolvedPath.startsWith("/plugins/")) {
-        return handlePlugin(resolvedPath, env, ctx);
+        return await handlePlugin(resolvedPath, env, ctx);
       }
 
       // Categories
       if (method === "GET" && resolvedPath === "/categories") {
-        return handleCategories(env, ctx);
+        return await handleCategories(env, ctx);
       }
 
       // Manifest (CLI compat)
       if (method === "GET" && resolvedPath === "/manifest.json") {
-        return handleManifest(env, ctx);
+        return await handleManifest(env, ctx);
+      }
+
+      // Catalog — P7-PLUG-08 (strong ETag, 304)
+      if (method === "GET" && resolvedPath === "/catalog.json") {
+        return await handleCatalog(request, env, ctx);
       }
 
       // Bundles — P6-E4-W3-S3-T8 / ADR-P6-03
       if (method === "GET" && resolvedPath === "/bundles.json") {
-        return handleBundlesJson(env, ctx);
+        return await handleBundlesJson(env, ctx);
       }
       if (method === "GET" && resolvedPath === "/bundles-schema.json") {
-        return handleBundlesSchema(env, ctx);
+        return await handleBundlesSchema(env, ctx);
       }
 
       // Stats
       if (method === "GET" && resolvedPath === "/stats") {
-        return handleStats(env);
+        return await handleStats(env);
       }
 
       // Marketplace — GET /marketplace/ratings/:name (must appear before /marketplace)
       if (method === "GET" && resolvedPath.startsWith("/marketplace/ratings/")) {
         // T-RATE-01: GET rate limit — 60 req/min per IP
-        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        const rlGet = await getRateLimit(request, env);
         if (rlGet.limited) {
           return jsonResponse(
             { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
@@ -210,7 +195,10 @@ export default {
           return jsonResponse({ error: "plugin name required" }, 400);
         }
         const result = await handleGetRating(pluginName, env as MarketplaceEnv);
-        return jsonResponse(result, 200, { "Cache-Control": "public, max-age=60" });
+        // ratingCount is the retired index.js spelling of reviewCount.
+        return jsonResponse({ ...result, ratingCount: result.reviewCount }, 200, {
+          "Cache-Control": "public, max-age=60",
+        });
       }
 
       // Marketplace — POST /plugins/:name/install-event (S68-T02)
@@ -222,6 +210,11 @@ export default {
         const pluginName = parts[1];
         if (!pluginName) {
           return jsonResponse({ error: "plugin name required" }, 400);
+        }
+        // Only count plugins that exist: an unknown name must not create KV keys.
+        const { all: known } = await fetchAllPlugins(env, ctx);
+        if (!known.some((p) => p.name === pluginName)) {
+          return jsonResponse({ error: "plugin not found", name: pluginName }, 404);
         }
         const result = await handleInstallEvent(pluginName, request, env as MarketplaceEnv);
         return jsonResponse(
@@ -260,7 +253,7 @@ export default {
       // Marketplace — GET /marketplace
       if (method === "GET" && resolvedPath === "/marketplace") {
         // T-RATE-01: GET rate limit — 60 req/min per IP
-        const rlGet = await checkGetRateLimit(request, env as MarketplaceEnv);
+        const rlGet = await getRateLimit(request, env);
         if (rlGet.limited) {
           return jsonResponse(
             { error: `Rate limit exceeded. Retry after ${rlGet.retryAfter}s.` },
@@ -274,14 +267,15 @@ export default {
         payload.stats.free = free.length;
         payload.stats.pro = pro.length;
         payload.stats.total = all.length;
-        return jsonResponse(payload, 200, {
+        // version, fetchedAt and total (the filtered count, as in index.js) are the retired envelope fields, kept additively.
+        return jsonResponse({ ...payload, version: "1.0.0", fetchedAt: payload.stats.updatedAt, total: payload.plugins.length }, 200, {
           "Cache-Control": `public, max-age=${cacheTtl(env)}`,
         });
       }
 
       // Sync webhook
       if (method === "POST" && resolvedPath === "/api/sync") {
-        return handleSync(request, env, ctx);
+        return await handleSync(request, env, ctx);
       }
 
       return jsonResponse(
@@ -296,8 +290,11 @@ export default {
             "GET /plugins/:name/:version",
             "GET /plugins/revocations",
             "GET /registry.json",
+            "GET /registry/list",
+            "GET /.well-known/revoked-authors.json",
             "GET /categories",
             "GET /manifest.json",
+            "GET /catalog.json",
             "GET /bundles.json",
             "GET /bundles-schema.json",
             "GET /marketplace",
@@ -317,18 +314,45 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+// The GET limiter writes a KV counter per request. It runs only when a dedicated
+// RATINGS_KV is bound; on the deployed config (PLUGINS_KV only) it would put an
+// anonymous write on the registry namespace for every marketplace GET.
+async function getRateLimit(request: Request, env: Env): Promise<{ limited: boolean; retryAfter: number }> {
+  if (!env.RATINGS_KV) return { limited: false, retryAfter: 0 };
+  return checkGetRateLimit(request, env as MarketplaceEnv);
+}
+
 // ---------------------------------------------------------------------------
 // GET /health
 // ---------------------------------------------------------------------------
 
+/** Ed25519 public key hex: PUBLIC_KEY_HEX, or the retired index.js name SIGNING_PUBLIC_KEY. */
+function publicKeyHex(env: Env): string | undefined {
+  return env.PUBLIC_KEY_HEX ?? env.SIGNING_PUBLIC_KEY;
+}
+
 function handleHealth(env: Env): Response {
   return jsonResponse({
-    status: "ok",
+    // "healthy" is what publish.yml and deploy.sh check after a deploy.
+    status: "healthy",
     service: "nself-plugin-registry",
     version: env.PLUGIN_REGISTRY_VERSION ?? env.REGISTRY_VERSION ?? "1.0.0",
     ts: new Date().toISOString(),
+    // `timestamp` and `features` are the retired index.js health fields.
+    timestamp: new Date().toISOString(),
+    features: [
+      "dual-registry",
+      "kv-cache",
+      "tier-filter",
+      "github-api-fetch",
+      "plugin-list",
+      "tarball-redirect",
+      "ed25519-signatures",
+      "revocations",
+      "catalog-etag",
+    ],
     signing: {
-      configured: Boolean(env.SIGNING_PRIVATE_KEY && env.PUBLIC_KEY_HEX),
+      configured: Boolean(env.SIGNING_PRIVATE_KEY && publicKeyHex(env)),
     },
   });
 }
@@ -342,7 +366,7 @@ async function handlePluginList(url: URL, env: Env, ctx: ExecutionContext): Prom
   const categoryFilter = url.searchParams.get("category");
   const ttl = cacheTtl(env);
 
-  const { free, pro, all } = await fetchAllPlugins(env, ctx);
+  const { all } = await fetchAllPlugins(env, ctx);
 
   let filtered = all;
   if (tierFilter === "free" || tierFilter === "pro") {
@@ -357,8 +381,9 @@ async function handlePluginList(url: URL, env: Env, ctx: ExecutionContext): Prom
   const response: PluginListResponse = {
     plugins: filtered,
     total: filtered.length,
-    free: free.length,
-    pro: pro.length,
+    // free/pro count the filtered list, as the retired index.js did
+    free: filtered.filter((p) => p.tier === "free").length,
+    pro: filtered.filter((p) => p.tier === "pro").length,
     generatedAt: new Date().toISOString(),
   };
 
@@ -434,10 +459,11 @@ async function handlePlugin(path: string, env: Env, ctx: ExecutionContext): Prom
 // below. This switch is exhaustive over PluginTier: adding a 4th tier
 // without adding a case here is a TypeScript compile error (via the `never`
 // assignment in `default`), so the guard cannot silently miss a new paid
-// tier the way it missed "max". index.js — the file wrangler.toml actually
-// deploys (`main = "src/index.js"`) — carries a runtime-fail-safe twin of
-// this same rule (isDirectDownloadTier); that file, not this one, is what
-// serves plugins.nself.org today.
+// tier the way it missed "max". It is also fail-safe at runtime: registry
+// data is not type-checked, so any value that is not the literal "free"
+// (a future tier, a typo, undefined) is refused. This is the only source
+// (src/index.js was collapsed into it in P7-PLUG-08), and it is what
+// wrangler.toml deploys.
 function isDirectDownloadTier(tier: PluginTier): boolean {
   switch (tier) {
     case "free":
@@ -447,7 +473,8 @@ function isDirectDownloadTier(tier: PluginTier): boolean {
       return false;
     default: {
       const _exhaustive: never = tier;
-      return _exhaustive;
+      void _exhaustive;
+      return false;
     }
   }
 }
@@ -540,7 +567,7 @@ async function handlePluginSignature(plugin: PluginEntry, env: Env): Promise<Res
       tarballURL,
       signature,
       algorithm: "ed25519",
-      publicKey: env.PUBLIC_KEY_HEX ?? null,
+      publicKey: publicKeyHex(env) ?? null,
       signedFor: canonicalPluginString(name, version, tarballURL),
     },
     200,
@@ -564,7 +591,9 @@ interface CombinedRegistry {
 }
 
 async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const tierFilter = url.searchParams.get("tier");
+  // Only free|pro filter, as the retired index.js did; any other value means no filter.
+  const tierParam = url.searchParams.get("tier");
+  const tierFilter = tierParam === "free" || tierParam === "pro" ? tierParam : null;
   const bypass = url.searchParams.get("nocache") === "1";
   const ttl = cacheTtl(env);
 
@@ -573,14 +602,22 @@ async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promis
   if (!tierFilter && !bypass && kv) {
     const cached = await kvGet<CombinedRegistry>(kv, KV_COMBINED);
     if (cached && isFresh(cached, ttl)) {
+      ctx.waitUntil(bumpStat(kv, "registryHits"));
+      const age = Math.max(0, Math.floor((Date.now() - cached.timestamp) / 1000));
       return jsonResponse(cached.data, 200, {
-        "Cache-Control": `public, max-age=${ttl}`,
+        "Cache-Control": `public, max-age=${Math.max(0, ttl - age)}`,
         "X-Cache": "HIT",
+        "X-Cache-Age": String(age),
+        "X-Tier": "combined",
       });
     }
   }
 
   const { free, pro, all } = await fetchAllPlugins(env, ctx, bypass);
+  if (all.length === 0) {
+    // Both sources failed: say so (as index.js did) instead of caching an empty registry.
+    return jsonResponse({ error: "Registry unavailable — both sources failed" }, 502);
+  }
 
   const combined: CombinedRegistry = {
     version: "1.0.0",
@@ -593,11 +630,13 @@ async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promis
 
   if (!tierFilter && !bypass && kv) {
     ctx.waitUntil(kvPutWrapped(kv, KV_COMBINED, combined));
+    ctx.waitUntil(bumpStat(kv, "registryFetches"));
   }
 
   return jsonResponse(combined, 200, {
     "Cache-Control": `public, max-age=${ttl}`,
     "X-Cache": "MISS",
+    "X-Tier": tierFilter ?? "combined",
   });
 }
 
@@ -626,8 +665,9 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
   if (kv) {
     const cached = await kvGet<Array<Record<string, string>>>(kv, KV_MANIFEST);
     if (cached && isFresh(cached, ttl)) {
+      const age = Math.max(0, Math.floor((Date.now() - cached.timestamp) / 1000));
       return jsonResponse(cached.data, 200, {
-        "Cache-Control": `public, max-age=${ttl}`,
+        "Cache-Control": `public, max-age=${Math.max(0, ttl - age)}`,
         "X-Cache": "HIT",
       });
     }
@@ -639,7 +679,12 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
     version: p.version,
     tier: p.tier,
     description: p.description,
-    downloadUrl: p.tarballURL || p.homepage || `https://github.com/nself-org/plugins/tree/main/${p.name}`,
+    // an explicit downloadUrl wins (index.js), then the tarball, then the homepage
+    downloadUrl:
+      (p as { downloadUrl?: string }).downloadUrl ||
+      p.tarballURL ||
+      p.homepage ||
+      `https://github.com/nself-org/plugins/tree/main/${p.name}`,
   }));
 
   if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_MANIFEST, manifest));
@@ -648,103 +693,6 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
     "Cache-Control": `public, max-age=${ttl}`,
     "X-Cache": "MISS",
   });
-}
-
-// ---------------------------------------------------------------------------
-// GET /bundles.json — P6-E4-W3-S3-T8 (ADR-P6-03).
-//
-// Serves the bundle-to-plugin membership map from the Bundles repo (today; the
-// nself-org/bundles repo after the rename lands), cached in PLUGINS_KV under
-// its own key (bundles-json-v1, distinct from the registry:* keys) so a
-// stale registry cache and a stale bundles.json cache invalidate
-// independently. Cache-Control matches the ticket guide's stated convention
-// (s-maxage + stale-while-revalidate) rather than this worker's usual plain
-// max-age, since bundles.json is fetched by CDN edges more aggressively than
-// the per-request registry endpoints.
-// ---------------------------------------------------------------------------
-
-const BUNDLES_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=300";
-
-async function handleBundlesJson(env: Env, ctx: ExecutionContext): Promise<Response> {
-  const data = await fetchBundlesJson(env, ctx);
-  if (data === null) {
-    return jsonResponse(
-      { error: "bundles.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset" },
-      502,
-    );
-  }
-
-  const { valid, errors } = validateBundlesJson(data);
-  if (!valid) {
-    console.error("bundles.json failed schema validation:", errors.join("; "));
-    return jsonResponse(
-      { error: "bundles.json failed schema validation", details: errors },
-      502,
-    );
-  }
-
-  return jsonResponse(data, 200, { "Cache-Control": BUNDLES_CACHE_CONTROL });
-}
-
-// ---------------------------------------------------------------------------
-// GET /bundles-schema.json — the schema bundles.json validates against.
-// Passthrough + cache only; not itself schema-validated.
-// ---------------------------------------------------------------------------
-
-async function handleBundlesSchema(env: Env, ctx: ExecutionContext): Promise<Response> {
-  const data = await fetchBundlesSchema(env, ctx);
-  if (data === null) {
-    return jsonResponse(
-      { error: "bundles-schema.json unavailable — upstream fetch failed or GH_ACCESS_TOKEN unset" },
-      502,
-    );
-  }
-  return jsonResponse(data, 200, { "Cache-Control": BUNDLES_CACHE_CONTROL });
-}
-
-// ---------------------------------------------------------------------------
-// GET /.well-known/revoked-authors.json — Author Certificate Revocation List
-// (S58-T09)
-//
-// CLI checks this endpoint on every `nself plugin install` and via daily cron
-// to detect plugins whose author keys have been revoked (abuse, security
-// breach, license fraud). Short max-age (60 s) because revocations are
-// security-critical and must propagate quickly.
-//
-// KV key: revocations:authors  — JSON array of RevokedAuthorEntry
-// The list is append-only: once revoked, entries must never be deleted.
-// ---------------------------------------------------------------------------
-
-const KV_REVOKED_AUTHORS = "revocations:authors";
-
-async function handleRevokedAuthors(env: Env): Promise<Response> {
-  const kv = env.REGISTRY ?? env.PLUGINS_KV;
-  let revokedAuthors: RevokedAuthorEntry[] = [];
-
-  if (kv) {
-    try {
-      const raw = await kv.get(KV_REVOKED_AUTHORS, "text");
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        if (Array.isArray(parsed)) {
-          revokedAuthors = parsed as RevokedAuthorEntry[];
-        }
-      }
-    } catch {
-      // KV read failure — return empty list so CLI is not falsely blocked.
-      // Errors are surfaced via the /health endpoint instead.
-      revokedAuthors = [];
-    }
-  }
-
-  const body: RevokedAuthorListResponse = {
-    revokedAuthors,
-    fetchedAt: new Date().toISOString(),
-    count: revokedAuthors.length,
-  };
-
-  // Short TTL: revocations are security-critical. CLI must see them promptly.
-  return jsonResponse(body, 200, { "Cache-Control": "public, max-age=60" });
 }
 
 // ---------------------------------------------------------------------------
@@ -757,6 +705,21 @@ interface StatsRecord {
   registryHits?: number;
   registryFetches?: number;
   lastSync?: string | null;
+}
+
+/** Best-effort counter bump; the record is stored flat, as index.js stored it. */
+async function bumpStat(
+  kv: KVNamespace,
+  key: "registryHits" | "registryFetches",
+): Promise<void> {
+  try {
+    const raw = await kvGet<StatsRecord>(kv, KV_STATS);
+    const stats: StatsRecord = raw ? (raw.data ?? (raw as unknown as StatsRecord)) : {};
+    stats[key] = (stats[key] ?? 0) + 1;
+    await kv.put(KV_STATS, JSON.stringify(stats));
+  } catch {
+    // counters are best-effort
+  }
 }
 
 async function handleStats(env: Env): Promise<Response> {
@@ -804,9 +767,10 @@ async function handleSync(
     ]);
   }
 
-  const [freeResult, proResult] = await Promise.allSettled([
+  const [freeResult, proResult, catalogResult] = await Promise.allSettled([
     fetchFreeRegistry(env, ctx, true),
     fetchProRegistry(env, ctx, true),
+    fetchCatalog(env, ctx, true),
   ]);
 
   const freeCount = freeResult.status === "fulfilled" ? freeResult.value.length : 0;
@@ -821,7 +785,9 @@ async function handleSync(
     ctx.waitUntil(
       (async () => {
         const existing = await kvGet<StatsRecord>(kv, KV_STATS);
-        const s: StatsRecord = existing?.data ?? { registryHits: 0, registryFetches: 0 };
+        const s: StatsRecord = existing
+          ? (existing.data ?? (existing as unknown as StatsRecord))
+          : { registryHits: 0, registryFetches: 0 };
         s.lastSync = new Date().toISOString();
         await kv.put(KV_STATS, JSON.stringify(s));
       })(),
@@ -836,6 +802,7 @@ async function handleSync(
     totalCount: freeCount + proCount,
     freeError,
     proError,
+    catalogSynced: catalogResult.status === "fulfilled" && catalogResult.value?.cache === "MISS",
     timestamp: new Date().toISOString(),
   });
 }
@@ -873,4 +840,4 @@ function toTitleCase(str: string): string {
 
 // Re-export types for external consumers
 export type { Env, PluginEntry, PluginListResponse, KVEnvelope };
-export { isDirectDownloadTier, handlePluginTarball };
+export { isDirectDownloadTier, handlePluginTarball, validateBundlesJson, handleBundlesJson, handleCatalog };

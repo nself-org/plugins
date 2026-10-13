@@ -211,7 +211,10 @@ Or use the route configuration in wrangler.toml with the zone ID.
 ```
 .workers/plugins-registry/
 ├── src/
-│   └── index.js      # Worker source code
+│   ├── index.ts      # Worker entry (the only source; wrangler main)
+│   ├── registry.ts   # Registry/catalog/bundles fetch + KV cache
+│   ├── marketplace.ts, revocations.ts, sign.ts, middleware/
+│   └── *.test.mjs    # node --test suites (run against an esbuild bundle: pnpm test)
 ├── deploy.sh         # Deployment script
 ├── package.json      # npm configuration
 ├── wrangler.toml     # Cloudflare Worker config

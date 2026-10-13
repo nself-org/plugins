@@ -76,9 +76,12 @@ export interface RevokedAuthorListResponse {
 export interface Env {
   REGISTRY: KVNamespace;
   PLUGINS_KV: KVNamespace;
-  RATINGS_KV: KVNamespace;
+  /** Optional dedicated ratings namespace; falls back to PLUGINS_KV (see ratingsKv). */
+  RATINGS_KV?: KVNamespace;
   SIGNING_PRIVATE_KEY: string;
   PUBLIC_KEY_HEX: string;
+  /** Legacy name of PUBLIC_KEY_HEX read by the retired src/index.js; accepted as an alias. */
+  SIGNING_PUBLIC_KEY?: string;
   PLUGIN_REGISTRY_VERSION: string;
   CACHE_TTL?: string;
   REGISTRY_VERSION?: string;
@@ -105,7 +108,7 @@ export interface KVEnvelope<T> {
 // GitHub Contents API response
 // ---------------------------------------------------------------------------
 
-interface GitHubContentsResponse {
+export interface GitHubContentsResponse {
   content: string;
   encoding: string;
   name: string;
@@ -129,102 +132,6 @@ interface ProRegistryWireFormat {
 type RegistryWireFormat = FreeRegistryWireFormat | ProRegistryWireFormat | PluginEntry[];
 
 // ---------------------------------------------------------------------------
-// Static fallback registry — seed data so the worker never returns empty
-// on first cold start. Contains only the stable free plugins.
-// ---------------------------------------------------------------------------
-
-const STATIC_FALLBACK: PluginEntry[] = [
-  {
-    name: "backup",
-    version: "1.0.0",
-    tier: "free",
-    description: "Automated backup with pruning and cloud storage",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/backup-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/backup",
-  },
-  {
-    name: "cron",
-    version: "1.0.0",
-    tier: "free",
-    description: "Scheduled job execution",
-    category: "automation",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/cron",
-  },
-  {
-    name: "feature-flags",
-    version: "1.0.0",
-    tier: "free",
-    description: "Feature flag management",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/feature-flags-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/feature-flags",
-  },
-  {
-    name: "jobs",
-    version: "1.0.0",
-    tier: "free",
-    description: "BullMQ background job queue",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/jobs-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/jobs",
-  },
-  {
-    name: "monitoring",
-    version: "1.0.0",
-    tier: "free",
-    description: "Prometheus, Grafana, Loki, and full observability stack",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitoring-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/monitoring",
-  },
-  {
-    name: "search",
-    version: "1.0.0",
-    tier: "free",
-    description: "Full-text search with PostgreSQL and MeiliSearch",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/search",
-  },
-  {
-    name: "stripe",
-    version: "1.0.0",
-    tier: "free",
-    description: "Stripe payment and billing integration",
-    category: "commerce",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/stripe-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/stripe",
-  },
-  {
-    name: "webhooks",
-    version: "1.0.0",
-    tier: "free",
-    description: "Outbound webhook delivery with retry",
-    category: "communication",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/webhooks-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/webhooks",
-  },
-];
-
-// ---------------------------------------------------------------------------
 // Normalise various wire formats to a typed flat array
 // ---------------------------------------------------------------------------
 
@@ -244,22 +151,19 @@ function normaliseToArray(data: RegistryWireFormat, expectedTier: PluginTier): P
     return [];
   }
 
+  // Spread first: the CLI reads checksums, download_url, dependencies, tables, ... straight
+  // from this wire format, so unknown fields must pass through. Defaults fill the typed core.
   return raw.map((p) => ({
+    ...p,
     name: p.name ?? "",
     version: p.version ?? "0.0.0",
-    tier: p.tier ?? expectedTier,
+    // Everything from the licensed (Bundles) registry is licensed whatever its
+    // entry says: only "max" keeps its own tier, any other value becomes "pro".
+    tier: expectedTier === "pro" ? (p.tier === "max" ? "max" : "pro") : (p.tier ?? expectedTier),
     description: p.description ?? "",
     category: p.category ?? "other",
     license: p.license ?? "MIT",
     tarballURL: p.tarballURL ?? "",
-    ...(p.checksum !== undefined && { checksum: p.checksum }),
-    ...(p.signature !== undefined && { signature: p.signature }),
-    ...(p.author !== undefined && { author: p.author }),
-    ...(p.homepage !== undefined && { homepage: p.homepage }),
-    ...(p.repository !== undefined && { repository: p.repository }),
-    ...(p.tags !== undefined && { tags: p.tags }),
-    ...(p.downloads !== undefined && { downloads: p.downloads }),
-    ...(p.displayName !== undefined && { displayName: p.displayName }),
   }));
 }
 
@@ -304,9 +208,14 @@ async function kvPutWrapped<T>(kv: KVNamespace, key: string, data: T): Promise<v
   }
 }
 
-function decodeGitHubContent(raw: string): unknown {
-  const decoded = atob(raw.replace(/\n/g, ""));
-  return JSON.parse(decoded);
+// The Contents API returns base64 of the file's UTF-8 bytes. atob() yields one
+// char per byte, so decode the bytes as UTF-8 or every non-ASCII character
+// (the nSelf mark, dashes) turns into mojibake and the catalog ETag would
+// differ from the one computed from the raw URL.
+export function decodeGitHubContent(raw: string): unknown {
+  const binary = atob(raw.replace(/\n/g, ""));
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder("utf-8").decode(bytes));
 }
 
 // ---------------------------------------------------------------------------
@@ -331,22 +240,23 @@ export async function fetchFreeRegistry(
   let data: RegistryWireFormat | null = null;
 
   if (env.GH_ACCESS_TOKEN) {
-    const resp = await fetch(FREE_REGISTRY_API_URL, {
-      headers: {
-        Authorization: `token ${env.GH_ACCESS_TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "nself-plugin-registry/2.0",
-      },
-    });
-    if (resp.ok) {
-      try {
+    try {
+      const resp = await fetch(FREE_REGISTRY_API_URL, {
+        headers: {
+          Authorization: `token ${env.GH_ACCESS_TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "nself-plugin-registry/2.0",
+        },
+      });
+      if (resp.ok) {
         const envelope = (await resp.json()) as GitHubContentsResponse;
         data = decodeGitHubContent(envelope.content) as RegistryWireFormat;
-      } catch (e) {
-        console.error("Failed to decode free registry content:", (e as Error).message);
+      } else {
+        console.warn(`Free registry GitHub API fetch failed: ${resp.status}`);
       }
-    } else {
-      console.warn(`Free registry GitHub API fetch failed: ${resp.status}`);
+    } catch (e) {
+      // A network or decode error falls through to the raw URL, like a non-200.
+      console.error("Free registry GitHub API fetch failed:", (e as Error).message);
     }
   }
 
@@ -355,8 +265,8 @@ export async function fetchFreeRegistry(
       headers: { "User-Agent": "nself-plugin-registry/2.0" },
     });
     if (!resp.ok) {
-      console.warn(`Free registry raw fetch failed: ${resp.status} — using static fallback`);
-      return STATIC_FALLBACK;
+      // Fail loudly, as the retired index.js did: seed data would be cached and served as real.
+      throw new Error(`Free registry raw fetch failed: ${resp.status}`);
     }
     data = (await resp.json()) as RegistryWireFormat;
   }
@@ -370,18 +280,19 @@ export async function fetchProRegistry(
   ctx: ExecutionContext,
   bypass = false,
 ): Promise<PluginEntry[] | null> {
-  if (!env.GH_ACCESS_TOKEN) {
-    return null;
-  }
-
   const kv = env.REGISTRY ?? env.PLUGINS_KV;
   const ttl = cacheTtl(env);
 
+  // Cache first (as the retired index.js did): a KV copy synced by /api/sync serves without a token.
   if (!bypass && kv) {
     const cached = await kvGet<RegistryWireFormat>(kv, KV_PRO);
     if (cached && isFresh(cached, ttl)) {
       return normaliseToArray(cached.data, "pro");
     }
+  }
+
+  if (!env.GH_ACCESS_TOKEN) {
+    return null;
   }
 
   const resp = await fetch(PRO_REGISTRY_API_URL, {
@@ -515,35 +426,41 @@ export function validateBundlesJson(data: unknown): { valid: boolean; errors: st
   return { valid: errors.length === 0, errors };
 }
 
+/** A fetched JSON document and whether it came from the KV cache. */
+export interface CachedJson {
+  data: unknown;
+  cache: "HIT" | "MISS";
+}
+
 /**
- * Fetches bundles.json from the Bundles repo via the GitHub Contents
- * API, mirroring fetchProRegistry's auth + KV-cache pattern above (reused
- * rather than re-implemented per DRY). Returns the raw parsed JSON
- * (unvalidated — callers run validateBundlesJson separately so a schema
- * failure can be reported distinctly from a fetch failure) or null on
- * fetch/decode failure.
+ * Cache-first fetch of one JSON file from the Bundles repo through the GitHub
+ * Contents API (authenticated; base64 body). The KV copy is served while fresh
+ * with no token, as the retired index.js did. Returns null on fetch/decode
+ * failure. Callers validate the body separately so a schema failure reads
+ * differently from a fetch failure.
  */
-export async function fetchBundlesJson(
+async function fetchBundlesRepoJson(
   env: Env,
   ctx: ExecutionContext,
-  bypass = false,
-): Promise<unknown | null> {
-  if (!env.GH_ACCESS_TOKEN) {
-    console.warn("GH_ACCESS_TOKEN not set — bundles.json unavailable");
-    return null;
-  }
-
+  url: string,
+  kvKey: string,
+  bypass: boolean,
+): Promise<CachedJson | null> {
   const kv = env.REGISTRY ?? env.PLUGINS_KV;
-  const ttl = cacheTtl(env);
 
   if (!bypass && kv) {
-    const cached = await kvGet<unknown>(kv, KV_BUNDLES_JSON);
-    if (cached && isFresh(cached, ttl)) {
-      return cached.data;
+    const cached = await kvGet<unknown>(kv, kvKey);
+    if (cached && isFresh(cached, cacheTtl(env))) {
+      return { data: cached.data, cache: "HIT" };
     }
   }
 
-  const resp = await fetch(BUNDLES_JSON_API_URL, {
+  if (!env.GH_ACCESS_TOKEN) {
+    console.warn(`GH_ACCESS_TOKEN not set — cannot fetch ${url}`);
+    return null;
+  }
+
+  const resp = await fetch(url, {
     headers: {
       Authorization: `token ${env.GH_ACCESS_TOKEN}`,
       Accept: "application/vnd.github.v3+json",
@@ -553,7 +470,7 @@ export async function fetchBundlesJson(
 
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
-    console.error(`bundles.json fetch failed: ${resp.status} — ${body.slice(0, 200)}`);
+    console.error(`Fetch failed for ${url}: ${resp.status} — ${body.slice(0, 200)}`);
     return null;
   }
 
@@ -562,61 +479,38 @@ export async function fetchBundlesJson(
     const envelope = (await resp.json()) as GitHubContentsResponse;
     data = decodeGitHubContent(envelope.content);
   } catch (e) {
-    console.error("Failed to decode bundles.json content:", (e as Error).message);
+    console.error(`Failed to decode content for ${url}:`, (e as Error).message);
     return null;
   }
 
-  if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_BUNDLES_JSON, data));
-  return data;
+  if (kv) ctx.waitUntil(kvPutWrapped(kv, kvKey, data));
+  return { data, cache: "MISS" };
 }
 
-/**
- * Fetches bundles-schema.json — same repo, same auth pattern, its own KV key.
- * Served as-is (no validation of the schema against itself).
- */
-export async function fetchBundlesSchema(
+export function fetchBundlesJson(
   env: Env,
   ctx: ExecutionContext,
   bypass = false,
-): Promise<unknown | null> {
-  if (!env.GH_ACCESS_TOKEN) {
-    return null;
-  }
+): Promise<CachedJson | null> {
+  return fetchBundlesRepoJson(env, ctx, BUNDLES_JSON_API_URL, KV_BUNDLES_JSON, bypass);
+}
 
-  const kv = env.REGISTRY ?? env.PLUGINS_KV;
-  const ttl = cacheTtl(env);
+/** bundles-schema.json: same repo and auth, its own KV key, served as-is. */
+export function fetchBundlesSchema(
+  env: Env,
+  ctx: ExecutionContext,
+  bypass = false,
+): Promise<CachedJson | null> {
+  return fetchBundlesRepoJson(env, ctx, BUNDLES_SCHEMA_API_URL, KV_BUNDLES_SCHEMA, bypass);
+}
 
-  if (!bypass && kv) {
-    const cached = await kvGet<unknown>(kv, KV_BUNDLES_SCHEMA);
-    if (cached && isFresh(cached, ttl)) {
-      return cached.data;
-    }
-  }
-
-  const resp = await fetch(BUNDLES_SCHEMA_API_URL, {
-    headers: {
-      Authorization: `token ${env.GH_ACCESS_TOKEN}`,
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "nself-plugin-registry/2.0",
-    },
-  });
-
-  if (!resp.ok) {
-    console.error(`bundles-schema.json fetch failed: ${resp.status}`);
-    return null;
-  }
-
-  let data: unknown;
-  try {
-    const envelope = (await resp.json()) as GitHubContentsResponse;
-    data = decodeGitHubContent(envelope.content);
-  } catch (e) {
-    console.error("Failed to decode bundles-schema.json content:", (e as Error).message);
-    return null;
-  }
-
-  if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_BUNDLES_SCHEMA, data));
-  return data;
+/**
+ * Namespace for ratings and install counters. The deployed wrangler.toml
+ * binds only PLUGINS_KV, so RATINGS_KV is optional and PLUGINS_KV serves when
+ * it is absent (every key is prefixed, none collide with the registry keys).
+ */
+export function ratingsKv(env: Env): KVNamespace {
+  return (env.RATINGS_KV ?? env.PLUGINS_KV) as KVNamespace;
 }
 
 export { cacheTtl, kvGet, kvPutWrapped, isFresh, DEFAULT_CACHE_TTL };
