@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
 
 	sdk "github.com/nself-org/plugin-sdk"
@@ -33,9 +35,7 @@ func main() {
 
 	store := internal.NewStore(pool)
 
-	if err := store.Migrate(); err != nil {
-		log.Fatalf("failed to run migrations: %v", err)
-	}
+	internal.BootMigrations(context.Background(), pool)
 
 	storagePath := os.Getenv("BACKUP_STORAGE_PATH")
 	if storagePath == "" {
@@ -61,6 +61,10 @@ func main() {
 	r.Use(sdk.CORS)
 	r.Use(sdk.RequestID)
 	r.Use(sdk.Logger)
+
+	// Own /health so it can report the boot migration counts (sdk only adds a plain liveness default).
+	r.Get("/health", internal.HealthHandler)
+	r.Head("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 
 	r.Post("/v1/backups", h.CreateBackup)
 	r.Get("/v1/backups", h.ListBackups)
