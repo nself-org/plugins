@@ -32,11 +32,11 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // bootMigrationsHealth is the "migrations" member of /health (applied and expected counts) and the HTTP status the
 // handler must answer with: 200, or 503 when the ledger cannot be read (the cli retries any non-200; a 200 with -1
 // counts is E119, a contract violation).
-func bootMigrationsHealth() (map[string]int, int) {
+func bootMigrationsHealth(ctx context.Context) (map[string]int, int) {
 	if bootPool == nil {
 		return map[string]int{"applied": -1, "expected": -1}, http.StatusServiceUnavailable
 	}
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
 		return map[string]int{"applied": -1, "expected": -1}, http.StatusServiceUnavailable

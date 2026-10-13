@@ -12,7 +12,7 @@ import (
 
 // Health returns 200 OK with plugin metadata.
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	mig, code := bootMigrationsHealth()
+	mig, code := bootMigrationsHealth(r.Context())
 	writeJSON(w, code, map[string]any{
 		"status":     "ok",
 		"plugin":     "e2ee",

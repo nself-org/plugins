@@ -4,13 +4,11 @@ WORKDIR /app
 COPY go.mod go.sum ./
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /devices ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -tags timetzdata -mod=vendor -o /devices ./cmd/main.go
 
 FROM alpine:3.19
-# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage and time zone data is compiled in (-tags timetzdata).
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
-ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 
 WORKDIR /app
 COPY --from=builder /devices .

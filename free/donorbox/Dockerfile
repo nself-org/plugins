@@ -11,13 +11,11 @@
 FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /donorbox ./cmd/
+RUN CGO_ENABLED=0 GOOS=linux go build -tags timetzdata -mod=vendor -ldflags="-s -w" -o /donorbox ./cmd/
 
 FROM alpine:3.20
-# No apk at build time (the tarball build runs with the network off): CA bundle and zoneinfo come from the builder stage.
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage and time zone data is compiled in (-tags timetzdata).
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
-ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 COPY --from=builder /donorbox /usr/local/bin/donorbox
 EXPOSE 3074
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
