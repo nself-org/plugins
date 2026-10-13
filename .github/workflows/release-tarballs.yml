@@ -1,11 +1,21 @@
 name: Release Plugin Tarballs (Free)
 
-# Builds and uploads tarballs for all 27 free plugins.
-# S67-T03: Dual-publish — GitHub Releases (canonical) + Cloudflare R2 (primary CDN).
-# CI hard-fails if R2 upload returns non-200. GitHub upload is always the primary
-# persistence; R2 is the CDN overlay. SHA-256 verified between both mirrors.
-# Triggers on tag push (v*) or manual dispatch with a tag override.
-# Idempotent: re-running skips assets already present on the release.
+# One tag push (v*) or manual dispatch with a tag runs four jobs, each with only the permissions and secrets it needs:
+#   build         deterministic source + per-platform tarballs (scripts/deterministic-tar.sh); no secrets, read-only token.
+#   publish       uploads the missing tarballs to the GitHub Release (never --clobber), writes the .sha256 files from the PUBLISHED
+#                 bytes, mirrors those bytes to Cloudflare R2 and attests build provenance for the tarballs this run built and the
+#                 Release serves unchanged; records the published sha256 list the signer is held to. Holds the R2 secrets, never the
+#                 signing key.
+#   sign          bound to the protected Environment `release-signing` (required reviewer): the only job that can read the free-tier
+#                 signing key (NSELF_RELEASE_SIGNING_KEY_FREE + _ID). Downloads what is on the Release, refuses it unless it is
+#                 byte-for-byte what publish recorded, and signs the source tarballs per hq PLUG D7 (scripts/release/sign.sh). The
+#                 licensed key is never here. Runs the tag's own commit of sign.sh, the code the reviewer approved.
+#   release-data  re-downloads the published bytes, writes sha256 + release_signature into releases.json
+#                 (scripts/verify-published-checksums.sh --write --signatures) and opens the release-data PR with the workflow's own
+#                 GITHUB_TOKEN. No PAT, no cross-repo trigger. The projections (registry.json, catalog.json, counts.json) need the
+#                 private bundles repo, which this token cannot read: the PR body tells the maintainer to regenerate them.
+# Checksums and signatures always describe the bytes on the Release, never a rebuild: the Release asset is the artifact of record.
+# Idempotent: re-running skips assets already present on the release. See .github/wiki/Releasing.md.
 
 on:
   push:
@@ -18,34 +28,44 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-
-env:
-  R2_BUCKET: nself-plugin-tarballs
-  R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-
+permissions: {}
 
 concurrency:
   group: release-tarballs-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-and-upload:
-    name: Build + Upload Free Plugin Tarballs
+  build:
+    name: Build Free Plugin Tarballs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Resolve release tag
         id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          TAG="${INPUT_TAG:-$REF_NAME}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "ERROR: '$TAG' is not a release tag (vMAJOR.MINOR.PATCH[-suffix])"
+            exit 1
           fi
+          # Every job checks out the commit the run started from, and the concurrency group is that ref. A manual run must therefore
+          # start from the tag itself ("Use workflow from: Tag"), so the code that builds, signs and records is the tag's code.
+          if [ "$GITHUB_REF" != "refs/tags/${TAG}" ]; then
+            echo "ERROR: start this workflow from the tag ${TAG} (ref is ${GITHUB_REF})"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Install jq
         run: sudo apt-get install -y jq
@@ -76,8 +96,10 @@ jobs:
         run: bash scripts/release/cli-targets-gate.sh --out "${GITHUB_WORKSPACE}/cli-targets"
 
       - name: Build tarballs for all free plugins (max 10 parallel)
+        env:
+          STEP_TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          TAG="${STEP_TAG}"
           VERSION="${TAG#v}"
           DIST_DIR="dist"
           mkdir -p "$DIST_DIR"
@@ -193,16 +215,18 @@ jobs:
           done
 
           echo "Built artifacts:"
-          ls -lh "$DIST_DIR"/*.tar.gz | wc -l
-          echo "tarball_count=$(ls dist/*.tar.gz 2>/dev/null | wc -l)" >> "$GITHUB_ENV"
+          find "$DIST_DIR" -name '*.tar.gz' | wc -l
+          echo "tarball_count=$(find dist -name '*.tar.gz' | wc -l)" >> "$GITHUB_ENV"
 
       - name: Verify every free plugin has its tarballs
+        env:
+          STEP_TAG: ${{ steps.tag.outputs.tag }}
         run: |
           # Recomputed here rather than inherited: each `run:` block is its own
           # shell, so VERSION set in the build step above is empty in this one.
           # Without this the check looked for "dist/<name>-.tar.gz" and reported
           # every plugin as missing.
-          TAG="${{ steps.tag.outputs.tag }}"
+          TAG="${STEP_TAG}"
           VERSION="${TAG#v}"
 
           # Each plugin produces one source tarball. A cli plugin produces five
@@ -230,7 +254,7 @@ jobs:
             echo "ERROR: release is incomplete; a cli plugin without a build for a platform cannot be installed on it"
             exit 1
           fi
-          echo "All plugin tarballs present ($(ls dist/*.tar.gz | wc -l) archives)"
+          echo "All plugin tarballs present ($(find dist -name '*.tar.gz' | wc -l) archives)"
 
       # S49-T05: verify each tarball's embedded binary arch matches tarball filename.
       # Catches cross-compile errors where wrong GOOS/GOARCH slips into a release asset.
@@ -250,17 +274,39 @@ jobs:
           # Explicit arch verification (binary tarballs) is handled in cli/release.yml S49-T05.
           # Free plugin tarballs are source-only; arch verification is not applicable here.
 
-      - name: Upload tarballs to GitHub Release
-        id: upload
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+      - name: Hand the built tarballs to the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
 
+  publish:
+    name: Publish to GitHub Release and R2
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+
+      - name: Upload missing tarballs to the GitHub Release
+        id: upload
+        run: |
           # Wait up to 90s for the release to appear (handles tag-push race where
           # another workflow or the UI creates the release concurrently).
           for i in $(seq 1 18); do
-            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
               echo "Release $TAG found"
               break
             fi
@@ -269,10 +315,10 @@ jobs:
           done
 
           # If still not found, create a stub (workflow_dispatch or truly missing).
-          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          if ! gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release $TAG not found after 90s — creating stub release"
             gh release create "$TAG" \
-              --repo "${{ github.repository }}" \
+              --repo "${GITHUB_REPOSITORY}" \
               --title "nself Plugins $TAG" \
               --notes "Plugin tarballs for $TAG" \
               --draft=false \
@@ -280,14 +326,14 @@ jobs:
           fi
 
           # NEVER --clobber. An asset already on the release is the artifact
-          # of record: registry.json's checksums are written from those exact
-          # published bytes (scripts/verify-published-checksums.sh --write).
+          # of record: releases.json's checksums and signatures are written from
+          # those exact published bytes (scripts/verify-published-checksums.sh --write).
           #
           # The release flow uploads the tarballs to a DRAFT release first, then
-          # writes their hashes into registry.json, then merges, then publishes.
+          # writes their hashes into releases.json, then merges, then publishes.
           # Publishing creates the tag, which triggers THIS workflow. If it then
           # rebuilt and clobbered, the bytes on the release would no longer be
-          # the bytes those checksums attest to, and all 129 free plugins would
+          # the bytes those checksums attest to, and all free plugins would
           # fail verification at the exact moment of release. CI cannot
           # reproduce the uploaded bytes: identical tar streams still gzip
           # differently across machines (Apple gzip vs GNU gzip, and across zlib
@@ -295,12 +341,12 @@ jobs:
           #
           # So: upload only what is missing. That is what "idempotent" in this
           # file's header always meant, and what --clobber never did.
-          existing="$(gh release view "$TAG" --repo "${{ github.repository }}" \
+          existing="$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" \
             --json assets --jq '.assets[].name' 2>/dev/null || true)"
 
           to_upload=()
           skipped=0
-          for f in dist/*.tar.gz dist/*.sha256; do
+          for f in dist/*.tar.gz; do
             [ -e "$f" ] || continue
             if printf '%s\n' "$existing" | grep -qxF "$(basename "$f")"; then
               skipped=$((skipped + 1))
@@ -315,111 +361,317 @@ jobs:
           else
             echo "Uploading ${#to_upload[@]} missing asset(s)."
             gh release upload "$TAG" "${to_upload[@]}" \
-              --repo "${{ github.repository }}"
+              --repo "${GITHUB_REPOSITORY}"
           fi
 
           echo "uploaded_count=${#to_upload[@]}" >> "$GITHUB_OUTPUT"
           echo "Upload complete"
 
-      # This workflow builds and uploads release ASSETS only. It must never
-      # write to the repository. registry.json checksums are written by
-      # exactly one tool, run against the PUBLISHED release bytes:
-      #   scripts/verify-published-checksums.sh --write <tag>
-      # Two prior incidents came from this workflow computing and pushing its
-      # own checksums instead: a naming-derivation bug on v1.2.1 grew
-      # registry.json from 129 to 289 entries (junk keys like
-      # "ai-cli-1.2.1-darwin-amd64.tar.gz"), and on v1.2.2 (runs 35541157880 /
-      # 35541439580) this step pushed commit 22f34fb to chore/release-1.2.2
-      # with a wrong "sha256:"-prefixed format and, for warehouse, watchdog,
-      # web3, webhooks and workflows, hashes that did not match the published
-      # bytes at all. Do not re-add a backfill/commit/push step here — run the
-      # verify script manually (or from the release-publish flow) instead.
-
-      - name: Verify GitHub upload
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Everything after this point works from the bytes the Release serves, not from dist/.
+      - name: Re-download the published bytes
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          ASSET_COUNT=$(gh release view "$TAG" --repo "${{ github.repository }}" \
-            --json assets --jq '.assets | length')
-          echo "Total assets on release $TAG: $ASSET_COUNT"
-          # Minimum: 27 tarballs + 27 checksums = 54
-          if [ "$ASSET_COUNT" -lt 54 ]; then
-            echo "WARNING: Expected at least 54 assets, found $ASSET_COUNT"
-          else
-            echo "OK: $ASSET_COUNT assets verified on release"
-          fi
-
-      # S67-T03: Dual-publish to R2 (primary CDN)
-      - name: Upload tarballs to R2 (S67-T03)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
-        run: |
-          VERSION="${{ steps.tag.outputs.tag }}"
-          VERSION="${VERSION#v}"
-          FAIL=0
-
-          for tarball in dist/*.tar.gz; do
-            plugin_name="$(basename "$tarball" "-${VERSION}.tar.gz")"
-            r2_key="plugins/${plugin_name}/${plugin_name}-${VERSION}.tar.gz"
-
-            echo "Uploading $plugin_name to R2 key $r2_key..."
-            HTTP_STATUS=$(curl -s -o /tmp/r2_upload_out.txt -w "%{http_code}" \
-              -X PUT \
-              "https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/objects/${r2_key}" \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/gzip" \
-              --data-binary "@$tarball")
-
-            if [ "$HTTP_STATUS" -ne 200 ]; then
-              echo "ERROR: R2 upload failed for $plugin_name (HTTP $HTTP_STATUS)"
-              cat /tmp/r2_upload_out.txt
-              FAIL=1
+          mkdir -p published
+          gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir published --pattern '*.tar.gz'
+          fail=0
+          mkdir -p attest
+          : > not-attested.txt
+          for f in dist/*.tar.gz; do
+            name="$(basename "$f")"
+            if [ ! -f "published/${name}" ]; then
+              echo "ERROR: ${name} is not on release ${TAG} after the upload"
+              fail=1
+            elif cmp -s "$f" "published/${name}"; then
+              cp "$f" "attest/${name}"
             else
-              echo "OK: $plugin_name uploaded to R2 (HTTP $HTTP_STATUS)"
+              # An earlier upload of this tag wins (never --clobber); everything below describes it, but this run built other bytes,
+              # so it cannot vouch for where they came from: they get no provenance attestation.
+              echo "NOTE: ${name} on the release differs from this run's rebuild; the published bytes are used, not attested"
+              echo "$name" >> not-attested.txt
             fi
           done
+          [ "$fail" -eq 0 ] || exit 1
+          echo "Published tarballs: $(find published -name '*.tar.gz' | wc -l); attestable (built by this run): $(find attest -name '*.tar.gz' | wc -l)"
 
-          if [ "$FAIL" -ne 0 ]; then
-            echo "ERROR: One or more R2 uploads failed — failing CI"
-            exit 1
+      # What the reviewer of the `sign` job approves: the sha256 of every tarball the Release serves right now. `sign` refuses any
+      # tarball that is not in this list with this hash, so an asset swapped while the approval waits is never signed.
+      - name: Record the published checksums
+        run: |
+          (cd published && sha256sum -- *.tar.gz) > published-sha256.txt
+          {
+            echo "### Published tarballs for ${TAG}"
+            echo
+            echo "$(wc -l < published-sha256.txt | tr -d ' ') tarball(s) on the Release; $(wc -l < not-attested.txt | tr -d ' ') differ from this run's rebuild (published, not attested)."
+            echo
+            echo '```'
+            cat published-sha256.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Provenance only for bytes this run built and the Release serves unchanged.
+      - name: Attest build provenance
+        if: hashFiles('attest/*.tar.gz') != ''
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: attest/*.tar.gz
+
+      - name: Hand the published checksums to the sign job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: published-sha256
+          path: published-sha256.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      # The .sha256 files describe the bytes on the Release, so they are computed from published/ and only the missing ones are
+      # uploaded; a checksum file from this run's rebuild would not match an older asset of record.
+      - name: Publish checksum files from the published bytes
+        run: |
+          mkdir -p checksums on-release
+          existing="$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$existing" | grep -q '\.sha256$'; then
+            gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir on-release --pattern '*.sha256'
+          fi
+          to_upload=()
+          fail=0
+          for f in published/*.tar.gz; do
+            name="$(basename "$f")"
+            printf "%s  %s\n" "$(sha256sum "$f" | cut -d' ' -f1)" "$name" > "checksums/${name}.sha256"
+            if [ -f "on-release/${name}.sha256" ]; then
+              # Never overwritten; a stale one is a defect to resolve by hand, not to hide.
+              cmp -s "checksums/${name}.sha256" "on-release/${name}.sha256" || { echo "ERROR: ${name}.sha256 on the release does not match the published ${name}"; fail=1; }
+            else
+              to_upload+=("checksums/${name}.sha256")
+            fi
+          done
+          [ "$fail" -eq 0 ] || exit 1
+          if [ "${#to_upload[@]}" -gt 0 ]; then
+            gh release upload "$TAG" "${to_upload[@]}" --repo "${GITHUB_REPOSITORY}"
           fi
 
-      - name: Verify SHA-256 match between GitHub and R2 (S67-T03)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify GitHub upload
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
+          ASSET_COUNT=$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" \
+            --json assets --jq '.assets | length')
+          echo "Total assets on release $TAG: $ASSET_COUNT"
+          # Every tarball this run built and its .sha256 must be on the release.
+          want=$(( $(find dist -name '*.tar.gz' | wc -l) * 2 ))
+          if [ "$ASSET_COUNT" -lt "$want" ]; then
+            echo "ERROR: expected at least $want assets, found $ASSET_COUNT"
+            exit 1
+          fi
+          echo "OK: $ASSET_COUNT assets verified on release"
+
+      # S67-T03: Dual-publish to R2 (CDN). The mirror carries the published bytes, so a pre-existing
+      # release asset and its R2 copy can never disagree. Every object is read back and its sha256
+      # compared; a failed upload or an object that cannot be read back fails the job.
+      - name: Mirror the published tarballs to R2 and verify them (S67-T03)
+        env:
+          R2_BUCKET: nself-plugin-tarballs
+          R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_R2_API_TOKEN }}
+        run: |
           VERSION="${TAG#v}"
           FAIL=0
 
-          for checksum_file in dist/*.sha256; do
-            plugin_name="$(basename "$checksum_file" ".tar.gz.sha256" 2>/dev/null || basename "$checksum_file" ".sha256")"
-            plugin_name="${plugin_name%-${VERSION}.tar.gz}"
-            expected_sha="$(cut -d' ' -f1 "$checksum_file")"
-            r2_key="plugins/${plugin_name}/${plugin_name}-${VERSION}.tar.gz"
+          for tarball in published/*.tar.gz; do
+            file="$(basename "$tarball")"
+            # <slug>-<version>.tar.gz and <slug>-<version>-<platform>.tar.gz both live under plugins/<slug>/.
+            plugin_name="${file%%-"${VERSION}"*}"
+            r2_key="plugins/${plugin_name}/${file}"
+            url="https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/objects/${r2_key}"
 
-            # Download from R2 and verify sha256
-            curl -sf -o /tmp/r2_verify.tar.gz \
-              "https://api.cloudflare.com/client/v4/accounts/${R2_ACCOUNT_ID}/r2/buckets/${R2_BUCKET}/objects/${r2_key}" \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" || {
-                echo "WARNING: Could not fetch $plugin_name from R2 for verification"
-                continue
-              }
+            HTTP_STATUS=$(curl -s -o r2_upload_out.txt -w "%{http_code}" \
+              -X PUT "$url" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/gzip" \
+              --data-binary "@$tarball")
+            if [ "$HTTP_STATUS" -ne 200 ]; then
+              echo "ERROR: R2 upload failed for $file (HTTP $HTTP_STATUS)"
+              cat r2_upload_out.txt
+              FAIL=1
+              continue
+            fi
 
-            actual_sha="$(sha256sum /tmp/r2_verify.tar.gz | cut -d' ' -f1)"
+            expected_sha="$(sha256sum "$tarball" | cut -d' ' -f1)"
+            if ! curl -sf -o r2_verify.tar.gz "$url" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"; then
+              echo "ERROR: could not read $file back from R2 to verify it"
+              FAIL=1
+              continue
+            fi
+            actual_sha="$(sha256sum r2_verify.tar.gz | cut -d' ' -f1)"
             if [ "$expected_sha" != "$actual_sha" ]; then
-              echo "ERROR: SHA-256 mismatch for $plugin_name"
-              echo "  expected: $expected_sha"
-              echo "  actual:   $actual_sha"
+              echo "ERROR: SHA-256 mismatch for $file"
+              echo "  published: $expected_sha"
+              echo "  r2:        $actual_sha"
               FAIL=1
             else
-              echo "OK: $plugin_name SHA-256 verified (${expected_sha:0:12}...)"
+              echo "OK: $file mirrored and verified (${expected_sha:0:12}...)"
             fi
           done
+          rm -f r2_upload_out.txt r2_verify.tar.gz
 
           if [ "$FAIL" -ne 0 ]; then
-            echo "ERROR: SHA-256 mismatch detected — R2 mirror is corrupted"
+            echo "ERROR: the R2 mirror is incomplete or corrupted — failing CI"
             exit 1
+          fi
+
+  # The only job bound to the `release-signing` Environment (required reviewer, set up by the owner in P7-PROD-59). It reads the
+  # free-tier signing key and nothing else secret, has no write access to the repository and no R2 access.
+  sign:
+    name: Sign (release-signing)
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    environment: release-signing
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      # The workflow's own commit: the sign.sh that touches the key is the one the reviewer approved, whatever the tag points at.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: published-sha256
+          path: expected
+
+      # What the Release serves is the artifact of record, so that is what gets signed (no artifact hand-off to expire while the
+      # reviewer decides). But only the bytes the publish job recorded: an asset replaced while this job waited for approval is refused.
+      - name: Download the published tarballs and compare them with what publish recorded
+        run: |
+          mkdir -p published
+          gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir published --pattern '*.tar.gz'
+          set -o pipefail
+          (cd published && sha256sum -- *.tar.gz) | sort > actual-sha256.txt
+          sort expected/published-sha256.txt | diff - actual-sha256.txt || { echo "ERROR: the Release no longer serves the bytes the publish job recorded; nothing is signed"; exit 1; }
+
+      # Source tarballs only (<slug>-<version>.tar.gz): the signed message names slug, version and the source tarball's sha256.
+      # Binary tarballs (<slug>-<version>-<platform>.tar.gz) are covered by platform_checksums and, when this run built them, the
+      # provenance attestation made in the publish job.
+      - name: Sign the published source tarballs (hq PLUG D7)
+        env:
+          NSELF_RELEASE_SIGNING_KEY_FREE: ${{ secrets.NSELF_RELEASE_SIGNING_KEY_FREE }}
+          NSELF_RELEASE_SIGNING_KEY_FREE_ID: ${{ secrets.NSELF_RELEASE_SIGNING_KEY_FREE_ID }}
+        run: |
+          set +x
+          VERSION="${TAG#v}"
+          if [ -z "$NSELF_RELEASE_SIGNING_KEY_FREE" ] || [ -z "$NSELF_RELEASE_SIGNING_KEY_FREE_ID" ]; then
+            echo "ERROR: the release-signing Environment has no free-tier signing key and key id (P7-PROD-59 creates them)"
+            exit 1
+          fi
+          : > signatures.ndjson
+          count=0
+          for f in published/*-"${VERSION}".tar.gz; do
+            [ -e "$f" ] || continue
+            slug="$(basename "$f" "-${VERSION}.tar.gz")"
+            # A tarball named for this tag whose manifest declares another version is not a release of that plugin: leave it unsigned.
+            if [ "$(jq -r '.version // ""' "free/${slug}/plugin.json" 2>/dev/null)" != "$VERSION" ]; then
+              echo "SKIP ${slug}: manifest version is not ${VERSION}"
+              continue
+            fi
+            sig="$(bash scripts/release/sign.sh "$slug" "$VERSION" "$f")"
+            sha="$(sha256sum "$f" | cut -d' ' -f1)"
+            jq -nc --arg s "$slug" --arg sha "$sha" --argjson sig "$sig" '{($s): {sha256: $sha, release_signature: $sig}}' >> signatures.ndjson
+            count=$((count + 1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "ERROR: no source tarball to sign in published/"
+            exit 1
+          fi
+          jq -sS 'add' signatures.ndjson > signatures.json
+          rm -f signatures.ndjson
+          echo "Signed ${count} source tarball(s)"
+
+          # Once a release public key is committed (P7-PLUG-69 commits the first), only a committed key may have signed.
+          stage="$(mktemp -d)"
+          jq --arg v "$VERSION" 'map_values(. + {version: $v}) | {releases: .}' signatures.json > "$stage/releases.json"
+          for slug in $(jq -r 'keys[]' signatures.json); do
+            ln -s "${PWD}/published/${slug}-${VERSION}.tar.gz" "$stage/"
+          done
+          pinned=0
+          ok=0
+          for k in scripts/release/keys/plugins-release-free-*.pub; do
+            [ -e "$k" ] || continue
+            pinned=1
+            if bash scripts/release/verify-signatures.sh --pub "$k" "$stage" >/dev/null 2>&1; then ok=1; fi
+          done
+          if [ "$pinned" -ne 1 ]; then
+            echo "ERROR: scripts/release/keys/ holds no release public key; commit it (P7-PLUG-69) before a real tag run, so the signatures can be checked against it"
+            exit 1
+          fi
+          if [ "$ok" -ne 1 ]; then
+            echo "ERROR: the signatures do not verify against any committed release key in scripts/release/keys/; the signing secret is not a pinned key"
+            exit 1
+          fi
+
+      - name: Hand the signatures to the release-data job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signatures
+          path: signatures.json
+          retention-days: 7
+          if-no-files-found: error
+
+  # Writes the release data from the bytes on the Release and opens the PR with the workflow token. A PR opened with GITHUB_TOKEN
+  # does not start other workflows by itself; Releasing.md says how the maintainer gets its required checks to run.
+  release-data:
+    name: Open the release-data PR
+    needs: [build, sign]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      TAG: ${{ needs.build.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signatures
+          path: signed
+
+      - name: Write releases.json from the published bytes
+        run: |
+          bash scripts/verify-published-checksums.sh --write --signatures signed/signatures.json "$TAG"
+
+      - name: Open the release-data PR
+        run: |
+          branch="release-data/${TAG}"
+          if git diff --quiet; then
+            echo "releases.json already holds ${TAG}; nothing to open"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            # A maintainer may already have pushed the regenerated projections to it; a re-run must not wipe that.
+            echo "::notice::${branch} already exists; left untouched. Delete it and re-run to regenerate."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add releases.json
+          git commit -m "chore(release): release data for ${TAG}"
+          # The empty expected value makes the push fail if the branch appeared since the check above.
+          git push --force-with-lease="refs/heads/${branch}:" origin "HEAD:refs/heads/${branch}"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
+            {
+              echo "Written by the release workflow from the bytes published on ${TAG}: sha256 and release_signature per plugin. Review the diff against the Release assets; do not edit by hand."
+              echo
+              echo "Before merging: registry.json, catalog.json and counts.json are projections of releases.json that need the private bundles repo, which the workflow token cannot read."
+              echo "Run bash scripts/plugin-counts.sh on a maintainer machine with the bundles checkout and push the result to this branch; the registry gate stays red until then."
+              echo "Pushing also starts the required checks, which a PR opened with the workflow token does not."
+            } > pr-body.md
+            gh pr create --base "$DEFAULT_BRANCH" --head "$branch" \
+              --title "chore(release): release data for ${TAG}" \
+              --body-file pr-body.md
           fi
