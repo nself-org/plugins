@@ -132,102 +132,6 @@ interface ProRegistryWireFormat {
 type RegistryWireFormat = FreeRegistryWireFormat | ProRegistryWireFormat | PluginEntry[];
 
 // ---------------------------------------------------------------------------
-// Static fallback registry — seed data so the worker never returns empty
-// on first cold start. Contains only the stable free plugins.
-// ---------------------------------------------------------------------------
-
-const STATIC_FALLBACK: PluginEntry[] = [
-  {
-    name: "backup",
-    version: "1.0.0",
-    tier: "free",
-    description: "Automated backup with pruning and cloud storage",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/backup-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/backup",
-  },
-  {
-    name: "cron",
-    version: "1.0.0",
-    tier: "free",
-    description: "Scheduled job execution",
-    category: "automation",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/cron-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/cron",
-  },
-  {
-    name: "feature-flags",
-    version: "1.0.0",
-    tier: "free",
-    description: "Feature flag management",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/feature-flags-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/feature-flags",
-  },
-  {
-    name: "jobs",
-    version: "1.0.0",
-    tier: "free",
-    description: "BullMQ background job queue",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/jobs-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/jobs",
-  },
-  {
-    name: "monitoring",
-    version: "1.0.0",
-    tier: "free",
-    description: "Prometheus, Grafana, Loki, and full observability stack",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/monitoring-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/monitoring",
-  },
-  {
-    name: "search",
-    version: "1.0.0",
-    tier: "free",
-    description: "Full-text search with PostgreSQL and MeiliSearch",
-    category: "infrastructure",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/search-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/search",
-  },
-  {
-    name: "stripe",
-    version: "1.0.0",
-    tier: "free",
-    description: "Stripe payment and billing integration",
-    category: "commerce",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/stripe-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/stripe",
-  },
-  {
-    name: "webhooks",
-    version: "1.0.0",
-    tier: "free",
-    description: "Outbound webhook delivery with retry",
-    category: "communication",
-    license: "MIT",
-    tarballURL: "https://github.com/nself-org/plugins/releases/download/v1.0.0/webhooks-1.0.0.tar.gz",
-    author: "nself",
-    homepage: "https://github.com/nself-org/plugins/tree/main/webhooks",
-  },
-];
-
-// ---------------------------------------------------------------------------
 // Normalise various wire formats to a typed flat array
 // ---------------------------------------------------------------------------
 
@@ -247,22 +151,19 @@ function normaliseToArray(data: RegistryWireFormat, expectedTier: PluginTier): P
     return [];
   }
 
+  // Spread first: the CLI reads checksums, download_url, dependencies, tables, ... straight
+  // from this wire format, so unknown fields must pass through. Defaults fill the typed core.
   return raw.map((p) => ({
+    ...p,
     name: p.name ?? "",
     version: p.version ?? "0.0.0",
-    tier: p.tier ?? expectedTier,
+    // Everything from the licensed (Bundles) registry is licensed whatever its
+    // entry says: only "max" keeps its own tier, any other value becomes "pro".
+    tier: expectedTier === "pro" ? (p.tier === "max" ? "max" : "pro") : (p.tier ?? expectedTier),
     description: p.description ?? "",
     category: p.category ?? "other",
     license: p.license ?? "MIT",
     tarballURL: p.tarballURL ?? "",
-    ...(p.checksum !== undefined && { checksum: p.checksum }),
-    ...(p.signature !== undefined && { signature: p.signature }),
-    ...(p.author !== undefined && { author: p.author }),
-    ...(p.homepage !== undefined && { homepage: p.homepage }),
-    ...(p.repository !== undefined && { repository: p.repository }),
-    ...(p.tags !== undefined && { tags: p.tags }),
-    ...(p.downloads !== undefined && { downloads: p.downloads }),
-    ...(p.displayName !== undefined && { displayName: p.displayName }),
   }));
 }
 
@@ -363,8 +264,8 @@ export async function fetchFreeRegistry(
       headers: { "User-Agent": "nself-plugin-registry/2.0" },
     });
     if (!resp.ok) {
-      console.warn(`Free registry raw fetch failed: ${resp.status} — using static fallback`);
-      return STATIC_FALLBACK;
+      // Fail loudly, as the retired index.js did: seed data would be cached and served as real.
+      throw new Error(`Free registry raw fetch failed: ${resp.status}`);
     }
     data = (await resp.json()) as RegistryWireFormat;
   }

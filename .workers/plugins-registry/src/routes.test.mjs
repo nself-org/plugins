@@ -109,6 +109,7 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     assert.equal(b.signing.configured, true);
     assert.equal(c.signing.configured, false);
     assert.ok(Array.isArray(a.features) && a.timestamp);
+    assert.equal(a.status, 'healthy', 'publish.yml and deploy.sh check for "healthy"');
   });
 
   test('/plugins/revocations serves `revoked` (CLI) and `revocations` (legacy), reading name or legacy plugin', async () => {
@@ -139,6 +140,56 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     const got = await (await call('/marketplace/ratings/jobs', {}, { PLUGINS_KV: kv })).json();
     assert.equal(got.reviewCount, 1);
     assert.equal(got.rating, 5);
+  });
+
+  test('registry entries pass every field through (the CLI reads checksums, download_url, tables, ...)', async () => {
+    const full = {
+      version: '1.2.0', description: 'Jobs', category: 'infrastructure', tarballURL: 'https://example.invalid/jobs.tgz',
+      checksums: { sha256: 'a'.repeat(64) }, download_url: 'https://example.invalid/dl', requires_license: false,
+      implementation: { language: 'go', entry: 'cmd/main.go' }, dependencies: { required: ['database'], optional: [] },
+      tables: ['np_jobs_queue'], port: 3201, tier_pair: false, bundles: ['task'], minNselfVersion: '1.0.0', tarballUrl: 'x',
+    };
+    const kv = fakeKv({ 'registry:free': envelope({ plugins: { jobs: full } }) });
+    const one = await (await call('/plugins/jobs', {}, { PLUGINS_KV: kv })).json();
+    for (const [k, v] of Object.entries(full)) assert.deepEqual(one[k], v, `/plugins/jobs ${k}`);
+    const reg = await (await call('/registry.json', {}, { PLUGINS_KV: kv })).json();
+    for (const [k, v] of Object.entries(full)) assert.deepEqual(reg.plugins[0][k], v, `/registry.json ${k}`);
+    assert.equal(one.name, 'jobs');
+    assert.equal(one.tier, 'free');
+  });
+
+  test('/registry.json: only tier=free|pro filters (tier=bogus lists everything), X-Tier header', async () => {
+    const all = await (await call('/registry.json')).json();
+    const bogus = await call('/registry.json?tier=bogus');
+    assert.equal(bogus.headers.get('X-Tier'), 'combined');
+    assert.equal((await bogus.json()).plugins.length, all.plugins.length);
+    const pro = await call('/registry.json?tier=pro');
+    assert.equal(pro.headers.get('X-Tier'), 'pro');
+    assert.ok((await pro.json()).plugins.every((p) => p.tier === 'pro'));
+  });
+
+  test('/registry.json is a 502 and is not cached when both sources fail', async () => {
+    globalThis.fetch = async () => new Response('down', { status: 500 });
+    const kv = fakeKv();
+    const res = await call('/registry.json', {}, { PLUGINS_KV: kv });
+    assert.equal(res.status, 502);
+    assert.equal(kv.store.has('registry:combined'), false);
+    assert.equal(kv.store.has('registry:free'), false);
+  });
+
+  test('/stats counts registry fetches and hits (flat record, as index.js stored it)', async () => {
+    const kv = registryKv();
+    await call('/registry.json', {}, { PLUGINS_KV: kv });
+    await call('/registry.json', {}, { PLUGINS_KV: kv });
+    const stats = await (await call('/stats', {}, { PLUGINS_KV: kv })).json();
+    assert.equal(stats.registryFetches, 1);
+    assert.equal(stats.registryHits, 1);
+  });
+
+  test('GET ratings keeps the old ratingCount field next to reviewCount', async () => {
+    const body = await (await call('/marketplace/ratings/jobs')).json();
+    assert.ok('reviewCount' in body && 'ratingCount' in body);
+    assert.equal(body.ratingCount, body.reviewCount);
   });
 
   test('a cached pro registry serves without GH_ACCESS_TOKEN (cache-first, as index.js did)', async () => {
@@ -180,6 +231,20 @@ describe('licence gate: paid tiers never get a tarball redirect', () => {
 
   test('a registry entry with no tier inherits its registry: pro registry -> refused', async () => {
     assert.equal((await call('/plugins/untiered/tarball')).status, 401);
+  });
+
+  test('a licensed-registry entry that claims tier "free" is still licensed (pro registry forces pro)', async () => {
+    const kv = fakeKv({
+      'registry:free': envelope({ plugins: {} }),
+      'registry:pro': envelope({ plugins: [{ name: 'liar', version: '1.0.0', tier: 'free' }, { name: 'liar2', version: '1.0.0', tier: 'enterprise' }] }),
+    });
+    for (const name of ['liar', 'liar2']) {
+      const res = await call(`/plugins/${name}/tarball`, {}, { PLUGINS_KV: kv });
+      assert.equal(res.status, 401, name);
+      assertNoTarball(res, name);
+    }
+    const listed = await (await call('/plugins/liar', {}, { PLUGINS_KV: kv })).json();
+    assert.equal(listed.tier, 'pro');
   });
 
   test('a name in both tiers resolves to the free entry and never to the licensed tarball', async () => {

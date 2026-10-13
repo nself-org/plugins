@@ -204,7 +204,84 @@ describe('GET /catalog.json', () => {
     assert.equal((await worker.fetch(req('/catalog.json', { method: 'OPTIONS' }), {}, ctx)).status, 204);
   });
 
-  test('POST /api/sync drops the catalog key and refetches it', async () => {
+  test('Contents API returning an empty body (a file over 1 MB) falls back to the raw URL', async () => {
+    const doc = sampleCatalog();
+    const calls = [];
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+      return String(url).startsWith('https://api.github.com/')
+        ? new Response(JSON.stringify({ content: '', encoding: 'none' }), { status: 200 })
+        : new Response(JSON.stringify(doc), { status: 200 });
+    };
+    const res = await get('/catalog.json', { PLUGINS_KV: fakeKv(), GH_ACCESS_TOKEN: 'fake-token' });
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 2);
+    assert.equal(await res.text(), JSON.stringify(doc));
+  });
+
+  test('a network error on the Contents API also falls back to the raw URL', async () => {
+    const doc = sampleCatalog();
+    globalThis.fetch = async (url) => {
+      if (String(url).startsWith('https://api.github.com/')) throw new Error('boom');
+      return new Response(JSON.stringify(doc), { status: 200 });
+    };
+    const res = await get('/catalog.json', { PLUGINS_KV: fakeKv(), GH_ACCESS_TOKEN: 'fake-token' });
+    assert.equal(res.status, 200);
+  });
+
+  test('a HIT promises only the time the KV copy has left (max-age shrinks with age)', async () => {
+    const body = JSON.stringify(sampleCatalog());
+    const kv = fakeKv({ 'catalog:json': envelope({ body, etag: sha256(body) }, 100 * 1000) });
+    globalThis.fetch = async () => { throw new Error('network must not be used'); };
+    const res = await get('/catalog.json', { PLUGINS_KV: kv });
+    const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('Cache-Control'))[1]);
+    assert.ok(maxAge >= 198 && maxAge <= 200, `max-age ${maxAge}`);
+  });
+
+  test('an expired KV copy with a changed upstream gets the new body and a new ETag', async () => {
+    const oldDoc = sampleCatalog();
+    const oldBody = JSON.stringify(oldDoc);
+    const kv = fakeKv({ 'catalog:json': envelope({ body: oldBody, etag: sha256(oldBody) }, 10 * 60 * 1000) });
+    const newDoc = sampleCatalog({ counts: { free: 5, licensed: 5 } });
+    stubUpstream(newDoc);
+    const res = await get('/catalog.json', { PLUGINS_KV: kv }, { 'If-None-Match': `"${sha256(oldBody)}"` });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('X-Cache'), 'MISS');
+    assert.equal(res.headers.get('ETag'), `"${sha256(JSON.stringify(newDoc))}"`);
+  });
+
+  test('STALE: the old copy is re-stamped so GitHub is retried in about 60 s, not on every request', async () => {
+    const body = JSON.stringify(sampleCatalog());
+    const kv = fakeKv({ 'catalog:json': envelope({ body, etag: sha256(body) }, 10 * 60 * 1000) });
+    stubUpstream(null, { apiStatus: 500, rawStatus: 500 });
+    await get('/catalog.json', { PLUGINS_KV: kv });
+    const stored = JSON.parse(kv.store.get('catalog:json'));
+    assert.equal(stored.data.body, body);
+    const remaining = 300 - (Date.now() - stored.timestamp) / 1000;
+    assert.ok(remaining > 50 && remaining <= 61, `retry in ${remaining}s`);
+    // the next request is a HIT on the re-stamped copy and does not touch the network
+    globalThis.fetch = async () => { throw new Error('network must not be used'); };
+    assert.equal((await get('/catalog.json', { PLUGINS_KV: kv })).headers.get('X-Cache'), 'HIT');
+  });
+
+  test('POST /api/sync with the upstream down keeps the old catalog copy (served STALE)', async () => {
+    const body = JSON.stringify(sampleCatalog());
+    const kv = fakeKv({ 'catalog:json': envelope({ body, etag: sha256(body) }) });
+    stubUpstream(null, { apiStatus: 500, rawStatus: 500 });
+    const ctx = fakeCtx();
+    const res = await worker.fetch(
+      req('/api/sync', { method: 'POST', headers: { Authorization: 'Bearer fake-sync-token' } }),
+      { PLUGINS_KV: kv, GITHUB_SYNC_TOKEN: 'fake-sync-token' },
+      ctx,
+    );
+    await ctx.settle();
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).catalogSynced, false);
+    assert.equal(JSON.parse(kv.store.get('catalog:json')).data.body, body);
+    assert.equal((await get('/catalog.json', { PLUGINS_KV: kv })).status, 200);
+  });
+
+  test('POST /api/sync refetches the catalog and replaces the KV copy', async () => {
     const kv = fakeKv({ 'catalog:json': envelope({ body: '{"plugins":{}}', etag: 'a'.repeat(64) }) });
     const calls = stubUpstream(sampleCatalog());
     const ctx = fakeCtx();

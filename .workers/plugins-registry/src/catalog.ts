@@ -39,7 +39,12 @@ export interface CatalogBody {
 export interface CatalogResult {
   catalog: CatalogBody;
   cache: "HIT" | "MISS" | "STALE";
+  /** Seconds the served copy has been in KV (0 for a fresh fetch). */
+  ageSeconds: number;
 }
+
+/** A STALE copy is retried against GitHub after this many seconds, not on every request. */
+const STALE_RETRY_SECONDS = 60;
 
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -81,13 +86,16 @@ export async function fetchCatalog(
     cached !== null &&
     typeof cached.data?.body === "string" &&
     typeof cached.data?.etag === "string";
+  const ageSeconds = cached ? Math.max(0, Math.floor((Date.now() - cached.timestamp) / 1000)) : 0;
   if (!bypass && cached && usable && isFresh(cached, ttl)) {
-    return { catalog: cached.data, cache: "HIT" };
+    return { catalog: cached.data, cache: "HIT", ageSeconds };
   }
 
+  // Contents API first (token); any failure there, including a decode error or an
+  // empty body for a file over 1 MB, falls through to the raw URL.
   let data: unknown = null;
-  try {
-    if (env.GH_ACCESS_TOKEN) {
+  if (env.GH_ACCESS_TOKEN) {
+    try {
       const resp = await fetch(CATALOG_API_URL, {
         headers: {
           Authorization: `token ${env.GH_ACCESS_TOKEN}`,
@@ -101,27 +109,40 @@ export async function fetchCatalog(
       } else {
         console.warn(`catalog.json GitHub API fetch failed: ${resp.status}`);
       }
+    } catch (e) {
+      console.warn("catalog.json GitHub API fetch failed:", (e as Error).message);
+      data = null;
     }
-    if (!looksLikeCatalog(data)) {
+  }
+  if (!looksLikeCatalog(data)) {
+    try {
       const resp = await fetch(CATALOG_RAW_URL, {
         headers: { "User-Agent": "nself-plugin-registry/2.0" },
       });
       data = resp.ok ? await resp.json() : null;
       if (!resp.ok) console.warn(`catalog.json raw fetch failed: ${resp.status}`);
+    } catch (e) {
+      console.error("catalog.json raw fetch failed:", (e as Error).message);
+      data = null;
     }
-  } catch (e) {
-    console.error("catalog.json fetch failed:", (e as Error).message);
-    data = null;
   }
 
   if (looksLikeCatalog(data)) {
     const catalog = await buildCatalogBody(data);
     if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_CATALOG, catalog));
-    return { catalog, cache: "MISS" };
+    return { catalog, cache: "MISS", ageSeconds: 0 };
   }
 
   if (cached && usable) {
-    return { catalog: cached.data, cache: "STALE" };
+    // Upstream is down: serve the old copy and push its timestamp so it is
+    // retried in STALE_RETRY_SECONDS rather than hitting GitHub on every request.
+    if (kv) {
+      const timestamp = Date.now() - Math.max(0, ttl - STALE_RETRY_SECONDS) * 1000;
+      ctx.waitUntil(
+        kv.put(KV_CATALOG, JSON.stringify({ data: cached.data, timestamp })).catch(() => {}),
+      );
+    }
+    return { catalog: cached.data, cache: "STALE", ageSeconds };
   }
   return null;
 }
@@ -146,7 +167,8 @@ export function etagMatches(ifNoneMatch: string | null, etag: string): boolean {
 // Compact JSON with a strong ETag (the sha256 hex of the exact body, quoted).
 // A request whose If-None-Match lists that tag (or *) gets 304 with no body.
 // The ETag changes exactly when the catalog bytes change. KV key catalog:json
-// is dropped by POST /api/sync like the registry keys.
+// is refreshed by POST /api/sync (a bypassing refetch; the old copy survives
+// a failed refetch and is then served STALE).
 // ---------------------------------------------------------------------------
 
 export async function handleCatalog(
@@ -163,7 +185,12 @@ export async function handleCatalog(
   }
 
   const { body, etag } = result.catalog;
-  const maxAge = result.cache === "STALE" ? 60 : cacheTtl(env);
+  // Never promise downstream caches more than the KV copy has left to live.
+  const ttl = cacheTtl(env);
+  const maxAge =
+    result.cache === "STALE"
+      ? STALE_RETRY_SECONDS
+      : Math.max(0, ttl - result.ageSeconds);
   const headers: Record<string, string> = {
     ...corsHeaders(),
     ETag: `"${etag}"`,

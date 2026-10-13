@@ -30,7 +30,7 @@ Every path also answers under a `/v1` prefix. Tests run with `pnpm test` there: 
 | `GET /bundles.json`, `/bundles-schema.json` | Bundle membership map and its schema (`X-Cache` HIT or MISS) |
 | `GET /marketplace`, `/marketplace/ratings/:name` | Marketplace view and ratings |
 | `POST /marketplace/ratings/:name`, `/plugins/:name/install-event` | Submit a rating, count an install |
-| `POST /api/sync` | Bearer `GITHUB_SYNC_TOKEN`; drops every KV cache key (including `catalog:json`) and refetches |
+| `POST /api/sync` | Bearer `GITHUB_SYNC_TOKEN`; drops the registry, manifest and bundles KV keys and refetches them; `catalog:json` is refetched in place, so a failed refetch keeps the old copy |
 
 ### `/catalog.json`
 
@@ -40,9 +40,29 @@ serialises it compactly (no indentation), and keeps the body and its hash togeth
 
 - `ETag: "<sha256 hex of the exact body bytes>"`: a strong tag. The same catalog gives the same tag from either source; any change to the catalog changes it.
 - `If-None-Match` with that tag (also a list of tags, a `W/` form, or `*`) returns `304` with an empty body and the same `ETag`.
-- `Cache-Control: public, max-age=300`, `Content-Type: application/json`, `X-Cache: HIT | MISS | STALE`.
-- If GitHub cannot be reached and an expired copy exists, the worker serves it as `STALE` (`max-age=60`); with no copy at all it returns `502`.
+- `Cache-Control: public, max-age=300` on a fresh fetch (a HIT promises only the time its KV copy has left), `Content-Type: application/json`, `X-Cache: HIT | MISS | STALE`.
+- If GitHub cannot be reached and an expired copy exists, the worker serves it as `STALE` (`max-age=60`) and retries GitHub about a minute later; with no copy at all it returns `502`. A Contents API failure of any kind falls back to the raw URL.
 - A fetched body that is not a catalog (not an object with a `plugins` collection) is never cached or served.
+
+### Changes from the retired `src/index.js`
+
+`index.js` was the deployed file; `index.ts` is now the only source. Where the two disagreed the TypeScript behaviour won,
+except where the CLI or a deploy check reads the old behaviour. For the deploy ticket (P7-PLUG-35):
+
+| Route | Now |
+|---|---|
+| `/health` | `status: "healthy"` (what `publish.yml` and `deploy.sh` check), plus `timestamp` and `features` |
+| `/plugins/revocations` | `revoked` (what the CLI reads) and `revocations` (old key), entries read with `name` or the old `plugin` |
+| `/plugins/:name/signature` | 200 with `signature: null` when signing is not configured (was 503); `name` replaces `plugin` in the body |
+| `/plugins` | `free`/`pro` count the whole registry, `generatedAt` added |
+| `POST /marketplace/ratings/:name` | body `{rating, comment, userHash}` and reply `{name, rating, reviewCount}` (the admin app already sends this); the old `{stars, review}` body is rejected. Ratings live in per-plugin `rating:<name>` keys in `PLUGINS_KV` (no `RATINGS_KV` binding is needed); the old single `ratings:all` key is not read |
+| `GET /marketplace/ratings/:name` | `reviewCount`, plus the old `ratingCount`; 60 requests a minute per IP |
+| 404 / error bodies | the message text is lower-case (`not found`) |
+| New | `/registry/list`, `/.well-known/revoked-authors.json`, `POST /plugins/:name/install-event`, `/v1/*` paths, and a 400 for an unsupported `X-API-Version` |
+| Unchanged | registry, manifest, categories, stats, bundles routes, `/api/sync`, the 401 gate and its order (gate, then revocation) |
+
+A name that exists in both registries (`cron`, `notify`) resolves to the free entry. Everything read from the licensed registry is
+treated as licensed whatever tier it claims.
 
 ### Licensed tarballs stay behind the licence gate
 

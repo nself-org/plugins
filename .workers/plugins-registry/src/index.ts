@@ -51,7 +51,7 @@
 import { signPlugin, canonicalPluginString } from "./sign.ts";
 import { corsHeaders, jsonResponse } from "./http.ts";
 import { handleBundlesJson, handleBundlesSchema } from "./bundles.ts";
-import { handleCatalog, fetchCatalog, KV_CATALOG } from "./catalog.ts";
+import { handleCatalog, fetchCatalog } from "./catalog.ts";
 import { handleRevocations, isRevoked } from "./revocations.ts";
 import {
   fetchFreeRegistry,
@@ -197,7 +197,10 @@ export default {
           return jsonResponse({ error: "plugin name required" }, 400);
         }
         const result = await handleGetRating(pluginName, env as MarketplaceEnv);
-        return jsonResponse(result, 200, { "Cache-Control": "public, max-age=60" });
+        // ratingCount is the retired index.js spelling of reviewCount.
+        return jsonResponse({ ...result, ratingCount: result.reviewCount }, 200, {
+          "Cache-Control": "public, max-age=60",
+        });
       }
 
       // Marketplace — POST /plugins/:name/install-event (S68-T02)
@@ -318,7 +321,8 @@ function publicKeyHex(env: Env): string | undefined {
 
 function handleHealth(env: Env): Response {
   return jsonResponse({
-    status: "ok",
+    // "healthy" is what publish.yml and deploy.sh check after a deploy.
+    status: "healthy",
     service: "nself-plugin-registry",
     version: env.PLUGIN_REGISTRY_VERSION ?? env.REGISTRY_VERSION ?? "1.0.0",
     ts: new Date().toISOString(),
@@ -574,7 +578,9 @@ interface CombinedRegistry {
 }
 
 async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const tierFilter = url.searchParams.get("tier");
+  // Only free|pro filter, as the retired index.js did; any other value means no filter.
+  const tierParam = url.searchParams.get("tier");
+  const tierFilter = tierParam === "free" || tierParam === "pro" ? tierParam : null;
   const bypass = url.searchParams.get("nocache") === "1";
   const ttl = cacheTtl(env);
 
@@ -583,14 +589,20 @@ async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promis
   if (!tierFilter && !bypass && kv) {
     const cached = await kvGet<CombinedRegistry>(kv, KV_COMBINED);
     if (cached && isFresh(cached, ttl)) {
+      ctx.waitUntil(bumpStat(kv, "registryHits"));
       return jsonResponse(cached.data, 200, {
         "Cache-Control": `public, max-age=${ttl}`,
         "X-Cache": "HIT",
+        "X-Tier": "combined",
       });
     }
   }
 
   const { free, pro, all } = await fetchAllPlugins(env, ctx, bypass);
+  if (all.length === 0) {
+    // Both sources failed: say so (as index.js did) instead of caching an empty registry.
+    return jsonResponse({ error: "Registry unavailable — both sources failed" }, 502);
+  }
 
   const combined: CombinedRegistry = {
     version: "1.0.0",
@@ -603,11 +615,13 @@ async function handleRegistry(url: URL, env: Env, ctx: ExecutionContext): Promis
 
   if (!tierFilter && !bypass && kv) {
     ctx.waitUntil(kvPutWrapped(kv, KV_COMBINED, combined));
+    ctx.waitUntil(bumpStat(kv, "registryFetches"));
   }
 
   return jsonResponse(combined, 200, {
     "Cache-Control": `public, max-age=${ttl}`,
     "X-Cache": "MISS",
+    "X-Tier": tierFilter ?? "combined",
   });
 }
 
@@ -717,6 +731,21 @@ interface StatsRecord {
   lastSync?: string | null;
 }
 
+/** Best-effort counter bump; the record is stored flat, as index.js stored it. */
+async function bumpStat(
+  kv: KVNamespace,
+  key: "registryHits" | "registryFetches",
+): Promise<void> {
+  try {
+    const raw = await kvGet<StatsRecord>(kv, KV_STATS);
+    const stats: StatsRecord = raw ? (raw.data ?? (raw as unknown as StatsRecord)) : {};
+    stats[key] = (stats[key] ?? 0) + 1;
+    await kv.put(KV_STATS, JSON.stringify(stats));
+  } catch {
+    // counters are best-effort
+  }
+}
+
 async function handleStats(env: Env): Promise<Response> {
   const kv = env.REGISTRY ?? env.PLUGINS_KV;
   let stats: StatsRecord = { registryHits: 0, registryFetches: 0, lastSync: null };
@@ -757,7 +786,6 @@ async function handleSync(
       kv.delete("registry:pro"),
       kv.delete(KV_COMBINED),
       kv.delete(KV_MANIFEST),
-      kv.delete(KV_CATALOG),
       kv.delete(KV_BUNDLES_JSON),
       kv.delete(KV_BUNDLES_SCHEMA),
     ]);
@@ -781,7 +809,9 @@ async function handleSync(
     ctx.waitUntil(
       (async () => {
         const existing = await kvGet<StatsRecord>(kv, KV_STATS);
-        const s: StatsRecord = existing?.data ?? { registryHits: 0, registryFetches: 0 };
+        const s: StatsRecord = existing
+          ? (existing.data ?? (existing as unknown as StatsRecord))
+          : { registryHits: 0, registryFetches: 0 };
         s.lastSync = new Date().toISOString();
         await kv.put(KV_STATS, JSON.stringify(s));
       })(),
