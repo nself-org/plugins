@@ -4,6 +4,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -21,6 +22,9 @@ var migrationStatus = migrate.Status
 func bootOptions() migrate.Options {
 	return migrate.Options{Schema: "np_web3", FS: migrations.FS}
 }
+
+// BootMigrations applies the plugin's own migrations; main calls it once, right after the pool is created.
+func BootMigrations(ctx context.Context, pool *pgxpool.Pool) { mustBootMigrations(ctx, pool) }
 
 // mustBootMigrations applies the plugin's own migrations before it serves; a failure is fatal.
 func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
@@ -47,4 +51,12 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 		return map[string]int{"applied": -1, "expected": -1}
 	}
 	return map[string]int{"applied": st.Applied, "expected": st.Expected}
+}
+
+// writeBootHealth answers GET /health. bootMigrationsHealth writes 503 itself when the status cannot be read, so the
+// content type is set first and the body is encoded directly (writeJSON would send a second status line).
+func writeBootHealth(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	m := bootMigrationsHealth(w)
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "web3", "migrations": m})
 }

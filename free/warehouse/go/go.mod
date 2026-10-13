@@ -13,7 +13,7 @@ require (
 	google.golang.org/api v0.274.0
 )
 
-replace github.com/nself-org/plugins/free/shared-utils => ../third_party/shared-utils
+replace github.com/nself-org/plugins/free/shared-utils => ../../shared-utils
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
