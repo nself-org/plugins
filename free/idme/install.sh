@@ -41,10 +41,9 @@ install_idme_plugin() {
     # Ensure migrations table exists
     schema_ensure_migrations_table
 
-    # Apply main schema
-    if [[ -f "${PLUGIN_DIR}/schema/tables.sql" ]]; then
-        plugin_db_exec_file "${PLUGIN_DIR}/schema/tables.sql"
-    fi
+    # The tables are created (and the old idme_* tables renamed to np_idme_*) by the plugin's own boot migrations
+    # (migrations/000_np_prefix_and_tables.sql). Creating them here first would leave the old rows orphaned in idme_*.
+    # schema/tables.sql stays as the reference DDL; it is not applied by this script.
 
     # Apply migrations
     if [[ -d "${PLUGIN_DIR}/schema/migrations" ]]; then

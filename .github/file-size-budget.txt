@@ -50,9 +50,8 @@ free/game-metadata/internal/handlers.go	990
 free/geocoding/internal/handlers.go	1087
 free/geocoding/internal/provider/provider.go	406
 free/github/actions/sync.sh	422
-free/github/internal/db_schema.go	609
 free/idme/internal/handlers.go	536
-free/job-queue/go/api/handlers.go	365
+free/job-queue/go/api/handlers.go	356
 free/jobs/actions/schedule.sh	310
 free/linkedin/internal/handlers.go	346
 free/media-processing/src/handlers.rs	416

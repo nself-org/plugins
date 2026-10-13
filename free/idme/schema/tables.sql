@@ -1,6 +1,7 @@
 -- =============================================================================
 -- ID.me Plugin Schema
 -- Tables for OAuth authentication and identity verification
+-- Reference copy. The plugin applies migrations/000_np_prefix_and_tables.sql itself at boot; install.sh does not run this file.
 -- =============================================================================
 
 -- Enable UUID extension if not already enabled
