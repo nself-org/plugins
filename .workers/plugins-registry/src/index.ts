@@ -366,7 +366,7 @@ async function handlePluginList(url: URL, env: Env, ctx: ExecutionContext): Prom
   const categoryFilter = url.searchParams.get("category");
   const ttl = cacheTtl(env);
 
-  const { free, pro, all } = await fetchAllPlugins(env, ctx);
+  const { all } = await fetchAllPlugins(env, ctx);
 
   let filtered = all;
   if (tierFilter === "free" || tierFilter === "pro") {
@@ -381,8 +381,9 @@ async function handlePluginList(url: URL, env: Env, ctx: ExecutionContext): Prom
   const response: PluginListResponse = {
     plugins: filtered,
     total: filtered.length,
-    free: free.length,
-    pro: pro.length,
+    // free/pro count the filtered list, as the retired index.js did
+    free: filtered.filter((p) => p.tier === "free").length,
+    pro: filtered.filter((p) => p.tier === "pro").length,
     generatedAt: new Date().toISOString(),
   };
 
@@ -664,8 +665,9 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
   if (kv) {
     const cached = await kvGet<Array<Record<string, string>>>(kv, KV_MANIFEST);
     if (cached && isFresh(cached, ttl)) {
+      const age = Math.max(0, Math.floor((Date.now() - cached.timestamp) / 1000));
       return jsonResponse(cached.data, 200, {
-        "Cache-Control": `public, max-age=${ttl}`,
+        "Cache-Control": `public, max-age=${Math.max(0, ttl - age)}`,
         "X-Cache": "HIT",
       });
     }
@@ -677,7 +679,12 @@ async function handleManifest(env: Env, ctx: ExecutionContext): Promise<Response
     version: p.version,
     tier: p.tier,
     description: p.description,
-    downloadUrl: p.tarballURL || p.homepage || `https://github.com/nself-org/plugins/tree/main/${p.name}`,
+    // an explicit downloadUrl wins (index.js), then the tarball, then the homepage
+    downloadUrl:
+      (p as { downloadUrl?: string }).downloadUrl ||
+      p.tarballURL ||
+      p.homepage ||
+      `https://github.com/nself-org/plugins/tree/main/${p.name}`,
   }));
 
   if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_MANIFEST, manifest));

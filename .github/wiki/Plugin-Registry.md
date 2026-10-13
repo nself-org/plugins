@@ -54,7 +54,7 @@ except where the CLI or a deploy check reads the old behaviour. For the deploy t
 | `/health` | `status: "healthy"` (what `publish.yml` and `deploy.sh` check), plus `timestamp` and `features` |
 | `/plugins/revocations` | `revoked` (what the CLI reads) and `revocations` (old key), entries read with `name` or the old `plugin` |
 | `/plugins/:name/signature` | 200 with `signature: null` when signing is not configured (was 503); `name` replaces `plugin` in the body |
-| `/plugins` | `free`/`pro` count the whole registry, `generatedAt` added |
+| `/plugins` | `generatedAt` added; `total`, `free`, `pro` count the filtered list as before |
 | `POST /marketplace/ratings/:name` | body `{rating, comment, userHash}` and reply `{name, rating, reviewCount}` (the admin app already sends this); the old `{stars, review}` body is rejected. Ratings live in per-plugin `rating:<name>` keys in `PLUGINS_KV` (no `RATINGS_KV` binding is needed); ratings the old worker stored in the single `ratings:all` key are still served and are the base for the next rating |
 | `GET /marketplace/ratings/:name` | `reviewCount`, plus the old `ratingCount`. The 60 requests a minute per-IP limiter runs only when a dedicated `RATINGS_KV` is bound (it writes a KV counter per request) |
 | `GET /marketplace` | the payload the CLI reads (`plugins`, `bundles`, `categories`, `stats`) plus the old `version`, `fetchedAt`, `total` (the filtered count); the six canonical Bundles (task, chat, claw, family, sentry, clawde) as in `index.js`; only `free` is free, `pro` and `max` plugins are licensed (`licenseRequired`) |

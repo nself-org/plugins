@@ -301,6 +301,31 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     assert.ok(task.stats.total > task.total);
   });
 
+  test('/plugins: free/pro count the filtered list (as index.js did)', async () => {
+    const all = await (await call('/plugins')).json();
+    const pro = await (await call('/plugins?tier=pro')).json();
+    assert.equal(pro.total, pro.plugins.length);
+    assert.equal(pro.free, 0);
+    assert.equal(pro.pro, pro.total);
+    assert.equal(all.total, all.plugins.length);
+    assert.equal(all.free, all.plugins.filter((p) => p.tier === 'free').length);
+  });
+
+  test('/manifest.json: downloadUrl wins, then tarballURL, then homepage; a cached copy promises the remaining TTL', async () => {
+    const kv = fakeKv({ 'registry:free': envelope({ plugins: {
+      a: { version: '1.0.0', downloadUrl: 'https://example.invalid/dl', tarballURL: 'https://example.invalid/tar' },
+      b: { version: '1.0.0', tarballURL: 'https://example.invalid/tar-b', homepage: 'https://example.invalid/home' },
+      c: { version: '1.0.0', homepage: 'https://example.invalid/home-c' },
+    } }) });
+    const m = await (await call('/manifest.json', {}, { PLUGINS_KV: kv })).json();
+    assert.deepEqual(m.map((e) => e.downloadUrl), ['https://example.invalid/dl', 'https://example.invalid/tar-b', 'https://example.invalid/home-c']);
+    const aged = fakeKv({ 'registry:manifest': envelope(m, 299 * 1000) });
+    const res = await call('/manifest.json', {}, { PLUGINS_KV: aged });
+    assert.equal(res.headers.get('X-Cache'), 'HIT');
+    const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('Cache-Control'))[1]);
+    assert.ok(maxAge <= 2, `max-age ${maxAge}`);
+  });
+
   test('a rejecting KV inside a route is a JSON 500, never an unhandled rejection', async () => {
     const kv = registryKv();
     kv.delete = async () => { throw new Error('kv down'); };
