@@ -22,3 +22,69 @@ from `plugin.json` by the workflow. `scripts/release/cli-targets.sh DIR` prints 
   pin is the way to pick up a new rule.
 - Fixtures: `tests/fixtures/manifest-v1-cli/` and its v2 twin `tests/fixtures/manifest-v2-cli/` must print
   identical targets.
+
+## Signed, attested release chain
+
+A release tag (`v*`) or a manual run of `release-tarballs.yml` with a tag input runs four jobs. Each holds only what it needs, and
+the chain uses the workflow's own `GITHUB_TOKEN` plus scoped repository secrets: no personal access token and no cross-repository trigger.
+
+| Job | Permissions | Secrets | Does |
+|---|---|---|---|
+| `build` | contents read | none | deterministic source and per-platform tarballs (`scripts/deterministic-tar.sh`) |
+| `publish` | contents write | Cloudflare R2 | uploads missing assets to the Release (never `--clobber`), re-downloads the published bytes, mirrors those bytes to R2 and reads each object back |
+| `sign` | contents read, id-token write, attestations write | free-tier signing key | bound to the `release-signing` Environment; signs the published source tarballs and attaches build-provenance attestations |
+| `release-data` | contents write, pull-requests write | none | writes `releases.json` from the published bytes, regenerates `registry.json`, `catalog.json`, `counts.json`, opens the release-data PR |
+
+Checksums and signatures always describe the bytes on the Release, never a rebuild. Gzip output differs between machines, so an
+asset that is already on the Release stays the artifact of record and everything downstream follows it.
+
+### Signature format (contract `plugins.release-signature` v1, hq PLUG D7)
+
+- Message: `nself-plugin-v1\n<slug>\n<version>\n<sha256 hex of the source tarball>\n`, signed with raw Ed25519
+  (`openssl pkeyutl -sign -rawin`).
+- `release_signature` in `releases.json` and the projections: `{"key_id": "plugins-<16 hex>", "alg": "ed25519", "sig": "<base64>"}`.
+  `sig` is the 64-byte signature in standard padded base64 (the text `sdk/go/signing` `EncodeSig` produces). `key_id` is derived,
+  never chosen: `plugins-` plus the first 16 hex of sha256 over the raw 32-byte public key. `sign.sh` refuses a key id that does not match its key.
+- Only the source tarball `<slug>-<version>.tar.gz` is signed. The per-platform binary tarballs are covered by `platform_checksums` and by the
+  provenance attestation; verify them with `gh attestation verify <file> --repo nself-org/plugins`.
+- Verification order is checksum, then signature, both before extraction.
+
+### Scripts (`scripts/release/`)
+
+| Script | Use |
+|---|---|
+| `sign.sh SLUG VERSION TARBALL` | prints the `release_signature` JSON. Key from `NSELF_RELEASE_SIGNING_KEY_FREE` (PKCS8 PEM) and `NSELF_RELEASE_SIGNING_KEY_FREE_ID`, environment only; written to a 0600 temp file removed on exit |
+| `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `unsigned`, `signature mismatch`. No key discovery |
+| `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
+| `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until the first real release (P7-PLUG-69) |
+
+OpenSSL 3 is required (`OPENSSL=/path/to/openssl` to pick one); macOS system LibreSSL cannot sign or verify Ed25519 with `-rawin`.
+GNU tar is required for deterministic tarballs (`brew install gnu-tar`).
+
+### Rehearsal (no key, no release, no network)
+
+```bash
+bash scripts/release/rehearse.sh --tag v0.0.0-rehearsal --no-upload --out "$TMPDIR/rehearsal"
+bash scripts/release/verify-signatures.sh --pub "$TMPDIR/rehearsal/rehearsal-test.pub" "$TMPDIR/rehearsal"
+```
+
+The same directory fails against any other key (`signature mismatch`, including every committed key in `keys/`) and a one-byte change in any
+tarball fails with `checksum mismatch`. A check that only compared sha256 to `releases.json` would pass for any key; this one does not.
+
+### Key custody and rotation
+
+- The free-tier key is an Actions secret of the `release-signing` Environment on this repository: required reviewer, deployment branches/tags limited to `v*`.
+  The owner creates the Environment and both secrets (`NSELF_RELEASE_SIGNING_KEY_FREE`, `NSELF_RELEASE_SIGNING_KEY_FREE_ID`) in P7-PROD-59. No other job can read them.
+- The licensed key is never a GitHub secret and never available to this workflow; it stays on the owner's release machine (P7-PLUG-22).
+- Rotation: generate the new key offline, store it as the Environment secrets, commit the new public key as `keys/plugins-release-free-<id>.pub` in the same
+  release-data change, and ship a CLI that pins the new key id before the first release signed with it (P7-PLUG-71). Keep the old public key until every supported CLI
+  knows the new one. A leaked key goes on the CLI's revoked list instead.
+- The private key never appears in a log, an artifact, a file in the repo or an argv.
+
+### After a real release
+
+1. Approve the `sign` job in the Actions UI (the required reviewer).
+2. Merge the `release-data/<tag>` PR. A pull request opened with `GITHUB_TOKEN` does not start other workflows, so the required checks do not run
+   on their own: push an empty commit to the branch from a maintainer account (or close and reopen the PR) to start them.
+3. The web `sources-lock` PR is a separate step (P7-PLUG-69).
+4. Repository setting needed once: Actions may create pull requests (Settings, Actions, General).
