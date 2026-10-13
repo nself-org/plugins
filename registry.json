@@ -2322,7 +2322,7 @@
         },
         "service_kind": "cli"
       },
-      "category": "utilities",
+      "category": "infrastructure",
       "checksum": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1",
       "checksums": {
         "sha256": "a90ff9d7744dfc04e9540608d500dfe9e6d8b61bfa3d6fd4934f3445e42b4eb1"
