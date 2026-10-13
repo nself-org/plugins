@@ -86,6 +86,11 @@ jobs:
             if [ "$provides_command" = "yes" ] && [ -z "$port" ]; then
               port=0   # a command plugin has no HTTP server
             fi
+            # A v2 plugin of service.kind cli or library has no listener to declare a port for (P7-PLUG-44: monitoring is an init container).
+            kind=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('kind','') if d.get('manifest_version')==2 else '')" 2>/dev/null)
+            if [ -z "$port" ] && { [ "$kind" = "cli" ] || [ "$kind" = "library" ]; }; then
+              port=0
+            fi
             if [ -z "$port" ]; then
               printf "  ERROR: Missing required field 'port' in %s (a service plugin must declare one; use 0 for no HTTP server)\n" "$file"
               errors=$((errors + 1))

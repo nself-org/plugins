@@ -132,7 +132,8 @@
   ],
   "schema": "np_nself_geo",
   "service": {
-    "kind": "library"
+    "kind": "library",
+    "port": 3203
   },
   "status": "planned",
   "tables": [

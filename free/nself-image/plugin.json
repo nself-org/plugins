@@ -114,7 +114,8 @@
   ],
   "schema": "np_nself_image",
   "service": {
-    "kind": "library"
+    "kind": "library",
+    "port": 3852
   },
   "status": "planned",
   "tables": [

@@ -74,7 +74,8 @@
     "nself": ">=1.1.0"
   },
   "service": {
-    "kind": "library"
+    "kind": "library",
+    "port": 3851
   },
   "status": "planned",
   "tags": [
