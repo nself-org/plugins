@@ -11,9 +11,10 @@ import (
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":    "ok",
-		"plugin":    "github",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"status":     "ok",
+		"plugin":     "github",
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"migrations": bootMigrationsHealth(w),
 	})
 }
 
@@ -84,4 +85,3 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})
 }
-

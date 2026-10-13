@@ -99,6 +99,7 @@ func connectDB(databaseURL string) (*pgxpool.Pool, error) {
 			}
 			continue
 		}
+		mustBootMigrations(ctx, pool)
 		err = pool.Ping(ctx)
 		cancel()
 		if err != nil {

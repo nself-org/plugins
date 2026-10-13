@@ -1,60 +1,49 @@
 {
-  "name": "mdns",
-  "version": "1.2.6",
-  "description": "mDNS/Bonjour service discovery for zero-config LAN advertising",
   "author": "nself",
-  "language": "go",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mdns",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.0",
-  "port": 3216,
   "category": "infrastructure",
-  "tags": [
-    "mdns",
-    "bonjour",
-    "zeroconf",
-    "lan",
-    "service-discovery"
+  "description": "mDNS/Bonjour service discovery for zero-config LAN advertising",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "MDNS_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MDNS_SERVICE_TYPE",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MDNS_INSTANCE_NAME",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MDNS_DOMAIN",
+      "required": false
+    }
   ],
-  "tables": [
-    "np_mdns_services",
-    "np_mdns_discovery_log"
-  ],
-  "webhooks": {},
-  "actions": {
-    "advertise": "Start advertising a service",
-    "discover": "Discover services on the network",
-    "services": "List advertised services",
-    "stats": "Show mDNS statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "MDNS_PLUGIN_PORT",
-      "MDNS_SERVICE_TYPE",
-      "MDNS_INSTANCE_NAME",
-      "MDNS_DOMAIN"
-    ]
-  },
-  "config": {
-    "defaultPort": 3216,
-    "defaultServiceType": "_ntv._tcp",
-    "defaultDomain": "local"
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/mdns",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
   "multiApp": {
-    "supported": true,
+    "defaultValue": "primary",
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
-    "defaultValue": "primary"
+    "supported": true
   },
+  "name": "mdns",
   "permissions": {
     "database": [
       "create",
@@ -62,18 +51,39 @@
       "update",
       "delete"
     ],
-    "network": [
-      "*"
-    ],
     "filesystem": [
       "logs",
       "cache",
       "temp"
+    ],
+    "network": [
+      "*"
     ]
   },
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "port": 3216,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_mdns",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3216
+  },
+  "status": "stable",
+  "tables": [
+    "np_mdns_services",
+    "np_mdns_discovery_log"
+  ],
+  "tags": [
+    "mdns",
+    "bonjour",
+    "zeroconf",
+    "lan",
+    "service-discovery"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }

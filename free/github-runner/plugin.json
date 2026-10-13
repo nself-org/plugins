@@ -1,22 +1,86 @@
 {
-  "name": "github-runner",
-  "version": "1.2.6",
-  "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` \u2014 enabling private repos to run CI without GitHub-hosted runners.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.0",
-  "language": "go",
-  "entryPoint": "cmd/main.go",
-  "port": 3054,
   "category": "development",
+  "description": "GitHub Actions self-hosted runner. Registers with your GitHub org and picks up CI jobs tagged `runs-on: ubuntu-latest` — enabling private repos to run CI without GitHub-hosted runners.",
+  "entryPoint": "cmd/main.go",
+  "envVars": [
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_PAT",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_ORG",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_NAME",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_LABELS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_SCOPE",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_REPO",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_GROUP",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_RUNNER_VERSION",
+      "required": false
+    }
+  ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github-runner",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "isolationColumn": "source_account_id",
+    "supported": false
+  },
+  "name": "github-runner",
+  "permissions": {
+    "database": [],
+    "filesystem": [
+      "logs",
+      "runners"
+    ],
+    "network": [
+      "github.com",
+      "*.actions.githubusercontent.com"
+    ]
+  },
+  "port": 3054,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3054
+  },
   "status": "stable",
-  "tier": "free",
   "tags": [
     "github",
     "ci",
@@ -26,60 +90,6 @@
     "self-hosted",
     "devops"
   ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "optionalDependencies": [],
-  "tables": [],
-  "webhooks": {},
-  "actions": {
-    "start": "Start the GitHub Actions runner",
-    "stop": "Stop the GitHub Actions runner",
-    "status": "Show runner registration and process status",
-    "logs": "Tail runner logs",
-    "update": "Update runner to latest version"
-  },
-  "envVars": {
-    "required": [
-      "GITHUB_RUNNER_PAT",
-      "GITHUB_RUNNER_ORG"
-    ],
-    "optional": [
-      "GITHUB_RUNNER_NAME",
-      "GITHUB_RUNNER_LABELS",
-      "GITHUB_RUNNER_SCOPE",
-      "GITHUB_RUNNER_REPO",
-      "GITHUB_RUNNER_GROUP",
-      "GITHUB_RUNNER_VERSION"
-    ]
-  },
-  "config": {
-    "defaultLabels": "self-hosted,linux,x64,ubuntu-latest",
-    "defaultScope": "org",
-    "runnerDir": "${HOME}/.nself/runners/github-runner",
-    "logDir": "${HOME}/.nself/logs/plugins/github-runner"
-  },
-  "hooks": {
-    "postInstall": "install.sh",
-    "preUninstall": "uninstall.sh",
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": false,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": null,
-    "defaultValue": null
-  },
-  "permissions": {
-    "database": [],
-    "network": [
-      "github.com",
-      "*.actions.githubusercontent.com"
-    ],
-    "filesystem": [
-      "logs",
-      "runners"
-    ]
-  }
+  "tier": "free",
+  "version": "1.2.6"
 }

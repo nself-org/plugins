@@ -4,12 +4,9 @@
 # Stage 1: builder
 FROM golang:1.22-alpine AS builder
 
-RUN apk add --no-cache ca-certificates git
-
 WORKDIR /build
 
 COPY go.mod go.sum ./
-RUN go mod download
 
 COPY cmd/ cmd/
 COPY internal/ internal/
@@ -19,8 +16,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nself-linke
 # Stage 2: runtime
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates wget && \
-    addgroup -S nself && \
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN addgroup -S nself && \
     adduser -S -G nself nself
 
 COPY --from=builder /nself-linkedin /usr/local/bin/nself-linkedin

@@ -1,65 +1,64 @@
 {
-  "name": "home",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Home automation bridge. Connects Home Assistant and MQTT to \u0273Self, enabling smart device control, state monitoring, scene activation, and command logging.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
   "category": "integrations",
-  "language": "go",
+  "description": "Home automation bridge. Connects Home Assistant and MQTT to ɳSelf, enabling smart device control, state monitoring, scene activation, and command logging.",
   "entryPoint": "binary",
-  "tags": [
-    "home-assistant",
-    "mqtt",
-    "smart-home",
-    "iot",
-    "automation"
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "HOME_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HOME_ASSISTANT_URL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "HOME_ASSISTANT_TOKEN",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MQTT_BROKER_URL",
+      "required": false
+    }
   ],
-  "tables": [
-    "np_home_connections",
-    "np_home_devices",
-    "np_home_command_log"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "default",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
   },
+  "name": "home",
   "optionalDependencies": [
     "claw"
   ],
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "PLUGIN_INTERNAL_SECRET"
-    ],
-    "optional": [
-      "HOME_PORT",
-      "HOME_ASSISTANT_URL",
-      "HOME_ASSISTANT_TOKEN",
-      "MQTT_BROKER_URL"
-    ]
-  },
-  "config": {
-    "defaultPort": 3127
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "default"
-  },
   "permissions": {
     "database": [
       "create",
@@ -67,68 +66,78 @@
       "update",
       "delete"
     ],
+    "filesystem": [],
     "network": [
       "outbound"
-    ],
-    "filesystem": []
+    ]
   },
   "port": 3127,
-  "status": "beta",
-  "binary_name": "home",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target",
-  "tier": "free",
-  "routes": [
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
+      "path": "/health"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/home/automations",
-      "auth": "bearer"
+      "path": "/home/automations"
     },
     {
+      "auth": "bearer",
       "method": "POST",
-      "path": "/home/automations/{id}/toggle",
-      "auth": "bearer"
+      "path": "/home/automations/{id}/toggle"
     },
     {
+      "auth": "bearer",
       "method": "POST",
-      "path": "/home/command",
-      "auth": "bearer"
+      "path": "/home/command"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/home/devices",
-      "auth": "bearer"
+      "path": "/home/devices"
     },
     {
+      "auth": "bearer",
       "method": "POST",
-      "path": "/home/scene/{scene_id}",
-      "auth": "bearer"
+      "path": "/home/scene/{scene_id}"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/home/state/{entity_id}",
-      "auth": "bearer"
+      "path": "/home/state/{entity_id}"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
+      "path": "/ready"
     }
   ],
-  "entry": "cmd/main.go",
-  "checksum": "2881cbd616fe3376bfc2d7377b80003121ea0809dfd2186b42992823b49aa941",
-  "bundles": [
-    "nfamily"
-  ]
+  "schema": "np_home",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3127
+  },
+  "status": "stable",
+  "tables": [
+    "np_home_connections",
+    "np_home_devices",
+    "np_home_command_log"
+  ],
+  "tags": [
+    "home-assistant",
+    "mqtt",
+    "smart-home",
+    "iot",
+    "automation"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }
