@@ -8,7 +8,8 @@
  * Returns a full marketplace view consumed by Admin UI and web/cloud.
  */
 
-import type { Env, PluginEntry } from "./registry.ts";
+import { ratingsKv, type Env, type PluginEntry } from "./registry.ts";
+import { legacyRating } from "./legacy-ratings.ts";
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -73,7 +74,8 @@ export interface RatingResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Bundle data — canonical from SPORT F06-BUNDLE-INVENTORY
+// Bundle data — the six canonical Bundles (task, chat, claw, family, sentry, clawde),
+// the membership the deployed index.js served; mirrors bundles.json (ADR-P6-03)
 // ---------------------------------------------------------------------------
 
 interface BundleDefinition {
@@ -84,35 +86,29 @@ interface BundleDefinition {
 }
 
 const BUNDLES: Record<string, BundleDefinition> = {
-  nclaw: {
-    name: "ɳClaw Bundle",
-    price: "$0.99/mo",
-    plugins: ["ai", "claw", "claw-web", "mux", "voice", "browser", "google", "notify", "cron"],
-    description: "Full AI assistant: email, calendar, news, budget, tools",
+  task: {
+    name: "ɳTask Bundle", price: "$0", description: "Free task-app backend: storage, jobs, search, webhooks, tokens",
+    plugins: ["storage", "notifications", "jobs", "search", "feature-flags", "audit-log", "webhooks", "tokens"],
+  },
+  chat: {
+    name: "ɳChat Bundle", price: "$0.99/mo", description: "Messaging with video calls, bots, SMS and support",
+    plugins: ["bots", "livekit", "nself-sms", "support"],
+  },
+  claw: {
+    name: "ɳClaw Bundle", price: "$0.99/mo", description: "Full AI assistant: email, calendar, news, budget, tools",
+    plugins: ["ai", "browser", "claw", "claw-budget", "claw-news", "claw-web", "cron", "google", "knowledge-base", "mcp", "mux", "notify", "voice"],
+  },
+  family: {
+    name: "ɳFamily Bundle", price: "$0.99/mo", description: "Private family social, photo sharing, activity feeds",
+    plugins: ["activity-feed", "calendar", "chat", "family", "family-geni", "geolocation", "moderation", "nself-csam", "photos", "social"],
+  },
+  sentry: {
+    name: "ɳSentry Bundle", price: "$0.99/mo", description: "Error tracking, uptime, status pages and on-call",
+    plugins: ["nself-alert-router", "nself-anomaly", "nself-audit", "nself-crash", "nself-cron-monitor", "nself-errors", "nself-incident-mgmt", "nself-oncall", "nself-rum", "nself-saas-gateway", "nself-slo-tracker", "nself-status-page", "nself-stripe", "nself-synthetic-monitor", "nself-uptime-monitor"],
   },
   clawde: {
-    name: "ClawDE+ Bundle",
-    price: "$1.99/mo",
-    plugins: ["realtime", "auth", "cms", "notify"],
-    description: "Cloud sync, premium models, team features",
-  },
-  ntv: {
-    name: "nTV Bundle",
-    price: "$0.99/mo",
-    plugins: ["media-processing", "streaming", "epg", "tmdb", "torrent-manager", "content-acquisition"],
-    description: "Media downloading, encoding, streaming, metadata",
-  },
-  nfamily: {
-    name: "nFamily Bundle",
-    price: "$0.99/mo",
-    plugins: ["social", "photos", "activity-feed", "moderation", "realtime", "cms", "chat"],
-    description: "Private family social, photo sharing, activity feeds",
-  },
-  nchat: {
-    name: "nChat Bundle",
-    price: "$0.99/mo",
-    plugins: ["chat", "livekit", "recording", "moderation", "bots", "realtime", "auth"],
-    description: "Messaging with video calls, bots, moderation",
+    name: "ClawDE Bundle", price: "$0.99/mo", description: "Cloud sync, premium models, team features",
+    plugins: ["auth", "cms", "realtime"],
   },
 };
 
@@ -135,7 +131,7 @@ const RECENCY_MAX = 15;
 const RECENCY_DECAY_DAYS = 60; // half-life for recency boost
 
 // AI-suite bundle slugs that get the maximum bundle boost
-const AI_BUNDLE_SLUGS: ReadonlySet<string> = new Set(["nclaw"]);
+const AI_BUNDLE_SLUGS: ReadonlySet<string> = new Set(["claw"]);
 
 function bundleBoost(bundle: string | null): number {
   if (!bundle) return BUNDLE_BOOST_NONE;
@@ -234,7 +230,8 @@ function categoryIcon(category: string): string {
 }
 
 function normaliseTier(tier: string): "free" | "pro" {
-  return tier === "pro" ? "pro" : "free";
+  // Fail closed: only the literal "free" is free; pro, max and anything else is licensed.
+  return tier === "free" ? "free" : "pro";
 }
 
 /** Validate a userHash — must be a 64-char lowercase hex string (SHA-256). */
@@ -257,12 +254,12 @@ async function readRatingAggregate(
 ): Promise<RatingAggregate> {
   const key = `rating:${sanitisePluginName(pluginName)}`;
   try {
-    const raw = await env.RATINGS_KV.get<RatingAggregate>(key, "json");
+    const raw = await ratingsKv(env).get<RatingAggregate>(key, "json");
     if (raw) return raw;
   } catch {
-    // fall through to default
+    // fall through to the legacy record, then the default
   }
-  return { rating: 0, reviewCount: 0, reviews: [] };
+  return (await legacyRating(env, pluginName)) ?? { rating: 0, reviewCount: 0, reviews: [] };
 }
 
 async function writeRatingAggregate(
@@ -271,7 +268,7 @@ async function writeRatingAggregate(
   aggregate: RatingAggregate,
 ): Promise<void> {
   const key = `rating:${sanitisePluginName(pluginName)}`;
-  await env.RATINGS_KV.put(key, JSON.stringify(aggregate));
+  await ratingsKv(env).put(key, JSON.stringify(aggregate));
 }
 
 // ---------------------------------------------------------------------------
@@ -647,7 +644,7 @@ async function isGetRateLimited(
 
   let count = 0;
   try {
-    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    const raw = await ratingsKv(env).get<{ count: number }>(key, "json");
     count = raw?.count ?? 0;
   } catch {
     return { limited: false, retryAfter: 60 }; // KV read failure — allow through
@@ -663,7 +660,7 @@ async function isGetRateLimited(
 
   // Increment counter with 90s TTL (covers window overlap)
   try {
-    await env.RATINGS_KV.put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
+    await ratingsKv(env).put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
   } catch {
     // Best-effort counter increment — not fatal
   }
@@ -687,7 +684,7 @@ async function isRateLimited(env: MarketplaceEnv, ip: string): Promise<{ limited
 
   let count = 0;
   try {
-    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    const raw = await ratingsKv(env).get<{ count: number }>(key, "json");
     count = raw?.count ?? 0;
   } catch {
     return { limited: false, retryAfter: 60 }; // KV read failure — allow through
@@ -704,7 +701,7 @@ async function isRateLimited(env: MarketplaceEnv, ip: string): Promise<{ limited
 
   // Increment counter with 90s TTL
   try {
-    await env.RATINGS_KV.put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
+    await ratingsKv(env).put(key, JSON.stringify({ count: count + 1 }), { expirationTtl: 90 });
   } catch {
     // Best-effort counter increment — not fatal
   }
@@ -724,7 +721,7 @@ async function isUserHashDedupBlocked(
 ): Promise<boolean> {
   const key = `rl:uh:${sanitisePluginName(pluginName)}:${userHash}`;
   try {
-    const raw = await env.RATINGS_KV.get(key, "text");
+    const raw = await ratingsKv(env).get(key, "text");
     return raw !== null; // exists = submitted within 7 days
   } catch {
     return false; // KV read failure — allow through
@@ -741,7 +738,7 @@ async function writeUserHashDedup(
 ): Promise<void> {
   const key = `rl:uh:${sanitisePluginName(pluginName)}:${userHash}`;
   try {
-    await env.RATINGS_KV.put(key, "1", { expirationTtl: 7 * 24 * 60 * 60 });
+    await ratingsKv(env).put(key, "1", { expirationTtl: 7 * 24 * 60 * 60 });
   } catch {
     // Best-effort
   }
@@ -887,7 +884,7 @@ async function readInstallCount(
 ): Promise<number> {
   const key = `${KV_INSTALL_PREFIX}${sanitisePluginName(pluginName)}`;
   try {
-    const raw = await env.RATINGS_KV.get<{ count: number }>(key, "json");
+    const raw = await ratingsKv(env).get<{ count: number }>(key, "json");
     return raw?.count ?? 0;
   } catch {
     return 0;
@@ -962,7 +959,7 @@ export async function handleInstallEvent(
 
   // Check dedup — KV free tier: ~1K writes/day. Using presence check (get returns null on miss).
   try {
-    const existing = await env.RATINGS_KV.get(dedupKey, "text");
+    const existing = await ratingsKv(env).get(dedupKey, "text");
     if (existing !== null) {
       // Already counted this week — no-op
       const count = await readInstallCount(env, safePlugin);
@@ -976,16 +973,16 @@ export async function handleInstallEvent(
   const countKey = `${KV_INSTALL_PREFIX}${safePlugin}`;
   let newCount = 1;
   try {
-    const current = await env.RATINGS_KV.get<{ count: number }>(countKey, "json");
+    const current = await ratingsKv(env).get<{ count: number }>(countKey, "json");
     newCount = (current?.count ?? 0) + 1;
-    await env.RATINGS_KV.put(countKey, JSON.stringify({ count: newCount, lastUpdated: new Date().toISOString() }));
+    await ratingsKv(env).put(countKey, JSON.stringify({ count: newCount, lastUpdated: new Date().toISOString() }));
   } catch {
     return { ok: false, status: 500, error: "Failed to update install count" };
   }
 
   // Write dedup key with 8-day TTL (covers full week + buffer)
   try {
-    await env.RATINGS_KV.put(dedupKey, "1", { expirationTtl: 8 * 24 * 60 * 60 });
+    await ratingsKv(env).put(dedupKey, "1", { expirationTtl: 8 * 24 * 60 * 60 });
   } catch {
     // Best-effort dedup — not fatal
   }

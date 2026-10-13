@@ -5,15 +5,15 @@
  * constraints, without a JSON-Schema library dependency) and handleBundlesJson()
  * (KV cache hit/miss, upstream fetch failure -> 502, schema failure -> 502).
  * Follows index.test.mjs's convention: Node's built-in test runner against
- * index.js directly (this package's real, deployed source — no vitest/jest).
+ * the esbuild bundle of src/index.ts (the deployed source — no vitest/jest).
  *
- * Run: node --test src/*.test.mjs
+ * Run: pnpm test
  * (from .workers/plugins-registry)
  */
 
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateBundlesJson, handleBundlesJson } from './index.js';
+import { validateBundlesJson, handleBundlesJson } from '../dist-test/index.mjs';
 
 // ---------------------------------------------------------------------------
 // validateBundlesJson() — structural schema check
