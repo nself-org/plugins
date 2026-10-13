@@ -34,6 +34,9 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
 func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
+	if bootPool == nil { // handlers built without mustBootMigrations (unit tests); the server always sets the pool before serving
+		return nil
+	}
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
