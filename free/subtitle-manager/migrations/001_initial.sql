@@ -1,8 +1,10 @@
 -- subtitle-manager plugin: initial schema
 -- CODE WINS: table names from internal/db.go (np_subtmgr_* prefix)
--- 3 tables: np_subtmgr_subtitles, np_subtmgr_downloads, np_subtmgr_qc_results
+-- Boot-applied by sdk/go/migrate with search_path pinned to np_subtitle_manager, so every table is schema-qualified:
+-- the tables live in public (the cli tracking rule) where the Go code and any older install already have them.
+-- 3 tables: public.np_subtmgr_subtitles, public.np_subtmgr_downloads, public.np_subtmgr_qc_results
 
-CREATE TABLE IF NOT EXISTS np_subtmgr_subtitles (
+CREATE TABLE IF NOT EXISTS public.np_subtmgr_subtitles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     media_id VARCHAR(255) NOT NULL,
@@ -15,13 +17,13 @@ CREATE TABLE IF NOT EXISTS np_subtmgr_subtitles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_subtmgr_subtitles_media ON np_subtmgr_subtitles(media_id, language);
-CREATE INDEX IF NOT EXISTS idx_np_subtmgr_subtitles_account ON np_subtmgr_subtitles(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_subtmgr_subtitles_media ON public.np_subtmgr_subtitles(media_id, language);
+CREATE INDEX IF NOT EXISTS idx_np_subtmgr_subtitles_account ON public.np_subtmgr_subtitles(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_subtmgr_downloads (
+CREATE TABLE IF NOT EXISTS public.np_subtmgr_downloads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-    subtitle_id UUID REFERENCES np_subtmgr_subtitles(id) ON DELETE CASCADE,
+    subtitle_id UUID REFERENCES public.np_subtmgr_subtitles(id) ON DELETE CASCADE,
     media_id VARCHAR(255) NOT NULL,
     media_type VARCHAR(50) NOT NULL,
     media_title VARCHAR(255),
@@ -38,13 +40,13 @@ CREATE TABLE IF NOT EXISTS np_subtmgr_downloads (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_subtmgr_downloads_media ON np_subtmgr_downloads(media_id, language);
-CREATE INDEX IF NOT EXISTS idx_np_subtmgr_downloads_account ON np_subtmgr_downloads(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_subtmgr_downloads_media ON public.np_subtmgr_downloads(media_id, language);
+CREATE INDEX IF NOT EXISTS idx_np_subtmgr_downloads_account ON public.np_subtmgr_downloads(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_subtmgr_qc_results (
+CREATE TABLE IF NOT EXISTS public.np_subtmgr_qc_results (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
-    download_id UUID REFERENCES np_subtmgr_downloads(id) ON DELETE CASCADE,
+    download_id UUID REFERENCES public.np_subtmgr_downloads(id) ON DELETE CASCADE,
     status VARCHAR(20) NOT NULL,
     checks JSONB NOT NULL DEFAULT '[]',
     issues JSONB NOT NULL DEFAULT '[]',
@@ -53,5 +55,5 @@ CREATE TABLE IF NOT EXISTS np_subtmgr_qc_results (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_np_subtmgr_qc_results_download ON np_subtmgr_qc_results(download_id);
-CREATE INDEX IF NOT EXISTS idx_np_subtmgr_qc_results_account ON np_subtmgr_qc_results(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_subtmgr_qc_results_download ON public.np_subtmgr_qc_results(download_id);
+CREATE INDEX IF NOT EXISTS idx_np_subtmgr_qc_results_account ON public.np_subtmgr_qc_results(source_account_id);

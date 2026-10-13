@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
 
-	sdk "github.com/nself-org/plugin-sdk"
 	"github.com/nself-org/nself-subtitle-manager/internal"
+	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func main() {
@@ -32,11 +33,10 @@ func main() {
 	}
 	defer pool.Close()
 
+	internal.BootMigrations(context.Background(), pool)
+
 	cfg := internal.LoadConfig()
 	db := internal.NewDB(pool)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("subtitle-manager: schema init failed: %v", err)
-	}
 
 	srv := sdk.NewServer(port)
 	r := srv.Router()

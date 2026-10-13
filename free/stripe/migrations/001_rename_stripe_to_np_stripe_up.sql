@@ -3,6 +3,8 @@
 -- Purpose: Rename stripe_* tables to np_stripe_* prefix (schema prefix compliance)
 -- Idempotent: uses DO $$ blocks with IF EXISTS / object_is_visible guards
 -- CR-C required before applying to production (payment data migration)
+-- Covers every table InitSchema creates (the first draft missed stripe_discounts and stripe_payouts, which an upgrade
+-- would have left behind next to fresh empty np_ tables) and no table the plugin does not create.
 -- Backward-compatible: existing data is preserved; only table names change
 -- Note: np_stripe_accounts already exists in plugins-pro/paid/nself-stripe —
 --       the free stripe plugin tables are independent objects with no conflict.
@@ -13,144 +15,180 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_customers')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_customers') THEN
     ALTER TABLE stripe_customers RENAME TO np_stripe_customers;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_customers') THEN
+    RAISE WARNING 'stripe_customers and np_stripe_customers both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_products → np_stripe_products
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_products')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_products') THEN
     ALTER TABLE stripe_products RENAME TO np_stripe_products;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_products') THEN
+    RAISE WARNING 'stripe_products and np_stripe_products both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_prices → np_stripe_prices
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_prices')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_prices') THEN
     ALTER TABLE stripe_prices RENAME TO np_stripe_prices;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_prices') THEN
+    RAISE WARNING 'stripe_prices and np_stripe_prices both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_coupons → np_stripe_coupons
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_coupons')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_coupons') THEN
     ALTER TABLE stripe_coupons RENAME TO np_stripe_coupons;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_coupons') THEN
+    RAISE WARNING 'stripe_coupons and np_stripe_coupons both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_promotion_codes → np_stripe_promotion_codes
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_promotion_codes')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_promotion_codes') THEN
     ALTER TABLE stripe_promotion_codes RENAME TO np_stripe_promotion_codes;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_promotion_codes') THEN
+    RAISE WARNING 'stripe_promotion_codes and np_stripe_promotion_codes both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_subscriptions → np_stripe_subscriptions
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_subscriptions')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_subscriptions') THEN
     ALTER TABLE stripe_subscriptions RENAME TO np_stripe_subscriptions;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_subscriptions') THEN
+    RAISE WARNING 'stripe_subscriptions and np_stripe_subscriptions both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_subscription_items → np_stripe_subscription_items
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_subscription_items')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_subscription_items') THEN
     ALTER TABLE stripe_subscription_items RENAME TO np_stripe_subscription_items;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_subscription_items') THEN
+    RAISE WARNING 'stripe_subscription_items and np_stripe_subscription_items both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
-  -- stripe_subscription_schedules → np_stripe_subscription_schedules
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_subscription_schedules')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_subscription_schedules') THEN
-    ALTER TABLE stripe_subscription_schedules RENAME TO np_stripe_subscription_schedules;
-  END IF;
 
   -- stripe_invoices → np_stripe_invoices
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_invoices')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_invoices') THEN
     ALTER TABLE stripe_invoices RENAME TO np_stripe_invoices;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_invoices') THEN
+    RAISE WARNING 'stripe_invoices and np_stripe_invoices both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_invoice_items → np_stripe_invoice_items
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_invoice_items')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_invoice_items') THEN
     ALTER TABLE stripe_invoice_items RENAME TO np_stripe_invoice_items;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_invoice_items') THEN
+    RAISE WARNING 'stripe_invoice_items and np_stripe_invoice_items both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
-  -- stripe_credit_notes → np_stripe_credit_notes
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_credit_notes')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_credit_notes') THEN
-    ALTER TABLE stripe_credit_notes RENAME TO np_stripe_credit_notes;
-  END IF;
 
   -- stripe_charges → np_stripe_charges
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_charges')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_charges') THEN
     ALTER TABLE stripe_charges RENAME TO np_stripe_charges;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_charges') THEN
+    RAISE WARNING 'stripe_charges and np_stripe_charges both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_refunds → np_stripe_refunds
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_refunds')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_refunds') THEN
     ALTER TABLE stripe_refunds RENAME TO np_stripe_refunds;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_refunds') THEN
+    RAISE WARNING 'stripe_refunds and np_stripe_refunds both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_disputes → np_stripe_disputes
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_disputes')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_disputes') THEN
     ALTER TABLE stripe_disputes RENAME TO np_stripe_disputes;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_disputes') THEN
+    RAISE WARNING 'stripe_disputes and np_stripe_disputes both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_payment_intents → np_stripe_payment_intents
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payment_intents')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_payment_intents') THEN
     ALTER TABLE stripe_payment_intents RENAME TO np_stripe_payment_intents;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payment_intents') THEN
+    RAISE WARNING 'stripe_payment_intents and np_stripe_payment_intents both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_setup_intents → np_stripe_setup_intents
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_setup_intents')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_setup_intents') THEN
     ALTER TABLE stripe_setup_intents RENAME TO np_stripe_setup_intents;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_setup_intents') THEN
+    RAISE WARNING 'stripe_setup_intents and np_stripe_setup_intents both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_payment_methods → np_stripe_payment_methods
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payment_methods')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_payment_methods') THEN
     ALTER TABLE stripe_payment_methods RENAME TO np_stripe_payment_methods;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payment_methods') THEN
+    RAISE WARNING 'stripe_payment_methods and np_stripe_payment_methods both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_balance_transactions → np_stripe_balance_transactions
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_balance_transactions')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_balance_transactions') THEN
     ALTER TABLE stripe_balance_transactions RENAME TO np_stripe_balance_transactions;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_balance_transactions') THEN
+    RAISE WARNING 'stripe_balance_transactions and np_stripe_balance_transactions both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_checkout_sessions → np_stripe_checkout_sessions
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_checkout_sessions')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_checkout_sessions') THEN
     ALTER TABLE stripe_checkout_sessions RENAME TO np_stripe_checkout_sessions;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_checkout_sessions') THEN
+    RAISE WARNING 'stripe_checkout_sessions and np_stripe_checkout_sessions both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
-  -- stripe_checkout_session_line_items → np_stripe_checkout_session_line_items
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_checkout_session_line_items')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_checkout_session_line_items') THEN
-    ALTER TABLE stripe_checkout_session_line_items RENAME TO np_stripe_checkout_session_line_items;
-  END IF;
 
   -- stripe_tax_ids → np_stripe_tax_ids
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_tax_ids')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_tax_ids') THEN
     ALTER TABLE stripe_tax_ids RENAME TO np_stripe_tax_ids;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_tax_ids') THEN
+    RAISE WARNING 'stripe_tax_ids and np_stripe_tax_ids both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_tax_rates → np_stripe_tax_rates
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_tax_rates')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_tax_rates') THEN
     ALTER TABLE stripe_tax_rates RENAME TO np_stripe_tax_rates;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_tax_rates') THEN
+    RAISE WARNING 'stripe_tax_rates and np_stripe_tax_rates both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
   -- stripe_webhook_events → np_stripe_webhook_events
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_webhook_events')
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_webhook_events') THEN
     ALTER TABLE stripe_webhook_events RENAME TO np_stripe_webhook_events;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_webhook_events') THEN
+    RAISE WARNING 'stripe_webhook_events and np_stripe_webhook_events both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 
-  -- stripe_events → np_stripe_events
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_events')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_events') THEN
-    ALTER TABLE stripe_events RENAME TO np_stripe_events;
+
+  -- stripe_discounts → np_stripe_discounts
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_discounts')
+     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_discounts') THEN
+    ALTER TABLE stripe_discounts RENAME TO np_stripe_discounts;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_discounts') THEN
+    RAISE WARNING 'stripe_discounts and np_stripe_discounts both exist: nothing renamed, merged or dropped; copy the rows by hand';
+  END IF;
+
+  -- stripe_payouts → np_stripe_payouts
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payouts')
+     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_payouts') THEN
+    ALTER TABLE stripe_payouts RENAME TO np_stripe_payouts;
+  ELSIF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payouts') THEN
+    RAISE WARNING 'stripe_payouts and np_stripe_payouts both exist: nothing renamed, merged or dropped; copy the rows by hand';
   END IF;
 END $$;
 
@@ -169,9 +207,13 @@ BEGIN
           AND i2.indexname = 'idx_np_' || substring(pg_indexes.indexname FROM 5)
       )
   LOOP
-    EXECUTE format('ALTER INDEX %I RENAME TO %I',
-      idx.indexname,
-      'idx_np_' || substring(idx.indexname FROM 5)
-    );
+    BEGIN
+      EXECUTE format('ALTER INDEX %I RENAME TO %I',
+        idx.indexname,
+        'idx_np_' || substring(idx.indexname FROM 5)
+      );
+    EXCEPTION WHEN duplicate_table OR undefined_object THEN
+      NULL; -- the target name appeared meanwhile, or the index is gone: leave it
+    END;
   END LOOP;
 END $$;

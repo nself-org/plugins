@@ -1,22 +1,184 @@
 {
-  "name": "retro-gaming",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Retro gaming ROM library management, emulator core serving, save state synchronization, play sessions, and controller configuration for nself-tv",
+  "apiEndpoints": [
+    "GET /api/games/roms",
+    "GET /api/games/roms/:id",
+    "POST /api/games/roms",
+    "PATCH /api/games/roms/:id",
+    "DELETE /api/games/roms/:id",
+    "POST /api/games/roms/scan",
+    "GET /api/games/save-states/:rom_id",
+    "POST /api/games/save-states/:rom_id",
+    "GET /api/games/save-states/:rom_id/:slot",
+    "DELETE /api/games/save-states/:rom_id/:slot",
+    "GET /api/games/cores",
+    "GET /api/games/cores/:platform",
+    "GET /api/games/cores/:core_name/download",
+    "POST /api/games/cores/installed",
+    "GET /api/games/cores/installed",
+    "POST /api/games/sessions/start",
+    "POST /api/games/sessions/:session_id/end",
+    "GET /api/games/sessions/recent",
+    "GET /api/games/controllers",
+    "POST /api/games/controllers",
+    "DELETE /api/games/controllers/:id",
+    "POST /api/games/roms/:id/enrich"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "language": "go",
-  "entryPoint": "binary",
-  "pluginType": "service",
-  "port": 3124,
   "category": "media",
+  "description": "Retro gaming ROM library management, emulator core serving, save state synchronization, play sessions, and controller configuration for nself-tv",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "RETRO_GAMING_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "IGDB_CLIENT_ID",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "IGDB_CLIENT_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "MOBYGAMES_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "RETRO_GAMING_ROM_PATH_PREFIX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "RETRO_GAMING_SAVE_STATE_PATH_PREFIX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "RETRO_GAMING_CORE_PATH_PREFIX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "RETRO_GAMING_CDN_URL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "RETRO_GAMING_STORAGE_BUCKET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "LOG_LEVEL",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "retro-gaming",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ],
+    "network": [
+      "api.igdb.com",
+      "id.twitch.tv",
+      "api.mobygames.com"
+    ]
+  },
+  "port": 3124,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/ready"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PUT",
+      "path": "/{id}"
+    }
+  ],
+  "schema": "np_retro_gaming",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3124
+  },
+  "status": "stable",
+  "tables": [
+    "np_retrogame_roms",
+    "np_retrogame_save_states",
+    "np_retrogame_play_sessions",
+    "np_retrogame_emulator_cores",
+    "np_retrogame_controller_configs",
+    "np_retrogame_core_installations"
+  ],
   "tags": [
     "retro-gaming",
     "roms",
@@ -27,234 +189,6 @@
     "igdb",
     "libretro"
   ],
-  "tables": [
-    "np_retrogame_roms",
-    "np_retrogame_save_states",
-    "np_retrogame_play_sessions",
-    "np_retrogame_emulator_cores",
-    "np_retrogame_controller_configs",
-    "np_retrogame_core_installations"
-  ],
-  "webhooks": {},
-  "actions": {
-    "server": "Start the retro-gaming API server",
-    "roms": "List and manage ROMs",
-    "save-states": "Manage save states",
-    "cores": "Manage emulator cores",
-    "sessions": "View play sessions",
-    "stats": "Show retro-gaming statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "RETRO_GAMING_PLUGIN_PORT",
-      "IGDB_CLIENT_ID",
-      "IGDB_CLIENT_SECRET",
-      "MOBYGAMES_API_KEY",
-      "RETRO_GAMING_ROM_PATH_PREFIX",
-      "RETRO_GAMING_SAVE_STATE_PATH_PREFIX",
-      "RETRO_GAMING_CORE_PATH_PREFIX",
-      "RETRO_GAMING_CDN_URL",
-      "RETRO_GAMING_STORAGE_BUCKET",
-      "LOG_LEVEL"
-    ]
-  },
-  "config": {
-    "defaultPort": 3033,
-    "romPathPrefix": "/roms",
-    "saveStatePathPrefix": "/save-states",
-    "corePathPrefix": "/cores",
-    "cdnUrl": ""
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "api.igdb.com",
-      "id.twitch.tv",
-      "api.mobygames.com"
-    ],
-    "filesystem": [
-      "logs",
-      "cache",
-      "temp"
-    ]
-  },
-  "apiEndpoints": [
-    {
-      "method": "GET",
-      "path": "/api/games/roms",
-      "description": "List ROMs"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/roms/:id",
-      "description": "Get ROM details"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/roms",
-      "description": "Create ROM entry"
-    },
-    {
-      "method": "PATCH",
-      "path": "/api/games/roms/:id",
-      "description": "Update ROM metadata"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/games/roms/:id",
-      "description": "Delete ROM"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/roms/scan",
-      "description": "Scan/import ROMs"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/save-states/:rom_id",
-      "description": "List save states"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/save-states/:rom_id",
-      "description": "Create save state"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/save-states/:rom_id/:slot",
-      "description": "Get save state"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/games/save-states/:rom_id/:slot",
-      "description": "Delete save state"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/cores",
-      "description": "List emulator cores"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/cores/:platform",
-      "description": "Get recommended core for platform"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/cores/:core_name/download",
-      "description": "Get core download URL"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/cores/installed",
-      "description": "Record core installation"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/cores/installed",
-      "description": "List installed cores"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/sessions/start",
-      "description": "Start play session"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/sessions/:session_id/end",
-      "description": "End play session"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/sessions/recent",
-      "description": "Recent play sessions"
-    },
-    {
-      "method": "GET",
-      "path": "/api/games/controllers",
-      "description": "List controller configs"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/controllers",
-      "description": "Create controller config"
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/games/controllers/:id",
-      "description": "Delete controller config"
-    },
-    {
-      "method": "POST",
-      "path": "/api/games/roms/:id/enrich",
-      "description": "Trigger metadata enrichment"
-    }
-  ],
-  "status": "stable",
   "tier": "free",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PUT",
-      "path": "/{id}",
-      "auth": "bearer"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "cmd/main.go",
-  "checksum": "47819b6c67ceaeee6d3560da040b6c7c1717faa7a71213a46403eb37666e6eb2",
-  "bundles": [
-    "ntv"
-  ]
+  "version": "1.2.6"
 }

@@ -1,0 +1,2 @@
+# Boot-kit dummies, never real secrets. The loader only checks the rk_/sk_ + test_/live_ prefix shape.
+STRIPE_API_KEY=rk_test_boot-kit-dummy-not-real
