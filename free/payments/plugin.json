@@ -62,7 +62,6 @@
   "status": "stable",
   "tables": [
     "np_payment_events",
-    "np_stripe_idempotency",
     "np_subscriptions",
     "np_usage_records"
   ],
