@@ -150,6 +150,18 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_events') THEN
     ALTER TABLE np_stripe_events RENAME TO stripe_events;
   END IF;
+
+  -- np_stripe_discounts → stripe_discounts
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_discounts')
+     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_discounts') THEN
+    ALTER TABLE np_stripe_discounts RENAME TO stripe_discounts;
+  END IF;
+
+  -- np_stripe_payouts → stripe_payouts
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_payouts')
+     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payouts') THEN
+    ALTER TABLE np_stripe_payouts RENAME TO stripe_payouts;
+  END IF;
 END $$;
 
 -- Revert index renames (idempotent)
