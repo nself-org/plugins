@@ -3,6 +3,8 @@
 -- Purpose: Rename stripe_* tables to np_stripe_* prefix (schema prefix compliance)
 -- Idempotent: uses DO $$ blocks with IF EXISTS / object_is_visible guards
 -- CR-C required before applying to production (payment data migration)
+-- Covers every table InitSchema creates (the first draft missed stripe_discounts and stripe_payouts, which an upgrade
+-- would have left behind next to fresh empty np_ tables) and no table the plugin does not create.
 -- Backward-compatible: existing data is preserved; only table names change
 -- Note: np_stripe_accounts already exists in plugins-pro/paid/nself-stripe —
 --       the free stripe plugin tables are independent objects with no conflict.
@@ -51,11 +53,6 @@ BEGIN
     ALTER TABLE stripe_subscription_items RENAME TO np_stripe_subscription_items;
   END IF;
 
-  -- stripe_subscription_schedules → np_stripe_subscription_schedules
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_subscription_schedules')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_subscription_schedules') THEN
-    ALTER TABLE stripe_subscription_schedules RENAME TO np_stripe_subscription_schedules;
-  END IF;
 
   -- stripe_invoices → np_stripe_invoices
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_invoices')
@@ -69,11 +66,6 @@ BEGIN
     ALTER TABLE stripe_invoice_items RENAME TO np_stripe_invoice_items;
   END IF;
 
-  -- stripe_credit_notes → np_stripe_credit_notes
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_credit_notes')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_credit_notes') THEN
-    ALTER TABLE stripe_credit_notes RENAME TO np_stripe_credit_notes;
-  END IF;
 
   -- stripe_charges → np_stripe_charges
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_charges')
@@ -123,11 +115,6 @@ BEGIN
     ALTER TABLE stripe_checkout_sessions RENAME TO np_stripe_checkout_sessions;
   END IF;
 
-  -- stripe_checkout_session_line_items → np_stripe_checkout_session_line_items
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_checkout_session_line_items')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_checkout_session_line_items') THEN
-    ALTER TABLE stripe_checkout_session_line_items RENAME TO np_stripe_checkout_session_line_items;
-  END IF;
 
   -- stripe_tax_ids → np_stripe_tax_ids
   IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_tax_ids')
@@ -147,10 +134,17 @@ BEGIN
     ALTER TABLE stripe_webhook_events RENAME TO np_stripe_webhook_events;
   END IF;
 
-  -- stripe_events → np_stripe_events
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_events')
-     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_events') THEN
-    ALTER TABLE stripe_events RENAME TO np_stripe_events;
+
+  -- stripe_discounts → np_stripe_discounts
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_discounts')
+     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_discounts') THEN
+    ALTER TABLE stripe_discounts RENAME TO np_stripe_discounts;
+  END IF;
+
+  -- stripe_payouts → np_stripe_payouts
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'stripe_payouts')
+     AND NOT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'np_stripe_payouts') THEN
+    ALTER TABLE stripe_payouts RENAME TO np_stripe_payouts;
   END IF;
 END $$;
 
@@ -169,9 +163,13 @@ BEGIN
           AND i2.indexname = 'idx_np_' || substring(pg_indexes.indexname FROM 5)
       )
   LOOP
-    EXECUTE format('ALTER INDEX %I RENAME TO %I',
-      idx.indexname,
-      'idx_np_' || substring(idx.indexname FROM 5)
-    );
+    BEGIN
+      EXECUTE format('ALTER INDEX %I RENAME TO %I',
+        idx.indexname,
+        'idx_np_' || substring(idx.indexname FROM 5)
+      );
+    EXCEPTION WHEN duplicate_table OR undefined_object THEN
+      NULL; -- the target name appeared meanwhile, or the index is gone: leave it
+    END;
   END LOOP;
 END $$;

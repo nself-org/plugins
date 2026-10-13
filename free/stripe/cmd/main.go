@@ -49,6 +49,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("[stripe] Failed to connect to database: %v", err)
 	}
+	internal.BootMigrations(ctx, pool)
 	defer pool.Close()
 
 	// Verify connectivity

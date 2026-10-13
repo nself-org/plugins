@@ -14,9 +14,10 @@ import (
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":    "ok",
-		"plugin":    "stripe",
-		"timestamp": time.Now().Format(time.RFC3339),
+		"status":     "ok",
+		"plugin":     "stripe",
+		"timestamp":  time.Now().Format(time.RFC3339),
+		"migrations": bootMigrationsHealth(w),
 	})
 }
 
