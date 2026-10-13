@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 func buildLSSignature(t testing.TB, secret string, body []byte) string {

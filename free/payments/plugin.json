@@ -1,20 +1,69 @@
 {
-  "name": "payments",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with webhook normalization.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
   "category": "commerce",
+  "description": "Unified payments abstraction supporting Stripe, PayPal, and Apple/Google Pay with webhook normalization.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PAYMENTS_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "STRIPE_SECRET_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_CLIENT_ID",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
-  "tier": "free",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "payments",
+  "optionalDependencies": [
+    "stripe",
+    "paypal"
+  ],
+  "port": 3086,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "none",
+      "method": "GET",
+      "path": "/health"
+    }
+  ],
+  "schema": "np_payments",
+  "service": {
+    "kind": "library",
+    "port": 3086
+  },
+  "status": "stable",
+  "tables": [
+    "np_payments_orders",
+    "np_payments_transactions"
+  ],
   "tags": [
     "payments",
     "stripe",
@@ -22,44 +71,6 @@
     "billing",
     "commerce"
   ],
-  "tables": [
-    "np_payments_orders",
-    "np_payments_transactions"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": [
-      "stripe",
-      "paypal"
-    ]
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PAYMENTS_PORT",
-      "STRIPE_SECRET_KEY",
-      "PAYPAL_CLIENT_ID"
-    ]
-  },
-  "entry": "cmd/main.go",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "none"
-    }
-  ],
-  "health_endpoint": "/health",
-  "checksum": "abead3a55226aced9ff7c1db1f95535771aff2d30db17fe7cd9292324989e549",
-  "port": 3086,
-  "bundles": [
-    "nclaw",
-    "nchat",
-    "ntv",
-    "nfamily",
-    "clawde",
-    "nsentry"
-  ]
+  "tier": "free",
+  "version": "1.2.6"
 }

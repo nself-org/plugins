@@ -4297,7 +4297,7 @@
           "nself": ">=1.0.9"
         },
         "schema": "np_ollama",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "integrations",
       "checksum": "b44a0d7fe3a481fa4d9391e6246ef51b303159ebf0bdc38994ef486a1e35afbb",
@@ -4341,7 +4341,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_payments",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "commerce",
       "checksum": "351b03463630ddbc97f246d7a3b669bf7931dc4ee661005913730921101d0339",
@@ -4441,7 +4441,7 @@
           "nself": ">=1.0.9"
         },
         "schema": "np_pentest",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "compliance",
       "checksum": "28ad457574e937e915558d4a0153a959eaf8e428c58b3590d89041f8ddcfe0cf",
@@ -4533,7 +4533,7 @@
           "nself": ">=1.1.1"
         },
         "schema": "np_plugin_clawde",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "development",
       "checksum": "5c963a4cf53208601bd3680cbe4bd2facbb02445f4f07a0c21a23384684dbc56",
@@ -4637,7 +4637,7 @@
         "requires": {
           "nself": ">=1.1.1"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "authentication",
       "checksum": "bd1b394253ebb0196702d3b4d539dc24ac0962daa830e6745ecfd35606849d19",
@@ -4670,7 +4670,7 @@
           "nself": ">=1.1.1"
         },
         "schema": "np_plugin_llm_gateway",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "68d3e4d3433b8c5dfb6ebbb1a7e52063a766bc1f01df66e130aa538c4fe3d5e0",
@@ -4706,7 +4706,7 @@
           "nself": ">=1.1.1"
         },
         "schema": "np_plugin_pty",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "development",
       "checksum": "4e979ab08aaa6a387007ea27c1dadb469030fb9b14f325f8b8a67d72c67304d2",
@@ -4739,10 +4739,13 @@
       "catalog": {
         "maturity": "implemented",
         "requires": {
-          "nself": ">=1.1.1"
+          "nself": ">=1.1.1",
+          "postgres_extensions": [
+            "vector"
+          ]
         },
         "schema": "np_plugin_retrieval",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "data",
       "checksum": "0881ded54755aa5dea62fc6c71e8b1d25b02465a0dbf2c52b7cf8f48fe6a830a",

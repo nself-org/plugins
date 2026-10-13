@@ -1,19 +1,103 @@
 {
-  "name": "ollama",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "One-click offline LLM stack. Stands up an Ollama Docker container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install. GPU passthrough is optional and localhost-only (port 11434 binds to 127.0.0.1 \u2014 never exposed externally).",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins/ollama",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.9",
+  "capabilities": [
+    "local_llm",
+    "model_management",
+    "gpu_passthrough",
+    "provider_registration"
+  ],
   "category": "integrations",
+  "description": "One-click offline LLM stack. Stands up an Ollama Docker container, auto-pulls gemma-3-4b on first start, and registers as a provider in plugin-ai. All nSelf AI features route through Ollama when NSELF_AI_PROVIDER=ollama. Zero cloud dependency, zero API key, zero usage cost after install. GPU passthrough is optional and localhost-only (port 11434 binds to 127.0.0.1 — never exposed externally).",
+  "envVars": [
+    {
+      "description": "",
+      "name": "NSELF_AI_PROVIDER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_OLLAMA_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_OLLAMA_DEFAULT_MODEL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_OLLAMA_AUTO_PULL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_OLLAMA_GPU",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_OLLAMA_CONTEXT_WINDOW",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_OLLAMA_TIMEOUT_SECONDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "OLLAMA_ENABLED",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_AI_OLLAMA_MODEL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_AI_OLLAMA_URL",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins/ollama",
   "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.9",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "ollama",
+  "port": 11434,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.9"
+  },
+  "schema": "np_ollama",
+  "service": {
+    "kind": "library",
+    "port": 11434
+  },
+  "status": "stable",
+  "tables": [
+    "np_ollama_model_registry"
+  ],
   "tags": [
     "ai",
     "llm",
@@ -24,76 +108,6 @@
     "self-hosted",
     "docker"
   ],
-  "tables": [
-    "np_ollama_model_registry"
-  ],
-  "capabilities": [
-    "local_llm",
-    "model_management",
-    "gpu_passthrough",
-    "provider_registration"
-  ],
-  "envVars": {
-    "required": [],
-    "optional": [
-      "NSELF_AI_PROVIDER",
-      "NSELF_OLLAMA_HOST",
-      "NSELF_OLLAMA_DEFAULT_MODEL",
-      "NSELF_OLLAMA_AUTO_PULL",
-      "NSELF_OLLAMA_GPU",
-      "NSELF_OLLAMA_CONTEXT_WINDOW",
-      "NSELF_OLLAMA_TIMEOUT_SECONDS",
-      "OLLAMA_ENABLED",
-      "PLUGIN_AI_OLLAMA_MODEL",
-      "PLUGIN_AI_OLLAMA_URL"
-    ]
-  },
-  "config": {
-    "defaultModel": "gemma-3-4b",
-    "autoPull": true,
-    "gpu": false,
-    "contextWindow": 8192,
-    "timeoutSeconds": 120,
-    "internalPort": 11434
-  },
-  "hooks": {
-    "postInstall": "scripts/post-install.sh",
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "composeFragment": "compose_fragment.yml",
-  "port": 11434,
-  "status": "stable",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 2048,
-  "systemd_after": "network.target",
   "tier": "free",
-  "security": {
-    "portBinding": "127.0.0.1",
-    "gpuNote": "GPU passthrough is opt-in via NSELF_OLLAMA_GPU=true. The Ollama service always binds port 11434 to 127.0.0.1 only. GPU drivers (NVIDIA CUDA, ROCm) are the user's responsibility and are not managed by this plugin. GPU access does NOT expose additional network surface."
-  },
-  "providerRegistration": {
-    "pluginTarget": "ai",
-    "providerName": "ollama",
-    "envVarMapping": {
-      "PLUGIN_AI_OLLAMA_URL": "NSELF_OLLAMA_HOST",
-      "PLUGIN_AI_OLLAMA_MODEL": "NSELF_OLLAMA_DEFAULT_MODEL",
-      "OLLAMA_ENABLED": "true"
-    }
-  },
-  "routes": [],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  }
+  "version": "1.2.6"
 }

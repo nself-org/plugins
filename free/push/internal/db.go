@@ -22,16 +22,16 @@ const (
 
 // OutboxRow represents a row in np_push_outbox.
 type OutboxRow struct {
-	ID           string          `json:"id"`
-	DeviceToken  string          `json:"device_token"`
-	Platform     string          `json:"platform"`
-	Payload      json.RawMessage `json:"payload"`
-	Status       string          `json:"status"`
-	Attempts     int             `json:"attempts"`
-	LastError    *string         `json:"last_error,omitempty"`
-	DedupeHash   string          `json:"dedupe_hash"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
+	ID          string          `json:"id"`
+	DeviceToken string          `json:"device_token"`
+	Platform    string          `json:"platform"`
+	Payload     json.RawMessage `json:"payload"`
+	Status      string          `json:"status"`
+	Attempts    int             `json:"attempts"`
+	LastError   *string         `json:"last_error,omitempty"`
+	DedupeHash  string          `json:"dedupe_hash"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 // Device represents a registered device in np_push_devices.
@@ -43,69 +43,6 @@ type Device struct {
 	UserID      *string   `json:"user_id,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// Migrate runs idempotent schema creation for np_push_outbox and np_push_devices.
-// All statements use IF NOT EXISTS so re-running on an existing schema is safe.
-// Size-cap exception: SQL DDL migration — 59L of linear SQL statements; splitting across files adds no value and breaks transactional migration semantics.
-func Migrate(pool *pgxpool.Pool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	queries := []string{
-		// Device registry: maps device tokens to users/apps.
-		// Tokens are stored in plain text — they are not secrets (APNs/FCM tokens
-		// are semi-public identifiers; the real secrets are the provider credentials
-		// held in env vars, never in the DB).
-		`CREATE TABLE IF NOT EXISTS np_push_devices (
-			id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-			device_token TEXT        NOT NULL,
-			platform     TEXT        NOT NULL CHECK (platform IN ('ios', 'android')),
-			app_id       TEXT        NOT NULL DEFAULT 'default',
-			user_id      TEXT,
-			created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)`,
-		// Unique constraint: one token per (platform, app_id) combination.
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_np_push_devices_token_platform_app
-			ON np_push_devices(device_token, platform, app_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_np_push_devices_user_id
-			ON np_push_devices(user_id) WHERE user_id IS NOT NULL`,
-
-		// Outbox: queued push notifications with delivery tracking.
-		// dedupe_hash is SHA-256(device_token || platform || payload) to prevent
-		// duplicate delivery on retry storms or at-least-once event trigger re-fires.
-		`CREATE TABLE IF NOT EXISTS np_push_outbox (
-			id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-			device_token TEXT        NOT NULL,
-			platform     TEXT        NOT NULL CHECK (platform IN ('ios', 'android')),
-			payload      JSONB       NOT NULL,
-			status       TEXT        NOT NULL DEFAULT 'pending'
-			             CHECK (status IN ('pending','queued','delivered','retrying','failed')),
-			attempts     INTEGER     NOT NULL DEFAULT 0,
-			last_error   TEXT,
-			dedupe_hash  TEXT        NOT NULL,
-			created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)`,
-		// Idempotency: unique on dedupe_hash prevents double-sends from retry bursts.
-		// The hash incorporates device_token + platform + payload so distinct messages
-		// to the same device are allowed; only exact-duplicate payloads are deduplicated.
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_np_push_outbox_dedupe
-			ON np_push_outbox(dedupe_hash)
-			WHERE status != 'failed'`,
-		`CREATE INDEX IF NOT EXISTS idx_np_push_outbox_status
-			ON np_push_outbox(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_np_push_outbox_created_at
-			ON np_push_outbox(created_at)`,
-	}
-
-	for _, q := range queries {
-		if _, err := pool.Exec(ctx, q); err != nil {
-			return fmt.Errorf("push migrate: %w", err)
-		}
-	}
-	return nil
 }
 
 // DedupeHash returns SHA-256(deviceToken + "|" + platform + "|" + payload).

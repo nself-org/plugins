@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS np_push_devices (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Upgrade: tables created by the old Go DDL lack source_account_id; add it before any index on it.
+ALTER TABLE np_push_devices ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
+
 -- Unique constraint: one token per (platform, app_id) combination.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_np_push_devices_token_platform_app
     ON np_push_devices(device_token, platform, app_id);
@@ -38,6 +41,8 @@ CREATE TABLE IF NOT EXISTS np_push_outbox (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE np_push_outbox ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
+
 -- Idempotency: unique on dedupe_hash prevents double-sends.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_np_push_outbox_dedupe
     ON np_push_outbox(dedupe_hash)
@@ -48,7 +53,3 @@ CREATE INDEX IF NOT EXISTS idx_np_push_outbox_created_at
     ON np_push_outbox(created_at);
 CREATE INDEX IF NOT EXISTS idx_np_push_outbox_account
     ON np_push_outbox(source_account_id);
-
--- Idempotent backfill for schema upgrades (adds source_account_id if running against existing schema)
-ALTER TABLE np_push_devices ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
-ALTER TABLE np_push_outbox ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';

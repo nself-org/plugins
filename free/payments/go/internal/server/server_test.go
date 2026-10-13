@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/nself-org/nself-payments/internal/config"
-	"github.com/nself-org/nself-payments/internal/metrics"
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/config"
+	"github.com/nself-org/nself-payments/go/internal/metrics"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 // mockProvider implements provider.Provider for testing.

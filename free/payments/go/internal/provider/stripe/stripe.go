@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 // retryIdempotencyKey derives a stable Idempotency-Key for a RetryInvoice call.

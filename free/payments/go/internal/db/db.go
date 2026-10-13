@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 //go:embed migrations/*.sql

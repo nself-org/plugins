@@ -14,16 +14,17 @@
 # Re-vendor after any go.mod/go.sum change: `go mod vendor` from this dir.
 FROM golang:1.26-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates
-
 WORKDIR /app
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /nself-paypal ./cmd/
 
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates wget
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 COPY --from=builder /nself-paypal /usr/local/bin/nself-paypal
 EXPOSE 3071
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget -qO- http://localhost:3071/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3071/health || exit 1
 CMD ["nself-paypal"]

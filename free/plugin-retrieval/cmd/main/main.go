@@ -1,5 +1,7 @@
 // Purpose: plugin-retrieval entry point. Starts HTTP server on port 3825.
-//   Provides /health, /search, /index endpoints for hybrid pgvector + tsvector retrieval.
+//
+//	Provides /health, /search, /index endpoints for hybrid pgvector + tsvector retrieval.
+//
 // Inputs: NSELF_DB_URL env var.
 // Outputs: HTTP JSON responses.
 // Constraints:
@@ -10,6 +12,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -35,6 +38,9 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping db: %v", err)
 	}
+
+	pool := internal.MustBootMigrations(context.Background(), dbURL)
+	defer pool.Close()
 
 	h := &internal.Handlers{DB: db}
 	port := os.Getenv("NSELF_RETRIEVAL_PORT")

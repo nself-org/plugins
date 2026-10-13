@@ -9,8 +9,12 @@ type Config struct {
 
 func LoadConfig() Config {
 	port := os.Getenv("PORT")
-	if port == "" { port = "3210" }
+	if port == "" {
+		port = "3210"
+	}
 	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" { dbURL = "postgres://postgres:postgres@localhost:5432/nself" }
+	if dbURL == "" {
+		dbURL = "postgres://postgres:postgres@localhost:5432/nself"
+	}
 	return Config{DatabaseURL: dbURL, Port: port}
 }

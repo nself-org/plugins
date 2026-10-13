@@ -1,7 +1,9 @@
 // Package internal provides the HTTP handlers for plugin-retrieval.
 //
 // Purpose: Expose /search (hybrid pgvector ANN + tsvector BM25 + RRF merge)
-//   and /index (upsert document with embedding) endpoints.
+//
+//	and /index (upsert document with embedding) endpoints.
+//
 // Inputs: HTTP JSON requests with source_account_id for multi-app isolation.
 // Outputs: JSON search results sorted by RRF score.
 // Constraints:
@@ -23,8 +25,8 @@ import (
 // SearchRequest is the payload for POST /search.
 type SearchRequest struct {
 	Query           string    `json:"query"`
-	Embedding       []float32 `json:"embedding"`       // caller-provided vector (nullable)
-	TopK            int       `json:"top_k"`           // max results (default 10)
+	Embedding       []float32 `json:"embedding"` // caller-provided vector (nullable)
+	TopK            int       `json:"top_k"`     // max results (default 10)
 	SourceAccountID string    `json:"source_account_id"`
 }
 
@@ -55,12 +57,22 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	// bootMigrationsHealth answers 503 itself when the ledger cannot be read, so it runs before the 200.
+	mig := bootMigrationsHealth(w)
+	body := map[string]any{"status": "ok", "migrations": mig}
+	if mig["applied"] < 0 {
+		body["status"] = "unhealthy"
+		_ = json.NewEncoder(w).Encode(body)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // Search handles POST /search. Runs pgvector ANN and/or tsvector BM25 and merges with RRF.
-//   If embedding is provided, runs vector search. If query is non-empty, runs text search.
-//   Both require source_account_id for tenant isolation.
+//
+//	If embedding is provided, runs vector search. If query is non-empty, runs text search.
+//	Both require source_account_id for tenant isolation.
 func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	var req SearchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

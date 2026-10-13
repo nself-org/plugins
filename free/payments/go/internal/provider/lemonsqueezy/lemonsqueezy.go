@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 const (

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 func newTestAdapter(srv *httptest.Server) *Adapter {

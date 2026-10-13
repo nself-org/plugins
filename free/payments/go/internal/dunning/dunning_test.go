@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nself-org/nself-payments/internal/config"
-	"github.com/nself-org/nself-payments/internal/metrics"
+	"github.com/nself-org/nself-payments/go/internal/config"
+	"github.com/nself-org/nself-payments/go/internal/metrics"
 )
 
 // sharedMetrics is created once per test binary to avoid duplicate Prometheus registration.

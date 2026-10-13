@@ -97,9 +97,6 @@ free/payments/go/internal/provider/lemonsqueezy/lemonsqueezy.go	347
 free/payments/go/internal/provider/paddle/paddle.go	354
 free/payments/go/internal/provider/stripe/stripe.go	416
 free/payments/go/internal/server/server.go	406
-free/paypal/internal/db.go	302
-free/podcast/internal/handlers.go	302
-free/post/internal/handlers.go	711
 free/post/internal/providers/wordpress/client.go	403
 free/release/cmd/main.go	310
 free/retro-gaming/internal/handlers.go	996

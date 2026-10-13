@@ -1,20 +1,126 @@
 {
-  "name": "post",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Multi-platform content publishing. Publish to WordPress, Ghost, Twitter/X, LinkedIn, Telegram channels, Dev.to, and Hashnode with optional scheduling.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
   "category": "content",
-  "language": "go",
+  "description": "Multi-platform content publishing. Publish to WordPress, Ghost, Twitter/X, LinkedIn, Telegram channels, Dev.to, and Hashnode with optional scheduling.",
   "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "POST_INTERNAL_SECRET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "POST_ENCRYPTION_KEY",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "BIND_ADDRESS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_PLUGIN_LICENSE_KEY",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "default",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "post",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [],
+    "network": [
+      "outbound"
+    ]
+  },
+  "port": 3129,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/post/accounts"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/post/accounts"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/post/accounts/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/post/publish"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/post/queue"
+    }
+  ],
+  "schema": "np_post",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3129
+  },
+  "status": "stable",
+  "tables": [
+    "np_post_accounts",
+    "np_post_queue"
+  ],
   "tags": [
     "publishing",
     "content",
@@ -26,102 +132,6 @@
     "hashnode",
     "scheduling"
   ],
-  "tables": [
-    "np_post_accounts",
-    "np_post_queue"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "optionalDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "POST_INTERNAL_SECRET",
-      "POST_ENCRYPTION_KEY"
-    ],
-    "optional": [
-      "PORT",
-      "BIND_ADDRESS",
-      "NSELF_PLUGIN_LICENSE_KEY"
-    ]
-  },
-  "config": {
-    "defaultPort": 3129,
-    "schedulerPollSeconds": 60,
-    "schedulerBatchSize": 10
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "default"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "outbound"
-    ],
-    "filesystem": []
-  },
-  "port": 3129,
-  "status": "beta",
-  "binary_name": "post",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target",
   "tier": "free",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/post/accounts",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/post/accounts",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/post/accounts/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/post/publish",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/post/queue",
-      "auth": "bearer"
-    }
-  ],
-  "entry": "cmd/main.go",
-  "checksum": "140ee822d5c79b59eabfeff421e9271653214a249d7e055cbe546ae9c09c7370",
-  "bundles": [
-    "nchat"
-  ]
+  "version": "1.2.6"
 }

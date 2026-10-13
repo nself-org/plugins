@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,15 +16,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/nself-org/nself-payments/internal/config"
-	"github.com/nself-org/nself-payments/internal/db"
-	"github.com/nself-org/nself-payments/internal/dunning"
-	"github.com/nself-org/nself-payments/internal/metrics"
-	"github.com/nself-org/nself-payments/internal/provider"
-	"github.com/nself-org/nself-payments/internal/provider/lemonsqueezy"
-	"github.com/nself-org/nself-payments/internal/provider/paddle"
-	stripeprovider "github.com/nself-org/nself-payments/internal/provider/stripe"
-	"github.com/nself-org/nself-payments/internal/server"
+	"github.com/nself-org/nself-payments/go/internal/config"
+	"github.com/nself-org/nself-payments/go/internal/db"
+	"github.com/nself-org/nself-payments/go/internal/dunning"
+	"github.com/nself-org/nself-payments/go/internal/metrics"
+	"github.com/nself-org/nself-payments/go/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/provider/lemonsqueezy"
+	"github.com/nself-org/nself-payments/go/internal/provider/paddle"
+	stripeprovider "github.com/nself-org/nself-payments/go/internal/provider/stripe"
+	"github.com/nself-org/nself-payments/go/internal/server"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -47,6 +48,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	bootCtx, bootCancel := context.WithTimeout(context.Background(), 35*time.Minute)
+	if err := db.BootMigrations(bootCtx, pool); err != nil {
+		bootCancel()
+		slog.Error("boot migrations failed", "error", err)
+		os.Exit(1)
+	}
+	bootCancel()
 
 	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	if err := db.Migrate(migrateCtx, pool); err != nil {
@@ -96,9 +105,13 @@ func main() {
 	r.Handle("/metrics", promhttp.Handler())
 
 	// Health endpoint.
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		counts, ok := db.BootMigrationsStatus(req.Context())
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","plugin":"payments"}`)
+		if !ok {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "payments", "migrations": counts})
 	})
 
 	// Start dunning engine.
