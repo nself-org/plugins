@@ -1,0 +1,3 @@
+# The nself-org/bundles commit whose registry.json and bundles.json scripts/plugin-counts.sh reads (P7-PLUG-36).
+# It is the merge commit of the licensed generator (P7-PLUG-37, bundles#281). Bump it to take newer licensed data.
+df0c37671287ce66d1c377a36e134aa50261e915

@@ -12,7 +12,7 @@
   "port": 3851,
   "service_type": "custom_service",
   "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
-  "category": "documents",
+  "category": "content",
   "license": "MIT",
   "tarball": "nself-pdf-v0.1.0-linux-amd64.tar.gz",
   "download_url": "https://ping.nself.org/plugins/nself-pdf/download",

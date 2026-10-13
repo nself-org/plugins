@@ -1,145 +1,98 @@
 #!/usr/bin/env bash
 # verify-published-checksums.sh
 #
-# Purpose: the release model this repo ships under (see .github/RELEASE-
-# v1.2.1.md and tarball-checksum-gate.yml) treats the PUBLISHED release
-# asset as the artifact of record — registry.json's checksums are supposed
-# to be written FROM those published bytes, not from an independent local
-# rebuild that merely hopes to match (gzip's DEFLATE output is
-# implementation/version-dependent; two byte-identical tar streams can
-# still produce different .tar.gz bytes on different machines — see
-# tarball-checksum-gate.yml's header comment for the measured proof). This
-# script is the one place that reads real published bytes and either
-# reports how registry.json disagrees with them, or writes them in.
+# Purpose: the release model this repo ships under (see .github/RELEASE-v1.2.1.md and tarball-checksum-gate.yml) treats the
+#   PUBLISHED release asset as the artifact of record. Checksums are written FROM those published bytes, not from an
+#   independent local rebuild that merely hopes to match (gzip's DEFLATE output is implementation-dependent; see
+#   tarball-checksum-gate.yml for the measured proof). Since P7-PLUG-36 the release data lives in releases.json and
+#   registry.json is a generated projection of it (scripts/plugin-counts.sh), so this is the one script that writes
+#   releases.json, and it reads real published bytes to do it.
 #
-# Inputs: TAG (e.g. v1.2.1) — a release that must already exist (the owner
-# creates it as a draft first; `gh release download` works against a draft
-# with repo access). registry.json in the current directory is read (and,
-# with --write, rewritten).
+# Inputs: TAG (e.g. v1.2.7), a release that must already exist (a draft works with repo access). releases.json in the repo
+#   root is read and, with --write, rewritten. A row is checked when its release_tag equals TAG. With --write, a free
+#   plugin whose manifest version equals TAG's version, whose source tarball <name>-<version>.tar.gz is on the release and
+#   whose row is missing or points at another tag, also gets its row written (this is how a new release lands).
 #
-# For every registry.json entry whose releaseTag equals TAG and which
-# carries a checksum-eligible tarball (i.e. NOT shared-utils-style
-# installable:false entries with no tarball/checksum fields at all), this
-# downloads:
-#   - the source tarball  <name>-<version>.tar.gz
-#   - if the plugin's free/<name>/plugin.json declares a binaryName (or the
-#     registry entry already has checksums.platforms), the five per-platform
-#     binary tarballs <name>-<version>-<platform>.tar.gz
-# and computes sha256 for each.
+# For each such plugin this downloads the source tarball and, when the plugin's manifest declares a binaryName (or its row
+#   already has platform_checksums), the five per-platform binary tarballs <name>-<version>-<platform>.tar.gz, and computes
+#   sha256 for each.
 #
 # Outputs:
-#   Default (report mode): prints ONLY the mismatches found (registry value
-#     vs. the freshly computed published-asset hash) and a final summary
-#     line; registry.json is NOT modified. Exit 0 if no mismatches, exit 1
-#     if any (whether a value disagreed or an expected asset was simply
+#   Default (report mode): prints ONLY the mismatches found (releases.json value vs the freshly computed hash) and a final
+#     summary line; nothing is modified. Exit 0 if no mismatches, exit 1 if any (a value disagreed or an expected asset was
 #     missing from the release).
-#   --write: writes the computed hashes into registry.json — the flat
-#     `checksum` field, the nested `checksums.sha256` field (both from the
-#     source tarball), and `checksums.platforms.<platform>` for each
-#     downloaded platform asset — then reports what changed. Exit 0 on
-#     success, exit 1 if any expected asset could not be downloaded (in
-#     which case registry.json is left with whatever it already had for
-#     that specific field; nothing partial is written for a missing asset).
+#   --write: writes version, sha256, release_tag, tarball_url, platform_checksums and binaries (the nself-* files in the
+#     linux-amd64 tarball) into releases.json, keeping an existing release_signature, then tells you to run
+#     scripts/plugin-counts.sh to regenerate registry.json. Exit 0 on success, exit 1 if any expected asset could not be
+#     downloaded (releases.json is not written then).
 #
-# Constraints: requires `gh` (authenticated, repo access — including to a
-# draft release), `jq`, and `sha256sum`/`shasum`. Never touches anything
-# but registry.json. Never creates or publishes a release, never tags.
+# Constraints: requires `gh` (authenticated, repo access), `jq`, `tar`, and `sha256sum`/`shasum`. Never creates or publishes
+#   a release, never tags, never touches anything but releases.json.
 #
 # Usage:
-#   ./scripts/verify-published-checksums.sh v1.2.1
-#   ./scripts/verify-published-checksums.sh --write v1.2.1
+#   ./scripts/verify-published-checksums.sh v1.2.7
+#   ./scripts/verify-published-checksums.sh --write v1.2.7
 
 set -euo pipefail
 
 REPO="nself-org/plugins"
 WRITE=false
-
 if [ "${1:-}" = "--write" ]; then
   WRITE=true
   shift
 fi
-
 TAG="${1:-}"
-
 if [ -z "$TAG" ]; then
-  printf "Usage: %s [--write] TAG\n" "$0" >&2
-  printf "  e.g. %s v1.2.1\n" "$0" >&2
-  printf "       %s --write v1.2.1\n" "$0" >&2
+  printf "Usage: %s [--write] TAG\n  e.g. %s v1.2.7\n       %s --write v1.2.7\n" "$0" "$0" "$0" >&2
   exit 1
 fi
-
 VERSION="${TAG#v}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REGISTRY_FILE="${REPO_ROOT}/registry.json"
+RELEASES_FILE="${REPO_ROOT}/releases.json"
 PLUGINS_DIR="${REPO_ROOT}/free"
-WORK_DIR="$(mktemp -d)"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/verify-checksums.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-# Matches internal/plugin/arch.go's PlatformArch() — the same list
-# scripts/build-tarballs.sh cross-compiles for a binaryName plugin.
+# Matches internal/plugin/arch.go's PlatformArch(), the same list scripts/build-tarballs.sh cross-compiles for a binaryName plugin.
 PLATFORMS="darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64"
+BINARY_RE='^nself-[a-z][a-z0-9-]*$'
 
 log() { printf "[verify-published-checksums] %s\n" "$*"; }
 err() { printf "[verify-published-checksums] ERROR: %s\n" "$*" >&2; }
 
-if ! command -v gh >/dev/null 2>&1; then
-  err "gh CLI not found."
-  exit 1
-fi
-if ! command -v jq >/dev/null 2>&1; then
-  err "jq not found."
-  exit 1
-fi
+for tool in gh jq tar; do
+  command -v "$tool" >/dev/null 2>&1 || { err "$tool not found."; exit 1; }
+done
+[ -f "$RELEASES_FILE" ] || { err "releases.json not found at ${RELEASES_FILE} (run scripts/plugin-counts.sh --init-releases once)"; exit 1; }
 
 sha256_file() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | cut -d' ' -f1
-  else
-    shasum -a 256 "$1" | cut -d' ' -f1
-  fi
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
-
-if [ ! -f "$REGISTRY_FILE" ]; then
-  err "registry.json not found at ${REGISTRY_FILE}"
-  exit 1
-fi
 
 if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   err "Release $TAG not found in $REPO (draft releases work fine with repo access — create it first)."
   exit 1
 fi
 
-REGISTRY_JSON="$(cat "$REGISTRY_FILE")"
+RELEASES_JSON="$(cat "$RELEASES_FILE")"
 MISMATCHES=0
 MISSING_ASSETS=0
 DOWNLOAD_ERRORS=0
 CHECKED=0
 WRITTEN=0
 
-# Fetch the release's asset list ONCE, and fetch the bytes ONCE.
-#
-# This used to run `gh release download --pattern <name>` per asset: 578 API
-# calls for v1.2.1. That is slow, it trips GitHub's secondary rate limit (the
-# same limit that broke the upload job at 525 assets), and — because the call
-# was `>/dev/null 2>&1` — a throttled or transient download was indistinguishable
-# from a genuinely absent asset and got reported as "MISSING". On the first
-# v1.2.1 run that produced a false MISSING for flags/linux-arm64, an asset which
-# was in fact present on the release. A checksum gate that cries missing under
-# load is worse than no gate: the failure mode is to dismiss it as noise.
-#
-# So: list once, download everything once, then work from local files. An asset
-# absent from the manifest is MISSING (a real release defect). An asset that is
-# in the manifest but has no local file is a DOWNLOAD ERROR (transient/infra).
-# They are counted separately and mean different things.
+# Fetch the release's asset list ONCE, and fetch the bytes ONCE. Per-asset `gh release download` calls trip GitHub's
+# secondary rate limit and, with the output discarded, made a throttled download look like a MISSING asset (a false alarm
+# seen on v1.2.1 for flags/linux-arm64). So: list once, download everything once, then work from local files. An asset absent
+# from the list is MISSING (a real release defect); one in the list with no local file is a DOWNLOAD ERROR (transient).
 ASSET_MANIFEST="${WORK_DIR}/.asset-manifest"
 if ! gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' > "$ASSET_MANIFEST" 2>/dev/null; then
   err "could not list assets on release $TAG"
   exit 1
 fi
 log "Release $TAG lists $(wc -l < "$ASSET_MANIFEST" | tr -d ' ') asset(s); downloading them once."
-
 asset_is_published() { grep -Fxq "$1" "$ASSET_MANIFEST"; }
 
 dl_err="${WORK_DIR}/.download-stderr"
@@ -150,24 +103,21 @@ if ! gh release download "$TAG" --repo "$REPO" --dir "$WORK_DIR" --clobber >/dev
 fi
 rm -f "$dl_err"
 
-# Iterate plugin names in a stable, deterministic order rather than
-# registry.json's own (already-alphabetical) key order directly, so this
-# script's log output is predictable even if that ever changes.
+# Plugins to process, in a stable order: rows already on TAG, plus (with --write) manifests at this version with no row on TAG.
+candidates="$(jq -r --arg t "$TAG" '.releases | to_entries[] | select(.value.release_tag == $t) | .key' <<<"$RELEASES_JSON")"
+if [ "$WRITE" = "true" ]; then
+  for dir in "$PLUGINS_DIR"/*/; do
+    name="$(basename "$dir")"
+    [ -f "$dir/plugin.json" ] || continue
+    [ "$(jq -r '.version // ""' "$dir/plugin.json")" = "$VERSION" ] || continue
+    asset_is_published "${name}-${VERSION}.tar.gz" || continue
+    candidates="$(printf '%s\n%s' "$candidates" "$name")"
+  done
+fi
+
 while IFS= read -r name; do
-  entry="$(printf '%s' "$REGISTRY_JSON" | jq -c --arg n "$name" '.plugins[$n]')"
-
-  entry_tag="$(printf '%s' "$entry" | jq -r '.releaseTag // empty')"
-  if [ "$entry_tag" != "$TAG" ]; then
-    # Not on this release — nothing published under TAG to check it against.
-    continue
-  fi
-
-  has_checksum_field="$(printf '%s' "$entry" | jq -r 'has("checksum") or (has("checksums") and (.checksums | has("sha256")))')"
-  if [ "$has_checksum_field" != "true" ]; then
-    # e.g. shared-utils: installable:false, no tarball, nothing to verify.
-    continue
-  fi
-
+  [ -n "$name" ] || continue
+  row="$(jq -c --arg n "$name" '.releases[$n] // {}' <<<"$RELEASES_JSON")"
   tarball_name="${name}-${VERSION}.tar.gz"
   asset_path="${WORK_DIR}/${tarball_name}"
 
@@ -181,47 +131,26 @@ while IFS= read -r name; do
     DOWNLOAD_ERRORS=$((DOWNLOAD_ERRORS + 1))
     continue
   fi
-
   computed_sha="$(sha256_file "$asset_path")"
   CHECKED=$((CHECKED + 1))
 
-  reg_flat="$(printf '%s' "$entry" | jq -r '.checksum // ""')"
-  reg_nested="$(printf '%s' "$entry" | jq -r '.checksums.sha256 // ""' )"
-  reg_nested_hex="${reg_nested#sha256:}"
-
-  if [ "$WRITE" = "true" ]; then
-    REGISTRY_JSON="$(printf '%s' "$REGISTRY_JSON" | jq \
-      --arg name "$name" --arg sha "$computed_sha" \
-      '(.plugins[$name].checksum) = $sha | (.plugins[$name].checksums.sha256) = $sha')"
-    WRITTEN=$((WRITTEN + 1))
-  else
-    if [ -n "$reg_flat" ] && [ "$reg_flat" != "$computed_sha" ]; then
-      printf "MISMATCH %s: .checksum=%s  published=%s\n" "$name" "$reg_flat" "$computed_sha"
-      MISMATCHES=$((MISMATCHES + 1))
-    fi
-    if [ -n "$reg_nested_hex" ] && [ "$reg_nested_hex" != "$computed_sha" ]; then
-      printf "MISMATCH %s: .checksums.sha256=%s  published=%s\n" "$name" "$reg_nested" "$computed_sha"
+  if [ "$WRITE" != "true" ]; then
+    reg_sha="$(jq -r '.sha256 // ""' <<<"$row")"
+    if [ -n "$reg_sha" ] && [ "$reg_sha" != "$computed_sha" ]; then
+      printf "MISMATCH %s: sha256=%s  published=%s\n" "$name" "$reg_sha" "$computed_sha"
       MISMATCHES=$((MISMATCHES + 1))
     fi
   fi
 
-  # Per-platform assets: only for plugins that actually ship a binary —
-  # either the registry entry already carries checksums.platforms, or the
-  # plugin's own manifest declares a binaryName (covers the "not yet
-  # populated" case, e.g. a brand-new binaryName plugin with nothing under
-  # checksums.platforms yet — --write should still be able to seed it).
-  plugin_json="${PLUGINS_DIR}/${name}/plugin.json"
+  # Per-platform assets: only for plugins that ship a binary (the manifest declares a binaryName, or the row already has platforms).
   bin_name=""
-  if [ -f "$plugin_json" ]; then
-    bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "$plugin_json" 2>/dev/null || printf '')"
-  fi
-  has_platforms_field="$(printf '%s' "$entry" | jq -r '(.checksums.platforms // {}) | length > 0')"
-
-  if [ -n "$bin_name" ] || [ "$has_platforms_field" = "true" ]; then
+  [ -f "${PLUGINS_DIR}/${name}/plugin.json" ] && bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${PLUGINS_DIR}/${name}/plugin.json" 2>/dev/null || printf '')"
+  has_platforms="$(jq -r '(.platform_checksums // {}) | length > 0' <<<"$row")"
+  platforms_json="{}"
+  if [ -n "$bin_name" ] || [ "$has_platforms" = "true" ]; then
     for platform in $PLATFORMS; do
       ptar_name="${name}-${VERSION}-${platform}.tar.gz"
       ptar_path="${WORK_DIR}/${ptar_name}"
-
       if ! asset_is_published "$ptar_name"; then
         printf "MISSING %s/%s: no asset named %s on release %s\n" "$name" "$platform" "$ptar_name" "$TAG"
         MISSING_ASSETS=$((MISSING_ASSETS + 1))
@@ -232,47 +161,57 @@ while IFS= read -r name; do
         DOWNLOAD_ERRORS=$((DOWNLOAD_ERRORS + 1))
         continue
       fi
-
       p_computed="$(sha256_file "$ptar_path")"
       CHECKED=$((CHECKED + 1))
-
-      if [ "$WRITE" = "true" ]; then
-        REGISTRY_JSON="$(printf '%s' "$REGISTRY_JSON" | jq \
-          --arg name "$name" --arg p "$platform" --arg sha "$p_computed" \
-          '(.plugins[$name].checksums.platforms[$p]) = $sha')"
-        WRITTEN=$((WRITTEN + 1))
-      else
-        reg_platform="$(printf '%s' "$entry" | jq -r --arg p "$platform" '.checksums.platforms[$p] // ""')"
+      platforms_json="$(jq -c --arg p "$platform" --arg s "$p_computed" '.[$p] = $s' <<<"$platforms_json")"
+      if [ "$WRITE" != "true" ]; then
+        reg_platform="$(jq -r --arg p "$platform" '.platform_checksums[$p] // ""' <<<"$row")"
         if [ -n "$reg_platform" ] && [ "$reg_platform" != "$p_computed" ]; then
-          printf "MISMATCH %s/%s: .checksums.platforms.%s=%s  published=%s\n" \
-            "$name" "$platform" "$platform" "$reg_platform" "$p_computed"
+          printf "MISMATCH %s/%s: platform_checksums.%s=%s  published=%s\n" "$name" "$platform" "$platform" "$reg_platform" "$p_computed"
           MISMATCHES=$((MISMATCHES + 1))
         fi
       fi
     done
   fi
-done < <(printf '%s' "$REGISTRY_JSON" | jq -r '.plugins | keys[]')
 
-if [ "$WRITE" = "true" ]; then
-  printf '%s\n' "$REGISTRY_JSON" > "$REGISTRY_FILE"
-  log "Wrote ${WRITTEN} checksum field(s) into registry.json from ${TAG}'s published assets (checked ${CHECKED} asset(s))."
+  if [ "$WRITE" = "true" ]; then
+    # The binaries a released CLI requires of the archive: the nself-* files in the linux-amd64 tarball.
+    binaries_json="[]"
+    linux_tar="${WORK_DIR}/${name}-${VERSION}-linux-amd64.tar.gz"
+    if [ -f "$linux_tar" ]; then
+      binaries_json="$(tar -tzf "$linux_tar" | awk -F/ '{print $NF}' | grep -E "$BINARY_RE" | sort -u | jq -R . | jq -sc .)"
+    fi
+    RELEASES_JSON="$(jq --arg n "$name" --arg v "$VERSION" --arg tag "$TAG" --arg sha "$computed_sha" \
+      --arg url "https://github.com/${REPO}/releases/download/${TAG}/${tarball_name}" \
+      --argjson plat "$platforms_json" --argjson bins "$binaries_json" '
+      .releases[$n] = ((.releases[$n] // {release_signature: null}) + {version: $v, sha256: $sha, release_tag: $tag, tarball_url: $url}
+        | del(.tarball)
+        | if ($plat | length) > 0 then .platform_checksums = $plat else del(.platform_checksums) end
+        | if ($bins | length) > 0 then .binaries = $bins else del(.binaries) end)' <<<"$RELEASES_JSON")"
+    WRITTEN=$((WRITTEN + 1))
+  fi
+done <<<"$(printf '%s\n' "$candidates" | sort -u)"
+
+if [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ]; then
+  [ "$WRITE" != "true" ] || log "releases.json NOT written: an expected asset is missing or failed to download."
+elif [ "$WRITE" = "true" ]; then
+  jq -S --indent 2 . <<<"$RELEASES_JSON" > "${RELEASES_FILE}.tmp" && mv "${RELEASES_FILE}.tmp" "$RELEASES_FILE"
+  log "Wrote ${WRITTEN} row(s) into releases.json from ${TAG}'s published assets (checked ${CHECKED} asset(s))."
+  log "Next: scripts/plugin-counts.sh regenerates registry.json, catalog.json and counts.json from it."
 else
-  log "Checked ${CHECKED} published asset(s) against registry.json for ${TAG}. Mismatches: ${MISMATCHES}."
+  log "Checked ${CHECKED} published asset(s) against releases.json for ${TAG}. Mismatches: ${MISMATCHES}."
 fi
 
 if [ "$MISSING_ASSETS" -gt 0 ]; then
   err "${MISSING_ASSETS} expected asset(s) are genuinely absent from release ${TAG}."
   err "That is a release defect: rebuild and upload the missing artifact(s)."
 fi
-
 if [ "$DOWNLOAD_ERRORS" -gt 0 ]; then
   err "${DOWNLOAD_ERRORS} asset(s) are published but could not be downloaded."
   err "That is transient (network or GitHub rate limiting), NOT a missing artifact."
   err "Re-run this script; do not rebuild or re-upload anything on account of it."
 fi
-
 if [ "$MISMATCHES" -gt 0 ] || [ "$MISSING_ASSETS" -gt 0 ] || [ "$DOWNLOAD_ERRORS" -gt 0 ]; then
   exit 1
 fi
-
 log "Done."

@@ -81,33 +81,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - name: Update registry timestamp
-        run: |
-          # Update the 'lastUpdated' field in registry.json
-          jq '.lastUpdated = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))' registry.json > registry.tmp.json
-          mv registry.tmp.json registry.json
-
-      - name: Generate checksums
-        run: |
-          for plugin_dir in free/*/; do
-            plugin_name=$(basename "$plugin_dir")
-            checksum=$(tar -cf - "$plugin_dir" 2>/dev/null | sha256sum | cut -d' ' -f1)
-
-            # Update checksum in registry.json
-            jq --arg name "$plugin_name" --arg checksum "sha256:$checksum" \
-              '(.plugins[$name].checksums.sha256) = $checksum' \
-              registry.json > registry.tmp.json
-            mv registry.tmp.json registry.json
-          done
-
-      - name: Commit registry updates
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add registry.json
-          git commit -m "chore: Update registry timestamp and checksums" || true
-          git push || true
-
       - name: Notify plugins.nself.org
         env:
           CLOUDFLARE_WORKER_SYNC_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_SYNC_TOKEN }}

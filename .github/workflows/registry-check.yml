@@ -3,6 +3,8 @@ name: Registry Consistency Check
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 
@@ -35,9 +37,7 @@ jobs:
           errors=0
 
           # Build list of plugin directories in free/
-          disk_plugins=$(find free -maxdepth 1 -mindepth 1 -type d \
-            | xargs -I{} basename {} \
-            | sort)
+          disk_plugins=$(find free -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sort)
 
           # Build list of plugin names from registry.json
           registry_plugins=$(python3 -c "
@@ -64,8 +64,14 @@ jobs:
           while IFS= read -r plugin; do
             [ -z "$plugin" ] && continue
             if ! echo "$registry_plugins" | grep -qx "$plugin"; then
-              echo "ERROR: Plugin '$plugin' exists in free/ but has no entry in registry.json"
-              errors=$((errors + 1))
+              # registry.json is generated (scripts/plugin-counts.sh): a plugin with no row in releases.json has no
+              # published bytes yet and is left out until the release pipeline adds one.
+              if jq -e --arg p "$plugin" '.releases[$p]' releases.json >/dev/null 2>&1; then
+                echo "ERROR: Plugin '$plugin' exists in free/ and has a releases.json row but no entry in registry.json"
+                errors=$((errors + 1))
+              else
+                echo "NOTE: Plugin '$plugin' has no releases.json row (unreleased); left out of registry.json"
+              fi
             fi
           done <<EOF
           $disk_plugins
@@ -84,7 +90,7 @@ jobs:
           if [ "$errors" -gt 0 ]; then
             echo ""
             echo "FAILED: $errors plugin(s) are missing from registry.json"
-            echo "Run 'pnpm build:registry' or manually add the entry to registry.json"
+            echo "Run 'bash scripts/plugin-counts.sh' to regenerate registry.json"
             exit 1
           fi
 
@@ -335,45 +341,33 @@ jobs:
           HAS_TOKEN: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN != '' }}
         run: echo "has-token=${HAS_TOKEN}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout plugins-pro (cross-repo counts, Mode A only)
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.26.9'   # >= the go directive of the cli commit in scripts/cli-tools.version
+
+      - name: Read the bundles pin
+        id: pin
+        run: echo "bundles-ref=$(grep -v '^#' scripts/bundles.ref | head -1 | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout bundles at scripts/bundles.ref (Mode A only)
         if: steps.check-token.outputs.has-token == 'true'
         uses: actions/checkout@v7.0.1
         with:
-          repository: nself-org/plugins-pro
-          path: ../plugins-pro
+          repository: nself-org/bundles
+          ref: ${{ steps.pin.outputs.bundles-ref }}
+          path: bundles-checkout
           token: ${{ secrets.PLUGINS_PRO_CHECKOUT_TOKEN }}
 
-      - name: Verify plugin counts pipeline (Mode A — cross-repo, free+pro)
+      - name: Projections match the generator (Mode A, registry.json + catalog.json + counts.json)
         if: steps.check-token.outputs.has-token == 'true'
-        run: |
-          # Full cross-repo drift gate: checks free registry.json (this repo,
-          # already validated above) plus pro registry.json against the
-          # plugins-pro disk layout, via the canonical generator. Requires
-          # a PLUGINS_PRO_CHECKOUT_TOKEN secret (PAT or deploy key scoped to
-          # nself-org/plugins-pro, which is private) — GITHUB_TOKEN cannot
-          # check out a different private repo. No such secret exists in this
-          # org as of P6; this step is inert until an owner provisions one.
-          #
-          # This used to shell out to ../cli/scripts/plugin-counts.sh, which
-          # encoded a different overlap rule (a hardcoded
-          # DISTINCT_BY_DESIGN={"search","webhooks"} that no longer matches the
-          # registries). Two gates encoding two rules is the exact drift this
-          # pipeline exists to remove, so it now calls the one generator that
-          # produces counts.json. The CLI copy is being retired to a shim.
-          bash scripts/plugin-counts.sh
+        env:
+          BUNDLES_DIR: ${{ github.workspace }}/bundles-checkout
+        run: bash scripts/plugin-counts.sh --check
 
-      - name: Verify plugin counts pipeline (Mode B — free-side only, no cross-repo secret)
-        if: steps.check-token.outputs.has-token == 'false'
+      - name: Projections match the generator (Mode B, registry.json only, no bundles token)
+        if: steps.check-token.outputs.has-token != 'true'
         run: |
-          # No PLUGINS_PRO_CHECKOUT_TOKEN secret exists, so plugins-pro cannot
-          # be checked out here (GITHUB_TOKEN is scoped to this repo only).
-          # The free-side half of the same guarantee is already enforced by
-          # this workflow's "Check all free/ plugins have registry.json
-          # entries" step above (disk == registry.json, zero drift). This step
-          # exists so the job log always states, explicitly, which mode ran
-          # and why — never a silent skip.
-          free_n=$(python3 -c "import json; print(len(json.load(open('registry.json'))['plugins']))")
-          echo "Mode B: PLUGINS_PRO_CHECKOUT_TOKEN not set — cross-repo (free+pro) count"
-          echo "verification skipped. Free-side registry has $free_n entries and is"
-          echo "already disk-verified by the step above. Provision"
-          echo "PLUGINS_PRO_CHECKOUT_TOKEN to enable the full cross-repo gate."
+          echo "::notice::Mode B: PLUGINS_PRO_CHECKOUT_TOKEN is not configured, so catalog.json and counts.json were NOT"
+          echo "::notice::verified against the private bundles repo. registry.json is verified below."
+          bash scripts/plugin-counts.sh --check --free-only
