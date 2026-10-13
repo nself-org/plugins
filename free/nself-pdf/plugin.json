@@ -1,25 +1,82 @@
 {
-  "name": "nself-pdf",
   "author": "nSelf Team",
-  "minNselfVersion": "1.1.0",
-  "display_name": "PDF Generation",
-  "version": "1.2.6",
-  "language": "go",
-  "bundle": "shared",
-  "visibility": "public",
-  "status": "planned",
-  "tier": "free",
-  "port": 3851,
-  "service_type": "custom_service",
-  "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
   "category": "content",
-  "license": "MIT",
-  "tarball": "nself-pdf-v0.1.0-linux-amd64.tar.gz",
-  "download_url": "https://ping.nself.org/plugins/nself-pdf/download",
-  "requires_license": false,
-  "isCommercial": false,
+  "dependencies": [
+    "minio"
+  ],
+  "description": "Server-side PDF generation from HTML templates (Handlebars/Nunjucks) with MinIO output and Hasura Action trigger",
+  "envVars": [
+    {
+      "description": "",
+      "name": "PDF_GENERATION_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_MINIO_ENDPOINT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_MINIO_ACCESS_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_MINIO_SECRET_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_TEMPLATES_BUCKET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_OUTPUT_BUCKET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_SHARED_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_MAX_CONCURRENT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_GENERATION_TIMEOUT_SECONDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PDF_AUDIT_ENABLED",
+      "required": false
+    }
+  ],
+  "language": "go",
+  "license": "free",
   "licenseType": "free",
-  "requiredEntitlements": [],
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "planned",
+  "minNselfVersion": "1.1.0",
+  "name": "nself-pdf",
+  "optionalDependencies": [
+    "database"
+  ],
+  "port": 3851,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.0"
+  },
+  "service": {
+    "kind": "library"
+  },
+  "status": "planned",
   "tags": [
     "pdf",
     "document-generation",
@@ -30,42 +87,7 @@
     "receipts",
     "reports"
   ],
-  "env_vars": [
-    "PDF_GENERATION_PORT",
-    "PDF_GENERATION_MINIO_ENDPOINT",
-    "PDF_GENERATION_MINIO_ACCESS_KEY",
-    "PDF_GENERATION_MINIO_SECRET_KEY",
-    "PDF_GENERATION_TEMPLATES_BUCKET",
-    "PDF_GENERATION_OUTPUT_BUCKET",
-    "PDF_GENERATION_SHARED_SECRET",
-    "PDF_GENERATION_MAX_CONCURRENT",
-    "PDF_GENERATION_TIMEOUT_SECONDS",
-    "PDF_AUDIT_ENABLED"
-  ],
-  "dependencies": {
-    "required": [
-      "minio"
-    ],
-    "optional": [
-      "database"
-    ]
-  },
-  "hasura_actions": [
-    {
-      "name": "generatePdf",
-      "endpoint": "http://127.0.0.1:3828/pdf/generate"
-    }
-  ],
-  "system_packages": [
-    "chromium-browser"
-  ],
-  "doctor_checks": [
-    "PDF-DEPS-01"
-  ],
-  "checksum": "d50a8437dff079718faf63fd395c27836f9f58d92f33a197cd88b1c35734bcab",
-  "bundles": [
-    "nclaw",
-    "clawde",
-    "nfamily"
-  ]
+  "tier": "free",
+  "version": "1.2.6",
+  "visibility": "public"
 }
