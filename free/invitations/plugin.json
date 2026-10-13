@@ -1,15 +1,104 @@
 {
-  "name": "invitations",
-  "version": "1.2.6",
-  "description": "Invitation management system with email/SMS delivery and tracking",
   "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
-  "repository": "https://github.com/nself-org/plugins",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
-  "port": 3402,
   "category": "communication",
+  "description": "Invitation management system with email/SMS delivery and tracking",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_DEFAULT_EXPIRY_HOURS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_CODE_LENGTH",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_MAX_BULK_SIZE",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_ACCEPT_URL_TEMPLATE",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_RATE_LIMIT_MAX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "INVITATIONS_RATE_LIMIT_WINDOW_MS",
+      "required": false
+    }
+  ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/invitations",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "invitations",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ],
+    "network": [
+      "*"
+    ]
+  },
+  "port": 3402,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_invitations",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3402
+  },
+  "status": "stable",
+  "tables": [
+    "np_invitations_invitations"
+  ],
   "tags": [
     "invitations",
     "invite",
@@ -18,81 +107,19 @@
     "sms",
     "referrals"
   ],
-  "tables": [
-    "np_invitations_invitations"
-  ],
-  "webhooks": {
-    "invitation.created": "Track new invitation creation",
-    "invitation.sent": "Record invitation delivery",
-    "invitation.delivered": "Confirm invitation received",
-    "invitation.accepted": "Process invitation acceptance",
-    "invitation.declined": "Handle invitation decline",
-    "invitation.expired": "Process expired invitation",
-    "invitation.revoked": "Handle invitation revocation",
-    "bulk.started": "Bulk send started",
-    "bulk.completed": "Bulk send completed",
-    "template.created": "New template created",
-    "template.updated": "Template modified"
-  },
-  "actions": {
-    "create": "Create new invitation",
-    "validate": "Validate invitation code",
-    "accept": "Accept invitation",
-    "decline": "Decline invitation",
-    "templates": "Manage invitation templates",
-    "bulk": "Send bulk invitations",
-    "stats": "View invitation statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "INVITATIONS_PLUGIN_PORT",
-      "INVITATIONS_DEFAULT_EXPIRY_HOURS",
-      "INVITATIONS_CODE_LENGTH",
-      "INVITATIONS_MAX_BULK_SIZE",
-      "INVITATIONS_ACCEPT_URL_TEMPLATE",
-      "INVITATIONS_API_KEY",
-      "INVITATIONS_RATE_LIMIT_MAX",
-      "INVITATIONS_RATE_LIMIT_WINDOW_MS"
-    ]
-  },
-  "config": {
-    "defaultExpiryHours": 168,
-    "codeLength": 32,
-    "maxBulkSize": 500,
-    "acceptUrlTemplate": "https://app.example.com/invite/{{code}}"
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "*"
-    ],
-    "filesystem": [
-      "logs",
-      "cache"
-    ]
-  },
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "tier": "free",
+  "version": "1.2.6",
+  "webhooks": [
+    "bulk.completed",
+    "bulk.started",
+    "invitation.accepted",
+    "invitation.created",
+    "invitation.declined",
+    "invitation.delivered",
+    "invitation.expired",
+    "invitation.revoked",
+    "invitation.sent",
+    "template.created",
+    "template.updated"
+  ]
 }

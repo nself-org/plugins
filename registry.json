@@ -2724,7 +2724,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_hipaa",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "compliance",
       "checksum": "c2a115183c27bce4dc4146c207f632de2e724e860b9ce6ef1611e489ef473852",
@@ -2979,7 +2979,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_job_queue",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "8cc0a3a74bd7b67ea02b1e99242a89761581778e04478c7d165aad7c01fe9f04",
@@ -2999,7 +2999,8 @@
       "requires_license": false,
       "tables": [
         "np_jobqueue_jobs",
-        "np_jobqueue_runs"
+        "np_job_dlq",
+        "np_circuit_breakers"
       ],
       "tags": [
         "jobs",
@@ -3175,7 +3176,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_linkedin",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "content",
       "checksum": "1d5264f719b2727debfc19a81c543855c5daf15027763c0ba715838daf2856fe",

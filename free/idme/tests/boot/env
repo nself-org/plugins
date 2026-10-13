@@ -1,0 +1,3 @@
+IDME_CLIENT_ID=boot-kit-dummy-client-id
+IDME_CLIENT_SECRET=boot-kit-dummy-secret-not-real
+IDME_REDIRECT_URI=http://localhost/boot-kit/callback

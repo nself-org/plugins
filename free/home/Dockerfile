@@ -21,8 +21,11 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /plugin ./cmd/
 
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates tzdata wget && \
-    addgroup -S nself && adduser -S nself -G nself
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /zoneinfo.zip
+ENV ZONEINFO=/zoneinfo.zip
+RUN addgroup -S nself && adduser -S nself -G nself
 COPY --from=builder /plugin /plugin
 USER nself
 ENV PORT=3127

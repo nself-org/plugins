@@ -22,37 +22,6 @@ type Invitation struct {
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
-// Migrate creates the required tables if they do not exist.
-func Migrate(pool *pgxpool.Pool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS np_invitations_invitations (
-			id          TEXT PRIMARY KEY,
-			email       TEXT NOT NULL,
-			role        TEXT NOT NULL DEFAULT 'member',
-			token       TEXT NOT NULL UNIQUE,
-			status      TEXT NOT NULL DEFAULT 'pending',
-			invited_by  TEXT NOT NULL,
-			expires_at  TIMESTAMPTZ,
-			accepted_at TIMESTAMPTZ,
-			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_np_invitations_status
-			ON np_invitations_invitations (status);
-
-		CREATE INDEX IF NOT EXISTS idx_np_invitations_email
-			ON np_invitations_invitations (email);
-
-		CREATE INDEX IF NOT EXISTS idx_np_invitations_token
-			ON np_invitations_invitations (token);
-	`)
-	return err
-}
-
 // InsertInvitation creates a new invitation record.
 func InsertInvitation(ctx context.Context, pool *pgxpool.Pool, inv *Invitation) error {
 	_, err := pool.Exec(ctx, `

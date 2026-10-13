@@ -1766,7 +1766,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_hipaa",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "hipaa",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/hipaa-1.2.6.tar.gz",
       "tier": "free",
@@ -1883,7 +1883,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_job_queue",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "job-queue",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/job-queue-1.2.6.tar.gz",
       "tier": "free",
@@ -2003,7 +2003,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_linkedin",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "linkedin",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/linkedin-1.2.6.tar.gz",
       "tier": "free",

@@ -1,31 +1,77 @@
 {
-  "name": "github",
-  "version": "1.2.6",
-  "description": "GitHub repository, issue, and workflow integration",
   "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github",
-  "repository": "https://github.com/nself-org/plugins",
-  "language": "go",
-  "entryPoint": "nself-github",
-  "tier": "free",
-  "isCommercial": false,
-  "minNselfVersion": "1.0.0",
   "category": "development",
-  "tags": [
-    "github",
-    "git",
-    "ci",
-    "devops",
-    "issues",
-    "pull-requests"
+  "description": "GitHub repository, issue, and workflow integration",
+  "entryPoint": "nself-github",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GITHUB_TOKEN",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GITHUB_WEBHOOK_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_ORG",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_REPOS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_API_KEYS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GITHUB_ACCOUNT_LABELS",
+      "required": false
+    }
   ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/github",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
   "multiApp": {
-    "supported": true,
+    "defaultValue": "primary",
     "isolationColumn": "source_account_id",
     "pkStrategy": "composite",
-    "defaultValue": "primary"
+    "supported": true
   },
+  "name": "github",
+  "port": 3002,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_github",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3002
+  },
+  "status": "stable",
   "tables": [
     "np_github_organizations",
     "np_github_repositories",
@@ -51,51 +97,29 @@
     "np_github_collaborators",
     "np_github_webhook_events"
   ],
-  "webhooks": {
-    "push": "Code pushed to repository",
-    "pull_request": "PR opened, closed, or merged",
-    "pull_request_review": "PR review submitted",
-    "issues": "Issue created, updated, or closed",
-    "issue_comment": "Comment on issue or PR",
-    "release": "Release published",
-    "workflow_run": "GitHub Actions workflow completed",
-    "deployment": "Deployment created",
-    "deployment_status": "Deployment status changed",
-    "create": "Branch or tag created",
-    "delete": "Branch or tag deleted",
-    "star": "Repository starred",
-    "fork": "Repository forked"
-  },
-  "actions": {
-    "sync": "Sync repository data",
-    "repos": "List and manage repositories",
-    "issues": "View and manage issues",
-    "prs": "View and manage pull requests",
-    "releases": "View releases",
-    "actions": "View workflow runs",
-    "webhook": "Manage webhook events"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "GITHUB_TOKEN"
-    ],
-    "optional": [
-      "GITHUB_WEBHOOK_SECRET",
-      "GITHUB_ORG",
-      "GITHUB_REPOS",
-      "GITHUB_API_KEYS",
-      "GITHUB_ACCOUNT_LABELS"
-    ]
-  },
-  "config": {
-    "apiVersion": "2022-11-28",
-    "webhookPath": "/webhooks/github",
-    "syncInterval": 3600,
-    "defaultBranch": "main"
-  },
-  "port": 3002,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false
+  "tags": [
+    "github",
+    "git",
+    "ci",
+    "devops",
+    "issues",
+    "pull-requests"
+  ],
+  "tier": "free",
+  "version": "1.2.6",
+  "webhooks": [
+    "create",
+    "delete",
+    "deployment",
+    "deployment_status",
+    "fork",
+    "issue_comment",
+    "issues",
+    "pull_request",
+    "pull_request_review",
+    "push",
+    "release",
+    "star",
+    "workflow_run"
+  ]
 }

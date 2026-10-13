@@ -1,8 +1,11 @@
 -- HIPAA plugin: core tables
+--
+-- Boot-applied by sdk/go/migrate with search_path pinned to np_hipaa, so every object is schema-qualified: the tables
+-- live in public (the cli tracking rule). Idempotent (IF NOT EXISTS).
 -- Migration 001: PHI column registry, PHI audit log, BAA records
 
 -- PHI column registry: tracks which table.column combinations contain PHI
-CREATE TABLE IF NOT EXISTS np_phi_columns (
+CREATE TABLE IF NOT EXISTS public.np_phi_columns (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id TEXT       NOT NULL DEFAULT 'primary',
   tenant_id        UUID,
@@ -19,11 +22,11 @@ CREATE TABLE IF NOT EXISTS np_phi_columns (
 );
 
 CREATE INDEX IF NOT EXISTS idx_phi_columns_account
-  ON np_phi_columns (source_account_id);
+  ON public.np_phi_columns (source_account_id);
 
 -- PHI-specific audit log: every access to a registered PHI column
 -- Retention enforced via RLS in migration 002.
-CREATE TABLE IF NOT EXISTS np_phi_audit_log (
+CREATE TABLE IF NOT EXISTS public.np_phi_audit_log (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id TEXT       NOT NULL DEFAULT 'primary',
   tenant_id        UUID,
@@ -37,18 +40,20 @@ CREATE TABLE IF NOT EXISTS np_phi_audit_log (
   accessed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   retain_until     DATE        NOT NULL
     GENERATED ALWAYS AS (
-      (accessed_at + INTERVAL '6 years')::DATE
+      -- UTC pins the expression: timestamptz + interval is only STABLE (session time zone), and Postgres
+      -- rejects a non-immutable generation expression.
+      ((accessed_at AT TIME ZONE 'UTC') + INTERVAL '6 years')::DATE
     ) STORED
 );
 
 CREATE INDEX IF NOT EXISTS idx_phi_audit_log_account
-  ON np_phi_audit_log (source_account_id, accessed_at DESC);
+  ON public.np_phi_audit_log (source_account_id, accessed_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_phi_audit_log_accessor
-  ON np_phi_audit_log (accessor_id, accessed_at DESC);
+  ON public.np_phi_audit_log (accessor_id, accessed_at DESC);
 
 -- BAA records: Business Associate Agreement tracking
-CREATE TABLE IF NOT EXISTS np_baa_records (
+CREATE TABLE IF NOT EXISTS public.np_baa_records (
   id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   source_account_id TEXT     NOT NULL DEFAULT 'primary',
   tenant_id      UUID,
@@ -67,4 +72,4 @@ CREATE TABLE IF NOT EXISTS np_baa_records (
 );
 
 CREATE INDEX IF NOT EXISTS idx_baa_records_account
-  ON np_baa_records (source_account_id, status);
+  ON public.np_baa_records (source_account_id, status);

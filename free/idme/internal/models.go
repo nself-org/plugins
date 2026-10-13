@@ -2,7 +2,7 @@ package internal
 
 import "time"
 
-// Verification represents an idme_verifications row.
+// Verification represents an np_idme_verifications row.
 type Verification struct {
 	ID               string     `json:"id"`
 	SourceAccountID  string     `json:"source_account_id"`
@@ -25,7 +25,7 @@ type Verification struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-// Group represents an idme_groups row.
+// Group represents an np_idme_groups row.
 type Group struct {
 	ID              string     `json:"id"`
 	SourceAccountID string     `json:"source_account_id"`
@@ -43,7 +43,7 @@ type Group struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
-// Badge represents an idme_badges row.
+// Badge represents an np_idme_badges row.
 type Badge struct {
 	ID              string     `json:"id"`
 	SourceAccountID string     `json:"source_account_id"`
@@ -61,7 +61,7 @@ type Badge struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
-// Attribute represents an idme_attributes row.
+// Attribute represents an np_idme_attributes row.
 type Attribute struct {
 	ID              string     `json:"id"`
 	SourceAccountID string     `json:"source_account_id"`
@@ -77,7 +77,7 @@ type Attribute struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
-// WebhookEvent represents an idme_webhook_events row.
+// WebhookEvent represents an np_idme_webhook_events row.
 type WebhookEvent struct {
 	ID              string     `json:"id"`
 	SourceAccountID string     `json:"source_account_id"`

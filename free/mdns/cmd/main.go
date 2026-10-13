@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -28,10 +29,10 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Applies the plugin's own migrations (sdk/go/migrate) before it serves; a failure is fatal.
+	internal.BootMigrations(context.Background(), pool)
+
 	db := internal.NewDB(pool)
-	if err := db.InitSchema(); err != nil {
-		log.Fatalf("[nself-mdns] schema init failed: %v", err)
-	}
 
 	srv := sdk.NewServer(port)
 	r := srv.Router()

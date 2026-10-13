@@ -57,9 +57,9 @@ process_webhook() {
 
     # Store webhook event
     plugin_db_query "
-        INSERT INTO idme_webhook_events (event_id, event_type, user_id, payload, received_at)
+        INSERT INTO np_idme_webhook_events (event_id, event_type, user_id, payload, received_at)
         VALUES ('$event_id', '$event_type', $([ -n "$user_id" ] && echo "'$user_id'" || echo "NULL"), '$payload'::jsonb, NOW())
-        ON CONFLICT (event_id) DO UPDATE SET retry_count = idme_webhook_events.retry_count + 1
+        ON CONFLICT (event_id) DO UPDATE SET retry_count = np_idme_webhook_events.retry_count + 1
     " || plugin_error "Failed to store webhook event"
 
     # Route to specific handler
@@ -74,7 +74,7 @@ process_webhook() {
 
     # Mark as processed
     plugin_db_query "
-        UPDATE idme_webhook_events
+        UPDATE np_idme_webhook_events
         SET processed = TRUE, processed_at = NOW()
         WHERE event_id = '$event_id'
     " || true

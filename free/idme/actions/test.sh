@@ -73,7 +73,7 @@ test_database() {
     plugin_info "Testing database connection..."
 
     # Check if tables exist
-    local tables=("idme_verifications" "idme_groups" "idme_badges" "idme_attributes")
+    local tables=("np_idme_verifications" "np_idme_groups" "np_idme_badges" "np_idme_attributes")
     local errors=0
 
     for table in "${tables[@]}"; do

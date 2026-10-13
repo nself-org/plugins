@@ -17,6 +17,7 @@ import (
 
 // RegisterRoutes mounts all invitation endpoints on the given router.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool) {
+	r.Get("/health", handleHealth(pool))
 	r.Post("/v1/invitations", handleCreateInvitation(pool))
 	r.Get("/v1/invitations", handleListInvitations(pool))
 	r.Get("/v1/invitations/{id}", handleGetInvitation(pool))

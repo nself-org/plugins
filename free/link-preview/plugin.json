@@ -1,16 +1,70 @@
 {
-  "name": "link-preview",
-  "version": "1.2.6",
-  "description": "URL metadata extraction with Open Graph, Twitter Cards, and caching",
   "author": "nself",
-  "license": "MIT",
-  "language": "go",
-  "lang": "go",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.0",
-  "port": 3736,
   "category": "content",
+  "description": "URL metadata extraction with Open Graph, Twitter Cards, and caching",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": false
+    }
+  ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/link-preview",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "supported": false
+  },
+  "name": "link-preview",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs"
+    ],
+    "network": [
+      "outbound-http"
+    ]
+  },
+  "port": 3736,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_link_preview",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3736
+  },
+  "status": "stable",
+  "tables": [
+    "np_link_preview_cache"
+  ],
   "tags": [
     "link-preview",
     "open-graph",
@@ -19,53 +73,6 @@
     "caching",
     "url"
   ],
-  "tables": [
-    "np_link_preview_cache"
-  ],
-  "webhooks": {},
-  "actions": {
-    "fetch": "Fetch preview for a URL (POST /v1/preview)",
-    "get": "Get cached preview (GET /v1/preview?url=...)",
-    "clear": "Clear preview cache (DELETE /v1/cache)"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PORT",
-      "PLUGIN_INTERNAL_SECRET"
-    ]
-  },
-  "config": {
-    "cacheTtlHours": 168,
-    "timeoutSeconds": 10
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": false
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "outbound-http"
-    ],
-    "filesystem": [
-      "logs"
-    ]
-  },
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "tier": "free",
+  "version": "1.2.6"
 }

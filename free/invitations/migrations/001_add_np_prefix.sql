@@ -1,28 +1,42 @@
--- Migration: Add np_ prefix to invitations tables
--- Run this on existing installations before upgrading to the latest plugin version.
--- These tables used the `inv_` prefix which did not include the required `np_` namespace.
+-- Migration 001: add the np_ prefix to the invitations tables (guarded renames only).
+-- Renames the tables (and their indexes) an older (TypeScript-era) release created with the inv_ prefix.
+-- Old names: inv_*. New names: np_invites_*.
+-- Guarded, idempotent, no transaction control (sdk/go/migrate refuses it, and applies each file itself):
+--   * a table is renamed only when the old name exists in public AND the new name is free;
+--   * when both names exist, both are left untouched (nothing merged, nothing dropped);
+--   * an index is renamed only when it sits on a renamed np_ table and the new index name is free.
+-- A fresh database has none of the old tables, so this file is a no-op there; the tables the Go code uses are created by 003.
+-- The reverse is 001_add_np_prefix.down.sql (never applied at boot).
 
-BEGIN;
-
-ALTER TABLE IF EXISTS inv_invitations RENAME TO np_invites_invitations;
-ALTER TABLE IF EXISTS inv_templates RENAME TO np_invites_templates;
-ALTER TABLE IF EXISTS inv_bulk_sends RENAME TO np_invites_bulk_sends;
-ALTER TABLE IF EXISTS inv_webhook_events RENAME TO np_invites_webhook_events;
-
--- Rename indexes to match new convention
 DO $$
 DECLARE
-  idx RECORD;
+  t RECORD;
+  i RECORD;
+  new_idx TEXT;
 BEGIN
-  FOR idx IN
+  FOR t IN
+    SELECT old_name, new_name FROM (VALUES
+      ('inv_invitations', 'np_invites_invitations')
+      , ('inv_templates', 'np_invites_templates')
+      , ('inv_bulk_sends', 'np_invites_bulk_sends')
+      , ('inv_webhook_events', 'np_invites_webhook_events')
+    ) AS v(old_name, new_name)
+  LOOP
+    IF to_regclass('public.' || quote_ident(t.old_name)) IS NOT NULL
+       AND to_regclass('public.' || quote_ident(t.new_name)) IS NULL THEN
+      EXECUTE format('ALTER TABLE public.%I RENAME TO %I', t.old_name, t.new_name);
+    END IF;
+  END LOOP;
+
+  FOR i IN
     SELECT indexname FROM pg_indexes
     WHERE schemaname = 'public'
-      AND indexname LIKE 'idx_inv_%'
+      AND tablename IN ('np_invites_invitations', 'np_invites_templates', 'np_invites_bulk_sends', 'np_invites_webhook_events')
+      AND starts_with(indexname, 'idx_inv_')
   LOOP
-    EXECUTE format('ALTER INDEX IF EXISTS %I RENAME TO %I',
-      idx.indexname,
-      replace(idx.indexname, 'idx_inv_', 'idx_np_invites_'));
+    new_idx := 'idx_np_invites_' || substr(i.indexname, length('idx_inv_') + 1);
+    IF to_regclass('public.' || quote_ident(new_idx)) IS NULL THEN
+      EXECUTE format('ALTER INDEX public.%I RENAME TO %I', i.indexname, new_idx);
+    END IF;
   END LOOP;
 END $$;
-
-COMMIT;

@@ -35,11 +35,11 @@ uninstall_idme_plugin() {
     plugin_db_query "DROP VIEW IF EXISTS idme_group_summary CASCADE;" || true
     plugin_db_query "DROP VIEW IF EXISTS idme_verified_users CASCADE;" || true
 
-    plugin_db_query "DROP TABLE IF EXISTS idme_webhook_events CASCADE;" || true
-    plugin_db_query "DROP TABLE IF EXISTS idme_attributes CASCADE;" || true
-    plugin_db_query "DROP TABLE IF EXISTS idme_badges CASCADE;" || true
-    plugin_db_query "DROP TABLE IF EXISTS idme_groups CASCADE;" || true
-    plugin_db_query "DROP TABLE IF EXISTS idme_verifications CASCADE;" || true
+    plugin_db_query "DROP TABLE IF EXISTS np_idme_webhook_events CASCADE;" || true
+    plugin_db_query "DROP TABLE IF EXISTS np_idme_attributes CASCADE;" || true
+    plugin_db_query "DROP TABLE IF EXISTS np_idme_badges CASCADE;" || true
+    plugin_db_query "DROP TABLE IF EXISTS np_idme_groups CASCADE;" || true
+    plugin_db_query "DROP TABLE IF EXISTS np_idme_verifications CASCADE;" || true
 
     # Drop triggers and functions
     plugin_db_query "DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;" || true

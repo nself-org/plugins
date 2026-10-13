@@ -9,9 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/nself-org/nself-hipaa/baa"
-	"github.com/nself-org/nself-hipaa/encryption"
-	"github.com/nself-org/nself-hipaa/phi"
+	"github.com/nself-org/plugins/free/hipaa/go/baa"
+	"github.com/nself-org/plugins/free/hipaa/go/encryption"
+	"github.com/nself-org/plugins/free/hipaa/go/phi"
 )
 
 // RegisterRoutes mounts all /hipaa/* routes on r.

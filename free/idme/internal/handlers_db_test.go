@@ -65,7 +65,7 @@ func verificationRow(mock pgxmock.PgxPoolIface, id string) *pgxmock.Rows {
 
 func TestCreateVerification_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_verifications").
+	mock.ExpectQuery("INSERT INTO np_idme_verifications").
 		WithArgs(pgxmock.AnyArg(), "user-1", pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnRows(verificationRow(mock, "v1"))
 
@@ -103,7 +103,7 @@ func TestCreateVerification_MissingUserID(t *testing.T) {
 
 func TestCreateVerification_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_verifications").
+	mock.ExpectQuery("INSERT INTO np_idme_verifications").
 		WithArgs(pgxmock.AnyArg(), "user-1", pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnError(errors.New("boom"))
 
@@ -215,7 +215,7 @@ func TestGetVerification_DBError(t *testing.T) {
 
 func TestVerificationCallback_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_verifications").
+	mock.ExpectQuery("INSERT INTO np_idme_verifications").
 		WithArgs("primary", "user-1", pgxmock.AnyArg()).
 		WillReturnRows(verificationRow(mock, "v1"))
 
@@ -250,7 +250,7 @@ func TestVerificationCallback_MissingCode(t *testing.T) {
 
 func TestVerificationCallback_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_verifications").
+	mock.ExpectQuery("INSERT INTO np_idme_verifications").
 		WithArgs("primary", "user-1", pgxmock.AnyArg()).
 		WillReturnError(errors.New("boom"))
 
@@ -265,7 +265,7 @@ func TestVerificationCallback_DBError(t *testing.T) {
 
 func TestVerificationCallback_SourceAccountFromBody(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_verifications").
+	mock.ExpectQuery("INSERT INTO np_idme_verifications").
 		WithArgs("acct-2", "user-1", pgxmock.AnyArg()).
 		WillReturnRows(verificationRow(mock, "v1"))
 
@@ -340,7 +340,7 @@ func TestListGroups_ScanError(t *testing.T) {
 
 func TestCreateGroup_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_groups").
+	mock.ExpectQuery("INSERT INTO np_idme_groups").
 		WithArgs("primary", "", "user-1", "military", "military", (*string)(nil), (*string)(nil), (*string)(nil)).
 		WillReturnRows(groupRow("g1"))
 
@@ -375,7 +375,7 @@ func TestCreateGroup_MissingRequiredFields(t *testing.T) {
 
 func TestCreateGroup_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_groups").
+	mock.ExpectQuery("INSERT INTO np_idme_groups").
 		WithArgs("primary", "", "user-1", "military", "military", (*string)(nil), (*string)(nil), (*string)(nil)).
 		WillReturnError(errors.New("boom"))
 
@@ -390,7 +390,7 @@ func TestCreateGroup_DBError(t *testing.T) {
 
 func TestUpdateGroup_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("UPDATE idme_groups SET").
+	mock.ExpectQuery("UPDATE np_idme_groups SET").
 		WithArgs("g1", "primary", pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnRows(groupRow("g1"))
 
@@ -416,7 +416,7 @@ func TestUpdateGroup_BadJSON(t *testing.T) {
 
 func TestUpdateGroup_NotFound(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("UPDATE idme_groups SET").
+	mock.ExpectQuery("UPDATE np_idme_groups SET").
 		WithArgs("missing", "primary", pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnError(pgx.ErrNoRows)
 
@@ -431,7 +431,7 @@ func TestUpdateGroup_NotFound(t *testing.T) {
 
 func TestUpdateGroup_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("UPDATE idme_groups SET").
+	mock.ExpectQuery("UPDATE np_idme_groups SET").
 		WithArgs("g1", "primary", pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).
 		WillReturnError(errors.New("boom"))
 
@@ -446,7 +446,7 @@ func TestUpdateGroup_DBError(t *testing.T) {
 
 func TestDeleteGroup_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectExec("DELETE FROM idme_groups").
+	mock.ExpectExec("DELETE FROM np_idme_groups").
 		WithArgs("g1", "primary").
 		WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
@@ -461,7 +461,7 @@ func TestDeleteGroup_OK(t *testing.T) {
 
 func TestDeleteGroup_NotFound(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectExec("DELETE FROM idme_groups").
+	mock.ExpectExec("DELETE FROM np_idme_groups").
 		WithArgs("missing", "primary").
 		WillReturnResult(pgxmock.NewResult("DELETE", 0))
 
@@ -476,7 +476,7 @@ func TestDeleteGroup_NotFound(t *testing.T) {
 
 func TestDeleteGroup_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectExec("DELETE FROM idme_groups").
+	mock.ExpectExec("DELETE FROM np_idme_groups").
 		WithArgs("g1", "primary").
 		WillReturnError(errors.New("boom"))
 
@@ -615,7 +615,7 @@ func TestListBadges_QueryError(t *testing.T) {
 
 func TestCreateBadge_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_badges").
+	mock.ExpectQuery("INSERT INTO np_idme_badges").
 		WithArgs("primary", "", "user-1", "military", "military", (*string)(nil), (*string)(nil), 0).
 		WillReturnRows(badgeRow("b1"))
 
@@ -650,7 +650,7 @@ func TestCreateBadge_MissingRequiredFields(t *testing.T) {
 
 func TestCreateBadge_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("INSERT INTO idme_badges").
+	mock.ExpectQuery("INSERT INTO np_idme_badges").
 		WithArgs("primary", "", "user-1", "military", "military", (*string)(nil), (*string)(nil), 0).
 		WillReturnError(errors.New("boom"))
 
@@ -667,19 +667,19 @@ func TestCreateBadge_DBError(t *testing.T) {
 
 func TestGetStats_OK(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_verifications WHERE source_account_id = \\$1$").
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_verifications WHERE source_account_id = \\$1$").
 		WithArgs("primary").
 		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(5))
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_verifications WHERE source_account_id = \\$1 AND verified = true").
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_verifications WHERE source_account_id = \\$1 AND verified = true").
 		WithArgs("primary").
 		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(3))
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_groups").
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_groups").
 		WithArgs("primary").
 		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(2))
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_badges").
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_badges").
 		WithArgs("primary").
 		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(4))
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_webhook_events").
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_webhook_events").
 		WithArgs("primary").
 		WillReturnRows(pgxmock.NewRows([]string{"count"}).AddRow(1))
 
@@ -693,7 +693,7 @@ func TestGetStats_OK(t *testing.T) {
 
 func TestGetStats_DBError(t *testing.T) {
 	db, mock := newMockDB(t)
-	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM idme_verifications WHERE source_account_id = \\$1$").
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM np_idme_verifications WHERE source_account_id = \\$1$").
 		WithArgs("primary").
 		WillReturnError(errors.New("boom"))
 

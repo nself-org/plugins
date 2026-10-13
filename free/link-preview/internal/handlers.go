@@ -16,6 +16,7 @@ const defaultCacheTTL = 7 * 24 * time.Hour // 168 hours
 
 // RegisterRoutes mounts all link-preview endpoints on the given router.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool) {
+	r.Get("/health", handleHealth(pool))
 	r.Post("/v1/preview", handleFetchPreview(pool))
 	r.Get("/v1/preview", handleGetPreview(pool))
 	r.Delete("/v1/cache", handleClearCache(pool))

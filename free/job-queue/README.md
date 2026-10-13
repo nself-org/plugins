@@ -87,21 +87,37 @@ This plugin uses **CS_10** (custom service slot 10). Defined in `F08-SERVICE-INV
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `REDIS_URL` | Yes | `redis://127.0.0.1:6379` | Redis connection URL |
-| `DATABASE_URL` | No | — | Postgres URL for visibility snapshots; jobs route to DLQ without it |
+| `DATABASE_URL` | Yes | — | Postgres URL; the plugin applies its own migrations at start and exits without it |
 | `JOBQUEUE_PORT` | No | `8213` | HTTP listen port |
 | `JOBQUEUE_CONCURRENCY` | No | `5` | Workers per queue |
 | `JOBQUEUE_MAX_ATTEMPTS` | No | `8` | Max retries before DLQ |
 | `JOBQUEUE_QUEUES` | No | `default,email,ai,media` | Comma-separated queue names |
+| `JOBQUEUE_HEALTH_IGNORE_REDIS` | No | `false` | `true` skips the Redis probe in `/health` (used by the boot test kit, which has no Redis) |
 
 ## Schema
 
 | Table | Purpose |
 |---|---|
-| `np_jobs` | Visibility snapshot of Redis job state; written by workers |
+| `np_jobqueue_jobs` | Visibility snapshot of Redis job state; written by workers |
 | `np_job_dlq` | Jobs that exhausted `MAX_ATTEMPTS`; shown in Admin UI DLQ panel |
 | `np_circuit_breakers` | Persistent circuit breaker state |
 
 All `np_*` tables include `source_account_id TEXT NOT NULL DEFAULT 'primary'` for multi-app isolation.
+
+## Migrations
+
+`job-queue` applies its migration files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_job_queue.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}` next to the Redis check. The tables live in `public`.
+
+**Upgrading an existing install.** The file is idempotent (`IF NOT EXISTS`), so it applies over tables an earlier version
+created: no data is touched or dropped. The first start of the new version creates the ledger.
+
+The Go module root is the plugin root (`go.mod` next to `plugin.json`) so `migrations/` can be embedded; the entry point is `./go`.
+
+| File | Description |
+|---|---|
+| `001_jobs.sql` | `np_jobqueue_jobs`, `np_job_dlq`, `np_circuit_breakers` |
 
 ## Multi-Tenant Isolation
 

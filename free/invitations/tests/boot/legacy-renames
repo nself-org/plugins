@@ -1,0 +1,4 @@
+inv_invitations np_invites_invitations
+inv_templates np_invites_templates
+inv_bulk_sends np_invites_bulk_sends
+inv_webhook_events np_invites_webhook_events

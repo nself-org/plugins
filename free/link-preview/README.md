@@ -415,6 +415,24 @@ nself-link-preview cleanup
 
 All tables include `source_account_id` for multi-app isolation.
 
+## Migrations
+
+`link-preview` applies these files itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_link_preview.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates its tables from Go code. `np_link_preview_cache` lives in `public`.
+
+**Upgrading an existing install.** The files are idempotent (`IF NOT EXISTS`, guarded renames), so they apply over tables an
+earlier version created: no data is touched or dropped. Tables an older TypeScript-era release created with the `lp_` prefix are renamed to `np_linkprev_*` only when the old name exists and the new one is free (nothing merged or dropped); the current Go plugin does not read them. The first start of the new version creates the ledger. A first
+start that has to build indexes over a large existing table can take minutes; until it finishes the plugin does not answer
+`/health`, so the container shows as unhealthy and an install readiness wait can time out: re-run it once the migration log
+line appears.
+
+| File | Description |
+|---|---|
+| `001_add_np_prefix.sql` | Guarded rename of the old `lp_*` tables and their indexes to `np_linkprev_*` |
+| `002_add_source_account_id.sql` | Adds `source_account_id` to an existing `np_link_preview_cache` |
+| `003_create_cache.sql` | Creates `np_link_preview_cache` and its indexes |
+
 ## Usage Examples
 
 ### Fetch a preview when a user posts a link

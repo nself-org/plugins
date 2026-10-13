@@ -11,6 +11,7 @@ var startTime = time.Now()
 // RegisterRoutes mounts all mDNS API routes on the given router.
 func RegisterRoutes(r chi.Router, db *DB) {
 	// Operational endpoints
+	r.Get("/health", handleHealth(db))
 	r.Get("/ready", handleReady(db))
 	r.Get("/live", handleLive(db))
 

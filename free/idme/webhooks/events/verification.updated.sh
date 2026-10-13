@@ -25,7 +25,7 @@ VERIFIED=$(echo "$PAYLOAD" | grep -o '"verified":[a-z]*' | sed 's/"verified"://'
 
 # Update verification record
 plugin_db_query "
-    UPDATE idme_verifications
+    UPDATE np_idme_verifications
     SET
         verified = $VERIFIED,
         verified_at = CASE WHEN $VERIFIED THEN NOW() ELSE NULL END,

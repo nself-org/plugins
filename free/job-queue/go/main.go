@@ -6,7 +6,7 @@
 // Constraints:
 //   - ctx.License.Valid() checked at startup: NSELF_JOB_QUEUE env var must be true.
 //   - Custom service slot CS_10.
-//   - source_account_id scopes all np_jobs/np_job_dlq queries (multi-tenant isolation).
+//   - source_account_id scopes all np_jobqueue_jobs/np_job_dlq queries (multi-tenant isolation).
 //   - Unregistered job types fail fast → retry/DLQ path (never silent completion).
 package main
 
@@ -20,7 +20,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nself-org/nself-job-queue/api"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/nself-org/plugins/free/job-queue/go/api"
 )
 
 func main() {
@@ -36,6 +38,19 @@ func main() {
 	}
 
 	cfg := loadConfig()
+
+	// Own migrations run before anything serves (boot-applied, contract plugin.boot-migrations v1).
+	if cfg.DatabaseURL == "" {
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
+	}
+	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		slog.Error("failed to connect to database", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+	api.BootMigrations(context.Background(), pool)
 
 	srv, err := api.NewServer(cfg, logger)
 	if err != nil {

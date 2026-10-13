@@ -30,8 +30,8 @@ verify_user() {
             v.first_name,
             v.last_name,
             COUNT(g.id) as groups_count
-        FROM idme_verifications v
-        LEFT JOIN idme_groups g ON v.id = g.verification_id AND g.verified = TRUE
+        FROM np_idme_verifications v
+        LEFT JOIN np_idme_groups g ON v.id = g.verification_id AND g.verified = TRUE
         WHERE v.email = '$user_email'
         GROUP BY v.id, v.verified, v.verified_at, v.first_name, v.last_name
     " || echo "")
@@ -57,8 +57,8 @@ verify_user() {
         printf "\nVerified groups:\n"
         plugin_db_query "
             SELECT group_type, group_name, verified_at
-            FROM idme_groups g
-            JOIN idme_verifications v ON g.verification_id = v.id
+            FROM np_idme_groups g
+            JOIN np_idme_verifications v ON g.verification_id = v.id
             WHERE v.email = '$user_email' AND g.verified = TRUE
             ORDER BY g.verified_at DESC
         " || true
@@ -77,8 +77,8 @@ list_verifications() {
             v.first_name || ' ' || v.last_name as name,
             v.verified_at,
             COUNT(g.id) as groups
-        FROM idme_verifications v
-        LEFT JOIN idme_groups g ON v.id = g.verification_id AND g.verified = TRUE
+        FROM np_idme_verifications v
+        LEFT JOIN np_idme_groups g ON v.id = g.verification_id AND g.verified = TRUE
         WHERE v.verified = TRUE
         GROUP BY v.id, v.email, v.first_name, v.last_name, v.verified_at
         ORDER BY v.verified_at DESC
@@ -92,7 +92,7 @@ show_stats() {
 
     # Total verifications
     local total
-    total=$(plugin_db_query "SELECT COUNT(*) FROM idme_verifications WHERE verified = TRUE" | tr -d '[:space:]')
+    total=$(plugin_db_query "SELECT COUNT(*) FROM np_idme_verifications WHERE verified = TRUE" | tr -d '[:space:]')
     printf "Total verified users: %s\n" "$total"
 
     # Groups breakdown
@@ -101,7 +101,7 @@ show_stats() {
         SELECT
             group_type,
             COUNT(*) as count
-        FROM idme_groups
+        FROM np_idme_groups
         WHERE verified = TRUE
         GROUP BY group_type
         ORDER BY count DESC

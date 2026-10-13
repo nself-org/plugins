@@ -1,19 +1,172 @@
 {
-  "name": "idme",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "ID.me OAuth authentication with government-grade identity verification for 7 groups",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "port": 3820,
   "category": "authentication",
+  "description": "ID.me OAuth authentication with government-grade identity verification for 7 groups",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "IDME_CLIENT_ID",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "IDME_CLIENT_SECRET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "IDME_REDIRECT_URI",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "IDME_SCOPES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "IDME_SANDBOX",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "IDME_WEBHOOK_SECRET",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "idme",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ],
+    "network": [
+      "id.me",
+      "idmelabs.com"
+    ]
+  },
+  "port": 3820,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/badges"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/badges"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/groups"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/groups"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/groups/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PUT",
+      "path": "/groups/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/stats"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/users/{user_id}/badges"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/users/{user_id}/verifications"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/verifications"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/verifications"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/verifications/callback"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/verifications/{id}"
+    }
+  ],
+  "schema": "np_idme",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3820
+  },
+  "status": "stable",
+  "tables": [
+    "np_idme_verifications",
+    "np_idme_groups",
+    "np_idme_badges",
+    "np_idme_attributes",
+    "np_idme_webhook_events"
+  ],
   "tags": [
     "authentication",
     "oauth",
@@ -23,158 +176,15 @@
     "military",
     "veterans"
   ],
-  "tables": [
-    "np_idme_verifications",
-    "np_idme_groups",
-    "np_idme_badges",
-    "np_idme_attributes",
-    "np_idme_webhook_events"
-  ],
-  "webhooks": {
-    "verification.created": "New verification created",
-    "verification.updated": "Verification status updated",
-    "verification.completed": "Verification completed successfully",
-    "verification.failed": "Verification failed",
-    "group.verified": "User verified for a specific group",
-    "group.revoked": "Group verification revoked",
-    "attribute.updated": "User attribute updated"
-  },
-  "actions": {
-    "init": "Initialize OAuth configuration",
-    "verify": "Check verification status",
-    "groups": "List verified groups",
-    "test": "Test OAuth connection"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "IDME_CLIENT_ID",
-      "IDME_CLIENT_SECRET",
-      "IDME_REDIRECT_URI"
-    ],
-    "optional": [
-      "IDME_SCOPES",
-      "IDME_SANDBOX",
-      "IDME_WEBHOOK_SECRET"
-    ]
-  },
-  "config": {
-    "apiVersion": "v3",
-    "baseUrl": "https://api.id.me",
-    "sandboxUrl": "https://api.idmelabs.com",
-    "webhookPath": "/webhooks/idme",
-    "defaultScopes": "openid,email,profile"
-  },
-  "hooks": {
-    "postInstall": "install.sh",
-    "preUninstall": "uninstall.sh"
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "id.me",
-      "idmelabs.com"
-    ],
-    "filesystem": [
-      "logs",
-      "cache"
-    ]
-  },
-  "status": "stable",
   "tier": "free",
-  "language": "go",
-  "entryPoint": "binary",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/badges",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/badges",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/groups",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/groups",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/groups/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PUT",
-      "path": "/groups/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/stats",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/users/{user_id}/badges",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/users/{user_id}/verifications",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/verifications",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/verifications",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/verifications/callback",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/verifications/{id}",
-      "auth": "bearer"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "cmd/main.go",
-  "checksum": "e284008c409f769120f01abd1bb9f375abc59a3f7dd8f7b9a6a37583af1cd746",
-  "bundles": [
-    "nfamily",
-    "nsentry"
+  "version": "1.2.6",
+  "webhooks": [
+    "attribute.updated",
+    "group.revoked",
+    "group.verified",
+    "verification.completed",
+    "verification.created",
+    "verification.failed",
+    "verification.updated"
   ]
 }
