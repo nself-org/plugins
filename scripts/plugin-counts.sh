@@ -105,7 +105,7 @@ run_generator() {
 run_generator -mode free -plugins "$ROOT/free" -releases "$ROOT/releases.json" -bundles "$WORK/bundles.json" \
   -peer-registry "$WORK/licensed.json" -bundles-ref "$BUNDLES_REF" -out "$WORK/out"
 # Wire correction (see Wire above): keep required edges to free registry entries, name every other edge.
-jq -r --slurpfile lic "$WORK/licensed.json" '(.plugins | keys) as $free | .plugins | to_entries[] | .key as $k | .value.dependencies
+jq -r '(.plugins | keys) as $free | .plugins | to_entries[] | .key as $k | .value.dependencies
   | (if type == "object" then (.required | map({d: ., why: "required"})) + (.optional | map({d: ., why: "optional"})) else map({d: ., why: "required"}) end)[]
   | select((.why == "optional") or (.d as $d | $free | index($d) | not))
   | "catalog: note: \($k) \(.why) dependency \(.d) is not a required free registry entry; left off the wire"' \

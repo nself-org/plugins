@@ -776,7 +776,7 @@ else
     if [ -n "$MISSING_FROM_REGISTRY" ]; then
         while IFS= read -r missing; do
             [ -z "$missing" ] && continue
-            [ -f "${REGISTRY_FILE%/*}/releases.json" ] && ! "$JQ" -e --arg n "$missing" '.releases[$n]' "${REGISTRY_FILE%/*}/releases.json" >/dev/null 2>&1 && continue # unreleased: generated registry leaves it out
+            [ -f "$(dirname "$REGISTRY_FILE")/releases.json" ] && ! "$JQ" -e --arg n "$missing" '.releases[$n]' "$(dirname "$REGISTRY_FILE")/releases.json" >/dev/null 2>&1 && continue # unreleased: generated registry leaves it out
             err "CHECK-1" "$missing" "Plugin directory exists but no registry entry"
         done <<EOF
 $MISSING_FROM_REGISTRY
