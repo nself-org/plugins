@@ -6,9 +6,9 @@
 -- SSRF: api_endpoint stored but validation in Go layer (provider URL validation required at write time)
 -- SECURITY: np_vpn_credentials — encrypted columns (password_encrypted, api_key_encrypted, etc.) — admin-only in Hasura
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
-CREATE TABLE IF NOT EXISTS np_vpn_providers (
+CREATE TABLE IF NOT EXISTS public.np_vpn_providers (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     display_name VARCHAR(255) NOT NULL,
@@ -30,11 +30,11 @@ CREATE TABLE IF NOT EXISTS np_vpn_providers (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_vpn_providers_account ON np_vpn_providers(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_providers_account ON public.np_vpn_providers(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_credentials (
+CREATE TABLE IF NOT EXISTS public.np_vpn_credentials (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id) ON DELETE CASCADE,
+    provider_id VARCHAR(255) NOT NULL REFERENCES public.np_vpn_providers(id) ON DELETE CASCADE,
     username VARCHAR(255),
     password_encrypted TEXT,
     api_key_encrypted TEXT,
@@ -48,11 +48,11 @@ CREATE TABLE IF NOT EXISTS np_vpn_credentials (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(provider_id, source_account_id)
 );
-CREATE INDEX IF NOT EXISTS idx_np_vpn_credentials_account ON np_vpn_credentials(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_credentials_account ON public.np_vpn_credentials(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_servers (
+CREATE TABLE IF NOT EXISTS public.np_vpn_servers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id) ON DELETE CASCADE,
+    provider_id VARCHAR(255) NOT NULL REFERENCES public.np_vpn_providers(id) ON DELETE CASCADE,
     hostname VARCHAR(255) NOT NULL,
     ip_address VARCHAR(45) NOT NULL,
     ipv6_address VARCHAR(45),
@@ -79,17 +79,17 @@ CREATE TABLE IF NOT EXISTS np_vpn_servers (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(provider_id, hostname, source_account_id)
 );
-CREATE INDEX IF NOT EXISTS idx_vpn_servers_provider ON np_vpn_servers(provider_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_servers_country ON np_vpn_servers(country_code);
-CREATE INDEX IF NOT EXISTS idx_vpn_servers_p2p ON np_vpn_servers(p2p_supported) WHERE p2p_supported = true;
-CREATE INDEX IF NOT EXISTS idx_vpn_servers_status ON np_vpn_servers(status);
-CREATE INDEX IF NOT EXISTS idx_vpn_servers_load ON np_vpn_servers(load);
-CREATE INDEX IF NOT EXISTS idx_np_vpn_servers_account ON np_vpn_servers(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_servers_provider ON public.np_vpn_servers(provider_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_servers_country ON public.np_vpn_servers(country_code);
+CREATE INDEX IF NOT EXISTS idx_vpn_servers_p2p ON public.np_vpn_servers(p2p_supported) WHERE p2p_supported = true;
+CREATE INDEX IF NOT EXISTS idx_vpn_servers_status ON public.np_vpn_servers(status);
+CREATE INDEX IF NOT EXISTS idx_vpn_servers_load ON public.np_vpn_servers(load);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_servers_account ON public.np_vpn_servers(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_connections (
+CREATE TABLE IF NOT EXISTS public.np_vpn_connections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id),
-    server_id UUID REFERENCES np_vpn_servers(id),
+    provider_id VARCHAR(255) NOT NULL REFERENCES public.np_vpn_providers(id),
+    server_id UUID REFERENCES public.np_vpn_servers(id),
     protocol VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
     local_ip VARCHAR(45),
@@ -109,14 +109,14 @@ CREATE TABLE IF NOT EXISTS np_vpn_connections (
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_vpn_connections_status ON np_vpn_connections(status);
-CREATE INDEX IF NOT EXISTS idx_vpn_connections_provider ON np_vpn_connections(provider_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_connections_created ON np_vpn_connections(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_np_vpn_connections_account ON np_vpn_connections(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_connections_status ON public.np_vpn_connections(status);
+CREATE INDEX IF NOT EXISTS idx_vpn_connections_provider ON public.np_vpn_connections(provider_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_connections_created ON public.np_vpn_connections(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_connections_account ON public.np_vpn_connections(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_downloads (
+CREATE TABLE IF NOT EXISTS public.np_vpn_downloads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    connection_id UUID REFERENCES np_vpn_connections(id),
+    connection_id UUID REFERENCES public.np_vpn_connections(id),
     magnet_link TEXT NOT NULL,
     info_hash VARCHAR(40) NOT NULL,
     name VARCHAR(512),
@@ -131,8 +131,8 @@ CREATE TABLE IF NOT EXISTS np_vpn_downloads (
     seeds INTEGER DEFAULT 0,
     eta_seconds INTEGER,
     requested_by VARCHAR(255) NOT NULL,
-    provider_id VARCHAR(255) NOT NULL REFERENCES np_vpn_providers(id),
-    server_id UUID REFERENCES np_vpn_servers(id),
+    provider_id VARCHAR(255) NOT NULL REFERENCES public.np_vpn_providers(id),
+    server_id UUID REFERENCES public.np_vpn_servers(id),
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     error_message TEXT,
@@ -140,27 +140,27 @@ CREATE TABLE IF NOT EXISTS np_vpn_downloads (
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_vpn_downloads_status ON np_vpn_downloads(status);
-CREATE INDEX IF NOT EXISTS idx_vpn_downloads_info_hash ON np_vpn_downloads(info_hash);
-CREATE INDEX IF NOT EXISTS idx_vpn_downloads_created ON np_vpn_downloads(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_np_vpn_downloads_account ON np_vpn_downloads(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_downloads_status ON public.np_vpn_downloads(status);
+CREATE INDEX IF NOT EXISTS idx_vpn_downloads_info_hash ON public.np_vpn_downloads(info_hash);
+CREATE INDEX IF NOT EXISTS idx_vpn_downloads_created ON public.np_vpn_downloads(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_downloads_account ON public.np_vpn_downloads(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_connection_logs (
+CREATE TABLE IF NOT EXISTS public.np_vpn_connection_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    connection_id UUID NOT NULL REFERENCES np_vpn_connections(id) ON DELETE CASCADE,
+    connection_id UUID NOT NULL REFERENCES public.np_vpn_connections(id) ON DELETE CASCADE,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     event_type VARCHAR(50) NOT NULL,
     message TEXT NOT NULL,
     details JSONB DEFAULT '{}',
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'
 );
-CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_connection ON np_vpn_connection_logs(connection_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_timestamp ON np_vpn_connection_logs(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_np_vpn_connection_logs_account ON np_vpn_connection_logs(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_connection ON public.np_vpn_connection_logs(connection_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_connection_logs_timestamp ON public.np_vpn_connection_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_connection_logs_account ON public.np_vpn_connection_logs(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_server_performance (
+CREATE TABLE IF NOT EXISTS public.np_vpn_server_performance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    server_id UUID NOT NULL REFERENCES np_vpn_servers(id) ON DELETE CASCADE,
+    server_id UUID NOT NULL REFERENCES public.np_vpn_servers(id) ON DELETE CASCADE,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     ping_ms INTEGER,
     download_speed_mbps DECIMAL(10, 2),
@@ -170,13 +170,13 @@ CREATE TABLE IF NOT EXISTS np_vpn_server_performance (
     avg_connection_time_ms INTEGER,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'
 );
-CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_server ON np_vpn_server_performance(server_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_timestamp ON np_vpn_server_performance(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_np_vpn_server_performance_account ON np_vpn_server_performance(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_server ON public.np_vpn_server_performance(server_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_server_performance_timestamp ON public.np_vpn_server_performance(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_server_performance_account ON public.np_vpn_server_performance(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_vpn_leak_tests (
+CREATE TABLE IF NOT EXISTS public.np_vpn_leak_tests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    connection_id UUID NOT NULL REFERENCES np_vpn_connections(id) ON DELETE CASCADE,
+    connection_id UUID NOT NULL REFERENCES public.np_vpn_connections(id) ON DELETE CASCADE,
     test_type VARCHAR(50) NOT NULL,
     passed BOOLEAN NOT NULL,
     expected_value VARCHAR(255),
@@ -185,6 +185,6 @@ CREATE TABLE IF NOT EXISTS np_vpn_leak_tests (
     tested_at TIMESTAMPTZ DEFAULT NOW(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary'
 );
-CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_connection ON np_vpn_leak_tests(connection_id);
-CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_passed ON np_vpn_leak_tests(passed);
-CREATE INDEX IF NOT EXISTS idx_np_vpn_leak_tests_account ON np_vpn_leak_tests(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_connection ON public.np_vpn_leak_tests(connection_id);
+CREATE INDEX IF NOT EXISTS idx_vpn_leak_tests_passed ON public.np_vpn_leak_tests(passed);
+CREATE INDEX IF NOT EXISTS idx_np_vpn_leak_tests_account ON public.np_vpn_leak_tests(source_account_id);

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -28,6 +29,7 @@ func main() {
 	}
 	defer pool.Close()
 
+	internal.BootMigrations(context.Background(), pool)
 	db := internal.NewDB(pool)
 	if err := db.InitSchema(); err != nil {
 		log.Fatalf("[nself-vpn] schema init failed: %v", err)
@@ -41,6 +43,7 @@ func main() {
 	r.Use(sdk.Recovery)
 	r.Use(sdk.RequestID)
 
+	r.Get("/health", internal.BootHealthHandler())
 	internal.RegisterRoutes(r, db)
 
 	log.Printf("[nself-vpn] starting on port %d", port)

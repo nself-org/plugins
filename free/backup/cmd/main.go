@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/nself-org/nself-backup/internal"
 )
 
-// Size-cap exception: plugin entry-point main() — 66L startup wiring (env/db/router/server); single invocation, not a reusable unit.
+// Size-cap exception: plugin entry-point main() — 68L startup wiring (env/db/router/server); single invocation, not a reusable unit.
 func main() {
 	cfg := sdk.LoadConfig()
 	if cfg.DatabaseURL == "" {
@@ -33,9 +34,7 @@ func main() {
 
 	store := internal.NewStore(pool)
 
-	if err := store.Migrate(); err != nil {
-		log.Fatalf("failed to run migrations: %v", err)
-	}
+	internal.BootMigrations(context.Background(), pool)
 
 	storagePath := os.Getenv("BACKUP_STORAGE_PATH")
 	if storagePath == "" {
@@ -61,6 +60,10 @@ func main() {
 	r.Use(sdk.CORS)
 	r.Use(sdk.RequestID)
 	r.Use(sdk.Logger)
+
+	// Own /health so it can report the boot migration counts (sdk only adds a plain liveness default).
+	r.Get("/health", internal.HealthHandler)
+	r.Head("/health", internal.HealthHandler)
 
 	r.Post("/v1/backups", h.CreateBackup)
 	r.Get("/v1/backups", h.ListBackups)

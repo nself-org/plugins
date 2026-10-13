@@ -14,7 +14,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /torrent-manager ./cmd/main.go
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 COPY --from=builder /torrent-manager /usr/local/bin/torrent-manager
 EXPOSE 3201
 CMD ["torrent-manager"]

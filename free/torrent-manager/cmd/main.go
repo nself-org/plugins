@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -34,6 +35,7 @@ func main() {
 	defer pool.Close()
 
 	cfg := internal.LoadConfig()
+	internal.BootMigrations(context.Background(), pool)
 	db := internal.NewDB(pool)
 	if err := db.InitSchema(); err != nil {
 		log.Fatalf("torrent-manager: schema init failed: %v", err)
@@ -47,6 +49,7 @@ func main() {
 	r.Use(sdk.Recovery)
 	r.Use(sdk.RequestID)
 
+	r.Get("/health", internal.BootHealthHandler())
 	internal.RegisterRoutes(r, db, cfg)
 
 	log.Printf("torrent-manager: starting on port %d", port)

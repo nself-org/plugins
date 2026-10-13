@@ -73,6 +73,13 @@ curl -X POST http://127.0.0.1:3050/restore \
 | `np_backup_jobs` | Backup job records — timestamps, file path, size, status, duration |
 | `np_backup_schedules` | Scheduled backup configuration — cron expression, retention policy, enabled flag |
 
+`backup` applies `migrations/*.sql` itself when it starts (contract `plugin.boot-migrations` v1, `sdk/go/migrate`): file-name
+order, one transaction per file, recorded in `np_backup.schema_migrations`. The manifest declares `migrations.apply: boot`
+and `GET /health` reports `migrations: {applied, expected}`. The plugin no longer creates its tables from Go code.
+
+**Upgrading an existing install.** The files are idempotent (`CREATE ... IF NOT EXISTS`), so they apply over tables an earlier
+version created: no data is touched or dropped. The first start of the new version creates the ledger schema `np_backup`.
+
 ## Usage
 
 ```bash

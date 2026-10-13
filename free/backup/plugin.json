@@ -1,19 +1,70 @@
 {
-  "name": "backup",
-  "version": "1.2.6",
-  "description": "PostgreSQL backup and restore automation with scheduling",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.0",
-  "language": "go",
-  "entryPoint": "cmd/main",
   "category": "infrastructure",
+  "description": "PostgreSQL backup and restore automation with scheduling",
+  "entryPoint": "cmd/main",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "BACKUP_STORAGE_PATH",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "BACKUP_PG_DUMP_PATH",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "BACKUP_PG_RESTORE_PATH",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "backup",
+  "port": 3050,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_backup",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3050
+  },
+  "status": "stable",
+  "tables": [
+    "np_backup_jobs",
+    "np_backup_schedules"
+  ],
   "tags": [
     "backup",
     "restore",
@@ -21,41 +72,6 @@
     "automation",
     "disaster-recovery"
   ],
-  "tables": [
-    "np_backup_jobs",
-    "np_backup_schedules"
-  ],
-  "webhooks": {},
-  "actions": {
-    "init": "Initialize database schema",
-    "server": "Start backup automation server"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PORT",
-      "BACKUP_STORAGE_PATH",
-      "BACKUP_PG_DUMP_PATH",
-      "BACKUP_PG_RESTORE_PATH",
-      "PLUGIN_INTERNAL_SECRET"
-    ]
-  },
-  "config": {
-    "defaultPort": 3050,
-    "defaultStoragePath": "/tmp/nself-backups"
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "port": 3050,
-  "status": "stable",
   "tier": "free",
-  "dependencies": {
-    "required": [],
-    "optional": []
-  }
+  "version": "1.2.6"
 }

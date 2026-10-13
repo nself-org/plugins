@@ -10,10 +10,12 @@
 -- = true, isolationColumn = source_account_id). It is NOT a Cloud-tenancy table,
 -- so it deliberately has no tenant_id column.
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Boot migrations pin search_path to np_entitlements (+ public); the table and the handlers live in public,
+-- so every object below is schema-qualified (same rule as webhooks and search).
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
 
-CREATE TABLE IF NOT EXISTS entitlement_grants (
-    id                UUID NOT NULL DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS public.entitlement_grants (
+    id                UUID NOT NULL DEFAULT public.uuid_generate_v4(),
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     user_id           TEXT,
     workspace_id      TEXT,
@@ -29,20 +31,20 @@ CREATE TABLE IF NOT EXISTS entitlement_grants (
     CHECK (user_id IS NOT NULL OR workspace_id IS NOT NULL)
 );
 
-CREATE INDEX IF NOT EXISTS idx_entitlement_grants_source ON entitlement_grants(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_entitlement_grants_user ON entitlement_grants(user_id);
-CREATE INDEX IF NOT EXISTS idx_entitlement_grants_workspace ON entitlement_grants(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_entitlement_grants_feature ON entitlement_grants(feature_key);
+CREATE INDEX IF NOT EXISTS idx_entitlement_grants_source ON public.entitlement_grants(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_entitlement_grants_user ON public.entitlement_grants(user_id);
+CREATE INDEX IF NOT EXISTS idx_entitlement_grants_workspace ON public.entitlement_grants(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_entitlement_grants_feature ON public.entitlement_grants(feature_key);
 CREATE INDEX IF NOT EXISTS idx_entitlement_grants_active
-    ON entitlement_grants(source_account_id, feature_key)
+    ON public.entitlement_grants(source_account_id, feature_key)
     WHERE revoked_at IS NULL;
 
 -- Row-Level Security (Convention A): every query is scoped to the caller's
 -- source_account_id, set by the SDK middleware as app.source_account_id. With a
 -- DEFAULT of 'primary', single-app deploys transparently see only 'primary' rows.
-ALTER TABLE entitlement_grants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.entitlement_grants ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS entitlement_grants_isolation ON entitlement_grants;
-CREATE POLICY entitlement_grants_isolation ON entitlement_grants
+DROP POLICY IF EXISTS entitlement_grants_isolation ON public.entitlement_grants;
+CREATE POLICY entitlement_grants_isolation ON public.entitlement_grants
     USING (source_account_id = current_setting('app.source_account_id', true))
     WITH CHECK (source_account_id = current_setting('app.source_account_id', true));
