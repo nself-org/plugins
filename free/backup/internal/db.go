@@ -20,57 +20,6 @@ func NewStore(pool *pgxpool.Pool) *Store {
 }
 
 // --------------------------------------------------------------------------
-// Migration
-// --------------------------------------------------------------------------
-
-// Migrate creates the np_backup_jobs and np_backup_schedules tables if they
-// do not already exist.
-func (s *Store) Migrate() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	ddl := `
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-CREATE TABLE IF NOT EXISTS np_backup_jobs (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    status      VARCHAR(32)  NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending','running','completed','failed')),
-    type        VARCHAR(32)  NOT NULL DEFAULT 'full'
-                CHECK (type IN ('full','incremental','schema_only','data_only')),
-    path        TEXT,
-    size        BIGINT,
-    started_at  TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ,
-    error       TEXT,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_np_backup_jobs_status
-    ON np_backup_jobs(status);
-CREATE INDEX IF NOT EXISTS idx_np_backup_jobs_created
-    ON np_backup_jobs(created_at DESC);
-
-CREATE TABLE IF NOT EXISTS np_backup_schedules (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    cron_expr   VARCHAR(128) NOT NULL,
-    enabled     BOOLEAN      NOT NULL DEFAULT true,
-    last_run    TIMESTAMPTZ,
-    next_run    TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_np_backup_schedules_enabled
-    ON np_backup_schedules(enabled) WHERE enabled = true;
-CREATE INDEX IF NOT EXISTS idx_np_backup_schedules_next_run
-    ON np_backup_schedules(next_run) WHERE enabled = true AND next_run IS NOT NULL;
-`
-
-	_, err := s.pool.Exec(ctx, ddl)
-	return err
-}
-
-// --------------------------------------------------------------------------
 // BackupJob
 // --------------------------------------------------------------------------
 

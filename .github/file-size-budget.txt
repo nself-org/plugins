@@ -15,6 +15,8 @@ free/auth-enterprise/go/handlers/sso.go	466
 free/auth-enterprise/go/mfa/totp.go	331
 free/auth-enterprise/go/sso/oidc.go	314
 free/auth-enterprise/go/sso/saml.go	385
+free/backup/third_party/sdk/devkit/cmd/new-plugin/main.go	510
+free/backup/third_party/sdk/identity.go	338
 free/byok/go/handlers/byok.go	483
 free/cdc/go/replication/engine.go	312
 free/cdn/internal/handlers.go	813
