@@ -34,7 +34,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // Health / Ready
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "plugin": "web3", "migrations": bootMigrationsHealth(w)})
+	// bootMigrationsHealth writes 503 itself when the status cannot be read, so the header and type are set first
+	// and the body is encoded directly (writeJSON would send a second status line).
+	w.Header().Set("Content-Type", "application/json")
+	m := bootMigrationsHealth(w)
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "web3", "migrations": m})
 }
 
 func (h *Handlers) Ready(w http.ResponseWriter, r *http.Request) {
