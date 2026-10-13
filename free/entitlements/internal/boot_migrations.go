@@ -17,7 +17,8 @@ import (
 var bootPool *pgxpool.Pool
 
 func bootOptions() migrate.Options {
-	return migrate.Options{Schema: "np_entitlements", FS: migrations.FS, StatementTimeout: 30 * time.Minute}
+	// SearchPath keeps public on the pinned path: the migrations qualify every object with public.
+	return migrate.Options{Schema: "np_entitlements", FS: migrations.FS, SearchPath: []string{"public"}, StatementTimeout: 30 * time.Minute}
 }
 
 // mustBootMigrations applies the plugin's own migrations before it serves; a failure is fatal.
@@ -40,6 +41,7 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return map[string]int{"applied": -1, "expected": -1}
 	}
