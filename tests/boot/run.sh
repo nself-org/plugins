@@ -5,6 +5,8 @@
 # Env hook (P7-PLUG-76): when <plugin>/tests/boot/env exists, each KEY=value line is passed as -e to both boots. Only
 # $DATABASE_URL and $PORT (or ${...}) are expanded, by plain string replacement (no eval); blank and # lines are
 # skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
+# P7-PLUG-44: a plugin with no migrations/*.sql is skipped with a "skip" line; <plugin>/tests/boot/build-network (empty marker)
+# lets the image build use the network (cargo fetch for the Rust plugin; Go plugins stay network-free).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); . "$HERE/../../scripts/conformance/lib.sh"
 mode=fixtures; list=alpha
@@ -19,8 +21,10 @@ for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/
 sleep 2
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p; pj=$dir/plugin.json; schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj")
+  if ! ls "$dir"/migrations/*.sql >/dev/null 2>&1; then echo "skip  boot $p: no migrations/*.sql (nothing to apply)"; continue; fi
   [ -n "$schema" ] || { echo "FAIL boot $p: manifest has no schema"; rc=1; continue; }
-  docker build --network none -q -t "nself-boot-$p:$pid" "$dir" >/dev/null 2>"$W/build.err" || { echo "FAIL boot $p: image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
+  netflag="--network none"; [ -f "$dir/tests/boot/build-network" ] && netflag=   # Rust cargo fetch (P7-PLUG-44 ruling): the marker file lifts the network ban for the image build only
+  docker build $netflag -q -t "nself-boot-$p:$pid" "$dir" >/dev/null 2>"$W/build.err" || { echo "FAIL boot $p: image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
   dburl="postgres://postgres:boot@$pg:5432/boot"; envargs=(); ef=$dir/tests/boot/env
   if [ -f "$ef" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
