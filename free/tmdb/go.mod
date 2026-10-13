@@ -11,7 +11,7 @@ require (
 	github.com/pashagolub/pgxmock/v4 v4.9.0
 )
 
-replace github.com/nself-org/plugins/free/shared-utils => ../shared-utils
+replace github.com/nself-org/plugins/free/shared-utils => ./third_party/shared-utils
 
 require (
 	github.com/google/uuid v1.6.0 // indirect

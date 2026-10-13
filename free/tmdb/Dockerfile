@@ -4,7 +4,7 @@
 #
 # go.mod's `replace github.com/nself-org/plugins/free/shared-utils => ../shared-utils`
 # cannot resolve once the build context is this plugin's own directory (the old
-# `go mod download` step here always failed once that replace target left the
+# module-download step here always failed once that replace target left the
 # build context). That's fine: vendor/ (committed, `go mod vendor`) already
 # contains github.com/nself-org/plugins/free/shared-utils, so the build below
 # runs in vendor mode (-mod=vendor) and never touches the network or the
