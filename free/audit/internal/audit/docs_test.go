@@ -129,9 +129,9 @@ func TestRunDocs_MissingAnchors(t *testing.T) {
 			missingCount++
 		}
 	}
-	// 10 required anchors minus the one we created = 9 expected.
-	if missingCount < 9 {
-		t.Errorf("expected >=9 missing anchors, got %d", missingCount)
+	// Every required anchor except the one we created is expected to be flagged.
+	if want := len(RequiredAnchors) - 1; missingCount < want {
+		t.Errorf("expected >=%d missing anchors, got %d", want, missingCount)
 	}
 }
 
