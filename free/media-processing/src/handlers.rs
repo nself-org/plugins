@@ -18,8 +18,17 @@ fn sa(req: &HttpRequest) -> &str {
         .unwrap_or("primary")
 }
 
-pub async fn health() -> HttpResponse {
-    HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
+/// Liveness plus boot-migration progress (contract plugin.boot-migrations v1): 503 when the
+/// ledger cannot be read.
+pub async fn health(pool: web::Data<Arc<Pool>>) -> HttpResponse {
+    match crate::migrate::status(&pool).await {
+        Ok(p) => HttpResponse::Ok().json(serde_json::json!({"status": "ok", "migrations": p.to_json()})),
+        Err(e) => {
+            log::error!("health: {e}");
+            HttpResponse::ServiceUnavailable()
+                .json(serde_json::json!({"status": "error", "error": "migration status unavailable"}))
+        }
+    }
 }
 
 pub async fn ready(pool: web::Data<Arc<Pool>>) -> HttpResponse {

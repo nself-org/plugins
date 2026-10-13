@@ -1,6 +1,7 @@
 mod config;
 mod db;
 mod handlers;
+mod migrate;
 mod models;
 
 use actix_web::{middleware, web, App, HttpServer};
@@ -21,6 +22,12 @@ async fn main() -> std::io::Result<()> {
             .await
             .expect("Failed to create DB pool"),
     );
+
+    // Contract plugin.boot-migrations v1: apply the plugin's own migrations before serving; fatal on error.
+    let applied = migrate::apply(&cfg.database_url)
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
+    log::info!("migrations: applied {}", applied.len());
 
     let semaphore = Arc::new(Semaphore::new(cfg.max_concurrent_jobs));
     let job_permits = Arc::new(JobPermits(Mutex::new(HashMap::new())));
