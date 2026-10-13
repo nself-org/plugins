@@ -92,10 +92,14 @@ free/rom-discovery/internal/handlers.go	526
 free/search/sdk/devkit/cmd/new-plugin/main.go	510
 free/search/sdk/identity.go	338
 free/shopify/actions/sync.sh	376
+free/shopify/third_party/sdk/devkit/cmd/new-plugin/main.go	510
+free/shopify/third_party/sdk/identity.go	338
 free/sports/internal/handlers.go	876
 free/storage-transform/go/cmd/main.go	324
 free/stripe/actions/sync.sh	381
 free/stripe/internal/db_schema.go	761
+free/subtitle-manager/third_party/sdk/devkit/cmd/new-plugin/main.go	510
+free/subtitle-manager/third_party/sdk/identity.go	338
 free/tenant-controller/go/internal/metering/metering.go	621
 free/tmdb/internal/db.go	424
 free/tmdb/internal/handlers.go	1177
