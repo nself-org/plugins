@@ -14,8 +14,8 @@
     "secret:sync-token": "wrangler secret put GITHUB_SYNC_TOKEN",
     "whoami": "wrangler whoami",
     "typecheck": "tsc --noEmit",
-    "build:test": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=dist-test/index.mjs --log-level=warning",
-    "test": "pnpm run build:test && node --test src/*.test.mjs"
+    "bundle-test": "esbuild src/index.ts --bundle --format=esm --platform=neutral --target=es2022 --outfile=dist-test/index.mjs --log-level=warning",
+    "test": "pnpm run bundle-test && node --test src/*.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.17.19",
