@@ -34,7 +34,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "plugin": "retro-gaming"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "plugin": "retro-gaming", "migrations": bootMigrationsHealth(w)})
 }
 
 func (h *Handlers) Ready(w http.ResponseWriter, r *http.Request) {

@@ -24,10 +24,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := internal.InitSchema(context.Background(), pool); err != nil {
-		log.Fatalf("init schema: %v", err)
-	}
-
 	h := internal.NewHandlers(pool)
 
 	r := chi.NewRouter()
