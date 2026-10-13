@@ -83,6 +83,22 @@ for tool in gh jq tar; do
 done
 [ -f "$RELEASES_FILE" ] || { err "releases.json not found at ${RELEASES_FILE} (run scripts/plugin-counts.sh --init-releases once)"; exit 1; }
 
+# version_is_newer A B: A is a strictly newer release than B. Numeric core first (sort -V); at an equal core a final release is
+# newer than any prerelease of it, and two prereleases compare by their suffix.
+version_is_newer() {
+  local c1="${1%%[-+]*}" c2="${2%%[-+]*}" p1 p2
+  if [ "$c1" != "$c2" ]; then
+    [ "$(printf '%s\n%s\n' "$c1" "$c2" | sort -V | tail -1)" = "$c1" ]
+    return
+  fi
+  p1="${1#"$c1"}"
+  p2="${2#"$c2"}"
+  [ "$p1" != "$p2" ] || return 1
+  [ -n "$p2" ] || return 1
+  [ -n "$p1" ] || return 0
+  [ "$(printf '%s\n%s\n' "$p1" "$p2" | sort -V | tail -1)" = "$p1" ]
+}
+
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
@@ -169,6 +185,16 @@ while IFS= read -r name; do
   [ -f "${PLUGINS_DIR}/${name}/plugin.json" ] && bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${PLUGINS_DIR}/${name}/plugin.json" 2>/dev/null || printf '')"
   has_platforms="$(jq -r '(.platform_checksums // {}) | length > 0' <<<"$row")"
   platforms_json="{}"
+  # With --signatures the release itself says whether a binary ships: a plugin whose binary is blocked by the cli-targets gate
+  # (scripts/conformance/exceptions.yaml) has a binaryName but no platform tarball on the release, and that is not a defect.
+  if [ -n "$SIGNATURES_FILE" ] && [ -n "$bin_name" ] && [ "$has_platforms" != "true" ]; then
+    any_platform=false
+    for platform in $PLATFORMS; do asset_is_published "${name}-${VERSION}-${platform}.tar.gz" && any_platform=true; done
+    if [ "$any_platform" = "false" ]; then
+      log "NOTE: ${name} declares binaryName ${bin_name} but the release has no platform tarball; no binary is recorded"
+      bin_name=""
+    fi
+  fi
   if [ -n "$bin_name" ] || [ "$has_platforms" = "true" ]; then
     for platform in $PLATFORMS; do
       ptar_name="${name}-${VERSION}-${platform}.tar.gz"
@@ -200,7 +226,7 @@ while IFS= read -r name; do
   if [ "$WRITE" = "true" ] && [ -n "$SIGNATURES_FILE" ]; then
     # A run for an older tag must not roll a newer row back (the manifest-version guard is off in this mode).
     row_version="$(jq -r '.version // ""' <<<"$row")"
-    if [ -n "$row_version" ] && [ "$row_version" != "$VERSION" ] && [ "$(printf '%s\n%s\n' "$row_version" "$VERSION" | sort -V | tail -1)" = "$row_version" ]; then
+    if [ -n "$row_version" ] && [ "$row_version" != "$VERSION" ] && version_is_newer "$row_version" "$VERSION"; then
       printf "ROLLBACK %s: releases.json already holds %s, newer than %s\n" "$name" "$row_version" "$VERSION"
       ROLLBACKS=$((ROLLBACKS + 1))
       continue

@@ -61,7 +61,7 @@ asset that is already on the Release stays the artifact of record and everything
 | `sign.sh SLUG VERSION TARBALL` | prints the `release_signature` JSON. Key from `NSELF_RELEASE_SIGNING_KEY_FREE` (PKCS8 PEM) and `NSELF_RELEASE_SIGNING_KEY_FREE_ID`, environment only; written to a 0600 temp file removed on exit |
 | `verify-signatures.sh --pub FILE DIR` | checks every `*.tar.gz` in DIR against `DIR/releases.json` and exactly the public key FILE (PEM SPKI). Failures on stderr: `checksum mismatch`, `missing release data`, `missing tarball`, `unsigned`, `signature mismatch`. No key discovery |
 | `rehearse.sh --tag T --no-upload --out DIR` | builds all source tarballs and signs them with a throwaway key; writes `DIR/releases.json` and `DIR/rehearsal-test.pub`. Two runs of one tag give byte-identical tarballs |
-| `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until the first real release (P7-PLUG-69) |
+| `keys/` | committed release public keys (`plugins-release-free-<id>.pub`). Empty until P7-PLUG-69 commits the production key, which must happen before the first real tag run |
 
 OpenSSL 3 is required (`OPENSSL=/path/to/openssl` to pick one); macOS system LibreSSL cannot sign or verify Ed25519 with `-rawin`.
 GNU tar is required for deterministic tarballs (`brew install gnu-tar`).
@@ -92,7 +92,9 @@ The Ticket P7-PLUG-21 verification lines are the gate for these scripts; no work
 - A release runs from the tag push. A manual run (`workflow_dispatch`) must start from the tag itself ("Use workflow from: Tag v1.2.3") and enter that same tag;
   the first step refuses anything else, so every job runs the tag's code and the concurrency group is the tag. The Release and the R2 mirror exist before the
   reviewer approves `sign`; trust travels in `releases.json`, which only changes after the signatures exist.
-- When `keys/` holds a key, the `sign` job refuses signatures that verify against none of the committed keys, so a mis-set secret cannot produce a signed-looking PR.
+- The `sign` job refuses to run unless `keys/` holds a release public key and the signatures verify against one of them, so a mis-set secret cannot produce a
+  signed-looking PR. Commit the public key (P7-PLUG-69) before the first real tag run.
+- A manual run from an older tag runs that tag's own workflow file, so this chain cannot backfill releases made before it.
 
 ### After a real release
 

@@ -55,7 +55,7 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           TAG="${INPUT_TAG:-$REF_NAME}"
-          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.-]+)?$ ]]; then
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "ERROR: '$TAG' is not a release tag (vMAJOR.MINOR.PATCH[-suffix])"
             exit 1
           fi
@@ -545,6 +545,7 @@ jobs:
         run: |
           mkdir -p published
           gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" --dir published --pattern '*.tar.gz'
+          set -o pipefail
           (cd published && sha256sum -- *.tar.gz) | sort > actual-sha256.txt
           sort expected/published-sha256.txt | diff - actual-sha256.txt || { echo "ERROR: the Release no longer serves the bytes the publish job recorded; nothing is signed"; exit 1; }
 
@@ -598,7 +599,11 @@ jobs:
             pinned=1
             if bash scripts/release/verify-signatures.sh --pub "$k" "$stage" >/dev/null 2>&1; then ok=1; fi
           done
-          if [ "$pinned" -eq 1 ] && [ "$ok" -ne 1 ]; then
+          if [ "$pinned" -ne 1 ]; then
+            echo "ERROR: scripts/release/keys/ holds no release public key; commit it (P7-PLUG-69) before a real tag run, so the signatures can be checked against it"
+            exit 1
+          fi
+          if [ "$ok" -ne 1 ]; then
             echo "ERROR: the signatures do not verify against any committed release key in scripts/release/keys/; the signing secret is not a pinned key"
             exit 1
           fi

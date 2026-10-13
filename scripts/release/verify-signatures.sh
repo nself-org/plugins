@@ -60,11 +60,19 @@ case "$PUB_TEXT" in "ED25519 Public-Key:"*) ;; *) err "not an Ed25519 public key
 EXPECTED_ID="plugins-$("$O" pkey -pubin -in "$PUB" -outform DER 2>/dev/null | tail -c 32 | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-16)"
 
 # Row lookup by file name: one jq pass writes "file<TAB>kind<TAB>slug<TAB>version<TAB>platform" for every known asset name.
+# Only the five published platforms count as binary tarballs, and a file name may appear once: a name that two rows could claim
+# is ambiguous release data, never a way to be checked as the weaker kind.
 jq -r '.releases | to_entries[] | .key as $s | .value as $v | select($v.version != null) |
   ($s + "-" + $v.version + ".tar.gz") as $src |
   [$src, "source", $s, $v.version, ""],
-  (($v.platform_checksums // {}) | keys[] | [($s + "-" + $v.version + "-" + . + ".tar.gz"), "platform", $s, $v.version, .])
+  (($v.platform_checksums // {}) | keys[] | select(. as $p | ["darwin-arm64", "darwin-amd64", "linux-amd64", "linux-arm64", "windows-amd64"] | index($p))
+    | [($s + "-" + $v.version + "-" + . + ".tar.gz"), "platform", $s, $v.version, .])
   | @tsv' "$RELEASES" > "$WORK/index.tsv"
+dups="$(cut -f1 "$WORK/index.tsv" | sort | uniq -d)"
+if [ -n "$dups" ]; then
+  err "ambiguous release data: more than one row claims $(printf '%s' "$dups" | tr '\n' ' ')"
+  exit 1
+fi
 
 fail=0
 checked=0
