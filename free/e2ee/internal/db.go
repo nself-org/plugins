@@ -14,7 +14,8 @@ import (
 // Inputs:    ctx (for dial timeout), cfg.DatabaseURL.
 // Outputs:   *pgxpool.Pool, or error if URL missing / unreachable.
 // Constraints: DATABASE_URL must be set; the pool is pinged before return so a
-//   misconfigured database fails fast at startup rather than on first request.
+//
+//	misconfigured database fails fast at startup rather than on first request.
 func NewPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
@@ -28,6 +29,7 @@ func NewPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 	if err := pool.Ping(ctx); err != nil {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
+	mustBootMigrations(ctx, pool)
 
 	return pool, nil
 }
@@ -38,12 +40,15 @@ func NewPool(ctx context.Context, cfg *Config) (*pgxpool.Pool, error) {
 // enforce isolation at runtime (CR-C critical #1: RLS was previously inert).
 //
 // Purpose:   Activate RLS by issuing SET LOCAL for the two GUCs the policies
-//            read via current_setting('app.*'), scoped to this transaction.
+//
+//	read via current_setting('app.*'), scoped to this transaction.
+//
 // Inputs:    ctx, the pool, and the authenticated source account + user id.
 // Outputs:   a pgx.Tx with both GUCs set, or an error (caller must Rollback).
 // Constraints: SET LOCAL ties the settings to the tx lifetime; on Commit/
-//   Rollback the connection is returned to the pool with no residual GUC state.
-//   The values come from gateway-forwarded headers only — never request bodies.
+//
+//	Rollback the connection is returned to the pool with no residual GUC state.
+//	The values come from gateway-forwarded headers only — never request bodies.
 func beginScoped(ctx context.Context, pool *pgxpool.Pool, sourceAccount, userID string) (pgx.Tx, error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {

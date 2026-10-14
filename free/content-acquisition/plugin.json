@@ -1,58 +1,4 @@
 {
-  "name": "content-acquisition",
-  "version": "1.2.6",
-  "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
-  "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-acquisition",
-  "repository": "https://github.com/nself-org/plugins",
-  "category": "media",
-  "subcategory": "orchestration",
-  "path": "plugins/content-acquisition",
-  "language": "go",
-  "runtime": "go",
-  "minNselfVersion": "1.0.0",
-  "port": 3202,
-  "dependencies": {
-    "npm": [
-      "@nself/plugin-utils",
-      "fastify",
-      "@fastify/cors",
-      "@fastify/rate-limit",
-      "commander",
-      "feedparser",
-      "axios",
-      "node-cron",
-      "bullmq",
-      "ioredis",
-      "json-logic-js",
-      "pg",
-      "dotenv",
-      "uuid",
-      "winston",
-      "chalk",
-      "ora"
-    ]
-  },
-  "tables": [
-    "np_contentacquisition_profiles",
-    "np_contentacquisition_acquisition_subscriptions",
-    "np_contentacquisition_rss_feeds",
-    "np_contentacquisition_rss_feed_items",
-    "np_contentacquisition_release_calendar",
-    "np_contentacquisition_acquisition_queue",
-    "np_contentacquisition_acquisition_history",
-    "np_contentacquisition_acquisition_rules"
-  ],
-  "views": [],
-  "webhooks": [
-    "acquisition.subscribed",
-    "acquisition.new_release_detected",
-    "acquisition.queued",
-    "acquisition.started",
-    "acquisition.completed",
-    "acquisition.failed"
-  ],
   "apiEndpoints": [
     "POST /v1/subscriptions",
     "GET /v1/subscriptions",
@@ -70,91 +16,144 @@
     "GET /v1/rules",
     "POST /v1/rules"
   ],
+  "author": "nself",
+  "category": "media",
   "cliCommands": [
     {
-      "name": "init",
-      "description": "Initialize plugin"
+      "description": "Initialize plugin",
+      "name": "init"
     },
     {
-      "name": "subscribe",
-      "description": "Subscribe to content"
+      "description": "Subscribe to content",
+      "name": "subscribe"
     },
     {
-      "name": "feeds",
-      "description": "Manage RSS feeds"
+      "description": "Manage RSS feeds",
+      "name": "feeds"
     },
     {
-      "name": "calendar",
-      "description": "View release calendar"
+      "description": "View release calendar",
+      "name": "calendar"
     },
     {
-      "name": "queue",
-      "description": "Manage download queue"
+      "description": "Manage download queue",
+      "name": "queue"
     },
     {
-      "name": "server",
-      "description": "Start HTTP server"
+      "description": "Start HTTP server",
+      "name": "server"
     }
   ],
+  "description": "Content acquisition with download rules engine. Planned: RSS feed monitoring, release calendar integration, automated download orchestration",
   "envVars": [
     {
+      "description": "",
       "name": "DATABASE_URL",
       "required": true
     },
     {
+      "default": "3202",
+      "description": "",
       "name": "CONTENT_ACQUISITION_PORT",
-      "default": "3202"
+      "required": false
     },
     {
+      "description": "",
       "name": "METADATA_ENRICHMENT_URL",
       "required": true
     },
     {
+      "description": "",
       "name": "TORRENT_MANAGER_URL",
       "required": true
     },
     {
+      "description": "",
       "name": "VPN_MANAGER_URL",
       "required": true
     },
     {
+      "default": "http://localhost:3204",
+      "description": "",
       "name": "SUBTITLE_MANAGER_URL",
-      "default": "http://localhost:3204"
+      "required": false
     },
     {
+      "default": "http://localhost:3019",
+      "description": "",
       "name": "MEDIA_PROCESSING_URL",
-      "default": "http://localhost:3019"
+      "required": false
     },
     {
+      "default": "http://localhost:4000",
+      "description": "",
       "name": "NTV_BACKEND_URL",
-      "default": "http://localhost:4000"
+      "required": false
     },
     {
+      "default": "localhost",
+      "description": "",
       "name": "REDIS_HOST",
-      "default": "localhost"
+      "required": false
     },
     {
+      "default": "6379",
+      "description": "",
       "name": "REDIS_PORT",
-      "default": "6379"
+      "required": false
     }
   ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/content-acquisition",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
   "multiApp": {
-    "supported": true,
+    "defaultValue": "primary",
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
-    "defaultValue": "primary"
+    "supported": true
   },
-  "features": [
-    "TV show and music subscriptions",
-    "RSS feed monitoring",
-    "Release calendar tracking",
-    "Quality profiles",
-    "Download rules engine",
-    "Automated download orchestration"
+  "name": "content-acquisition",
+  "port": 3202,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "runtime": "go",
+  "schema": "np_content_acquisition",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3202
+  },
+  "status": "stable",
+  "tables": [
+    "np_contentacquisition_profiles",
+    "np_contentacquisition_acquisition_subscriptions",
+    "np_contentacquisition_rss_feeds",
+    "np_contentacquisition_rss_feed_items",
+    "np_contentacquisition_release_calendar",
+    "np_contentacquisition_acquisition_queue",
+    "np_contentacquisition_acquisition_history",
+    "np_contentacquisition_acquisition_rules"
   ],
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "tier": "free",
+  "version": "1.2.6",
+  "webhooks": [
+    "acquisition.subscribed",
+    "acquisition.new_release_detected",
+    "acquisition.queued",
+    "acquisition.started",
+    "acquisition.completed",
+    "acquisition.failed"
+  ]
 }

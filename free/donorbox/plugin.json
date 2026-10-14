@@ -1,21 +1,92 @@
 {
-  "name": "donorbox",
-  "version": "1.2.6",
-  "description": "Donorbox donation data sync with webhook handling",
-  "author": "nself",
-  "license": "MIT",
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.9.9",
-  "category": "commerce",
-  "language": "go",
-  "tags": [
-    "donations",
-    "fundraising",
-    "campaigns",
-    "donorbox",
-    "webhooks"
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
   ],
+  "author": "nself",
+  "category": "commerce",
+  "description": "Donorbox donation data sync with webhook handling",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "DONORBOX_API_KEY",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "DONORBOX_EMAIL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "DONORBOX_WEBHOOK_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "0.9.9",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "donorbox",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ],
+    "network": [
+      "donorbox.org"
+    ]
+  },
+  "port": 3074,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=0.9.9"
+  },
+  "schema": "np_donorbox",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3074
+  },
+  "status": "stable",
   "tables": [
     "np_donorbox_campaigns",
     "np_donorbox_donors",
@@ -25,79 +96,16 @@
     "np_donorbox_tickets",
     "np_donorbox_webhook_events"
   ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "optionalDependencies": [],
-  "webhooks": {
-    "donation.created": "Sync new donation to database"
-  },
-  "actions": {
-    "sync": "Sync all Donorbox data to database",
-    "reconcile": "Re-sync recent data to catch gaps from missed webhooks",
-    "server": "Start the Donorbox plugin server",
-    "status": "Show sync status and statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "DONORBOX_API_KEY",
-      "DONORBOX_EMAIL"
-    ],
-    "optional": [
-      "PORT",
-      "DONORBOX_WEBHOOK_SECRET",
-      "PLUGIN_INTERNAL_SECRET"
-    ]
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "config": {
-    "defaultPort": 3074,
-    "syncInterval": 3600,
-    "webhookPath": "/webhooks/donorbox",
-    "retryAttempts": 3,
-    "retryDelay": 1000
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "donorbox.org"
-    ],
-    "filesystem": [
-      "logs",
-      "cache"
-    ]
-  },
-  "port": 3074,
-  "status": "stable",
-  "binary_name": "donorbox",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
+  "tags": [
+    "donations",
+    "fundraising",
+    "campaigns",
+    "donorbox",
+    "webhooks"
   ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target",
   "tier": "free",
-  "requires_license": false,
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": []
+  "version": "1.2.6",
+  "webhooks": [
+    "donation.created"
+  ]
 }

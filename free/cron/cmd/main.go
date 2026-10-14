@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	sdk "github.com/nself-org/plugin-sdk"
@@ -23,6 +24,8 @@ func main() {
 		log.Fatalf("database connection failed: %v", err)
 	}
 	defer pool.Close()
+
+	internal.MustBootMigrations(context.Background(), pool)
 
 	if err := internal.Migrate(pool); err != nil {
 		log.Fatalf("database migration failed: %v", err)
@@ -56,6 +59,7 @@ func main() {
 	r.Use(sdk.CORS)
 	r.Use(sdk.Logger)
 	r.Use(sdk.Recovery)
+	r.Get("/health", internal.BootHealthHandler(pool))
 
 	internal.RegisterRoutes(r, app)
 

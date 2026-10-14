@@ -1,21 +1,31 @@
 {
-  "name": "dogfood",
-  "version": "1.2.6",
-  "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.2.8",
-  "language": "go",
-  "pluginType": "cli",
-  "entryPoint": "cmd/",
   "binaryName": "nself-dogfood",
   "category": "infrastructure",
+  "commands": {
+    "binary": "nself-dogfood",
+    "command": "dogfood"
+  },
+  "description": "Production dogfood audit and reporting: 21 read-only checks covering backups, DR, tenancy, licensing, secrets, migrations, monitoring, security, watchdog, and queue health.",
+  "entryPoint": "cmd/",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.2.8",
+  "name": "dogfood",
+  "pluginType": "cli",
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.2.8"
+  },
+  "service": {
+    "kind": "cli"
+  },
+  "status": "stable",
   "tags": [
     "dogfood",
     "audit",
@@ -23,26 +33,6 @@
     "production",
     "health"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {
-    "audit": "Run the 21-check production dogfood audit",
-    "report": "Show the latest saved audit report"
-  },
-  "envVars": {
-    "required": [],
-    "optional": []
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "status": "stable",
   "tier": "free",
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "notes": "This is a CLI-proxy plugin, not a service plugin: it has no port, no HTTP server, and no database tables. `nself plugin install dogfood` must place the built nself-dogfood binary at ~/.nself/plugins/bin/nself-dogfood, where internal/plugin/router.go's ProxyCommand execs it for `nself dogfood <args>` with stdio inherited. Extracted from cli/cmd/commands/dogfood.go and cli/internal/dogfood/ under CLI-R11."
+  "version": "1.2.6"
 }

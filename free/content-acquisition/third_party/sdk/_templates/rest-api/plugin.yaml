@@ -1,0 +1,21 @@
+name: rest-api-plugin
+version: 0.1.0
+tier: free
+license: MIT
+description: REST API plugin template for nSelf.
+author: your-name
+port: 3900
+schema: np_rest_api_plugin
+health: /rest-api-plugin/healthz
+endpoints:
+  - GET /rest-api-plugin/hello
+  - POST /rest-api-plugin/items
+  - GET /rest-api-plugin/items/:id
+systemDependencies:
+  - postgres
+depends: []
+env:
+  REST_API_PLUGIN_SECRET:
+    required: false
+    description: Optional API secret
+    default: ""

@@ -45,14 +45,6 @@ func decode(r *http.Request, dst any) error {
 // Health
 // -------------------------------------------------------------------------
 
-func HealthHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":    "ok",
-		"plugin":    "compliance",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	})
-}
-
 func ReadyHandler(db *DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := db.Pool.Ping(r.Context()); err != nil {

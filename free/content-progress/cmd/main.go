@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
-	sdk "github.com/nself-org/plugin-sdk"
 	"github.com/nself-org/nself-content-progress/internal"
+	sdk "github.com/nself-org/plugin-sdk"
 )
 
 func main() {
@@ -25,6 +26,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	internal.MustBootMigrations(context.Background(), pool)
+
 	db := internal.NewDB(pool, cfg)
 	if err := db.InitSchema(); err != nil {
 		log.Fatalf("content-progress: schema init failed: %v", err)
@@ -37,6 +40,7 @@ func main() {
 	r.Use(sdk.Logger)
 	r.Use(sdk.Recovery)
 	r.Use(sdk.RequestID)
+	r.Get("/health", internal.BootHealthHandler(pool))
 
 	internal.RegisterRoutes(r, db, cfg)
 

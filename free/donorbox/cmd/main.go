@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -28,6 +29,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	internal.MustBootMigrations(context.Background(), pool)
+
 	db := internal.NewDB(pool)
 	if err := db.InitSchema(); err != nil {
 		log.Fatalf("[nself-donorbox] schema init failed: %v", err)
@@ -49,6 +52,7 @@ func main() {
 	r.Use(sdk.Logger)
 	r.Use(sdk.CORS)
 	r.Use(sdk.RequestID)
+	r.Get("/health", internal.BootHealthHandler(pool))
 
 	internal.RegisterRoutes(r, db, client, webhookSecret)
 

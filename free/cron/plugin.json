@@ -1,56 +1,48 @@
 {
-  "name": "cron",
-  "version": "1.2.6",
-  "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "tier_pair": true,
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.9.9",
   "category": "automation",
+  "description": "Cron job scheduler. Register jobs with standard cron syntax, execute via HTTP callbacks, track run history.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "CRON_TIMEOUT_SECS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "CRON_RETENTION_DAYS",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
-  "tags": [
-    "cron",
-    "scheduler",
-    "jobs",
-    "automation",
-    "webhooks"
-  ],
-  "tables": [
-    "np_cron_jobs",
-    "np_cron_runs"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
   },
-  "optionalDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PORT",
-      "CRON_TIMEOUT_SECS",
-      "CRON_RETENTION_DAYS"
-    ]
-  },
-  "config": {
-    "defaultPort": 3051,
-    "maxRetries": 3,
-    "timeoutSecs": 30,
-    "retentionDays": 90
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
+  "minNselfVersion": "0.9.9",
+  "name": "cron",
   "permissions": {
     "database": [
       "create",
@@ -58,21 +50,35 @@
       "update",
       "delete"
     ],
+    "filesystem": [],
     "network": [
       "outbound"
-    ],
-    "filesystem": []
+    ]
   },
   "port": 3051,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=0.9.9"
+  },
+  "schema": "np_cron",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3051
+  },
   "status": "stable",
-  "binary_name": "nself-cron",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
+  "tables": [
+    "np_cron_jobs",
+    "np_cron_runs"
   ],
-  "min_memory_mb": 32,
-  "systemd_after": "network.target",
-  "tier": "free"
+  "tags": [
+    "cron",
+    "scheduler",
+    "jobs",
+    "automation",
+    "webhooks"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }
