@@ -19,12 +19,12 @@ func TestLoadInvalid(t *testing.T) {
 	}{
 		{"unknown key", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    bogus: 1\n", 6, "/jobs/a/bogus", "unexpected additional properties"},
 		{"unknown top-level key", "version: 1\nzzz: 1\n", 2, "/zzz", "unexpected additional properties"},
-		{"bad enum", "version: 1\njobs:\n  a:\n    kind: nope\n    run: [go, test]\n", 4, "/jobs/a/kind", "does not equal any of"},
-		{"wrong type", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    timeout: 5\n", 6, "/jobs/a/timeout", "want \"string\""},
-		{"bad version", "version: 2\n", 1, "/version", "does not equal 1"},
+		{"bad enum", "version: 1\njobs:\n  a:\n    kind: nope\n    run: [go, test]\n", 4, "/jobs/a/kind", "must be one of"},
+		{"wrong type", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    timeout: 5\n", 6, "/jobs/a/timeout", "wrong type"},
+		{"bad version", "version: 2\n", 1, "/version", "must equal 1"},
 		{"missing version", "jobs: {}\n", 1, "", "missing properties"},
-		{"second job is the bad one", "version: 1\njobs:\n" + goodJob + "  b:\n    kind: weird\n    run: [x]\n", 7, "/jobs/b/kind", "does not equal any of"},
-		{"bad list item", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    when:\n      triggers: [push, never]\n", 7, "/jobs/a/when/triggers/1", "does not equal"},
+		{"second job is the bad one", "version: 1\njobs:\n" + goodJob + "  b:\n    kind: weird\n    run: [x]\n", 7, "/jobs/b/kind", "must be one of"},
+		{"bad list item", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    when:\n      triggers: [push, never]\n", 7, "/jobs/a/when/triggers/1", "must be one of"},
 		{"duplicate key", "version: 1\nversion: 1\n", 2, "/version", "duplicate key"},
 		{"non-string key", "version: 1\n7: x\n", 2, "", "keys must be strings"},
 		{"two documents", "version: 1\n---\nversion: 1\n", 3, "", "more than one YAML document"},
@@ -34,8 +34,8 @@ func TestLoadInvalid(t *testing.T) {
 		{"unknown dependency", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [ghost]\n", 6, "/jobs/a/deps/0", "unknown job"},
 		{"unknown service", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    needs_services: [db]\n", 6, "/jobs/a/needs_services/0", "unknown service"},
 		{"unknown pipeline job", "version: 1\npipelines:\n  p:\n    triggers: [push]\n    jobs: [ghost]\n", 5, "/pipelines/p/jobs/0", "unknown job"},
-		{"pattern error names the bad job", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: 30s\n  b:\n    kind: test\n    run: [x]\n    timeout: \"30\"\n", 10, "/jobs/b/timeout", "does not match"},
-		{"pattern error in a list", "version: 1\nsupport:\n  - linux/amd64\n  - invalid\n", 4, "/support/1", "does not match"},
+		{"pattern error names the bad job", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: 30s\n  b:\n    kind: test\n    run: [x]\n    timeout: \"30\"\n", 10, "/jobs/b/timeout", "must match the pattern"},
+		{"pattern error in a list", "version: 1\nsupport:\n  - linux/amd64\n  - invalid\n", 4, "/support/1", "must match the pattern"},
 		{"null run", "version: 1\njobs:\n  a:\n    kind: test\n    run:\n", 5, "/jobs/a/run", "null is not allowed"},
 		{"null policy is fine only inside policy", "version: 1\ndetect:\n", 2, "/detect", "null is not allowed"},
 		{"timeout overflow", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: 999999999999999999999h\n", 6, "/jobs/a/timeout", "positive duration"},
@@ -45,6 +45,9 @@ func TestLoadInvalid(t *testing.T) {
 		{"workdir escapes", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    workdir: ../../outside\n", 6, "/jobs/a/workdir", "inside the repository"},
 		{"absolute path glob", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    when:\n      paths: [src/**, /etc/**]\n", 7, "/jobs/a/when/paths/1", "inside the repository"},
 		{"unsafe job id", "version: 1\njobs:\n  ../x:\n    kind: test\n    run: [x]\n", 3, "/jobs/..~1x", "job id must match"},
+		{"secret-looking string with message words", "version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [\"ghp_FAKE does not match\"]}\n", 4, "/jobs/b/secrets/0", "must match the pattern"},
+		{"composite value", "version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [[ghp_FAKE]]}\n", 4, "/jobs/b/secrets/0", "wrong type"},
+		{"float where integer", "version: 1\njobs: {a: {kind: test, run: [echo], requires: {cpu: 18446744073709551616}}}\n", 2, "/jobs/a/requires/cpu", "out of range"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -152,7 +155,7 @@ func FuzzLoad(f *testing.F) {
 func TestErrorNeverEchoesTheValue(t *testing.T) {
 	doc := "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    secrets: [project/ok, ghp_FAKEFAKEFAKEFAKEFAKE]\n"
 	_, err := Parse("ci.yaml", []byte(doc))
-	if err == nil || strings.Contains(err.Error(), "FAKEFAKE") {
+	if err == nil || strings.Contains(err.Error(), "FAKEFAKE") || strings.Contains(err.Error(), "ghp_") {
 		t.Fatalf("value echoed or no error: %v", err)
 	}
 	if e := err.(*Error); e.Problems[0].Pointer != "/jobs/a/secrets/1" || e.Problems[0].Line != 6 {
@@ -182,5 +185,44 @@ func TestErrorTextHasNoControlCharacters(t *testing.T) {
 	_, err := Parse("ci.yaml", []byte(doc))
 	if err == nil || strings.ContainsAny(err.Error(), "\x1b\r") || strings.Count(err.Error(), "\n") != 0 {
 		t.Fatalf("control characters survived: %q", err)
+	}
+}
+
+func TestNeverEchoesAnyValue(t *testing.T) {
+	for _, doc := range []string{
+		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [\"ghp_FAKE does not match\"]}\n",
+		"version: 1\njobs:\n  b: {kind: test, run: [echo], secrets: [[ghp_FAKE]]}\n",
+		"version: 1\njobs:\n  b: {kind: ghp_FAKE, run: [echo]}\n",
+		"version: 1\njobs:\n  b: {kind: test, run: [echo], timeout: ghp_FAKE}\n",
+		"version: 1\njobs:\n  b: {kind: test, run: [echo], when: {triggers: [ghp_FAKE]}}\n",
+	} {
+		_, err := Parse("ci.yaml", []byte(doc))
+		if err == nil || strings.Contains(err.Error(), "ghp_FAKE") {
+			t.Errorf("%q: %v", doc, err)
+		}
+	}
+}
+
+func TestAliasBombViaTaggedScalarsAndKeys(t *testing.T) {
+	big := strings.Repeat("A", 1<<16)
+	var tagged, keys strings.Builder
+	tagged.WriteString("version: 1\npolicy:\n  seed: &s !!binary " + big + "\n  copies: [")
+	keys.WriteString("version: 1\npolicy:\n  base: &m\n    ? " + big + "\n    : 1\n  copies: [")
+	for i := 0; i < 100; i++ {
+		tagged.WriteString("*s,")
+		keys.WriteString("*m,")
+	}
+	tagged.WriteString("]\n")
+	keys.WriteString("]\n")
+	for name, doc := range map[string]string{"tagged": tagged.String(), "keys": keys.String()} {
+		if _, err := Parse("bomb.yaml", []byte(doc)); err == nil || !strings.Contains(err.Error(), "too large") {
+			t.Errorf("%s bomb accepted: %v", name, err)
+		}
+	}
+}
+
+func TestPolicyKeepsLargeIntegersAndNulls(t *testing.T) {
+	if _, err := Parse("ci.yaml", []byte("version: 1\npolicy: {value: 9223372036854775808, nothing: ~}\n")); err != nil {
+		t.Fatalf("opaque policy rejected: %v", err)
 	}
 }

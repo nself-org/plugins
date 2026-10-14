@@ -26,6 +26,7 @@ import (
 	"sync"
 	"unicode"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"gopkg.in/yaml.v3"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -135,7 +136,7 @@ func Parse(name string, data []byte) (*Loaded, error) {
 		return fail(Problem{File: name, Message: err.Error()})
 	}
 	if err := validateSchema(js); err != nil {
-		ptr, msg := locate(err, value)
+		ptr, msg := locate(err, value, schemaTree)
 		return fail(Problem{File: name, Line: lineFor(lines, ptr), Pointer: ptr, Message: msg})
 	}
 	var out Loaded
@@ -155,6 +156,7 @@ func Parse(name string, data []byte) (*Loaded, error) {
 var (
 	schemaOnce  sync.Once
 	schemaBytes []byte
+	schemaTree  *jsonschema.Schema
 	schemaErr   error
 )
 
@@ -166,6 +168,12 @@ func validateSchema(doc []byte) error {
 			return
 		}
 		schemaBytes = all[schemaName]
+		var tree jsonschema.Schema
+		if err := json.Unmarshal(schemaBytes, &tree); err != nil {
+			schemaErr = err
+			return
+		}
+		schemaTree = &tree
 	})
 	if schemaErr != nil {
 		return schemaErr

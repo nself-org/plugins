@@ -14,6 +14,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,10 @@ type walker struct {
 func (w *walker) bad(n *yaml.Node, ptr, msg string) {
 	w.probs = append(w.probs, Problem{File: w.file, Line: n.Line, Pointer: ptr, Message: msg})
 }
+
+// inPolicy is true inside the opaque policy block, which the protected policy
+// loader owns: it may hold nulls and any number.
+func inPolicy(ptr string) bool { return ptr == "/policy" || strings.HasPrefix(ptr, "/policy/") }
 
 // overLimit reports the expansion limit once.
 func (w *walker) overLimit(n *yaml.Node, ptr string) {
@@ -67,6 +72,10 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 				}
 				continue
 			}
+			if w.bytes -= len(k.Value); w.bytes < 0 {
+				w.overLimit(k, ptr)
+				return m
+			}
 			child := ptr + "/" + escape(k.Value)
 			if _, dup := m[k.Value]; dup {
 				w.bad(k, child, "duplicate key")
@@ -83,12 +92,12 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 		}
 		return s
 	case yaml.ScalarNode:
-		if n.Tag == "!!timestamp" || n.Tag == "!!binary" {
-			return n.Value
-		}
 		if w.bytes -= len(n.Value); w.bytes < 0 {
 			w.overLimit(n, ptr)
 			return nil
+		}
+		if n.Tag == "!!timestamp" || n.Tag == "!!binary" {
+			return n.Value
 		}
 		var v any
 		if err := n.Decode(&v); err != nil {
@@ -98,14 +107,18 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 		switch x := v.(type) {
 		case nil:
 			// `key:` with no value or `~`: only the opaque policy block may hold one.
-			if ptr != "/policy" && !strings.HasPrefix(ptr, "/policy/") {
+			if !inPolicy(ptr) {
 				w.bad(n, ptr, "null is not allowed here; omit the key")
 			}
 		case uint64:
-			w.bad(n, ptr, "integer is out of range")
+			if !inPolicy(ptr) {
+				w.bad(n, ptr, "integer is out of range")
+			}
 		case float64:
 			if math.IsInf(x, 0) || math.IsNaN(x) {
 				w.bad(n, ptr, "number must be finite")
+			} else if plainInteger.MatchString(n.Value) && !inPolicy(ptr) {
+				w.bad(n, ptr, "integer is out of range")
 			}
 		}
 		return v
@@ -113,5 +126,9 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 	w.bad(n, ptr, fmt.Sprintf("unsupported YAML node kind %d", n.Kind))
 	return nil
 }
+
+// plainInteger matches digits only: an integer too large for int64 is
+// resolved as a float, and the typed decode would fail without a location.
+var plainInteger = regexp.MustCompile(`^[+-]?[0-9][0-9_]*$`)
 
 const tooBig = "document is too large or nests too deeply (limits apply after alias expansion)"

@@ -207,3 +207,17 @@ func TestWriteRefusesSymlinks(t *testing.T) {
 		t.Fatalf("file created outside the repo: %v", entries)
 	}
 }
+
+func TestMigrateNotesForFlowStages(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".ci.yaml"), []byte("plugin: p\nstages: [{name: test, cmd: [echo, ok]}]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(m.Notes, "\n"), "inline cmd") {
+		t.Errorf("flow-style stages not noted: %v", m.Notes)
+	}
+}

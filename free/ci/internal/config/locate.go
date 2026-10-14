@@ -1,31 +1,37 @@
 package config
 
 // Purpose: turn a JSON-schema error into the JSON pointer of the offending
-// instance value. The schema library reports the schema path
-// (/properties/jobs/additionalProperties/properties/kind), not the instance
-// path, so the path is walked against the decoded document.
-// Inputs:  the schema error and the decoded document.
-// Outputs: the instance pointer ("" for the root) and the leaf message.
+// instance value and a message that never repeats that value. The schema
+// library reports the schema path (/properties/jobs/additionalProperties/
+// properties/kind), not the instance path, so the path is walked in the
+// schema tree and in the document together.
+// Inputs:  the schema error, the decoded document and the parsed schema.
+// Outputs: the instance pointer ("" for the root) and a message built from
+// the failing keyword and the schema (allowed values, pattern, type), never
+// from the value.
 // Constraints: pure. Where one schema path covers several instance values
-// (additionalProperties, items) the first value, in sorted key / index order,
-// that the leaf message fits is chosen; the schema check still fails the
-// whole document either way, so a wrong pick only moves the reported line.
+// (additionalProperties, items) each is validated against the sub-schema at
+// that path and the first that fails is reported (sorted key / index order);
+// a literal secret pasted where a reference belongs is therefore never echoed
+// into logs or JSON envelopes, whatever the value looks like.
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 var (
-	schemaStep    = regexp.MustCompile(`validating (/[^\s:]*): `)
-	schemaRoot    = regexp.MustCompile(`validating https?://[^\s]+: `)
-	missingProp   = regexp.MustCompile(`missing properties: \[(.*?)\]`)
-	extraProp     = regexp.MustCompile(`unexpected additional properties \[(.*?)\]`)
-	quotedName    = regexp.MustCompile(`"([^"]*)"`)
-	combinators   = map[string]bool{"oneOf": true, "anyOf": true, "allOf": true}
-	transparentKW = map[string]bool{"if": true, "then": true, "else": true, "not": true}
+	schemaStep  = regexp.MustCompile(`validating (/[^\s:]*): `)
+	schemaTop   = regexp.MustCompile(`validating https?://[^\s]+: `)
+	missingProp = regexp.MustCompile(`missing properties: \[(.*?)\]`)
+	extraProp   = regexp.MustCompile(`unexpected additional properties \[(.*?)\]`)
+	quotedName  = regexp.MustCompile(`"([^"]*)"`)
+	keywordLead = regexp.MustCompile(`^(\w+): `)
 )
 
 type candidate struct {
@@ -33,37 +39,58 @@ type candidate struct {
 	value any
 }
 
-// locate maps a schema error to an instance pointer and a leaf message.
-func locate(err error, doc any) (string, string) {
+// locate maps a schema error to an instance pointer and a safe message.
+func locate(err error, doc any, root *jsonschema.Schema) (string, string) {
 	text := err.Error()
 	msg := text
 	if idx := schemaStep.FindAllStringIndex(text, -1); len(idx) > 0 {
 		msg = text[idx[len(idx)-1][1]:]
-	} else if m := schemaRoot.FindStringIndex(text); m != nil {
+	} else if m := schemaTop.FindStringIndex(text); m != nil {
 		msg = text[m[1]:]
 	}
 	path := ""
 	if all := schemaStep.FindAllStringSubmatch(text, -1); len(all) > 0 {
 		path = all[len(all)-1][1]
 	}
-	cands := []candidate{{"", doc}}
+	cands, node := []candidate{{"", doc}}, root
 	toks := strings.Split(strings.TrimPrefix(path, "/"), "/")
 	for i := 0; i < len(toks) && path != ""; i++ {
 		switch tok := toks[i]; {
 		case tok == "properties" && i+1 < len(toks):
 			i++
-			cands = child(cands, func(m map[string]any) []string { return keep(m, toks[i]) })
+			name := toks[i]
+			cands = child(cands, func(m map[string]any) []string { return keep(m, name) })
+			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema { return s.Properties[name] })
 		case tok == "additionalProperties", tok == "patternProperties":
-			cands = child(cands, func(m map[string]any) []string { return sortedKeys(m) })
+			cands = child(cands, sortedKeys[any])
+			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema { return s.AdditionalProperties })
 		case tok == "items":
 			cands = items(cands)
-		case combinators[tok] && i+1 < len(toks):
+			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema { return s.Items })
+		case (tok == "oneOf" || tok == "anyOf" || tok == "allOf") && i+1 < len(toks):
 			i++
-		case transparentKW[tok]:
+			n, _ := strconv.Atoi(toks[i])
+			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema {
+				list := map[string][]*jsonschema.Schema{"oneOf": s.OneOf, "anyOf": s.AnyOf, "allOf": s.AllOf}[tok]
+				if n < len(list) {
+					return list[n]
+				}
+				return nil
+			})
+		case tok == "if", tok == "then", tok == "else", tok == "not":
+			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema {
+				return map[string]*jsonschema.Schema{"if": s.If, "then": s.Then, "else": s.Else, "not": s.Not}[tok]
+			})
 		}
 	}
-	ptr, msg := pick(cands, msg)
-	return ptr, cleanMessage(msg)
+	return pick(cands, msg, node)
+}
+
+func sub(s *jsonschema.Schema, f func(*jsonschema.Schema) *jsonschema.Schema) *jsonschema.Schema {
+	if s == nil {
+		return nil
+	}
+	return f(s)
 }
 
 func keep(m map[string]any, name string) []string {
@@ -99,12 +126,12 @@ func items(in []candidate) []candidate {
 	return out
 }
 
-// pick chooses the candidate the leaf message describes and returns its
-// pointer with the message, the offending value redacted.
-func pick(cands []candidate, msg string) (string, string) {
+// pick chooses the offending candidate and words the failure from the schema.
+func pick(cands []candidate, msg string, node *jsonschema.Schema) (string, string) {
 	if len(cands) == 0 {
-		return "", msg
+		return "", describe(msg, node)
 	}
+	// Object-level failures name keys, which the message already carries.
 	if m := extraProp.FindStringSubmatch(msg); m != nil {
 		for _, c := range cands {
 			if obj, ok := c.value.(map[string]any); ok {
@@ -127,37 +154,72 @@ func pick(cands []candidate, msg string) (string, string) {
 			}
 		}
 	}
-	// "enum: weird does not equal ...", "type: 5 has type ...": the value sits
-	// between the keyword and the first verb.
-	lead := msg
-	for _, verb := range []string{" does not", " has type", " has length", " must ", " is "} {
-		if i := strings.Index(lead, verb); i >= 0 {
-			lead = lead[:i]
-		}
-	}
-	for _, c := range cands {
-		switch c.value.(type) {
-		case map[string]any, []any:
-			continue
-		}
-		// Strings appear quoted in pattern errors and bare in enum errors.
-		for _, form := range []string{strconv.Quote(fmt.Sprint(c.value)), fmt.Sprint(c.value)} {
-			if strings.HasSuffix(lead, " "+form) {
-				return c.ptr, redact(msg, lead, form)
+	// Value-level failure: the candidate the sub-schema rejects.
+	if node != nil {
+		if res, err := node.Resolve(nil); err == nil {
+			for _, c := range cands {
+				if res.Validate(jsonRoundTrip(c.value)) != nil {
+					return c.ptr, describe(msg, node)
+				}
 			}
 		}
 	}
-	return cands[0].ptr, msg
+	return cands[0].ptr, describe(msg, node)
 }
 
-// redact hides the offending value: a literal secret pasted where a
-// reference belongs must never be echoed into logs or JSON envelopes.
-func redact(msg, lead, form string) string {
-	i := strings.LastIndex(lead, " "+form)
-	return msg[:i+1] + "<value>" + msg[i+1+len(form):]
+func jsonRoundTrip(v any) any {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return v
+	}
+	var out any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return v
+	}
+	return out
 }
 
-// cleanMessage drops the schema-path noise from a leaf message.
-func cleanMessage(msg string) string {
-	return strings.TrimSpace(strings.TrimPrefix(msg, "schema validation at "))
+// describe words a value-level failure from the failing keyword and the
+// schema, never from the library text (which quotes the value).
+func describe(msg string, node *jsonschema.Schema) string {
+	m := keywordLead.FindStringSubmatch(msg)
+	if m == nil || node == nil {
+		if m != nil {
+			return m[1] + " constraint not satisfied"
+		}
+		return strings.TrimSpace(msg)
+	}
+	switch m[1] {
+	case "enum":
+		return fmt.Sprintf("must be one of %v", node.Enum)
+	case "pattern":
+		return "must match the pattern " + node.Pattern
+	case "type":
+		types := node.Types
+		if node.Type != "" {
+			types = []string{node.Type}
+		}
+		return fmt.Sprintf("has the wrong type; want %s", strings.Join(types, " or "))
+	case "const":
+		if node.Const != nil {
+			return fmt.Sprintf("must equal %v", *node.Const)
+		}
+	case "minimum":
+		if node.Minimum != nil {
+			return fmt.Sprintf("must be at least %v", *node.Minimum)
+		}
+	case "maximum":
+		if node.Maximum != nil {
+			return fmt.Sprintf("must be at most %v", *node.Maximum)
+		}
+	case "minItems":
+		if node.MinItems != nil {
+			return fmt.Sprintf("needs at least %d items", *node.MinItems)
+		}
+	case "maxItems":
+		if node.MaxItems != nil {
+			return fmt.Sprintf("allows at most %d items", *node.MaxItems)
+		}
+	}
+	return m[1] + " constraint not satisfied"
 }

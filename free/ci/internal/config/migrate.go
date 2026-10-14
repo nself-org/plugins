@@ -85,10 +85,33 @@ func parseLegacy(rel string, data []byte) (legacyFile, error) {
 // legacyDefaultTimeout is the `nself ci run --timeout` default in seconds.
 const legacyDefaultTimeout = 300
 
-var (
-	flowCmd = regexp.MustCompile(`(?m)^\s*(cmd|env_required):\s*\[`)
-	nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-)
+var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
+
+// hasFlowArrays reports a cmd or env_required written as an inline [a, b]
+// array, which the legacy line parser never read.
+func hasFlowArrays(data []byte) bool {
+	var doc yaml.Node
+	if yaml.Unmarshal(data, &doc) != nil {
+		return false
+	}
+	var walk func(n *yaml.Node) bool
+	walk = func(n *yaml.Node) bool {
+		if n.Kind == yaml.MappingNode {
+			for i := 0; i+1 < len(n.Content); i += 2 {
+				if k, v := n.Content[i], n.Content[i+1]; (k.Value == "cmd" || k.Value == "env_required") && v.Kind == yaml.SequenceNode && v.Style&yaml.FlowStyle != 0 {
+					return true
+				}
+			}
+		}
+		for _, c := range n.Content {
+			if walk(c) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(&doc)
+}
 
 func slug(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
@@ -156,7 +179,7 @@ func Migrate(root string) (*Migration, error) {
 		if lf.Epic != "" || lf.Stack != "" {
 			m.Notes = append(m.Notes, rel+": epic and stack are planning metadata and are dropped")
 		}
-		if flowCmd.Match(data) {
+		if hasFlowArrays(data) {
 			m.Notes = append(m.Notes, rel+": inline cmd/env_required arrays were never read by the legacy runner (it parsed block lists only), so those stages declared a command but ran none; the migrated jobs run the declared commands")
 		}
 		if len(lf.Stages) > 1 {
