@@ -133,6 +133,56 @@ export async function addRevocation(
 
 const KV_REVOKED_AUTHORS = "revocations:authors";
 
+/*
+ * Regression tests live here to keep this security fix within its source scope.
+ * Run from .workers/plugins-registry, using /Volumes/D5/tmp/d0867-20261014:
+ * pnpm exec esbuild src/revocations.ts --bundle --format=esm --platform=node \
+ *   --outfile=/Volumes/D5/tmp/d0867-20261014/revocations.mjs
+ * awk '/^REGRESSION_BEGIN$/{p=1;next}/^REGRESSION_END$/{p=0}p' src/revocations.ts \
+ *   > /Volumes/D5/tmp/d0867-20261014/revocations.test.mjs
+ * node --test /Volumes/D5/tmp/d0867-20261014/revocations.test.mjs
+REGRESSION_BEGIN
+import assert from "node:assert/strict";
+import test from "node:test";
+import { handleRevokedAuthors } from "./revocations.mjs";
+
+test("author revocation KV failures fail closed without caching an empty list", async () => {
+  for (const binding of ["REGISTRY", "PLUGINS_KV"]) {
+    const response = await handleRevokedAuthors({
+      [binding]: { get: async () => { throw new Error("KV unavailable"); } },
+    });
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(response.headers.get("Content-Type"), "application/json");
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+    const body = await response.json();
+    assert.equal(typeof body.error, "string");
+    assert.equal("revokedAuthors" in body, false);
+    assert.equal("count" in body, false);
+  }
+});
+
+test("author revocation successful and absent KV reads retain the public response", async () => {
+  const author = { authorKey: "revoked-author", revokedAt: "2026-10-14T00:00:00Z" };
+  for (const raw of [JSON.stringify([author]), null]) {
+    const response = await handleRevokedAuthors({ REGISTRY: {
+      get: async (key, type) => {
+        assert.equal(key, "revocations:authors");
+        assert.equal(type, "text");
+        return raw;
+      },
+    } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Cache-Control"), "public, max-age=60");
+    const body = await response.json();
+    assert.deepEqual(body.revokedAuthors, raw ? [author] : []);
+    assert.equal(body.count, raw ? 1 : 0);
+    assert.ok(Number.isFinite(Date.parse(body.fetchedAt)));
+  }
+});
+REGRESSION_END
+ */
+
 export async function handleRevokedAuthors(env: Env): Promise<Response> {
   const kv = env.REGISTRY ?? env.PLUGINS_KV;
   let revokedAuthors: RevokedAuthorEntry[] = [];
@@ -147,9 +197,12 @@ export async function handleRevokedAuthors(env: Env): Promise<Response> {
         }
       }
     } catch {
-      // KV read failure — return empty list so CLI is not falsely blocked.
-      // Errors are surfaced via the /health endpoint instead.
-      revokedAuthors = [];
+      // An unavailable revocation list must not become a cached all-clear.
+      return jsonResponse(
+        { error: "Author revocation list unavailable" },
+        503,
+        { "Cache-Control": "no-store" },
+      );
     }
   }
 
