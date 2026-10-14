@@ -1,0 +1,82 @@
+{
+  "schema_version": "1",
+  "command": "ci plan",
+  "data": {
+    "pipeline": {
+      "id": "default",
+      "name": "default",
+      "kind": "default"
+    },
+    "trigger": "local",
+    "selection": {
+      "mode": "affected",
+      "reason": "selection.affected",
+      "digest": "6c10afdfb86da9398ce4f499e3c18d1f4e4f662e887fafb52f5fc89b866cdd4a"
+    },
+    "support": [
+      "darwin/arm64",
+      "linux/amd64"
+    ],
+    "fail_fast": "dependants",
+    "layers": [
+      [
+        "lint"
+      ]
+    ],
+    "jobs": [
+      {
+        "id": "lint",
+        "name": "lint",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.affected",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "make",
+            "lint"
+          ],
+          "workdir": "tools",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "high",
+          "path": "fast",
+          "isolation": "process"
+        }
+      }
+    ],
+    "skipped": [
+      {
+        "job": "build",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      },
+      {
+        "job": "flaky",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      },
+      {
+        "job": "images",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      },
+      {
+        "job": "ios",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      },
+      {
+        "job": "mac-ui",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      }
+    ]
+  }
+}
