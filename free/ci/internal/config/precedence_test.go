@@ -84,3 +84,24 @@ func TestBindingsDeclareEachEnvOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestRetryAndExtraProvenance(t *testing.T) {
+	l := loaded(t, "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    retry: {}\n    idempotent: false\n    allow_failure: true\n    workdir: sub\n    isolation: container\n    priority: high\n  b:\n    kind: test\n    run: [y]\n    retry: {infra_max: 0}\n")
+	e, err := Resolve(Inputs{Loaded: l})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := e.Jobs["a"], e.Jobs["b"]
+	if a.RetryInfraMax.Source != SourceDefault || a.RetryInfraMax.Value != 1 {
+		t.Errorf("retry: {} must keep the default: %+v", a.RetryInfraMax)
+	}
+	if b.RetryInfraMax != (Value{0, SourceFile, "ci.yaml:15"}) {
+		t.Errorf("explicit zero lost: %+v", b.RetryInfraMax)
+	}
+	if a.Idempotent.Value != false || a.AllowFailure.Value != true || a.Workdir.Value != "sub" || a.Isolation.Value != "container" || a.Priority.Value != "high" || a.Idempotent.Source != SourceFile {
+		t.Errorf("extra provenance: %+v", a)
+	}
+	if b.Idempotent.Source != SourceDefault || b.Workdir.Value != "." {
+		t.Errorf("defaults: %+v", b)
+	}
+}

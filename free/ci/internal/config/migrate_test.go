@@ -94,7 +94,7 @@ func assertSameJobs(t *testing.T, root string, m *Migration) {
 			if strings.Join(job.Run, "\x00") != strings.Join(st.Cmd, "\x00") {
 				t.Errorf("%s: argv %v != %v", st.Name, job.Run, st.Cmd)
 			}
-			wantTimeout := ""
+			wantTimeout := fmt.Sprintf("%ds", legacyDefaultTimeout)
 			if st.Timeout > 0 {
 				wantTimeout = fmt.Sprintf("%ds", st.Timeout)
 			}
@@ -127,6 +127,7 @@ func TestMigrateUntranslatable(t *testing.T) {
 		"stage without cmd":       {"plugin: p\nstages:\n  - name: a\n", "stages[0].cmd"},
 		"negative timeout":        {"plugin: p\nstages:\n  - name: a\n    cmd: [x]\n    timeout: -1\n", "stages[0].timeout"},
 		"unreadable":              {"plugin: [\n", ""},
+		"second document":         {"plugin: p\nstages:\n  - name: a\n    cmd: [x]\n---\nplugin: q\n", "---"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -175,5 +176,34 @@ func TestMigrateNothingAndNoOverwrite(t *testing.T) {
 	}
 	if err := m.Write(root); err == nil {
 		t.Fatal("Write replaced a file with other content")
+	}
+}
+
+func TestMigrateNotes(t *testing.T) {
+	m, err := Migrate(copyFixture(t, filepath.Join("legacy", "gauth")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(m.Notes, "\n")
+	if !strings.Contains(joined, "inline cmd") || !strings.Contains(joined, "independent") {
+		t.Errorf("notes: %v", m.Notes)
+	}
+}
+
+func TestWriteRefusesSymlinks(t *testing.T) {
+	root := copyFixture(t, filepath.Join("legacy", "gauth"))
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, ".nself")); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Write(root); err == nil {
+		t.Fatal("wrote through a symlinked .nself")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("file created outside the repo: %v", entries)
 	}
 }

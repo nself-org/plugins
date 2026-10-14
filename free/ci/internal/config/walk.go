@@ -13,7 +13,9 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,6 +23,7 @@ import (
 const (
 	maxDepth = 64
 	maxNodes = 200_000
+	maxBytes = 4 << 20 // scalar bytes after alias expansion
 )
 
 type walker struct {
@@ -28,17 +31,23 @@ type walker struct {
 	lines  map[string]int
 	probs  []Problem
 	budget int
+	bytes  int
 }
 
 func (w *walker) bad(n *yaml.Node, ptr, msg string) {
 	w.probs = append(w.probs, Problem{File: w.file, Line: n.Line, Pointer: ptr, Message: msg})
 }
 
+// overLimit reports the expansion limit once.
+func (w *walker) overLimit(n *yaml.Node, ptr string) {
+	if len(w.probs) == 0 || w.probs[len(w.probs)-1].Message != tooBig {
+		w.bad(n, ptr, tooBig)
+	}
+}
+
 func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 	if w.budget--; w.budget < 0 || depth > maxDepth {
-		if len(w.probs) == 0 || w.probs[len(w.probs)-1].Message != tooBig {
-			w.bad(n, ptr, tooBig)
-		}
+		w.overLimit(n, ptr)
 		return nil
 	}
 	if n.Kind == yaml.AliasNode {
@@ -77,10 +86,27 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 		if n.Tag == "!!timestamp" || n.Tag == "!!binary" {
 			return n.Value
 		}
+		if w.bytes -= len(n.Value); w.bytes < 0 {
+			w.overLimit(n, ptr)
+			return nil
+		}
 		var v any
 		if err := n.Decode(&v); err != nil {
 			w.bad(n, ptr, err.Error())
 			return nil
+		}
+		switch x := v.(type) {
+		case nil:
+			// `key:` with no value or `~`: only the opaque policy block may hold one.
+			if ptr != "/policy" && !strings.HasPrefix(ptr, "/policy/") {
+				w.bad(n, ptr, "null is not allowed here; omit the key")
+			}
+		case uint64:
+			w.bad(n, ptr, "integer is out of range")
+		case float64:
+			if math.IsInf(x, 0) || math.IsNaN(x) {
+				w.bad(n, ptr, "number must be finite")
+			}
 		}
 		return v
 	}

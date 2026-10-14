@@ -62,7 +62,8 @@ func locate(err error, doc any) (string, string) {
 		case transparentKW[tok]:
 		}
 	}
-	return pick(cands, msg), cleanMessage(msg)
+	ptr, msg := pick(cands, msg)
+	return ptr, cleanMessage(msg)
 }
 
 func keep(m map[string]any, name string) []string {
@@ -98,17 +99,18 @@ func items(in []candidate) []candidate {
 	return out
 }
 
-// pick chooses the candidate the leaf message describes.
-func pick(cands []candidate, msg string) string {
+// pick chooses the candidate the leaf message describes and returns its
+// pointer with the message, the offending value redacted.
+func pick(cands []candidate, msg string) (string, string) {
 	if len(cands) == 0 {
-		return ""
+		return "", msg
 	}
 	if m := extraProp.FindStringSubmatch(msg); m != nil {
 		for _, c := range cands {
 			if obj, ok := c.value.(map[string]any); ok {
 				for _, q := range quotedName.FindAllStringSubmatch(m[1], -1) {
 					if _, has := obj[q[1]]; has {
-						return c.ptr + "/" + escape(q[1])
+						return c.ptr + "/" + escape(q[1]), msg
 					}
 				}
 			}
@@ -119,7 +121,7 @@ func pick(cands []candidate, msg string) string {
 			if obj, ok := c.value.(map[string]any); ok {
 				for _, q := range quotedName.FindAllStringSubmatch(m[1], -1) {
 					if _, has := obj[q[1]]; !has {
-						return c.ptr
+						return c.ptr, msg
 					}
 				}
 			}
@@ -134,14 +136,25 @@ func pick(cands []candidate, msg string) string {
 		}
 	}
 	for _, c := range cands {
-		if _, isObj := c.value.(map[string]any); isObj {
+		switch c.value.(type) {
+		case map[string]any, []any:
 			continue
 		}
-		if strings.HasSuffix(lead, " "+fmt.Sprint(c.value)) {
-			return c.ptr
+		// Strings appear quoted in pattern errors and bare in enum errors.
+		for _, form := range []string{strconv.Quote(fmt.Sprint(c.value)), fmt.Sprint(c.value)} {
+			if strings.HasSuffix(lead, " "+form) {
+				return c.ptr, redact(msg, lead, form)
+			}
 		}
 	}
-	return cands[0].ptr
+	return cands[0].ptr, msg
+}
+
+// redact hides the offending value: a literal secret pasted where a
+// reference belongs must never be echoed into logs or JSON envelopes.
+func redact(msg, lead, form string) string {
+	i := strings.LastIndex(lead, " "+form)
+	return msg[:i+1] + "<value>" + msg[i+1+len(form):]
 }
 
 // cleanMessage drops the schema-path noise from a leaf message.

@@ -100,6 +100,12 @@ func (m *Migration) Diff(root string) (string, error) {
 // other content (merge by hand) and succeeds quietly when the file is identical.
 func (m *Migration) Write(root string) error {
 	path := filepath.Join(root, FileName)
+	// Never write through a symlink: it could point outside the repo root.
+	for _, p := range []string{filepath.Dir(path), path} {
+		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: p + " is a symlink; replace it with a real file or directory before migrating"}}}
+		}
+	}
 	if current, err := os.ReadFile(path); err == nil {
 		if bytes.Equal(current, m.YAML) {
 			return nil

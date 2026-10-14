@@ -65,7 +65,14 @@ func parseLegacy(rel string, data []byte) (legacyFile, error) {
 	var lf legacyFile
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&lf); err != nil && !errors.Is(err, io.EOF) {
+	err := dec.Decode(&lf)
+	if err == nil {
+		var extra yaml.Node
+		if e := dec.Decode(&extra); !errors.Is(e, io.EOF) {
+			return lf, untranslatable(rel, extra.Line, "---", "a second YAML document would be dropped; the legacy runner reads one manifest per file")
+		}
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
 		if m := legacyField.FindStringSubmatch(err.Error()); m != nil {
 			line := 0
 			fmt.Sscanf(m[1], "%d", &line)
@@ -76,7 +83,13 @@ func parseLegacy(rel string, data []byte) (legacyFile, error) {
 	return lf, nil
 }
 
-var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
+// legacyDefaultTimeout is the `nself ci run --timeout` default in seconds.
+const legacyDefaultTimeout = 300
+
+var (
+	flowCmd = regexp.MustCompile(`(?m)^\s*(cmd|env_required):\s*\[`)
+	nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
+)
 
 func slug(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
@@ -91,7 +104,11 @@ func jobID(plugin, stage string, taken map[string]bool) string {
 		short = stage[i+1:]
 	}
 	for _, name := range []string{short, stage} {
-		if id := prefix + "-" + slug(name); !taken[id] && slug(name) != "" {
+		id := prefix + "-" + slug(name)
+		if prefix == "" {
+			id = slug(name)
+		}
+		if id != "" && slug(name) != "" && !taken[id] {
 			return id
 		}
 	}
@@ -140,6 +157,12 @@ func Migrate(root string) (*Migration, error) {
 		if lf.Epic != "" || lf.Stack != "" {
 			m.Notes = append(m.Notes, rel+": epic and stack are planning metadata and are dropped")
 		}
+		if flowCmd.Match(data) {
+			m.Notes = append(m.Notes, rel+": inline cmd/env_required arrays were never read by the legacy runner (it parsed block lists only), so those stages declared a command but ran none; the migrated jobs run the declared commands")
+		}
+		if len(lf.Stages) > 1 {
+			m.Notes = append(m.Notes, rel+": the legacy runner ran its stages in order in one directory; the migrated jobs are independent, so add deps (or merge the commands into one job) wherever a stage reads files another produces")
+		}
 		if len(lf.GatewayRoutes) > 0 {
 			return nil, untranslatable(rel, 0, "gateway_routes", "gateway route probes are not jobs; remove the field or move the probes into a job run argv")
 		}
@@ -157,6 +180,8 @@ func Migrate(root string) (*Migration, error) {
 			}
 			taken[id] = true
 			job := model.Job{Kind: kindFor(st.Name), Run: st.Cmd}
+			// A stage without a timeout ran under the legacy runner's 300 s default.
+			job.Timeout = fmt.Sprintf("%ds", legacyDefaultTimeout)
 			if st.Timeout > 0 {
 				job.Timeout = fmt.Sprintf("%ds", st.Timeout)
 			}

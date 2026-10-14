@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const goodJob = "  a:\n    kind: test\n    run: [go, test]\n"
@@ -23,7 +24,7 @@ func TestLoadInvalid(t *testing.T) {
 		{"bad version", "version: 2\n", 1, "/version", "does not equal 1"},
 		{"missing version", "jobs: {}\n", 1, "", "missing properties"},
 		{"second job is the bad one", "version: 1\njobs:\n" + goodJob + "  b:\n    kind: weird\n    run: [x]\n", 7, "/jobs/b/kind", "does not equal any of"},
-		{"bad list item", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    when:\n      triggers: [push, never]\n", 7, "/jobs/a/when/triggers/1", "never"},
+		{"bad list item", "version: 1\njobs:\n  a:\n    kind: test\n    run: [go, test]\n    when:\n      triggers: [push, never]\n", 7, "/jobs/a/when/triggers/1", "does not equal"},
 		{"duplicate key", "version: 1\nversion: 1\n", 2, "/version", "duplicate key"},
 		{"non-string key", "version: 1\n7: x\n", 2, "", "keys must be strings"},
 		{"two documents", "version: 1\n---\nversion: 1\n", 3, "", "more than one YAML document"},
@@ -33,6 +34,14 @@ func TestLoadInvalid(t *testing.T) {
 		{"unknown dependency", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [ghost]\n", 6, "/jobs/a/deps/0", "unknown job"},
 		{"unknown service", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    needs_services: [db]\n", 6, "/jobs/a/needs_services/0", "unknown service"},
 		{"unknown pipeline job", "version: 1\npipelines:\n  p:\n    triggers: [push]\n    jobs: [ghost]\n", 5, "/pipelines/p/jobs/0", "unknown job"},
+		{"pattern error names the bad job", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: 30s\n  b:\n    kind: test\n    run: [x]\n    timeout: \"30\"\n", 10, "/jobs/b/timeout", "does not match"},
+		{"pattern error in a list", "version: 1\nsupport:\n  - linux/amd64\n  - invalid\n", 4, "/support/1", "does not match"},
+		{"null run", "version: 1\njobs:\n  a:\n    kind: test\n    run:\n", 5, "/jobs/a/run", "null is not allowed"},
+		{"null policy is fine only inside policy", "version: 1\ndetect:\n", 2, "/detect", "null is not allowed"},
+		{"timeout overflow", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: 999999999999999999999h\n", 6, "/jobs/a/timeout", "positive duration"},
+		{"negative timeout", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: -5s\n", 6, "/jobs/a/timeout", "positive duration"},
+		{"infinite number", "version: 1\npolicy: {a: 1}\njobs:\n  a:\n    kind: test\n    run: [x]\n    requires: {cpu: .inf}\n", 7, "/jobs/a/requires/cpu", "finite"},
+		{"integer too large", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    requires: {cpu: 9223372036854775808}\n", 6, "/jobs/a/requires/cpu", "out of range"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -135,4 +144,32 @@ func FuzzLoad(f *testing.F) {
 			t.Fatalf("second parse differs: %v", err)
 		}
 	})
+}
+
+func TestErrorNeverEchoesTheValue(t *testing.T) {
+	doc := "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    secrets: [project/ok, ghp_FAKEFAKEFAKEFAKEFAKE]\n"
+	_, err := Parse("ci.yaml", []byte(doc))
+	if err == nil || strings.Contains(err.Error(), "FAKEFAKE") {
+		t.Fatalf("value echoed or no error: %v", err)
+	}
+	if e := err.(*Error); e.Problems[0].Pointer != "/jobs/a/secrets/1" || e.Problems[0].Line != 6 {
+		t.Errorf("located %+v", e.Problems[0])
+	}
+}
+
+func TestAliasBombIsRefused(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("version: 1\nsupport: &s [" + strings.Repeat("x", 1<<16) + "]\nx:\n")
+	b.WriteString("  - &big " + strings.Repeat("y", 1<<16) + "\n")
+	for i := 0; i < 200; i++ {
+		b.WriteString("  - *big\n")
+	}
+	start := time.Now()
+	_, err := Parse("bomb.yaml", []byte(b.String()))
+	if err == nil || !strings.Contains(err.Error(), "expands too far") {
+		t.Fatalf("alias bomb accepted: %v", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Errorf("took %v", time.Since(start))
+	}
 }

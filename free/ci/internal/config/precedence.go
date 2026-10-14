@@ -56,6 +56,11 @@ type JobValues struct {
 	Required      Value `json:"required"`
 	Path          Value `json:"path"`
 	RetryInfraMax Value `json:"retry_infra_max"`
+	Priority      Value `json:"priority"`
+	Idempotent    Value `json:"idempotent"`
+	AllowFailure  Value `json:"allow_failure"`
+	Workdir       Value `json:"workdir"`
+	Isolation     Value `json:"isolation"`
 }
 
 // Effective is the resolved configuration.
@@ -141,6 +146,11 @@ func Resolve(in Inputs) (Effective, error) {
 			Required:      Value{true, SourceDefault, "built-in"},
 			Path:          Value{"deep", SourceDefault, "built-in"},
 			RetryInfraMax: Value{1, SourceDefault, "built-in"},
+			Priority:      Value{"normal", SourceDefault, "built-in"},
+			Idempotent:    Value{true, SourceDefault, "built-in"},
+			AllowFailure:  Value{false, SourceDefault, "built-in"},
+			Workdir:       Value{".", SourceDefault, "built-in"},
+			Isolation:     Value{"process", SourceDefault, "built-in"},
 		}
 		if job.Timeout != "" {
 			jv.Timeout = Value{job.Timeout, SourceFile, at("/timeout")}
@@ -154,8 +164,23 @@ func Resolve(in Inputs) (Effective, error) {
 		if job.Path != "" {
 			jv.Path = Value{string(job.Path), SourceFile, at("/path")}
 		}
-		if job.Retry != nil {
-			jv.RetryInfraMax = Value{job.Retry.InfraMax, SourceFile, at("/retry")}
+		if _, set := in.Loaded.Lines[jobPtr(id, "/retry/infra_max")]; set && job.Retry != nil {
+			jv.RetryInfraMax = Value{job.Retry.InfraMax, SourceFile, at("/retry/infra_max")}
+		}
+		if job.Priority != "" {
+			jv.Priority = Value{string(job.Priority), SourceFile, at("/priority")}
+		}
+		if job.Idempotent != nil {
+			jv.Idempotent = Value{*job.Idempotent, SourceFile, at("/idempotent")}
+		}
+		if _, set := in.Loaded.Lines[jobPtr(id, "/allow_failure")]; set {
+			jv.AllowFailure = Value{job.AllowFailure, SourceFile, at("/allow_failure")}
+		}
+		if job.Workdir != "" {
+			jv.Workdir = Value{job.Workdir, SourceFile, at("/workdir")}
+		}
+		if job.Isolation != "" {
+			jv.Isolation = Value{string(job.Isolation), SourceFile, at("/isolation")}
 		}
 		out.Jobs[id] = jv
 	}

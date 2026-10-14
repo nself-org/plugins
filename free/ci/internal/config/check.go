@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
@@ -27,6 +28,12 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 	}
 	for _, id := range sortedKeys(cfg.Jobs) {
 		job := cfg.Jobs[id]
+		if len(job.Run) == 0 {
+			add(jobPtr(id, "/run"), fmt.Sprintf("job %q needs a run argv with at least one element", id))
+		}
+		if job.Timeout != "" && !positiveDuration(job.Timeout) {
+			add(jobPtr(id, "/timeout"), fmt.Sprintf("job %q timeout is not a positive duration that fits in 290 years", id))
+		}
 		for i, dep := range job.Deps {
 			if _, ok := cfg.Jobs[dep]; !ok {
 				add(fmt.Sprintf("%s/%d", jobPtr(id, "/deps"), i), fmt.Sprintf("job %q depends on unknown job %q", id, dep))
@@ -39,6 +46,9 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 		}
 	}
 	for _, name := range sortedKeys(cfg.Pipelines) {
+		if age := cfg.Pipelines[name].MaxAge; age != "" && !positiveDuration(age) {
+			add("/pipelines/"+escape(name)+"/max_age", fmt.Sprintf("pipeline %q max_age is not a positive duration", name))
+		}
 		for i, id := range cfg.Pipelines[name].Jobs {
 			if _, ok := cfg.Jobs[id]; !ok {
 				add(fmt.Sprintf("/pipelines/%s/jobs/%d", escape(name), i), fmt.Sprintf("pipeline %q lists unknown job %q", name, id))
@@ -49,6 +59,13 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 		add("/jobs", "dependency cycle: "+cycle)
 	}
 	return out
+}
+
+// positiveDuration reports whether s parses as a Go duration above zero; the
+// schema pattern alone admits signs and values that overflow time.Duration.
+func positiveDuration(s string) bool {
+	d, err := time.ParseDuration(s)
+	return err == nil && d > 0
 }
 
 // findCycle returns "a -> b -> a" for the first cycle in deps, or "".

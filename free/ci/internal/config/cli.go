@@ -120,10 +120,25 @@ func warningTexts(ws []Warning) []string {
 }
 
 func repoRoot(flagValue string, d Deps) (string, error) {
+	if flagValue == "" {
+		flagValue = d.Getenv("NSELF_CI_REPO")
+	}
 	if flagValue != "" {
 		return filepath.Abs(flagValue)
 	}
 	return d.Getwd()
+}
+
+// ignoreWarning runs the E623 check; a check that cannot run says so.
+func ignoreWarning(root string, d Deps) []Warning {
+	w, err := CheckIgnored(context.Background(), root, d.Run)
+	switch {
+	case err != nil:
+		return []Warning{{Code: CodeIgnored, Message: "could not check whether " + FileName + " is git-ignored: " + err.Error()}}
+	case w != nil:
+		return []Warning{*w}
+	}
+	return nil
 }
 
 // RunShow implements `nself ci config show [--json]`.
@@ -165,9 +180,7 @@ func RunShow(args []string, stdout, stderr io.Writer, d Deps) int {
 		in.Loaded = loaded
 		data.FilePresent, data.Config, data.Version = true, &loaded.Config, loaded.Config.Version
 		data.Warnings = append(data.Warnings, loaded.Warnings...)
-		if w, err := CheckIgnored(context.Background(), root, d.Run); err == nil && w != nil {
-			data.Warnings = append(data.Warnings, *w)
-		}
+		data.Warnings = append(data.Warnings, ignoreWarning(root, d)...)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return emitError(command, o.json, stdout, stderr, err)
 	}
@@ -243,9 +256,7 @@ func RunMigrate(args []string, stdout, stderr io.Writer, d Deps) int {
 		}
 	}
 	data := migrateData{Sources: m.Sources, Jobs: m.Order, Diff: diff, Written: o.write, Notes: append([]string{}, m.Notes...), Warnings: []Warning{}}
-	if w, err := CheckIgnored(context.Background(), root, d.Run); err == nil && w != nil {
-		data.Warnings = append(data.Warnings, *w)
-	}
+	data.Warnings = append(data.Warnings, ignoreWarning(root, d)...)
 	if o.json {
 		if err := output.WriteData(stdout, command, data, &output.Meta{Warnings: warningTexts(data.Warnings)}); err != nil {
 			return emitError(command, false, stdout, stderr, err)

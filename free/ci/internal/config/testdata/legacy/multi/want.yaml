@@ -10,6 +10,7 @@ jobs:
   retrieval-test:
     kind: test
     run: [go, test, ./...]
+    timeout: 300s
   # from .ci.yaml stage build
   retrieval-build:
     kind: build
@@ -20,6 +21,7 @@ jobs:
     kind: static
     run: [npm, run, lint]
     workdir: free/other
+    timeout: 300s
     when:
       paths: [free/other/**]
   # legacy env_required (E2E_URL) was not enforced because skip_if_env_missing was false
@@ -36,6 +38,7 @@ jobs:
     kind: test
     run: [sh, -c, echo ok]
     workdir: free/other
+    timeout: 300s
     required: false
     when:
       paths: [free/other/**]
