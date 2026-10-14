@@ -62,19 +62,26 @@ func init() {
 }
 
 func planFail(asJSON bool, err error) int {
-	code, exit := "E619", 2
+	code, exit, msg := "E619", 2, err.Error()
 	var pe *plan.Error
-	if errors.As(err, &pe) {
-		code, exit = pe.Code, 1
-	}
 	var ce *config.Error
-	if errors.As(err, &ce) {
+	switch {
+	case errors.As(err, &pe):
+		code, exit = pe.Code, 1
+	case errors.As(err, &ce):
 		code, exit = ce.Code, 1
+		ds := make([]plan.Diagnostic, len(ce.Problems))
+		for i, p := range ce.Problems {
+			ds[i] = plan.Diagnostic{File: p.File, Line: p.Line, Pointer: p.Pointer, Message: p.Message}
+		}
+		if de := plan.DAGError(ds); de != nil { // a cycle or undefined dep is E616, not E620
+			code, msg = de.Code, de.Error()
+		}
 	}
 	if asJSON {
-		_ = output.WriteError(os.Stdout, "ci plan", output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit}, nil)
+		_ = output.WriteError(os.Stdout, "ci plan", output.ErrorDetail{Code: code, Message: msg, ExitCode: exit}, nil)
 	} else {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, msg)
 	}
 	return exit
 }
@@ -128,7 +135,9 @@ func runPlan(args []string) int {
 		}
 		return 0
 	}
-	fmt.Fprintln(os.Stdout, strings.Join(p.Human(cells), "\n"))
+	if _, err := fmt.Fprintln(os.Stdout, strings.Join(p.Human(cells), "\n")); err != nil {
+		return planFail(false, err)
+	}
 	return 0
 }
 
@@ -248,26 +257,9 @@ var planToolAlias = map[string]string{"xcode": "xcodebuild"}
 // planWorld probes the local world: platform, the tools the plan may need,
 // Docker, CPU and memory. No nodes or providers exist yet (closed world).
 func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
-	want := map[string]bool{"docker": true}
-	for _, c := range checks {
-		want[c.Tool] = true
-	}
-	for _, j := range cfg.Jobs {
-		if j.Requirements != nil {
-			for _, t := range j.Requirements.Tools {
-				want[t] = true
-			}
-		}
-	}
 	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH}
-	names := make([]string, 0, len(want))
-	for t := range want {
-		names = append(names, t)
-	}
-	sort.Strings(names)
-	for _, t := range names {
-		bin := firstOf(planToolAlias[t], t)
-		if t != "" && planOnPath(bin) {
+	for _, t := range plan.WantedTools(cfg, checks) {
+		if t != "" && planOnPath(firstOf(planToolAlias[t], t)) {
 			w.Tools = append(w.Tools, t)
 		}
 	}
