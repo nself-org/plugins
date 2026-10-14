@@ -1,0 +1,337 @@
+{
+  "schema_version": "1",
+  "command": "ci plan",
+  "data": {
+    "pipeline": {
+      "id": "default",
+      "name": "default",
+      "kind": "default"
+    },
+    "trigger": "local",
+    "selection": {
+      "mode": "full",
+      "reason": "selection.no_base",
+      "digest": "af5abbdb6494e8e88c5393b841f8bfac74b938ea3340c55221c20fbf19489971"
+    },
+    "support": [
+      "linux/amd64"
+    ],
+    "fail_fast": "dependants",
+    "layers": [
+      [
+        "go.fmt",
+        "go.test",
+        "go.vet",
+        "node.build.web",
+        "node.lint.web",
+        "node.test.web",
+        "node.typecheck.web",
+        "rust.clippy.engine",
+        "rust.test.engine",
+        "secrets.gitleaks"
+      ]
+    ],
+    "jobs": [
+      {
+        "id": "go.fmt",
+        "name": "go.fmt",
+        "check": "go.fmt",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "gofmt",
+            "-l",
+            "."
+          ],
+          "workdir": ".",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "go.test",
+        "name": "go.test",
+        "check": "go.test",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "test",
+          "run": [
+            "go",
+            "test",
+            "-count=1",
+            "./..."
+          ],
+          "workdir": ".",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "go.vet",
+        "name": "go.vet",
+        "check": "go.vet",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "go",
+            "vet",
+            "./..."
+          ],
+          "workdir": ".",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "node.build.web",
+        "name": "node.build.web",
+        "check": "node.build",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "build",
+          "run": [
+            "npm",
+            "run",
+            "build"
+          ],
+          "workdir": "web",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "deep",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "node.lint.web",
+        "name": "node.lint.web",
+        "check": "node.lint",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "npm",
+            "run",
+            "lint"
+          ],
+          "workdir": "web",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "node.test.web",
+        "name": "node.test.web",
+        "check": "node.test",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "test",
+          "run": [
+            "npm",
+            "run",
+            "test"
+          ],
+          "workdir": "web",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "node.typecheck.web",
+        "name": "node.typecheck.web",
+        "check": "node.typecheck",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "npm",
+            "run",
+            "typecheck"
+          ],
+          "workdir": "web",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "rust.clippy.engine",
+        "name": "rust.clippy.engine",
+        "check": "rust.clippy",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "cargo",
+            "clippy",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "--deny",
+            "warnings"
+          ],
+          "workdir": "engine",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "rust.test.engine",
+        "name": "rust.test.engine",
+        "check": "rust.test",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "test",
+          "run": [
+            "cargo",
+            "test",
+            "--all-features"
+          ],
+          "workdir": "engine",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "secrets.gitleaks",
+        "name": "secrets.gitleaks",
+        "check": "secrets.gitleaks",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.no_base",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "quality",
+          "run": [
+            "gitleaks",
+            "detect",
+            "--source",
+            ".",
+            "--exit-code",
+            "1"
+          ],
+          "workdir": ".",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      }
+    ],
+    "skipped": [
+      {
+        "job": "go.govulncheck",
+        "reason": "advisory.tool_missing",
+        "detail": "tool govulncheck is not on PATH"
+      },
+      {
+        "job": "security.trivy.fs",
+        "reason": "advisory.tool_missing",
+        "detail": "tool trivy is not on PATH"
+      }
+    ]
+  }
+}

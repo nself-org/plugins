@@ -1,0 +1,297 @@
+package main
+
+// Purpose: the `plan` subcommand of nself-ci (P7-CI-35): probe the local
+// world and the git revision, call the pure planner and print the plan.
+// Inputs:  --json, --pipeline NAME, --trigger T, --repo DIR, --config FILE,
+// --base SHA (env NSELF_CI_REPO, NSELF_CI_BASE_SHA).
+// Outputs: a table, or with --json one v1 envelope whose data is the plan
+// (jobs, layers, skipped, selection); exit 0, 1 (invalid config or plan),
+// 2 (infrastructure).
+// Constraints: V15 only, registered from init(); every process (git) runs
+// through the exec funnel; catalogue checks join the plan only when the
+// config declares no jobs of its own; SCHED files add flags to planFlags and
+// set placePlan from their init(); nil placePlan adds nothing to the output.
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/nself-org/cli/sdk/go/v2/output"
+
+	"github.com/nself-org/plugins/free/ci/internal/config"
+	"github.com/nself-org/plugins/free/ci/internal/detect"
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/gates"
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
+)
+
+// planFlags is the flag set of `plan`; SCHED files register more flags on it.
+var planFlags = flag.NewFlagSet("plan", flag.ContinueOnError)
+
+// placePlan, when set, adds placement to the plan after it is built and
+// validated: data goes under data.placement, human to the table.
+var placePlan func(ctx context.Context, p *model.Pipeline) (data any, human []string, err error)
+
+var planOpts struct {
+	json                               bool
+	pipeline, trigger, repo, cfg, base string
+}
+
+func init() {
+	planFlags.BoolVar(&planOpts.json, "json", false, "print one v1 JSON envelope")
+	planFlags.StringVar(&planOpts.pipeline, "pipeline", "", "named pipeline to plan (default: every non-drill job)")
+	planFlags.StringVar(&planOpts.trigger, "trigger", "", "plan the pipelines listing this trigger (push, pull_request, tag, manual, schedule, api, local)")
+	planFlags.StringVar(&planOpts.repo, "repo", "", "repository root (env NSELF_CI_REPO; default: current directory)")
+	planFlags.StringVar(&planOpts.cfg, "config", "", "config file (default: <repo>/.nself/ci.yaml)")
+	planFlags.StringVar(&planOpts.base, "base", "", "base commit for affected selection (env NSELF_CI_BASE_SHA; default: merge-base with origin's default branch)")
+	registerV15("plan", subcommandEntry{
+		V15Only: true,
+		Flags:   func() *flag.FlagSet { return planFlags },
+		Handler: runPlan,
+	})
+}
+
+func planFail(asJSON bool, err error) int {
+	code, exit := "E619", 2
+	var pe *plan.Error
+	if errors.As(err, &pe) {
+		code, exit = pe.Code, 1
+	}
+	var ce *config.Error
+	if errors.As(err, &ce) {
+		code, exit = ce.Code, 1
+	}
+	if asJSON {
+		_ = output.WriteError(os.Stdout, "ci plan", output.ErrorDetail{Code: code, Message: err.Error(), ExitCode: exit}, nil)
+	} else {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	return exit
+}
+
+func runPlan(args []string) int {
+	planFlags.SetOutput(os.Stderr)
+	if err := planFlags.Parse(args); err != nil {
+		return 2
+	}
+	o := planOpts
+	ctx := context.Background()
+	root := firstOf(o.repo, os.Getenv("NSELF_CI_REPO"))
+	var err error
+	if root == "" {
+		root, err = os.Getwd()
+	} else {
+		root, err = filepath.Abs(root)
+	}
+	if err != nil {
+		return planFail(o.json, err)
+	}
+	if err := config.CheckLeftover(root); err != nil {
+		return planFail(o.json, err)
+	}
+	cfg := model.PipelineConfig{Version: 1}
+	path := firstOf(o.cfg, filepath.Join(root, config.FileName))
+	loaded, err := config.Load(path)
+	switch {
+	case err == nil:
+		cfg = loaded.Config
+	case !errors.Is(err, os.ErrNotExist) || o.cfg != "":
+		return planFail(o.json, err)
+	}
+	facts, checks, err := planChecks(root, cfg)
+	if err != nil {
+		return planFail(o.json, err)
+	}
+	in := plan.Input{Config: cfg, Facts: facts, Checks: checks, Revision: planRevision(ctx, root, o.base),
+		World: planWorld(cfg, checks), Pipeline: o.pipeline, Trigger: model.Trigger(o.trigger)}
+	p, err := plan.Build(in)
+	if err != nil {
+		return planFail(o.json, err)
+	}
+	cells, err := p.ApplyPlacement(ctx, placePlan)
+	if err != nil {
+		return planFail(o.json, err)
+	}
+	if o.json {
+		if err := output.WriteData(os.Stdout, "ci plan", p, nil); err != nil {
+			return planFail(false, err)
+		}
+		return 0
+	}
+	fmt.Fprintln(os.Stdout, strings.Join(p.Human(cells), "\n"))
+	return 0
+}
+
+// planChecks detects the repo's ecosystems and plans the catalogue checks
+// (only when the config declares no jobs; detect.disable drops ecosystems).
+func planChecks(root string, cfg model.PipelineConfig) ([]detect.Fact, []plan.Check, error) {
+	reg := gates.DefaultRegistry()
+	facts, err := detect.DefaultRegistry().Detect(os.DirFS(root), reg.Has)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(cfg.Jobs) > 0 {
+		return facts, nil, nil
+	}
+	off := map[string]bool{}
+	if cfg.Detect != nil {
+		for _, d := range cfg.Detect.Disable {
+			off[d] = true
+		}
+	}
+	var out []plan.Check
+	for _, c := range reg.Plan(facts, gates.Options{Config: cfg}) {
+		if off[strings.SplitN(c.Def.ID, ".", 2)[0]] {
+			continue
+		}
+		argv := make([]string, len(c.Def.Argv))
+		for i, a := range c.Def.Argv {
+			argv[i] = strings.ReplaceAll(a, "{target}", c.Target)
+		}
+		out = append(out, plan.Check{ID: c.Def.ID, Kind: c.Def.Kind, Tool: c.Def.Tool, Workdir: c.Workdir, Target: c.Target,
+			Argv: argv, Required: c.Required, Substantive: c.Def.Substantive, Path: c.Def.Path})
+	}
+	return facts, out, nil
+}
+
+var planSHA = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+
+// planRevision computes the revision context through the exec funnel: the
+// PR base sha (--base or NSELF_CI_BASE_SHA), else the merge-base with
+// origin's default branch; no base means BaseKnown=false (full plan). An
+// unknown default branch or a detached HEAD counts as the default branch
+// (plan.ClassifyRevision), so required deep jobs are never dropped by guess.
+func planRevision(ctx context.Context, root, base string) plan.Revision {
+	raw := func(args ...string) (string, bool) { return planGit(ctx, root, args...) }
+	git := func(args ...string) (string, bool) {
+		s, ok := raw(args...)
+		return strings.TrimSpace(s), ok
+	}
+	rev := plan.Revision{}
+	for _, kv := range os.Environ() {
+		rev.Env = append(rev.Env, strings.SplitN(kv, "=", 2)[0])
+	}
+	facts := plan.BranchFacts{Detached: true}
+	if b, ok := git("rev-parse", "--abbrev-ref", "HEAD"); ok && b != "HEAD" && b != "" {
+		facts.Branch, facts.Detached = b, false
+		rev.Branch = b
+	}
+	if s, ok := git("symbolic-ref", "--short", "refs/remotes/origin/HEAD"); ok {
+		facts.OriginHead = strings.TrimPrefix(s, "origin/")
+	}
+	for _, n := range []string{"main", "master", "trunk"} {
+		if _, ok := git("rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+n); ok {
+			facts.Remotes = append(facts.Remotes, n)
+		}
+	}
+	_, facts.ExactTag = git("describe", "--exact-match", "--tags", "HEAD")
+	rev.DefaultBranch, rev.Release = plan.ClassifyRevision(facts)
+	base = firstOf(base, os.Getenv("NSELF_CI_BASE_SHA"))
+	if def := plan.DefaultBranchName(facts); base == "" && def != "" {
+		if mb, ok := git("merge-base", "HEAD", "origin/"+def); ok {
+			base = mb
+		}
+	}
+	if !planSHA.MatchString(base) {
+		return rev
+	}
+	// NUL-separated, renames split into delete + add, so no path is quoted
+	// or lost: a file moved out of a module still selects that module.
+	changed, ok1 := raw("diff", "--name-only", "--no-renames", "-z", base)
+	fresh, ok2 := raw("ls-files", "-z", "--others", "--exclude-standard")
+	if !ok1 || !ok2 {
+		return rev
+	}
+	seen := map[string]bool{}
+	for _, l := range strings.Split(changed+"\x00"+fresh, "\x00") {
+		if l = strings.Trim(l, "\r\n"); l != "" && !seen[l] {
+			seen[l] = true
+			rev.Changed = append(rev.Changed, l)
+		}
+	}
+	sort.Strings(rev.Changed)
+	rev.BaseKnown = true
+	return rev
+}
+
+// planGit runs git in a funnel workspace and returns its raw output; ok is
+// false on a non-zero exit or any failure.
+func planGit(ctx context.Context, root string, args ...string) (string, bool) {
+	home, err := os.MkdirTemp("", "nself-ci-plan-")
+	if err != nil {
+		return "", false
+	}
+	defer func() { _ = os.RemoveAll(home) }()
+	var buf strings.Builder
+	var ex ciexec.Executor
+	res := ex.Run(ctx, ciexec.JobSpec{
+		AttemptID: fmt.Sprintf("plan-git-%d", time.Now().UnixNano()), CoordinatorID: "plan",
+		Job: model.Job{Kind: "static"}, Home: home, Timeout: 30 * time.Second,
+		Command: append([]string{"git", "-c", "core.fsmonitor=false", "-C", root}, args...),
+		Output:  func(b []byte) { buf.Write(b) },
+	})
+	return buf.String(), res.Err == nil && res.ExitCode == 0
+}
+
+var planToolAlias = map[string]string{"xcode": "xcodebuild"}
+
+// planWorld probes the local world: platform, the tools the plan may need,
+// Docker, CPU and memory. No nodes or providers exist yet (closed world).
+func planWorld(cfg model.PipelineConfig, checks []plan.Check) plan.World {
+	want := map[string]bool{"docker": true}
+	for _, c := range checks {
+		want[c.Tool] = true
+	}
+	for _, j := range cfg.Jobs {
+		if j.Requirements != nil {
+			for _, t := range j.Requirements.Tools {
+				want[t] = true
+			}
+		}
+	}
+	w := plan.World{Platform: runtime.GOOS + "/" + runtime.GOARCH}
+	names := make([]string, 0, len(want))
+	for t := range want {
+		names = append(names, t)
+	}
+	sort.Strings(names)
+	for _, t := range names {
+		bin := firstOf(planToolAlias[t], t)
+		if t != "" && planOnPath(bin) {
+			w.Tools = append(w.Tools, t)
+		}
+	}
+	w.Docker = planOnPath("docker")
+	c := ciexec.Probe()
+	w.CPU, w.MemMB = c.CPUs, c.MemoryMB
+	return w
+}
+
+func planOnPath(name string) bool {
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if dir == "" {
+			dir = "."
+		}
+		if s, err := os.Stat(filepath.Join(dir, name)); err == nil && !s.IsDir() && s.Mode()&0111 != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func firstOf(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}

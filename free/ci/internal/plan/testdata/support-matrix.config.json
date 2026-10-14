@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "support": ["linux/amd64", "darwin/arm64"],
+  "jobs": {
+    "build": {"kind": "build", "run": ["make", "build"], "matrix": {"platform": "support"}, "path": "fast"},
+    "mac-ui": {"kind": "test", "run": ["make", "ui"], "matrix": {"platform": ["darwin/arm64"]}, "deps": ["build"], "required": false},
+    "images": {"kind": "release", "run": ["make", "image"], "isolation": "container", "container": {"image": "registry.test/app@sha256:0000000000000000000000000000000000000000000000000000000000000000"}, "deps": ["build"]},
+    "lint": {"kind": "static", "run": ["make", "lint"], "workdir": "tools", "path": "fast", "priority": "high"},
+    "flaky": {"kind": "test", "run": ["make", "flaky"], "allow_failure": true, "required": false, "retry": {"infra_max": 2}},
+    "ios": {"kind": "build", "run": ["xcodebuild", "-scheme", "App"], "requires": {"tools": ["xcode"], "cpu": 2}}
+  },
+  "pipelines": {
+    "nightly": {"triggers": ["schedule"], "jobs": ["build", "flaky"]}
+  }
+}
