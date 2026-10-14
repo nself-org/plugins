@@ -50,7 +50,7 @@ func CheckIgnored(ctx context.Context, root string, run Runner) (*Warning, error
 	if run == nil {
 		return nil, nil
 	}
-	code, err := run(ctx, []string{"git", "-C", root, "check-ignore", "-q", "--", FileName})
+	code, err := run(ctx, []string{"git", "-c", "core.fsmonitor=false", "-C", root, "check-ignore", "-q", "--", FileName})
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,9 @@ package config
 
 import (
 	"fmt"
+	"path"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +31,19 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 	}
 	for _, id := range sortedKeys(cfg.Jobs) {
 		job := cfg.Jobs[id]
+		if !safeName.MatchString(id) {
+			add("/jobs/"+escape(id), "job id must match "+safeName.String())
+		}
+		if escapesRepo(job.Workdir) {
+			add(jobPtr(id, "/workdir"), fmt.Sprintf("job %q workdir must stay inside the repository", id))
+		}
+		if job.When != nil {
+			for i, p := range job.When.Paths {
+				if escapesRepo(p) {
+					add(fmt.Sprintf("%s/%d", jobPtr(id, "/when/paths"), i), "when.paths entries must stay inside the repository")
+				}
+			}
+		}
 		if len(job.Run) == 0 {
 			add(jobPtr(id, "/run"), fmt.Sprintf("job %q needs a run argv with at least one element", id))
 		}
@@ -45,7 +61,18 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 			}
 		}
 	}
+	for _, name := range sortedKeys(cfg.Services) {
+		if !safeName.MatchString(name) {
+			add("/services/"+escape(name), "service name must match "+safeName.String())
+		}
+	}
 	for _, name := range sortedKeys(cfg.Pipelines) {
+		if !safeName.MatchString(name) {
+			add("/pipelines/"+escape(name), "pipeline name must match "+safeName.String())
+		}
+		if escapesRepo(cfg.Pipelines[name].DrillsDir) {
+			add("/pipelines/"+escape(name)+"/drills_dir", "drills_dir must stay inside the repository")
+		}
 		if age := cfg.Pipelines[name].MaxAge; age != "" && !positiveDuration(age) {
 			add("/pipelines/"+escape(name)+"/max_age", fmt.Sprintf("pipeline %q max_age is not a positive duration", name))
 		}
@@ -59,6 +86,26 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 		add("/jobs", "dependency cycle: "+cycle)
 	}
 	return out
+}
+
+// safeName is the shape of an id that later becomes a path component or a
+// log field (the same rule internal/exec applies to attempt ids).
+var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+// escapesRepo reports a path that is absolute or climbs out with "..".
+func escapesRepo(p string) bool {
+	if p == "" {
+		return false
+	}
+	if path.IsAbs(p) || filepath.IsAbs(p) || strings.HasPrefix(p, "~") {
+		return true
+	}
+	for _, seg := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // positiveDuration reports whether s parses as a Go duration above zero; the

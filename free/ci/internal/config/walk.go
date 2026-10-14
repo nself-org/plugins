@@ -114,4 +114,4 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 	return nil
 }
 
-const tooBig = "document nests too deeply or expands too far (alias cycle or alias bomb)"
+const tooBig = "document is too large or nests too deeply (limits apply after alias expansion)"

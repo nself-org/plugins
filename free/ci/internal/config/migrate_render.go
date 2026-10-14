@@ -117,5 +117,13 @@ func (m *Migration) Write(root string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, m.YAML, 0o644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(m.YAML); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }

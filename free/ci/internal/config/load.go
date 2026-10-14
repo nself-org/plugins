@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 
@@ -86,16 +87,24 @@ type Loaded struct {
 
 // Load reads and validates the config file at path.
 func Load(path string) (*Loaded, error) {
-	data, err := os.ReadFile(path)
+	data, err := readRegular(path)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		return nil, &Error{Code: CodeInvalid, Problems: []Problem{{File: path, Message: err.Error()}}}
 	}
 	return Parse(path, data)
 }
 
 // Parse validates a config document. A validation failure is an *Error.
 func Parse(name string, data []byte) (*Loaded, error) {
-	fail := func(ps ...Problem) (*Loaded, error) { return nil, &Error{Code: CodeInvalid, Problems: ps} }
+	fail := func(ps ...Problem) (*Loaded, error) {
+		for i := range ps {
+			ps[i].Pointer, ps[i].Message = printable(ps[i].Pointer), printable(ps[i].Message)
+		}
+		return nil, &Error{Code: CodeInvalid, Problems: ps}
+	}
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var doc yaml.Node
 	if err := dec.Decode(&doc); err != nil {
@@ -186,4 +195,15 @@ func lineFor(lines map[string]int, ptr string) int {
 		}
 		ptr = ptr[:i]
 	}
+}
+
+// printable replaces control characters so untrusted text from a config
+// cannot forge log lines or drive a terminal.
+func printable(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '?'
+		}
+		return r
+	}, s)
 }

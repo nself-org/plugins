@@ -42,6 +42,9 @@ func TestLoadInvalid(t *testing.T) {
 		{"negative timeout", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: -5s\n", 6, "/jobs/a/timeout", "positive duration"},
 		{"infinite number", "version: 1\npolicy: {a: 1}\njobs:\n  a:\n    kind: test\n    run: [x]\n    requires: {cpu: .inf}\n", 7, "/jobs/a/requires/cpu", "finite"},
 		{"integer too large", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    requires: {cpu: 9223372036854775808}\n", 6, "/jobs/a/requires/cpu", "out of range"},
+		{"workdir escapes", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    workdir: ../../outside\n", 6, "/jobs/a/workdir", "inside the repository"},
+		{"absolute path glob", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    when:\n      paths: [src/**, /etc/**]\n", 7, "/jobs/a/when/paths/1", "inside the repository"},
+		{"unsafe job id", "version: 1\njobs:\n  ../x:\n    kind: test\n    run: [x]\n", 3, "/jobs/..~1x", "job id must match"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -166,10 +169,18 @@ func TestAliasBombIsRefused(t *testing.T) {
 	}
 	start := time.Now()
 	_, err := Parse("bomb.yaml", []byte(b.String()))
-	if err == nil || !strings.Contains(err.Error(), "expands too far") {
+	if err == nil || !strings.Contains(err.Error(), "too large") {
 		t.Fatalf("alias bomb accepted: %v", err)
 	}
 	if time.Since(start) > 5*time.Second {
 		t.Errorf("took %v", time.Since(start))
+	}
+}
+
+func TestErrorTextHasNoControlCharacters(t *testing.T) {
+	doc := "version: 1\njobs:\n  \"a\\nE620: fake\":\n    kind: test\n    run: [x]\n"
+	_, err := Parse("ci.yaml", []byte(doc))
+	if err == nil || strings.ContainsAny(err.Error(), "\x1b\r") || strings.Count(err.Error(), "\n") != 0 {
+		t.Fatalf("control characters survived: %q", err)
 	}
 }

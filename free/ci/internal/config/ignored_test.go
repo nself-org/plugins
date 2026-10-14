@@ -68,7 +68,7 @@ func TestIgnoredWarning(t *testing.T) {
 		if err != nil || w == nil {
 			t.Fatalf("exit 0 must warn: %v %v", w, err)
 		}
-		if strings.Join(got, " ") != "git -C /repo check-ignore -q -- .nself/ci.yaml" {
+		if strings.Join(got, " ") != "git -c core.fsmonitor=false -C /repo check-ignore -q -- .nself/ci.yaml" {
 			t.Errorf("argv: %v", got)
 		}
 		if _, err := CheckIgnored(ctx, "/repo", func(context.Context, []string) (int, error) { return -1, errors.New("no git") }); err == nil {

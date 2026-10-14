@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -142,9 +141,9 @@ func Migrate(root string) (*Migration, error) {
 	m.Config = model.PipelineConfig{Version: 1, Jobs: map[string]model.Job{}}
 	taken := map[string]bool{}
 	for _, rel := range found {
-		data, err := os.ReadFile(filepath.Join(root, rel))
+		data, err := readRegular(filepath.Join(root, rel))
 		if err != nil {
-			return nil, err
+			return nil, untranslatable(rel, 0, "", err.Error())
 		}
 		lf, err := parseLegacy(rel, data)
 		if err != nil {
@@ -205,7 +204,7 @@ func Migrate(root string) (*Migration, error) {
 		}
 	}
 	if len(m.Order) == 0 {
-		return nil, untranslatable(strings.Join(found, ", "), 0, "stages", "no stage to migrate")
+		return nil, untranslatable(strings.Join(found, ", "), 0, "stages", "no stage to migrate. "+strings.Join(m.Notes, " "))
 	}
 	if err := m.render(); err != nil {
 		return nil, err
