@@ -181,7 +181,7 @@ func RunShow(args []string, stdout, stderr io.Writer, d Deps) int {
 		data.FilePresent, data.Config, data.Version = true, &loaded.Config, loaded.Config.Version
 		data.Warnings = append(data.Warnings, loaded.Warnings...)
 		data.Warnings = append(data.Warnings, ignoreWarning(root, d)...)
-	} else if !errors.Is(err, os.ErrNotExist) {
+	} else if !errors.Is(err, os.ErrNotExist) || o.cfg != "" {
 		return emitError(command, o.json, stdout, stderr, err)
 	}
 	if data.Effective, err = Resolve(in); err != nil {

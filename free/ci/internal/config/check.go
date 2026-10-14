@@ -38,10 +38,36 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 			add(jobPtr(id, "/workdir"), fmt.Sprintf("job %q workdir must stay inside the repository", id))
 		}
 		if job.When != nil {
+			for i, name := range job.When.EnvPresent {
+				if !envName.MatchString(name) {
+					add(fmt.Sprintf("%s/%d", jobPtr(id, "/when/env_present"), i), "env_present entries must be environment variable names, not values")
+				}
+			}
 			for i, p := range job.When.Paths {
 				if escapesRepo(p) {
 					add(fmt.Sprintf("%s/%d", jobPtr(id, "/when/paths"), i), "when.paths entries must stay inside the repository")
 				}
+			}
+		}
+		for key := range job.Env {
+			if !envName.MatchString(key) {
+				add(jobPtr(id, "/env"), "env keys must be environment variable names")
+				break
+			}
+		}
+		if job.Container != nil && !pinnedImage.MatchString(job.Container.Image) {
+			add(jobPtr(id, "/container/image"), "container image must be pinned by digest (ref@sha256:<64 hex>)")
+		}
+		if job.Cache != nil {
+			for i, p := range job.Cache.Paths {
+				if escapesRepo(p) {
+					add(fmt.Sprintf("%s/%d", jobPtr(id, "/cache/paths"), i), "cache paths must stay inside the repository")
+				}
+			}
+		}
+		for i, a := range job.Artifacts {
+			if escapesRepo(a.Path) {
+				add(fmt.Sprintf("%s/%d/path", jobPtr(id, "/artifacts"), i), "artifact paths must stay inside the repository")
 			}
 		}
 		if len(job.Run) == 0 {
@@ -52,12 +78,26 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 		}
 		for i, dep := range job.Deps {
 			if _, ok := cfg.Jobs[dep]; !ok {
-				add(fmt.Sprintf("%s/%d", jobPtr(id, "/deps"), i), fmt.Sprintf("job %q depends on unknown job %q", id, dep))
+				add(fmt.Sprintf("%s/%d", jobPtr(id, "/deps"), i), fmt.Sprintf("job %q depends on a job that is not defined", id))
 			}
 		}
 		for i, name := range job.NeedsServices {
 			if _, ok := cfg.Services[name]; !ok {
-				add(fmt.Sprintf("%s/%d", jobPtr(id, "/needs_services"), i), fmt.Sprintf("job %q needs unknown service %q", id, name))
+				add(fmt.Sprintf("%s/%d", jobPtr(id, "/needs_services"), i), fmt.Sprintf("job %q needs a service that is not defined", id))
+			}
+		}
+	}
+	if cfg.Detect != nil {
+		for i, p := range cfg.Detect.Roots {
+			if escapesRepo(p) {
+				add(fmt.Sprintf("/detect/roots/%d", i), "detect roots must stay inside the repository")
+			}
+		}
+	}
+	for _, id := range sortedKeys(cfg.Checks) {
+		for i, p := range cfg.Checks[id].Rules {
+			if escapesRepo(p) {
+				add(fmt.Sprintf("/checks/%s/rules/%d", escape(id), i), "rule paths must stay inside the repository")
 			}
 		}
 	}
@@ -78,7 +118,7 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 		}
 		for i, id := range cfg.Pipelines[name].Jobs {
 			if _, ok := cfg.Jobs[id]; !ok {
-				add(fmt.Sprintf("/pipelines/%s/jobs/%d", escape(name), i), fmt.Sprintf("pipeline %q lists unknown job %q", name, id))
+				add(fmt.Sprintf("/pipelines/%s/jobs/%d", escape(name), i), fmt.Sprintf("pipeline %q lists a job that is not defined", name))
 			}
 		}
 	}
@@ -90,6 +130,11 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 
 // safeName is the shape of an id that later becomes a path component or a
 // log field (the same rule internal/exec applies to attempt ids).
+var (
+	envName     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	pinnedImage = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
+)
+
 var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 // escapesRepo reports a path that is absolute or climbs out with "..".

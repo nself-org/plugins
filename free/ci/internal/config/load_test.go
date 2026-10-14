@@ -31,9 +31,9 @@ func TestLoadInvalid(t *testing.T) {
 		{"not a mapping", "- a\n- b\n", 1, "", "must be a mapping"},
 		{"empty", "", 0, "", "empty document"},
 		{"yaml syntax", "version: 1\njobs: [\n", 2, "", "did not find expected"},
-		{"unknown dependency", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [ghost]\n", 6, "/jobs/a/deps/0", "unknown job"},
-		{"unknown service", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    needs_services: [db]\n", 6, "/jobs/a/needs_services/0", "unknown service"},
-		{"unknown pipeline job", "version: 1\npipelines:\n  p:\n    triggers: [push]\n    jobs: [ghost]\n", 5, "/pipelines/p/jobs/0", "unknown job"},
+		{"unknown dependency", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [ghost]\n", 6, "/jobs/a/deps/0", "not defined"},
+		{"unknown service", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    needs_services: [db]\n", 6, "/jobs/a/needs_services/0", "not defined"},
+		{"unknown pipeline job", "version: 1\npipelines:\n  p:\n    triggers: [push]\n    jobs: [ghost]\n", 5, "/pipelines/p/jobs/0", "not defined"},
 		{"pattern error names the bad job", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    timeout: 30s\n  b:\n    kind: test\n    run: [x]\n    timeout: \"30\"\n", 10, "/jobs/b/timeout", "must match the pattern"},
 		{"pattern error in a list", "version: 1\nsupport:\n  - linux/amd64\n  - invalid\n", 4, "/support/1", "must match the pattern"},
 		{"null run", "version: 1\njobs:\n  a:\n    kind: test\n    run:\n", 5, "/jobs/a/run", "null is not allowed"},
@@ -51,6 +51,12 @@ func TestLoadInvalid(t *testing.T) {
 		{"conditional schema picks the failing artifact", "version: 1\njobs: {a: {kind: test, run: [echo], artifacts: [{path: x, kind: package}, {path: y, image: {ref: x}, kind: package}]}}\n", 2, "/jobs/a/artifacts/1/kind", "must equal"},
 		{"float spelling of an integer", "version: 1\njobs: {a: {kind: test, run: [echo], requires: {cpu: 1e30}}}\n", 2, "/jobs/a/requires/cpu", "out of range"},
 		{"dotted key in typed error", "version: 1\njobs:\n  a.b: {kind: test, run: [echo], requires: {cpu: 1e30}}\n", 3, "/jobs/a.b/requires/cpu", "out of range"},
+		{"env_present holds a value", "version: 1\njobs: {a: {kind: test, run: [x], when: {env_present: [\"TOKEN=secretvalue\"]}}}\n", 2, "/jobs/a/when/env_present/0", "variable names"},
+		{"env key is not a name", "version: 1\njobs: {a: {kind: test, run: [x], env: {\"bad key\": v}}}\n", 2, "/jobs/a/env", "variable names"},
+		{"unpinned container image", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"alpine:latest\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
+		{"artifact path escapes", "version: 1\njobs: {a: {kind: test, run: [x], artifacts: [{path: /etc/passwd}]}}\n", 2, "/jobs/a/artifacts/0/path", "inside the repository"},
+		{"cache path escapes", "version: 1\njobs: {a: {kind: test, run: [x], cache: {paths: [../../x]}}}\n", 2, "/jobs/a/cache/paths/0", "inside the repository"},
+		{"detect root escapes", "version: 1\ndetect: {roots: [/etc]}\n", 2, "/detect/roots/0", "inside the repository"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -240,5 +246,21 @@ func TestPathsAreNormalisedBeforeContainment(t *testing.T) {
 		if escapesRepo(p) != escapes {
 			t.Errorf("escapesRepo(%q) = %v", p, !escapes)
 		}
+	}
+}
+
+func TestPinnedImageAndNamesAccepted(t *testing.T) {
+	doc := "version: 1\njobs: {a: {kind: test, run: [x], env: {LOG_LEVEL: debug}, when: {env_present: [DB_URL]}, container: {image: \"alpine@sha256:" + strings.Repeat("a", 64) + "\"}}}\n"
+	if _, err := Parse("ci.yaml", []byte(doc)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWarningNeverContainsAValue(t *testing.T) {
+	// env_present is refused unless it is a variable name, so the D28 warning
+	// can only ever print names.
+	_, err := Parse("ci.yaml", []byte("version: 1\njobs: {a: {kind: test, run: [x], when: {env_present: [\"ghp_FAKEENVP=secretvalue\"]}}}\n"))
+	if err == nil || strings.Contains(err.Error(), "secretvalue") || strings.Contains(err.Error(), "ghp_") {
+		t.Fatalf("value echoed or accepted: %v", err)
 	}
 }

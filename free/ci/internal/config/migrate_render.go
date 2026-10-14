@@ -72,6 +72,9 @@ func (m *Migration) render() error {
 
 // Diff shows what writing the migration would change under root.
 func (m *Migration) Diff(root string) (string, error) {
+	if err := checkDestination(root); err != nil {
+		return "", err
+	}
 	current, err := readRegular(filepath.Join(root, FileName))
 	switch {
 	case err == nil && bytes.Equal(current, m.YAML):
@@ -100,11 +103,8 @@ func (m *Migration) Diff(root string) (string, error) {
 // other content (merge by hand) and succeeds quietly when the file is identical.
 func (m *Migration) Write(root string) error {
 	path := filepath.Join(root, FileName)
-	// Never write through a symlink: it could point outside the repo root.
-	for _, p := range []string{filepath.Dir(path), path} {
-		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: p + " is a symlink; replace it with a real file or directory before migrating"}}}
-		}
+	if err := checkDestination(root); err != nil {
+		return err
 	}
 	if current, err := readRegular(path); err == nil {
 		if bytes.Equal(current, m.YAML) {
@@ -126,4 +126,16 @@ func (m *Migration) Write(root string) error {
 		return err
 	}
 	return f.Close()
+}
+
+// checkDestination refuses a symlinked .nself or .nself/ci.yaml: reading or
+// writing through it could leave the repository root.
+func checkDestination(root string) error {
+	path := filepath.Join(root, FileName)
+	for _, p := range []string{filepath.Dir(path), path} {
+		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: p + " is a symlink; replace it with a real file or directory before migrating"}}}
+		}
+	}
+	return nil
 }

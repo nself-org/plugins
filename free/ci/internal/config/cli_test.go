@@ -217,3 +217,21 @@ func TestMigrateCommandErrors(t *testing.T) {
 		t.Errorf("E622: exit %d %s", code, out.String())
 	}
 }
+
+func TestShowMissingExplicitConfigIsAnError(t *testing.T) {
+	root := t.TempDir()
+	var errOut bytes.Buffer
+	if code := RunShow([]string{"--config", filepath.Join(root, "nope.yaml")}, &bytes.Buffer{}, &errOut, testDeps(root, nil, false)); code != 2 {
+		t.Errorf("explicit missing config: exit %d %s", code, errOut.String())
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".nself"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("ci-typo.yaml", filepath.Join(root, FileName)); err != nil {
+		t.Fatal(err)
+	}
+	errOut.Reset()
+	if code := RunShow(nil, &bytes.Buffer{}, &errOut, testDeps(root, nil, false)); code != 1 || !strings.Contains(errOut.String(), "dangling symlink") {
+		t.Errorf("dangling link: exit %d %s", code, errOut.String())
+	}
+}

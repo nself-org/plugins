@@ -77,7 +77,8 @@ func parseLegacy(rel string, data []byte) (legacyFile, error) {
 			fmt.Sscanf(m[1], "%d", &line)
 			return lf, untranslatable(rel, line, m[2], "legacy field "+m[2]+" has no equivalent in .nself/ci.yaml")
 		}
-		return lf, untranslatable(rel, 0, "", "not a readable legacy manifest: "+strings.TrimPrefix(err.Error(), "yaml: "))
+		p := yamlProblem(rel, err)
+		return lf, untranslatable(rel, p.Line, "", "not a readable legacy manifest: "+p.Message)
 	}
 	return lf, nil
 }
@@ -86,32 +87,6 @@ func parseLegacy(rel string, data []byte) (legacyFile, error) {
 const legacyDefaultTimeout = 300
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-
-// hasFlowArrays reports a cmd or env_required written as an inline [a, b]
-// array, which the legacy line parser never read.
-func hasFlowArrays(data []byte) bool {
-	var doc yaml.Node
-	if yaml.Unmarshal(data, &doc) != nil {
-		return false
-	}
-	var walk func(n *yaml.Node) bool
-	walk = func(n *yaml.Node) bool {
-		if n.Kind == yaml.MappingNode {
-			for i := 0; i+1 < len(n.Content); i += 2 {
-				if k, v := n.Content[i], n.Content[i+1]; (k.Value == "cmd" || k.Value == "env_required") && v.Kind == yaml.SequenceNode && v.Style&yaml.FlowStyle != 0 {
-					return true
-				}
-			}
-		}
-		for _, c := range n.Content {
-			if walk(c) {
-				return true
-			}
-		}
-		return false
-	}
-	return walk(&doc)
-}
 
 func slug(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
@@ -130,7 +105,7 @@ func jobID(plugin, stage string, taken map[string]bool) string {
 		if prefix == "" {
 			id = slug(name)
 		}
-		if id != "" && slug(name) != "" && !taken[id] {
+		if id != "" && slug(name) != "" && !taken[id] && safeName.MatchString(id) {
 			return id
 		}
 	}
@@ -179,9 +154,10 @@ func Migrate(root string) (*Migration, error) {
 		if lf.Epic != "" || lf.Stack != "" {
 			m.Notes = append(m.Notes, rel+": epic and stack are planning metadata and are dropped")
 		}
-		if hasFlowArrays(data) {
-			m.Notes = append(m.Notes, rel+": inline cmd/env_required arrays were never read by the legacy runner (it parsed block lists only), so those stages declared a command but ran none; the migrated jobs run the declared commands")
+		if err := checkListItems(rel, data); err != nil {
+			return nil, err
 		}
+		m.Notes = append(m.Notes, divergenceNotes(rel, data, lf.Stages)...)
 		if len(lf.Stages) > 1 {
 			m.Notes = append(m.Notes, rel+": the legacy runner ran its stages in order in one directory; the migrated jobs are independent, so add deps (or merge the commands into one job) wherever a stage reads files another produces")
 		}
@@ -194,7 +170,7 @@ func Migrate(root string) (*Migration, error) {
 			id := jobID(lf.Plugin, st.Name, taken)
 			switch {
 			case id == "":
-				return nil, untranslatable(rel, 0, field+".name", "stage name "+fmt.Sprintf("%q", st.Name)+" does not give a unique job id")
+				return nil, untranslatable(rel, 0, field+".name", "stage name "+fmt.Sprintf("%q", st.Name)+" does not give a valid, unique job id")
 			case len(st.Cmd) == 0:
 				return nil, untranslatable(rel, 0, field+".cmd", "stage "+st.Name+" declares no cmd; a job needs at least one argv element")
 			case st.Timeout < 0:

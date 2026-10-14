@@ -24,6 +24,9 @@ func readRegular(path string) ([]byte, error) {
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		if info, err = os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("%s is a dangling symlink", path)
+			}
 			return nil, err
 		}
 	}

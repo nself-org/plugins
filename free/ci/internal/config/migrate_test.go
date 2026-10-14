@@ -185,7 +185,7 @@ func TestMigrateNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(m.Notes, "\n")
-	if !strings.Contains(joined, "inline cmd") || !strings.Contains(joined, "independent") {
+	if !strings.Contains(joined, "read no cmd") || !strings.Contains(joined, "ignored timeout 180") || !strings.Contains(joined, "never skipped") || !strings.Contains(joined, "independent") {
 		t.Errorf("notes: %v", m.Notes)
 	}
 }
@@ -217,7 +217,7 @@ func TestMigrateNotesForFlowStages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(m.Notes, "\n"), "inline cmd") {
+	if !strings.Contains(strings.Join(m.Notes, "\n"), "found 0 stage") {
 		t.Errorf("flow-style stages not noted: %v", m.Notes)
 	}
 }
@@ -239,5 +239,72 @@ func TestMigrateDestinationReadsAreBounded(t *testing.T) {
 	}
 	if err := m.Write(root); err == nil {
 		t.Error("Write accepted a device destination")
+	}
+}
+
+// blockManifest is valid YAML the legacy line scanner reads differently from
+// what it declares: timeout and skip_if_env_missing at indent 4 are never read,
+// and an all-digit cmd item is filed under env_required.
+const blockManifest = "plugin: plugin-px\nstages:\n  - name: slow\n    cmd:\n    - sh\n    - -c\n    - sleep 3\n    timeout: 1\n  - name: needsenv\n    cmd:\n    - sh\n    - -c\n    - exit 7\n    env_required:\n    - ZZ_UNSET_VAR\n    skip_if_env_missing: true\n  - name: digits\n    cmd:\n    - sleep\n    - 2\n"
+
+func TestMigrateNamesEveryLegacyDivergence(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "free", "px"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "free", "px", ".ci.yaml"), []byte(blockManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(m.Notes, "\n")
+	for _, want := range []string{"stage slow: the legacy runner ignored timeout 1", "stage needsenv: the legacy runner never skipped", "stage digits: the legacy runner read cmd as 1 element(s) instead of 2"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("missing note %q in:\n%s", want, joined)
+		}
+	}
+}
+
+func TestMigrateRefusesNullItemsAndBadIds(t *testing.T) {
+	for name, c := range map[string]struct{ doc, field string }{
+		"null cmd item":   {"plugin: p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - null\n", "stages[0].cmd[1]"},
+		"nested cmd item": {"plugin: p\nstages:\n  - name: a\n    cmd: [echo, [x]]\n", ""},
+		"id too long":     {"plugin: p\nstages:\n  - name: " + strings.Repeat("x", 140) + "\n    cmd: [x]\n", "stages[0].name"},
+	} {
+		root := t.TempDir()
+		_ = os.WriteFile(filepath.Join(root, ".ci.yaml"), []byte(c.doc), 0o644)
+		_, err := Migrate(root)
+		e, ok := err.(*Error)
+		if !ok || e.Code != CodeUntranslatable || !strings.Contains(e.Problems[0].Pointer, c.field) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestMigrateErrorsDoNotEchoValues(t *testing.T) {
+	root := t.TempDir()
+	_ = os.WriteFile(filepath.Join(root, ".ci.yaml"), []byte("plugin: p\nstages:\n  - name: t\n    cmd: [x]\n    timeout: hunter2\n"), 0o644)
+	_, err := Migrate(root)
+	if err == nil || strings.Contains(err.Error(), "hunter2") || err.(*Error).Problems[0].Line == 0 {
+		t.Fatalf("value echoed or no line: %v", err)
+	}
+}
+
+func TestDiffRefusesSymlinkedDestination(t *testing.T) {
+	root := copyFixture(t, filepath.Join("legacy", "gauth"))
+	outside := filepath.Join(t.TempDir(), "secret.env")
+	_ = os.WriteFile(outside, []byte("TOKEN=ghp_FAKE_OUTSIDE\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(root, ".nself"), 0o755)
+	if err := os.Symlink(outside, filepath.Join(root, FileName)); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff, err := m.Diff(root); err == nil || strings.Contains(diff, "ghp_FAKE") {
+		t.Fatalf("Diff followed the symlink: %q %v", diff, err)
 	}
 }
