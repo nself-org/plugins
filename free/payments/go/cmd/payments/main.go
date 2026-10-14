@@ -57,7 +57,7 @@ func main() {
 	}
 	bootCancel()
 
-	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	if err := db.Migrate(migrateCtx, pool); err != nil {
 		migrateCancel()
 		slog.Error("migration failed", "error", err)
