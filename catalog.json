@@ -3048,7 +3048,7 @@
         "nself": ">=1.0.9"
       },
       "schema": "np_ollama",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "ollama",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/ollama-1.2.6.tar.gz",
       "tier": "free",
@@ -3069,7 +3069,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_payments",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "payments",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/payments-1.2.6.tar.gz",
       "tier": "free",
@@ -3111,7 +3111,7 @@
         "nself": ">=1.0.9"
       },
       "schema": "np_pentest",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "pentest",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/pentest-1.2.6.tar.gz",
       "tier": "free",
@@ -3179,7 +3179,7 @@
         "nself": ">=1.1.1"
       },
       "schema": "np_plugin_clawde",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "plugin-clawde",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-clawde-1.2.6.tar.gz",
       "tier": "free",
@@ -3236,7 +3236,7 @@
         "nself": ">=1.1.1"
       },
       "schema": null,
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "plugin-gauth",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-gauth-1.2.6.tar.gz",
       "tier": "free",
@@ -3257,7 +3257,7 @@
         "nself": ">=1.1.1"
       },
       "schema": "np_plugin_llm_gateway",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "plugin-llm-gateway",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-llm-gateway-1.2.6.tar.gz",
       "tier": "free",
@@ -3278,7 +3278,7 @@
         "nself": ">=1.1.1"
       },
       "schema": "np_plugin_pty",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "plugin-pty",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-pty-1.2.6.tar.gz",
       "tier": "free",
@@ -3296,10 +3296,13 @@
       "maturity": "implemented",
       "release_signature": null,
       "requires": {
-        "nself": ">=1.1.1"
+        "nself": ">=1.1.1",
+        "postgres_extensions": [
+          "vector"
+        ]
       },
       "schema": "np_plugin_retrieval",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "plugin-retrieval",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/plugin-retrieval-1.2.6.tar.gz",
       "tier": "free",

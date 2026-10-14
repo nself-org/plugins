@@ -1,62 +1,65 @@
 {
-  "name": "plugin-pty",
-  "display_name": "\u0273Self PTY Bridge",
-  "version": "1.2.6",
-  "description": "Pseudo-terminal bridge for ClawDE AI sessions. Spawns, manages, and relays PTY processes with per-tenant resource limits and WebSocket I/O.",
   "author": "nself-org",
-  "license": "MIT",
-  "licenseType": "free",
-  "tier": "free",
-  "language": "go",
-  "minNselfVersion": "1.1.1",
-  "isCommercial": false,
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "port": 9100,
-  "bundle": [
-    "clawde"
-  ],
   "category": "development",
-  "health": "/health",
+  "description": "Pseudo-terminal bridge for ClawDE AI sessions. Spawns, manages, and relays PTY processes with per-tenant resource limits and WebSocket I/O.",
+  "envVars": [
+    {
+      "description": "PostgreSQL connection string",
+      "name": "NSELF_DB_URL",
+      "required": true
+    },
+    {
+      "description": "nSelf license key",
+      "name": "NSELF_LICENSE_KEY",
+      "required": true
+    },
+    {
+      "default": "5",
+      "description": "Max concurrent PTY sessions per tenant",
+      "name": "PTY_MAX_PER_TENANT",
+      "required": false
+    },
+    {
+      "default": "3600",
+      "description": "PTY session idle timeout in seconds",
+      "name": "PTY_SESSION_TIMEOUT_SECS",
+      "required": false
+    },
+    {
+      "default": "9100",
+      "description": "HTTP server port",
+      "name": "PTY_PORT",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.1.1",
+  "name": "plugin-pty",
+  "port": 9100,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.1"
+  },
+  "schema": "np_plugin_pty",
+  "service": {
+    "kind": "library",
+    "port": 9100
+  },
+  "status": "stable",
   "tables": [
     "np_pty_sessions",
     "np_pty_audit_log"
   ],
-  "env": [
-    {
-      "key": "NSELF_DB_URL",
-      "required": true,
-      "description": "PostgreSQL connection string"
-    },
-    {
-      "key": "NSELF_LICENSE_KEY",
-      "required": true,
-      "description": "nSelf license key"
-    },
-    {
-      "key": "PTY_MAX_PER_TENANT",
-      "required": false,
-      "default": "5",
-      "description": "Max concurrent PTY sessions per tenant"
-    },
-    {
-      "key": "PTY_SESSION_TIMEOUT_SECS",
-      "required": false,
-      "default": "3600",
-      "description": "PTY session idle timeout in seconds"
-    },
-    {
-      "key": "PTY_PORT",
-      "required": false,
-      "default": "9100",
-      "description": "HTTP server port"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "bundles": [
-    "clawde"
-  ]
+  "tier": "free",
+  "version": "1.2.6"
 }

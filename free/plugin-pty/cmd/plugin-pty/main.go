@@ -1,6 +1,8 @@
 // Purpose: plugin-pty entry point.
-//   Starts HTTP + WebSocket server on port 9100.
-//   Provides PTY session lifecycle and WebSocket I/O relay for ClawDE.
+//
+//	Starts HTTP + WebSocket server on port 9100.
+//	Provides PTY session lifecycle and WebSocket I/O relay for ClawDE.
+//
 // Inputs:  NSELF_DB_URL, PTY_MAX_PER_TENANT, PTY_SESSION_TIMEOUT_SECS.
 // Outputs: HTTP JSON + WebSocket PTY I/O.
 // Constraints:
@@ -63,11 +65,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "plugin-pty: db connect error: %v\n", err)
 		os.Exit(1)
 	}
+	mustBootMigrations(ctx, pool)
 	defer pool.Close()
 
 	cfg := ptyhandler.Config{
 		MaxPerTenant: maxPerTenant,
 		SessionTTL:   sessionTTL,
+
+		MigrationsHealth: bootMigrationsHealth,
 	}
 
 	h := ptyhandler.NewHandler(pool, cfg)

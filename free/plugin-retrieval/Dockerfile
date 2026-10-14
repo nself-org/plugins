@@ -1,16 +1,18 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/plugin-retrieval ./cmd/main/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /app/plugin-retrieval ./cmd/main/main.go
 
 FROM alpine:3.19
-RUN apk add --no-cache wget ca-certificates
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 WORKDIR /app
 COPY --from=builder /app/plugin-retrieval .
 COPY migrations/ ./migrations/
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:3825/health || exit 1
+    CMD wget -qO- http://127.0.0.1:${NSELF_RETRIEVAL_PORT:-3825}/health || exit 1
 EXPOSE 3825
 CMD ["./plugin-retrieval"]

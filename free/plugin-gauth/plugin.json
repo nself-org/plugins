@@ -1,41 +1,58 @@
 {
-  "name": "plugin-gauth",
-  "version": "1.2.6",
-  "description": "Headless server-side Google OAuth token refresh for nSelf AI services",
   "author": "nSelf",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "tier": "free",
   "category": "authentication",
-  "language": "rust",
-  "minNselfVersion": "1.1.1",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "epic": "E7",
-  "port": 3827,
-  "binary": "plugin-gauth",
+  "description": "Headless server-side Google OAuth token refresh for nSelf AI services",
+  "envVars": [
+    {
+      "description": "",
+      "name": "NSELF_DB_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GAUTH_ENCRYPTION_KEY",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GOOGLE_CLIENT_ID",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GOOGLE_CLIENT_SECRET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "GAUTH_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "GOOGLE_TOKEN_URL",
+      "required": false
+    }
+  ],
   "health_endpoint": "/health",
-  "env_required": [
-    "NSELF_DB_URL",
-    "GAUTH_ENCRYPTION_KEY",
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET"
-  ],
-  "env_optional": [
-    "GAUTH_PORT",
-    "GOOGLE_TOKEN_URL"
-  ],
-  "bundles": [
-    "nclaw",
-    "clawde",
-    "nchat",
-    "nfamily",
-    "ntv",
-    "nsentry"
-  ]
+  "language": "rust",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.1.1",
+  "name": "plugin-gauth",
+  "port": 3827,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.1"
+  },
+  "service": {
+    "kind": "library",
+    "port": 3827
+  },
+  "status": "stable",
+  "tier": "free",
+  "version": "1.2.6"
 }

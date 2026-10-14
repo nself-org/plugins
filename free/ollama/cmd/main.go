@@ -6,6 +6,7 @@
 // Inputs:  PLUGIN_ACTION env (install | start | stop)
 //          OLLAMA_MODEL   env (default: gemma-3-4b)
 //          OLLAMA_HOST    env (default: http://localhost:11434)
+//          DATABASE_URL   env (optional; when set, migrations/*.sql are applied at boot)
 // Outputs: Exit 0 on success, non-zero on failure. Logs to stdout.
 // Constraints: Requires Docker daemon accessible; Ollama container must be
 //              running before "start" action is called.
@@ -13,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -21,6 +23,14 @@ import (
 
 func main() {
 	action := lifecycle.EnvStr("PLUGIN_ACTION", "start")
+
+	// Boot migrations run before install and start; stop never touches the database.
+	if action == "install" || action == "start" {
+		if err := lifecycle.BootMigrations(context.Background()); err != nil {
+			fmt.Fprintf(os.Stderr, "ollama %s failed: %v\n", action, err)
+			os.Exit(1)
+		}
+	}
 
 	switch action {
 	case "install":

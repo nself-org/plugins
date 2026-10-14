@@ -7,7 +7,7 @@
 --         np_paypal_balances, np_paypal_webhook_events
 -- PII: payer_email/payer_name in np_paypal_transactions and np_paypal_payers (admin-only)
 
-CREATE TABLE IF NOT EXISTS np_paypal_transactions (
+CREATE TABLE IF NOT EXISTS public.np_paypal_transactions (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT '',
@@ -24,12 +24,12 @@ CREATE TABLE IF NOT EXISTS np_paypal_transactions (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_transactions_paypal_id ON np_paypal_transactions(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_transactions_status ON np_paypal_transactions(status);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_transactions_created ON np_paypal_transactions(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_transactions_account ON np_paypal_transactions(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_transactions_paypal_id ON public.np_paypal_transactions(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_transactions_status ON public.np_paypal_transactions(status);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_transactions_created ON public.np_paypal_transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_transactions_account ON public.np_paypal_transactions(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_orders (
+CREATE TABLE IF NOT EXISTS public.np_paypal_orders (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT '',
@@ -41,12 +41,12 @@ CREATE TABLE IF NOT EXISTS np_paypal_orders (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_orders_paypal_id ON np_paypal_orders(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_orders_status ON np_paypal_orders(status);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_orders_created ON np_paypal_orders(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_orders_account ON np_paypal_orders(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_orders_paypal_id ON public.np_paypal_orders(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_orders_status ON public.np_paypal_orders(status);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_orders_created ON public.np_paypal_orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_orders_account ON public.np_paypal_orders(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_captures (
+CREATE TABLE IF NOT EXISTS public.np_paypal_captures (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     order_id TEXT,
@@ -59,11 +59,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_captures (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_captures_paypal_id ON np_paypal_captures(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_captures_order ON np_paypal_captures(order_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_captures_account ON np_paypal_captures(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_captures_paypal_id ON public.np_paypal_captures(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_captures_order ON public.np_paypal_captures(order_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_captures_account ON public.np_paypal_captures(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_authorizations (
+CREATE TABLE IF NOT EXISTS public.np_paypal_authorizations (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     order_id TEXT,
@@ -76,11 +76,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_authorizations (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_authorizations_paypal_id ON np_paypal_authorizations(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_authorizations_order ON np_paypal_authorizations(order_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_authorizations_account ON np_paypal_authorizations(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_authorizations_paypal_id ON public.np_paypal_authorizations(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_authorizations_order ON public.np_paypal_authorizations(order_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_authorizations_account ON public.np_paypal_authorizations(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_refunds (
+CREATE TABLE IF NOT EXISTS public.np_paypal_refunds (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     capture_id TEXT,
@@ -92,11 +92,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_refunds (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_refunds_paypal_id ON np_paypal_refunds(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_refunds_capture ON np_paypal_refunds(capture_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_refunds_account ON np_paypal_refunds(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_refunds_paypal_id ON public.np_paypal_refunds(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_refunds_capture ON public.np_paypal_refunds(capture_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_refunds_account ON public.np_paypal_refunds(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_subscriptions (
+CREATE TABLE IF NOT EXISTS public.np_paypal_subscriptions (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     plan_id TEXT NOT NULL DEFAULT '',
@@ -109,12 +109,12 @@ CREATE TABLE IF NOT EXISTS np_paypal_subscriptions (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_paypal_id ON np_paypal_subscriptions(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_status ON np_paypal_subscriptions(status);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_plan ON np_paypal_subscriptions(plan_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_account ON np_paypal_subscriptions(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_paypal_id ON public.np_paypal_subscriptions(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_status ON public.np_paypal_subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_plan ON public.np_paypal_subscriptions(plan_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_subscriptions_account ON public.np_paypal_subscriptions(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_subscription_plans (
+CREATE TABLE IF NOT EXISTS public.np_paypal_subscription_plans (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     product_id TEXT NOT NULL DEFAULT '',
@@ -128,11 +128,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_subscription_plans (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_sub_plans_paypal_id ON np_paypal_subscription_plans(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_sub_plans_product ON np_paypal_subscription_plans(product_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_sub_plans_account ON np_paypal_subscription_plans(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_sub_plans_paypal_id ON public.np_paypal_subscription_plans(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_sub_plans_product ON public.np_paypal_subscription_plans(product_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_sub_plans_account ON public.np_paypal_subscription_plans(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_products (
+CREATE TABLE IF NOT EXISTS public.np_paypal_products (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     name TEXT NOT NULL DEFAULT '',
@@ -146,10 +146,10 @@ CREATE TABLE IF NOT EXISTS np_paypal_products (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_products_paypal_id ON np_paypal_products(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_products_account ON np_paypal_products(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_products_paypal_id ON public.np_paypal_products(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_products_account ON public.np_paypal_products(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_disputes (
+CREATE TABLE IF NOT EXISTS public.np_paypal_disputes (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     reason TEXT NOT NULL DEFAULT '',
@@ -162,12 +162,12 @@ CREATE TABLE IF NOT EXISTS np_paypal_disputes (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_disputes_paypal_id ON np_paypal_disputes(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_disputes_status ON np_paypal_disputes(status);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_disputes_created ON np_paypal_disputes(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_disputes_account ON np_paypal_disputes(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_disputes_paypal_id ON public.np_paypal_disputes(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_disputes_status ON public.np_paypal_disputes(status);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_disputes_created ON public.np_paypal_disputes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_disputes_account ON public.np_paypal_disputes(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_payouts (
+CREATE TABLE IF NOT EXISTS public.np_paypal_payouts (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     batch_id TEXT NOT NULL DEFAULT '',
@@ -181,11 +181,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_payouts (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_payouts_paypal_id ON np_paypal_payouts(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_payouts_batch ON np_paypal_payouts(batch_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_payouts_account ON np_paypal_payouts(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_payouts_paypal_id ON public.np_paypal_payouts(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_payouts_batch ON public.np_paypal_payouts(batch_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_payouts_account ON public.np_paypal_payouts(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_invoices (
+CREATE TABLE IF NOT EXISTS public.np_paypal_invoices (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT '',
@@ -199,11 +199,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_invoices (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_invoices_paypal_id ON np_paypal_invoices(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_invoices_status ON np_paypal_invoices(status);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_invoices_account ON np_paypal_invoices(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_invoices_paypal_id ON public.np_paypal_invoices(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_invoices_status ON public.np_paypal_invoices(status);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_invoices_account ON public.np_paypal_invoices(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_payers (
+CREATE TABLE IF NOT EXISTS public.np_paypal_payers (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_id TEXT NOT NULL,
     email TEXT,
@@ -213,11 +213,11 @@ CREATE TABLE IF NOT EXISTS np_paypal_payers (
     source_account_id TEXT NOT NULL DEFAULT 'primary',
     synced_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_payers_paypal_id ON np_paypal_payers(paypal_id, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_payers_email ON np_paypal_payers(email);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_payers_account ON np_paypal_payers(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_payers_paypal_id ON public.np_paypal_payers(paypal_id, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_payers_email ON public.np_paypal_payers(email);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_payers_account ON public.np_paypal_payers(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_balances (
+CREATE TABLE IF NOT EXISTS public.np_paypal_balances (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     currency TEXT NOT NULL DEFAULT 'USD',
     total_balance NUMERIC(20,2),
@@ -226,10 +226,10 @@ CREATE TABLE IF NOT EXISTS np_paypal_balances (
     recorded_at TIMESTAMPTZ DEFAULT NOW(),
     source_account_id TEXT NOT NULL DEFAULT 'primary'
 );
-CREATE INDEX IF NOT EXISTS idx_np_paypal_balances_currency ON np_paypal_balances(currency, source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_balances_account ON np_paypal_balances(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_balances_currency ON public.np_paypal_balances(currency, source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_balances_account ON public.np_paypal_balances(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_paypal_webhook_events (
+CREATE TABLE IF NOT EXISTS public.np_paypal_webhook_events (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     paypal_event_id TEXT NOT NULL,
     event_type TEXT NOT NULL DEFAULT '',
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS np_paypal_webhook_events (
     processed BOOLEAN NOT NULL DEFAULT false,
     source_account_id TEXT NOT NULL DEFAULT 'primary'
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_event_id ON np_paypal_webhook_events(paypal_event_id);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_type ON np_paypal_webhook_events(event_type);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_created ON np_paypal_webhook_events(create_time DESC);
-CREATE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_account ON np_paypal_webhook_events(source_account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_event_id ON public.np_paypal_webhook_events(paypal_event_id);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_type ON public.np_paypal_webhook_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_created ON public.np_paypal_webhook_events(create_time DESC);
+CREATE INDEX IF NOT EXISTS idx_np_paypal_webhook_events_account ON public.np_paypal_webhook_events(source_account_id);

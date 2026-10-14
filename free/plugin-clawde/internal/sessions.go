@@ -1,8 +1,10 @@
 // Package internal provides session management and daemon health for plugin-clawde.
 //
 // Purpose: Track ClawDE session lifecycle (create, heartbeat, close) and daemon health.
-//   Sessions are scoped per source_account_id (Multi-App Isolation Convention).
-//   Events are append-only and can be streamed via SSE.
+//
+//	Sessions are scoped per source_account_id (Multi-App Isolation Convention).
+//	Events are append-only and can be streamed via SSE.
+//
 // Inputs: HTTP JSON requests with source_account_id.
 // Outputs: JSON session state, SSE event streams.
 // Constraints:
@@ -59,7 +61,16 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	// bootMigrationsHealth answers 503 itself when the ledger cannot be read, so it runs before the 200.
+	mig := bootMigrationsHealth(w)
+	body := map[string]any{"status": "ok", "migrations": mig}
+	if mig["applied"] < 0 {
+		body["status"] = "unhealthy"
+		_ = json.NewEncoder(w).Encode(body)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // CreateSession handles POST /sessions. Creates a new active session.

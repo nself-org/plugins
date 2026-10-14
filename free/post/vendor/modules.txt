@@ -39,7 +39,10 @@ github.com/jackc/puddle/v2/internal/genstack
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/nself-org/plugins/free/shared-utils v0.0.0 => ../shared-utils
+# github.com/nself-org/cli/sdk/go/v2 v2.0.0 => ./third_party/cli-sdk-go
+## explicit; go 1.25.0
+github.com/nself-org/cli/sdk/go/v2/migrate
+# github.com/nself-org/plugins/free/shared-utils v0.0.0 => ./third_party/shared-utils
 ## explicit; go 1.25.0
 github.com/nself-org/plugins/free/shared-utils/httpclient
 github.com/nself-org/plugins/free/shared-utils/httpmid
@@ -119,4 +122,5 @@ google.golang.org/protobuf/reflect/protoregistry
 google.golang.org/protobuf/runtime/protoiface
 google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/timestamppb
-# github.com/nself-org/plugins/free/shared-utils => ../shared-utils
+# github.com/nself-org/plugins/free/shared-utils => ./third_party/shared-utils
+# github.com/nself-org/cli/sdk/go/v2 => ./third_party/cli-sdk-go

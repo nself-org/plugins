@@ -1,0 +1,3 @@
+# Dummy values for the fresh-DB boot kit; never real secrets.
+POST_INTERNAL_SECRET=boot-kit-dummy-internal-secret
+POST_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000

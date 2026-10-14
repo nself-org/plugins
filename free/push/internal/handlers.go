@@ -13,13 +13,14 @@ import (
 
 // RegisterRoutes mounts all push plugin routes onto the given router.
 // Routes:
-//   POST /push/dispatch     — Hasura event trigger endpoint
-//   POST /push/devices      — register / update a device token
-//   GET  /health            — health check
+//
+//	POST /push/dispatch     — Hasura event trigger endpoint
+//	POST /push/devices      — register / update a device token
+//	GET  /health            — health check
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, dispatcher *Dispatcher) {
 	r.Post("/push/dispatch", handleDispatch(pool, dispatcher))
 	r.Post("/push/devices", handleRegisterDevice(pool))
-	r.Get("/health", handleHealth())
+	registerHealth(r)
 }
 
 // --- Dispatch handler ---
@@ -160,14 +161,6 @@ func handleRegisterDevice(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 
 		sdk.Respond(w, http.StatusOK, device)
-	}
-}
-
-// --- Health handler ---
-
-func handleHealth() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sdk.Respond(w, http.StatusOK, map[string]string{"status": "ok", "plugin": "push"})
 	}
 }
 

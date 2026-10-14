@@ -1,23 +1,109 @@
 {
-  "name": "paypal",
-  "version": "1.2.6",
-  "description": "PayPal payment data sync with webhook handling",
   "author": "nself",
-  "license": "MIT",
-  "language": "go",
-  "entryPoint": "nself-paypal",
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "port": 3071,
   "category": "commerce",
-  "tags": [
-    "payments",
-    "donations",
-    "subscriptions",
-    "paypal",
-    "webhooks"
+  "description": "PayPal payment data sync with webhook handling",
+  "entryPoint": "nself-paypal",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_CLIENT_ID",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_CLIENT_SECRET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_CLIENT_IDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_CLIENT_SECRETS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_ACCOUNT_LABELS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_WEBHOOK_IDS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_WEBHOOK_SECRETS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_ENVIRONMENT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PAYPAL_SYNC_INTERVAL",
+      "required": false
+    }
   ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "paypal",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache"
+    ],
+    "network": [
+      "paypal.com",
+      "api-m.paypal.com",
+      "api-m.sandbox.paypal.com"
+    ]
+  },
+  "port": 3071,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_paypal",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3071
+  },
+  "status": "stable",
   "tables": [
     "np_paypal_transactions",
     "np_paypal_orders",
@@ -34,93 +120,40 @@
     "np_paypal_balances",
     "np_paypal_webhook_events"
   ],
-  "webhooks": {
-    "PAYMENT.CAPTURE.COMPLETED": "Handle completed payment capture",
-    "PAYMENT.CAPTURE.DENIED": "Handle denied payment capture",
-    "PAYMENT.CAPTURE.REFUNDED": "Handle refunded payment capture",
-    "PAYMENT.CAPTURE.REVERSED": "Handle reversed payment capture",
-    "PAYMENT.CAPTURE.PENDING": "Handle pending payment capture",
-    "CHECKOUT.ORDER.COMPLETED": "Handle completed checkout order",
-    "CHECKOUT.ORDER.APPROVED": "Handle approved checkout order",
-    "CHECKOUT.ORDER.VOIDED": "Handle voided checkout order",
-    "BILLING.SUBSCRIPTION.CREATED": "Handle new subscription",
-    "BILLING.SUBSCRIPTION.ACTIVATED": "Handle activated subscription",
-    "BILLING.SUBSCRIPTION.UPDATED": "Handle updated subscription",
-    "BILLING.SUBSCRIPTION.CANCELLED": "Handle cancelled subscription",
-    "BILLING.SUBSCRIPTION.SUSPENDED": "Handle suspended subscription",
-    "BILLING.SUBSCRIPTION.EXPIRED": "Handle expired subscription",
-    "CUSTOMER.DISPUTE.CREATED": "Handle new dispute",
-    "CUSTOMER.DISPUTE.UPDATED": "Handle updated dispute",
-    "CUSTOMER.DISPUTE.RESOLVED": "Handle resolved dispute",
-    "CUSTOMER.DISPUTE.OTHER": "Handle other dispute event",
-    "PAYMENT.PAYOUTSBATCH.SUCCESS": "Handle successful payout batch",
-    "PAYMENT.PAYOUTSBATCH.DENIED": "Handle denied payout batch",
-    "PAYMENT.PAYOUTSBATCH.PROCESSING": "Handle processing payout batch",
-    "INVOICING.INVOICE.PAID": "Handle paid invoice",
-    "INVOICING.INVOICE.CANCELLED": "Handle cancelled invoice",
-    "PAYMENT.SALE.REFUNDED": "Handle refunded sale",
-    "PAYMENT.SALE.COMPLETED": "Handle completed sale"
-  },
-  "actions": {
-    "sync": "Sync all PayPal data to database",
-    "reconcile": "Re-sync recent data to catch gaps from missed webhooks",
-    "server": "Start the PayPal plugin server",
-    "status": "Show sync status and statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "PAYPAL_CLIENT_ID",
-      "PAYPAL_CLIENT_SECRET"
-    ],
-    "optional": [
-      "PAYPAL_CLIENT_IDS",
-      "PAYPAL_CLIENT_SECRETS",
-      "PAYPAL_ACCOUNT_LABELS",
-      "PAYPAL_WEBHOOK_IDS",
-      "PAYPAL_WEBHOOK_SECRETS",
-      "PAYPAL_ENVIRONMENT",
-      "PAYPAL_SYNC_INTERVAL"
-    ]
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "config": {
-    "syncInterval": 3600,
-    "webhookPath": "/webhooks/paypal",
-    "retryAttempts": 3,
-    "retryDelay": 1000
-  },
-  "hooks": {
-    "postInstall": "install.sh",
-    "preUninstall": "uninstall.sh",
-    "postSync": null
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "paypal.com",
-      "api-m.paypal.com",
-      "api-m.sandbox.paypal.com"
-    ],
-    "filesystem": [
-      "logs",
-      "cache"
-    ]
-  },
-  "status": "stable",
+  "tags": [
+    "payments",
+    "donations",
+    "subscriptions",
+    "paypal",
+    "webhooks"
+  ],
   "tier": "free",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requires_license": false,
-  "requiredEntitlements": []
+  "version": "1.2.6",
+  "webhooks": [
+    "BILLING.SUBSCRIPTION.ACTIVATED",
+    "BILLING.SUBSCRIPTION.CANCELLED",
+    "BILLING.SUBSCRIPTION.CREATED",
+    "BILLING.SUBSCRIPTION.EXPIRED",
+    "BILLING.SUBSCRIPTION.SUSPENDED",
+    "BILLING.SUBSCRIPTION.UPDATED",
+    "CHECKOUT.ORDER.APPROVED",
+    "CHECKOUT.ORDER.COMPLETED",
+    "CHECKOUT.ORDER.VOIDED",
+    "CUSTOMER.DISPUTE.CREATED",
+    "CUSTOMER.DISPUTE.OTHER",
+    "CUSTOMER.DISPUTE.RESOLVED",
+    "CUSTOMER.DISPUTE.UPDATED",
+    "INVOICING.INVOICE.CANCELLED",
+    "INVOICING.INVOICE.PAID",
+    "PAYMENT.CAPTURE.COMPLETED",
+    "PAYMENT.CAPTURE.DENIED",
+    "PAYMENT.CAPTURE.PENDING",
+    "PAYMENT.CAPTURE.REFUNDED",
+    "PAYMENT.CAPTURE.REVERSED",
+    "PAYMENT.PAYOUTSBATCH.DENIED",
+    "PAYMENT.PAYOUTSBATCH.PROCESSING",
+    "PAYMENT.PAYOUTSBATCH.SUCCESS",
+    "PAYMENT.SALE.COMPLETED",
+    "PAYMENT.SALE.REFUNDED"
+  ]
 }

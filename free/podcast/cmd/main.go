@@ -19,11 +19,10 @@ func main() {
 	cfg := internal.LoadConfig()
 	ctx := context.Background()
 	pool, err := internal.NewDB(ctx, cfg.DatabaseURL)
-	if err != nil { log.Fatalf("db: %v", err) }
-	defer pool.Close()
-	if err := internal.InitSchema(ctx, pool); err != nil {
-		log.Fatalf("schema init: %v", err)
+	if err != nil {
+		log.Fatalf("db: %v", err)
 	}
+	defer pool.Close()
 	h := internal.NewHandlers(pool)
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Logger, middleware.Recoverer)
@@ -48,10 +47,12 @@ func main() {
 		r.Delete("/{id}", h.DeleteEpisode)
 		r.Post("/{id}/play", h.RecordPlay)
 	})
-	srv := &http.Server{Addr: fmt.Sprintf(":%s", cfg.Port), Handler: r, ReadTimeout: 30*time.Second, WriteTimeout: 30*time.Second}
+	srv := &http.Server{Addr: fmt.Sprintf(":%s", cfg.Port), Handler: r, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
 	go func() {
 		log.Printf("podcast plugin on :%s", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed { log.Fatalf("listen: %v", err) }
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %v", err)
+		}
 	}()
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

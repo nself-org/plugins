@@ -40,3 +40,12 @@ deltas:
     to: "http://plugin-gamma:3903"
     owner_ref: P7-PLUG-03
     expires: 2026-12-31
+  # 2026-10-13 P7-PLUG-45: payments lists paypal as an optional dependency in the object form; its converted twin
+  # uses the array form v1.4.12 reads, so paypal (converted in the same batch) gains PLUGIN_PAYPAL_INTERNAL_URL.
+  - slug: paypal
+    file: compose-env-urls.txt
+    key: "PLUGIN_PAYPAL_INTERNAL_URL=http://plugin-paypal:3071"
+    from: "-"
+    to: "http://plugin-paypal:3071"
+    owner_ref: P7-PLUG-45
+    expires: 2026-12-31

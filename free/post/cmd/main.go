@@ -46,10 +46,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := internal.InitSchema(ctx, pool); err != nil {
-		log.Fatalf("schema init: %v", err)
-	}
-
 	h := &internal.Handlers{
 		DB:  pool,
 		Key: encKey,

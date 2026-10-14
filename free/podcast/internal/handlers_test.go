@@ -12,13 +12,14 @@ func TestHealthEndpoint(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
 	h.Health(w, req)
-	if w.Code != 200 {
-		t.Fatalf("expected 200, got %d", w.Code)
+	// No database pool in a unit test: the migrations ledger cannot be read, so /health answers 503.
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 without a pool, got %d", w.Code)
 	}
-	var body map[string]string
+	var body map[string]any
 	json.NewDecoder(w.Body).Decode(&body)
 	if body["plugin"] != "podcast" {
-		t.Fatalf("expected plugin=podcast, got %s", body["plugin"])
+		t.Fatalf("expected plugin=podcast, got %v", body["plugin"])
 	}
 }
 
