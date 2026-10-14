@@ -57,6 +57,7 @@ func TestLoadInvalid(t *testing.T) {
 		{"artifact path escapes", "version: 1\njobs: {a: {kind: test, run: [x], artifacts: [{path: /etc/passwd}]}}\n", 2, "/jobs/a/artifacts/0/path", "inside the repository"},
 		{"cache path escapes", "version: 1\njobs: {a: {kind: test, run: [x], cache: {paths: [../../x]}}}\n", 2, "/jobs/a/cache/paths/0", "inside the repository"},
 		{"detect root escapes", "version: 1\ndetect: {roots: [/etc]}\n", 2, "/detect/roots/0", "inside the repository"},
+		{"image with no reference", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {

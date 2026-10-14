@@ -23,12 +23,11 @@ import (
 )
 
 // oracleStages returns the stages as the legacy line scanner reads them.
-func oracleStages(data []byte) []legacyStage {
+func oracleStages(data []byte) ([]legacyStage, error) {
 	var stages []legacyStage
 	cur := -1
 	inStages := false
-	sc := bufio.NewScanner(bytes.NewReader(data))
-	sc.Buffer(make([]byte, 0, 64*1024), MaxFileBytes)
+	sc := bufio.NewScanner(bytes.NewReader(data)) // default 64 KiB line limit, as legacy
 	for sc.Scan() {
 		line := sc.Text()
 		trimmed := strings.TrimSpace(line)
@@ -38,7 +37,11 @@ func oracleStages(data []byte) []legacyStage {
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
 		switch {
 		case indent == 0:
-			inStages, cur = strings.HasPrefix(trimmed, "stages:"), -1
+			key := trimmed
+			if i := strings.Index(trimmed, ":"); i >= 0 {
+				key = strings.TrimSpace(trimmed[:i])
+			}
+			inStages, cur = key == "stages", -1
 		case indent == 2 && !inStages:
 		case inStages && indent == 2:
 			if rest, ok := strings.CutPrefix(trimmed, "- name:"); ok {
@@ -64,7 +67,7 @@ func oracleStages(data []byte) []legacyStage {
 			}
 		}
 	}
-	return stages
+	return stages, sc.Err()
 }
 
 func allCapsOrDigits(s string) bool {
@@ -82,7 +85,10 @@ func allCapsOrDigits(s string) bool {
 // divergenceNotes lists, per stage, what the legacy runner read or did that
 // differs from the declared stage the migration will turn into a job.
 func divergenceNotes(rel string, data []byte, declared []legacyStage) []string {
-	ran := oracleStages(data)
+	ran, err := oracleStages(data)
+	if err != nil {
+		return []string{rel + ": the legacy runner could not read this file (a line over 64 KiB) and skipped the whole manifest; the migrated jobs follow the YAML"}
+	}
 	if len(ran) != len(declared) {
 		return []string{fmt.Sprintf("%s: the legacy line parser found %d stage(s), the YAML declares %d; the migrated jobs follow the YAML", rel, len(ran), len(declared))}
 	}
@@ -120,6 +126,9 @@ func checkListItems(rel string, data []byte) error {
 	if yaml.Unmarshal(data, &doc) != nil || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
 		return nil
 	}
+	if bad := findIndirection(&doc); bad != nil {
+		return untranslatable(rel, bad.Line, "", "anchors, aliases and merge keys are not supported in a legacy manifest; write the values out")
+	}
 	top := doc.Content[0]
 	for i := 0; i+1 < len(top.Content); i += 2 {
 		if top.Content[i].Value != "stages" || top.Content[i+1].Kind != yaml.SequenceNode {
@@ -140,6 +149,20 @@ func checkListItems(rel string, data []byte) error {
 					}
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// findIndirection returns the first anchor, alias or merge key: the typed
+// decode would resolve it, and the null check above would not see through it.
+func findIndirection(n *yaml.Node) *yaml.Node {
+	if n.Kind == yaml.AliasNode || n.Anchor != "" || (n.Kind == yaml.ScalarNode && n.Tag == "!!merge") {
+		return n
+	}
+	for _, c := range n.Content {
+		if bad := findIndirection(c); bad != nil {
+			return bad
 		}
 	}
 	return nil

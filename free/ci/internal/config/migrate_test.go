@@ -271,6 +271,8 @@ func TestMigrateRefusesNullItemsAndBadIds(t *testing.T) {
 	for name, c := range map[string]struct{ doc, field string }{
 		"null cmd item":   {"plugin: p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - null\n", "stages[0].cmd[1]"},
 		"nested cmd item": {"plugin: p\nstages:\n  - name: a\n    cmd: [echo, [x]]\n", ""},
+		"merge key":       {"plugin: p\nstages:\n  - name: a\n    <<: {cmd: [echo, null, tail]}\n", ""},
+		"anchor":          {"plugin: p\nstages:\n  - name: a\n    cmd: &c [echo, hi]\n", ""},
 		"id too long":     {"plugin: p\nstages:\n  - name: " + strings.Repeat("x", 140) + "\n    cmd: [x]\n", "stages[0].name"},
 	} {
 		root := t.TempDir()
@@ -306,5 +308,15 @@ func TestDiffRefusesSymlinkedDestination(t *testing.T) {
 	}
 	if diff, err := m.Diff(root); err == nil || strings.Contains(diff, "ghp_FAKE") {
 		t.Fatalf("Diff followed the symlink: %q %v", diff, err)
+	}
+}
+
+func TestOracleMirrorsLegacyScanner(t *testing.T) {
+	if _, err := oracleStages([]byte("plugin: p\n#" + strings.Repeat("x", 70000) + "\nstages:\n  - name: a\n")); err == nil {
+		t.Error("a line over 64 KiB must fail like the legacy scanner")
+	}
+	st, err := oracleStages([]byte("plugin: p\nstages :\n  - name: a\n    cmd:\n    - echo\n    - hello\n"))
+	if err != nil || len(st) != 1 || strings.Join(st[0].Cmd, " ") != "echo hello" {
+		t.Errorf("whitespace before the colon: %v %v", st, err)
 	}
 }
