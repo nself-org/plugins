@@ -3,7 +3,7 @@
 # ~/.nself/plugins/bin/nself-claw and execs it directly; this Dockerfile
 # exists only so CI can build+lint the plugin the same way service plugins
 # are built, and to hand the resulting /plugin binary to the release pipeline.
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.* ./
 COPY . .
