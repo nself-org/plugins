@@ -6,8 +6,8 @@
 // Outputs: []Diff, empty when the file matches the model.
 //
 // Constraints: reports a service that is missing from the values file, extra
-// in it, or whose image, tag, plugin marker or init-script names differ, and a
-// differing baseDomain. secrets.yaml is not read: init-script bodies are
+// in it, or whose mapped status, image, tag, plugin marker or init-script names
+// differ, and a differing baseDomain. secrets.yaml is not read: init-script bodies are
 // compared by name only, never by content. A service listed under unsupported
 // counts as present (it is accounted for). Diffs are sorted by service then
 // kind and never include env values.
@@ -71,7 +71,12 @@ func CheckWith(existing []byte, m *Model, o MapOptions) ([]Diff, error) {
 			continue
 		}
 		w, ok := want.Services[name]
-		if !ok || !mapped {
+		if mapped != ok {
+			diffs = append(diffs, Diff{name, DiffDiffers,
+				fmt.Sprintf("mapped status: values %t, compose %t", mapped, ok)})
+			continue
+		}
+		if !mapped {
 			continue
 		}
 		h := have.Services[name]

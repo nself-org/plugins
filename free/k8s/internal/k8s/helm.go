@@ -217,29 +217,29 @@ func clusterFlags(opts InstallOptions) (flags, tail string) {
 // use (the context and server lines only when one is set), so a stale current
 // context or an inherited HELM_KUBE* variable that points at a real cluster is
 // visible before anything is applied. The API server URL is printed without
-// userinfo, query or fragment; no other HELM_KUBE* value (such as
+// userinfo, path, query or fragment; no other HELM_KUBE* value (such as
 // HELM_KUBETOKEN) is ever printed.
 func announceTarget(w io.Writer, kubeconfig, kubeContext string) {
 	switch {
 	case kubeconfig != "":
-		fmt.Fprintf(w, "k8s: target kubeconfig %s (--cluster)\n", kubeconfig)
+		_, _ = fmt.Fprintf(w, "k8s: target kubeconfig %s (--cluster)\n", kubeconfig)
 	case os.Getenv("KUBECONFIG") != "":
-		fmt.Fprintf(w, "k8s: target kubeconfig %s (KUBECONFIG)\n", os.Getenv("KUBECONFIG"))
+		_, _ = fmt.Fprintf(w, "k8s: target kubeconfig %s (KUBECONFIG)\n", os.Getenv("KUBECONFIG"))
 	default:
-		fmt.Fprintln(w, "k8s: target kubeconfig ~/.kube/config (current context)")
+		_, _ = fmt.Fprintln(w, "k8s: target kubeconfig ~/.kube/config (current context)")
 	}
 	switch envCtx := os.Getenv("HELM_KUBECONTEXT"); {
 	case kubeContext != "":
-		fmt.Fprintf(w, "k8s: target context %s (--context)\n", kubeContext)
+		_, _ = fmt.Fprintf(w, "k8s: target context %s (--context)\n", kubeContext)
 	case envCtx != "":
-		fmt.Fprintf(w, "k8s: target context %s (inherited HELM_KUBECONTEXT)\n", envCtx)
+		_, _ = fmt.Fprintf(w, "k8s: target context %s (inherited HELM_KUBECONTEXT)\n", envCtx)
 	}
 	if api := os.Getenv("HELM_KUBEAPISERVER"); kubeContext == "" && api != "" {
-		fmt.Fprintf(w, "k8s: target API server %s (inherited HELM_KUBEAPISERVER)\n", redactURL(api))
+		_, _ = fmt.Fprintf(w, "k8s: target API server %s (inherited HELM_KUBEAPISERVER)\n", redactURL(api))
 	}
 }
 
-// redactURL returns raw without userinfo, query or fragment (any of them may
+// redactURL returns raw without userinfo, path, query or fragment (any of them may
 // carry a token), or "(unparsable value)" when raw is not a URL with a host
 // (the raw text is never echoed then, so a value such as "user:pass@host",
 // which parses as an opaque URL, cannot leak).
@@ -249,5 +249,6 @@ func redactURL(raw string) string {
 		return "(unparsable value)"
 	}
 	u.User, u.RawQuery, u.ForceQuery, u.Fragment, u.RawFragment = nil, "", false, "", ""
+	u.Path, u.RawPath = "", ""
 	return u.String()
 }

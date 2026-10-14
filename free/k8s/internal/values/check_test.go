@@ -9,6 +9,7 @@
 package values
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,6 +61,31 @@ func TestCheckNamesChangedTag(t *testing.T) {
 	if len(diffs) != 1 || diffs[0].Service != "hasura" || diffs[0].Kind != DiffDiffers ||
 		!strings.Contains(diffs[0].Detail, "v9.9.9") {
 		t.Fatalf("diffs = %v", diffs)
+	}
+}
+
+func TestCheckMappedStatusChanges(t *testing.T) {
+	for _, initiallyMapped := range []bool{true, false} {
+		t.Run(fmt.Sprintf("initially-mapped-%t", initiallyMapped), func(t *testing.T) {
+			m := &Model{Name: "p", Services: map[string]ComposeSvc{
+				"app": {Image: "nginx:1.27", Privileged: !initiallyMapped},
+			}}
+			v, _, err := Map(m, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := MarshalValues(v)
+			if err != nil {
+				t.Fatal(err)
+			}
+			app := m.Services["app"]
+			app.Privileged = initiallyMapped
+			m.Services["app"] = app
+			diffs, err := Check(b, m)
+			if err != nil || len(diffs) != 1 || diffs[0].Service != "app" || diffs[0].Kind != DiffDiffers {
+				t.Fatalf("mapped status changed: diffs=%v err=%v", diffs, err)
+			}
+		})
 	}
 }
 

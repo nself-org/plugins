@@ -77,6 +77,9 @@ restartPolicy: {{ .restart }}
 containers:
   - name: {{ $name }}
     image: {{ include "nself.image" $svc | quote }}
+    {{- with $svc.pullPolicy }}
+    imagePullPolicy: {{ . | quote }}
+    {{- end }}
     {{- with $svc.entrypoint }}
     command: {{ toJson . }}
     {{- end }}

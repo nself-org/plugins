@@ -28,13 +28,13 @@ func TestIsTerminal(t *testing.T) {
 		if isTerminal(f.Fd()) {
 			t.Errorf("isTerminal(%s) = true, want false", dev)
 		}
-		f.Close()
+		_ = f.Close()
 	}
 	file, err := os.CreateTemp(t.TempDir(), "plain")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if isTerminal(file.Fd()) {
 		t.Error("isTerminal(regular file) = true, want false")
 	}
@@ -42,8 +42,8 @@ func TestIsTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	if isTerminal(r.Fd()) {
 		t.Error("isTerminal(pipe) = true, want false")
 	}
@@ -51,12 +51,12 @@ func TestIsTerminal(t *testing.T) {
 	if err != nil {
 		t.Skipf("no pty for the positive control: %v", err)
 	}
-	defer master.Close()
+	defer func() { _ = master.Close() }()
 	slave, err := openPTYSlave(master)
 	if err != nil {
 		t.Fatalf("opening the pty terminal side: %v", err)
 	}
-	defer slave.Close()
+	defer func() { _ = slave.Close() }()
 	if !isTerminal(slave.Fd()) {
 		t.Error("isTerminal(pty) = false, want true")
 	}
@@ -69,7 +69,7 @@ func TestUninstallRefusesDevZeroWithoutPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer zero.Close()
+	defer func() { _ = zero.Close() }()
 	r := runCLI(t, cliRun{Helm: "ok", Stdin: zero}, "uninstall")
 	if r.Exit != 4 || !strings.Contains(r.Stderr, "needs confirmation") {
 		t.Errorf("exit = %d, want 4 with the refusal\nstderr:\n%s", r.Exit, r.Stderr)

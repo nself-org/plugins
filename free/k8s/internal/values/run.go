@@ -130,7 +130,7 @@ type Result struct {
 func Items(list []Unsupported) []Item {
 	out := make([]Item, 0, len(list))
 	for _, u := range list {
-		out = append(out, Item{Name: u.Name, Reason: u.Reason})
+		out = append(out, Item(u))
 	}
 	return out
 }
@@ -140,18 +140,26 @@ func Items(list []Unsupported) []Item {
 func (r *Result) WriteText(w io.Writer) {
 	if r.Mode == ModeCheck {
 		for _, d := range r.Diffs {
-			fmt.Fprintln(w, d)
+			if _, err := fmt.Fprintln(w, d); err != nil {
+				return
+			}
 		}
 		if len(r.Diffs) == 0 {
-			fmt.Fprintf(w, "parity ok: %d compose service(s) match %s\n", r.Services, r.ValuesFile)
+			_, _ = fmt.Fprintf(w, "parity ok: %d compose service(s) match %s\n", r.Services, r.ValuesFile)
 		}
 		return
 	}
-	fmt.Fprintf(w, "wrote %s and %s (%d mapped, %d unsupported)\n", r.ValuesFile, r.SecretsFile, r.Mapped, len(r.Unsupported))
+	if _, err := fmt.Fprintf(w, "wrote %s and %s (%d mapped, %d unsupported)\n", r.ValuesFile, r.SecretsFile, r.Mapped, len(r.Unsupported)); err != nil {
+		return
+	}
 	for _, u := range r.Unsupported {
-		fmt.Fprintf(w, "unsupported: %s: %s\n", u.Name, u.Reason)
+		if _, err := fmt.Fprintf(w, "unsupported: %s: %s\n", u.Name, u.Reason); err != nil {
+			return
+		}
 	}
 	for _, u := range r.UnmappedRoutes {
-		fmt.Fprintf(w, "unmapped route: %s: %s\n", u.Name, u.Reason)
+		if _, err := fmt.Fprintf(w, "unmapped route: %s: %s\n", u.Name, u.Reason); err != nil {
+			return
+		}
 	}
 }

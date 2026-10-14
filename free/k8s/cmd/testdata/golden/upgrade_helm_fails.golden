@@ -6,4 +6,6 @@ exit: 1
 k8s: target kubeconfig ~/.kube/config (current context)
 stub helm: boom
 Error: k8s: helm upgrade: exit status 1
+If helm applied the upgrade, it rolled the release back to the last deployed revision (--atomic). Check it with 'helm history nself'; if the rollback itself failed, run 'helm rollback nself' (add --kubeconfig for your cluster).
 Error: k8s: helm upgrade: exit status 1
+If helm applied the upgrade, it rolled the release back to the last deployed revision (--atomic). Check it with 'helm history nself'; if the rollback itself failed, run 'helm rollback nself' (add --kubeconfig for your cluster).

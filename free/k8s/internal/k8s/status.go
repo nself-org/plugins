@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"unicode/utf8"
 )
 
 // ReleaseSummary is what `nself k8s status` prints.
@@ -112,16 +111,7 @@ func releaseMissing(stderr []byte) bool {
 // maxStderrTail bounds the helm stderr kept in a status error.
 const maxStderrTail = 512
 
-// stderrTail returns stderr trimmed of surrounding space, cut to its last
-// maxStderrTail bytes at a rune boundary and prefixed "..." when cut.
+// stderrTail sanitizes before trimming to a bounded UTF-8 tail.
 func stderrTail(stderr []byte) string {
-	s := bytes.TrimSpace(stderr)
-	if len(s) <= maxStderrTail {
-		return string(s)
-	}
-	s = s[len(s)-maxStderrTail:]
-	for len(s) > 0 && !utf8.RuneStart(s[0]) {
-		s = s[1:]
-	}
-	return "..." + string(s)
+	return SafeHelmDiagnostic(string(stderr))
 }
