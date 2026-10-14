@@ -25,9 +25,10 @@ services:
       - "${TRAEFIK_UPLOAD_ROUTES:-}"
       - "--upload-read-timeout"
       - "${TRAEFIK_UPLOAD_READ_TIMEOUT:-600s}"
-    # one-shot writer into bind dirs that Docker creates root-owned on Linux; read-only root, no capabilities,
-    # no listener. The long-running traefik-acme uses the image's non-root user.
-    user: "0:0"
+    # One-shot writer as the host operator; the CLI must pre-create both output bind directories as this user
+    # on Linux, before Docker can create them root-owned. Read-only root, no capabilities, no listener.
+    # The long-running traefik-acme uses the image's non-root user.
+    user: "${NSELF_HOST_UID}:${NSELF_HOST_GID}"
     volumes:
       - ./.nself/generated/routes.json:/nself/routes.json:ro
       - ./ssl:/nself/ssl:ro

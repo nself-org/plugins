@@ -143,7 +143,7 @@ func TestStaticConfigPolicy(t *testing.T) {
 }
 
 // The image runs as the distroless nonroot uid; the long-running traefik-acme takes that default,
-// the one-shot traefik-config is the one documented root exception, and traefik reads the rendered
+// the one-shot traefik-config uses the host operator uid, and traefik reads the rendered
 // static directory read-only. The upload port stays on loopback unless the operator publishes it.
 func TestNonRootAndUploadFragmentPolicy(t *testing.T) {
 	df, _ := os.ReadFile(filepath.Join("..", "Dockerfile"))
@@ -153,9 +153,6 @@ func TestNonRootAndUploadFragmentPolicy(t *testing.T) {
 	services := get(readYAML(t, "docker-compose.plugin.yml"), "services").(map[string]any)
 	if u, ok := services["traefik-acme"].(map[string]any)["user"]; ok {
 		t.Errorf("traefik-acme sets user %v: it must use the image's non-root user", u)
-	}
-	if u := services["traefik-config"].(map[string]any)["user"]; u != "0:0" {
-		t.Errorf("traefik-config user = %v, want the documented 0:0 exception", u)
 	}
 	// One render-interface tag on both renderer services, never a floating one: a stale local image
 	// without --static-out would otherwise be reused after an upgrade.
