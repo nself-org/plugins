@@ -37,7 +37,7 @@ func TestCycleAndDangling(t *testing.T) {
 	if !reflect.DeepEqual(e.Jobs, []string{"a", "ghost"}) {
 		t.Errorf("dangling error = %+v", e)
 	}
-	planErr(t, Input{World: w, Config: cfgOf(map[string]model.Job{"a": job("a")})}, CodeCycle)
+	_ = planErr(t, Input{World: w, Config: cfgOf(map[string]model.Job{"a": job("a")})}, CodeCycle)
 }
 
 func TestRequiredDependsOnAllowFailure(t *testing.T) {
@@ -45,7 +45,7 @@ func TestRequiredDependsOnAllowFailure(t *testing.T) {
 	soft.AllowFailure = true
 	soft.Required = bptr(false)
 	cfg := cfgOf(map[string]model.Job{"soft": soft, "hard": job("soft")})
-	planErr(t, Input{World: linuxWorld(), Config: cfg}, CodeRequiredAllowFailure)
+	_ = planErr(t, Input{World: linuxWorld(), Config: cfg}, CodeRequiredAllowFailure)
 	hard := job("soft")
 	hard.Required = bptr(false)
 	cfg.Jobs["hard"] = hard
@@ -55,11 +55,11 @@ func TestRequiredDependsOnAllowFailure(t *testing.T) {
 func TestUnknownNames(t *testing.T) {
 	cfg := cfgOf(map[string]model.Job{"a": job()})
 	cfg.Pipelines = map[string]model.PipelineDef{"p": {Triggers: []model.Trigger{"push"}, Jobs: []string{"missing"}}}
-	planErr(t, Input{World: linuxWorld(), Config: cfg, Pipeline: "nope"}, CodeUnknownName)
-	planErr(t, Input{World: linuxWorld(), Config: cfg, Pipeline: "p"}, CodeUnknownName)
+	_ = planErr(t, Input{World: linuxWorld(), Config: cfg, Pipeline: "nope"}, CodeUnknownName)
+	_ = planErr(t, Input{World: linuxWorld(), Config: cfg, Pipeline: "p"}, CodeUnknownName)
 	cfg.Pipelines = nil
 	cfg.Policy = map[string]any{"fail_fast": "sideways"}
-	planErr(t, Input{World: linuxWorld(), Config: cfg}, CodeUnknownName)
+	_ = planErr(t, Input{World: linuxWorld(), Config: cfg}, CodeUnknownName)
 }
 
 func TestLayersAndPriority(t *testing.T) {
@@ -242,7 +242,7 @@ func TestTransitiveRequiredAllowFailure(t *testing.T) {
 
 func TestUnknownTrigger(t *testing.T) {
 	cfg := cfgOf(map[string]model.Job{"a": job()})
-	planErr(t, Input{World: linuxWorld(), Config: cfg, Trigger: "pushh"}, CodeUnknownName)
+	_ = planErr(t, Input{World: linuxWorld(), Config: cfg, Trigger: "pushh"}, CodeUnknownName)
 }
 
 // Epic D28 for named and trigger-selected pipelines: a default-branch or

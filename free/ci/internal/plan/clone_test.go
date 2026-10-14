@@ -18,7 +18,7 @@ func fill(v reflect.Value) {
 		v.SetBool(true)
 	case reflect.Int, reflect.Int64:
 		v.SetInt(3)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		v.Set(reflect.New(v.Type().Elem()))
 		fill(v.Elem())
 	case reflect.Slice:
@@ -44,7 +44,7 @@ func fill(v reflect.Value) {
 // shared lists the paths where a and b hold the same pointer, slice or map.
 func shared(a, b reflect.Value, path string, out *[]string) {
 	switch a.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if a.IsNil() || b.IsNil() {
 			return
 		}
