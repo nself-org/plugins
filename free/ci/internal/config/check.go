@@ -132,7 +132,7 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 // log field (the same rule internal/exec applies to attempt ids).
 var (
 	envName     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	pinnedImage = regexp.MustCompile(`^[^\s@]+@sha256:[0-9a-f]{64}$`)
+	pinnedImage = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]+)?/)?[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`)
 )
 
 var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)

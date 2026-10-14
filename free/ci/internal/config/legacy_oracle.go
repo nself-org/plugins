@@ -24,7 +24,16 @@ import (
 
 // oracleStages returns the stages as the legacy line scanner reads them.
 func oracleStages(data []byte) ([]legacyStage, error) {
+	stages, _, err := oracleRead(data)
+	return stages, err
+}
+
+// oracleRead also returns the plugin name the scanner sets: the top-level key
+// must read exactly "plugin" (a quoted key or a leading BOM does not), and a
+// manifest without it is skipped whole by the legacy runner.
+func oracleRead(data []byte) ([]legacyStage, string, error) {
 	var stages []legacyStage
+	plugin := ""
 	cur := -1
 	inStages := false
 	sc := bufio.NewScanner(bytes.NewReader(data)) // default 64 KiB line limit, as legacy
@@ -42,6 +51,9 @@ func oracleStages(data []byte) ([]legacyStage, error) {
 				key = strings.TrimSpace(trimmed[:i])
 			}
 			inStages, cur = key == "stages", -1
+			if key == "plugin" {
+				plugin = strings.Trim(strings.TrimSpace(trimmed[strings.Index(trimmed, ":")+1:]), `"'`)
+			}
 		case indent == 2 && !inStages:
 		case inStages && indent == 2:
 			if rest, ok := strings.CutPrefix(trimmed, "- name:"); ok {
@@ -67,7 +79,7 @@ func oracleStages(data []byte) ([]legacyStage, error) {
 			}
 		}
 	}
-	return stages, sc.Err()
+	return stages, plugin, sc.Err()
 }
 
 func allCapsOrDigits(s string) bool {
@@ -85,7 +97,10 @@ func allCapsOrDigits(s string) bool {
 // divergenceNotes lists, per stage, what the legacy runner read or did that
 // differs from the declared stage the migration will turn into a job.
 func divergenceNotes(rel string, data []byte, declared []legacyStage) []string {
-	ran, err := oracleStages(data)
+	ran, plugin, err := oracleRead(data)
+	if err == nil && plugin == "" {
+		return []string{rel + ": the legacy runner skipped this whole manifest (it found no top-level plugin: key); the migrated jobs follow the YAML"}
+	}
 	if err != nil {
 		return []string{rel + ": the legacy runner could not read this file (a line over 64 KiB) and skipped the whole manifest; the migrated jobs follow the YAML"}
 	}

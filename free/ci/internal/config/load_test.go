@@ -58,6 +58,8 @@ func TestLoadInvalid(t *testing.T) {
 		{"cache path escapes", "version: 1\njobs: {a: {kind: test, run: [x], cache: {paths: [../../x]}}}\n", 2, "/jobs/a/cache/paths/0", "inside the repository"},
 		{"detect root escapes", "version: 1\ndetect: {roots: [/etc]}\n", 2, "/detect/roots/0", "inside the repository"},
 		{"image with no reference", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
+		{"image with a bad repository", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"!!!@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
+		{"image with a leading slash", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"/alpine@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -251,7 +253,7 @@ func TestPathsAreNormalisedBeforeContainment(t *testing.T) {
 }
 
 func TestPinnedImageAndNamesAccepted(t *testing.T) {
-	doc := "version: 1\njobs: {a: {kind: test, run: [x], env: {LOG_LEVEL: debug}, when: {env_present: [DB_URL]}, container: {image: \"alpine@sha256:" + strings.Repeat("a", 64) + "\"}}}\n"
+	doc := "version: 1\njobs: {a: {kind: test, run: [x], env: {LOG_LEVEL: debug}, when: {env_present: [DB_URL]}, container: {image: \"ghcr.io/nself-org/ci-toolchain:1.2@sha256:" + strings.Repeat("a", 64) + "\"}}}\n"
 	if _, err := Parse("ci.yaml", []byte(doc)); err != nil {
 		t.Fatal(err)
 	}

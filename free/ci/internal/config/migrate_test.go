@@ -320,3 +320,17 @@ func TestOracleMirrorsLegacyScanner(t *testing.T) {
 		t.Errorf("whitespace before the colon: %v %v", st, err)
 	}
 }
+
+func TestOracleSkipsManifestsWithoutAPluginKey(t *testing.T) {
+	for _, doc := range []string{"\"plugin\": p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n", "\ufeffplugin: p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n"} {
+		root := t.TempDir()
+		_ = os.WriteFile(filepath.Join(root, ".ci.yaml"), []byte(doc), 0o644)
+		m, err := Migrate(root)
+		if err != nil {
+			continue // a BOM may be refused by the YAML decode; either way it is not silent
+		}
+		if !strings.Contains(strings.Join(m.Notes, "\n"), "skipped this whole manifest") {
+			t.Errorf("silent skip difference for %q: %v", doc, m.Notes)
+		}
+	}
+}
