@@ -6,7 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/rabbitmq/amqp091-go v1.13.0
 	github.com/segmentio/kafka-go v0.4.47
 )
 

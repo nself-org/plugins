@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	sf "github.com/snowflakedb/gosnowflake"
+	sf "github.com/snowflakedb/gosnowflake/v2"
 
 	// Blank import registers the "snowflake" sql driver via init().
-	_ "github.com/snowflakedb/gosnowflake"
+	_ "github.com/snowflakedb/gosnowflake/v2"
 )
 
 // Driver writes rows to Snowflake using PUT + COPY INTO staged JSON.
@@ -78,8 +78,8 @@ func (d *Driver) WriteBatch(ctx context.Context, table string, rows []map[string
 	}
 
 	// PUT the JSON data into the stage.
-	// sf.WithFileStream attaches the reader to the context (2-arg form).
-	putCtx := sf.WithFileStream(ctx, strings.NewReader(buf.String()))
+	// sf.WithFilePutStream attaches the upload reader to the context.
+	putCtx := sf.WithFilePutStream(ctx, strings.NewReader(buf.String()))
 	putSQL := fmt.Sprintf("PUT file://%s @%s AUTO_COMPRESS=FALSE", fileName, stageName)
 	if _, err := d.db.ExecContext(putCtx, putSQL); err != nil {
 		return fmt.Errorf("put stage: %w", err)
