@@ -46,13 +46,14 @@ func oracleRead(data []byte) ([]legacyStage, string, error) {
 		indent := len(line) - len(strings.TrimLeft(line, " \t"))
 		switch {
 		case indent == 0:
-			key := trimmed
+			// splitYAMLKV: no colon gives key = the whole line and an empty value.
+			key, value := trimmed, ""
 			if i := strings.Index(trimmed, ":"); i >= 0 {
-				key = strings.TrimSpace(trimmed[:i])
+				key, value = strings.TrimSpace(trimmed[:i]), strings.TrimSpace(trimmed[i+1:])
 			}
 			inStages, cur = key == "stages", -1
 			if key == "plugin" {
-				plugin = strings.Trim(strings.TrimSpace(trimmed[strings.Index(trimmed, ":")+1:]), `"'`)
+				plugin = strings.Trim(value, `"'`)
 			}
 		case indent == 2 && !inStages:
 		case inStages && indent == 2:

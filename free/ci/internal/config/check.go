@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,7 +56,7 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 				break
 			}
 		}
-		if job.Container != nil && !pinnedImage.MatchString(job.Container.Image) {
+		if job.Container != nil && !pinnedImageRef(job.Container.Image) {
 			add(jobPtr(id, "/container/image"), "container image must be pinned by digest (ref@sha256:<64 hex>)")
 		}
 		if job.Cache != nil {
@@ -131,8 +132,12 @@ func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Pro
 // safeName is the shape of an id that later becomes a path component or a
 // log field (the same rule internal/exec applies to attempt ids).
 var (
-	envName     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	pinnedImage = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]+)?/)?[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`)
+	envName      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	digestSuffix = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
+	hostLabel    = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`)
+	pathPart     = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*$`)
+	imageTag     = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+	ipv6Host     = regexp.MustCompile(`^\[[0-9A-Fa-f:.]+\](?::[0-9]+)?$`)
 )
 
 var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -227,4 +232,43 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// pinnedImageRef reports whether s is [registry/]repository[:tag]@sha256:<64 hex>
+// with a well-formed registry and repository path.
+func pinnedImageRef(s string) bool {
+	if !digestSuffix.MatchString(s) {
+		return false
+	}
+	ref := strings.TrimSuffix(s, s[strings.LastIndex(s, "@"):])
+	parts := strings.Split(ref, "/")
+	if i := strings.LastIndex(parts[len(parts)-1], ":"); i >= 0 {
+		if !imageTag.MatchString(parts[len(parts)-1][i+1:]) {
+			return false
+		}
+		parts[len(parts)-1] = parts[len(parts)-1][:i]
+	}
+	if len(parts) > 1 && (strings.ContainsAny(parts[0], ".:") || parts[0] == "localhost" || strings.HasPrefix(parts[0], "[")) {
+		host := parts[0]
+		if !ipv6Host.MatchString(host) {
+			if h, port, ok := strings.Cut(host, ":"); ok {
+				if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+					return false
+				}
+				host = h
+			}
+			for _, label := range strings.Split(host, ".") {
+				if !hostLabel.MatchString(label) {
+					return false
+				}
+			}
+		}
+		parts = parts[1:]
+	}
+	for _, p := range parts {
+		if !pathPart.MatchString(p) {
+			return false
+		}
+	}
+	return true
 }

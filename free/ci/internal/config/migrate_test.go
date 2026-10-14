@@ -322,7 +322,7 @@ func TestOracleMirrorsLegacyScanner(t *testing.T) {
 }
 
 func TestOracleSkipsManifestsWithoutAPluginKey(t *testing.T) {
-	for _, doc := range []string{"\"plugin\": p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n", "\ufeffplugin: p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n"} {
+	for _, doc := range []string{"plugin: \"p\nplugin\n\"\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n", "\"plugin\": p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n", "\ufeffplugin: p\nstages:\n  - name: a\n    cmd:\n    - echo\n    - hello\n"} {
 		root := t.TempDir()
 		_ = os.WriteFile(filepath.Join(root, ".ci.yaml"), []byte(doc), 0o644)
 		m, err := Migrate(root)

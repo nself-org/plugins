@@ -60,6 +60,8 @@ func TestLoadInvalid(t *testing.T) {
 		{"image with no reference", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
 		{"image with a bad repository", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"!!!@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
 		{"image with a leading slash", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"/alpine@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
+		{"image with empty dns label", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"foo..bar/alpine@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
+		{"image with a hyphen label", "version: 1\njobs: {a: {kind: test, run: [x], container: {image: \"foo.-bar/alpine@sha256:" + strings.Repeat("a", 64) + "\"}}}\n", 2, "/jobs/a/container/image", "pinned by digest"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -248,6 +250,20 @@ func TestPathsAreNormalisedBeforeContainment(t *testing.T) {
 	for p, escapes := range map[string]bool{"src/../lib": false, "./a/b": false, "a/**": false, "..": true, "a/../../x": true, "../x": true, "/etc": true, "~/x": true, "a\\..\\..\\x": true} {
 		if escapesRepo(p) != escapes {
 			t.Errorf("escapesRepo(%q) = %v", p, !escapes)
+		}
+	}
+}
+
+func TestPinnedImageReferences(t *testing.T) {
+	d := "@sha256:" + strings.Repeat("a", 64)
+	for ref, ok := range map[string]bool{
+		"alpine" + d: true, "ghcr.io/nself-org/ci:1.2" + d: true, "localhost:5000/a/b" + d: true, "[::1]:5000/alpine" + d: true,
+		"registry.example.com:443/team/app_x-y" + d: true,
+		"/alpine" + d: false, "!!!" + d: false, "foo..bar/alpine" + d: false, "UPPER/case" + d: false, "a:b:c" + d: false,
+		"alpine@sha256:abc": false, "host:99999/x" + d: false, "": false,
+	} {
+		if pinnedImageRef(ref) != ok {
+			t.Errorf("pinnedImageRef(%q) = %v", ref, !ok)
 		}
 	}
 }
