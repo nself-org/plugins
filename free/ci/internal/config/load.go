@@ -143,7 +143,7 @@ func Parse(name string, data []byte) (*Loaded, error) {
 	strict := json.NewDecoder(bytes.NewReader(js))
 	strict.DisallowUnknownFields()
 	if err := strict.Decode(&out.Config); err != nil {
-		return fail(Problem{File: name, Message: err.Error()})
+		return fail(decodeProblem(name, err, lines))
 	}
 	if probs := semantic(name, out.Config, lines); len(probs) > 0 {
 		return fail(probs...)
@@ -154,10 +154,10 @@ func Parse(name string, data []byte) (*Loaded, error) {
 }
 
 var (
-	schemaOnce  sync.Once
-	schemaBytes []byte
-	schemaTree  *jsonschema.Schema
-	schemaErr   error
+	schemaOnce     sync.Once
+	schemaTree     *jsonschema.Schema
+	schemaResolved *jsonschema.Resolved
+	schemaErr      error
 )
 
 func validateSchema(doc []byte) error {
@@ -167,18 +167,23 @@ func validateSchema(doc []byte) error {
 			schemaErr = err
 			return
 		}
-		schemaBytes = all[schemaName]
 		var tree jsonschema.Schema
-		if err := json.Unmarshal(schemaBytes, &tree); err != nil {
+		if err := json.Unmarshal(all[schemaName], &tree); err != nil {
 			schemaErr = err
 			return
 		}
-		schemaTree = &tree
+		if schemaResolved, schemaErr = tree.Resolve(nil); schemaErr == nil {
+			schemaTree = &tree
+		}
 	})
 	if schemaErr != nil {
 		return schemaErr
 	}
-	return model.ValidateJSON(schemaBytes, doc)
+	var instance any
+	if err := json.Unmarshal(doc, &instance); err != nil {
+		return err
+	}
+	return schemaResolved.Validate(instance)
 }
 
 var yamlLine = regexp.MustCompile(`line (\d+)`)
@@ -214,4 +219,15 @@ func printable(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// decodeProblem locates a typed-decode failure (for example 1e30 for an int
+// field) from the field path; the message names the Go type, never the value.
+func decodeProblem(name string, err error, lines map[string]int) Problem {
+	var te *json.UnmarshalTypeError
+	if errors.As(err, &te) {
+		ptr := "/" + strings.ReplaceAll(te.Field, ".", "/")
+		return Problem{File: name, Line: lineFor(lines, ptr), Pointer: ptr, Message: "value does not fit " + te.Type.String()}
+	}
+	return Problem{File: name, Message: "document does not decode into the config model"}
 }

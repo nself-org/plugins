@@ -101,7 +101,7 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 		}
 		var v any
 		if err := n.Decode(&v); err != nil {
-			w.bad(n, ptr, err.Error())
+			w.bad(n, ptr, "scalar does not parse as "+n.ShortTag())
 			return nil
 		}
 		switch x := v.(type) {

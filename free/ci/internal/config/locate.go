@@ -17,6 +17,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -26,10 +27,8 @@ import (
 )
 
 var (
-	schemaStep  = regexp.MustCompile(`validating (/[^\s:]*): `)
-	schemaTop   = regexp.MustCompile(`validating https?://[^\s]+: `)
-	missingProp = regexp.MustCompile(`missing properties: \[(.*?)\]`)
-	extraProp   = regexp.MustCompile(`unexpected additional properties \[(.*?)\]`)
+	missingProp = regexp.MustCompile(`^required: missing properties: \[(.*?)\]$`)
+	extraProp   = regexp.MustCompile(`^unexpected additional properties \[(.*?)\]$`)
 	quotedName  = regexp.MustCompile(`"([^"]*)"`)
 	keywordLead = regexp.MustCompile(`^(\w+): `)
 )
@@ -39,19 +38,28 @@ type candidate struct {
 	value any
 }
 
+// chain splits a wrapped validation error into the schema path of its
+// innermost "validating /..." layer and the leaf error. Each layer's own text
+// is its message minus the wrapped error, so text inside a value cannot pose
+// as a schema path.
+func chain(err error) (string, string) {
+	path, leaf := "", err
+	for {
+		inner := errors.Unwrap(leaf)
+		if inner == nil {
+			return path, leaf.Error()
+		}
+		layer := strings.TrimSuffix(leaf.Error(), ": "+inner.Error())
+		if p, ok := strings.CutPrefix(layer, "validating /"); ok {
+			path = "/" + p
+		}
+		leaf = inner
+	}
+}
+
 // locate maps a schema error to an instance pointer and a safe message.
 func locate(err error, doc any, root *jsonschema.Schema) (string, string) {
-	text := err.Error()
-	msg := text
-	if idx := schemaStep.FindAllStringIndex(text, -1); len(idx) > 0 {
-		msg = text[idx[len(idx)-1][1]:]
-	} else if m := schemaTop.FindStringIndex(text); m != nil {
-		msg = text[m[1]:]
-	}
-	path := ""
-	if all := schemaStep.FindAllStringSubmatch(text, -1); len(all) > 0 {
-		path = all[len(all)-1][1]
-	}
+	path, msg := chain(err)
 	cands, node := []candidate{{"", doc}}, root
 	toks := strings.Split(strings.TrimPrefix(path, "/"), "/")
 	for i := 0; i < len(toks) && path != ""; i++ {
@@ -77,13 +85,44 @@ func locate(err error, doc any, root *jsonschema.Schema) (string, string) {
 				}
 				return nil
 			})
-		case tok == "if", tok == "then", tok == "else", tok == "not":
+		case tok == "then", tok == "else":
+			// Only instances that satisfy (then) or fail (else) the sibling `if` apply.
+			if node != nil && node.If != nil {
+				wantValid := tok == "then"
+				cands = filter(cands, func(c candidate) bool { return accepts(node.If, c.value) == wantValid })
+			}
 			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema {
-				return map[string]*jsonschema.Schema{"if": s.If, "then": s.Then, "else": s.Else, "not": s.Not}[tok]
+				if tok == "then" {
+					return s.Then
+				}
+				return s.Else
+			})
+		case tok == "if", tok == "not":
+			node = sub(node, func(s *jsonschema.Schema) *jsonschema.Schema {
+				if tok == "if" {
+					return s.If
+				}
+				return s.Not
 			})
 		}
 	}
 	return pick(cands, msg, node)
+}
+
+func filter(in []candidate, keepIt func(candidate) bool) []candidate {
+	var out []candidate
+	for _, c := range in {
+		if keepIt(c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// accepts reports whether the instance validates against the schema.
+func accepts(s *jsonschema.Schema, v any) bool {
+	res, err := s.Resolve(nil)
+	return err == nil && res.Validate(jsonRoundTrip(v)) == nil
 }
 
 func sub(s *jsonschema.Schema, f func(*jsonschema.Schema) *jsonschema.Schema) *jsonschema.Schema {
@@ -187,7 +226,7 @@ func describe(msg string, node *jsonschema.Schema) string {
 		if m != nil {
 			return m[1] + " constraint not satisfied"
 		}
-		return strings.TrimSpace(msg)
+		return "does not satisfy the schema"
 	}
 	switch m[1] {
 	case "enum":

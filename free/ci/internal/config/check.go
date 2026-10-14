@@ -100,12 +100,8 @@ func escapesRepo(p string) bool {
 	if path.IsAbs(p) || filepath.IsAbs(p) || strings.HasPrefix(p, "~") {
 		return true
 	}
-	for _, seg := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
-		if seg == ".." {
-			return true
-		}
-	}
-	return false
+	clean := path.Clean(strings.ReplaceAll(p, "\\", "/"))
+	return clean == ".." || strings.HasPrefix(clean, "../")
 }
 
 // positiveDuration reports whether s parses as a Go duration above zero; the

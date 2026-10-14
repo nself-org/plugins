@@ -48,6 +48,8 @@ func TestLoadInvalid(t *testing.T) {
 		{"secret-looking string with message words", "version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [\"ghp_FAKE does not match\"]}\n", 4, "/jobs/b/secrets/0", "must match the pattern"},
 		{"composite value", "version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [[ghp_FAKE]]}\n", 4, "/jobs/b/secrets/0", "wrong type"},
 		{"float where integer", "version: 1\njobs: {a: {kind: test, run: [echo], requires: {cpu: 18446744073709551616}}}\n", 2, "/jobs/a/requires/cpu", "out of range"},
+		{"conditional schema picks the failing artifact", "version: 1\njobs: {a: {kind: test, run: [echo], artifacts: [{path: x, kind: package}, {path: y, image: {ref: x}, kind: package}]}}\n", 2, "/jobs/a/artifacts/1/kind", "must equal"},
+		{"float spelling of an integer", "version: 1\njobs: {a: {kind: test, run: [echo], requires: {cpu: 1e30}}}\n", 2, "/jobs/a/requires/cpu", "does not fit"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -195,6 +197,9 @@ func TestNeverEchoesAnyValue(t *testing.T) {
 		"version: 1\njobs:\n  b: {kind: ghp_FAKE, run: [echo]}\n",
 		"version: 1\njobs:\n  b: {kind: test, run: [echo], timeout: ghp_FAKE}\n",
 		"version: 1\njobs:\n  b: {kind: test, run: [echo], when: {triggers: [ghp_FAKE]}}\n",
+		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [\"bad validating /properties/jobs: ghp_FAKE\"]}\n",
+		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [!!int ghp_FAKE]}\n",
+		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [\"enum: x unexpected additional properties [\\\"a\\\"] ghp_FAKE\"]}\n",
 	} {
 		_, err := Parse("ci.yaml", []byte(doc))
 		if err == nil || strings.Contains(err.Error(), "ghp_FAKE") {
@@ -224,5 +229,13 @@ func TestAliasBombViaTaggedScalarsAndKeys(t *testing.T) {
 func TestPolicyKeepsLargeIntegersAndNulls(t *testing.T) {
 	if _, err := Parse("ci.yaml", []byte("version: 1\npolicy: {value: 9223372036854775808, nothing: ~}\n")); err != nil {
 		t.Fatalf("opaque policy rejected: %v", err)
+	}
+}
+
+func TestPathsAreNormalisedBeforeContainment(t *testing.T) {
+	for p, escapes := range map[string]bool{"src/../lib": false, "./a/b": false, "a/**": false, "..": true, "a/../../x": true, "../x": true, "/etc": true, "~/x": true, "a\\..\\..\\x": true} {
+		if escapesRepo(p) != escapes {
+			t.Errorf("escapesRepo(%q) = %v", p, !escapes)
+		}
 	}
 }

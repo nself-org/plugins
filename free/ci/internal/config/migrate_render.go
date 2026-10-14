@@ -72,12 +72,12 @@ func (m *Migration) render() error {
 
 // Diff shows what writing the migration would change under root.
 func (m *Migration) Diff(root string) (string, error) {
-	current, err := os.ReadFile(filepath.Join(root, FileName))
+	current, err := readRegular(filepath.Join(root, FileName))
 	switch {
 	case err == nil && bytes.Equal(current, m.YAML):
 		return "", nil
 	case err != nil && !os.IsNotExist(err):
-		return "", err
+		return "", &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: err.Error()}}}
 	}
 	var b strings.Builder
 	from := "a/" + FileName
@@ -106,13 +106,13 @@ func (m *Migration) Write(root string) error {
 			return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: p + " is a symlink; replace it with a real file or directory before migrating"}}}
 		}
 	}
-	if current, err := os.ReadFile(path); err == nil {
+	if current, err := readRegular(path); err == nil {
 		if bytes.Equal(current, m.YAML) {
 			return nil
 		}
 		return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: "already exists with other content; merge the planned jobs by hand (run without --write to see them)"}}}
 	} else if !os.IsNotExist(err) {
-		return err
+		return &Error{Code: CodeInvalid, Problems: []Problem{{File: FileName, Message: err.Error()}}}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

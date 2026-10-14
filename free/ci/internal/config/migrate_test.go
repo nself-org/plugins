@@ -221,3 +221,23 @@ func TestMigrateNotesForFlowStages(t *testing.T) {
 		t.Errorf("flow-style stages not noted: %v", m.Notes)
 	}
 }
+
+func TestMigrateDestinationReadsAreBounded(t *testing.T) {
+	root := copyFixture(t, filepath.Join("legacy", "gauth"))
+	if err := os.MkdirAll(filepath.Join(root, ".nself"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/dev/zero", filepath.Join(root, FileName)); err != nil {
+		t.Fatal(err)
+	}
+	m, err := Migrate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Diff(root); err == nil {
+		t.Error("Diff read a device through the destination symlink")
+	}
+	if err := m.Write(root); err == nil {
+		t.Error("Write accepted a device destination")
+	}
+}
