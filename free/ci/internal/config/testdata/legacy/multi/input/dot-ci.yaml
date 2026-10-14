@@ -1,0 +1,19 @@
+# Root-level manifest: no workdir, no paths filter.
+plugin: plugin-retrieval
+epic: E7
+stack: go
+
+stages:
+  - name: go:vet
+    cmd: ["go", "vet", "./..."]
+    timeout: 120
+
+  - name: go:test
+    cmd:
+      - go
+      - test
+      - ./...
+
+  - name: build
+    cmd: ["make", "build"]
+    timeout: 600
