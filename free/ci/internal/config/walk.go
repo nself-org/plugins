@@ -14,7 +14,6 @@ package config
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -112,13 +111,15 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 			}
 		case uint64:
 			if !inPolicy(ptr) {
-				w.bad(n, ptr, "integer is out of range")
+				w.bad(n, ptr, "number is out of range")
 			}
 		case float64:
 			if math.IsInf(x, 0) || math.IsNaN(x) {
 				w.bad(n, ptr, "number must be finite")
-			} else if plainInteger.MatchString(n.Value) && !inPolicy(ptr) {
-				w.bad(n, ptr, "integer is out of range")
+			} else if math.Abs(x) >= 1<<63 && !inPolicy(ptr) {
+				// Every numeric field is an int; a larger number would fail the typed
+				// decode with a Go-version-dependent location, so it is refused here.
+				w.bad(n, ptr, "number is out of range")
 			}
 		}
 		return v
@@ -126,9 +127,5 @@ func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
 	w.bad(n, ptr, fmt.Sprintf("unsupported YAML node kind %d", n.Kind))
 	return nil
 }
-
-// plainInteger matches digits only: an integer too large for int64 is
-// resolved as a float, and the typed decode would fail without a location.
-var plainInteger = regexp.MustCompile(`^[+-]?[0-9][0-9_]*$`)
 
 const tooBig = "document is too large or nests too deeply (limits apply after alias expansion)"
