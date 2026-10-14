@@ -143,7 +143,7 @@ func Parse(name string, data []byte) (*Loaded, error) {
 	strict := json.NewDecoder(bytes.NewReader(js))
 	strict.DisallowUnknownFields()
 	if err := strict.Decode(&out.Config); err != nil {
-		return fail(decodeProblem(name, err, lines))
+		return fail(decodeProblem(name, err, lines, value))
 	}
 	if probs := semantic(name, out.Config, lines); len(probs) > 0 {
 		return fail(probs...)
@@ -188,8 +188,15 @@ func validateSchema(doc []byte) error {
 
 var yamlLine = regexp.MustCompile(`line (\d+)`)
 
+// quotedText matches the quoted names and values yaml.v3 puts into messages.
+var quotedText = regexp.MustCompile("'[^']*'|`[^`]*`|\"[^\"]*\"")
+
 func yamlProblem(name string, err error) Problem {
-	p := Problem{File: name, Message: strings.TrimPrefix(err.Error(), "yaml: ")}
+	msg := quotedText.ReplaceAllString(strings.TrimPrefix(err.Error(), "yaml: "), "<name>")
+	if len(msg) > 160 {
+		msg = msg[:160]
+	}
+	p := Problem{File: name, Message: msg}
 	if m := yamlLine.FindStringSubmatch(err.Error()); m != nil {
 		p.Line, _ = strconv.Atoi(m[1])
 	}
@@ -223,11 +230,37 @@ func printable(s string) string {
 
 // decodeProblem locates a typed-decode failure (for example 1e30 for an int
 // field) from the field path; the message names the Go type, never the value.
-func decodeProblem(name string, err error, lines map[string]int) Problem {
+func decodeProblem(name string, err error, lines map[string]int, doc any) Problem {
 	var te *json.UnmarshalTypeError
 	if errors.As(err, &te) {
-		ptr := "/" + strings.ReplaceAll(te.Field, ".", "/")
+		ptr := fieldPointer(doc, te.Field)
 		return Problem{File: name, Line: lineFor(lines, ptr), Pointer: ptr, Message: "value does not fit " + te.Type.String()}
 	}
 	return Problem{File: name, Message: "document does not decode into the config model"}
+}
+
+// fieldPointer turns a Go field path ("jobs.a.b.requires.cpu") into a JSON
+// pointer by matching it against the document, so a key that contains a dot
+// ("a.b") stays one segment.
+func fieldPointer(doc any, field string) string {
+	toks := strings.Split(field, ".")
+	ptr, cur := "", doc
+	for i := 0; i < len(toks); {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			break
+		}
+		matched := false
+		for j := i + 1; j <= len(toks); j++ {
+			key := strings.Join(toks[i:j], ".")
+			if next, has := m[key]; has {
+				ptr, cur, i, matched = ptr+"/"+escape(key), next, j, true
+				break
+			}
+		}
+		if !matched {
+			break
+		}
+	}
+	return ptr
 }

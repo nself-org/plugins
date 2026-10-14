@@ -50,6 +50,7 @@ func TestLoadInvalid(t *testing.T) {
 		{"float where integer", "version: 1\njobs: {a: {kind: test, run: [echo], requires: {cpu: 18446744073709551616}}}\n", 2, "/jobs/a/requires/cpu", "out of range"},
 		{"conditional schema picks the failing artifact", "version: 1\njobs: {a: {kind: test, run: [echo], artifacts: [{path: x, kind: package}, {path: y, image: {ref: x}, kind: package}]}}\n", 2, "/jobs/a/artifacts/1/kind", "must equal"},
 		{"float spelling of an integer", "version: 1\njobs: {a: {kind: test, run: [echo], requires: {cpu: 1e30}}}\n", 2, "/jobs/a/requires/cpu", "does not fit"},
+		{"dotted key in typed error", "version: 1\njobs:\n  a.b: {kind: test, run: [echo], requires: {cpu: 1e30}}\n", 3, "/jobs/a.b/requires/cpu", "does not fit"},
 		{"cycle", "version: 1\njobs:\n  a:\n    kind: test\n    run: [x]\n    deps: [b]\n  b:\n    kind: test\n    run: [x]\n    deps: [a]\n", 2, "/jobs", "a -> b -> a"},
 	}
 	for _, c := range cases {
@@ -199,6 +200,8 @@ func TestNeverEchoesAnyValue(t *testing.T) {
 		"version: 1\njobs:\n  b: {kind: test, run: [echo], when: {triggers: [ghp_FAKE]}}\n",
 		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [project/ok]}\n  b: {kind: test, run: [echo], secrets: [\"bad validating /properties/jobs: ghp_FAKE\"]}\n",
 		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [!!int ghp_FAKE]}\n",
+		"version: 1\njobs: {a: {kind: test, run: [echo], secrets: [*ghp_FAKE]}}\n",
+		"version: 1\njobs: {a: {kind: test, run: [echo], secrets: [\"ghp_FAKE\\q\"]}}\n",
 		"version: 1\njobs:\n  a: {kind: test, run: [echo], secrets: [\"enum: x unexpected additional properties [\\\"a\\\"] ghp_FAKE\"]}\n",
 	} {
 		_, err := Parse("ci.yaml", []byte(doc))
