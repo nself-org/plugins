@@ -1,0 +1,91 @@
+package config
+
+// Purpose: turn a yaml.v3 node tree into plain Go values (the form the JSON
+// schema validates), recording the line of every JSON pointer.
+// Inputs:  a document node.
+// Outputs: map[string]any / []any / scalars, a pointer -> line table and the
+// problems found.
+// Constraints: refuses non-string keys, duplicate keys and merge keys; an
+// alias is expanded in place, so a cyclic alias (`a: &x [*x]`) or an alias
+// bomb is stopped by the depth and node limits instead of exhausting memory
+// or the stack. A mapping key's line wins over its value's line, so a problem
+// in a block mapping points at the key.
+
+import (
+	"fmt"
+	"strconv"
+
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	maxDepth = 64
+	maxNodes = 200_000
+)
+
+type walker struct {
+	file   string
+	lines  map[string]int
+	probs  []Problem
+	budget int
+}
+
+func (w *walker) bad(n *yaml.Node, ptr, msg string) {
+	w.probs = append(w.probs, Problem{File: w.file, Line: n.Line, Pointer: ptr, Message: msg})
+}
+
+func (w *walker) value(n *yaml.Node, ptr string, depth int) any {
+	if w.budget--; w.budget < 0 || depth > maxDepth {
+		if len(w.probs) == 0 || w.probs[len(w.probs)-1].Message != tooBig {
+			w.bad(n, ptr, tooBig)
+		}
+		return nil
+	}
+	if n.Kind == yaml.AliasNode {
+		return w.value(n.Alias, ptr, depth+1)
+	}
+	w.lines[ptr] = n.Line
+	switch n.Kind {
+	case yaml.MappingNode:
+		m := make(map[string]any, len(n.Content)/2)
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, v := n.Content[i], n.Content[i+1]
+			if k.Kind != yaml.ScalarNode || k.Tag != "!!str" {
+				if k.Tag == "!!merge" {
+					w.bad(k, ptr, "merge keys (<<) are not supported")
+				} else {
+					w.bad(k, ptr, "keys must be strings")
+				}
+				continue
+			}
+			child := ptr + "/" + escape(k.Value)
+			if _, dup := m[k.Value]; dup {
+				w.bad(k, child, "duplicate key")
+				continue
+			}
+			m[k.Value] = w.value(v, child, depth+1)
+			w.lines[child] = k.Line
+		}
+		return m
+	case yaml.SequenceNode:
+		s := make([]any, len(n.Content))
+		for i, c := range n.Content {
+			s[i] = w.value(c, ptr+"/"+strconv.Itoa(i), depth+1)
+		}
+		return s
+	case yaml.ScalarNode:
+		if n.Tag == "!!timestamp" || n.Tag == "!!binary" {
+			return n.Value
+		}
+		var v any
+		if err := n.Decode(&v); err != nil {
+			w.bad(n, ptr, err.Error())
+			return nil
+		}
+		return v
+	}
+	w.bad(n, ptr, fmt.Sprintf("unsupported YAML node kind %d", n.Kind))
+	return nil
+}
+
+const tooBig = "document nests too deeply or expands too far (alias cycle or alias bomb)"

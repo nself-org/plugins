@@ -1,0 +1,14 @@
+plugin: other
+stages:
+  - name: lint
+    cmd: ["npm", "run", "lint"]
+  # env_required without skip_if_env_missing was never enforced by the legacy runner.
+  - name: e2e
+    cmd: ["npm", "run", "e2e"]
+    timeout: 90
+    env_required:
+      - E2E_URL
+  - name: smoke
+    cmd: ["sh", "-c", "echo ok"]
+    env_required: [SMOKE_HOST, SMOKE_TOKEN_REF]
+    skip_if_env_missing: true
