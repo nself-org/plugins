@@ -9,7 +9,9 @@ import (
 )
 
 func TestHashKeyStable(t *testing.T) {
-	if HashKey("abc") != HashKey("abc") {
+	first := HashKey("abc")
+	second := HashKey("abc")
+	if first != second {
 		t.Errorf("hash should be stable")
 	}
 	if HashKey("a") == HashKey("b") {

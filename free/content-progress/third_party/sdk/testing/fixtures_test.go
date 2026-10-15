@@ -19,7 +19,11 @@ func TestStubUpstream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /v1/models: %v", err)
 	}
-	defer resp.Body.Close()
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
@@ -35,7 +39,11 @@ func TestStubUpstream_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET: %v", err)
 	}
-	defer resp.Body.Close()
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
@@ -80,7 +88,9 @@ func TestFixedClock(t *testing.T) {
 
 func TestDoJSONRequest(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `{"ok":true}`)
+		if _, err := io.WriteString(w, `{"ok":true}`); err != nil {
+			t.Error(err)
+		}
 	})
 	status, body := sdktest.DoJSONRequest(t, handler, http.MethodGet, "/test", nil)
 	if status != http.StatusOK {
