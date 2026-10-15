@@ -752,3 +752,53 @@ JOIN stripe_products p ON pr.product_id = p.id AND pr.source_account_id = p.sour
 WHERE ch.status = 'succeeded'
 GROUP BY p.id, p.name, ch.currency, ch.source_account_id
 ORDER BY total_amount DESC;
+
+-- Synthetic legacy rows, distinct from seed.sql so both-table survival is checked.
+BEGIN;
+
+INSERT INTO stripe_customers (id, source_account_id, email)
+VALUES ('cus_legacy_boot', 'primary', 'boot@example.invalid');
+INSERT INTO stripe_products (id, source_account_id, name)
+VALUES ('prod_legacy_boot', 'primary', 'Boot fixture');
+INSERT INTO stripe_prices (id, source_account_id, product_id, currency, type)
+VALUES ('price_legacy_boot', 'primary', 'prod_legacy_boot', 'usd', 'recurring');
+INSERT INTO stripe_coupons (id, source_account_id, duration)
+VALUES ('coupon_legacy_boot', 'primary', 'once');
+INSERT INTO stripe_promotion_codes (id, source_account_id, coupon_id, code)
+VALUES ('promo_legacy_boot', 'primary', 'coupon_legacy_boot', 'BOOT');
+INSERT INTO stripe_payment_methods (id, source_account_id, customer_id, type)
+VALUES ('pm_legacy_boot', 'primary', 'cus_legacy_boot', 'card');
+INSERT INTO stripe_subscriptions (id, source_account_id, customer_id, status)
+VALUES ('sub_legacy_boot', 'primary', 'cus_legacy_boot', 'active');
+INSERT INTO stripe_subscription_items (id, source_account_id, subscription_id, price_id)
+VALUES ('si_legacy_boot', 'primary', 'sub_legacy_boot', 'price_legacy_boot');
+INSERT INTO stripe_invoices (id, source_account_id, customer_id, subscription_id, currency, amount_due, subtotal, total)
+VALUES ('in_legacy_boot', 'primary', 'cus_legacy_boot', 'sub_legacy_boot', 'usd', 100, 100, 100);
+INSERT INTO stripe_invoice_items (id, source_account_id, invoice_id, price_id, amount, currency)
+VALUES ('ii_legacy_boot', 'primary', 'in_legacy_boot', 'price_legacy_boot', 100, 'usd');
+INSERT INTO stripe_payment_intents (id, source_account_id, customer_id, invoice_id, amount, currency, status)
+VALUES ('pi_legacy_boot', 'primary', 'cus_legacy_boot', 'in_legacy_boot', 100, 'usd', 'succeeded');
+INSERT INTO stripe_charges (id, source_account_id, customer_id, payment_intent_id, payment_method_id, amount, currency, status)
+VALUES ('ch_legacy_boot', 'primary', 'cus_legacy_boot', 'pi_legacy_boot', 'pm_legacy_boot', 100, 'usd', 'succeeded');
+INSERT INTO stripe_refunds (id, source_account_id, charge_id, amount, currency, status)
+VALUES ('re_legacy_boot', 'primary', 'ch_legacy_boot', 10, 'usd', 'succeeded');
+INSERT INTO stripe_disputes (id, source_account_id, charge_id, amount, currency, status, reason)
+VALUES ('dp_legacy_boot', 'primary', 'ch_legacy_boot', 10, 'usd', 'needs_response', 'fraudulent');
+INSERT INTO stripe_balance_transactions (id, source_account_id, amount, currency, net, type, status)
+VALUES ('txn_legacy_boot', 'primary', 100, 'usd', 100, 'charge', 'available');
+INSERT INTO stripe_payouts (id, source_account_id, amount, currency, status, type)
+VALUES ('po_legacy_boot', 'primary', 100, 'usd', 'paid', 'bank_account');
+INSERT INTO stripe_checkout_sessions (id, source_account_id, customer_id, subscription_id, payment_intent_id, mode)
+VALUES ('cs_legacy_boot', 'primary', 'cus_legacy_boot', 'sub_legacy_boot', 'pi_legacy_boot', 'subscription');
+INSERT INTO stripe_discounts (id, source_account_id, coupon_id, promotion_code_id, customer_id, subscription_id, invoice_id, checkout_session_id)
+VALUES ('di_legacy_boot', 'primary', 'coupon_legacy_boot', 'promo_legacy_boot', 'cus_legacy_boot', 'sub_legacy_boot', 'in_legacy_boot', 'cs_legacy_boot');
+INSERT INTO stripe_setup_intents (id, source_account_id, customer_id, payment_method_id, status)
+VALUES ('seti_legacy_boot', 'primary', 'cus_legacy_boot', 'pm_legacy_boot', 'succeeded');
+INSERT INTO stripe_tax_ids (id, source_account_id, customer_id, type, value)
+VALUES ('txi_legacy_boot', 'primary', 'cus_legacy_boot', 'eu_vat', 'TEST000000');
+INSERT INTO stripe_tax_rates (id, source_account_id, display_name, percentage)
+VALUES ('txr_legacy_boot', 'primary', 'Boot tax', 1.0000);
+INSERT INTO stripe_webhook_events (id, source_account_id, type, data)
+VALUES ('evt_legacy_boot', 'primary', 'customer.created', '{"object":{"id":"cus_legacy_boot"}}');
+
+COMMIT;
