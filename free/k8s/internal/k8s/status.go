@@ -52,8 +52,8 @@ type helmRelease struct {
 var ErrStatusUnparsable = errors.New("k8s: helm status: output is not a release JSON document")
 
 // Status returns the release summary as a JSON line.
-func Status(ctx context.Context, releaseName, kubeconfig string) (string, error) {
-	sum, err := ReleaseStatus(ctx, releaseName, kubeconfig)
+func Status(ctx context.Context, releaseName, kubeconfig, kubeContext string) (string, error) {
+	sum, err := ReleaseStatus(ctx, releaseName, kubeconfig, kubeContext)
 	if err != nil {
 		return "", err
 	}
@@ -68,7 +68,9 @@ func Status(ctx context.Context, releaseName, kubeconfig string) (string, error)
 // helm failure is a *HelmError; NotFound is set when helm's stderr says the
 // release does not exist. helm's stderr (trimmed, last 512 bytes) is kept in
 // HelmError.Stderr so an unreachable cluster or a bad context is diagnosable.
-func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (ReleaseSummary, error) {
+// A non-empty kubeContext is passed as --kube-context and wins over every
+// inherited HELM_KUBE* variable, as for install and upgrade.
+func ReleaseStatus(ctx context.Context, releaseName, kubeconfig, kubeContext string) (ReleaseSummary, error) {
 	helm, err := helmBinary()
 	if err != nil {
 		return ReleaseSummary{}, err
@@ -80,8 +82,14 @@ func ReleaseStatus(ctx context.Context, releaseName, kubeconfig string) (Release
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig", kubeconfig)
 	}
+	if kubeContext != "" {
+		args = append(args, "--kube-context", kubeContext)
+	}
+	if kubeContext != "" { // status stays silent unless the caller named a context
+		announceTarget(os.Stderr, kubeconfig, kubeContext)
+	}
 	cmd := exec.CommandContext(ctx, helm, args...)
-	cmd.Env = helmEnv(os.Environ())
+	cmd.Env = helmEnvFor(os.Environ(), kubeContext)
 	out, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError

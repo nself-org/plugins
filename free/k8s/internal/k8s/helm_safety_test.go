@@ -26,7 +26,7 @@ const releaseJSON = `{"name":"rel","namespace":"ns1","version":3,
 func TestStatusPrintsOnlySummary(t *testing.T) {
 	out := fakeHelm(t)
 	writeFile(t, filepath.Join(out, "status.json"), releaseJSON, 0o600)
-	got, err := Status(context.Background(), "rel", "")
+	got, err := Status(context.Background(), "rel", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestStatusPrintsOnlySummary(t *testing.T) {
 func TestStatusRejectsNonJSON(t *testing.T) {
 	out := fakeHelm(t)
 	writeFile(t, filepath.Join(out, "status.json"), "password: needle-value-one\n", 0o600)
-	got, err := Status(context.Background(), "rel", "")
+	got, err := Status(context.Background(), "rel", "", "")
 	if err == nil || strings.Contains(err.Error()+got, needleValue) {
 		t.Errorf("got %q, %v; want an error that does not echo helm's output", got, err)
 	}
@@ -87,7 +87,7 @@ func TestHelmRunsWithCleanEnv(t *testing.T) {
 	t.Run("status", func(t *testing.T) {
 		out := fakeHelm(t)
 		writeFile(t, filepath.Join(out, "status.json"), releaseJSON, 0o600)
-		if _, err := Status(context.Background(), "rel", ""); err != nil {
+		if _, err := Status(context.Background(), "rel", "", ""); err != nil {
 			t.Fatal(err)
 		}
 		check(t, out)

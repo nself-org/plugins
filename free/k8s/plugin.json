@@ -49,6 +49,11 @@
             "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
           },
           {
+            "name": "context",
+            "type": "string",
+            "usage": "Explicit kube context (overrides inherited Helm cluster settings)"
+          },
+          {
             "name": "domain",
             "type": "string",
             "usage": "Domain that replaces the project's BASE_DOMAIN in the ingress hosts (required for install)"
@@ -106,6 +111,11 @@
             "name": "cluster",
             "type": "string",
             "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "name": "context",
+            "type": "string",
+            "usage": "Explicit kube context (overrides inherited Helm cluster settings)"
           },
           {
             "name": "domain",
@@ -167,6 +177,11 @@
             "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
           },
           {
+            "name": "context",
+            "type": "string",
+            "usage": "Explicit kube context (overrides inherited Helm cluster settings)"
+          },
+          {
             "default": "false",
             "name": "json",
             "type": "bool",
@@ -196,6 +211,11 @@
             "name": "cluster",
             "type": "string",
             "usage": "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)"
+          },
+          {
+            "name": "context",
+            "type": "string",
+            "usage": "Explicit kube context (overrides inherited Helm cluster settings)"
           },
           {
             "default": "false",

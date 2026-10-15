@@ -29,7 +29,11 @@ Run 'nself k8s values' first so the generated values match the compose model.
 The values are applied afresh (no --reuse-values): a service removed from the
 compose model leaves the release. Pass the same --domain, --plugins and
 --license-secret as at install time: a value left out is not passed, and the
-upgrade prints the ones it is not passing. The licence key itself is never sent
+upgrade prints the ones it is not passing.
+
+The upgrade runs helm --atomic: it always waits until every workload is ready
+(up to --timeout) and rolls the release back when that fails, so --wait=false is
+ignored here (it applies to install only) and the command says so. The licence key itself is never sent
 to helm; --license-secret names the cluster Secret that holds it (see
 'nself k8s install --help').`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,6 +54,9 @@ to helm; --license-secret names the cluster Secret that holds it (see
 		warnDomainNoEffect(r, opts)
 		if missing := k8s.NotPassed(opts); len(missing) > 0 {
 			r.warn("Not passing " + strings.Join(missing, ", ") + " (upgrade applies values afresh; repeat the install flags to pass them)")
+		}
+		if cmd.Flags().Changed("wait") && !opts.Wait {
+			r.warn("--wait=false has no effect on upgrade: it runs helm --atomic, which always waits (up to --timeout) and rolls back on failure")
 		}
 		r.info("Upgrading nSelf Helm release...")
 		if err := k8s.Upgrade(cmd.Context(), opts); err != nil {

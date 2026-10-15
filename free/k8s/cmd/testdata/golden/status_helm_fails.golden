@@ -8,6 +8,7 @@ Usage:
 
 Flags:
       --cluster string   Path to kubeconfig
+      --context string   Explicit kube context (overrides inherited Helm cluster settings)
   -h, --help             help for status
       --release string   Helm release name (default "nself")
 

@@ -26,6 +26,8 @@ import (
 type UninstallOptions struct {
 	ReleaseName string
 	Kubeconfig  string
+	// KubeContext is an explicit kube context, handled as for install.
+	KubeContext string
 	// Stdout receives helm's standard output (default os.Stdout).
 	Stdout io.Writer
 }
@@ -40,6 +42,9 @@ func uninstallArgs(opts UninstallOptions) []string {
 	if opts.Kubeconfig != "" {
 		args = append(args, "--kubeconfig", opts.Kubeconfig)
 	}
+	if opts.KubeContext != "" {
+		args = append(args, "--kube-context", opts.KubeContext)
+	}
 	return args
 }
 
@@ -49,7 +54,7 @@ func Uninstall(ctx context.Context, opts UninstallOptions) error {
 	if err != nil {
 		return err
 	}
-	announceTarget(os.Stderr, opts.Kubeconfig, "")
+	announceTarget(os.Stderr, opts.Kubeconfig, opts.KubeContext)
 	var stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, helm, uninstallArgs(opts)...)
 	cmd.Stdout = opts.Stdout
@@ -57,7 +62,7 @@ func Uninstall(ctx context.Context, opts UninstallOptions) error {
 		cmd.Stdout = os.Stdout
 	}
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stderr)
-	cmd.Env = helmEnv(os.Environ())
+	cmd.Env = helmEnvFor(os.Environ(), opts.KubeContext)
 	if err := cmd.Run(); err != nil {
 		return &HelmError{Verb: "uninstall", Err: err, NotFound: releaseMissing(stderr.Bytes()),
 			text: fmt.Sprintf("k8s: helm uninstall: %v", err)}

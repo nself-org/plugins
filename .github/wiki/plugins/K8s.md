@@ -137,11 +137,12 @@ Both commands refuse (exit 1, `run nself k8s values`) when `values.yaml` or `sec
 |------|---------|---------|
 | `--domain` | none | Required for install. Replaces the project's `BASE_DOMAIN` in the ingress hosts and TLS hosts (see below) |
 | `--cluster` | none | Path to a kubeconfig. Without it helm reads `KUBECONFIG` or `~/.kube/config` |
+| `--context` | none | Explicit kube context, passed to helm as `--kube-context`. It also drops every inherited `HELM_KUBE*` variable, so the context you name is the one used. `status` and `uninstall` take it too; give `status` the context `upgrade` used |
 | `--release` | `nself` | Helm release name. A name that starts with `-` is refused in every mode (helm would read it as a flag) |
 | `--plugins` | none | Comma-separated plugins (`plugins.install`). The chart checks each against the generated values and fails the render when one is missing |
 | `--license-secret` | none | Name of an existing Secret that holds `NSELF_PLUGIN_LICENSE_KEY`. Plugin workloads read the key from it. Must be a valid Secret name |
 | `--project-dir` | `.` | Project directory that holds `.nself/generated/k8s` |
-| `--wait` | on | Wait until every workload is ready |
+| `--wait` | on | Wait until every workload is ready. `install` only: `upgrade` always waits (see below) and warns when you pass `--wait=false` |
 | `--timeout` | `10m` | How long helm waits |
 
 What it passes to helm: `--values values.yaml --values secrets.yaml` and, when you set `--domain`, `--plugins` or `--license-secret`, a third
@@ -151,6 +152,11 @@ the command line, and never through `--set`. helm runs with a cleaned environmen
 command prints which kubeconfig helm will use. `upgrade` applies the current values afresh (no `--reuse-values`), so a service
 you removed from the compose model leaves the release; pass the same `--domain`, `--plugins` and `--license-secret` as at install time; `upgrade`
 prints one line naming the values it is not passing.
+
+`upgrade` runs `helm upgrade --atomic`. It always waits until every workload is ready (up to `--timeout`), and when that
+fails or helm cannot apply the upgrade, helm rolls the release back to the last deployed revision; the error then names
+`helm history` and `helm rollback` for your cluster. So `--wait=false` has no effect on `upgrade`. Helm 4 deprecates
+`--atomic` (it is replaced by `--rollback-on-failure`); the plugin keeps `--atomic` while it supports helm 3.
 
 `nself k8s status` prints only the release name, namespace, revision, chart version and status. It never prints helm's release
 config or manifest, which hold every secret of the stack.
@@ -189,7 +195,7 @@ without content in `secrets.yaml` fails the render. `values --check` compares th
 
 ## Uninstall
 
-`nself k8s uninstall` removes the release with `helm uninstall <release>` (add `--cluster` and `--release` as for install). It is
+`nself k8s uninstall` removes the release with `helm uninstall <release>` (add `--cluster`, `--context` and `--release` as for install). It is
 destructive, so it needs confirmation:
 
 - `--yes` (or `-y`) confirms.

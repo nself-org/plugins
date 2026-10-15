@@ -1,7 +1,7 @@
 // Purpose: `nself-k8s status` — shows the Helm release status. Behavior is
 // unchanged from the pre-extraction `nself k8s status`.
 //
-// Inputs: --cluster, --release.
+// Inputs: --cluster, --context, --release.
 //
 // Outputs: the release summary JSON line (five fields only); with --json the
 // same object is the data member of a v1 envelope.
@@ -28,18 +28,19 @@ var statusCmd = &cobra.Command{
 			return r.usageFail("status takes no arguments")
 		}
 		cluster, _ := cmd.Flags().GetString("cluster")
+		kubeContext, _ := cmd.Flags().GetString("context")
 		release, _ := cmd.Flags().GetString("release")
 		if err := r.checkRelease(releaseOrDefault(release), false); err != nil {
 			return err
 		}
 		if r.json {
-			sum, err := k8s.ReleaseStatus(cmd.Context(), release, cluster)
+			sum, err := k8s.ReleaseStatus(cmd.Context(), release, cluster, kubeContext)
 			if err != nil {
 				return r.fail(err)
 			}
 			return r.done(sum)
 		}
-		out, err := k8s.Status(cmd.Context(), release, cluster)
+		out, err := k8s.Status(cmd.Context(), release, cluster, kubeContext)
 		if err != nil {
 			return r.fail(err)
 		}
@@ -55,5 +56,6 @@ func init() {
 	// those bytes unchanged. It is documented in the wiki and the manifest.
 	_ = statusCmd.Flags().MarkHidden("json")
 	statusCmd.Flags().String("cluster", "", "Path to kubeconfig")
+	statusCmd.Flags().String("context", "", "Explicit kube context (overrides inherited Helm cluster settings)")
 	statusCmd.Flags().String("release", k8s.HelmReleaseName, "Helm release name")
 }

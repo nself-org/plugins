@@ -1,6 +1,6 @@
 // Purpose: `nself-k8s uninstall` removes the nSelf Helm release (helm uninstall).
 //
-// Inputs: --release, --cluster, --yes, --json, and stdin.
+// Inputs: --release, --cluster, --context, --yes, --json, and stdin.
 //
 // Outputs: helm's own output (stdout goes to stderr under --json), plus an
 // Info/Success line in human mode; with --json one envelope whose data is
@@ -43,12 +43,13 @@ deletes the volumes.
 
 Example:
   nself k8s uninstall --yes
-  nself k8s uninstall --release my-nself --cluster ~/.kube/config --yes --json`,
+  nself k8s uninstall --release my-nself --cluster ~/.kube/config --context prod --yes --json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
 		r := newInvocation(cmd, "uninstall")
 		cluster, _ := cmd.Flags().GetString("cluster")
+		kubeContext, _ := cmd.Flags().GetString("context")
 		release, _ := cmd.Flags().GetString("release")
 		yes, _ := cmd.Flags().GetBool("yes")
 		release = releaseOrDefault(release)
@@ -62,7 +63,7 @@ Example:
 			}
 		}
 		r.info(fmt.Sprintf("Uninstalling Helm release %s...", release))
-		err := k8s.Uninstall(cmd.Context(), k8s.UninstallOptions{ReleaseName: release, Kubeconfig: cluster, Stdout: r.helmStdout()})
+		err := k8s.Uninstall(cmd.Context(), k8s.UninstallOptions{ReleaseName: release, Kubeconfig: cluster, KubeContext: kubeContext, Stdout: r.helmStdout()})
 		if err != nil {
 			return r.fail(err)
 		}
@@ -83,6 +84,7 @@ func (r *invocation) refuse(release string) error {
 func init() {
 	addJSONFlag(uninstallCmd)
 	uninstallCmd.Flags().String("cluster", "", "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)")
+	uninstallCmd.Flags().String("context", "", "Explicit kube context (overrides inherited Helm cluster settings)")
 	uninstallCmd.Flags().String("release", k8s.HelmReleaseName, "Helm release name")
 	uninstallCmd.Flags().BoolP("yes", "y", false, "Confirm the removal (required without a terminal)")
 }

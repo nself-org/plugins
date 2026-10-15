@@ -146,7 +146,7 @@ func TestReleaseStatusErrorCarriesStderr(t *testing.T) {
 			fakeHelm(t)
 			t.Setenv("FAKE_HELM_FAIL", "1")
 			t.Setenv("FAKE_HELM_STDERR", c.stderr)
-			_, err := ReleaseStatus(context.Background(), "rel", "")
+			_, err := ReleaseStatus(context.Background(), "rel", "", "")
 			he, ok := err.(*HelmError)
 			if !ok {
 				t.Fatalf("err = %#v, want *HelmError", err)
@@ -161,7 +161,7 @@ func TestReleaseStatusErrorCarriesStderr(t *testing.T) {
 		fakeHelm(t)
 		t.Setenv("FAKE_HELM_FAIL", "1")
 		t.Setenv("FAKE_HELM_STDERR", "Error: release: not found\n")
-		_, err := ReleaseStatus(context.Background(), "rel", "")
+		_, err := ReleaseStatus(context.Background(), "rel", "", "")
 		if he, ok := err.(*HelmError); !ok || !he.NotFound || he.Stderr != "Error: release: not found" {
 			t.Errorf("err = %#v", err)
 		}
