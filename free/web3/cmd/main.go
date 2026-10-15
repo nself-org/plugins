@@ -136,9 +136,6 @@ func main() {
 	defer pool.Close()
 
 	internal.BootMigrations(ctx, pool)
-	if err := internal.InitSchema(ctx, pool); err != nil {
-		log.Fatalf("schema init: %v", err)
-	}
 
 	h := internal.NewHandlers(pool)
 	r := newRouter(h)
