@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- Purpose: Drop all np_web3_* tables (reverse of 001_np_web3_schema.sql).
 -- Inputs: None.
 -- Outputs: All 12 np_web3_* tables and their indexes removed.

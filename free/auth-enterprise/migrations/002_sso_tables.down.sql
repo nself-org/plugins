@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- 002_sso_tables.down.sql
 -- Reverse of 002_sso_tables.sql
 -- Drops SSO provider registry, session log, and CSRF state cache.
