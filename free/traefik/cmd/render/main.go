@@ -57,47 +57,47 @@ func run(args []string, errw io.Writer) int {
 	ids := splitIDs(*uploadRoutes)
 	up := staticcfg.Upload{Enabled: len(ids) > 0, ReadTimeout: *uploadTimeout}
 	if err := up.Validate(); err != nil {
-		fmt.Fprintln(errw, "render:", err)
+		_, _ = fmt.Fprintln(errw, "render:", err)
 		return 1
 	}
 	if up.Enabled && *staticOut == "" {
-		fmt.Fprintln(errw, "render: --upload-routes needs --static-out (the upload entrypoint lives in the static configuration)")
+		_, _ = fmt.Fprintln(errw, "render: --upload-routes needs --static-out (the upload entrypoint lives in the static configuration)")
 		return 1
 	}
 	f, err := os.Open(*routes)
 	if err != nil {
-		fmt.Fprintln(errw, "render:", err)
+		_, _ = fmt.Fprintln(errw, "render:", err)
 		return 2
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	m, err := contract.Load(f)
 	if err != nil {
-		fmt.Fprintln(errw, "render:", err)
+		_, _ = fmt.Fprintln(errw, "render:", err)
 		return 1
 	}
 	data, err := render.Render(m, render.Options{SSLRoot: *ssl, CertRoot: *certRoot, Helper: *helper, Upload: ids})
 	var ref *render.RefusalError
 	if errors.As(err, &ref) {
-		fmt.Fprintln(errw, ref.Error())
+		_, _ = fmt.Fprintln(errw, ref.Error())
 		return 1
 	}
 	if err != nil {
-		fmt.Fprintln(errw, "render:", err)
+		_, _ = fmt.Fprintln(errw, "render:", err)
 		return 2
 	}
 	var staticDoc []byte
 	if *staticOut != "" {
 		if staticDoc, err = staticcfg.Render(config.Base, up); err != nil {
-			fmt.Fprintln(errw, "render:", err)
+			_, _ = fmt.Fprintln(errw, "render:", err)
 			return 1
 		}
 		if err := writeDoc(*staticOut, "traefik.yml", staticDoc); err != nil {
-			fmt.Fprintln(errw, "render:", err)
+			_, _ = fmt.Fprintln(errw, "render:", err)
 			return 2
 		}
 	}
 	if err := writeDoc(*out, "dynamic.yml", data); err != nil {
-		fmt.Fprintln(errw, "render:", err)
+		_, _ = fmt.Fprintln(errw, "render:", err)
 		return 2
 	}
 	return 0
@@ -112,7 +112,7 @@ func serve(args []string, errw io.Writer) int {
 		return 2
 	}
 	srv := &http.Server{Addr: *listen, Handler: static.Handler(*root), ReadHeaderTimeout: 10 * time.Second}
-	fmt.Fprintln(errw, "serve-static:", srv.ListenAndServe())
+	_, _ = fmt.Fprintln(errw, "serve-static:", srv.ListenAndServe())
 	return 2
 }
 
@@ -127,12 +127,12 @@ func health(args []string, errw io.Writer) int {
 	c := http.Client{Timeout: 2 * time.Second}
 	resp, err := c.Get("http://" + *addr + "/__nself/ok")
 	if err != nil {
-		fmt.Fprintln(errw, "healthcheck:", err)
+		_, _ = fmt.Fprintln(errw, "healthcheck:", err)
 		return 1
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintln(errw, "healthcheck: status", resp.StatusCode)
+		_, _ = fmt.Fprintln(errw, "healthcheck: status", resp.StatusCode)
 		return 1
 	}
 	return 0

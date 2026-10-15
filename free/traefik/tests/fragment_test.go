@@ -45,6 +45,15 @@ func get(m map[string]any, keys ...string) any {
 func TestFragmentPolicy(t *testing.T) {
 	frag := readYAML(t, "docker-compose.plugin.yml")
 	services := get(frag, "services").(map[string]any)
+	docsMounted := false
+	for _, v := range asList(get(services, "traefik-acme", "volumes")) {
+		if toString(v) == "./.dist:/opt/nself/.dist:ro" {
+			docsMounted = true
+		}
+	}
+	if !docsMounted {
+		t.Error("static helper must mount the generated docs read-only")
+	}
 	for _, want := range []string{"traefik-config", "traefik-acme", "traefik"} {
 		if _, ok := services[want]; !ok {
 			t.Fatalf("service %s missing", want)

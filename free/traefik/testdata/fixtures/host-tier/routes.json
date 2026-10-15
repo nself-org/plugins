@@ -1109,6 +1109,42 @@
       ],
       "shadowed_by": null,
       "unmodelled": []
+    },
+    {
+      "id": "core:api-docs",
+      "source": "core",
+      "file": "nginx/sites/api-docs.conf",
+      "server_names": [
+        "docs.example.test"
+      ],
+      "listen": {
+        "http": true,
+        "https": false
+      },
+      "tls": null,
+      "locations": [
+        {
+          "path": "/api-docs",
+          "match": "prefix",
+          "static_file": "/opt/nself/.dist/openapi.json",
+          "headers_add": {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            "Access-Control-Allow-Origin": "*"
+          },
+          "access_log": true
+        },
+        {
+          "path": "/docs",
+          "match": "prefix",
+          "static_file": "/opt/nself/.dist/scalar.html",
+          "headers_add": {
+            "Content-Type": "text/html",
+            "Cache-Control": "no-store"
+          },
+          "access_log": true
+        }
+      ]
     }
   ]
 }

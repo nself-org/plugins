@@ -1,4 +1,4 @@
-// Package static is the traefik-acme helper: it serves the ACME HTTP-01 webroot
+// Package static is the traefik-acme helper: it serves the core docs files and ACME HTTP-01 webroot
 // (nginx parity: one bare token under /.well-known/acme-challenge/, no
 // subdirectories, no traversal, no symlinks, GET and HEAD only) and answers the
 // fixed statuses the rendered configuration routes to it (/__nself/ok and
@@ -19,11 +19,18 @@ import (
 
 var tokenRE = regexp.MustCompile(`^/[.]well-known/acme-challenge/[A-Za-z0-9_-]+$`)
 
-// Handler serves root as the ACME webroot plus the fixed responder paths.
-func Handler(root string) http.Handler {
+// Handler serves the ACME webroot, docs files and fixed responder paths.
+// docsRoot overrides the production /opt/nself/.dist mount for isolated tests.
+func Handler(root string, docsRoot ...string) http.Handler {
+	dist := "/opt/nself/.dist"
+	if len(docsRoot) > 0 {
+		dist = docsRoot[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
 		switch {
+		case strings.HasPrefix(p, "/__nself/docs/"):
+			serveDocs(w, r, dist)
 		case p == "/__nself/ok":
 			w.Header().Set("Content-Type", "text/plain")
 			_, _ = w.Write([]byte("OK"))
@@ -74,7 +81,7 @@ func serveToken(w http.ResponseWriter, r *http.Request, root string) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() {
 		w.WriteHeader(http.StatusNotFound)

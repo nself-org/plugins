@@ -1948,6 +1948,50 @@
       ],
       "shadowed_by": null,
       "unmodelled": []
+    },
+    {
+      "id": "core:api-docs",
+      "source": "core",
+      "file": "nginx/sites/api-docs.conf",
+      "server_names": [
+        "docs.example.org"
+      ],
+      "listen": {
+        "http": false,
+        "https": true
+      },
+      "tls": {
+        "ssl_dir": "example-org",
+        "has_trusted_chain": false,
+        "protocols": [
+          "TLSv1.2",
+          "TLSv1.3"
+        ],
+        "ciphers": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"
+      },
+      "locations": [
+        {
+          "path": "/api-docs",
+          "match": "prefix",
+          "static_file": "/opt/nself/.dist/openapi.json",
+          "headers_add": {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+            "Access-Control-Allow-Origin": "*"
+          },
+          "access_log": true
+        },
+        {
+          "path": "/docs",
+          "match": "prefix",
+          "static_file": "/opt/nself/.dist/scalar.html",
+          "headers_add": {
+            "Content-Type": "text/html",
+            "Cache-Control": "no-store"
+          },
+          "access_log": true
+        }
+      ]
     }
   ]
 }

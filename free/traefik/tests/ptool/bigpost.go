@@ -35,7 +35,7 @@ func (p *patternReader) Read(b []byte) (int, error) {
 // (one request must not be throttled), else the slowpost route.
 func bigRoute(m routes) (route, int64, bool) {
 	for _, x := range m.Routes {
-		if !hasRoot(x) || !(x.Listen.HTTP || x.Listen.HTTPS) || x.RateLimit != nil {
+		if !hasRoot(x) || (!x.Listen.HTTP && !x.Listen.HTTPS) || x.RateLimit != nil {
 			continue
 		}
 		for _, l := range x.Locations {
@@ -68,15 +68,15 @@ func bigPost(m routes, name string, mib int) {
 	}
 	c, err := dialRaw(target{name}, scheme(rt), hostOf(rt))
 	must(err)
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	_ = c.SetDeadline(time.Now().Add(120 * time.Second))
-	fmt.Fprintf(c, "POST / HTTP/1.1\r\nHost: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", hostOf(rt), size)
+	_, _ = fmt.Fprintf(c, "POST / HTTP/1.1\r\nHost: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", hostOf(rt), size)
 	h := sha256.New()
 	_, err = io.Copy(c, io.TeeReader(&patternReader{n: size}, h))
 	must(err)
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 	must(err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var e echo
 	if err := json.NewDecoder(resp.Body).Decode(&e); resp.StatusCode != 200 || err != nil {
 		die(fmt.Errorf("bigpost %d MiB via %s on %s: status %d, decode %v", mib, name, rt.ID, resp.StatusCode, err))
@@ -98,12 +98,12 @@ func uploadOnly(m routes, name, port string) {
 	get := func(sc, host string) int {
 		c, err := dialPort(target{name}, sc, host, port)
 		must(err)
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		_ = c.SetDeadline(time.Now().Add(15 * time.Second))
-		fmt.Fprintf(c, "GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", host)
+		_, _ = fmt.Fprintf(c, "GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", host)
 		resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 		must(err)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return resp.StatusCode
 	}
 	if st := get(scheme(named), hostOf(named)); st == 404 {
@@ -111,7 +111,7 @@ func uploadOnly(m routes, name, port string) {
 	}
 	n := 0
 	for _, rt := range m.Routes {
-		if rt.ID == named.ID || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
+		if rt.ID == named.ID || (!rt.Listen.HTTP && !rt.Listen.HTTPS) {
 			continue
 		}
 		if st := get(scheme(rt), hostOf(rt)); st != 404 {
