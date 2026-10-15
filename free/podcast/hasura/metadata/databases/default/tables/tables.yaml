@@ -1,5 +1,5 @@
-- "!include np_podcast_podcasts
-np_podcast_episodes
-np_podcast_subscriptions
-np_podcast_playback_positions
-np_podcast_categories.yaml"
+- "!include np_podcast_podcasts.yaml"
+- "!include np_podcast_episodes.yaml"
+- "!include np_podcast_subscriptions.yaml"
+- "!include np_podcast_playback_positions.yaml"
+- "!include np_podcast_categories.yaml"
