@@ -48,15 +48,16 @@ const lockSQL = "SELECT format('LOCK TABLE %I.%I IN ACCESS SHARE MODE', n.nspnam
 	coveredFrom + coveredWhere + coveredOrder + "\\gexec\n"
 
 // fingerprintSQL generates one query per table and runs it with \gexec. The whole-row alias
-// is 'nself_fp_' + the table oid, plus as many trailing '_' as it takes to be longer than
-// every column name of that form, so no column of the table can shadow the whole-row
-// reference (a column wins over a same-named alias).
+// is the first unused 'nself_fp_<oid>_<index>' column name. There are more candidates
+// than attributes, so one must be free. Even the largest oid and attribute index fit
+// below PostgreSQL's 63-byte identifier limit: truncation cannot introduce a collision.
 const fingerprintSQL = "SELECT format('SELECT json_build_object(''schema'', %1$L::text, ''table'', %2$L::text, ''rows'', count(*), " +
 	"''sum'', coalesce(sum((''x'' || substr(md5(%3$I::text), 1, 16))::bit(64)::bigint), 0)::text)::text FROM %1$I.%2$I AS %3$I', " +
 	"n.nspname, c.relname, x.alias)" + coveredFrom +
-	"\nCROSS JOIN LATERAL (SELECT 'nself_fp_' || c.oid::text || repeat('_', coalesce((SELECT max(length(a.attname) - length('nself_fp_' || c.oid::text))" +
-	"\n  FROM pg_catalog.pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped" +
-	"\n  AND a.attname ~ ('^nself_fp_' || c.oid::text || '_*$')), -1) + 1) AS alias) x" +
+	"\nCROSS JOIN LATERAL (SELECT 'nself_fp_' || c.oid::text || '_' || i::text AS alias" +
+	"\n  FROM generate_series(0, c.relnatts::int) i WHERE NOT EXISTS" +
+	"\n  (SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid = c.oid" +
+	"\n   AND a.attname = 'nself_fp_' || c.oid::text || '_' || i::text) ORDER BY i LIMIT 1) x" +
 	coveredWhere + coveredOrder + "\\gexec\n"
 
 // Fingerprint is the content fingerprint of one table.

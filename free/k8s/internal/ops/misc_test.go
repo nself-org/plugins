@@ -36,7 +36,7 @@ func TestFingerprintSQLQuotesEveryIdentifierInSQL(t *testing.T) {
 	if !strings.HasPrefix(sessionPrelude, "SET statement_timeout = 0;") {
 		t.Error("the timeouts are not reset first")
 	}
-	for _, must := range []string{"%1$I.%2$I", "%1$L::text", "AS %3$I", "nself_fp_' || c.oid", "attname ~", "relkind = 'r'", "'pg_catalog', 'information_schema'", `pg\_toast%`, `pg\_temp\_%`, "ORDER BY n.nspname, c.relname", `\gexec`,
+	for _, must := range []string{"%1$I.%2$I", "%1$L::text", "AS %3$I", "nself_fp_' || c.oid", "attname =", "relkind = 'r'", "'pg_catalog', 'information_schema'", `pg\_toast%`, `pg\_temp\_%`, "ORDER BY n.nspname, c.relname", `\gexec`,
 		"count(*)", "md5(%3$I::text)", "::bit(64)::bigint"} {
 		if !strings.Contains(fingerprintSQL, must) {
 			t.Errorf("fingerprint SQL lacks %q", must)
@@ -106,7 +106,7 @@ func TestResolveTarget(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p, proj, err := ResolveTarget(tc.o)
 			if tc.code != "" {
-				wantCode(t, err, tc.code)
+				_ = wantCode(t, err, tc.code)
 				return
 			}
 			if err != nil || p != tc.path || proj != tc.proj {

@@ -254,7 +254,8 @@ For every ordinary table (partitions included) in every schema except `pg_catalo
 `md5(<row as text>)`. The sum does not depend on row order and never builds one large value. The statements are generated
 inside SQL from `pg_catalog` with `format('%I', ...)`, so odd table names are quoted by the database and never built from
 input. The session pins `TimeZone`, `DateStyle`, `IntervalStyle`, `extra_float_digits` and `bytea_output` so a row has the same
-text at backup and at restore.
+text at backup and at restore. Whole-row aliases use the first unused bounded candidate, remain below PostgreSQL's 63-byte
+identifier limit, and cannot be shadowed by a column name.
 
 Backup reads the fingerprints in a `REPEATABLE READ READ ONLY` session that exports a snapshot, takes `ACCESS SHARE` locks on
 every covered table (as `pg_dump` does) before it reads any fingerprint, and `pg_dump --snapshot` streams from that snapshot, so dump and fingerprints describe the same moment even while the database is written. Restore reads the
@@ -317,7 +318,9 @@ unknown-flag envelope.
 | `backup` | `file`, `metadata_file`, `bytes`, `sha256`, `tables[]` (`schema`, `table`, `rows`) |
 | `restore` | `file`, `verified` (always `true`), `tables[]` (`schema`, `table`, `rows`) |
 
-Database error text never reaches an envelope: `cause` holds fixed text only. Human mode prints the first error line of `pg_dump` or `pg_restore` after the code, with every quoted part masked as `…`, `DETAIL`, `CONTEXT` and `HINT` dropped, at most 160 characters.
+Database error text never reaches an envelope: `cause` holds fixed text only. Human mode reports a fixed failure category:
+database connection failed, database constraint violation, database input rejected, or database operation failed.
+Custom exceptions and unquoted row values are never printed.
 
 An error envelope carries `error.code`, `message`, optional `cause` and `remediation`, `exit_code` and `class`; the process exit
 status equals `exit_code`. Messages never carry a secret, the licence key or helm's release JSON. Without `--json` every

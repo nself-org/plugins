@@ -175,7 +175,7 @@ func TestRestoreDatabaseTextNeverReachesTheEnvelope(t *testing.T) {
 	if h.Exit != 1 || strings.Contains(h.Stdout+h.Stderr, secret) || strings.Contains(h.Stdout+h.Stderr, "users") {
 		t.Errorf("human: exit %d\n%s%s", h.Exit, h.Stdout, h.Stderr)
 	}
-	if !strings.Contains(h.Stderr, "first error line:") || !strings.Contains(h.Stderr, "…") || strings.Contains(h.Stderr, "DETAIL") {
-		t.Errorf("human stderr lacks the masked first error line: %q", h.Stderr)
+	if !strings.Contains(h.Stderr, "failure category: database input rejected") || strings.Contains(h.Stderr, "DETAIL") {
+		t.Errorf("human stderr lacks the fixed failure category: %q", h.Stderr)
 	}
 }

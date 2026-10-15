@@ -129,9 +129,9 @@ func (r *invocation) failOps(err error) error {
 	if oe.Cause != "" {
 		msg += ": " + oe.Cause
 	}
-	// The first error line of the tool, masked: human mode only, never in an envelope.
+	// A fixed failure category: human mode only, never raw database text.
 	if d := oe.HumanDetail(); d != "" {
-		msg += " [first error line: " + d + "]"
+		msg += " [failure category: " + d + "]"
 	}
 	if oe.Remediation != "" {
 		msg += " (" + strings.TrimSpace(oe.Remediation) + ")"

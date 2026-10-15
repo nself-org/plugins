@@ -8,8 +8,8 @@
 //
 // Constraints: messages, remediations and causes are fixed text: a step, an exit status, a
 // marker state, a count of error lines, or table names (E737). Database-provided error
-// text is kept apart in Detail and never reaches the envelope; HumanDetail masks it for
-// human-mode stderr.
+// text is kept apart in Detail and never reaches the envelope; HumanDetail returns
+// only a fixed failure category for human-mode stderr.
 //
 //	E730 kubectl not on PATH                                     infra
 //	E731 postgres pod not found, not unique or not reachable     user
@@ -25,7 +25,6 @@ package ops
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 )
 
 // Error codes owned by this package.
@@ -50,7 +49,7 @@ const (
 // maxCause bounds the cause text of an Error.
 const maxCause = 1500
 
-// maxHuman bounds the masked first error line shown in human mode.
+// maxHuman bounds the failure category shown in human mode.
 const maxHuman = 160
 
 // Error is a coded failure of backup or restore.
@@ -61,7 +60,7 @@ type Error struct {
 	Remediation string
 	Cause       string
 	// Detail is the first error line the tool printed. It is database-provided text and
-	// may carry a row value, so it is never serialized: only HumanDetail (masked) reaches
+	// may carry a row value, so it is never serialized: only HumanDetail's category reaches
 	// human-mode stderr.
 	Detail string
 }
@@ -138,37 +137,22 @@ func errRestoreShort() *Error {
 		"restore again; check the connection to the cluster", "")
 }
 
-// HumanDetail is the first error line for a person: every quoted segment masked, text
-// from DETAIL, CONTEXT or HINT dropped, at most maxHuman bytes. "" when there is none.
+// HumanDetail maps database text to fixed categories. Custom exceptions can contain
+// unquoted row values, so no part of the original text is returned.
 func (e *Error) HumanDetail() string {
-	s := e.Detail
-	for _, k := range []string{"DETAIL:", "CONTEXT:", "HINT:"} {
-		if i := strings.Index(s, k); i >= 0 {
-			s = s[:i]
-		}
+	s := strings.ToLower(strings.TrimSpace(e.Detail))
+	switch {
+	case s == "":
+		return ""
+	case strings.Contains(s, "connection to server"), strings.Contains(s, "connection refused"):
+		return "database connection failed"
+	case strings.Contains(s, "duplicate key"), strings.Contains(s, "violates") && strings.Contains(s, "constraint"):
+		return "database constraint violation"
+	case strings.Contains(s, "invalid input syntax"):
+		return "database input rejected"
+	default:
+		return "database operation failed"
 	}
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		q := s[i]
-		if q != '\'' && q != '"' {
-			b.WriteByte(q)
-			continue
-		}
-		b.WriteString("…") // the quoted segment, or the rest of an unterminated one
-		if j := strings.IndexByte(s[i+1:], q); j >= 0 {
-			i += j + 1
-		} else {
-			i = len(s)
-		}
-	}
-	out := strings.Join(strings.Fields(b.String()), " ")
-	if len(out) > maxHuman {
-		out = out[:maxHuman]
-		for len(out) > 0 && !utf8.ValidString(out) {
-			out = out[:len(out)-1]
-		}
-	}
-	return out
 }
 
 func errMismatch(diffs []Diff) *Error {
