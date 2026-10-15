@@ -7,7 +7,6 @@ package internal
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -56,7 +55,7 @@ func TestRPCBridge_UnsafeChainID(t *testing.T) {
 }
 
 func TestRPCBridge_ChainNotConfigured(t *testing.T) {
-	os.Unsetenv("WEB3_RPC_URL_1")
+	t.Setenv("WEB3_RPC_URL_1", "")
 	h := &Handlers{}
 	rec := httptest.NewRecorder()
 	req := reqWithChainID(http.MethodPost, "/api/v1/rpc/1", "", "1")
@@ -70,12 +69,11 @@ func TestRPCBridge_ProxiesUpstream(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"jsonrpc":"2.0","result":"0x1","id":1}`))
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","result":"0x1","id":1}`))
 	}))
 	defer upstream.Close()
 
-	os.Setenv("WEB3_RPC_URL_1", upstream.URL)
-	defer os.Unsetenv("WEB3_RPC_URL_1")
+	t.Setenv("WEB3_RPC_URL_1", upstream.URL)
 
 	h := &Handlers{}
 	rec := httptest.NewRecorder()
@@ -90,8 +88,7 @@ func TestRPCBridge_ProxiesUpstream(t *testing.T) {
 }
 
 func TestRPCBridge_UpstreamUnreachable(t *testing.T) {
-	os.Setenv("WEB3_RPC_URL_1", "http://127.0.0.1:1")
-	defer os.Unsetenv("WEB3_RPC_URL_1")
+	t.Setenv("WEB3_RPC_URL_1", "http://127.0.0.1:1")
 
 	h := &Handlers{}
 	rec := httptest.NewRecorder()

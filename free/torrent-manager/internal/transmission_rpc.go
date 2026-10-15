@@ -27,7 +27,7 @@ func (t *TransmissionClient) doRPC(method string, args interface{}) (json.RawMes
 	// If we get a 409, Transmission sends us a new session ID.
 	if resp.StatusCode == http.StatusConflict {
 		newID := resp.Header.Get("X-Transmission-Session-Id")
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if newID != "" {
 			t.mu.Lock()
 			t.sessionID = newID
@@ -42,7 +42,7 @@ func (t *TransmissionClient) doRPC(method string, args interface{}) (json.RawMes
 		}
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

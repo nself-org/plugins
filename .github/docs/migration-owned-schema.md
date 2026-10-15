@@ -14,3 +14,8 @@ the migration runner sets a plugin-specific search path.
 Run the regression guards with `python3 tests/boot/test_migration_schema.py` and
 the fresh database checks with
 `bash tests/boot/run.sh --plugins torrent-manager,vpn,web3`.
+
+The required lint checks also remove unused torrent RPC metadata and make ignored
+response cleanup errors explicit. Web3 handlers are split into files below the
+repository size limit. Web3 request logs now use the socket peer address, after
+removing deprecated middleware that trusted unverified forwarded IP headers.

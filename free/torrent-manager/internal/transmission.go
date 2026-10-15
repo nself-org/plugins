@@ -58,35 +58,29 @@ type torrentGetResult struct {
 	Torrents []transmissionTorrent `json:"torrents"`
 }
 
-type sessionStatsResult struct {
-	ActiveTorrentCount int `json:"activeTorrentCount"`
-	PausedTorrentCount int `json:"pausedTorrentCount"`
-	TorrentCount       int `json:"torrentCount"`
-}
-
 // transmissionTorrent represents a torrent as returned by Transmission RPC.
 type transmissionTorrent struct {
-	ID                int     `json:"id"`
-	Name              string  `json:"name"`
-	HashString        string  `json:"hashString"`
-	MagnetLink        string  `json:"magnetLink"`
-	Status            int     `json:"status"`
-	TotalSize         int64   `json:"totalSize"`
-	DownloadedEver    int64   `json:"downloadedEver"`
-	UploadedEver      int64   `json:"uploadedEver"`
-	PercentDone       float64 `json:"percentDone"`
-	UploadRatio       float64 `json:"uploadRatio"`
-	RateDownload      int64   `json:"rateDownload"`
-	RateUpload        int64   `json:"rateUpload"`
-	PeersSendingToUs  int     `json:"peersSendingToUs"`
-	PeersGettingFromUs int    `json:"peersGettingFromUs"`
-	PeersConnected    int     `json:"peersConnected"`
-	DownloadDir       string  `json:"downloadDir"`
-	AddedDate         int64   `json:"addedDate"`
-	ActivityDate      int64   `json:"activityDate"`
-	DoneDate          int64   `json:"doneDate"`
-	Error             int     `json:"error"`
-	ErrorString       string  `json:"errorString"`
+	ID                 int     `json:"id"`
+	Name               string  `json:"name"`
+	HashString         string  `json:"hashString"`
+	MagnetLink         string  `json:"magnetLink"`
+	Status             int     `json:"status"`
+	TotalSize          int64   `json:"totalSize"`
+	DownloadedEver     int64   `json:"downloadedEver"`
+	UploadedEver       int64   `json:"uploadedEver"`
+	PercentDone        float64 `json:"percentDone"`
+	UploadRatio        float64 `json:"uploadRatio"`
+	RateDownload       int64   `json:"rateDownload"`
+	RateUpload         int64   `json:"rateUpload"`
+	PeersSendingToUs   int     `json:"peersSendingToUs"`
+	PeersGettingFromUs int     `json:"peersGettingFromUs"`
+	PeersConnected     int     `json:"peersConnected"`
+	DownloadDir        string  `json:"downloadDir"`
+	AddedDate          int64   `json:"addedDate"`
+	ActivityDate       int64   `json:"activityDate"`
+	DoneDate           int64   `json:"doneDate"`
+	Error              int     `json:"error"`
+	ErrorString        string  `json:"errorString"`
 }
 
 // torrentFields is the list of fields to request from Transmission.

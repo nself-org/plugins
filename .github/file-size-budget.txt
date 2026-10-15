@@ -123,7 +123,6 @@ free/torrent-manager/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/torrent-manager/third_party/sdk/identity.go	338
 free/vpn/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/vpn/third_party/sdk/identity.go	338
-free/web3/internal/handlers.go	1107
 free/webhooks/sdk/devkit/cmd/new-plugin/main.go	510
 free/webhooks/sdk/identity.go	338
 free/workflows/internal/handlers.go	721

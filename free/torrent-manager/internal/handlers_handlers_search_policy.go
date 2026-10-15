@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	sdk "github.com/nself-org/plugin-sdk"
 	"io"
 	"log"
 	"net/http"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // ============================================================================
@@ -242,7 +242,7 @@ func (h *handler) checkVPN() bool {
 		log.Printf("torrent-manager: VPN check failed: %v", err)
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -258,4 +258,3 @@ func (h *handler) checkVPN() bool {
 
 	return status.Connected
 }
-
