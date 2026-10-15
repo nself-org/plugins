@@ -1852,6 +1852,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
@@ -1897,6 +1898,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
@@ -1986,6 +1988,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
@@ -2031,6 +2034,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
