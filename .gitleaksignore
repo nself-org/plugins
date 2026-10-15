@@ -1,2 +1,2 @@
-# False positive: line 8 of sign.ts is a doc comment ("Key format: raw (32-byte private seed, ...)"), no secret.
+# Reviewed 2026-10-15: line 8 of sign.ts is a doc comment ("Key format: raw (32-byte private seed ...)"), no secret value
 8c28efbd59c202526bfcc8f4249e4d629f3df413:.workers/plugins-registry/src/sign.ts:generic-api-key:8
