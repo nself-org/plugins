@@ -18,7 +18,11 @@ func TestNewRegistryBuildInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /metrics: %v", err)
 	}
-	defer resp.Body.Close()
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	body, _ := io.ReadAll(resp.Body)
 	out := string(body)
 
@@ -39,7 +43,11 @@ func TestObserveRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /metrics: %v", err)
 	}
-	defer resp.Body.Close()
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	body, _ := io.ReadAll(resp.Body)
 	out := string(body)
 
