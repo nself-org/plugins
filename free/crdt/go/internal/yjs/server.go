@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/nself-org/nself-crdt/internal/store"
+	"github.com/nself-org/plugins/free/crdt/go/internal/store"
 )
 
 // Yjs message type constants (y-websocket protocol).

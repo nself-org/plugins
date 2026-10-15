@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/nself-org/nself-crdt/internal/automerge"
-	"github.com/nself-org/nself-crdt/internal/store"
-	"github.com/nself-org/nself-crdt/internal/yjs"
+	"github.com/nself-org/plugins/free/crdt/go/internal/automerge"
+	"github.com/nself-org/plugins/free/crdt/go/internal/store"
+	"github.com/nself-org/plugins/free/crdt/go/internal/yjs"
 )
 
 // Handlers bundles all HTTP handlers for the CRDT plugin.
@@ -20,6 +20,8 @@ type Handlers struct {
 	amHandler  *automerge.SyncHandler
 	compactor  *automerge.Compactor
 	log        *slog.Logger
+	// migrationsHealth reports the boot-migration counts for /health; nil leaves the member out.
+	migrationsHealth func(http.ResponseWriter) map[string]int
 }
 
 // New creates Handlers.
@@ -37,6 +39,13 @@ func New(
 		compactor:  comp,
 		log:        log,
 	}
+}
+
+// WithMigrationsHealth sets the source of the "migrations" member of /health. The function answers 503 itself
+// when the migration status cannot be read, so Health sets the content type before calling it.
+func (h *Handlers) WithMigrationsHealth(fn func(http.ResponseWriter) map[string]int) *Handlers {
+	h.migrationsHealth = fn
+	return h
 }
 
 // Mount registers all CRDT routes onto r.
@@ -58,9 +67,15 @@ func (h *Handlers) Mount(r chi.Router) {
 	r.Post("/crdt/compact/{docID}", h.CompactDoc)
 }
 
-// Health returns 200 OK with {"status":"ok"}.
+// Health returns 200 OK with {"status":"ok"} and, when wired, the boot-migration counts.
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	automerge.WriteHealthOK(w)
+	if h.migrationsHealth == nil {
+		automerge.WriteHealthOK(w)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	body := map[string]any{"status": "ok", "migrations": h.migrationsHealth(w)}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // YjsWS upgrades the connection and runs the y-websocket server protocol.

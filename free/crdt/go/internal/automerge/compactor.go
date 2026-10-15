@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/nself-org/nself-crdt/internal/store"
+	"github.com/nself-org/plugins/free/crdt/go/internal/store"
 )
 
 // Compactor runs a background loop that compacts update history for all documents.

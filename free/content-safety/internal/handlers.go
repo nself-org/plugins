@@ -46,10 +46,15 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":    "ok",
-		"plugin":    "content-safety",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	// bootMigrationsHealth answers 503 itself when the migration status cannot be read, so it runs first
+	// and the content type is set before that header goes out.
+	w.Header().Set("Content-Type", "application/json")
+	migrations := bootMigrationsHealth(w)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":     "ok",
+		"plugin":     "content-safety",
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"migrations": migrations,
 	})
 }
 
