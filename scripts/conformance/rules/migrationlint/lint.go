@@ -57,10 +57,16 @@ func lintStmt(t []tok, c *ctx) []viol {
 			}
 		}
 	case "INSERT":
-		lintInsert(t, bad)
+		out = append(out, insertViols(t)...)
+	case "UPDATE", "DELETE", "TRUNCATE":
+		lintData(w(t, 0), t, bad)
 	case "WITH":
-		if contains(t, "INSERT", "INTO") {
-			lintInsert(t, bad)
+		out = append(out, insertViols(t)...)
+		if verb := cteDataVerb(t); verb != "" {
+			lintData(verb, t, bad)
+		}
+		if tail := withTail(t); !c.inDO && w(tail, 0) == "SELECT" && selectInto(tail) {
+			bad("SELECT ... INTO creates a table and fails when it exists: use CREATE TABLE IF NOT EXISTS ... AS")
 		}
 	case "SELECT":
 		if !c.inDO && selectInto(t) {
@@ -72,10 +78,29 @@ func lintStmt(t []tok, c *ctx) []viol {
 	return out
 }
 
-func lintInsert(t []tok, bad func(string, ...any)) {
-	if !contains(t, "ON", "CONFLICT") && !contains(t, "NOT", "EXISTS") {
-		bad("INSERT without ON CONFLICT or a NOT EXISTS guard inserts the rows again on replay")
+// lintData fails UPDATE, DELETE and TRUNCATE (D-0619): whether a replay changes the data again cannot be proven from the
+// statement, so a real one needs an exceptions.yaml entry (rule migration-idempotent) or a guarded DO block.
+func lintData(k string, t []tok, bad func(string, ...any)) {
+	bad("%s runs again on replay and is not provably idempotent: guard it in a DO block or add a migration-idempotent exception", k)
+}
+
+// cteDataVerb returns UPDATE or DELETE when a WITH statement modifies data ("FOR UPDATE" row locks, trigger events and
+// "ON DELETE" actions are not statements).
+func cteDataVerb(t []tok) string {
+	for i := 1; i < len(t); i++ {
+		switch w(t, i) {
+		case "UPDATE", "DELETE":
+			switch w(t, i-1) {
+			case "FOR", "OF", "ON", "BEFORE", "AFTER", "OR", "NO", "KEY":
+				continue
+			}
+			if w(t, i) == "DELETE" && w(t, i+1) != "FROM" {
+				continue
+			}
+			return w(t, i)
+		}
 	}
+	return ""
 }
 
 func lintCreate(t []tok, c *ctx, bad func(string, ...any)) {

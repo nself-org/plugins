@@ -128,6 +128,12 @@ func stripPLn(t []tok) ([]tok, pl) {
 			t = t[1:]
 		case "ELSE", "DECLARE", "EXCEPTION":
 			t = t[1:]
+		case "":
+			if len(t) >= 5 && isPunct(t, 0, "<") && isPunct(t, 1, "<") && isPunct(t, 3, ">") && isPunct(t, 4, ">") {
+				t = t[5:] // a <<label>> before BEGIN, LOOP or FOR
+				continue
+			}
+			return t, n
 		case "IF", "ELSIF", "ELSEIF", "WHILE", "FOR", "FOREACH", "WHEN", "CASE":
 			end := "THEN" // IF, ELSIF, WHEN and CASE head end at THEN; a FOR/WHILE head ends at LOOP
 			switch w(t, 0) {
