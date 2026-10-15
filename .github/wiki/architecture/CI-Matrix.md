@@ -6,8 +6,14 @@ How free plugins get tested automatically, and what does not.
 
 | Workflow | Covers |
 |---|---|
-| `build-test.yml` ("Go Build & Test (free plugins)") | Compiles, `go vet`s, and `go test`s every `free/*/` directory that has a `go.mod` |
+| `build-test.yml` ("Go Build & Test (free plugins)") | Checks first-party Go module metadata, then compiles, vets, and tests Go plugins, including nested modules |
 | `registry-check.yml` ("Registry Consistency Check") | Registry/schema consistency: disk-vs-`registry.json` drift, `plugin.json` required fields, version consistency, `bundles[]` shape, plugin counts, and non-Go plugin config validation |
+
+Run `bash scripts/ci/tests/test-go-mod-tidy.sh` to reproduce the metadata check.
+It runs `GOWORK=off go mod tidy -diff` in tracked first-party modules under
+`free/`, `scripts/`, and the root `sdk/`, excluding vendor, third-party copies,
+plugin-local SDK copies, and fixtures. Fix drift with `go mod tidy` in the
+reported module, then `go mod vendor` there if it has a vendor directory.
 
 ## The 59 / 1 split
 

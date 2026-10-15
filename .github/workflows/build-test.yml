@@ -34,6 +34,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.4'
+      - name: Check Go module metadata is tidy
+        run: bash scripts/ci/tests/test-go-mod-tidy.sh
       - name: Install libvips (required by storage-transform's govips binding)
         # storage-transform/go binds libvips through govips and cannot compile
         # without the headers. Its own Dockerfile installs libvips-dev for the

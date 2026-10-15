@@ -21,7 +21,7 @@ func load(path string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return jsonschema.UnmarshalJSON(f)
 }
 

@@ -106,7 +106,7 @@ func TestResolveTarget(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p, proj, err := ResolveTarget(tc.o)
 			if tc.code != "" {
-				wantCode(t, err, tc.code)
+				_ = wantCode(t, err, tc.code)
 				return
 			}
 			if err != nil || p != tc.path || proj != tc.proj {

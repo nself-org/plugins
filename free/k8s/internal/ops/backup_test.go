@@ -149,7 +149,7 @@ func TestBackupDumpFailureRemovesPartial(t *testing.T) {
 	f.dumpErr = errors.New("exit status 1")
 	o := backupOpts(f, t.TempDir())
 	_, err := Backup(context.Background(), o)
-	wantCode(t, err, CodeBackupFailed)
+	_ = wantCode(t, err, CodeBackupFailed)
 	if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
 		t.Error("the partial dump was kept")
 	}
@@ -168,7 +168,7 @@ func TestBackupRefusesExistingOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Backup(context.Background(), o)
-	wantCode(t, err, CodeTarget)
+	_ = wantCode(t, err, CodeTarget)
 	if b, _ := os.ReadFile(o.Path); string(b) != "precious" {
 		t.Error("an existing file was overwritten or removed")
 	}
@@ -205,7 +205,7 @@ func TestBackupRejectsBadSnapshotAndVersion(t *testing.T) {
 			f := newFake()
 			mut(f)
 			_, err := Backup(context.Background(), backupOpts(f, t.TempDir()))
-			wantCode(t, err, CodeFingerprint)
+			_ = wantCode(t, err, CodeFingerprint)
 			if f.count("pg_dump") != 0 {
 				t.Error("pg_dump ran")
 			}
@@ -337,7 +337,7 @@ func TestBackupRequiresTheExitMarkerOfPgDump(t *testing.T) {
 			set(f)
 			o := backupOpts(f, t.TempDir())
 			_, err := Backup(context.Background(), o)
-			wantCode(t, err, CodeBackupFailed)
+			_ = wantCode(t, err, CodeBackupFailed)
 			if _, e := os.Stat(o.Path); !os.IsNotExist(e) {
 				t.Error("the dump was kept")
 			}
@@ -448,7 +448,7 @@ func TestBackupCancelledMidDumpLeavesNothing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	f.onDump = cancel
 	_, err := Backup(ctx, o)
-	wantCode(t, err, CodeBackupFailed)
+	_ = wantCode(t, err, CodeBackupFailed)
 	if d := finalDumpsIn(t, dir); len(d) != 0 {
 		t.Errorf("a truncated dump stayed under a core name: %v", d)
 	}
@@ -466,7 +466,7 @@ func TestBackupNeverOverwritesAFileThatAppearsMidDump(t *testing.T) {
 	dir := filepath.Dir(o.Path)
 	f.onDump = func() { _ = os.WriteFile(o.Path, []byte("someone else"), 0o600) }
 	_, err := Backup(context.Background(), o)
-	wantCode(t, err, CodeTarget)
+	_ = wantCode(t, err, CodeTarget)
 	if b, _ := os.ReadFile(o.Path); string(b) != "someone else" {
 		t.Error("the file that appeared was overwritten")
 	}
@@ -488,7 +488,7 @@ func TestBackupRefusesAStalePartial(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Backup(context.Background(), o)
-	wantCode(t, err, CodeTarget)
+	_ = wantCode(t, err, CodeTarget)
 	if b, _ := os.ReadFile(partialPath(o.Path)); string(b) != "stale" {
 		t.Error("another backup's partial was touched")
 	}
@@ -524,7 +524,7 @@ func TestBackupLeavesAnotherBackupsSidecarAlone(t *testing.T) {
 		_ = os.WriteFile(MetaPath(o.Path), []byte(other), 0o600)
 	}
 	_, err := Backup(context.Background(), o)
-	wantCode(t, err, CodeTarget)
+	_ = wantCode(t, err, CodeTarget)
 	if b, _ := os.ReadFile(MetaPath(o.Path)); string(b) != other {
 		t.Errorf("the other sidecar changed: %q", b)
 	}
@@ -549,7 +549,7 @@ func TestBackupSidecarAppearingAloneIsNotReplaced(t *testing.T) {
 		_ = os.WriteFile(MetaPath(o.Path), []byte("keep"), 0o600)
 	}
 	_, err := Backup(context.Background(), o)
-	wantCode(t, err, CodeTarget)
+	_ = wantCode(t, err, CodeTarget)
 	if b, _ := os.ReadFile(MetaPath(o.Path)); string(b) != "keep" {
 		t.Errorf("sidecar replaced or removed: %q", b)
 	}

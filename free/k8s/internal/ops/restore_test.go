@@ -77,7 +77,7 @@ func TestRestoreTruncatedDumpRunsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
-	wantCode(t, err, CodeChecksum)
+	_ = wantCode(t, err, CodeChecksum)
 	if len(f.calls) != 0 {
 		t.Errorf("calls = %+v", f.calls)
 	}
@@ -102,7 +102,7 @@ func TestRestoreMissingOrBadSidecarRunsNothing(t *testing.T) {
 			f, path := madeBackup(t)
 			mut(path)
 			_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
-			wantCode(t, err, CodeBackupInvalid)
+			_ = wantCode(t, err, CodeBackupInvalid)
 			if len(f.calls) != 0 {
 				t.Errorf("calls = %+v", f.calls)
 			}
@@ -114,7 +114,7 @@ func TestRestoreMissingFileAndDirectory(t *testing.T) {
 	f, path := madeBackup(t)
 	for _, p := range []string{path + ".nope", strings.TrimSuffix(path, "/demo_full_20261011_040506.dump")} {
 		_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: p})
-		wantCode(t, err, CodeBackupInvalid)
+		_ = wantCode(t, err, CodeBackupInvalid)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("calls = %+v", f.calls)
@@ -174,14 +174,14 @@ func TestRestoreNonZeroExitFails(t *testing.T) {
 	f, path := madeBackup(t)
 	f.restoreRC = os.ErrDeadlineExceeded
 	_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
-	wantCode(t, err, CodeRestoreFailed)
+	_ = wantCode(t, err, CodeRestoreFailed)
 }
 
 func TestRestoreFingerprintQueryFailure(t *testing.T) {
 	f, path := madeBackup(t)
 	f.postFps = []string{"this is not json"}
 	_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
-	wantCode(t, err, CodeFingerprint)
+	_ = wantCode(t, err, CodeFingerprint)
 }
 
 func TestErrLineWriterSplitsAcrossWrites(t *testing.T) {
@@ -238,10 +238,10 @@ func TestPrepareRestoreChecksWithoutACluster(t *testing.T) {
 	b[0] ^= 1
 	_ = os.WriteFile(path, b, 0o600)
 	_, err = PrepareRestore(path)
-	wantCode(t, err, CodeChecksum)
+	_ = wantCode(t, err, CodeChecksum)
 	_ = os.Remove(MetaPath(path))
 	_, err = PrepareRestore(path)
-	wantCode(t, err, CodeBackupInvalid)
+	_ = wantCode(t, err, CodeBackupInvalid)
 }
 
 func TestRestoreRequiresTheExitMarker(t *testing.T) {
@@ -274,7 +274,7 @@ func TestReadFingerprintsNeedsTheCompletionMarker(t *testing.T) {
 			f.postFps = lines
 			f.postNoSentinel = true
 			_, err := Restore(context.Background(), RestoreOptions{Exec: f, File: path})
-			wantCode(t, err, CodeFingerprint)
+			_ = wantCode(t, err, CodeFingerprint)
 		})
 	}
 	f, path := madeBackup(t) // control: the same output with its marker verifies
