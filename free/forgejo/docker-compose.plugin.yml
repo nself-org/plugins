@@ -38,7 +38,7 @@ services:
 
   # ─── Forgejo server ────────────────────────────────────────────────────────
   forgejo:
-    image: codeberg.org/forgejo/forgejo:9
+    image: codeberg.org/forgejo/forgejo:9.0.3@sha256:3c34f11fe8b9983096eef3f8f25c2d2c21c4ae7504960cb203f0b075d1d8ed73
     container_name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo
     restart: unless-stopped
     environment:
@@ -107,7 +107,7 @@ services:
   #
   # Reference: https://forgejo.org/docs/latest/admin/actions/
   forgejo-init:
-    image: codeberg.org/forgejo/forgejo:9
+    image: codeberg.org/forgejo/forgejo:9.0.3@sha256:3c34f11fe8b9983096eef3f8f25c2d2c21c4ae7504960cb203f0b075d1d8ed73
     container_name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_init
     restart: "no"
     depends_on:
