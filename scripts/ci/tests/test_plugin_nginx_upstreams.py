@@ -1,6 +1,6 @@
 """D-0776: reject container-local proxy destinations in all free nginx confs.
 
-Run: python3 -m unittest discover -s free/tests -p 'test_nginx_upstreams.py'
+Run: python3 -m unittest discover -s scripts/ci/tests -p 'test_plugin_nginx_upstreams.py'
 Reuses the CI nginx parser; no Docker, network, or third-party dependencies.
 """
 import ipaddress
@@ -10,10 +10,11 @@ import sys
 import unittest
 from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts/ci/tests"))
-from test_plugin_nginx_access_gate import parse, tokens, walk
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_plugin_nginx_access_gate import parse, tokens, walk, ROOT as _ROOT
 from test_plugin_nginx_proxy_pass import expand, set_values
+
+ROOT = Path(_ROOT)
 
 
 def loopback_problems(text):
