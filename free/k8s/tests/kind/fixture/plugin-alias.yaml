@@ -1,0 +1,22 @@
+# Generated-value shape for a bare notify service and a dependent plugin.
+services:
+  notify:
+    kind: deployment
+    plugin: notify
+    image: busybox
+    tag: 1.37.0
+    entrypoint: [sh, -ec]
+    command: ["mkdir -p /tmp/www; printf 'notify-ok' > /tmp/www/index.html; exec httpd -f -p 8080 -h /tmp/www"]
+    ports:
+      - port: 8080
+        protocol: TCP
+  dependent:
+    kind: deployment
+    plugin: dependent
+    image: busybox
+    tag: 1.37.0
+    command: [sleep, "3600"]
+    env: [PLUGIN_NOTIFY_INTERNAL_URL]
+secrets:
+  dependent:
+    PLUGIN_NOTIFY_INTERNAL_URL: http://plugin-notify:8080
