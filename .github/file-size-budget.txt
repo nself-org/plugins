@@ -27,7 +27,7 @@ free/content-acquisition/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/content-acquisition/third_party/sdk/identity.go	338
 free/content-progress/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/content-progress/third_party/sdk/identity.go	338
-free/content-safety/internal/handlers.go	893
+free/content-safety/internal/handlers.go	885
 free/cron/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/cron/third_party/sdk/identity.go	338
 free/ddns/internal/handlers.go	755

@@ -1,8 +1,6 @@
-BEGIN;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
-CREATE TABLE IF NOT EXISTS np_cs_evidence (
+CREATE TABLE IF NOT EXISTS public.np_cs_evidence (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     type VARCHAR(100) NOT NULL,
@@ -20,13 +18,13 @@ CREATE TABLE IF NOT EXISTS np_cs_evidence (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_evidence ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_evidence FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_evidence_owner ON np_cs_evidence;
-CREATE POLICY rls_np_cs_evidence_owner ON np_cs_evidence
+ALTER TABLE public.np_cs_evidence ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_evidence FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_evidence_owner ON public.np_cs_evidence;
+CREATE POLICY rls_np_cs_evidence_owner ON public.np_cs_evidence
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_legal_holds (
+CREATE TABLE IF NOT EXISTS public.np_cs_legal_holds (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     name VARCHAR(255) NOT NULL,
@@ -41,13 +39,13 @@ CREATE TABLE IF NOT EXISTS np_cs_legal_holds (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_legal_holds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_legal_holds FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_legal_holds_owner ON np_cs_legal_holds;
-CREATE POLICY rls_np_cs_legal_holds_owner ON np_cs_legal_holds
+ALTER TABLE public.np_cs_legal_holds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_legal_holds FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_legal_holds_owner ON public.np_cs_legal_holds;
+CREATE POLICY rls_np_cs_legal_holds_owner ON public.np_cs_legal_holds
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_evidence_exports (
+CREATE TABLE IF NOT EXISTS public.np_cs_evidence_exports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     legal_hold_id UUID,
@@ -61,13 +59,13 @@ CREATE TABLE IF NOT EXISTS np_cs_evidence_exports (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_evidence_exports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_evidence_exports FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_evidence_exports_owner ON np_cs_evidence_exports;
-CREATE POLICY rls_np_cs_evidence_exports_owner ON np_cs_evidence_exports
+ALTER TABLE public.np_cs_evidence_exports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_evidence_exports FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_evidence_exports_owner ON public.np_cs_evidence_exports;
+CREATE POLICY rls_np_cs_evidence_exports_owner ON public.np_cs_evidence_exports
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_spam_rules (
+CREATE TABLE IF NOT EXISTS public.np_cs_spam_rules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     name VARCHAR(255) NOT NULL,
@@ -82,13 +80,13 @@ CREATE TABLE IF NOT EXISTS np_cs_spam_rules (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_spam_rules ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_spam_rules FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_spam_rules_owner ON np_cs_spam_rules;
-CREATE POLICY rls_np_cs_spam_rules_owner ON np_cs_spam_rules
+ALTER TABLE public.np_cs_spam_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_spam_rules FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_spam_rules_owner ON public.np_cs_spam_rules;
+CREATE POLICY rls_np_cs_spam_rules_owner ON public.np_cs_spam_rules
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_spam_configs (
+CREATE TABLE IF NOT EXISTS public.np_cs_spam_configs (
     workspace_id VARCHAR(128) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     sensitivity VARCHAR(20) NOT NULL DEFAULT 'medium',
@@ -99,13 +97,13 @@ CREATE TABLE IF NOT EXISTS np_cs_spam_configs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (workspace_id, source_account_id)
 );
-ALTER TABLE np_cs_spam_configs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_spam_configs FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_spam_configs_owner ON np_cs_spam_configs;
-CREATE POLICY rls_np_cs_spam_configs_owner ON np_cs_spam_configs
+ALTER TABLE public.np_cs_spam_configs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_spam_configs FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_spam_configs_owner ON public.np_cs_spam_configs;
+CREATE POLICY rls_np_cs_spam_configs_owner ON public.np_cs_spam_configs
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_rate_limit_violations (
+CREATE TABLE IF NOT EXISTS public.np_cs_rate_limit_violations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     user_id VARCHAR(128) NOT NULL,
@@ -116,13 +114,13 @@ CREATE TABLE IF NOT EXISTS np_cs_rate_limit_violations (
     metadata JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_rate_limit_violations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_rate_limit_violations FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_rate_limit_violations_owner ON np_cs_rate_limit_violations;
-CREATE POLICY rls_np_cs_rate_limit_violations_owner ON np_cs_rate_limit_violations
+ALTER TABLE public.np_cs_rate_limit_violations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_rate_limit_violations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_rate_limit_violations_owner ON public.np_cs_rate_limit_violations;
+CREATE POLICY rls_np_cs_rate_limit_violations_owner ON public.np_cs_rate_limit_violations
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_raid_events (
+CREATE TABLE IF NOT EXISTS public.np_cs_raid_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     workspace_id VARCHAR(128) NOT NULL,
@@ -134,13 +132,13 @@ CREATE TABLE IF NOT EXISTS np_cs_raid_events (
     details JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_raid_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_raid_events FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_raid_events_owner ON np_cs_raid_events;
-CREATE POLICY rls_np_cs_raid_events_owner ON np_cs_raid_events
+ALTER TABLE public.np_cs_raid_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_raid_events FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_raid_events_owner ON public.np_cs_raid_events;
+CREATE POLICY rls_np_cs_raid_events_owner ON public.np_cs_raid_events
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_lockdowns (
+CREATE TABLE IF NOT EXISTS public.np_cs_lockdowns (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     workspace_id VARCHAR(128) NOT NULL,
@@ -155,13 +153,13 @@ CREATE TABLE IF NOT EXISTS np_cs_lockdowns (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-ALTER TABLE np_cs_lockdowns ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_lockdowns FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_lockdowns_owner ON np_cs_lockdowns;
-CREATE POLICY rls_np_cs_lockdowns_owner ON np_cs_lockdowns
+ALTER TABLE public.np_cs_lockdowns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_lockdowns FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_lockdowns_owner ON public.np_cs_lockdowns;
+CREATE POLICY rls_np_cs_lockdowns_owner ON public.np_cs_lockdowns
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-CREATE TABLE IF NOT EXISTS np_cs_abuse_scores (
+CREATE TABLE IF NOT EXISTS public.np_cs_abuse_scores (
     user_id VARCHAR(128) NOT NULL,
     source_account_id VARCHAR(128) NOT NULL DEFAULT 'primary',
     trust_score NUMERIC(5,4) NOT NULL DEFAULT 0.5,
@@ -175,10 +173,9 @@ CREATE TABLE IF NOT EXISTS np_cs_abuse_scores (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, source_account_id)
 );
-ALTER TABLE np_cs_abuse_scores ENABLE ROW LEVEL SECURITY;
-ALTER TABLE np_cs_abuse_scores FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS rls_np_cs_abuse_scores_owner ON np_cs_abuse_scores;
-CREATE POLICY rls_np_cs_abuse_scores_owner ON np_cs_abuse_scores
+ALTER TABLE public.np_cs_abuse_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.np_cs_abuse_scores FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_np_cs_abuse_scores_owner ON public.np_cs_abuse_scores;
+CREATE POLICY rls_np_cs_abuse_scores_owner ON public.np_cs_abuse_scores
     USING (source_account_id = current_setting('app.current_source_account_id', true));
 
-COMMIT;

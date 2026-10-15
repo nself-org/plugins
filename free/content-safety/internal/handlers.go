@@ -45,14 +45,6 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"status":    "ok",
-		"plugin":    "content-safety",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	})
-}
-
 func (h *Handlers) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.Pool.Exec(r.Context(), "SELECT 1"); err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{

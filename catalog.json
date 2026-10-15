@@ -913,7 +913,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_content_safety",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "content-safety",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/content-safety-1.2.6.tar.gz",
       "tier": "free",
@@ -958,7 +958,7 @@
         "nself": ">=1.0.0"
       },
       "schema": "np_crdt",
-      "service_kind": "compose",
+      "service_kind": "library",
       "slug": "crdt",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/crdt-1.2.6.tar.gz",
       "tier": "free",
