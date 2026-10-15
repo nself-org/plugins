@@ -10,7 +10,7 @@ services:
     # The image tag is the render-interface generation: bump it (r2, r3, ...) whenever the render command line or its
     # outputs change, so compose builds the new image instead of reusing a stale local one (an old image lacks
     # --static-out and traefik-config would exit 2). traefik-acme must use the same tag.
-    image: nself/nself-traefik-render:r2
+    image: nself/nself-traefik-render:r3
     restart: "no"
     command:
       - "--routes"
@@ -45,12 +45,13 @@ services:
     build:
       context: ${NSELF_PLUGIN_DIR}/traefik
       dockerfile: Dockerfile
-    image: nself/nself-traefik-render:r2
+    image: nself/nself-traefik-render:r3
     entrypoint: ["/render"]
     command: ["serve-static", "--root", "/acme-webroot", "--listen", ":8080"]
     restart: unless-stopped
     volumes:
       - ./ssl/.acme-webroot:/acme-webroot:ro
+      - ./.dist:/opt/nself/.dist:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

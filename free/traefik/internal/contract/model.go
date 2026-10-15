@@ -5,8 +5,8 @@
 // Inputs: a routes.json byte stream. Outputs: Model. Constraints: field names
 // and meaning follow the contract. Load fails closed on any field the renderer
 // does not know (a new restriction would otherwise render as an unrestricted
-// route), and every field below is either rendered, refused, or (the core:api-docs route and
-// its static_file and headers_add fields) skipped as an accepted difference by the renderer.
+// route), and every field below is either rendered or refused. The core:api-docs
+// static_file aliases and headers_add are served through the static helper.
 // Optional fields added to v1 (all omitempty): locations[].upstream.path and .query,
 // locations[].static_file and locations[].headers_add.
 package contract

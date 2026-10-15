@@ -81,6 +81,18 @@ func (b *builder) location(r contract.Route, i int, l contract.Location, host st
 		add(buf)
 	}
 	switch {
+	case l.StaticFile != nil:
+		mw, ok := b.docsMiddleware(r, l, field)
+		if !ok {
+			return
+		}
+		if len(l.HeadersAdd) == 0 {
+			add(sec)
+		}
+		for _, n := range mw {
+			add(n)
+		}
+		svc = b.responder()
 	case l.StaticRoot != nil:
 		if l.Path != acmePrefix || l.Match != "prefix" {
 			b.refuse(r.ID, field+".static_root", "only the ACME challenge prefix is served from a webroot")
