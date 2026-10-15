@@ -38,18 +38,13 @@ Reference vault credentials. Never hardcode secrets.
 
 ## Database Schema
 
-Tables created (prefix `np_`):
+Boot migrations create `public.entitlement_grants`, with `source_account_id`
+for multi-app isolation. The manifest lists this existing table. It does not
+declare plan, subscription, feature, quota, usage, add-on, or event tables that
+the plugin's migrations do not create.
 
-- `np_entitlements_plans`
-- `np_entitlements_subscriptions`
-- `np_entitlements_features`
-- `np_entitlements_quotas`
-- `np_entitlements_usage`
-- `np_entitlements_addons`
-- `np_entitlements_grants`
-- `np_entitlements_events`
-
-All tables use `source_account_id` for multi-app isolation where applicable.
+The migration ledger remains in `np_entitlements`; the application table lives
+in `public`. Set `PORT` to override the binary's default port `3735`.
 
 ## REST API
 

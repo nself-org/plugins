@@ -178,7 +178,7 @@
       "path": "/api/v1/check/batch"
     }
   ],
-  "schema": "np_entitlements",
+  "schema": "public",
   "service": {
     "compose": "docker-compose.plugin.yml",
     "healthcheck": "/health",
@@ -187,14 +187,7 @@
   },
   "status": "stable",
   "tables": [
-    "np_entitlements_plans",
-    "np_entitlements_subscriptions",
-    "np_entitlements_features",
-    "np_entitlements_quotas",
-    "np_entitlements_usage",
-    "np_entitlements_addons",
-    "np_entitlements_grants",
-    "np_entitlements_events"
+    "entitlement_grants"
   ],
   "tags": [
     "entitlements",

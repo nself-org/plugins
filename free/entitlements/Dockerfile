@@ -8,5 +8,5 @@ FROM alpine:3.19
 RUN addgroup -S nself && adduser -S nself -G nself
 COPY --from=builder /plugin /plugin
 USER nself
-EXPOSE 3715
+EXPOSE 3735
 ENTRYPOINT ["/plugin"]

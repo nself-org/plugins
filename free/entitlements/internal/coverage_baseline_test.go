@@ -4,31 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
 
 func TestLoadConfig_Defaults(t *testing.T) {
-	saved := map[string]string{
-		"PORT":         os.Getenv("PORT"),
-		"DATABASE_URL": os.Getenv("DATABASE_URL"),
-	}
-	os.Unsetenv("PORT")
-	os.Unsetenv("DATABASE_URL")
-	defer func() {
-		for k, v := range saved {
-			if v == "" {
-				os.Unsetenv(k)
-			} else {
-				os.Setenv(k, v)
-			}
-		}
-	}()
+	t.Setenv("PORT", "")
+	t.Setenv("DATABASE_URL", "")
 
 	c := LoadConfig()
-	if c.Port != "3715" {
-		t.Errorf("default Port = %q; want 3715", c.Port)
+	if c.Port != "3735" {
+		t.Errorf("default Port = %q; want 3735", c.Port)
 	}
 	if !strings.HasPrefix(c.DatabaseURL, "postgres://") {
 		t.Errorf("default DatabaseURL = %q", c.DatabaseURL)
@@ -36,12 +22,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 }
 
 func TestLoadConfig_EnvOverrides(t *testing.T) {
-	os.Setenv("PORT", "9999")
-	os.Setenv("DATABASE_URL", "postgres://x")
-	defer func() {
-		os.Unsetenv("PORT")
-		os.Unsetenv("DATABASE_URL")
-	}()
+	t.Setenv("PORT", "9999")
+	t.Setenv("DATABASE_URL", "postgres://x")
 	c := LoadConfig()
 	if c.Port != "9999" || c.DatabaseURL != "postgres://x" {
 		t.Errorf("overrides not applied: %+v", c)

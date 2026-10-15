@@ -10,7 +10,7 @@ type Config struct {
 func LoadConfig() Config {
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3715"
+		port = "3735"
 	}
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {

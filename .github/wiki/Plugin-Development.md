@@ -12,6 +12,16 @@ See also:
 
 ## 1. Scaffold a Plugin
 
+### Local Git hooks
+
+Run `bash .github/scripts/install-hooks.sh` from the repository root to select
+the tracked hooks with `core.hooksPath=.github/hooks`. This replaces selection
+of an older `.git/hooks/pre-commit` without editing that local file.
+The tracked pre-commit guard lists staged paths once and scans their index
+content in one `git grep --cached` call, including filenames with spaces.
+The commit-msg hook checks prohibited co-author trailers directly.
+Check the active hook directory with `git config --get core.hooksPath`.
+
 The CLI generates the full directory layout for you:
 
 ```bash
