@@ -144,8 +144,12 @@ scan_history_range() {
   # Strip those trailers before applying the AI-attribution regex; genuine AI
   # co-author trailers (claude/openai/copilot/...) are still caught.
   BOT_COAUTHOR_REGEX='co-authored-by:[[:space:]]*(dependabot|github-actions|renovate)\[bot\]'
+  # The release workflow adds the repository owner (a human, not an assistant) as co-author on
+  # its data commits (v1.2.9 release data). Strip exactly that trailer; AI co-authors stay caught.
+  OWNER_COAUTHOR_REGEX='co-authored-by:[[:space:]]*Aric Camarata <aric\.camarata@gmail\.com>'
   matches="$(git log --format='%H%n%s%n%b%n---END---' --after="$GRANDFATHER_DATE" "$range" \
     | grep -viE "$BOT_COAUTHOR_REGEX" \
+    | grep -viE "$OWNER_COAUTHOR_REGEX" \
     | grep -nE -i "$COMMIT_MSG_REGEX" || true)"
   if [ -n "$matches" ]; then
     printf '%s\n' "$matches"
