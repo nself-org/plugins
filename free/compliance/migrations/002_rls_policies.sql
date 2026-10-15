@@ -2,7 +2,6 @@
 -- PERM-HASURA-01 remediation — Postgres RLS was missing from compliance tables.
 -- Convention B (cloud multi-tenancy): tenant_id UUID per the Convention Wall.
 
-BEGIN;
 
 -- ============================================================================
 -- np_change_log
@@ -46,4 +45,3 @@ CREATE POLICY rls_np_vendor_registry_tenant ON np_vendor_registry
         OR current_setting('app.current_tenant_id', true) IS NULL
     );
 
-COMMIT;

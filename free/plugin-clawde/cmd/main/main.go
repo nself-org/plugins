@@ -1,6 +1,8 @@
 // Purpose: plugin-clawde entry point. Starts HTTP server on port 3847.
-//   Provides /health, /sessions, /sessions/{id}/heartbeat,
-//   /sessions/{id}/events endpoints.
+//
+//	Provides /health, /sessions, /sessions/{id}/heartbeat,
+//	/sessions/{id}/events endpoints.
+//
 // Inputs: NSELF_DB_URL env var.
 // Outputs: HTTP JSON responses and SSE event streams.
 // Constraints:
@@ -11,6 +13,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -37,6 +40,9 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping db: %v", err)
 	}
+
+	pool := internal.MustBootMigrations(context.Background(), dbURL)
+	defer pool.Close()
 
 	daemonAddr := os.Getenv("NSELF_CLAWDE_DAEMON_ADDR")
 	if daemonAddr == "" {

@@ -42,6 +42,7 @@ func NewDB(ctx context.Context, databaseURL string) (*DB, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
+	mustBootMigrations(ctx, pool)
 
 	return &DB{Pool: pool, closer: pool}, nil
 }

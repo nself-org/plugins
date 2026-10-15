@@ -1,20 +1,157 @@
 {
-  "name": "podcast",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "language": "go",
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "port": 3730,
   "category": "media",
+  "description": "Podcast service with RSS feed parsing, episode management, playback position sync, and subscription management",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PODCAST_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PODCAST_RSS_POLL_INTERVAL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PODCAST_MAX_EPISODES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PODCAST_STORAGE_BACKEND",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "podcast",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs",
+      "cache",
+      "temp"
+    ],
+    "network": [
+      "*"
+    ]
+  },
+  "port": 3730,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/ready"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PUT",
+      "path": "/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}/episodes"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/episodes"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/{id}/feed.xml"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/play"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/{id}/subscribe"
+    },
+    {
+      "auth": "bearer",
+      "method": "DELETE",
+      "path": "/{id}/unsubscribe"
+    }
+  ],
+  "schema": "np_podcast",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3730
+  },
+  "status": "stable",
+  "tables": [
+    "np_podcast_categories",
+    "np_podcast_episodes",
+    "np_podcast_playback_positions",
+    "np_podcast_plays",
+    "np_podcast_podcasts",
+    "np_podcast_subscriptions"
+  ],
   "tags": [
     "podcast",
     "rss",
@@ -23,144 +160,6 @@
     "subscriptions",
     "playback"
   ],
-  "tables": [
-    "np_podcast_podcasts",
-    "np_podcast_episodes",
-    "np_podcast_subscriptions",
-    "np_podcast_playback_positions",
-    "np_podcast_categories"
-  ],
-  "webhooks": {},
-  "actions": {
-    "feeds": "List feeds",
-    "subscribe": "Subscribe to podcast",
-    "episodes": "List episodes",
-    "sync": "Sync RSS feeds",
-    "search": "Search podcasts",
-    "stats": "Show statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PODCAST_PLUGIN_PORT",
-      "PODCAST_RSS_POLL_INTERVAL",
-      "PODCAST_MAX_EPISODES",
-      "PODCAST_STORAGE_BACKEND"
-    ]
-  },
-  "config": {
-    "defaultPort": 3210,
-    "rssPollIntervalMinutes": 60,
-    "maxEpisodesPerFeed": 500,
-    "storageBackend": "database",
-    "feedTimeoutSeconds": 30,
-    "cleanupOldEpisodesDays": 365
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "*"
-    ],
-    "filesystem": [
-      "logs",
-      "cache",
-      "temp"
-    ]
-  },
-  "status": "stable",
   "tier": "free",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PUT",
-      "path": "/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}/episodes",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/episodes",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/{id}/feed.xml",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/play",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/{id}/subscribe",
-      "auth": "bearer"
-    },
-    {
-      "method": "DELETE",
-      "path": "/{id}/unsubscribe",
-      "auth": "bearer"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "cmd/main.go",
-  "checksum": "eb3677367b7a859f177198283345c730ca3900f5fe13f992848a744813e49a37",
-  "bundles": [
-    "ntv"
-  ]
+  "version": "1.2.6"
 }

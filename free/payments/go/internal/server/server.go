@@ -11,10 +11,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/nself-org/nself-payments/internal/config"
-	"github.com/nself-org/nself-payments/internal/db"
-	"github.com/nself-org/nself-payments/internal/metrics"
-	"github.com/nself-org/nself-payments/internal/provider"
+	"github.com/nself-org/nself-payments/go/internal/config"
+	"github.com/nself-org/nself-payments/go/internal/db"
+	"github.com/nself-org/nself-payments/go/internal/metrics"
+	"github.com/nself-org/nself-payments/go/internal/provider"
 )
 
 // Handler holds dependencies for the HTTP handler layer.

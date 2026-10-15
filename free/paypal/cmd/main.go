@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"strconv"
@@ -39,9 +40,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	if err := internal.Migrate(pool); err != nil {
-		log.Fatalf("[nself-paypal] migration failed: %v", err)
-	}
+	internal.BootMigrations(context.Background(), pool)
 
 	cfg, err := internal.LoadConfig()
 	if err != nil {

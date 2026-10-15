@@ -24,7 +24,10 @@ github.com/jackc/pgx/v5/pgxpool
 ## explicit; go 1.19
 github.com/jackc/puddle/v2
 github.com/jackc/puddle/v2/internal/genstack
-# github.com/nself-org/plugin-sdk v0.0.0 => ../../sdk
+# github.com/nself-org/cli/sdk/go/v2 v2.0.0 => ./third_party/cli-sdk-go
+## explicit; go 1.25.0
+github.com/nself-org/cli/sdk/go/v2/migrate
+# github.com/nself-org/plugin-sdk v0.0.0 => ./third_party/sdk
 ## explicit; go 1.26.4
 github.com/nself-org/plugin-sdk
 github.com/nself-org/plugin-sdk/db
@@ -50,4 +53,5 @@ golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/width
-# github.com/nself-org/plugin-sdk => ../../sdk
+# github.com/nself-org/plugin-sdk => ./third_party/sdk
+# github.com/nself-org/cli/sdk/go/v2 => ./third_party/cli-sdk-go

@@ -8,8 +8,21 @@
 # Usage: v14-oracle.sh [--plugins a,b | --fixtures]   (--plugins: originals come from git origin/main free/<n>)
 set -eu
 . "$(dirname "$0")/lib.sh"
+# Regression for D-0452: after #162, storage's original and converted output have no compose-file delta.
+# Inputs: checked-in deltas; output: failure for a stale storage allowance. Scratch is removed on exit.
+test_storage_deltas() (
+  . "$CONF_DIR/oracle/deltas.sh"
+  test_dir=$(mktemp -d "$(conf_work)/storage-deltas.XXXXXX")
+  trap 'rm -rf "$test_dir"' EXIT
+  : > "$test_dir/compose-files.txt"
+  CONF_TODAY=2026-10-14 apply_deltas "$test_dir" storage "$CONF_ROOT/tests/conformance/oracle-deltas.yaml" || exit 1
+  [ ! -s "$test_dir/compose-files.txt" ] || { echo "FAIL oracle: storage output changed"; exit 1; }
+  echo "pass  oracle storage has no post-merge delta"
+)
+if [ "${1:-}" = --test-storage-deltas ]; then test_storage_deltas; exit $?; fi
 mode=fixtures; list=
 while [ $# -gt 0 ]; do case $1 in --plugins) mode=plugins; list=$2; shift;; --fixtures) mode=fixtures;; *) echo "unknown argument $1" >&2; exit 2;; esac; shift; done
+[ "$mode" != fixtures ] || test_storage_deltas
 command -v docker >/dev/null && docker info >/dev/null 2>&1 || { echo "FAIL oracle: docker is not available (a skipped oracle is a failure)"; exit 1; }
 W=$(conf_work)/oracle; mkdir -p "$W/dl"; VER=1.4.12
 case "$(docker info --format '{{.Architecture}}')" in aarch64|arm64) arch=arm64;; *) arch=amd64;; esac

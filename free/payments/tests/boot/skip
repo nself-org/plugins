@@ -1,0 +1,1 @@
+no Dockerfile in the plugin directory: the service is built by the host project; BootMigrations is covered by the conformance rules

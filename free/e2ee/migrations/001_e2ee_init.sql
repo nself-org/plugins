@@ -40,6 +40,7 @@ ALTER TABLE np_e2ee_identity_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_identity_keys FORCE ROW LEVEL SECURITY;
 
 -- Owner read/write of own identity rows.
+DROP POLICY IF EXISTS np_e2ee_identity_keys_owner ON np_e2ee_identity_keys;
 CREATE POLICY np_e2ee_identity_keys_owner ON np_e2ee_identity_keys
     USING (
         source_account_id = current_setting('app.source_account_id', true)
@@ -49,6 +50,7 @@ CREATE POLICY np_e2ee_identity_keys_owner ON np_e2ee_identity_keys
 -- Public-fetch policy: any user in the same app may READ another user's PUBLIC
 -- identity key (so Bob can build a bundle for Alice). Only public columns exist
 -- in this table, so no PII leaks. SELECT only.
+DROP POLICY IF EXISTS np_e2ee_identity_keys_public_read ON np_e2ee_identity_keys;
 CREATE POLICY np_e2ee_identity_keys_public_read ON np_e2ee_identity_keys
     FOR SELECT
     USING (source_account_id = current_setting('app.source_account_id', true));
@@ -76,12 +78,14 @@ CREATE TABLE IF NOT EXISTS np_e2ee_signed_prekeys (
 ALTER TABLE np_e2ee_signed_prekeys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_signed_prekeys FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS np_e2ee_signed_prekeys_owner ON np_e2ee_signed_prekeys;
 CREATE POLICY np_e2ee_signed_prekeys_owner ON np_e2ee_signed_prekeys
     USING (
         source_account_id = current_setting('app.source_account_id', true)
         AND user_id = current_setting('app.current_user_id', true)
     );
 
+DROP POLICY IF EXISTS np_e2ee_signed_prekeys_public_read ON np_e2ee_signed_prekeys;
 CREATE POLICY np_e2ee_signed_prekeys_public_read ON np_e2ee_signed_prekeys
     FOR SELECT
     USING (source_account_id = current_setting('app.source_account_id', true));
@@ -110,6 +114,7 @@ CREATE TABLE IF NOT EXISTS np_e2ee_one_time_prekeys (
 ALTER TABLE np_e2ee_one_time_prekeys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_one_time_prekeys FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS np_e2ee_one_time_prekeys_owner ON np_e2ee_one_time_prekeys;
 CREATE POLICY np_e2ee_one_time_prekeys_owner ON np_e2ee_one_time_prekeys
     USING (
         source_account_id = current_setting('app.source_account_id', true)
@@ -117,6 +122,7 @@ CREATE POLICY np_e2ee_one_time_prekeys_owner ON np_e2ee_one_time_prekeys
     );
 
 -- Public read of UNCONSUMED prekeys so an initiator can claim one.
+DROP POLICY IF EXISTS np_e2ee_one_time_prekeys_public_read ON np_e2ee_one_time_prekeys;
 CREATE POLICY np_e2ee_one_time_prekeys_public_read ON np_e2ee_one_time_prekeys
     FOR SELECT
     USING (source_account_id = current_setting('app.source_account_id', true));
@@ -149,12 +155,14 @@ CREATE TABLE IF NOT EXISTS np_e2ee_kyber_prekeys (
 ALTER TABLE np_e2ee_kyber_prekeys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_kyber_prekeys FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS np_e2ee_kyber_prekeys_owner ON np_e2ee_kyber_prekeys;
 CREATE POLICY np_e2ee_kyber_prekeys_owner ON np_e2ee_kyber_prekeys
     USING (
         source_account_id = current_setting('app.source_account_id', true)
         AND user_id = current_setting('app.current_user_id', true)
     );
 
+DROP POLICY IF EXISTS np_e2ee_kyber_prekeys_public_read ON np_e2ee_kyber_prekeys;
 CREATE POLICY np_e2ee_kyber_prekeys_public_read ON np_e2ee_kyber_prekeys
     FOR SELECT
     USING (source_account_id = current_setting('app.source_account_id', true));
@@ -183,6 +191,7 @@ ALTER TABLE np_e2ee_prekey_bundles_served ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_prekey_bundles_served FORCE ROW LEVEL SECURITY;
 
 -- Requester or target owner may read their own served-bundle audit rows.
+DROP POLICY IF EXISTS np_e2ee_prekey_bundles_served_owner ON np_e2ee_prekey_bundles_served;
 CREATE POLICY np_e2ee_prekey_bundles_served_owner ON np_e2ee_prekey_bundles_served
     FOR SELECT
     USING (
@@ -213,6 +222,7 @@ CREATE TABLE IF NOT EXISTS np_e2ee_verification_states (
 ALTER TABLE np_e2ee_verification_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_verification_states FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS np_e2ee_verification_states_owner ON np_e2ee_verification_states;
 CREATE POLICY np_e2ee_verification_states_owner ON np_e2ee_verification_states
     USING (
         source_account_id = current_setting('app.source_account_id', true)
@@ -240,6 +250,7 @@ CREATE TABLE IF NOT EXISTS np_e2ee_safety_numbers (
 ALTER TABLE np_e2ee_safety_numbers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_safety_numbers FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS np_e2ee_safety_numbers_owner ON np_e2ee_safety_numbers;
 CREATE POLICY np_e2ee_safety_numbers_owner ON np_e2ee_safety_numbers
     USING (
         source_account_id = current_setting('app.source_account_id', true)
@@ -269,6 +280,7 @@ ALTER TABLE np_e2ee_audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE np_e2ee_audit_log FORCE ROW LEVEL SECURITY;
 
 -- Append-only: INSERT allowed within own scope.
+DROP POLICY IF EXISTS np_e2ee_audit_log_insert ON np_e2ee_audit_log;
 CREATE POLICY np_e2ee_audit_log_insert ON np_e2ee_audit_log
     FOR INSERT
     WITH CHECK (
@@ -277,6 +289,7 @@ CREATE POLICY np_e2ee_audit_log_insert ON np_e2ee_audit_log
     );
 
 -- Owner may read own audit rows. (No UPDATE/DELETE policy => denied.)
+DROP POLICY IF EXISTS np_e2ee_audit_log_select ON np_e2ee_audit_log;
 CREATE POLICY np_e2ee_audit_log_select ON np_e2ee_audit_log
     FOR SELECT
     USING (

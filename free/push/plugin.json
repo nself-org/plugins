@@ -1,18 +1,111 @@
 {
-  "name": "push",
-  "version": "1.2.6",
-  "description": "APNs + FCM push notification relay. Hasura event-trigger fan-out, delivery state tracking, exponential backoff retry. Handles iOS (Apple Push Notification service) and Android (Firebase Cloud Messaging v1 API).",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "1.0.9",
   "category": "communication",
+  "description": "APNs + FCM push notification relay. Hasura event-trigger fan-out, delivery state tracking, exponential backoff retry. Handles iOS (Apple Push Notification service) and Android (Firebase Cloud Messaging v1 API).",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "REDIS_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_APNS_TEAM_ID",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_APNS_KEY_ID",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_APNS_KEY_PEM",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_APNS_BUNDLE_ID",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_FCM_PROJECT_ID",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_FCM_SERVICE_ACCOUNT_JSON",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_RETRY_MAX_ATTEMPTS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PUSH_RETRY_BACKOFF_BASE_MS",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.9",
+  "name": "push",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "filesystem": [],
+    "network": [
+      "outbound"
+    ]
+  },
+  "port": 3053,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.9"
+  },
+  "schema": "np_push",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3053
+  },
+  "status": "stable",
+  "tables": [
+    "np_push_outbox",
+    "np_push_devices"
+  ],
   "tags": [
     "push",
     "apns",
@@ -22,62 +115,6 @@
     "android",
     "notifications"
   ],
-  "tables": [
-    "np_push_outbox",
-    "np_push_devices"
-  ],
-  "dependencies": {
-    "redis": ">=1.0.0"
-  },
-  "optionalDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "REDIS_URL"
-    ],
-    "optional": [
-      "PORT",
-      "PUSH_APNS_TEAM_ID",
-      "PUSH_APNS_KEY_ID",
-      "PUSH_APNS_KEY_PEM",
-      "PUSH_APNS_BUNDLE_ID",
-      "PUSH_FCM_PROJECT_ID",
-      "PUSH_FCM_SERVICE_ACCOUNT_JSON",
-      "PUSH_RETRY_MAX_ATTEMPTS",
-      "PUSH_RETRY_BACKOFF_BASE_MS"
-    ]
-  },
-  "config": {
-    "defaultPort": 3053,
-    "retryMaxAttempts": 3,
-    "retryBackoffBaseMs": 500
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update"
-    ],
-    "network": [
-      "outbound"
-    ],
-    "filesystem": []
-  },
-  "port": 3053,
-  "status": "stable",
-  "binary_name": "nself-push",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target redis.service",
-  "tier": "free"
+  "tier": "free",
+  "version": "1.2.6"
 }

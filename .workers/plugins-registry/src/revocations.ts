@@ -147,9 +147,12 @@ export async function handleRevokedAuthors(env: Env): Promise<Response> {
         }
       }
     } catch {
-      // KV read failure — return empty list so CLI is not falsely blocked.
-      // Errors are surfaced via the /health endpoint instead.
-      revokedAuthors = [];
+      // An unavailable revocation list must not become a cached all-clear.
+      return jsonResponse(
+        { error: "Author revocation list unavailable" },
+        503,
+        { "Cache-Control": "no-store" },
+      );
     }
   }
 

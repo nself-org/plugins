@@ -1,13 +1,15 @@
 package internal
 
 import (
-
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // RegisterRoutes mounts all PayPal plugin endpoints on the given router.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool, cfg *Config) {
+	// Health (with the boot-migrations ledger member)
+	registerHealth(r)
+
 	// Webhooks
 	r.Post("/webhooks/paypal", HandleWebhook(pool, cfg))
 

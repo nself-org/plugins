@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -34,6 +35,10 @@ func main() {
 		if err := db.Ping(); err != nil {
 			log.Printf("WARN: db ping failed: %v — running without DB (cache/quota disabled)", err)
 			db = nil
+		} else {
+			// Migrations run only when the database is reachable; a failure is fatal.
+			pool := internal.MustBootMigrations(context.Background(), dbURL)
+			defer pool.Close()
 		}
 	}
 

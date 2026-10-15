@@ -32,6 +32,8 @@ import (
 type Config struct {
 	MaxPerTenant int
 	SessionTTL   time.Duration
+	// MigrationsHealth returns the /health "migrations" member; it answers 503 itself, so call it before any header.
+	MigrationsHealth func(w http.ResponseWriter) map[string]int
 }
 
 // Handler holds handler dependencies.
@@ -91,7 +93,18 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	body := map[string]any{"status": "ok"}
+	if h.cfg.MigrationsHealth != nil {
+		mig := h.cfg.MigrationsHealth(w)
+		body["migrations"] = mig
+		if mig["applied"] < 0 {
+			body["status"] = "unhealthy"
+			_ = json.NewEncoder(w).Encode(body)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func (h *Handler) createSession(w http.ResponseWriter, r *http.Request) {
@@ -285,4 +298,3 @@ func StripControlSequences(input []byte) []byte {
 func isLetter(b byte) bool {
 	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')
 }
-

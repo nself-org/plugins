@@ -34,12 +34,10 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Run schema migrations (idempotent).
-	if err := internal.Migrate(pool); err != nil {
-		log.Fatalf("[push] migration failed: %v", err)
-	}
-
 	ctx := context.Background()
+
+	// Apply the plugin's own migrations/*.sql before serving (fatal on failure).
+	internal.BootMigrations(ctx, pool)
 
 	// Build APNs client (nil if not configured — plugin starts in degraded mode).
 	apnsClient, err := internal.NewAPNsClient(cfg)

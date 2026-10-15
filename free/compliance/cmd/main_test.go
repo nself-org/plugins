@@ -31,15 +31,19 @@ func TestNewRouter_Health(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	r.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	// No boot migrations ran against the mocked pool, so /health answers 503 with the -1 counts (the cli retries it).
+	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var out map[string]string
+	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if out["plugin"] != "compliance" {
-		t.Errorf("plugin = %q", out["plugin"])
+		t.Errorf("plugin = %v", out["plugin"])
+	}
+	if _, ok := out["migrations"]; !ok {
+		t.Errorf("migrations member missing: %s", rec.Body.String())
 	}
 }
 
@@ -110,4 +114,3 @@ func TestNewRouter_DSARsRouteDispatch(t *testing.T) {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 }
-

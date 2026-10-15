@@ -13,8 +13,6 @@
 # Stage 1: builder
 FROM golang:1.26-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates
-
 WORKDIR /build
 
 # Copy plugin source, including the committed vendor/ dir (context root ==
@@ -26,7 +24,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /nself-pus
 # Stage 2: minimal runtime
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates wget
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
 
 COPY --from=builder /nself-push /usr/local/bin/nself-push
 
@@ -34,6 +35,6 @@ ENV PORT=3053
 EXPOSE 3053
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget -qO- http://localhost:3053/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3053/health || exit 1
 
 CMD ["/usr/local/bin/nself-push"]

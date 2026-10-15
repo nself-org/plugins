@@ -1,0 +1,2 @@
+DATABASE_URL=$DATABASE_URL?sslmode=disable
+PORT=$PORT

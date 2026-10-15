@@ -1,16 +1,92 @@
 {
-  "name": "e2ee",
-  "version": "1.2.6",
-  "description": "End-to-end encryption key directory: X3DH prekey distribution + Kyber-1024 (ML-KEM-1024) post-quantum prekeys for nchat. Server stores PUBLIC keys only; private keys never leave the client.",
   "author": "nself",
-  "license": "MIT",
-  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/free/e2ee",
-  "repository": "https://github.com/nself-org/plugins",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
-  "runtime": "go",
-  "port": 3055,
   "category": "authentication",
+  "description": "End-to-end encryption key directory: X3DH prekey distribution + Kyber-1024 (ML-KEM-1024) post-quantum prekeys for nchat. Server stores PUBLIC keys only; private keys never leave the client.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "E2EE_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "E2EE_PLUGIN_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "E2EE_LOG_LEVEL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "E2EE_MAX_ONE_TIME_PREKEYS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "E2EE_MAX_KYBER_PREKEYS",
+      "required": false
+    }
+  ],
+  "homepage": "https://github.com/nself-org/plugins/tree/main/plugins/free/e2ee",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "e2ee",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [],
+    "network": []
+  },
+  "port": 3055,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "runtime": "go",
+  "schema": "np_e2ee",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3055
+  },
+  "status": "stable",
+  "tables": [
+    "np_e2ee_identity_keys",
+    "np_e2ee_signed_prekeys",
+    "np_e2ee_one_time_prekeys",
+    "np_e2ee_kyber_prekeys",
+    "np_e2ee_prekey_bundles_served",
+    "np_e2ee_verification_states",
+    "np_e2ee_safety_numbers",
+    "np_e2ee_audit_log"
+  ],
   "tags": [
     "e2ee",
     "encryption",
@@ -22,58 +98,6 @@
     "key-directory",
     "security"
   ],
-  "tables": [
-    "np_e2ee_identity_keys",
-    "np_e2ee_signed_prekeys",
-    "np_e2ee_one_time_prekeys",
-    "np_e2ee_kyber_prekeys",
-    "np_e2ee_prekey_bundles_served",
-    "np_e2ee_verification_states",
-    "np_e2ee_safety_numbers",
-    "np_e2ee_audit_log"
-  ],
-  "webhooks": {},
-  "actions": {
-    "init": "Initialize database schema",
-    "server": "Start the key-directory API server"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "E2EE_PLUGIN_PORT",
-      "E2EE_PLUGIN_HOST",
-      "E2EE_LOG_LEVEL",
-      "E2EE_MAX_ONE_TIME_PREKEYS",
-      "E2EE_MAX_KYBER_PREKEYS"
-    ]
-  },
-  "config": {},
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [],
-    "filesystem": []
-  },
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "tier": "free"
+  "tier": "free",
+  "version": "1.2.6"
 }

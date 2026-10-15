@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # tests/boot/run.sh [--plugins a,b | --fixtures] [--sequential]: the fresh-DB boot kit. Builds the converted plugin
-# image (network disabled for RUN steps), starts postgres:16, boots the plugin twice and requires: first boot
+# image (network disabled for RUN steps), starts postgres:16 (pgvector/pgvector:pg16 when a plugin requires the vector extension), boots the plugin twice and requires: first boot
 # applies all migrations, second applies none, and /health reports migrations applied == expected.
 # Env hook (P7-PLUG-76): when <plugin>/tests/boot/env exists, each KEY=value line is passed as -e to both boots. Only
 # $DATABASE_URL and $PORT (or ${...}) are expanded, by plain string replacement (no eval); blank and # lines are
 # skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
-# P7-PLUG-44: a plugin whose manifest declares no migrations (and has no migrations/*.sql) is skipped with a "skip" line; <plugin>/tests/boot/build-network (empty marker)
-# lets the image build use the network (cargo fetch for the Rust plugin; Go plugins stay network-free).
+# Skipped: a plugin with a tests/boot/skip marker (first line = reason), or one whose manifest declares no migrations (and has no migrations/*.sql) (P7-PLUG-44).
+# <plugin>/tests/boot/build-network (empty marker) lets the image build use the network (cargo fetch for the Rust plugin; Go plugins stay network-free).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); . "$HERE/../../scripts/conformance/lib.sh"
 mode=fixtures; list=alpha
@@ -16,12 +16,19 @@ if [ "$mode" = fixtures ]; then bash "$CONF_ROOT/scripts/codemods/run.sh" --fixt
 cleanup() { docker rm -f "$pg" "nself-boot-a-$pid" "nself-boot-b-$pid" >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1; for p in $(printf '%s' "$list" | tr ',' ' '); do docker rmi -f "nself-boot-$p:$pid" >/dev/null 2>&1; done; }
 trap cleanup EXIT
 docker network create "$net" >/dev/null
-docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD=boot -e POSTGRES_DB=boot postgres:16 >/dev/null
+# Image: postgres:16, or pgvector/pgvector:pg16 when a plugin of the run requires the vector extension (manifest requires.postgres_extensions).
+pgimg=postgres:16
+for p in $(printf '%s' "$list" | tr ',' ' '); do
+  jq -e '(.requires.postgres_extensions // []) | index("vector")' "$root/$p/plugin.json" >/dev/null 2>&1 && pgimg=pgvector/pgvector:pg16
+done
+docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD=boot -e POSTGRES_DB=boot "$pgimg" >/dev/null
 for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/null 2>&1 && break; sleep 1; done
 sleep 2
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p; pj=$dir/plugin.json; schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj")
-  # Skip only a plugin that declares no migrations at all; a manifest with a migrations key but no SQL still boots (and fails on its own terms).
+  # Nothing to boot: a marker file tests/boot/skip whose first line says why (a library or hook binary with no HTTP server), or a plugin that declares no migrations at all.
+  # A manifest with a migrations key but no SQL still boots (and fails on its own terms).
+  [ -f "$dir/tests/boot/skip" ] && { echo "skip  boot $p: $(head -1 "$dir/tests/boot/skip")"; continue; }
   if ! ls "$dir"/migrations/*.sql >/dev/null 2>&1 && [ "$(jq -r '.migrations // empty | tostring' "$pj")" = "" ]; then echo "skip  boot $p: no migrations declared (nothing to apply)"; continue; fi
   [ -n "$schema" ] || { echo "FAIL boot $p: manifest has no schema"; rc=1; continue; }
   netflag="--network none"; [ -f "$dir/tests/boot/build-network" ] && netflag=   # Rust cargo fetch (P7-PLUG-44 ruling): the marker file lifts the network ban for the image build only

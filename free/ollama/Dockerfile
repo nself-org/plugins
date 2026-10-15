@@ -3,20 +3,24 @@
 # Stage 2: Minimal runtime image
 
 # ----- builder -----
-FROM golang:1.22-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
 
 COPY go.mod ./
-RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /ollama-plugin ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /ollama-plugin ./cmd
 
 # ----- runtime -----
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates docker-cli
+# No apk at build time (the tarball build runs with the network off): the CA bundle and zoneinfo come from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /usr/local/go/lib/time/zoneinfo.zip /usr/local/share/zoneinfo.zip
+ENV ZONEINFO=/usr/local/share/zoneinfo.zip
+# docker-cli comes from the official docker image (no apk at build time).
+COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 
 COPY --from=builder /ollama-plugin /usr/local/bin/ollama-plugin
 

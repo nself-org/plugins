@@ -1,32 +1,40 @@
 {
-  "name": "plugin-retrieval",
-  "version": "1.2.6",
-  "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for \u0273Claw memory and nself-ai-mcp search/recall tools.",
   "author": "nSelf",
-  "license": "MIT",
-  "licenseType": "free",
-  "tier": "free",
-  "language": "go",
-  "minNselfVersion": "1.1.1",
-  "installable": true,
-  "isCommercial": false,
-  "requiredEntitlements": [],
-  "requires_license": false,
   "category": "data",
-  "port": 3825,
-  "bundle": [
-    "nclaw"
-  ],
-  "tables": [
-    "np_retrieval_documents",
-    "np_retrieval_embeddings"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "description": "Hybrid retrieval plugin: pgvector ANN + tsvector BM25 merged with Reciprocal Rank Fusion (RRF). Provides the search backend for ɳClaw memory and nself-ai-mcp search/recall tools.",
+  "installable": true,
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
   },
-  "bundles": [
-    "nclaw",
-    "clawde"
-  ]
+  "minNselfVersion": "1.1.1",
+  "name": "plugin-retrieval",
+  "port": 3825,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.1",
+    "postgres_extensions": [
+      "vector"
+    ]
+  },
+  "schema": "np_plugin_retrieval",
+  "service": {
+    "kind": "library",
+    "port": 3825
+  },
+  "status": "stable",
+  "tables": [
+    "np_embeddings",
+    "np_retrieval_documents",
+    "np_retrieval_embeddings",
+    "np_retrieval_index"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }

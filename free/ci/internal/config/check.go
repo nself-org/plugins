@@ -1,0 +1,274 @@
+package config
+
+// Purpose: checks the JSON schema cannot express: references between jobs,
+// services and pipelines, dependency cycles, and the Epic D28 warning for a
+// required job that `when.env_present` can exclude.
+// Inputs:  a decoded model.PipelineConfig and the line table of its file.
+// Outputs: located Problems (fatal) or Warnings (E620 as a warning).
+// Constraints: pure; no file or process access.
+
+import (
+	"fmt"
+	"path"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
+)
+
+func jobPtr(id, field string) string { return "/jobs/" + escape(id) + field }
+
+func escape(s string) string { return strings.NewReplacer("~", "~0", "/", "~1").Replace(s) }
+
+// semantic reports dangling references and dependency cycles.
+func semantic(file string, cfg model.PipelineConfig, lines map[string]int) []Problem {
+	var out []Problem
+	add := func(ptr, msg string) {
+		out = append(out, Problem{File: file, Line: lineFor(lines, ptr), Pointer: ptr, Message: msg})
+	}
+	for _, id := range sortedKeys(cfg.Jobs) {
+		job := cfg.Jobs[id]
+		if !safeName.MatchString(id) {
+			add("/jobs/"+escape(id), "job id must match "+safeName.String())
+		}
+		if escapesRepo(job.Workdir) {
+			add(jobPtr(id, "/workdir"), fmt.Sprintf("job %q workdir must stay inside the repository", id))
+		}
+		if job.When != nil {
+			for i, name := range job.When.EnvPresent {
+				if !envName.MatchString(name) {
+					add(fmt.Sprintf("%s/%d", jobPtr(id, "/when/env_present"), i), "env_present entries must be environment variable names, not values")
+				}
+			}
+			for i, p := range job.When.Paths {
+				if escapesRepo(p) {
+					add(fmt.Sprintf("%s/%d", jobPtr(id, "/when/paths"), i), "when.paths entries must stay inside the repository")
+				}
+			}
+		}
+		for key := range job.Env {
+			if !envName.MatchString(key) {
+				add(jobPtr(id, "/env"), "env keys must be environment variable names")
+				break
+			}
+		}
+		if job.Container != nil && !pinnedImageRef(job.Container.Image) {
+			add(jobPtr(id, "/container/image"), "container image must be pinned by digest (ref@sha256:<64 hex>)")
+		}
+		if job.Cache != nil {
+			for i, p := range job.Cache.Paths {
+				if escapesRepo(p) {
+					add(fmt.Sprintf("%s/%d", jobPtr(id, "/cache/paths"), i), "cache paths must stay inside the repository")
+				}
+			}
+		}
+		for i, a := range job.Artifacts {
+			if escapesRepo(a.Path) {
+				add(fmt.Sprintf("%s/%d/path", jobPtr(id, "/artifacts"), i), "artifact paths must stay inside the repository")
+			}
+		}
+		if len(job.Run) == 0 {
+			add(jobPtr(id, "/run"), fmt.Sprintf("job %q needs a run argv with at least one element", id))
+		}
+		if job.Timeout != "" && !positiveDuration(job.Timeout) {
+			add(jobPtr(id, "/timeout"), fmt.Sprintf("job %q timeout is not a positive duration that fits in 290 years", id))
+		}
+		for i, dep := range job.Deps {
+			if _, ok := cfg.Jobs[dep]; !ok {
+				add(fmt.Sprintf("%s/%d", jobPtr(id, "/deps"), i), fmt.Sprintf("job %q depends on a job that is not defined", id))
+			}
+		}
+		for i, name := range job.NeedsServices {
+			if _, ok := cfg.Services[name]; !ok {
+				add(fmt.Sprintf("%s/%d", jobPtr(id, "/needs_services"), i), fmt.Sprintf("job %q needs a service that is not defined", id))
+			}
+		}
+	}
+	if cfg.Detect != nil {
+		for i, p := range cfg.Detect.Roots {
+			if escapesRepo(p) {
+				add(fmt.Sprintf("/detect/roots/%d", i), "detect roots must stay inside the repository")
+			}
+		}
+	}
+	for _, id := range sortedKeys(cfg.Checks) {
+		for i, p := range cfg.Checks[id].Rules {
+			if escapesRepo(p) {
+				add(fmt.Sprintf("/checks/%s/rules/%d", escape(id), i), "rule paths must stay inside the repository")
+			}
+		}
+	}
+	for _, name := range sortedKeys(cfg.Services) {
+		if !safeName.MatchString(name) {
+			add("/services/"+escape(name), "service name must match "+safeName.String())
+		}
+	}
+	for _, name := range sortedKeys(cfg.Pipelines) {
+		if !safeName.MatchString(name) {
+			add("/pipelines/"+escape(name), "pipeline name must match "+safeName.String())
+		}
+		if escapesRepo(cfg.Pipelines[name].DrillsDir) {
+			add("/pipelines/"+escape(name)+"/drills_dir", "drills_dir must stay inside the repository")
+		}
+		if age := cfg.Pipelines[name].MaxAge; age != "" && !positiveDuration(age) {
+			add("/pipelines/"+escape(name)+"/max_age", fmt.Sprintf("pipeline %q max_age is not a positive duration", name))
+		}
+		for i, id := range cfg.Pipelines[name].Jobs {
+			if _, ok := cfg.Jobs[id]; !ok {
+				add(fmt.Sprintf("/pipelines/%s/jobs/%d", escape(name), i), fmt.Sprintf("pipeline %q lists a job that is not defined", name))
+			}
+		}
+	}
+	if cycle := findCycle(cfg.Jobs); cycle != "" {
+		add("/jobs", "dependency cycle: "+cycle)
+	}
+	return out
+}
+
+// safeName is the shape of an id that later becomes a path component or a
+// log field (the same rule internal/exec applies to attempt ids).
+var (
+	envName      = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	digestSuffix = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
+	hostLabel    = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`)
+	pathPart     = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*$`)
+	imageTag     = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+	ipv6Host     = regexp.MustCompile(`^\[[0-9A-Fa-f:.]+\](?::[0-9]+)?$`)
+)
+
+var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+// escapesRepo reports a path that is absolute or climbs out with "..".
+func escapesRepo(p string) bool {
+	if p == "" {
+		return false
+	}
+	if path.IsAbs(p) || filepath.IsAbs(p) || strings.HasPrefix(p, "~") {
+		return true
+	}
+	clean := path.Clean(strings.ReplaceAll(p, "\\", "/"))
+	return clean == ".." || strings.HasPrefix(clean, "../")
+}
+
+// positiveDuration reports whether s parses as a Go duration above zero; the
+// schema pattern alone admits signs and values that overflow time.Duration.
+func positiveDuration(s string) bool {
+	d, err := time.ParseDuration(s)
+	return err == nil && d > 0
+}
+
+// findCycle returns "a -> b -> a" for the first cycle in deps, or "".
+func findCycle(jobs map[string]model.Job) string {
+	const (
+		unseen = iota
+		open
+		closed
+	)
+	state := map[string]int{}
+	var stack []string
+	var visit func(id string) string
+	visit = func(id string) string {
+		switch state[id] {
+		case closed:
+			return ""
+		case open:
+			for i, s := range stack {
+				if s == id {
+					return strings.Join(append(append([]string{}, stack[i:]...), id), " -> ")
+				}
+			}
+		}
+		state[id] = open
+		stack = append(stack, id)
+		for _, dep := range jobs[id].Deps {
+			if _, ok := jobs[dep]; !ok {
+				continue
+			}
+			if c := visit(dep); c != "" {
+				return c
+			}
+		}
+		stack = stack[:len(stack)-1]
+		state[id] = closed
+		return ""
+	}
+	for _, id := range sortedKeys(jobs) {
+		if c := visit(id); c != "" {
+			return c
+		}
+	}
+	return ""
+}
+
+// envPresentWarnings implements Epic D28: a required job (the default) whose
+// selection depends on `when.env_present` fails the run when the variables
+// are absent, so the loader says so.
+func envPresentWarnings(cfg model.PipelineConfig, lines map[string]int) []Warning {
+	var out []Warning
+	for _, id := range sortedKeys(cfg.Jobs) {
+		job := cfg.Jobs[id]
+		if job.When == nil || len(job.When.EnvPresent) == 0 || (job.Required != nil && !*job.Required) {
+			continue
+		}
+		ptr := jobPtr(id, "/when/env_present")
+		out = append(out, Warning{
+			Code:    CodeInvalid,
+			Line:    lineFor(lines, ptr),
+			Pointer: ptr,
+			Message: fmt.Sprintf("job %q is required but runs only when %s is set: a missing variable fails the run; set required: false for an optional job", id, strings.Join(job.When.EnvPresent, ", ")),
+		})
+	}
+	return out
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// pinnedImageRef reports whether s is [registry/]repository[:tag]@sha256:<64 hex>
+// with a well-formed registry and repository path.
+func pinnedImageRef(s string) bool {
+	if !digestSuffix.MatchString(s) {
+		return false
+	}
+	ref := strings.TrimSuffix(s, s[strings.LastIndex(s, "@"):])
+	parts := strings.Split(ref, "/")
+	if i := strings.LastIndex(parts[len(parts)-1], ":"); i >= 0 {
+		if !imageTag.MatchString(parts[len(parts)-1][i+1:]) {
+			return false
+		}
+		parts[len(parts)-1] = parts[len(parts)-1][:i]
+	}
+	if len(parts) > 1 && (strings.ContainsAny(parts[0], ".:") || parts[0] == "localhost" || strings.HasPrefix(parts[0], "[")) {
+		host := parts[0]
+		if !ipv6Host.MatchString(host) {
+			if h, port, ok := strings.Cut(host, ":"); ok {
+				if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+					return false
+				}
+				host = h
+			}
+			for _, label := range strings.Split(host, ".") {
+				if !hostLabel.MatchString(label) {
+					return false
+				}
+			}
+		}
+		parts = parts[1:]
+	}
+	for _, p := range parts {
+		if !pathPart.MatchString(p) {
+			return false
+		}
+	}
+	return true
+}

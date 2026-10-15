@@ -1,8 +1,10 @@
 // Package internal implements the plugin-llm-gateway HTTP handlers.
 //
 // Purpose: Proxy LLM completion requests from ClawDE to nself-ai-gateway (port 3761),
-//   adding per-tenant token quota enforcement, Redis-backed response caching,
-//   per-session context injection, and SSRF guard.
+//
+//	adding per-tenant token quota enforcement, Redis-backed response caching,
+//	per-session context injection, and SSRF guard.
+//
 // Inputs:  POST /v1/completions — JSON with model, messages, tenant_id, session_id.
 // Outputs: JSON completion response (or 429 on quota exceeded, 403 on SSRF block).
 // Constraints:
@@ -44,9 +46,9 @@ type cacheEntry struct {
 
 // Gateway holds the database handle and in-memory cache for request handlers.
 type Gateway struct {
-	DB             *sql.DB
-	GatewayURL     string // upstream nself-ai-gateway base URL
-	CacheTTL       time.Duration
+	DB              *sql.DB
+	GatewayURL      string // upstream nself-ai-gateway base URL
+	CacheTTL        time.Duration
 	DailyTokenQuota int64 // tokens per tenant per day; 0 = unlimited
 
 	cache sync.Map // map[string]*cacheEntry
@@ -79,7 +81,16 @@ func (g *Gateway) Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	// bootMigrationsHealth answers 503 itself when the ledger cannot be read, so it runs before the 200.
+	mig := bootMigrationsHealth(w)
+	body := map[string]any{"status": "ok", "migrations": mig}
+	if mig["applied"] < 0 {
+		body["status"] = "unhealthy"
+		_ = json.NewEncoder(w).Encode(body)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // Completions handles POST /v1/completions.
