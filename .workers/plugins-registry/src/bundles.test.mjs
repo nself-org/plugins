@@ -3,7 +3,7 @@
  *
  * Covers validateBundlesJson() (structural check against bundles-schema.json's
  * constraints, without a JSON-Schema library dependency) and handleBundlesJson()
- * (KV cache hit/miss, upstream fetch failure -> 502, schema failure -> 502).
+ * (edge cache hit/miss, upstream fetch failure -> 502, schema failure -> 502).
  * Follows index.test.mjs's convention: Node's built-in test runner against
  * the esbuild bundle of src/index.ts (the deployed source — no vitest/jest).
  *
@@ -14,6 +14,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBundlesJson, handleBundlesJson } from '../dist-test/index.mjs';
+import { installCache, seedCache, envelope } from './test-helpers.mjs';
 
 // ---------------------------------------------------------------------------
 // validateBundlesJson() — structural schema check
@@ -101,18 +102,21 @@ describe('validateBundlesJson()', () => {
 });
 
 // ---------------------------------------------------------------------------
-// handleBundlesJson() — route behaviour (KV hit/miss, fetch failure, schema failure)
+// handleBundlesJson() — route behaviour (edge hit/miss, fetch failure, schema failure)
 // ---------------------------------------------------------------------------
 
 const CTX = { waitUntil: () => {} };
 const originalFetch = globalThis.fetch;
+const originalCaches = globalThis.caches;
+beforeEach(() => installCache());
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  globalThis.caches = originalCaches;
 });
 
 describe('handleBundlesJson()', () => {
-  test('no GH_ACCESS_TOKEN and no KV cache -> 502, never calls fetch', async () => {
+  test('no GH_ACCESS_TOKEN and no edge cache -> 502, never calls fetch', async () => {
     let fetchCalled = false;
     globalThis.fetch = async () => { fetchCalled = true; throw new Error('should not be called'); };
 
@@ -122,14 +126,13 @@ describe('handleBundlesJson()', () => {
     assert.equal(fetchCalled, false);
   });
 
-  test('fresh KV cache -> 200 with cached data, X-Cache: HIT, never calls fetch', async () => {
+  test('fresh edge cache -> 200 with cached data, X-Cache: HIT, never calls fetch', async () => {
     let fetchCalled = false;
     globalThis.fetch = async () => { fetchCalled = true; throw new Error('should not be called'); };
 
     const cachedData = validBundlesFile();
-    const env = {
-      PLUGINS_KV: { get: async () => ({ data: cachedData, timestamp: Date.now() }) },
-    };
+    seedCache({ 'bundles-json-v1': envelope(cachedData) });
+    const env = {};
     const res = await handleBundlesJson(env, CTX);
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('X-Cache'), 'HIT');
@@ -167,7 +170,7 @@ describe('handleBundlesJson()', () => {
       JSON.stringify({ content: Buffer.from(JSON.stringify(valid)).toString('base64') }),
       { status: 200 },
     );
-    const env = { GH_ACCESS_TOKEN: 'fake-token' }; // no PLUGINS_KV -> cache read is a no-op miss
+    const env = { GH_ACCESS_TOKEN: 'fake-token' }; // isolated edge cache starts empty
     const res = await handleBundlesJson(env, CTX);
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('X-Cache'), 'MISS');

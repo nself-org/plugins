@@ -27,6 +27,47 @@ export function fakeKv(seed = {}) {
   };
 }
 
+/** Install an isolated Cache API fixture; responses are cloned like the edge API. */
+export function installCache(seed = {}) {
+  const store = new Map();
+  const cache = {
+    store,
+    async match(request) { return store.get(request.url)?.clone(); },
+    async put(request, response) { store.set(request.url, response.clone()); },
+    async delete(request) { return store.delete(request.url); },
+  };
+  globalThis.caches = { default: cache };
+  seedCache(seed);
+  return cache;
+}
+
+const cacheUrl = (key) => `https://plugins.nself.org/__worker-cache/v1/${encodeURIComponent(key)}`;
+
+/** Seed serialized envelopes without involving the durable KV stand-in. */
+export function seedCache(seed) {
+  for (const [key, value] of Object.entries(seed)) {
+    globalThis.caches.default.store.set(cacheUrl(key), new Response(JSON.stringify(value), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' },
+    }));
+  }
+}
+
+/** Inspect a cached JSON value using the public Cache API shape. */
+export async function readCache(key) {
+  const response = await globalThis.caches.default.match(new Request(cacheUrl(key)));
+  return response ? response.json() : null;
+}
+
+/** Start a fresh edge cache while preserving only durable records in KV. */
+export function cacheFixtureKv(seed = {}) {
+  const cached = {}, durable = {};
+  for (const [key, value] of Object.entries(seed)) {
+    (key.startsWith('registry:') || key === 'catalog:json' ? cached : durable)[key] = value;
+  }
+  installCache(cached);
+  return fakeKv(durable);
+}
+
 /** ExecutionContext whose waitUntil promises can be awaited with settle(). */
 export function fakeCtx() {
   const pending = [];
@@ -36,7 +77,7 @@ export function fakeCtx() {
   };
 }
 
-/** A KV envelope as the worker stores it. */
+/** A cache envelope as the worker stores it. */
 export const envelope = (data, ageMs = 0) => ({ data, timestamp: Date.now() - ageMs });
 
 /** sha256 hex of a string, computed outside the worker. */
@@ -67,11 +108,11 @@ export function sampleCatalog(overrides = {}) {
 export const req = (path, init = {}) => new Request(`https://plugins.nself.org${path}`, init);
 
 /**
- * Registry fixture pre-seeded in KV so route tests never reach for the network.
+ * Registry fixture pre-seeded in edge cache so routes never reach the network.
  * free: object-keyed wire format; pro: array wire format (as in production).
  */
 export function registryKv(extra = {}) {
-  return fakeKv({
+  return cacheFixtureKv({
     'registry:free': envelope({
       plugins: {
         jobs: { version: '1.2.0', description: 'Jobs', category: 'infrastructure', tarballURL: 'https://example.invalid/jobs.tgz' },
