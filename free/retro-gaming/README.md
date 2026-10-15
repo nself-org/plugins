@@ -57,7 +57,14 @@ All tables use `source_account_id` for multi-app isolation.
 
 ## REST API
 
-Public endpoints. Internal admin routes are excluded from this surface.
+The binary runs an HTTP server with no plugin-specific CLI subcommands. Use REST
+for ROMs, cores, save states, and play sessions.
+
+Public endpoints declared by `apiEndpoints` in [`plugin.json`](plugin.json).
+The current Go server registers `/api/v1/...` routes instead; the declared
+`/api/games/...` surface below is not yet implemented by that server.
+Check the deployed version's routes before using the examples below.
+Internal admin routes are excluded from this surface.
 
 | Method | Path | Description |
 |--------|------|-------------|

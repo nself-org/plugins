@@ -9,7 +9,6 @@ Retro game library management with ROM cataloging, save state sync, play session
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-- [CLI Commands](#cli-commands)
 - [REST API](#rest-api)
 - [Database Schema](#database-schema)
 - [Features](#features)
@@ -36,10 +35,12 @@ The Retro Gaming plugin provides a complete retro game library management system
 
 ```bash
 nself plugin install retro-gaming
-nself plugin retro-gaming init    # Creates schema and seeds default emulator cores
-nself plugin retro-gaming server
-nself plugin retro-gaming roms list
+nself build
 ```
+
+The plugin binary runs an HTTP server with no plugin-specific CLI subcommands.
+Schema migrations run at service startup. Use the [REST API](#rest-api) for ROMs,
+cores, save states, and sessions.
 
 ---
 
@@ -69,23 +70,13 @@ nself plugin retro-gaming roms list
 
 ---
 
-## CLI Commands
-
-| Command | Description | Options |
-|---------|-------------|---------|
-| `init` | Initialize schema and seed default emulator cores | - |
-| `server` | Start the API server | `-p, --port`, `-h, --host` |
-| `roms list` | List ROMs in library | `--platform`, `--genre`, `--favorites`, `--search`, `--sort`, `-l, --limit` |
-| `roms stats` | Show ROM library statistics | - |
-| `cores list` | List emulator cores | - |
-| `cores seed` | Seed default emulator cores | - |
-| `save-states` | List save states | `--rom <rom_id>` |
-| `sessions recent` | Show recent play sessions | - |
-| `stats` / `status` | Show overall statistics | - |
-
----
-
 ## REST API
+
+These endpoints are the public surface declared in
+[`plugin.json`](../../../free/retro-gaming/plugin.json) (`apiEndpoints`).
+The current Go server registers `/api/v1/...` routes instead; the declared
+`/api/games/...` surface below is not yet implemented by that server.
+Check the deployed version's routes before calling these endpoints.
 
 ### ROMs
 
@@ -94,7 +85,7 @@ nself plugin retro-gaming roms list
 | `GET` | `/api/games/roms` | List ROMs with filters |
 | `POST` | `/api/games/roms` | Add a ROM to the library |
 | `GET` | `/api/games/roms/:id` | Get ROM details |
-| `PUT` | `/api/games/roms/:id` | Update ROM metadata |
+| `PATCH` | `/api/games/roms/:id` | Update ROM metadata |
 | `DELETE` | `/api/games/roms/:id` | Remove a ROM |
 | `POST` | `/api/games/roms/scan` | Scan storage for new ROMs |
 | `POST` | `/api/games/roms/:id/enrich` | Enrich ROM metadata from IGDB |
@@ -105,16 +96,17 @@ nself plugin retro-gaming roms list
 |--------|------|-------------|
 | `GET` | `/api/games/save-states/:rom_id` | List save states for a ROM |
 | `POST` | `/api/games/save-states/:rom_id` | Upload a save state |
-| `GET` | `/api/games/save-states/:rom_id/:id` | Get a specific save state |
-| `DELETE` | `/api/games/save-states/:rom_id/:id` | Delete a save state |
+| `GET` | `/api/games/save-states/:rom_id/:slot` | Get a specific save state |
+| `DELETE` | `/api/games/save-states/:rom_id/:slot` | Delete a save state |
 
 ### Emulator Cores
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/games/cores` | List all emulator cores |
-| `GET` | `/api/games/cores/platform/:platform` | Get cores for a platform |
-| `POST` | `/api/games/cores/:id/download` | Download/install a core |
+| `GET` | `/api/games/cores/:platform` | Get recommended core for a platform |
+| `GET` | `/api/games/cores/:core_name/download` | Get core download URL |
+| `POST` | `/api/games/cores/installed` | Record core installation |
 | `GET` | `/api/games/cores/installed` | List installed cores |
 
 ### Play Sessions
@@ -122,7 +114,7 @@ nself plugin retro-gaming roms list
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/games/sessions/start` | Start a play session |
-| `POST` | `/api/games/sessions/:id/end` | End a play session |
+| `POST` | `/api/games/sessions/:session_id/end` | End a play session |
 | `GET` | `/api/games/sessions/recent` | Get recent sessions |
 
 ### Controllers
@@ -131,14 +123,12 @@ nself plugin retro-gaming roms list
 |--------|------|-------------|
 | `GET` | `/api/games/controllers` | List controller configs |
 | `POST` | `/api/games/controllers` | Create controller config |
-| `PUT` | `/api/games/controllers/:id` | Update controller config |
 | `DELETE` | `/api/games/controllers/:id` | Delete controller config |
 
-### Stats and Health
+### Health
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/stats` | Library statistics |
 | `GET` | `/health` | Health check |
 | `GET` | `/ready` | Readiness check |
 
@@ -228,7 +218,8 @@ nself plugin retro-gaming roms list
 | `created_at` | TIMESTAMPTZ | Creation timestamp |
 | `updated_at` | TIMESTAMPTZ | Last update |
 
-**Default seeded cores:** nestopia (NES), snes9x (SNES), gambatte (Game Boy), mgba (GBA), genesis_plus_gx (Genesis), mupen64plus (N64), pcsx_rearmed (PS1), mame2003_plus (Arcade), fceux (NES alternate).
+Core records must be populated before clients can select an emulator; startup
+migrations create the tables but do not seed default cores.
 
 ### `np_retrogame_controller_configs`
 
@@ -265,7 +256,7 @@ nself plugin retro-gaming roms list
 - **Metadata enrichment** from IGDB and MobyGames (cover art, descriptions, ratings)
 - **Save state sync** with per-slot management and auto-save support
 - **Play session tracking** with duration and frequency statistics
-- **Emulator core management** with 9 pre-seeded cores across 8 platforms
+- **Emulator core management** with per-platform core records
 - **Controller configuration** per-platform with custom button mappings
 - **ROM scanning** to auto-discover ROMs from storage
 - **Checksum verification** (MD5, SHA1, CRC32) for ROM integrity
@@ -282,5 +273,5 @@ nself plugin retro-gaming roms list
 | IGDB enrichment fails | Verify `RETROGAMING_IGDB_CLIENT_ID` and `RETROGAMING_IGDB_CLIENT_SECRET` are set |
 | ROMs not found during scan | Check `RETROGAMING_STORAGE_PATH` points to correct directory |
 | Save states not loading | Ensure core version matches the version used when saving |
-| No default cores after init | Run `nself plugin retro-gaming cores seed` manually |
+| No emulator cores listed | Startup migrations create tables without default cores. The current server supports creating core records with `POST /api/v1/emulator-cores/`; list them with `GET /api/v1/emulator-cores/`. |
 | Cover art not displaying | Check `RETROGAMING_CDN_URL` is configured and accessible |
