@@ -9,19 +9,22 @@
  *    methods, hostile registry tier values) never hand out a licensed tarball.
  *
  * Runs against dist-test/index.mjs (esbuild bundle of src/index.ts). All data is
- * synthetic and served from a fake KV, so nothing here touches the network.
+ * synthetic and served from a fake edge cache, so nothing here touches the network.
  *
  * Run: pnpm test  (from .workers/plugins-registry)
  */
 
-import { test, describe, afterEach } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../dist-test/index.mjs';
-import { fakeKv, fakeCtx, envelope, registryKv, req, sampleCatalog } from './test-helpers.mjs';
+import { fakeKv, cacheFixtureKv, installCache, readCache, fakeCtx, envelope, registryKv, req, sampleCatalog } from './test-helpers.mjs';
 
 const originalFetch = globalThis.fetch;
+const originalCaches = globalThis.caches;
+beforeEach(() => installCache());
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  globalThis.caches = originalCaches;
 });
 
 const GITHUB_RELEASES = /^https:\/\/github\.com\/nself-org\//;
@@ -149,7 +152,7 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
       implementation: { language: 'go', entry: 'cmd/main.go' }, dependencies: { required: ['database'], optional: [] },
       tables: ['np_jobs_queue'], port: 3201, tier_pair: false, bundles: ['task'], minNselfVersion: '1.0.0', tarballUrl: 'x',
     };
-    const kv = fakeKv({ 'registry:free': envelope({ plugins: { jobs: full } }) });
+    const kv = cacheFixtureKv({ 'registry:free': envelope({ plugins: { jobs: full } }) });
     const one = await (await call('/plugins/jobs', {}, { PLUGINS_KV: kv })).json();
     for (const [k, v] of Object.entries(full)) assert.deepEqual(one[k], v, `/plugins/jobs ${k}`);
     const reg = await (await call('/registry.json', {}, { PLUGINS_KV: kv })).json();
@@ -173,17 +176,19 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     const kv = fakeKv();
     const res = await call('/registry.json', {}, { PLUGINS_KV: kv });
     assert.equal(res.status, 502);
-    assert.equal(kv.store.has('registry:combined'), false);
-    assert.equal(kv.store.has('registry:free'), false);
+    assert.equal(await readCache('registry:combined'), null);
+    assert.equal(await readCache('registry:free'), null);
   });
 
-  test('/stats counts registry fetches and hits (flat record, as index.js stored it)', async () => {
-    const kv = registryKv();
+  test('/stats preserves durable counters without mutating them on registry reads', async () => {
+    const stored = { registryFetches: 7, registryHits: 11, lastSync: '2026-10-01T00:00:00.000Z' };
+    const kv = registryKv({ 'stats:global': stored });
     await call('/registry.json', {}, { PLUGINS_KV: kv });
     await call('/registry.json', {}, { PLUGINS_KV: kv });
     const stats = await (await call('/stats', {}, { PLUGINS_KV: kv })).json();
-    assert.equal(stats.registryFetches, 1);
-    assert.equal(stats.registryHits, 1);
+    assert.equal(stats.registryFetches, stored.registryFetches);
+    assert.equal(stats.registryHits, stored.registryHits);
+    assert.deepEqual(JSON.parse(kv.store.get('stats:global')), stored);
   });
 
   test('GET ratings keeps the old ratingCount field next to reviewCount', async () => {
@@ -207,15 +212,14 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     assert.ok(kv.store.size > before);
   });
 
-  test('GET /marketplace writes nothing to KV on the deployed config (no RATINGS_KV, no GET limiter)', async () => {
+  test('GET /marketplace writes nothing to KV on the deployed config (no RATINGS_KV, edge GET limiter)', async () => {
     const kv = registryKv();
     let writes = 0;
     const put = kv.put;
     kv.put = async (...a) => { writes += 1; return put(...a); };
     for (let i = 0; i < 5; i++) await call('/marketplace', {}, { PLUGINS_KV: kv });
     await call('/marketplace/ratings/jobs', {}, { PLUGINS_KV: kv });
-    // the first /marketplace builds and caches the enriched view once; nothing per request
-    assert.ok(writes <= 1, `${writes} writes`);
+    assert.equal(writes, 0);
   });
 
   test('/registry.json HIT promises the remaining TTL and reports X-Cache-Age', async () => {
@@ -312,24 +316,23 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
   });
 
   test('/manifest.json: downloadUrl wins, then tarballURL, then homepage; a cached copy promises the remaining TTL', async () => {
-    const kv = fakeKv({ 'registry:free': envelope({ plugins: {
+    const kv = cacheFixtureKv({ 'registry:free': envelope({ plugins: {
       a: { version: '1.0.0', downloadUrl: 'https://example.invalid/dl', tarballURL: 'https://example.invalid/tar' },
       b: { version: '1.0.0', tarballURL: 'https://example.invalid/tar-b', homepage: 'https://example.invalid/home' },
       c: { version: '1.0.0', homepage: 'https://example.invalid/home-c' },
     } }) });
     const m = await (await call('/manifest.json', {}, { PLUGINS_KV: kv })).json();
     assert.deepEqual(m.map((e) => e.downloadUrl), ['https://example.invalid/dl', 'https://example.invalid/tar-b', 'https://example.invalid/home-c']);
-    const aged = fakeKv({ 'registry:manifest': envelope(m, 299 * 1000) });
+    const aged = cacheFixtureKv({ 'registry:manifest': envelope(m, 299 * 1000) });
     const res = await call('/manifest.json', {}, { PLUGINS_KV: aged });
     assert.equal(res.headers.get('X-Cache'), 'HIT');
     const maxAge = Number(/max-age=(\d+)/.exec(res.headers.get('Cache-Control'))[1]);
     assert.ok(maxAge <= 2, `max-age ${maxAge}`);
   });
 
-  test('a rejecting KV inside a route is a JSON 500, never an unhandled rejection', async () => {
+  test('a throwing execution context inside a route is a JSON 500', async () => {
     const kv = registryKv();
-    kv.delete = async () => { throw new Error('kv down'); };
-    const ctx = fakeCtx();
+    const ctx = { waitUntil: () => { throw new Error('context unavailable'); } };
     const res = await worker.fetch(
       req('/api/sync', { method: 'POST', headers: { Authorization: 'Bearer fake-sync-token' } }),
       { PLUGINS_KV: kv, GITHUB_SYNC_TOKEN: 'fake-sync-token' },
@@ -381,7 +384,7 @@ describe('licence gate: paid tiers never get a tarball redirect', () => {
   });
 
   test('a licensed-registry entry that claims tier "free" is still licensed (pro registry forces pro)', async () => {
-    const kv = fakeKv({
+    const kv = cacheFixtureKv({
       'registry:free': envelope({ plugins: {} }),
       'registry:pro': envelope({ plugins: [{ name: 'liar', version: '1.0.0', tier: 'free' }, { name: 'liar2', version: '1.0.0', tier: 'enterprise' }] }),
     });
@@ -492,7 +495,7 @@ describe('licence gate: paid tiers never get a tarball redirect', () => {
   });
 
   test('registry data cannot smuggle a tier through the wire format (array and keyed forms)', async () => {
-    const kv = fakeKv({
+    const kv = cacheFixtureKv({
       'registry:free': envelope([
         { name: 'arr-pro', version: '1.0.0', tier: 'pro' },
         { name: 'arr-null', version: '1.0.0', tier: null },

@@ -11,9 +11,8 @@ import {
   cacheTtl,
   decodeGitHubContent,
   isFresh,
-  kvGet,
-  kvPutWrapped,
 } from "./registry.ts";
+import { edgeGetWrapped, edgePutWrapped } from "./edge-cache.ts";
 import type { Env, GitHubContentsResponse } from "./registry.ts";
 import { corsHeaders, jsonResponse } from "./http.ts";
 
@@ -87,10 +86,9 @@ export async function fetchCatalog(
   ctx: ExecutionContext,
   bypass = false,
 ): Promise<CatalogResult | null> {
-  const kv = env.REGISTRY ?? env.PLUGINS_KV;
   const ttl = cacheTtl(env);
 
-  const cached = kv ? await kvGet<CatalogBody>(kv, KV_CATALOG) : null;
+  const cached = await edgeGetWrapped<CatalogBody>(KV_CATALOG);
   const usable =
     cached !== null &&
     typeof cached.data?.body === "string" &&
@@ -138,19 +136,15 @@ export async function fetchCatalog(
 
   if (looksLikeCatalog(data)) {
     const catalog = await buildCatalogBody(data);
-    if (kv) ctx.waitUntil(kvPutWrapped(kv, KV_CATALOG, catalog));
+    ctx.waitUntil(edgePutWrapped(KV_CATALOG, catalog));
     return { catalog, cache: "MISS", ageSeconds: 0 };
   }
 
   if (cached && usable) {
     // Upstream is down: serve the old copy and push its timestamp so it is
     // retried in STALE_RETRY_SECONDS rather than hitting GitHub on every request.
-    if (kv) {
-      const timestamp = Date.now() - Math.max(0, ttl - STALE_RETRY_SECONDS) * 1000;
-      ctx.waitUntil(
-        kv.put(KV_CATALOG, JSON.stringify({ data: cached.data, timestamp })).catch(() => {}),
-      );
-    }
+    const timestamp = Date.now() - Math.max(0, ttl - STALE_RETRY_SECONDS) * 1000;
+    ctx.waitUntil(edgePutWrapped(KV_CATALOG, cached.data, timestamp));
     return { catalog: cached.data, cache: "STALE", ageSeconds };
   }
   return null;

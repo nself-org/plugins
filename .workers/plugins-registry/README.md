@@ -6,7 +6,7 @@ Fast, globally distributed API for the nself plugin registry.
 
 This Cloudflare Worker serves the plugin registry at `plugins.nself.org`. It:
 
-- Caches `registry.json` in Workers KV for fast global access
+- Caches registry, catalog, bundles and marketplace responses in the Workers Cache API
 - Provides individual plugin lookup endpoints
 - Handles GitHub Actions webhook for cache invalidation
 - Tracks usage statistics
@@ -115,7 +115,24 @@ Set via `wrangler secret put`:
 
 ## KV Namespace
 
-The Worker uses Workers KV for caching:
+The Worker keeps revocations, durable ratings/install data and sync statistics in
+Workers KV. Public response envelopes and per-IP GET/POST rate counters use
+`caches.default`; public reads do not put or delete KV, including statistics.
+`/stats` retains historical counters and records the last authenticated sync.
+
+Cache API entries are local to each data center and may be evicted. Rate limits
+are best effort within each data center, with the existing GET and POST minute
+thresholds. Envelope timestamps control freshness (default five minutes), while
+catalog entries remain available for stale fallback for up to a day, subject to
+eviction. Sync invalidates local edge keys; other data centers refresh on TTL.
+Catalog sync preserves the old copy if upstream is unavailable.
+
+The owner must deploy the fixed worker. Before and after deployment, compare
+Cloudflare GraphQL `kvOperationsAdaptiveGroups` reads/writes/deletes for the
+`PLUGINS_KV` namespace over equal traffic windows. Ordinary GET traffic should
+produce no KV puts/deletes; ratings, installs and authenticated sync still can.
+
+To manage the durable namespace:
 
 ```bash
 # List existing namespaces
@@ -212,7 +229,7 @@ Or use the route configuration in wrangler.toml with the zone ID.
 .workers/plugins-registry/
 ├── src/
 │   ├── index.ts      # Worker entry (the only source; wrangler main)
-│   ├── registry.ts   # Registry/catalog/bundles fetch + KV cache
+│   ├── registry.ts   # Registry loaders; edge-cache.ts owns disposable envelopes
 │   ├── marketplace.ts, revocations.ts, sign.ts, middleware/
 │   └── *.test.mjs    # node --test suites (run against an esbuild bundle: pnpm test)
 ├── deploy.sh         # Deployment script
