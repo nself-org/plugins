@@ -11,7 +11,9 @@ set -u
 dir=$1; exc=${2:-$CONF_DIR/exceptions.yaml}; base=${3:-}; name=$(plugin_name "$dir")
 [ -n "$base" ] || { fail migration-idempotent "$name" "no migration baseline (pass the release tree as the third argument)"; exit 1; }
 bdir=$base/$(basename "$dir"); files=
-if released_boot "$bdir"; then
+released_boot "$bdir"; rb=$?
+[ $rb -ne 2 ] || { fail migration-idempotent "$name" "the baseline manifest $bdir/plugin.json cannot be read (malformed JSON): cannot tell which migration files are new"; exit 1; }
+if [ $rb -eq 0 ]; then
   old=$(applied_files "$bdir")
   while IFS= read -r f; do
     [ -n "$f" ] || continue
