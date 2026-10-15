@@ -5,7 +5,7 @@
  * Public key:  stored as hex in env.PUBLIC_KEY_HEX      (32-byte key  = 64 hex chars)
  *
  * Cloudflare Workers support Ed25519 via Web Crypto (crypto.subtle) since 2023.
- * Key format: "raw" (32-byte private seed, 32-byte public key).
+ * Key format: PKCS8-wrapped private seed, raw 32-byte public key.
  *
  * Canonical signing string format: "{name}@{version}:{tarball_url}"
  * This format must match the Go CLI implementation exactly so signatures
@@ -17,8 +17,8 @@
 // ---------------------------------------------------------------------------
 
 function hexToBytes(hex: string): Uint8Array {
-  if (hex.length % 2 !== 0) {
-    throw new Error(`Invalid hex string — odd length (${hex.length})`);
+  if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) {
+    throw new Error("Invalid hex string");
   }
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
@@ -50,7 +50,7 @@ export function canonicalPluginString(
 
 // ---------------------------------------------------------------------------
 // Sign a message with an Ed25519 private key.
-// Returns hex-encoded signature, or null if key absent or on error.
+// Returns hex-encoded signature, or null if key absent; throws on signing error.
 // ---------------------------------------------------------------------------
 
 export async function signPlugin(
@@ -62,9 +62,11 @@ export async function signPlugin(
   if (!privateKeyHex) return null;
 
   try {
-    const keyBytes = hexToBytes(privateKeyHex);
+    // RFC 8410: Ed25519 seed inside the PKCS8 PrivateKeyInfo OCTET STRING.
+    if (privateKeyHex.length !== 64) throw new Error("Expected a 32-byte seed");
+    const keyBytes = hexToBytes(`302e020100300506032b657004220420${privateKeyHex}`);
     const cryptoKey = await crypto.subtle.importKey(
-      "raw",
+      "pkcs8",
       keyBytes,
       { name: "Ed25519" },
       false,
@@ -75,9 +77,20 @@ export async function signPlugin(
     const encoder = new TextEncoder();
     const signatureBuffer = await crypto.subtle.sign("Ed25519", cryptoKey, encoder.encode(message));
     return bytesToHex(new Uint8Array(signatureBuffer));
-  } catch (err) {
-    console.error("signPlugin failed:", (err as Error).message);
-    return null;
+  } catch {
+    // The HTTP error handler exposes this message, so never include key material.
+    throw new Error("Plugin signing failed");
+  }
+}
+
+/** Prove both configured keys work together before advertising signing health. */
+export async function signingConfigured(privateKeyHex?: string, publicKeyHex?: string): Promise<boolean> {
+  if (!privateKeyHex || !publicKeyHex) return false;
+  try {
+    const signature = await signPlugin("health", "1", "registry-signing-probe", privateKeyHex);
+    return signature !== null && await verifyPlugin("health", "1", "registry-signing-probe", signature, publicKeyHex);
+  } catch {
+    return false;
   }
 }
 
