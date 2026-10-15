@@ -75,6 +75,32 @@ and `nself secrets rotate --dual-window` keeps the old value in the secret store
 
 Do not hand the secret to browsers or mobile apps: a caller holding it can name any account.
 
+### Calling storage from a backend
+
+Every server-side caller sends the header itself. Read the value from `PLUGIN_INTERNAL_SECRET` in the caller's
+environment; never put it in a repo, a browser bundle or a mobile app.
+
+- **Go:** `github.com/nself-org/plugin-storage/client` sets `X-Plugin-Secret` (and optionally
+  `X-Hasura-Source-Account-Id`) on every call:
+
+  ```go
+  c, err := client.NewFromEnv("http://storage:9007", client.WithAccount("tenant-7")) // ErrNoSecret if the env value is empty
+  id, err := c.CreateBucket(ctx, "photos", "")
+  err = c.PutObject(ctx, "photos", "a.txt", "text/plain", body, size)
+  ```
+
+- **Hasura action or remote schema:** add the header with `value_from_env`, so the secret stays out of the metadata:
+
+  ```yaml
+  headers:
+    - name: X-Plugin-Secret
+      value_from_env: PLUGIN_INTERNAL_SECRET
+  ```
+
+  The Hasura container needs `PLUGIN_INTERNAL_SECRET` in its environment.
+
+- **Any other HTTP client:** send `X-Plugin-Secret: $PLUGIN_INTERNAL_SECRET` on every `/storage/*` request.
+
 ## API
 
 | Method | Path | Description |
