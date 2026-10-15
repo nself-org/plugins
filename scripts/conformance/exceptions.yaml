@@ -24,29 +24,9 @@ exceptions:
     owner_ref: P7-PLUG-41
     expires: 2026-12-31
   - rule: cli-targets
-    plugin: monitoring
-    reason: "plugin.json refused by the normalizer (language not in enum)"
-    owner_ref: P7-PLUG-44
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: ollama
-    reason: "plugin.json refused by the normalizer (language not in enum)"
-    owner_ref: P7-PLUG-45
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: retro-gaming
-    reason: "declares subcommands (roms list, server, ...) as cliCommands: spaced names and core-verb binaries"
-    owner_ref: P7-PLUG-46
-    expires: 2026-12-31
-  - rule: cli-targets
     plugin: subtitle-manager
     reason: "declares subcommands (init, server, ...) as cliCommands: would ship core-verb binaries"
     owner_ref: P7-PLUG-46
-    expires: 2026-12-31
-  - rule: cli-targets
-    plugin: tenant-controller
-    reason: "plugin.json refused by the normalizer (table without np_ prefix)"
-    owner_ref: P7-PLUG-47
     expires: 2026-12-31
   - rule: cli-targets
     plugin: torrent-manager

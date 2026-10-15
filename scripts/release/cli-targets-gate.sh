@@ -11,7 +11,8 @@
 #   - another plugin yields the same binary.
 # Every blocked plugin needs an unexpired entry (rule cli-targets, plugin, reason, owner_ref naming
 # the Ticket that fixes its manifest, expires within the PLUG-03 cap) in the exceptions file, else the
-# run fails. Blocked plugins are listed on stdout and in $GITHUB_STEP_SUMMARY.
+# run fails. Unexpired cli-targets exceptions must name a currently blocked plugin, else the run
+# fails. Blocked plugins are listed on stdout and in $GITHUB_STEP_SUMMARY.
 # Data checks over the tool's output only: no manifest is parsed here.
 # Env: CLI_TARGETS_TOOL (built manifestv2migrate), CLI_CORE_REGISTRY (registry json; default from the
 # pinned cli source), CONF_TODAY (test date). Exit: 0 ok, 1 an unlisted block or a bad exceptions file, 2 usage.
@@ -65,7 +66,17 @@ for f in "$work"/*.tsv; do
     [ -z "$o" ] || echo "binary $bin is also yielded by $o" >> "$work/$p.block"
   done < "$f"
 done
-# Pass 3: blocked plugins need an exception; others are released.
+# Pass 3: every active exception must correspond to a current block; blocked plugins need an
+# exception, and others are released. Check the exception rows too, so missing plugins fail.
+while IFS="$tab" read -r rule p exp; do
+  [ "$rule" = cli-targets ] || continue
+  [ "$exp" \< "$(conf_today)" ] && continue
+  if [ ! -s "$work/$p.block" ]; then
+    fail cli-targets "$p" "unused unexpired exception: plugin is not blocked; remove the entry"; rc=1
+  fi
+done <<EOF
+$(yaml_rows "$exc" rule plugin expires)
+EOF
 blocked=0; summary="## Blocked CLI binary targets (P7-PLUG-55)"$'\n'
 for f in "$work"/*.tsv; do
   p=$(basename "$f" .tsv)
@@ -85,6 +96,6 @@ for f in "$work"/*.tsv; do
 done
 [ "$blocked" -gt 0 ] || summary="$summary- none"$'\n'
 [ -z "${GITHUB_STEP_SUMMARY:-}" ] || printf '%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
-echo "cli-targets-gate: $(ls "$out" | wc -l | tr -d ' ') plugin(s), $blocked excepted block(s), exit $rc"
+echo "cli-targets-gate: $(find "$out" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ') plugin(s), $blocked excepted block(s), exit $rc"
 rm -rf "$work"
 exit $rc
