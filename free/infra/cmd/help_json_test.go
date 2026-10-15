@@ -72,6 +72,22 @@ func TestHelpJSONFalseStaysHuman(t *testing.T) {
 	}
 }
 
+// TestHelpJSONInvalidValueNotStripped (D-0615): only a --json spelling pflag accepts
+// as a bool is dropped from the probe. An invalid one (--json=maybe) stays, so the
+// probe cannot swallow a value the normal path would refuse: no help envelope.
+func TestHelpJSONInvalidValueNotStripped(t *testing.T) {
+	res := runCLI(t, cliEnv{}, "plan", "--help", "--json", "--json=maybe")
+	if res.Exit == 0 || strings.Contains(res.Stdout, `"help"`) {
+		t.Fatalf("want the invalid --json value refused, got exit %d stdout %q", res.Exit, res.Stdout)
+	}
+	for _, ok := range []string{"--json=true", "--json=1", "--json=T"} {
+		res := runCLI(t, cliEnv{}, "plan", "--help", ok)
+		if res.Exit != 0 || !strings.Contains(res.Stdout, `"help"`) {
+			t.Fatalf("%s: want a help envelope, got exit %d stdout %q", ok, res.Exit, res.Stdout)
+		}
+	}
+}
+
 // TestHumanHelpBytes pins the human help on the points the issue touched:
 // the nself prefix, the hetzner-only provider flag and the OpenTofu text.
 func TestHumanHelpBytes(t *testing.T) {

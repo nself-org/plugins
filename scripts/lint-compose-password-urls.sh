@@ -16,9 +16,11 @@
 #        secret variable anywhere: userinfo, path or query,
 #     2. a secret variable is followed by "@" in the same word (the userinfo
 #        tail of a URL whose "://" sits on the line above), or
-#     3. it is a one-word line below a "://" line and indented deeper than the
-#        key or list item holding that scalar, i.e. a URL split across three
-#        or more lines.
+#     3. it continues a URL split over lines, i.e. it sits below a "://" line,
+#        deeper than the key or list item holding that scalar, and is either a
+#        one-word line (a trailing " # comment" does not count as words) or
+#        follows a line whose URL word ends in a backslash. A comma that ends
+#        a flow-sequence item ends the URL.
 # Inputs: fragment paths as arguments; default free/*/docker-compose.plugin.yml.
 # Outputs: one "file:line: ..." line per offence on stderr; exit 1 if any.
 # Constraints: bash 3.2 compatible; sed/grep/awk only; never prints a password.
@@ -40,15 +42,22 @@ for f in $files; do
   # Lines naming a secret variable, comments dropped, prefixed "N:".
   hits="$(grep -niE "$secret" "$f" | grep -vE '^[0-9]+:[[:space:]]*#' || true)"
   [ -n "$hits" ] || continue
-  # Line numbers of one-word continuation lines inside a multi-line URL.
+  # Line numbers of continuation lines inside a multi-line URL.
   cont=" $(awk '
     /^[[:space:]]*(#|$)/ { next }
     { match($0, /^[[:space:]]*/); ind = RLENGTH
-      key = ($0 ~ /^[[:space:]]*(- |[A-Za-z0-9_.-]+:([[:space:]]|$))/) }
-    url && ind <= kind { url = 0 }
-    url && NF == 1 { printf "%d ", NR }
+      key = ($0 ~ /^[[:space:]]*(- |[A-Za-z0-9_.-]+:([[:space:]]|$))/)
+      s = $0; sub(/[ \t]+#.*$/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
+      nw = split(s, w, /[ \t]+/); last = w[nw] }
+    url && ind <= kind { url = 0; bs = 0 }
+    url && (nw == 1 || bs) { printf "%d ", NR; iscont = 1 }
     !url && key { kind = ind }
     /:\/\// { url = 1 }
+    # A trailing backslash on the word that holds the URL extends it to the next line.
+    { bs = (url && last ~ /\\$/ && (last ~ /:\/\// || iscont)); iscont = 0 }
+    # A comma ends a flow-sequence item, so the URL ends with it.
+    { n = gsub(/[[{]/, "&", s) - gsub(/[]}]/, "&", s); depth += n }
+    depth > 0 && s ~ /,$/ { url = 0; bs = 0 }
   ' "$f")"
   while IFS= read -r line; do
     [ -n "$line" ] || continue

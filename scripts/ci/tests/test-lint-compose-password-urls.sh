@@ -49,6 +49,16 @@ check name-lowercase-default reject '      - D=postgres://u:${db_pass:-x}@pg/db'
 check nested-form accept \
   '      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}' \
   '      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENC:-${REDIS_PASSWORD}}@redis:6379 http://a@b'
+# D-0615: a URL cut by a trailing backslash continues on the next line however many words it has.
+check bs-continuation-comment reject '      - X=curl http://h/p?t=\' '        ${API_TOKEN}" # comment'
+check bs-continuation-two-words reject '      - X=http://h/p?t=\' '        ${API_TOKEN} tail'
+check bs-continuation-chained reject '      - X=http://h/p?a=\' '        b\' '        ${API_TOKEN} # tail'
+# A backslash after the URL word (shell line continuation) does not extend the URL.
+check bs-after-url-word accept '      - Y=curl http://h/ \' '        -H ${API_TOKEN}'
+# D-0615: in a multi-line flow sequence a comma ends the item, so the URL state resets.
+check flow-seq-item-boundary accept '      T: [' '        CMD, curl, "http://h/health",' \
+  '        ${REDIS_PASSWORD},' '      ]'
+check flow-seq-url-continues reject '      T: [' '        CMD, "http://h/?t=\' '        ${API_TOKEN}", x' '      ]'
 check secrets-outside-urls accept '      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}' \
   '      - GITHUB_TOKEN=${GITHUB_TOKEN}' '      # - X=postgres://u:${POSTGRES_PASSWORD}@h' \
   '      - HEALTH=http://127.0.0.1:3107/tokens/health' \

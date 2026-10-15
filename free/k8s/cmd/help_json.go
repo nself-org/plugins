@@ -28,6 +28,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -48,6 +49,21 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
+// isJSONFlag reports whether a is a --json spelling pflag accepts for a bool
+// (--json, --json=true, --json=1, --json=T ...). Any other token, --json=maybe
+// included, is left in place so the flag parse refuses it as the normal path does.
+func isJSONFlag(a string) bool {
+	if a == "--json" {
+		return true
+	}
+	v, ok := strings.CutPrefix(a, "--json=")
+	if !ok {
+		return false
+	}
+	_, err := strconv.ParseBool(v)
+	return err == nil
+}
+
 // helpJSON handles `--help --json`. It returns handled=false (and writes
 // nothing) unless args carry both; otherwise it writes the envelope to stdout
 // and returns the process exit code.
@@ -57,7 +73,7 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 	}
 	rest := make([]string, 0, len(args))
 	for _, a := range args {
-		if a == "--json" || strings.HasPrefix(a, "--json=") {
+		if isJSONFlag(a) {
 			continue
 		}
 		rest = append(rest, a)
