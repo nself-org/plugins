@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- DOWN Migration: 001_audit_log_init
 -- Plugin: audit-log
 -- Description: Removes all audit-log database objects in reverse order.

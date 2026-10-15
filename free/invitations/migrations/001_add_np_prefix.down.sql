@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- Rollback: Rename np_ prefix back to inv_ for invitations tables
 -- Reverse of 001_add_np_prefix.sql
 

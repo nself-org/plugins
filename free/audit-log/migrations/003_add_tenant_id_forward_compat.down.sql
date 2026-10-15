@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- Rollback: Remove tenant_id column from np_auditlog_events
 -- Reverse of 003_add_tenant_id_forward_compat.sql
 

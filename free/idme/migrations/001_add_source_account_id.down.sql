@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- 001_add_source_account_id.down.sql
 -- Reverse of 001_add_source_account_id.sql
 

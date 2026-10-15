@@ -53,6 +53,18 @@ The `go.mod` pre-pins `github.com/nself-org/plugin-sdk-go` so the SDK is ready t
 
 ## 2. Read the Scope Rules
 
+### Migration rollback policy
+
+Plugin `migrations/*.down.sql` files are retained as historical SQL. They are
+unmaintained and **must not be run**, including by hand: they may no longer
+reverse the current up migration and can destroy data parked by an upgrade.
+Every such file must begin with the warning enforced by
+`scripts/ci/tests/test_plugin_down_migrations.py` in the hygiene gate, for both
+manifest v1 and v2 plugins. Keep the warning when converting a plugin.
+
+Boot migration runners exclude these files. Use a reviewed forward migration
+to correct a schema; do not use historical down SQL as a rollback procedure.
+
 Before writing code, read `.claude/docs/doctrines/plugin-scope.md`. One domain per plugin, one schema (`np_my_notifier`), one Docker image, mandatory `/healthz` + `/readyz` + `/metrics` + `/version` endpoints. Violations are rejected at code review.
 
 ### Connection URLs in compose fragments

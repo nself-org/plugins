@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- Rollback: Remove type, rollout_pct, and stale_after_days columns from np_flags_flags
 -- Reverse of 003_add_flag_type_rollout.sql
 
