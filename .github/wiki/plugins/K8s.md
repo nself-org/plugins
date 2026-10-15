@@ -193,9 +193,11 @@ without content in `secrets.yaml` fails the render. `values --check` compares th
 destructive, so it needs confirmation:
 
 - `--yes` (or `-y`) confirms.
-- Without `--yes`, a terminal is asked to type the release name.
+- Without `--yes`, a terminal on Linux or macOS is asked to type the release name.
 - Without `--yes` and without a terminal (a script, CI, stdin from `/dev/null`), or with `--json`, it refuses with E403 and
   exit status 4, and runs no helm command.
+
+On Windows and other operating systems, uninstall requires `--yes` (or `-y`); no confirmation prompt is available.
 
 The confirmation answer is read up to 4096 bytes; a longer line never matches.
 
