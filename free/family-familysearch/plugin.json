@@ -65,6 +65,7 @@
   "repository": "https://github.com/nself-org/plugins-pro",
   "port": 3510,
   "status": "planned",
+  "installable": false,
   "tier": "free",
   "language": "go",
   "entryPoint": "binary",
