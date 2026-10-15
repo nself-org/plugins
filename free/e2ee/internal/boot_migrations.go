@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -33,6 +34,8 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // handler must answer with: 200, or 503 when the ledger cannot be read (the cli retries any non-200; a 200 with -1
 // counts is E119, a contract violation).
 func bootMigrationsHealth(ctx context.Context) (map[string]int, int) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if bootPool == nil {
 		return map[string]int{"applied": -1, "expected": -1}, http.StatusServiceUnavailable
 	}

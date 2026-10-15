@@ -45,8 +45,10 @@ func MustBootMigrations(ctx context.Context, dbURL string) *pgxpool.Pool {
 // bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
-func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+func bootMigrationsHealth(ctx context.Context, w http.ResponseWriter) map[string]int {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)

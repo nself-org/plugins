@@ -20,6 +20,6 @@ func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		// bootMigrationsHealth may answer 503 itself, so no explicit WriteHeader(200) before it (the default applies).
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(r.Context(), w)})
 	}
 }

@@ -13,9 +13,9 @@ func RegisterRoutes(r chi.Router, db *DB, cfg *Config, osClient *OpenSubtitlesCl
 	qc := NewSubtitleQC()
 	norm := NewNormalizer()
 
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(req.Context(), w)})
 	})
 
 	r.Route("/v1", func(r chi.Router) {

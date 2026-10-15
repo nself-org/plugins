@@ -21,5 +21,5 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		s3 = "configured" // no network probe: /health must stay cheap and never depend on the S3 endpoint
 	}
 	// bootMigrationsHealth may answer 503 itself, so no explicit WriteHeader(200) before it (the default applies).
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w), "s3": s3})
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": bootMigrationsHealth(r.Context(), w), "s3": s3})
 }

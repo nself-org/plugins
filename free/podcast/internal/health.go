@@ -9,7 +9,7 @@ import (
 // so it runs before the body is written and the 200 below is skipped in that case.
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	mig := bootMigrationsHealth(w)
+	mig := bootMigrationsHealth(r.Context(), w)
 	body := map[string]any{"status": "ok", "plugin": "podcast", "migrations": mig}
 	if mig["applied"] < 0 {
 		body["status"] = "error"

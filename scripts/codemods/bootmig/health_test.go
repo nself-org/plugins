@@ -20,27 +20,27 @@ func TestHealthEdit(t *testing.T) {
 		{"funcdecl handler", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"funclit handler on /health route", `func routes(r router) {
 	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 	})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(req.Context(), w)`},
 		{"named writer rw, multiline literal", `func Health(rw http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(rw).Encode(map[string]any{
 		"status": "ok",
 	})
 }
-`, `"migrations": bootMigrationsHealth(rw),`},
+`, `"migrations": bootMigrationsHealth(r.Context(), rw),`},
 		{"nearest enclosing literal wins", `func handleHealth(w http.ResponseWriter, r *http.Request) {
-	f := func(out http.ResponseWriter) {
+	f := func(out http.ResponseWriter, req *http.Request) {
 		_ = json.NewEncoder(out).Encode(map[string]any{"status": "ok"})
 	}
-	f(w)
+	f(w, r)
 }
-`, `bootMigrationsHealth(out)`},
+`, `bootMigrationsHealth(req.Context(), out)`},
 		{"WriteHeader before the literal", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
@@ -58,7 +58,7 @@ func TestHealthEdit(t *testing.T) {
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"http.Error in a branch that does not return", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -75,7 +75,7 @@ func TestHealthEdit(t *testing.T) {
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"Write before the literal", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("x"))
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
@@ -101,23 +101,23 @@ func TestHealthEdit(t *testing.T) {
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"literal passed straight to a helper taking the writer", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	respond(w, map[string]any{"status": "ok"})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"call on another writer before the literal is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	log.Print(other)
 	fmt.Fprintf(os.Stderr, "x")
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"WriteHeader after the literal is fine", `func handleHealth(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{"status": "ok"}
 	_ = json.NewEncoder(w).Encode(body)
 	w.WriteHeader(http.StatusOK)
 }
-`, `"migrations": bootMigrationsHealth(w)`},
+`, `"migrations": bootMigrationsHealth(r.Context(), w)`},
 		{"no writer parameter", `func healthBody() map[string]any {
 	return map[string]any{"status": "ok"}
 }
@@ -183,7 +183,7 @@ func TestHelperTemplate(t *testing.T) {
 		t.Error("template is not gofmt-clean")
 	}
 	for _, want := range []string{
-		"func bootMigrationsHealth(w http.ResponseWriter) map[string]int",
+		"func bootMigrationsHealth(ctx context.Context, w http.ResponseWriter) map[string]int",
 		`log.Printf("migrations: status: %v", err)`,
 		"w.WriteHeader(http.StatusServiceUnavailable)",
 		`"net/http"`,

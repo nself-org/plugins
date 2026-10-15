@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -39,12 +40,14 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
-func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
+func bootMigrationsHealth(ctx context.Context, w http.ResponseWriter) map[string]int {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	if bootPool == nil { // no pool yet (handler tests): never a panic, never a false 200
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return map[string]int{"applied": -1, "expected": -1}
 	}
-	st, err := migrationStatus(context.Background(), bootPool, bootOptions())
+	st, err := migrationStatus(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -55,8 +58,8 @@ func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
 
 // writeBootHealth answers GET /health. bootMigrationsHealth writes 503 itself when the status cannot be read, so the
 // content type is set first and the body is encoded directly (writeJSON would send a second status line).
-func writeBootHealth(w http.ResponseWriter) {
+func writeBootHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	m := bootMigrationsHealth(w)
+	m := bootMigrationsHealth(r.Context(), w)
 	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "plugin": "web3", "migrations": m})
 }

@@ -31,7 +31,7 @@ func newRouter(db *internal.DB, cfg internal.Config) http.Handler {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// BootMigrationsHealth may write a 503 header, so it runs before the body.
-		mig := internal.BootMigrationsHealth(w)
+		mig := internal.BootMigrationsHealth(r.Context(), w)
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "service": "idme-plugin", "migrations": mig})
 	})
 

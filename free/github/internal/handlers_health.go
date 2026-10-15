@@ -9,12 +9,12 @@ import (
 
 // --- Health endpoints --------------------------------------------------------
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":     "ok",
 		"plugin":     "github",
 		"timestamp":  time.Now().UTC().Format(time.RFC3339),
-		"migrations": bootMigrationsHealth(w),
+		"migrations": bootMigrationsHealth(req.Context(), w),
 	})
 }
 

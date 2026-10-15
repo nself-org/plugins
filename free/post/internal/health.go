@@ -9,7 +9,7 @@ import (
 // so it runs before the body is written and no second WriteHeader happens in that case.
 func (h *Handlers) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	mig := bootMigrationsHealth(w)
+	mig := bootMigrationsHealth(r.Context(), w)
 	body := map[string]any{"status": "ok", "service": "nself-post", "migrations": mig}
 	if mig["applied"] < 0 {
 		body["status"] = "error"

@@ -18,6 +18,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -44,8 +45,10 @@ func mustBootMigrations(ctx context.Context, pool *pgxpool.Pool) {
 // bootMigrationsHealth is the "migrations" member of /health: applied and expected counts.
 // On a Status error it logs, answers 503 (the cli retries any non-200; a 200 with -1 counts is E119,
 // a contract violation) and returns -1 counts for humans. Call it before the handler writes a header.
-func bootMigrationsHealth(w http.ResponseWriter) map[string]int {
-	st, err := migrate.Status(context.Background(), bootPool, bootOptions())
+func bootMigrationsHealth(ctx context.Context, w http.ResponseWriter) map[string]int {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	st, err := migrate.Status(ctx, bootPool, bootOptions())
 	if err != nil {
 		log.Printf("migrations: status: %%v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -132,8 +135,8 @@ type fnScope struct {
 
 // healthEdit finds the map literal with a "status" key inside a health handler: a function whose name
 // contains "ealth", or any call whose first argument is a string literal ending in "/health". The literal
-// gets `"migrations": bootMigrationsHealth(<w>)`, <w> being the enclosing function's http.ResponseWriter
-// parameter. With no such parameter, or a <w>.WriteHeader call before the literal, nothing is wired
+// gets `"migrations": bootMigrationsHealth(<request>.Context(), <w>)`, using the enclosing function's
+// request and response writer. Without named parameters, or a <w>.WriteHeader call before the literal, nothing is wired
 // (the helper's 503 would be lost or superfluous) and the site is left for hand wiring.
 func healthEdit(files []string) *healthSite {
 	for _, f := range files {
@@ -174,10 +177,11 @@ func healthEdit(files []string) *healthSite {
 				case *ast.CompositeLit:
 					if inHealth && isStatusMap(v) {
 						w := writerParam(fn.typ)
-						if w == "" || writesHeaderBefore(fn.body, w, v.Pos()) {
+						r := requestParam(fn.typ)
+						if w == "" || r == "" || writesHeaderBefore(fn.body, w, v.Pos()) {
 							found = &healthSite{manual: true}
 						} else {
-							found = &healthSite{file: f, edit: litEdit(src, fset, v, w)}
+							found = &healthSite{file: f, edit: litEdit(src, fset, v, r+".Context(), "+w)}
 						}
 						return false
 					}
@@ -204,6 +208,24 @@ func writerParam(ft *ast.FuncType) string {
 			continue
 		}
 		return p.Names[0].Name
+	}
+	return ""
+}
+
+// requestParam returns the named *http.Request parameter, or empty for manual wiring.
+func requestParam(ft *ast.FuncType) string {
+	if ft == nil || ft.Params == nil {
+		return ""
+	}
+	for _, p := range ft.Params.List {
+		ptr, ok := p.Type.(*ast.StarExpr)
+		if !ok || len(p.Names) == 0 || p.Names[0].Name == "_" {
+			continue
+		}
+		sel, ok := ptr.X.(*ast.SelectorExpr)
+		if ok && sel.Sel.Name == "Request" {
+			return p.Names[0].Name
+		}
 	}
 	return ""
 }

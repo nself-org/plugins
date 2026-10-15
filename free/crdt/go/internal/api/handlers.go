@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -21,7 +22,7 @@ type Handlers struct {
 	compactor  *automerge.Compactor
 	log        *slog.Logger
 	// migrationsHealth reports the boot-migration counts for /health; nil leaves the member out.
-	migrationsHealth func(http.ResponseWriter) map[string]int
+	migrationsHealth func(context.Context, http.ResponseWriter) map[string]int
 }
 
 // New creates Handlers.
@@ -43,7 +44,7 @@ func New(
 
 // WithMigrationsHealth sets the source of the "migrations" member of /health. The function answers 503 itself
 // when the migration status cannot be read, so Health sets the content type before calling it.
-func (h *Handlers) WithMigrationsHealth(fn func(http.ResponseWriter) map[string]int) *Handlers {
+func (h *Handlers) WithMigrationsHealth(fn func(context.Context, http.ResponseWriter) map[string]int) *Handlers {
 	h.migrationsHealth = fn
 	return h
 }
@@ -74,7 +75,7 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	body := map[string]any{"status": "ok", "migrations": h.migrationsHealth(w)}
+	body := map[string]any{"status": "ok", "migrations": h.migrationsHealth(r.Context(), w)}
 	_ = json.NewEncoder(w).Encode(body)
 }
 

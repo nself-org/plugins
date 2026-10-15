@@ -82,7 +82,7 @@ func (g *Gateway) Health(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	// bootMigrationsHealth answers 503 itself when the ledger cannot be read, so it runs before the 200.
-	mig := bootMigrationsHealth(w)
+	mig := bootMigrationsHealth(r.Context(), w)
 	body := map[string]any{"status": "ok", "migrations": mig}
 	if mig["applied"] < 0 {
 		body["status"] = "unhealthy"

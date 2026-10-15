@@ -33,7 +33,7 @@ type Config struct {
 	MaxPerTenant int
 	SessionTTL   time.Duration
 	// MigrationsHealth returns the /health "migrations" member; it answers 503 itself, so call it before any header.
-	MigrationsHealth func(w http.ResponseWriter) map[string]int
+	MigrationsHealth func(ctx context.Context, w http.ResponseWriter) map[string]int
 }
 
 // Handler holds handler dependencies.
@@ -95,7 +95,7 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	body := map[string]any{"status": "ok"}
 	if h.cfg.MigrationsHealth != nil {
-		mig := h.cfg.MigrationsHealth(w)
+		mig := h.cfg.MigrationsHealth(r.Context(), w)
 		body["migrations"] = mig
 		if mig["applied"] < 0 {
 			body["status"] = "unhealthy"

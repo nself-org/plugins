@@ -51,7 +51,7 @@ func handleHealth(pool *pgxpool.Pool) http.HandlerFunc {
 		// The ledger check writes the 503 itself on a Status error, so it runs before Respond and a
 		// second WriteHeader is avoided: in that case the body is encoded directly.
 		w.Header().Set("Content-Type", "application/json")
-		mig := bootMigrationsHealth(w)
+		mig := bootMigrationsHealth(r.Context(), w)
 		body := map[string]any{
 			"status":     status,
 			"plugin":     "audit-log",

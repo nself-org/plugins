@@ -37,7 +37,6 @@ free/donorbox/internal/db.go	307
 free/donorbox/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/donorbox/third_party/sdk/identity.go	338
 free/dr/cmd/main.go	302
-free/entitlements/internal/handlers.go	804
 free/entitlements/internal/handlers_v2.go	402
 free/feature-flags/sdk/devkit/cmd/new-plugin/main.go	510
 free/feature-flags/sdk/identity.go	338
@@ -100,7 +99,6 @@ free/post/internal/providers/wordpress/client.go	403
 free/push/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/push/third_party/sdk/identity.go	338
 free/release/cmd/main.go	310
-free/retro-gaming/internal/handlers.go	996
 free/rom-discovery/internal/handlers.go	526
 free/search/sdk/devkit/cmd/new-plugin/main.go	510
 free/search/sdk/identity.go	338
@@ -126,7 +124,6 @@ free/vpn/internal/db_schema.go	321
 free/vpn/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/vpn/third_party/sdk/identity.go	338
 free/web3/internal/db.go	330
-free/web3/internal/handlers.go	1107
 free/webhooks/sdk/devkit/cmd/new-plugin/main.go	510
 free/webhooks/sdk/identity.go	338
 free/workflows/internal/handlers.go	721
