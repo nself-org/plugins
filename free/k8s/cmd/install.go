@@ -139,6 +139,7 @@ func warnLicenceUnsent(r *invocation, opts k8s.InstallOptions) {
 // addInstallFlags registers the flags install and upgrade share.
 func addInstallFlags(c *cobra.Command) {
 	c.Flags().String("cluster", "", "Path to kubeconfig (default: helm reads the KUBECONFIG env var or ~/.kube/config)")
+	c.Flags().String("context", "", "Explicit kube context (overrides inherited Helm cluster settings)")
 	c.Flags().String("release", k8s.HelmReleaseName, "Helm release name")
 	c.Flags().String("plugins", "", "Comma-separated plugins the chart checks against the generated values (each must be a plugin service there)")
 	c.Flags().String("license-secret", "", "Name of an existing Secret that holds NSELF_PLUGIN_LICENSE_KEY; plugin workloads read the key from it (the key itself is never sent)")
@@ -151,6 +152,7 @@ func addInstallFlags(c *cobra.Command) {
 func installOptions(cmd *cobra.Command) k8s.InstallOptions {
 	domain, _ := cmd.Flags().GetString("domain")
 	cluster, _ := cmd.Flags().GetString("cluster")
+	kubeContext, _ := cmd.Flags().GetString("context")
 	release, _ := cmd.Flags().GetString("release")
 	pluginsRaw, _ := cmd.Flags().GetString("plugins")
 	licenseSecret, _ := cmd.Flags().GetString("license-secret")
@@ -167,6 +169,7 @@ func installOptions(cmd *cobra.Command) k8s.InstallOptions {
 		ReleaseName:   release,
 		Domain:        domain,
 		Kubeconfig:    cluster,
+		KubeContext:   kubeContext,
 		LicenseKey:    os.Getenv(k8s.LicenseEnv),
 		LicenseSecret: licenseSecret,
 		Plugins:       plugins,

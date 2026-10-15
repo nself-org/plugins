@@ -9,7 +9,7 @@
 // Constraints: a plugin cannot register codes in the core registry, so it
 // reuses two core codes and owns E720 to E739. Messages are fixed text: they
 // never echo an error string that could carry a secret, a licence key, an env
-// value or helm's release JSON; Cause is limited to the exec exit status.
+// value or helm's release JSON; captured diagnostics are sanitized and bounded.
 //
 //	E401 usage: bad or missing flag, extra argument         user
 //	E403 destructive action blocked: uninstall unconfirmed  destructive_blocked
@@ -89,18 +89,21 @@ func classify(err error) output.ErrorDetail {
 }
 
 func helmDetail(he *k8s.HelmError) output.ErrorDetail {
-	if he.NotFound {
-		return output.ErrorDetail{Code: CodeReleaseNotFound, Class: output.ClassUser,
-			Message: "the helm release was not found", Remediation: "run nself k8s install, or pass --release and --cluster for the right release"}
-	}
 	d := output.ErrorDetail{Code: CodeHelmFailed, Class: output.ClassInfra,
 		Message: "helm " + he.Verb + " failed", Remediation: "helm's own output is on stderr"}
-	if he.Verb == "status" {
-		// ReleaseStatus captures helm's stderr to classify it and drops it.
+	if he.NotFound {
+		d = output.ErrorDetail{Code: CodeReleaseNotFound, Class: output.ClassUser,
+			Message: "the helm release was not found", Remediation: "run nself k8s install, or pass --release and --cluster for the right release"}
+	}
+	if he.Verb == "status" && !he.NotFound {
 		d.Remediation = "check that the cluster is reachable and --cluster is right; run helm status for helm's own message"
 	}
+	if hint := k8s.SafeHelmDiagnostic(he.Hint); hint != "" {
+		d.Remediation = hint
+	}
+	d.Cause = k8s.SafeHelmDiagnostic(he.Stderr)
 	var ee *exec.ExitError
-	if errors.As(he.Err, &ee) {
+	if d.Cause == "" && errors.As(he.Err, &ee) {
 		d.Cause = ee.Error()
 	}
 	return d

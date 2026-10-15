@@ -31,6 +31,7 @@ Requires `helm` to be installed: https://helm.sh
 ```bash
 nself k8s install --domain myapp.com
 nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself
+nself k8s install --domain myapp.com --context my-context
 nself k8s install --domain myapp.com --plugins cron --license-secret nself-license
 nself k8s status
 nself k8s upgrade
@@ -43,6 +44,12 @@ and pass its name with `--license-secret` (see `nself k8s install --help`).
 
 The chart is embedded in the plugin binary (source in `charts/nself/` in this
 repo); there is no chart repository.
+
+Install and upgrade accept `--context` to select an explicit kube context and
+override inherited Helm cluster settings. Failed commands show upgrade recovery
+advice and bounded, sanitized Helm status diagnostics in human and JSON output.
+`nself k8s values --check` detects changes between mapped and unsupported
+services. Generated `pullPolicy` values render as container `imagePullPolicy`.
 
 ## History
 

@@ -148,12 +148,14 @@ func TestAnnounceTargetContext(t *testing.T) {
 	}
 }
 
-// TestRedactURL: userinfo, query and fragment never survive; a non-URL is not
+// TestRedactURL: userinfo, path, query and fragment never survive; a non-URL is not
 // echoed.
 func TestRedactURL(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"https://user:fake-pass@fake.example.invalid:6443", "https://fake.example.invalid:6443"},
-		{"https://fake.example.invalid:6443/?token=fake-tok#frag", "https://fake.example.invalid:6443/"},
+		{"https://fake.example.invalid:6443/?token=fake-tok#frag", "https://fake.example.invalid:6443"},
+		{"https://fake.example.invalid:6443/api/fake-token", "https://fake.example.invalid:6443"},
+		{"https://fake.example.invalid:6443/api/fake%2Ftoken", "https://fake.example.invalid:6443"},
 		{"https://fake.example.invalid:6443?", "https://fake.example.invalid:6443"},
 		{"user:fake-pass@host", "(unparsable value)"},
 	}
