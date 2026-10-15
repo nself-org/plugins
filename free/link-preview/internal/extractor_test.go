@@ -125,7 +125,7 @@ func TestExtractMetadata_HappyPath(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<!DOCTYPE html><html><head>
+		_, _ = w.Write([]byte(`<!DOCTYPE html><html><head>
 			<meta property="og:title" content="Test Page">
 			<meta property="og:description" content="A test page">
 		</head><body>Body content</body></html>`))
@@ -164,7 +164,7 @@ func TestExtractMetadata_NonHTMLContentType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"key":"value"}`))
+		_, _ = w.Write([]byte(`{"key":"value"}`))
 	}))
 	defer srv.Close()
 
@@ -188,7 +188,7 @@ func TestExtractMetadata_XHTMLContentType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/xhtml+xml; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml">
 			<head><title>XHTML Page</title></head><body></body></html>`))
 	}))
 	defer srv.Close()

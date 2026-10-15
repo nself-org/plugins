@@ -65,7 +65,6 @@ func main() {
 	h := &internal.Handlers{DB: db, Cfg: cfg, Prov: prov, Limiter: limiter}
 
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
@@ -111,7 +110,7 @@ func main() {
 				if key != cfg.APIKey {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusUnauthorized)
-					fmt.Fprint(w, `{"error":"unauthorized"}`)
+					_, _ = fmt.Fprint(w, `{"error":"unauthorized"}`)
 					return
 				}
 				next.ServeHTTP(w, req)

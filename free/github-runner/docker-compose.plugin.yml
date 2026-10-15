@@ -7,7 +7,7 @@ services:
     networks:
       - ${DOCKER_NETWORK}
     environment:
-      PORT: "3053"
+      PORT: "3054"
       PLUGIN_INTERNAL_SECRET: ${PLUGIN_INTERNAL_SECRET:-}
       GITHUB_RUNNER_PAT: ${GITHUB_RUNNER_PAT}
       GITHUB_RUNNER_ORG: ${GITHUB_RUNNER_ORG}
@@ -20,9 +20,9 @@ services:
       - github_runner_data:/runner
       - github_runner_logs:/logs
     ports:
-      - "127.0.0.1:3053:3053"
+      - "127.0.0.1:3054:3054"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3053/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3054/health"]
       interval: 30s
       timeout: 10s
       retries: 3

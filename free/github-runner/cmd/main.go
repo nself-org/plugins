@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	sdk "github.com/nself-org/plugin-sdk"
 
@@ -17,15 +16,6 @@ func main() {
 	port := 3054
 	if cfg.Port != 3000 {
 		port = cfg.Port
-	}
-
-	runnerDir := os.Getenv("GITHUB_RUNNER_DIR")
-	if runnerDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatalf("cannot determine home directory: %v", err)
-		}
-		runnerDir = home + "/.nself/runners/github-runner"
 	}
 
 	state := internal.NewRunnerState()

@@ -9,9 +9,9 @@ services:
     container_name: nself-idme
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3010:3010"
+      - "127.0.0.1:3820:3820"
     environment:
-      - PORT=3010
+      - PORT=3820
       - DATABASE_URL=${DATABASE_URL}
       - IDME_CLIENT_ID=${IDME_CLIENT_ID}
       - IDME_CLIENT_SECRET=${IDME_CLIENT_SECRET}
@@ -20,7 +20,7 @@ services:
       - IDME_SANDBOX=${IDME_SANDBOX:-false}
       - IDME_WEBHOOK_SECRET=${IDME_WEBHOOK_SECRET:-}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3010/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3820/health"]
       interval: 30s
       timeout: 5s
       retries: 3

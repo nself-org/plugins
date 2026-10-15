@@ -25,7 +25,7 @@ func main() {
 
 	port := os.Getenv("HIPAA_PLUGIN_PORT")
 	if port == "" {
-		port = "3212"
+		port = "3214"
 	}
 	host := os.Getenv("HIPAA_PLUGIN_HOST")
 	if host == "" {
@@ -49,7 +49,6 @@ func main() {
 	mustBootMigrations(context.Background(), pool)
 
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))

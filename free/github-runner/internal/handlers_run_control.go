@@ -2,12 +2,12 @@ package internal
 
 import (
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 72L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
@@ -51,7 +51,7 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = logFile
 
 	if err := cmd.Start(); err != nil {
-		logFile.Close()
+		_ = logFile.Close()
 		sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("start runner: %w", err))
 		return
 	}
@@ -65,7 +65,7 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 
 	// Monitor the subprocess and clear state when it exits.
 	go func() {
-		defer logFile.Close()
+		defer func() { _ = logFile.Close() }()
 		_ = cmd.Wait()
 
 		h.state.mu.Lock()
@@ -139,7 +139,7 @@ func (h *Handler) Logs(w http.ResponseWriter, r *http.Request) {
 		sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("open log file: %w", err))
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	lines, err := tailLines(f, logTailLines)
 	if err != nil {

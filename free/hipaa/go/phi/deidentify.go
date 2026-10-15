@@ -62,8 +62,8 @@ func (ts *inMemoryTokenStore) Detokenize(tok string) (string, bool) {
 
 // DeidentifyRequest is the body for POST /hipaa/deidentify.
 type DeidentifyRequest struct {
-	TableName string            `json:"table_name"`
-	Rows      []map[string]any  `json:"rows"`
+	TableName string           `json:"table_name"`
+	Rows      []map[string]any `json:"rows"`
 }
 
 // DeidentifyHandler masks or tokenizes all PHI fields in a dataset.
@@ -126,9 +126,9 @@ func DeidentifyHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			out = append(out, deID)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"table_name":    req.TableName,
+			"table_name":     req.TableName,
 			"rows_processed": len(out),
-			"rows":          out,
+			"rows":           out,
 		})
 	}
 }
@@ -175,7 +175,6 @@ func DetokenizeHandler(pool *pgxpool.Pool) http.HandlerFunc {
 // -------------------------------------------------------------------------
 
 var (
-	rSSN   = regexp.MustCompile(`\d`)
 	rPhone = regexp.MustCompile(`\d`)
 )
 

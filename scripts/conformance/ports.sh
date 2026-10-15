@@ -38,5 +38,11 @@ if [ "$report" = 1 ]; then printf '%s\n' "$collisions" | grep . ; exit 0; fi
 if [ "$mode" = plugins ] || [ "$mode" = changed ]; then
   collisions=$(printf '%s\n' "$collisions" | awk -v L=",$list," '{ for (i = 3; i <= NF; i++) { o = $i; if (index(L, "," o ",")) { print; break } } }')
 fi
-[ -z "$collisions" ] && exit 0
-printf '%s\n' "$collisions"; exit 1
+rc=0
+[ -z "$collisions" ] || { printf '%s\n' "$collisions"; rc=1; }
+selected=
+[ "$mode" = all ] || selected=$list
+if [ "$mode" = all ] || [ -n "$selected" ]; then
+  python3 "$CONF_DIR/port-alignment.py" "$root" "$selected" || rc=1
+fi
+exit "$rc"

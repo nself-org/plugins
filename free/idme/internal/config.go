@@ -4,17 +4,17 @@ import (
 	"os"
 )
 
-const DefaultPort = "3010"
+const DefaultPort = "3820"
 
 type Config struct {
-	Port            string
-	DatabaseURL     string
-	ClientID        string
-	ClientSecret    string
-	RedirectURI     string
-	Scopes          string
-	Sandbox         bool
-	WebhookSecret   string
+	Port          string
+	DatabaseURL   string
+	ClientID      string
+	ClientSecret  string
+	RedirectURI   string
+	Scopes        string
+	Sandbox       bool
+	WebhookSecret string
 }
 
 func LoadConfig() Config {

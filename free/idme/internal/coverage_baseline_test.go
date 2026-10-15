@@ -3,7 +3,6 @@ package internal
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -14,20 +13,9 @@ func TestLoadConfig_Defaults(t *testing.T) {
 		"IDME_CLIENT_SECRET", "IDME_REDIRECT_URI",
 		"IDME_SCOPES", "IDME_SANDBOX", "IDME_WEBHOOK_SECRET",
 	}
-	saved := make(map[string]string, len(keys))
 	for _, k := range keys {
-		saved[k] = os.Getenv(k)
-		os.Unsetenv(k)
+		t.Setenv(k, "")
 	}
-	defer func() {
-		for k, v := range saved {
-			if v == "" {
-				os.Unsetenv(k)
-			} else {
-				os.Setenv(k, v)
-			}
-		}
-	}()
 
 	c := LoadConfig()
 	if c.Port != DefaultPort {
@@ -42,17 +30,10 @@ func TestLoadConfig_Defaults(t *testing.T) {
 }
 
 func TestLoadConfig_EnvOverrides(t *testing.T) {
-	os.Setenv("PORT", "9999")
-	os.Setenv("IDME_SCOPES", "openid,extra")
-	os.Setenv("IDME_SANDBOX", "true")
-	os.Setenv("IDME_CLIENT_ID", "cid")
-	defer func() {
-		for _, k := range []string{
-			"PORT", "IDME_SCOPES", "IDME_SANDBOX", "IDME_CLIENT_ID",
-		} {
-			os.Unsetenv(k)
-		}
-	}()
+	t.Setenv("PORT", "9999")
+	t.Setenv("IDME_SCOPES", "openid,extra")
+	t.Setenv("IDME_SANDBOX", "true")
+	t.Setenv("IDME_CLIENT_ID", "cid")
 	c := LoadConfig()
 	if c.Port != "9999" || c.Scopes != "openid,extra" || !c.Sandbox || c.ClientID != "cid" {
 		t.Errorf("overrides not applied: %+v", c)
@@ -62,12 +43,7 @@ func TestLoadConfig_EnvOverrides(t *testing.T) {
 func TestSandbox_OnlyTrueLiteral(t *testing.T) {
 	for _, val := range []string{"1", "yes", "TRUE", ""} {
 		t.Run(val, func(t *testing.T) {
-			if val == "" {
-				os.Unsetenv("IDME_SANDBOX")
-			} else {
-				os.Setenv("IDME_SANDBOX", val)
-				defer os.Unsetenv("IDME_SANDBOX")
-			}
+			t.Setenv("IDME_SANDBOX", val)
 			if LoadConfig().Sandbox {
 				t.Errorf("Sandbox should require literal \"true\"; %q enabled it", val)
 			}

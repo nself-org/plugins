@@ -61,7 +61,7 @@ func ExtractMetadata(targetURL string) (*Metadata, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch url: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)

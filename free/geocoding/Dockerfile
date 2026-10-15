@@ -15,8 +15,8 @@ ENV ZONEINFO=/zoneinfo.zip
 WORKDIR /app
 COPY --from=builder /geocoding .
 
-EXPOSE 3203
+EXPOSE 3856
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3203/health || exit 1
+  CMD wget -qO- http://localhost:3856/health || exit 1
 USER nobody
 ENTRYPOINT ["/app/geocoding"]

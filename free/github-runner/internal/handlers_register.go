@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"io"
 	"log"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 90L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
@@ -126,7 +126,7 @@ func fetchRegistrationToken(ctx context.Context, pat, org string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)

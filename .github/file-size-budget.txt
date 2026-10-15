@@ -52,8 +52,6 @@ free/file-processing/ts/src/webhooks.ts	343
 free/functions-v8/go/internal/api/handlers.go	361
 free/functions-v8/go/internal/store/store.go	332
 free/game-metadata/internal/handlers.go	990
-free/geocoding/internal/handlers.go	1087
-free/geocoding/internal/provider/provider.go	406
 free/github-runner/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/github-runner/third_party/sdk/identity.go	338
 free/github/actions/sync.sh	422

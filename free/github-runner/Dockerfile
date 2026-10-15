@@ -17,7 +17,7 @@ FROM alpine:3.19
 # No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plugin /plugin
-EXPOSE 3053
+EXPOSE 3054
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD wget -qO- http://localhost:3053/health || exit 1
+  CMD wget -qO- http://localhost:3054/health || exit 1
 CMD ["/plugin"]
