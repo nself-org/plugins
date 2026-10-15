@@ -1,0 +1,11 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0622).
+# A flow mapping value whose name is the literal project network.
+# Must be flagged.
+services:
+  example:
+    image: example/app:0
+    networks:
+      - ${DOCKER_NETWORK}
+      - default
+networks:
+  default: { name: nself-network, driver: bridge }
