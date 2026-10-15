@@ -32,10 +32,10 @@ github.com/jackc/puddle/v2/internal/genstack
 ## explicit; go 1.25.0
 github.com/nself-org/plugins/free/shared-utils/httpclient
 github.com/nself-org/plugins/free/shared-utils/httpmid
-# golang.org/x/sync v0.21.0
+# golang.org/x/sync v0.22.0
 ## explicit; go 1.25.0
 golang.org/x/sync/semaphore
-# golang.org/x/text v0.39.0
+# golang.org/x/text v0.41.0
 ## explicit; go 1.25.0
 golang.org/x/text/cases
 golang.org/x/text/internal

@@ -15,8 +15,8 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/nself-org/cli/sdk/go/v2 v2.0.0
 	github.com/pashagolub/pgxmock/v3 v3.4.0
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
 
 replace github.com/nself-org/cli/sdk/go/v2 => ./third_party/cli-sdk-go

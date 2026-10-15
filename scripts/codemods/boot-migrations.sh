@@ -35,7 +35,7 @@ if [ ! -f "$dest/migrate/apply.go" ] && [ $dry -eq 0 ]; then
   changed=1; mkdir -p "$dest/migrate"
   for src in "$sdk"/migrate/*.go; do case $src in *_test.go) continue;; esac; cp "$src" "$dest/migrate/"; done
   cp "$(cli_src)/LICENSE" "$dest/LICENSE"   # the license gate walks every go.mod, so the copied module carries its license
-  printf 'module github.com/nself-org/cli/sdk/go/v2\n\ngo 1.25.0\n\nrequire github.com/jackc/pgx/v5 %s\n' "$(awk '$1 == "github.com/jackc/pgx/v5" { print $2; exit }' "$sdk/go.mod")" > "$dest/go.mod"
+  printf 'module github.com/nself-org/cli/sdk/go/v2\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/jackc/pgx/v5 %s\n\tgolang.org/x/text v0.41.0 // indirect\n)\n' "$(awk '$1 == "github.com/jackc/pgx/v5" { print $2; exit }' "$sdk/go.mod")" > "$dest/go.mod"
   # tidy fills in the indirect requires and go.sum, so the copied module resolves on its own (license gate, builds)
   ( cd "$dest" && GOFLAGS=-mod=mod go mod tidy >/dev/null 2>&1 ) || bail "go mod tidy failed in the copied SDK module"
   ( cd "$dir" && go mod edit -require=github.com/nself-org/cli/sdk/go/v2@v2.0.0 -replace=github.com/nself-org/cli/sdk/go/v2=./third_party/cli-sdk-go )
