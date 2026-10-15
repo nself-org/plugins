@@ -19,7 +19,7 @@
     ],
     "optional": {
       "NSELF_SYNC_BIND": "127.0.0.1",
-      "NSELF_SYNC_PORT": "3844",
+      "NSELF_SYNC_PORT": "3853",
       "NSELF_SYNC_RATE_PUSH_PER_MIN": "100",
       "NSELF_SYNC_PULL_PAGE_SIZE": "500",
       "NSELF_SYNC_WS_AUTH_TIMEOUT_SEC": "5",

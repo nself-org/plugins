@@ -26,7 +26,7 @@ import (
 	"github.com/nself-org/nself-sync/internal/ws"
 )
 
-const ListenAddr = "127.0.0.1:3844"
+const ListenAddr = "127.0.0.1:3853"
 
 // server holds wired dependencies. Globals are avoided so tests can build
 // per-test instances with fakes.

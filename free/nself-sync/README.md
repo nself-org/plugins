@@ -19,7 +19,7 @@ All tables include tenant_id for multi-tenancy. Hasura row-level security enforc
 
 ## Port
 
-3844 (reserved in PPI port registry)
+3853 (3844 is forgejo)
 
 ## Version
 

@@ -1,83 +1,105 @@
 {
-  "name": "file-processing",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure. Planned: Inbound webhook support for storage provider notifications",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "port": 3089,
   "category": "infrastructure",
-  "tags": [
-    "files",
-    "storage",
-    "processing",
-    "thumbnails",
-    "optimization"
+  "description": "File processing with thumbnails and optimization for MinIO/S3/GCS/R2/B2/Azure. Planned: Inbound webhook support for storage provider notifications",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "FILE_STORAGE_BUCKET",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "FILE_STORAGE_PROVIDER",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "FILE_STORAGE_ENDPOINT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_STORAGE_ACCESS_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_STORAGE_SECRET_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_STORAGE_REGION",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_THUMBNAIL_SIZES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_ENABLE_OPTIMIZATION",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_MAX_SIZE",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_ALLOWED_TYPES",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_STRIP_EXIF",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "FILE_QUEUE_CONCURRENCY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "REDIS_URL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "CORS_ALLOWED_ORIGIN",
+      "required": false
+    }
   ],
-  "tables": [
-    "np_fileproc_jobs",
-    "np_fileproc_thumbnails",
-    "np_fileproc_metadata"
-  ],
-  "actions": {
-    "init": "Initialize file processing service",
-    "server": "Start HTTP server for processing endpoints",
-    "worker": "Start background worker for processing queue",
-    "process": "Process files and generate thumbnails",
-    "cleanup": "Clean up old processing jobs and temporary files",
-    "stats": "View processing statistics"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL",
-      "FILE_STORAGE_BUCKET",
-      "FILE_STORAGE_PROVIDER"
-    ],
-    "optional": [
-      "FILE_STORAGE_ENDPOINT",
-      "FILE_STORAGE_ACCESS_KEY",
-      "FILE_STORAGE_SECRET_KEY",
-      "FILE_STORAGE_REGION",
-      "FILE_THUMBNAIL_SIZES",
-      "FILE_ENABLE_OPTIMIZATION",
-      "FILE_MAX_SIZE",
-      "FILE_ALLOWED_TYPES",
-      "FILE_STRIP_EXIF",
-      "FILE_QUEUE_CONCURRENCY",
-      "REDIS_URL",
-      "PORT",
-      "CORS_ALLOWED_ORIGIN"
-    ]
-  },
+  "homepage": "https://nself.org/plugins",
+  "language": "rust",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "minNselfVersion": "1.0.0",
   "multiApp": {
-    "supported": true,
+    "defaultValue": "primary",
     "isolationColumn": "source_account_id",
     "pkStrategy": "single",
-    "defaultValue": "primary"
+    "supported": true
   },
-  "config": {
-    "defaultThumbnailSizes": [
-      100,
-      400,
-      1200
-    ],
-    "maxFileSize": 104857600,
-    "queueConcurrency": 3,
-    "enableOptimization": true,
-    "stripExif": true
-  },
-  "hooks": {
-    "postInstall": "install.sh",
-    "preUninstall": "uninstall.sh",
-    "postSync": null
-  },
+  "name": "file-processing",
   "permissions": {
     "database": [
       "create",
@@ -85,85 +107,97 @@
       "update",
       "delete"
     ],
-    "network": [
-      "*"
-    ],
     "filesystem": [
       "logs",
       "cache",
       "temp"
+    ],
+    "network": [
+      "*"
     ]
   },
-  "status": "stable",
-  "tier": "free",
-  "language": "rust",
-  "entryPoint": "binary",
-  "routes": [
+  "port": 3089,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/jobs",
-      "auth": "bearer"
+      "path": "/api/v1/jobs"
     },
     {
+      "auth": "bearer",
       "method": "POST",
-      "path": "/api/v1/jobs",
-      "auth": "bearer"
+      "path": "/api/v1/jobs"
     },
     {
+      "auth": "bearer",
       "method": "DELETE",
-      "path": "/api/v1/jobs/{id}",
-      "auth": "bearer"
+      "path": "/api/v1/jobs/{id}"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/jobs/{id}",
-      "auth": "bearer"
+      "path": "/api/v1/jobs/{id}"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/metadata",
-      "auth": "bearer"
+      "path": "/api/v1/metadata"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/metadata/{id}",
-      "auth": "bearer"
+      "path": "/api/v1/metadata/{id}"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/stats",
-      "auth": "bearer"
+      "path": "/api/v1/stats"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/thumbnails",
-      "auth": "bearer"
+      "path": "/api/v1/thumbnails"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/api/v1/thumbnails/{id}",
-      "auth": "bearer"
+      "path": "/api/v1/thumbnails/{id}"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
+      "path": "/health"
     },
     {
+      "auth": "bearer",
       "method": "GET",
-      "path": "/ready",
-      "auth": "bearer"
+      "path": "/ready"
     }
   ],
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "schema": "np_file_processing",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3089
   },
-  "entry": "src/main.rs",
-  "checksum": "81ddc7e6a787c1621794aff17ead8719dd30254785e38e5c14725b20249a1666",
-  "bundles": [
-    "ntv",
-    "nfamily",
-    "clawde"
-  ]
+  "status": "stable",
+  "tables": [
+    "np_fileproc_jobs",
+    "np_fileproc_thumbnails",
+    "np_fileproc_metadata"
+  ],
+  "tags": [
+    "files",
+    "storage",
+    "processing",
+    "thumbnails",
+    "optimization"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }

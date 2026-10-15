@@ -359,5 +359,8 @@ jobs:
       - name: Codemods are idempotent on real plugins
         run: bash tests/conformance/realtree.sh --drop-dev-tool-keys --plugins github-runner,nself-vault,family-ancestry,audit-log
 
+      - name: D-0815 forgejo and file-processing pass the whole gate
+        run: bash tests/conformance/d0815-test.sh
+
       - name: Released CLI v1.4.12 oracle
         run: bash scripts/conformance/v14-oracle.sh --fixtures
