@@ -18,7 +18,11 @@ func TestNewRegistryBuildInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /metrics: %v", err)
 	}
-	defer resp.Body.Close()
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Errorf("close /metrics response: %v", err)
+		}
+	})
 	body, _ := io.ReadAll(resp.Body)
 	out := string(body)
 
@@ -35,8 +39,15 @@ func TestObserveRequest(t *testing.T) {
 
 	ts := httptest.NewServer(r.Handler())
 	t.Cleanup(ts.Close)
-	resp, _ := http.Get(ts.URL)
-	defer resp.Body.Close()
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("GET /metrics: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Errorf("close /metrics response: %v", err)
+		}
+	})
 	body, _ := io.ReadAll(resp.Body)
 	out := string(body)
 
