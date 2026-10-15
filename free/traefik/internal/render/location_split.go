@@ -108,18 +108,18 @@ func returnStatusOK(st int) bool {
 var methodRE = regexp.MustCompile(`^[A-Z]+$`)
 
 // contractExtras refuses the optional v1 fields this renderer cannot carry (fail closed). A
-// static_file or headers_add location is only the core:api-docs route, which route() skips before
-// it gets here. The cli's nginx uses a variable proxy_pass ("set $up_x <target>; proxy_pass $up_x;"),
+// static_file and headers_add are supported only for the core docs files.
+// The cli's nginx uses a variable proxy_pass ("set $up_x <target>; proxy_pass $up_x;"),
 // so an upstream path or query REPLACES THE WHOLE REQUEST URI (not the matched prefix), and
 // Traefik's service URL cannot do that.
 func (b *builder) contractExtras(r contract.Route, l contract.Location, field string) bool {
 	ok := true
-	if l.StaticFile != nil {
-		b.refuse(r.ID, field+".static_file", "an nginx alias of a single file has no Traefik equivalent (only the core:api-docs route uses it, and that route is skipped)")
+	if l.StaticFile != nil && !docsFile(r, l) {
+		b.refuse(r.ID, field+".static_file", "only core:api-docs files under /opt/nself/.dist are served")
 		ok = false
 	}
-	if len(l.HeadersAdd) > 0 {
-		b.refuse(r.ID, field+".headers_add", "nginx add_header on a location is not rendered (only the core:api-docs route uses it, and that route is skipped)")
+	if len(l.HeadersAdd) > 0 && !docsFile(r, l) {
+		b.refuse(r.ID, field+".headers_add", "response headers require a supported core:api-docs static file")
 		ok = false
 	}
 	if l.Upstream != nil {

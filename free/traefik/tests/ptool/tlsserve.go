@@ -66,7 +66,7 @@ func servedSANs(addr, sni string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	return c.ConnectionState().PeerCertificates[0].DNSNames, nil
 }
 
@@ -89,7 +89,7 @@ func httpsStatus(target, host string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode, nil
 }
 

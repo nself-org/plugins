@@ -18,14 +18,14 @@ func rawStatus(t target, scheme, host, rawPath string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
-	fmt.Fprintf(c, "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", rawPath, host)
+	_, _ = fmt.Fprintf(c, "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", rawPath, host)
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 	if err != nil {
 		return 0, err
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return resp.StatusCode, nil
 }
 
@@ -95,11 +95,11 @@ func wsOpen(t target, scheme, host string) (net.Conn, error) {
 		return nil, err
 	}
 	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
-	fmt.Fprintf(c, "GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n",
+	_, _ = fmt.Fprintf(c, "GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n",
 		host, base64.StdEncoding.EncodeToString([]byte("parity-hold-nonc")))
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 	if err != nil || resp.StatusCode != 101 {
-		c.Close()
+		_ = c.Close()
 		return nil, fmt.Errorf("upgrade: status %v err %v", resp, err)
 	}
 	_ = c.SetDeadline(time.Time{})
@@ -226,11 +226,11 @@ func wsIdle(m routes, name string, secs int) {
 	}
 	c, err := wsOpen(target{name}, scheme(rt), hostOf(rt))
 	must(err)
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	fmt.Printf("OPEN %s on %s via %s\n", rt.ID, scheme(rt), name)
 	time.Sleep(time.Duration(secs) * time.Second)
 	_ = c.SetDeadline(time.Now().Add(10 * time.Second))
-	fmt.Fprint(c, "idle-ping\n")
+	_, _ = fmt.Fprint(c, "idle-ping\n")
 	line, err := bufio.NewReader(c).ReadString('\n')
 	if err != nil || strings.TrimSpace(line) != "idle-ping" {
 		die(fmt.Errorf("websocket via %s did not survive %ds idle: %q %v", name, secs, line, err))
@@ -243,7 +243,7 @@ func wsIdle(m routes, name string, secs int) {
 func hostCase(r *runner, m routes) {
 	n := 0
 	for _, rt := range m.Routes {
-		if !hasRoot(rt) || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
+		if !hasRoot(rt) || (!rt.Listen.HTTP && !rt.Listen.HTTPS) {
 			continue
 		}
 		q := req{scheme: scheme(rt), host: strings.ToUpper(hostOf(rt)), method: "GET", path: "/"}
@@ -271,7 +271,7 @@ func healthMethod(r *runner, m routes) {
 	n := 0
 	for _, rt := range m.Routes {
 		for _, l := range rt.Locations {
-			if !l.HealthProbe || l.Upstream == nil || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
+			if !l.HealthProbe || l.Upstream == nil || (!rt.Listen.HTTP && !rt.Listen.HTTPS) {
 				continue
 			}
 			for _, method := range []string{"DELETE", "POST", "PUT"} {
