@@ -126,3 +126,7 @@ INSERT INTO webhook_endpoints (id, url, secret, events) VALUES ('00000000-0000-4
 INSERT INTO webhook_deliveries (id, endpoint_id, event_type, payload) VALUES ('00000000-0000-4000-8000-0000000000c2', '00000000-0000-4000-8000-0000000000c1', 'user.created', '{}');
 INSERT INTO webhook_event_types (id, name) VALUES ('00000000-0000-4000-8000-0000000000c3', 'user.created');
 INSERT INTO webhook_dead_letters (id, delivery_id, endpoint_id) VALUES ('00000000-0000-4000-8000-0000000000c4', '00000000-0000-4000-8000-0000000000c2', '00000000-0000-4000-8000-0000000000c1');
+
+-- D-0501: TS-era rows whose source_account_id is NULL (the column was nullable); migration 002 must normalise them to 'primary'.
+INSERT INTO webhook_endpoints (id, source_account_id, url, secret, events) VALUES ('00000000-0000-4000-8000-0000000000c5', NULL, 'https://example.invalid/null-account', 'whsec_fixture', '{user.created}');
+INSERT INTO webhook_deliveries (id, source_account_id, endpoint_id, event_type, payload) VALUES ('00000000-0000-4000-8000-0000000000c6', NULL, '00000000-0000-4000-8000-0000000000c5', 'user.created', '{}');
