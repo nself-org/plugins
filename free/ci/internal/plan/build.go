@@ -14,6 +14,7 @@ package plan
 import (
 	"sort"
 
+	"github.com/nself-org/plugins/free/ci/internal/detect"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
@@ -80,7 +81,10 @@ func Build(in Input) (*Plan, error) {
 		}
 	}
 	// A live required job needs its dependency closure: a dependency's own
-	// `when` or advisory skip never drops the required gate (Epic D28).
+	// `when` or advisory skip never drops the required gate (Epic D28). Such
+	// a dependency is restorable, but only when the required job is kept; it
+	// is not offered to the selector, so it can never be picked on its own.
+	restorable := map[string]bool{}
 	var needed []string
 	for _, id := range ids {
 		if live[id] && cs[id].required {
@@ -89,20 +93,14 @@ func Build(in Input) (*Plan, error) {
 	}
 	for id := range closureOf(cs, needed) {
 		if members[id] && !live[id] {
-			delete(excluded, id)
-			live[id] = true
-		}
-	}
-	for _, id := range ids {
-		if s, ok := excluded[id]; ok {
-			skip(s.Job, s.Reason, s.Detail)
+			restorable[id] = true
 		}
 	}
 	for changed := true; changed; {
 		changed = false
 		for _, id := range ids {
 			for _, d := range cs[id].job.Deps {
-				if live[id] && !live[d] {
+				if live[id] && !live[d] && !restorable[d] {
 					delete(live, id)
 					skip(id, "dep.failed", "dependency "+d+" is not in the plan")
 					changed = true
@@ -112,13 +110,51 @@ func Build(in Input) (*Plan, error) {
 	}
 
 	sel, picked := selectJobs(in, cs, ids, live)
-	var seeds []string
-	for _, id := range ids {
-		if live[id] && (picked[id] || forced[id]) {
-			seeds = append(seeds, id)
+	dead := map[string]bool{}
+	var keep, need map[string]bool
+	for changed := true; changed; {
+		changed = false
+		var seeds, req []string
+		for _, id := range ids {
+			if live[id] && !dead[id] && (picked[id] || forced[id]) {
+				seeds = append(seeds, id)
+			}
+		}
+		keep = closureOf(cs, seeds)
+		for _, id := range ids {
+			if keep[id] && cs[id].required {
+				req = append(req, cs[id].job.Deps...)
+			}
+		}
+		need = closureOf(cs, req)
+		for _, id := range ids {
+			if !live[id] || dead[id] || !keep[id] {
+				continue
+			}
+			for _, d := range cs[id].job.Deps {
+				if dead[d] || (restorable[d] && !need[d]) {
+					dead[id] = true
+					skip(id, "dep.failed", "dependency "+d+" is not in the plan")
+					changed = true
+					break
+				}
+			}
 		}
 	}
-	keep := closureOf(cs, seeds)
+	for id := range dead {
+		delete(live, id)
+	}
+	for id := range need {
+		if restorable[id] {
+			delete(excluded, id)
+			live[id] = true
+		}
+	}
+	for _, id := range ids {
+		if s, ok := excluded[id]; ok {
+			skip(s.Job, s.Reason, s.Detail)
+		}
+	}
 	sel.Digest = selectionDigest(sel, keep) // the digest covers the final job set, forced jobs included
 	reasons := map[string]model.Reason{}
 	for _, id := range ids {
@@ -176,8 +212,8 @@ func selectJobs(in Input, cs map[string]*cand, ids []string, live map[string]boo
 		sel.Digest = selectionDigest(sel, picked)
 		return sel, picked
 	}
-	return runSelector(SelectionInput{Changed: rev.Changed, BaseKnown: true, DefaultBranch: rev.DefaultBranch,
-		Release: rev.Release, Jobs: refs, Facts: in.Facts})
+	return runSelector(SelectionInput{Changed: append([]string(nil), rev.Changed...), BaseKnown: true,
+		DefaultBranch: rev.DefaultBranch, Release: rev.Release, Jobs: refs, Facts: append([]detect.Fact(nil), in.Facts...)})
 }
 
 // selectPipeline resolves --pipeline / --trigger to the member jobs (with
