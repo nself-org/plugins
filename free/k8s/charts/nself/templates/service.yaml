@@ -1,11 +1,24 @@
-{{- /* One Service per workload with ports. The name equals the compose service name, so in-stack addresses such as postgres:5432 keep working. */ -}}
+{{- /* Preserve compose service names and expose plugin-* hostnames for dependency URLs. */ -}}
+{{- $aliases := dict }}
 {{- range $name, $svc := .Values.services }}
 {{- if and $svc.ports (ne $svc.kind "job") (ne $svc.kind "ingress") }}
+{{- $names := list $name }}
+{{- if $svc.plugin }}
+{{- $alias := printf "plugin-%s" $svc.plugin }}
+{{- if ne $alias $name }}
+{{- if or (hasKey $.Values.services $alias) (hasKey $aliases $alias) }}
+{{- fail (printf "plugin Service alias %s for service %s conflicts with another workload" $alias $name) }}
+{{- end }}
+{{- $_ := set $aliases $alias true }}
+{{- $names = append $names $alias }}
+{{- end }}
+{{- end }}
+{{- range $serviceName := $names }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $name }}
+  name: {{ $serviceName }}
   labels:
     {{- include "nself.labels" (dict "root" $ "name" $name) | nindent 4 }}
 spec:
@@ -21,5 +34,6 @@ spec:
       targetPort: {{ .port }}
       protocol: {{ .protocol }}
     {{- end }}
+{{- end }}
 {{- end }}
 {{- end }}

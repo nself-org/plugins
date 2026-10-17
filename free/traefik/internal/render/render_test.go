@@ -22,7 +22,7 @@ func fixture(t *testing.T, name string) *contract.Model {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	m, err := contract.Load(f)
 	if err != nil {
 		t.Fatal(err)
