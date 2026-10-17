@@ -1,0 +1,207 @@
+{
+  "schema_version": "1",
+  "command": "ci plan",
+  "data": {
+    "pipeline": {
+      "id": "default",
+      "name": "default",
+      "kind": "default"
+    },
+    "trigger": "local",
+    "selection": {
+      "mode": "affected",
+      "reason": "selection.affected",
+      "digest": "be586366d3a455f2579d284c3e4e8e079bfb94bc7b4cfbd1d93511a1dd866a80"
+    },
+    "support": [
+      "darwin/arm64",
+      "linux/amd64"
+    ],
+    "fail_fast": "dependants",
+    "layers": [
+      [
+        "lint",
+        "build@darwin/arm64",
+        "build@linux/amd64",
+        "ios"
+      ],
+      [
+        "images"
+      ]
+    ],
+    "jobs": [
+      {
+        "id": "lint",
+        "name": "lint",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.affected",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "static",
+          "run": [
+            "make",
+            "lint"
+          ],
+          "workdir": "tools",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "high",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "build@darwin/arm64",
+        "name": "build",
+        "platform": "darwin/arm64",
+        "layer": 0,
+        "state": "unplaceable",
+        "reason": "selection.full_required",
+        "blocked": "unplaceable.platform",
+        "detail": "platform darwin/arm64 has no registered runner",
+        "deps": [],
+        "dependants": [
+          "images"
+        ],
+        "job": {
+          "kind": "build",
+          "run": [
+            "make",
+            "build"
+          ],
+          "workdir": ".",
+          "matrix": {
+            "platform": "support"
+          },
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "build@linux/amd64",
+        "name": "build",
+        "platform": "linux/amd64",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.full_required",
+        "deps": [],
+        "dependants": [
+          "images"
+        ],
+        "job": {
+          "kind": "build",
+          "run": [
+            "make",
+            "build"
+          ],
+          "workdir": ".",
+          "matrix": {
+            "platform": "support"
+          },
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "fast",
+          "isolation": "process"
+        }
+      },
+      {
+        "id": "ios",
+        "name": "ios",
+        "layer": 0,
+        "state": "planned",
+        "reason": "selection.full_required",
+        "deps": [],
+        "dependants": [],
+        "job": {
+          "kind": "build",
+          "run": [
+            "xcodebuild",
+            "-scheme",
+            "App"
+          ],
+          "workdir": ".",
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "deep",
+          "isolation": "process",
+          "requires": {
+            "tools": [
+              "xcode"
+            ],
+            "cpu": 2
+          }
+        }
+      },
+      {
+        "id": "images",
+        "name": "images",
+        "layer": 1,
+        "state": "planned",
+        "reason": "selection.full_required",
+        "deps": [
+          "build@darwin/arm64",
+          "build@linux/amd64"
+        ],
+        "dependants": [],
+        "job": {
+          "kind": "release",
+          "run": [
+            "make",
+            "image"
+          ],
+          "workdir": ".",
+          "deps": [
+            "build"
+          ],
+          "required": true,
+          "idempotent": true,
+          "timeout": "10m",
+          "retry": {
+            "infra_max": 1
+          },
+          "priority": "normal",
+          "path": "deep",
+          "isolation": "container",
+          "container": {
+            "image": "registry.test/app@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      }
+    ],
+    "skipped": [
+      {
+        "job": "flaky",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      },
+      {
+        "job": "mac-ui",
+        "reason": "selection.affected",
+        "detail": "not affected by the changed paths"
+      }
+    ]
+  }
+}
