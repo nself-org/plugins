@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"io"
 	"log"
 	"net/http"
@@ -13,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 90L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
@@ -33,7 +33,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
-	token, err := fetchRegistrationToken(ctx, pat, org)
+	// Trusted-only guard: refuse a runner group (or repo) open to public
+	// repositories before any registration token is requested.
+	cfg := TrustConfigFromEnv()
+	trust, err := CheckTrust(ctx, cfg)
+	if err != nil {
+		respondTrustError(w, err)
+		return
+	}
+
+	token, err := fetchRegistrationToken(ctx, cfg)
 	if err != nil {
 		sdk.Error(w, http.StatusBadGateway, fmt.Errorf("fetch registration token: %w", err))
 		return
@@ -56,10 +65,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		labels = "self-hosted,linux,x64"
 	}
 
-	group := os.Getenv("GITHUB_RUNNER_GROUP")
-	if group == "" {
-		group = "Default"
-	}
+	group := trust.Group
 
 	configScript := filepath.Join(dir, "config.sh")
 	if _, err := os.Stat(configScript); err != nil {
@@ -70,11 +76,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	args := []string{
 		"--unattended",
 		"--replace",
-		"--url", fmt.Sprintf("https://github.com/%s", org),
+		"--url", registrationURL(cfg),
 		"--token", token,
 		"--name", name,
 		"--labels", labels,
-		"--runnergroup", group,
+	}
+	if cfg.Scope != "repo" {
+		args = append(args, "--runnergroup", group)
 	}
 
 	cmd := exec.CommandContext(ctx, configScript, args...)
@@ -105,13 +113,27 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		"name":       name,
 		"labels":     labels,
 		"org":        org,
+		"warning":    trust.Warning,
 	})
 }
 
+// registrationURL is the GitHub URL the runner registers against: the org, or
+// the single repository for repo scope.
+func registrationURL(cfg TrustConfig) string {
+	if cfg.Scope == "repo" {
+		return fmt.Sprintf("https://github.com/%s/%s", cfg.Org, cfg.Repo)
+	}
+	return fmt.Sprintf("https://github.com/%s", cfg.Org)
+}
+
 // fetchRegistrationToken calls the GitHub REST API to get a short-lived
-// registration token for the given org.
-func fetchRegistrationToken(ctx context.Context, pat, org string) (string, error) {
-	url := fmt.Sprintf("https://api.github.com/orgs/%s/actions/runners/registration-token", org)
+// registration token for the org, or for the repository in repo scope.
+func fetchRegistrationToken(ctx context.Context, cfg TrustConfig) (string, error) {
+	pat := cfg.PAT
+	url := fmt.Sprintf("%s/orgs/%s/actions/runners/registration-token", githubAPIBase, cfg.Org)
+	if cfg.Scope == "repo" {
+		url = fmt.Sprintf("%s/repos/%s/%s/actions/runners/registration-token", githubAPIBase, cfg.Org, cfg.Repo)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {

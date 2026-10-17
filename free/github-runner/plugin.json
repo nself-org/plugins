@@ -5,7 +5,7 @@
   "entryPoint": "cmd/main.go",
   "envVars": [
     {
-      "description": "",
+      "description": "Token that can register runners: a fine-grained token with the organisation \"Self-hosted runners: write\" permission (or a classic token with admin:org)",
       "name": "GITHUB_RUNNER_PAT",
       "required": true
     },
@@ -35,13 +35,18 @@
       "required": false
     },
     {
-      "description": "",
+      "description": "Runner group name; empty uses the organisation default group. A group open to public repositories is refused",
       "name": "GITHUB_RUNNER_GROUP",
       "required": false
     },
     {
       "description": "",
       "name": "GITHUB_RUNNER_VERSION",
+      "required": false
+    },
+    {
+      "description": "Set to true to let a runner group or repository that is open to public repositories register and start (UNSAFE: fork pull requests can run on this host; warned on every start). Default false",
+      "name": "GITHUB_RUNNER_ALLOW_PUBLIC_REPOS",
       "required": false
     }
   ],

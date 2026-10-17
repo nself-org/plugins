@@ -2,12 +2,12 @@ package internal
 
 import (
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 72L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
@@ -19,6 +19,13 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.state.mu.Unlock()
+
+	// Trusted-only guard: re-check the runner group (or repo) on every start.
+	trust, err := CheckTrust(r.Context(), TrustConfigFromEnv())
+	if err != nil {
+		respondTrustError(w, err)
+		return
+	}
 
 	dir := runnerDir()
 	runScript := filepath.Join(dir, "run.sh")
@@ -81,6 +88,7 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 	sdk.Respond(w, http.StatusOK, map[string]interface{}{
 		"started": true,
 		"pid":     pid,
+		"warning": trust.Warning,
 	})
 }
 
@@ -90,24 +98,13 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 
 // Stop sends SIGTERM to the runner subprocess.
 func (h *Handler) Stop(w http.ResponseWriter, r *http.Request) {
-	h.state.mu.Lock()
-	running := h.state.Running
-	pid := h.state.PID
-	h.state.mu.Unlock()
-
+	pid, running, err := h.stopRunnerProcess()
 	if !running {
 		sdk.Error(w, http.StatusConflict, fmt.Errorf("runner is not running"))
 		return
 	}
-
-	proc, err := os.FindProcess(pid)
 	if err != nil {
-		sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("find process %d: %w", pid, err))
-		return
-	}
-
-	if err := proc.Signal(os.Interrupt); err != nil {
-		sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("signal process %d: %w", pid, err))
+		sdk.Error(w, http.StatusInternalServerError, err)
 		return
 	}
 

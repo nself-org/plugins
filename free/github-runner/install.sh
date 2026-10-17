@@ -10,6 +10,7 @@ SHARED_DIR="$(dirname "$(dirname "$PLUGIN_DIR")")/shared"
 
 # Source utilities
 source "${SHARED_DIR}/plugin-utils.sh"
+source "${PLUGIN_DIR}/actions/trust.sh"
 
 # =============================================================================
 # Configuration
@@ -145,6 +146,22 @@ install_github_runner() {
   else
     plugin_success "PAT scope verified: $scope_header"
   fi
+
+  # ------------------------------------------------------------------
+  # 2b. Trusted-only guard: refuse a runner group (or repo) open to public
+  #     repositories before anything is downloaded or registered.
+  # ------------------------------------------------------------------
+  plugin_info "Checking the runner group is trusted-only..."
+  local trust_rc=0
+  trust_check || trust_rc=$?
+  if [[ "$trust_rc" -ne 0 ]]; then
+    plugin_error "Refusing to install the runner (see the message above)."
+    exit "$trust_rc"
+  fi
+  plugin_success "Runner group check passed${TRUST_GROUP:+: $TRUST_GROUP}"
+  local host_warning
+  host_warning=$(trust_deploy_host_warning)
+  [[ -z "$host_warning" ]] || plugin_warn "$host_warning"
 
   # ------------------------------------------------------------------
   # 3. Create directories
