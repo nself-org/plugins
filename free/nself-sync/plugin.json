@@ -1,56 +1,85 @@
 {
-  "name": "nself-sync",
   "author": "nSelf Team",
-  "displayName": "Event-Log Sync Engine for \u0273Claw",
-  "version": "1.2.6",
-  "tier": "free",
   "category": "infrastructure",
-  "minNselfVersion": "1.1.1",
-  "bundle": [
-    "nclaw",
-    "shared"
-  ],
-  "port": 3853,
-  "language": "go",
-  "env": {
-    "required": [
-      "DATABASE_URL",
-      "NSELF_SYNC_JWT_SECRET"
-    ],
-    "optional": {
-      "NSELF_SYNC_BIND": "127.0.0.1",
-      "NSELF_SYNC_PORT": "3844",
-      "NSELF_SYNC_RATE_PUSH_PER_MIN": "100",
-      "NSELF_SYNC_PULL_PAGE_SIZE": "500",
-      "NSELF_SYNC_WS_AUTH_TIMEOUT_SEC": "5",
-      "NSELF_SYNC_PLUGIN_ENABLED": "false"
+  "description": "Event-log sync engine for ɳClaw. Multi-device state sync via HLC + LWW; JWT-authenticated push/pull/snapshot/subscribe with Ed25519-signed events.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "NSELF_SYNC_JWT_SECRET",
+      "required": true
+    },
+    {
+      "default": "127.0.0.1",
+      "description": "",
+      "name": "NSELF_SYNC_BIND",
+      "required": false
+    },
+    {
+      "default": "3853",
+      "description": "",
+      "name": "NSELF_SYNC_PORT",
+      "required": false
+    },
+    {
+      "default": "100",
+      "description": "",
+      "name": "NSELF_SYNC_RATE_PUSH_PER_MIN",
+      "required": false
+    },
+    {
+      "default": "500",
+      "description": "",
+      "name": "NSELF_SYNC_PULL_PAGE_SIZE",
+      "required": false
+    },
+    {
+      "default": "5",
+      "description": "",
+      "name": "NSELF_SYNC_WS_AUTH_TIMEOUT_SEC",
+      "required": false
+    },
+    {
+      "default": "false",
+      "description": "",
+      "name": "NSELF_SYNC_PLUGIN_ENABLED",
+      "required": false
     }
-  },
-  "hasuraRemoteSchema": false,
-  "featureFlag": "NSELF_SYNC_PLUGIN_ENABLED",
-  "versionTarget": "v1.1.2",
-  "visibility": "public",
-  "license": "MIT",
-  "isCommercial": false,
+  ],
+  "health_endpoint": "/health",
+  "language": "go",
+  "license": "free",
   "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
   },
+  "minNselfVersion": "1.1.1",
+  "name": "nself-sync",
+  "port": 3853,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.1"
+  },
+  "schema": "np_nself_sync",
+  "service": {
+    "kind": "library",
+    "port": 3853
+  },
+  "status": "stable",
   "tables": [
     "np_sync_events",
     "np_devices",
     "np_sync_cursors"
   ],
-  "description": "Event-log sync engine for \u0273Claw. Multi-device state sync via HLC + LWW; JWT-authenticated push/pull/snapshot/subscribe with Ed25519-signed events.",
-  "bundles": [
-    "nclaw",
-    "nchat",
-    "ntv",
-    "nfamily",
-    "clawde",
-    "nsentry"
-  ]
+  "tier": "free",
+  "version": "1.2.6",
+  "visibility": "public"
 }

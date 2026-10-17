@@ -15,6 +15,12 @@ import (
 
 // RegisterRoutes mounts all notify endpoints on the given router.
 func RegisterRoutes(r chi.Router, pool *pgxpool.Pool) {
+	// Replaces the SDK default /health: reports the boot-migration counts (contract plugin.boot-migrations v1).
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		m := bootMigrationsHealth(w)
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "migrations": m})
+	})
 	r.Post("/v1/send", handleSend(pool))
 	r.Get("/v1/notifications", handleListNotifications(pool))
 	r.Get("/v1/notifications/{id}", handleGetNotification(pool))

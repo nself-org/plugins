@@ -113,7 +113,7 @@ func parseCIYaml(path string) (ciPlugin, error) {
 	if err != nil {
 		return ciPlugin{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var p ciPlugin
 	var currentStage *ciStage
@@ -169,7 +169,7 @@ func parseCIYaml(path string) (ciPlugin, error) {
 				switch kv[0] {
 				case "timeout":
 					var t int
-					fmt.Sscanf(kv[1], "%d", &t)
+					_, _ = fmt.Sscanf(kv[1], "%d", &t)
 					currentStage.Timeout = t
 				case "skip_if_env_missing":
 					currentStage.SkipIfEnvMissing = strings.TrimSpace(kv[1]) == "true"
@@ -207,19 +207,6 @@ func splitYAMLKV(s string) [2]string {
 		return [2]string{s, ""}
 	}
 	return [2]string{strings.TrimSpace(s[:idx]), strings.TrimSpace(s[idx+1:])}
-}
-
-// isEnvVarName returns true if s looks like an environment variable name (UPPER_CASE).
-func isEnvVarName(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	for _, c := range s {
-		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
-			return false
-		}
-	}
-	return true
 }
 
 // orderE7Plugins sorts manifests so E7 plugins run in canonical order:

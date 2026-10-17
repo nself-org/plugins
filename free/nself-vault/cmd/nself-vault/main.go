@@ -18,69 +18,6 @@ import (
 	"github.com/nself-org/nself-vault/internal/store"
 )
 
-// migrationSQL is the embedded schema migration.
-// In production this would be embedded via //go:embed, but we keep this
-// explicit for simplicity and test-environment compatibility.
-const migrationSQL = `
-CREATE TABLE IF NOT EXISTS np_vault_devices (
-    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id        UUID        NOT NULL,
-    tenant_id      UUID,
-    device_pubkey  BYTEA       NOT NULL,
-    device_label   TEXT,
-    platform       TEXT,
-    last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at     TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_np_vault_devices_user_seen
-    ON np_vault_devices (user_id, last_seen_at DESC)
-    WHERE revoked_at IS NULL;
-
-CREATE TABLE IF NOT EXISTS np_vault_records (
-    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id          UUID        NOT NULL,
-    tenant_id        UUID,
-    credential_kind  TEXT        NOT NULL,
-    label            TEXT        NOT NULL,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at       TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_np_vault_records_user_revoked
-    ON np_vault_records (user_id, revoked_at)
-    WHERE revoked_at IS NULL;
-
-CREATE TABLE IF NOT EXISTS np_vault_envelopes (
-    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    record_id           UUID        NOT NULL REFERENCES np_vault_records(id) ON DELETE CASCADE,
-    device_id           UUID        NOT NULL REFERENCES np_vault_devices(id) ON DELETE CASCADE,
-    envelope_ciphertext BYTEA       NOT NULL,
-    envelope_nonce      BYTEA       NOT NULL,
-    sealed_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (record_id, device_id)
-);
-CREATE INDEX IF NOT EXISTS idx_np_vault_envelopes_record_device
-    ON np_vault_envelopes (record_id, device_id);
-
-CREATE TABLE IF NOT EXISTS np_vault_audit (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    record_id   UUID,
-    device_id   UUID,
-    user_id     UUID        NOT NULL,
-    tenant_id   UUID,
-    action      TEXT        NOT NULL,
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    metadata    JSONB       NOT NULL DEFAULT '{}'
-);
-CREATE INDEX IF NOT EXISTS idx_np_vault_audit_user_occurred
-    ON np_vault_audit (user_id, occurred_at DESC);
-
--- V05-F5: Revoke UPDATE and DELETE on np_vault_audit to enforce audit-log immutability.
--- The service role may INSERT new audit entries but never modify or delete them.
--- This is idempotent — repeated REVOKEs are no-ops once the privilege is absent.
-REVOKE UPDATE, DELETE ON np_vault_audit FROM PUBLIC;
-`
-
 func main() {
 	if os.Getenv("VAULT_PLUGIN_ENABLED") == "false" || os.Getenv("VAULT_PLUGIN_ENABLED") == "" {
 		log.Println("vault: VAULT_PLUGIN_ENABLED is not set to true — exiting")
@@ -111,10 +48,8 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := db.RunMigration(context.Background(), migrationSQL); err != nil {
-		log.Fatalf("vault: migration failed: %v", err)
-	}
-	log.Println("vault: schema migrations applied")
+	// Own migrations apply once, right after the pool exists; a failure is fatal.
+	mustBootMigrations(context.Background(), db.Pool())
 
 	extractor := auth.NewExtractor(jwtSecret)
 	h := api.New(db, extractor)
@@ -125,7 +60,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(redactEnvelopeMiddleware)
 
-	r.Get("/health", h.Health)
+	r.Get("/health", handleHealth) // reports the migration ledger counts; h.Health is the plain liveness handler
 
 	r.Route("/vault/v1", func(r chi.Router) {
 		// Device management

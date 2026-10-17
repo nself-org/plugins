@@ -4,7 +4,7 @@
 -- Threshold updates require admin role (see spec §8 permissions matrix).
 -- Idempotent: uses IF NOT EXISTS throughout
 
-CREATE TABLE IF NOT EXISTS np_eval_thresholds (
+CREATE TABLE IF NOT EXISTS public.np_eval_thresholds (
     id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     autonomy_tier  TEXT        NOT NULL UNIQUE CHECK (autonomy_tier IN ('supervised', 'semi-auto', 'full-auto')),
     min_pass_rate  FLOAT       NOT NULL,

@@ -1,81 +1,110 @@
 {
-  "name": "notify",
-  "version": "1.2.6",
-  "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "tier_pair": true,
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins",
-  "minNselfVersion": "0.9.9",
   "category": "communication",
+  "description": "Multi-channel notification service. Channels: Email (SMTP), Webhook (HMAC-signed). HTTP endpoints for sending notifications, managing templates, and viewing delivery history.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "PLUGIN_INTERNAL_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_USER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_PASSWORD",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "SMTP_FROM",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "WEBHOOK_HMAC_SECRET",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
-  "tags": [
-    "notifications",
-    "email",
-    "webhooks",
-    "templates"
-  ],
-  "tables": [
-    "np_notify_notifications",
-    "np_notify_templates"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
   },
-  "optionalDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "PORT",
-      "PLUGIN_INTERNAL_SECRET",
-      "SMTP_HOST",
-      "SMTP_PORT",
-      "SMTP_USER",
-      "SMTP_PASSWORD",
-      "SMTP_FROM",
-      "WEBHOOK_HMAC_SECRET"
-    ]
-  },
-  "config": {
-    "defaultPort": 3052
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
+  "minNselfVersion": "0.9.9",
   "multiApp": {
     "supported": false
   },
+  "name": "notify",
   "permissions": {
     "database": [
       "create",
       "read",
       "update"
     ],
+    "filesystem": [],
     "network": [
       "outbound"
-    ],
-    "filesystem": []
+    ]
   },
   "port": 3052,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=0.9.9"
+  },
+  "schema": "np_notify",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3052
+  },
   "status": "stable",
-  "binary_name": "notify",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
+  "tables": [
+    "np_notify_notifications",
+    "np_notify_templates"
   ],
-  "min_memory_mb": 64,
-  "systemd_after": "network.target",
-  "tier": "free"
+  "tags": [
+    "notifications",
+    "email",
+    "webhooks",
+    "templates"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }

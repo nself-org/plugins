@@ -3859,7 +3859,7 @@
           "nself": ">=1.1.0"
         },
         "schema": "np_nself_cloud",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "cff71f3b5999132baea7d74abddc46cdd01edca323e53d59e62cb2d96c165a88",
@@ -3912,7 +3912,7 @@
           "nself": ">=1.1.1"
         },
         "schema": "np_nself_eval_gate",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "development",
       "checksum": "dce7ee9465ce6ec2f2fcb5d01c100ec1f8edb0705bbe92ea1ba21e17b25d8a53",
@@ -3960,7 +3960,7 @@
           "nself": ">=1.1.0"
         },
         "schema": "np_nself_geo",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "integrations",
       "checksum": "0f35c93a597839cc4983c1051572778edb788e769e885acc03177c01d267713d",
@@ -4003,7 +4003,7 @@
           "nself": ">=1.2.0"
         },
         "schema": "np_nself_image",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "media",
       "checksum": "1817c670945c8f511d60646bcaa10823afd35a37c1fff5f3966ab44740a2d9a5",
@@ -4051,7 +4051,7 @@
         "requires": {
           "nself": ">=1.1.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "content",
       "checksum": "c6c44b1dcfeaada6c34785cc78827b0f91c6e6c34f249678642eaffb7f7de583",
@@ -4094,7 +4094,7 @@
         "requires": {
           "nself": ">=1.1.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "compliance",
       "checksum": "fa0a3c5a8885ead36ecd6288b572634f8b388a0b590b78025eeb06bc33346716",
@@ -4140,7 +4140,7 @@
           "nself": ">=1.1.1"
         },
         "schema": "np_nself_sync",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "b11d451b3d0cb25d830bad6c355246448c6481a127060a68ea96be8bf5fe81c0",
@@ -4176,7 +4176,8 @@
         "requires": {
           "nself": ">=1.0.0"
         },
-        "service_kind": "compose"
+        "schema": "np_nself_vault",
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "958a9cccf867a956ae776e25eb28885565ead51cba44fea6e5984c72449d211d",
@@ -4194,7 +4195,12 @@
       "port": 3823,
       "releaseTag": "v1.2.6",
       "requires_license": false,
-      "tables": [],
+      "tables": [
+        "np_vault_devices",
+        "np_vault_records",
+        "np_vault_envelopes",
+        "np_vault_audit"
+      ],
       "tags": [],
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-vault-1.2.6.tar.gz",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/nself-vault-1.2.6.tar.gz",

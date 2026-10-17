@@ -32,7 +32,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // Health / Ready
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "migrations": bootMigrationsHealth(w)})
 }
 
 func (h *Handlers) Ready(w http.ResponseWriter, r *http.Request) {
@@ -910,7 +910,7 @@ func mustJSON(v any) []byte {
 }
 
 func itoa(i int) string {
-	return string(rune('0'+i)) // simple single-digit; safe for param counts we use
+	return string(rune('0' + i)) // simple single-digit; safe for param counts we use
 }
 
 func joinConditions(conds []string) string {

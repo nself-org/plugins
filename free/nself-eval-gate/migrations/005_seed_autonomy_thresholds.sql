@@ -6,7 +6,7 @@
 --   semi-auto   = recall-quality-v1 must score >= 0.75 pass-rate 0.80
 --   full-auto   = recall-quality-v1 + generation-v1 must score >= 0.88 pass-rate 0.92
 
-INSERT INTO np_eval_thresholds (autonomy_tier, min_pass_rate, min_suite_score, applies_to, enforced)
+INSERT INTO public.np_eval_thresholds (autonomy_tier, min_pass_rate, min_suite_score, applies_to, enforced)
 VALUES
     ('supervised',  0.00, 0.00, '{}',                                            false),
     ('semi-auto',   0.80, 0.75, ARRAY['recall-quality-v1'],                      true),

@@ -1,96 +1,89 @@
 {
-  "name": "nself-eval-gate",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality precision/recall/fact_f1 metrics, CI integration via nself ci eval, and autonomy-tier threshold enforcement.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.1.1",
-  "language": "go",
-  "entryPoint": "binary",
-  "entry": "main.go",
-  "status": "stable",
-  "tier": "free",
   "category": "development",
-  "port": 3770,
-  "tags": [
-    "eval",
-    "ci",
-    "autonomy-gate",
-    "scoring",
-    "llm-as-judge"
-  ],
-  "tables": [
-    "np_eval_suites",
-    "np_eval_tasks",
-    "np_eval_runs",
-    "np_eval_thresholds"
-  ],
-  "health_endpoint": "/health",
-  "routes": [
+  "description": "Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality precision/recall/fact_f1 metrics, CI integration via nself ci eval, and autonomy-tier threshold enforcement.",
+  "entryPoint": "binary",
+  "envVars": [
     {
-      "method": "POST",
-      "path": "/eval/run",
-      "auth": "plugin-jwt"
+      "description": "",
+      "name": "NSELF_EVAL_GATE_DB_URL",
+      "required": true
     },
     {
-      "method": "GET",
-      "path": "/eval/runs/{id}",
-      "auth": "plugin-jwt"
+      "description": "",
+      "name": "NSELF_EVAL_GATE_PORT",
+      "required": false
     },
     {
-      "method": "GET",
-      "path": "/eval/suites",
-      "auth": "plugin-jwt"
+      "description": "",
+      "name": "NSELF_EVAL_GATE_REDIS_URL",
+      "required": false
     },
     {
-      "method": "POST",
-      "path": "/eval/validate",
-      "auth": "plugin-jwt"
+      "description": "",
+      "name": "NSELF_EVAL_GATE_JUDGE_MODEL",
+      "required": false
     },
     {
-      "method": "GET",
-      "path": "/eval/thresholds",
-      "auth": "plugin-jwt"
+      "description": "",
+      "name": "NSELF_EVAL_GATE_JUDGE_TIMEOUT_S",
+      "required": false
     },
     {
-      "method": "GET",
-      "path": "/eval/gate/{tier}",
-      "auth": "plugin-jwt"
+      "description": "",
+      "name": "NSELF_EVAL_GATE_EMBED_TIMEOUT_S",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_EVAL_GATE_MAX_CONCURRENCY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_EVAL_GATE_CACHE_EMBED_TTL_H",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_EVAL_GATE_CACHE_JUDGE_TTL_H",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_EVAL_RECALL_K",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_EVAL_SCHEMA_VERSION",
+      "required": false
     }
   ],
-  "envVars": {
-    "required": [
-      "NSELF_EVAL_GATE_DB_URL"
-    ],
-    "optional": [
-      "NSELF_EVAL_GATE_PORT",
-      "NSELF_EVAL_GATE_REDIS_URL",
-      "NSELF_EVAL_GATE_JUDGE_MODEL",
-      "NSELF_EVAL_GATE_JUDGE_TIMEOUT_S",
-      "NSELF_EVAL_GATE_EMBED_TIMEOUT_S",
-      "NSELF_EVAL_GATE_MAX_CONCURRENCY",
-      "NSELF_EVAL_GATE_CACHE_EMBED_TTL_H",
-      "NSELF_EVAL_GATE_CACHE_JUDGE_TTL_H",
-      "NSELF_EVAL_RECALL_K",
-      "NSELF_EVAL_SCHEMA_VERSION"
-    ]
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
   },
-  "config": {
-    "defaultPort": 3770
-  },
+  "minNselfVersion": "1.1.1",
   "multiApp": {
-    "supported": true,
+    "defaultValue": "primary",
     "isolationColumn": "source_account_id",
     "pkStrategy": "uuid",
-    "defaultValue": "primary"
+    "supported": true
   },
+  "name": "nself-eval-gate",
+  "optionalDependencies": [
+    "plugin-retrieval",
+    "nself-ai-gateway"
+  ],
   "permissions": {
     "database": [
       "create",
@@ -98,26 +91,67 @@
       "update",
       "delete"
     ],
+    "filesystem": [],
     "network": [
       "outbound"
-    ],
-    "filesystem": []
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "dependencies": {
-    "required": [],
-    "optional": [
-      "plugin-retrieval",
-      "nself-ai-gateway"
     ]
   },
-  "bundles": [
-    "nclaw",
-    "clawde",
-    "shared"
-  ]
+  "port": 3770,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.1"
+  },
+  "rest_routes": [
+    {
+      "auth": "plugin-jwt",
+      "method": "POST",
+      "path": "/eval/run"
+    },
+    {
+      "auth": "plugin-jwt",
+      "method": "GET",
+      "path": "/eval/runs/{id}"
+    },
+    {
+      "auth": "plugin-jwt",
+      "method": "GET",
+      "path": "/eval/suites"
+    },
+    {
+      "auth": "plugin-jwt",
+      "method": "POST",
+      "path": "/eval/validate"
+    },
+    {
+      "auth": "plugin-jwt",
+      "method": "GET",
+      "path": "/eval/thresholds"
+    },
+    {
+      "auth": "plugin-jwt",
+      "method": "GET",
+      "path": "/eval/gate/{tier}"
+    }
+  ],
+  "schema": "np_nself_eval_gate",
+  "service": {
+    "kind": "library",
+    "port": 3770
+  },
+  "status": "stable",
+  "tables": [
+    "np_eval_suites",
+    "np_eval_tasks",
+    "np_eval_runs",
+    "np_eval_thresholds"
+  ],
+  "tags": [
+    "eval",
+    "ci",
+    "autonomy-gate",
+    "scoring",
+    "llm-as-judge"
+  ],
+  "tier": "free",
+  "version": "1.2.6"
 }

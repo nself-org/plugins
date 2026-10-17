@@ -48,6 +48,13 @@ func runRepoGoScripts(root string, timeout int, verbose bool) []GateResult {
 // such as gremlins or go test die with it, and its pipes are closed shortly
 // after even if something still holds them.
 func runRepoScript(name, root, path string, verbose bool) GateResult {
+	gr, _ := runRepoScriptResult(name, root, path, verbose)
+	return gr
+}
+
+// runRepoScriptResult preserves the execution error for callers that distinguish
+// findings from gate errors, while runRepoScript retains its existing verdict.
+func runRepoScriptResult(name, root, path string, verbose bool) (GateResult, error) {
 	start := time.Now()
 	gr := GateResult{Name: name}
 	if _, err := exec.LookPath("bash"); err != nil {
@@ -55,7 +62,7 @@ func runRepoScript(name, root, path string, verbose bool) GateResult {
 		gr.Passed = true
 		gr.Skipped = true
 		gr.Elapsed = time.Since(start)
-		return gr
+		return gr, err
 	}
 	if verbose {
 		fmt.Fprintf(os.Stderr, "[nself-ci] running: bash %s\n", path)
@@ -77,5 +84,5 @@ func runRepoScript(name, root, path string, verbose bool) GateResult {
 		gr.Passed = false
 		gr.Output = strings.TrimSpace(fmt.Sprintf("timed out after %s\n%s", repoScriptDeadline, gr.Output))
 	}
-	return gr
+	return gr, err
 }
