@@ -22,6 +22,11 @@ http:
                     - font/woff
                     - font/woff2
                 minResponseBodyBytes: 20
+        headers-8edf10b4:
+            headers:
+                customResponseHeaders:
+                    Cache-Control: no-store
+                    Content-Type: text/html
         headers-25c21423:
             headers:
                 customResponseHeaders:
@@ -31,6 +36,12 @@ http:
                     X-Content-Type-Options: nosniff
                     X-Frame-Options: SAMEORIGIN
                     X-XSS-Protection: "0"
+        headers-a60f4e30:
+            headers:
+                customResponseHeaders:
+                    Access-Control-Allow-Origin: '*'
+                    Cache-Control: no-store
+                    Content-Type: application/json
         inFlightReq-2ddcbcc7:
             inFlightReq:
                 amount: 5
@@ -92,7 +103,44 @@ http:
         replacePath-8861c4ed:
             replacePath:
                 path: /__nself/status/404
+        replacePathRegex-00dcd61b:
+            replacePathRegex:
+                regex: ^/api-docs(.*)$
+                replacement: /__nself/docs/openapi.json${1}
+        replacePathRegex-29c0c2a5:
+            replacePathRegex:
+                regex: ^/docs(.*)$
+                replacement: /__nself/docs/scalar.html${1}
     routers:
+        core-api-docs-0a58b1f1-catchall-web:
+            entryPoints:
+                - web
+            middlewares:
+                - buffering-8642699b
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`docs.example.test`)
+            service: responder
+        core-api-docs-0a58b1f1-l0-web:
+            entryPoints:
+                - web
+            middlewares:
+                - buffering-8642699b
+                - headers-a60f4e30
+                - replacePathRegex-00dcd61b
+            priority: 25602018
+            rule: Host(`docs.example.test`) && PathPrefix(`/api-docs`)
+            service: responder
+        core-api-docs-0a58b1f1-l1-web:
+            entryPoints:
+                - web
+            middlewares:
+                - buffering-8642699b
+                - headers-8edf10b4
+                - replacePathRegex-29c0c2a5
+            priority: 25602010
+            rule: Host(`docs.example.test`) && PathPrefix(`/docs`)
+            service: responder
         core-auth-fcf1e097-b0-web:
             entryPoints:
                 - web

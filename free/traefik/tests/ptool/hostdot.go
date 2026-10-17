@@ -12,7 +12,7 @@ func hostDot(r *runner, m routes, need bool) {
 	n := 0
 	for _, rt := range m.Routes {
 		name := rt.ServerNames[0]
-		if !(strings.HasPrefix(name, "*.") || strings.HasPrefix(name, ".")) || !hasRoot(rt) || !(rt.Listen.HTTP || rt.Listen.HTTPS) {
+		if (!strings.HasPrefix(name, "*.") && !strings.HasPrefix(name, ".")) || !hasRoot(rt) || (!rt.Listen.HTTP && !rt.Listen.HTTPS) {
 			continue
 		}
 		q := req{scheme: scheme(rt), host: hostOf(rt) + ".", method: "GET", path: "/"}

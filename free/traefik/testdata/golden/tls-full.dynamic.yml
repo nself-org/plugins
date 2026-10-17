@@ -22,6 +22,17 @@ http:
                     - font/woff
                     - font/woff2
                 minResponseBodyBytes: 20
+        headers-8edf10b4:
+            headers:
+                customResponseHeaders:
+                    Cache-Control: no-store
+                    Content-Type: text/html
+        headers-a60f4e30:
+            headers:
+                customResponseHeaders:
+                    Access-Control-Allow-Origin: '*'
+                    Cache-Control: no-store
+                    Content-Type: application/json
         headers-fec414ab:
             headers:
                 customResponseHeaders:
@@ -98,7 +109,47 @@ http:
         replacePath-8861c4ed:
             replacePath:
                 path: /__nself/status/404
+        replacePathRegex-00dcd61b:
+            replacePathRegex:
+                regex: ^/api-docs(.*)$
+                replacement: /__nself/docs/openapi.json${1}
+        replacePathRegex-29c0c2a5:
+            replacePathRegex:
+                regex: ^/docs(.*)$
+                replacement: /__nself/docs/scalar.html${1}
     routers:
+        core-api-docs-0a58b1f1-catchall-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - buffering-8642699b
+                - replacePath-8861c4ed
+            priority: 25600001
+            rule: Host(`docs.example.org`)
+            service: responder
+            tls: {}
+        core-api-docs-0a58b1f1-l0-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - buffering-8642699b
+                - headers-a60f4e30
+                - replacePathRegex-00dcd61b
+            priority: 25602018
+            rule: Host(`docs.example.org`) && PathPrefix(`/api-docs`)
+            service: responder
+            tls: {}
+        core-api-docs-0a58b1f1-l1-tls:
+            entryPoints:
+                - websecure
+            middlewares:
+                - buffering-8642699b
+                - headers-8edf10b4
+                - replacePathRegex-29c0c2a5
+            priority: 25602010
+            rule: Host(`docs.example.org`) && PathPrefix(`/docs`)
+            service: responder
+            tls: {}
         core-auth-fcf1e097-b0-tls:
             entryPoints:
                 - websecure

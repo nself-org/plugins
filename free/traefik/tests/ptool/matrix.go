@@ -65,7 +65,7 @@ func (t target) do(q req) result {
 	if err != nil {
 		return result{err: err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	h := sha256.New()
 	var src io.Reader = resp.Body
 	if q.gz && resp.Header.Get("Content-Encoding") == "gzip" {
@@ -208,9 +208,9 @@ func declared(t target, scheme, host, method, path string, n int64) (int, error)
 	if err != nil {
 		return 0, err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
-	fmt.Fprintf(c, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", method, path, host, n)
+	_, _ = fmt.Fprintf(c, "%s %s HTTP/1.1\r\nHost: %s\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", method, path, host, n)
 	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
 	if err != nil {
 		return 0, err
@@ -223,9 +223,9 @@ func wsCheck(t target, scheme, host string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	_ = c.SetDeadline(time.Now().Add(10 * time.Second))
-	fmt.Fprintf(c, "GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", host, base64.StdEncoding.EncodeToString([]byte("parity-ws-nonce1")))
+	_, _ = fmt.Fprintf(c, "GET /ws HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", host, base64.StdEncoding.EncodeToString([]byte("parity-ws-nonce1")))
 	br := bufio.NewReader(c)
 	resp, err := http.ReadResponse(br, nil)
 	if err != nil {
@@ -234,7 +234,7 @@ func wsCheck(t target, scheme, host string) (string, error) {
 	if resp.StatusCode != 101 {
 		return fmt.Sprintf("status %d", resp.StatusCode), nil
 	}
-	fmt.Fprint(c, "ping-parity\n")
+	_, _ = fmt.Fprint(c, "ping-parity\n")
 	line, err := br.ReadString('\n')
 	return fmt.Sprintf("101 accept=%s echo=%q", resp.Header.Get("Sec-WebSocket-Accept"), strings.TrimSpace(line)), err
 }

@@ -3,13 +3,14 @@ import { fetchFreeRegistry, fetchProRegistry, kvGet, KV_BUNDLES_JSON, KV_BUNDLES
 import type { Env } from "./registry.ts";
 import { fetchCatalog } from "./catalog.ts";
 import { edgeDelete } from "./edge-cache.ts";
+import { signingConfigured } from "./sign.ts";
 
 /** Ed25519 public key hex: PUBLIC_KEY_HEX, or the retired index.js name SIGNING_PUBLIC_KEY. */
 function publicKeyHex(env: Env): string | undefined {
   return env.PUBLIC_KEY_HEX ?? env.SIGNING_PUBLIC_KEY;
 }
 
-export function handleHealth(env: Env): Response {
+export async function handleHealth(env: Env): Promise<Response> {
   return jsonResponse({
     // "healthy" is what publish.yml and deploy.sh check after a deploy.
     status: "healthy",
@@ -30,7 +31,7 @@ export function handleHealth(env: Env): Response {
       "catalog-etag",
     ],
     signing: {
-      configured: Boolean(env.SIGNING_PRIVATE_KEY && publicKeyHex(env)),
+      configured: await signingConfigured(env.SIGNING_PRIVATE_KEY, publicKeyHex(env)),
     },
   });
 }

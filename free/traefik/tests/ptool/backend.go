@@ -38,7 +38,7 @@ func backend(r routes) {
 	}
 	go func() {
 		errc <- http.ListenAndServe(":9999", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			fmt.Fprint(w, hits.Load())
+			_, _ = fmt.Fprint(w, hits.Load())
 		}))
 	}()
 	die(<-errc)
@@ -94,8 +94,8 @@ func websocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer c.Close()
-	fmt.Fprintf(rw, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
+	defer func() { _ = c.Close() }()
+	_, _ = fmt.Fprintf(rw, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
 		base64.StdEncoding.EncodeToString(sum[:]))
 	_ = rw.Flush()
 	_, _ = io.Copy(c, rw)

@@ -29,3 +29,8 @@ bash tests/parity.sh                     # Docker, Linux containers: nginx vs Tr
 ```
 
 `testdata/fixtures` holds routes.json and the nginx tree produced by `nself build` (see `testdata/fixtures/SOURCE`).
+
+The static helper serves `core:api-docs` aliases from the read-only `.dist` mount:
+`docs.<base>/api-docs` returns `openapi.json`, and `/docs` returns the Scalar page
+`scalar.html`. Only these two files are exposed. Location response headers from
+`routes.json`, including content type, CORS and cache policy, use headers middleware.

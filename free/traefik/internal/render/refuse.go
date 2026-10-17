@@ -17,7 +17,7 @@ func (e *RefusalError) Error() string {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		fmt.Fprintf(&b, "refused: route %s: %s: %s", r.Route, r.Field, r.Reason)
+		_, _ = fmt.Fprintf(&b, "refused: route %s: %s: %s", r.Route, r.Field, r.Reason)
 	}
 	return b.String()
 }

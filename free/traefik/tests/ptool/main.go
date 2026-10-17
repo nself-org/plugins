@@ -89,8 +89,10 @@ type route struct {
 			Zone  string `json:"zone"`
 			Burst int    `json:"burst"`
 		} `json:"rate_limit"`
-		StaticRoot   *string `json:"static_root"`
-		MaxBodyBytes *int64  `json:"max_body_bytes"`
+		StaticRoot   *string           `json:"static_root"`
+		StaticFile   *string           `json:"static_file"`
+		HeadersAdd   map[string]string `json:"headers_add"`
+		MaxBodyBytes *int64            `json:"max_body_bytes"`
 		Return       *struct {
 			Status int     `json:"status"`
 			To     *string `json:"to"`
@@ -107,20 +109,11 @@ func loadRoutes(path string) routes {
 	if err := json.Unmarshal(b, &r); err != nil {
 		die(err)
 	}
-	// core:api-docs is skipped by the traefik renderer (accepted difference, DEPL lead ruling
-	// 2026-10-11) and removed from the nginx reference, so no suite probes docs.<base>.
-	kept := r.Routes[:0]
-	for _, rt := range r.Routes {
-		if rt.ID != "core:api-docs" {
-			kept = append(kept, rt)
-		}
-	}
-	r.Routes = kept
 	return r
 }
 
 func die(err error) {
-	fmt.Fprintln(os.Stderr, "ptool:", err)
+	_, _ = fmt.Fprintln(os.Stderr, "ptool:", err)
 	os.Exit(1)
 }
 
@@ -254,12 +247,6 @@ func gencert(r routes, out string, gen int) {
 	}
 }
 
-func must(err error) {
-	if err != nil {
-		die(err)
-	}
-}
-
 func selfSigned(cn string, dns []string, serial int64) (certPEM, keyPEM []byte) {
 	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	must(err)
@@ -278,7 +265,7 @@ func serialErr(addr, sni string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	return c.ConnectionState().PeerCertificates[0].SerialNumber.String(), nil
 }
 
@@ -287,7 +274,7 @@ func rawdata(url, require string) {
 	if err != nil {
 		die(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var raw map[string]map[string]map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		die(err)
