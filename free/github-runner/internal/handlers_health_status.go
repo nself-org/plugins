@@ -1,20 +1,25 @@
 package internal
 
 import (
-	"net/http"
+	"context"
 	sdk "github.com/nself-org/plugin-sdk"
+	"net/http"
 )
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	snap := h.state.Snapshot()
-	sdk.Respond(w, http.StatusOK, map[string]interface{}{
+	body := map[string]interface{}{
 		"status":  "healthy",
 		"service": "nself-github-runner",
 		"runner": map[string]bool{
 			"registered": snap.Registered,
 			"running":    snap.Running,
 		},
-	})
+	}
+	if warn := deployHostWarning(); warn != "" {
+		body["deploy_host_warning"] = warn
+	}
+	sdk.Respond(w, http.StatusOK, body)
 }
 
 // --------------------------------------------------------------------------
@@ -30,10 +35,17 @@ type statusResponse struct {
 	Org        string `json:"org"`
 	PID        int    `json:"pid,omitempty"`
 	RunnerDir  string `json:"runner_dir"`
+	// DeployHostWarning is set when ENV is prod, production or staging.
+	DeployHostWarning string `json:"deploy_host_warning,omitempty"`
+	// Trust is the result of re-running the trusted-only guard.
+	Trust trustStatus `json:"trust"`
 }
 
 // Status returns the current runner registration and process state.
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), trustCheckTimeout)
+	defer cancel()
+	trust := h.enforceTrust(ctx)
 	snap := h.state.Snapshot()
 	sdk.Respond(w, http.StatusOK, statusResponse{
 		Registered: snap.Registered,
@@ -43,6 +55,9 @@ func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 		Org:        snap.Org,
 		PID:        snap.PID,
 		RunnerDir:  runnerDir(),
+
+		DeployHostWarning: deployHostWarning(),
+		Trust:             trust,
 	})
 }
 

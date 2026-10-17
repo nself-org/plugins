@@ -13,7 +13,13 @@ services:
       GITHUB_RUNNER_ORG: ${GITHUB_RUNNER_ORG}
       GITHUB_RUNNER_NAME: ${GITHUB_RUNNER_NAME:-}
       GITHUB_RUNNER_LABELS: ${GITHUB_RUNNER_LABELS:-self-hosted,linux,x64}
-      GITHUB_RUNNER_GROUP: ${GITHUB_RUNNER_GROUP:-Default}
+      GITHUB_RUNNER_SCOPE: ${GITHUB_RUNNER_SCOPE:-org}
+      GITHUB_RUNNER_REPO: ${GITHUB_RUNNER_REPO:-}
+      # Empty resolves to the organisation's default runner group.
+      GITHUB_RUNNER_GROUP: ${GITHUB_RUNNER_GROUP:-}
+      # Trusted-only guard. "true" accepts public repositories (unsafe).
+      GITHUB_RUNNER_ALLOW_PUBLIC_REPOS: ${GITHUB_RUNNER_ALLOW_PUBLIC_REPOS:-false}
+      ENV: ${ENV:-}
       GITHUB_RUNNER_DIR: /runner
       GITHUB_RUNNER_LOG_PATH: /logs/runner.log
     volumes:

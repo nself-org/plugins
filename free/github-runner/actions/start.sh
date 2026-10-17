@@ -6,6 +6,7 @@ set -euo pipefail
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHARED_DIR="$(dirname "$(dirname "$PLUGIN_DIR")")/shared"
 source "${SHARED_DIR}/plugin-utils.sh"
+source "${PLUGIN_DIR}/actions/trust.sh"
 
 RUNNER_DIR="${HOME}/.nself/runners/github-runner"
 LOG_DIR="${HOME}/.nself/logs/plugins/github-runner"
@@ -15,6 +16,20 @@ if [[ ! -f "${RUNNER_DIR}/run.sh" ]]; then
   plugin_error "Runner not installed. Run: nself plugin install github-runner"
   exit 1
 fi
+
+# Trusted-only guard: re-checked on every start. A group or repo that is now
+# open to public repositories stops a running runner unless overridden.
+trust_rc=0
+trust_check || trust_rc=$?
+if [[ "$trust_rc" -ne 0 ]]; then
+  if [[ "$trust_rc" -eq 1 ]]; then
+    trust_stop_runner "$PID_FILE" "actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+  fi
+  plugin_error "Runner not started (see the message above)."
+  exit "$trust_rc"
+fi
+host_warning=$(trust_deploy_host_warning)
+[[ -z "$host_warning" ]] || plugin_warn "$host_warning"
 
 # Check if already running
 if [[ -f "$PID_FILE" ]]; then
