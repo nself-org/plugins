@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev link",
+  "error": {
+    "code": "E771",
+    "message": "the path is not a plugin directory: it must exist and hold a plugin.yaml",
+    "remediation": "run the command with the plugin's source directory",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

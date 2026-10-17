@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev unlink",
+  "data": {
+    "name": "rt",
+    "unlinked": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "schema_version": "1",
+  "command": "sentry logout",
+  "data": {
+    "logged_out": true
+  }
+}

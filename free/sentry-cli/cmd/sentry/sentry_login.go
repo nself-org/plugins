@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
 	"github.com/nself-org/nself-sentry-cli/internal/ui"
 	"github.com/spf13/cobra"
@@ -50,6 +51,9 @@ var sentryLogoutCmd = &cobra.Command{
 		if err := sentryapi.DeleteCredentials(); err != nil {
 			return fmt.Errorf("logout: %w", err)
 		}
+		if jsonout.Envelope(cmd) {
+			return jsonout.Done(cmd, map[string]bool{"logged_out": true})
+		}
 		ui.Success("Logged out of ɳSentry (credentials removed).")
 		return nil
 	},
@@ -71,6 +75,11 @@ Examples:
 func init() {
 	addSentryCloudFlags(sentryLoginCmd)
 	addSentryCloudFlags(sentryWhoamiCmd)
+	jsonout.AddFlag(sentryLogoutCmd, "Print one v1 JSON envelope on stdout")
+	// login and logout printed no JSON before: the envelope is their --json
+	// output in v1.4 and v1.5 mode alike.
+	jsonout.Always(sentryLoginCmd)
+	jsonout.Always(sentryLogoutCmd)
 	sentryCmd.AddCommand(sentryLoginCmd, sentryLogoutCmd, sentryWhoamiCmd)
 }
 
@@ -82,11 +91,16 @@ func runSentryLogin(cmd *cobra.Command, _ []string) error {
 	apiURL, apiKey := sentryapi.Resolve(flagURL, flagKey)
 
 	if apiKey == "" {
-		fmt.Fprint(cmd.OutOrStdout(), "Paste your ɳSentry API key (nsk_...): ")
+		prompt := cmd.OutOrStdout()
+		if jsonout.Envelope(cmd) {
+			prompt = cmd.ErrOrStderr() // stdout carries the envelope only
+		}
+		fmt.Fprint(prompt, "Paste your ɳSentry API key (nsk_...): ")
 		reader := bufio.NewReader(cmd.InOrStdin())
 		line, err := reader.ReadString('\n')
 		if err != nil && line == "" {
-			return fmt.Errorf("reading API key: %w", err)
+			// No key flag, no env value, nothing on stdin: the caller's omission (E401), not a fault.
+			return &jsonout.UsageErr{Msg: fmt.Sprintf("reading API key: %v", err), Safe: "no API key given: pass --api-key or pipe it on stdin"}
 		}
 		apiKey = strings.TrimSpace(line)
 	}
@@ -113,6 +127,11 @@ func runSentryLogin(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("saving credentials: %w", err)
 	}
 
+	if jsonout.Envelope(cmd) {
+		return jsonout.Done(cmd, map[string]interface{}{
+			"logged_in": true, "email": acct.Email, "tenant_id": acct.TenantID, "tier": acct.Tier,
+		})
+	}
 	ui.Success(fmt.Sprintf("Logged in to ɳSentry as %s (tenant %s, tier %s) — key %s",
 		acct.Email, acct.TenantID, dashIfEmpty(acct.Tier), maskSentryKey(apiKey)))
 	return nil
@@ -127,7 +146,7 @@ func runSentryWhoami(cmd *cobra.Command, _ []string) error {
 	}
 
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, acct)
+		return emitSentryJSON(cmd, acct, acct)
 	}
 
 	ui.CommandHeader("ɳSentry Account", acct.Email)

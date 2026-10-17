@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev debug",
+  "error": {
+    "code": "E401",
+    "message": "invalid port: must be 1024-65535",
+    "remediation": "run nself plugin-dev <command> --help",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

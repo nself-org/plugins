@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions deploy",
+  "error": {
+    "code": "E765",
+    "message": "the deploy source was not found",
+    "remediation": "pass an existing file or directory",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

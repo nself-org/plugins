@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev debug",
+  "error": {
+    "code": "E776",
+    "message": "the debug build or the dlv debugger failed",
+    "remediation": "install dlv (go install github.com/go-delve/delve/cmd/dlv@latest); the tool output is on stderr",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

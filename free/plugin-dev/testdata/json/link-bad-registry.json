@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev link",
+  "error": {
+    "code": "E774",
+    "message": "the plugin links file (~/.nself/plugin-links.json) could not be read or written",
+    "remediation": "check the file is valid JSON and that ~/.nself is writable",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

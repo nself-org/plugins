@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev link",
+  "data": {
+    "links": [
+      {
+        "name": "rt",
+        "path": "<TMP>/work/rt"
+      }
+    ]
+  }
+}

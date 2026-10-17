@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions delete",
+  "error": {
+    "code": "E760",
+    "message": "the function was not found",
+    "remediation": "check the name with nself functions list",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

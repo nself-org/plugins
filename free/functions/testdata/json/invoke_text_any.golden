@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "command": "functions invoke",
+  "data": {
+    "body": "plain text",
+    "method": "GET",
+    "name": "text",
+    "status": 200
+  }
+}

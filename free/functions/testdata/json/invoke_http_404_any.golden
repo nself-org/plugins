@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "functions invoke",
+  "error": {
+    "code": "E763",
+    "message": "the function replied with an HTTP error",
+    "cause": "HTTP 404",
+    "remediation": "check the function with nself functions logs <name>",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

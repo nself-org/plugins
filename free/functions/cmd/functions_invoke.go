@@ -6,8 +6,10 @@ package main
 // Inputs: cobra command flags (--payload, --auth, --method) and the
 // positional function name.
 // Outputs: the HTTP status and (pretty-printed, if JSON) response body on
-// stdout; a non-nil error on HTTP >= 400 or request failures.
-// Constraints: pure move, no behavior change. functionNamePattern and
+// stdout; a non-nil error on HTTP >= 400 or request failures. With --json,
+// one v1 envelope (data: name, method, status, body) or an error envelope
+// (E762 no answer, E763 HTTP >= 400); see envelope.go.
+// Constraints: human output unchanged. functionNamePattern and
 // functionsCmd (parent) remain in functions.go.
 
 import (
@@ -20,8 +22,9 @@ import (
 	"strings"
 	"time"
 
-	
 	"github.com/spf13/cobra"
+
+	"github.com/nself-org/cli/sdk/go/v2/output"
 )
 
 var functionsInvokeFlags struct {
@@ -47,12 +50,15 @@ func init() {
 	functionsInvokeCmd.Flags().StringVar(&functionsInvokeFlags.payload, "payload", "", "JSON payload body")
 	functionsInvokeCmd.Flags().StringVar(&functionsInvokeFlags.auth, "auth", "", "Bearer token for Authorization header")
 	functionsInvokeCmd.Flags().StringVar(&functionsInvokeFlags.method, "method", "POST", "HTTP method: GET, POST, PUT, PATCH, DELETE")
+	addJSONFlag(functionsInvokeCmd)
 }
 
 func runFunctionsInvoke(cmd *cobra.Command, args []string) error {
+	r := begin(cmd, false)
+	defer r.end()
 	name := args[0]
 	if !functionNamePattern.MatchString(name) {
-		return fmt.Errorf("invalid function name %q", name)
+		return r.usageSafe(fmt.Sprintf("invalid function name %q", name), "invalid function name")
 	}
 
 	port := 3008
@@ -74,7 +80,7 @@ func runFunctionsInvoke(cmd *cobra.Command, args []string) error {
 
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
+		return r.usageSafe(fmt.Sprintf("building request: %v", err), "invalid --method")
 	}
 
 	if functionsInvokeFlags.payload != "" {
@@ -87,13 +93,17 @@ func runFunctionsInvoke(cmd *cobra.Command, args []string) error {
 
 	resp, err := httptimeout.Default.Do(req)
 	if err != nil {
-		return fmt.Errorf("invoking %s: %w", name, err)
+		return r.fail(newErr(fmt.Errorf("invoking %s: %w", name, err), CodeServiceDown, output.ClassInfra,
+			"the functions service did not answer",
+			"start it with nself start and check the port with nself functions list"))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("reading response: %w", err)
+		return r.fail(newErr(fmt.Errorf("reading response: %w", err), CodeServiceDown, output.ClassInfra,
+			"the functions service did not answer",
+			"start it with nself start and check the port with nself functions list"))
 	}
 
 	fmt.Printf("HTTP %d\n", resp.StatusCode)
@@ -107,7 +117,11 @@ func runFunctionsInvoke(cmd *cobra.Command, args []string) error {
 	}
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("function returned HTTP %d", resp.StatusCode)
+		return r.fail(&fnError{err: fmt.Errorf("function returned HTTP %d", resp.StatusCode), detail: httpDetail(resp.StatusCode)})
 	}
-	return nil
+	var data any = string(respBody)
+	if json.Valid(respBody) {
+		data = json.RawMessage(respBody)
+	}
+	return r.done(map[string]any{"name": name, "method": method, "status": resp.StatusCode, "body": data})
 }

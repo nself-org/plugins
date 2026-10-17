@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "command": "sentry incidents list",
+  "data": {
+    "incidents": [
+      {
+        "id": "i1",
+        "monitor_id": "m1",
+        "title": "api down",
+        "status": "open",
+        "severity": "high",
+        "started_at": "2026-01-02T03:04:05Z"
+      }
+    ]
+  }
+}

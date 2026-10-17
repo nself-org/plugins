@@ -1,0 +1,17 @@
+--- stdout
+{
+  "overall": "operational",
+  "total": 1,
+  "operational": 1,
+  "degraded": 0,
+  "down": [],
+  "components": [
+    {
+      "name": "API",
+      "status": "operational"
+    }
+  ]
+}
+--- stderr
+--- exit
+0

@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev init",
+  "data": {
+    "name": "demo",
+    "template": "go",
+    "tier": "free",
+    "tenancy": "none",
+    "dir": "demo",
+    "files": [
+      ".air.toml",
+      ".dockerignore",
+      ".github/workflows/ci.yml",
+      "Dockerfile",
+      "README.md",
+      "cmd/main.go",
+      "docker-compose.plugin.yml",
+      "go.mod",
+      "go.sum",
+      "hasura/metadata.json",
+      "internal/config/config.go",
+      "internal/server/server.go",
+      "internal/server/server_test.go",
+      "migrations/001_init.sql",
+      "plugin.json"
+    ]
+  }
+}

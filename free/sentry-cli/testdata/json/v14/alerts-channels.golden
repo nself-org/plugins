@@ -1,0 +1,12 @@
+--- stdout
+--- stderr
+[
+  {
+    "id": "c1",
+    "kind": "email",
+    "target": "ops@example.test",
+    "enabled": true
+  }
+]
+--- exit
+0

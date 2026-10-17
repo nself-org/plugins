@@ -17,7 +17,7 @@
   "commands": {
     "binary": "nself-plugin-dev",
     "command": "plugin-dev",
-    "json": "none",
+    "json": "envelope",
     "output": "document",
     "side_effect": "write",
     "subcommands": [
@@ -57,6 +57,12 @@
             "usage": "Overwrite files if the output directory already exists"
           },
           {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          },
+          {
             "default": "1.0.9",
             "name": "min-cli",
             "type": "string",
@@ -103,11 +109,12 @@
             "usage": "Plugin tier: free or pro"
           }
         ],
-        "json": "none",
+        "json": "envelope",
         "name": "init",
         "output": "document",
         "side_effect": "write",
-        "summary": "Scaffold a new plugin project"
+        "summary": "Scaffold a new plugin project",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -145,6 +152,12 @@
             "usage": "Overwrite files if the output directory already exists"
           },
           {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          },
+          {
             "default": "1.0.9",
             "name": "min-cli",
             "type": "string",
@@ -191,11 +204,12 @@
             "usage": "Plugin tier: free or pro"
           }
         ],
-        "json": "none",
+        "json": "envelope",
         "name": "new",
         "output": "document",
         "side_effect": "write",
-        "summary": "Scaffold a new plugin project (deprecated: use 'init')"
+        "summary": "Scaffold a new plugin project (deprecated: use 'init')",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -219,16 +233,23 @@
           },
           {
             "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          },
+          {
+            "default": "false",
             "name": "no-link",
             "type": "bool",
             "usage": "Skip auto-linking the plugin before starting dev mode"
           }
         ],
-        "json": "none",
+        "json": "envelope",
         "name": "dev",
         "output": "stream",
         "side_effect": "write",
-        "summary": "Start a plugin in development mode with hot-reload"
+        "summary": "Start a plugin in development mode with hot-reload",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -238,6 +259,12 @@
           }
         ],
         "flags": [
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          },
           {
             "default": "0",
             "name": "port",
@@ -251,11 +278,12 @@
             "usage": "Print the allocated port and exit (for scripting)"
           }
         ],
-        "json": "none",
+        "json": "envelope",
         "name": "debug",
         "output": "document",
         "side_effect": "write",
-        "summary": "Attach a dlv debugger to a running plugin process"
+        "summary": "Attach a dlv debugger to a running plugin process",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -273,16 +301,23 @@
           },
           {
             "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          },
+          {
+            "default": "false",
             "name": "list",
             "type": "bool",
             "usage": "List currently linked plugins"
           }
         ],
-        "json": "none",
+        "json": "envelope",
         "name": "link",
         "output": "document",
         "side_effect": "write",
-        "summary": "Register a local plugin directory as a shadow override"
+        "summary": "Register a local plugin directory as a shadow override",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -291,11 +326,20 @@
             "required": true
           }
         ],
-        "json": "none",
+        "flags": [
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          }
+        ],
+        "json": "envelope",
         "name": "unlink",
         "output": "document",
         "side_effect": "write",
-        "summary": "Remove a local plugin shadow, restoring the registry version"
+        "summary": "Remove a local plugin shadow, restoring the registry version",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -313,6 +357,12 @@
           },
           {
             "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (status lines and tool output go to stderr)"
+          },
+          {
+            "default": "false",
             "name": "no-cleanup",
             "type": "bool",
             "usage": "Skip cleanup after smoke test (useful for debugging)"
@@ -324,11 +374,12 @@
             "usage": "Test phase to run: unit, smoke, or both"
           }
         ],
-        "json": "none",
+        "json": "envelope",
         "name": "test",
         "output": "document",
         "side_effect": "write",
-        "summary": "Run a plugin's test suite (unit + smoke install/uninstall)"
+        "summary": "Run a plugin's test suite (unit + smoke install/uninstall)",
+        "surface": "cli-only"
       }
     ],
     "summary": "Plugin author tools: init, new, dev, debug, link, unlink, test"

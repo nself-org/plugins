@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev test",
+  "data": {
+    "name": "rt",
+    "phase": "unit",
+    "passed": [
+      "unit"
+    ],
+    "cleanup": false
+  }
+}

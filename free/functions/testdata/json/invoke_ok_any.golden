@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "functions invoke",
+  "data": {
+    "body": {
+      "greeting": "hello"
+    },
+    "method": "POST",
+    "name": "hello",
+    "status": 200
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "command": "sentry alerts channels",
+  "data": {
+    "channels": [
+      {
+        "id": "c1",
+        "kind": "email",
+        "target": "ops@example.test",
+        "enabled": true
+      }
+    ]
+  }
+}

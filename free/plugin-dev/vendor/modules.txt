@@ -1,0 +1,5 @@
+# github.com/nself-org/cli/sdk/go/v2 v2.4.14
+## explicit; go 1.25.0
+github.com/nself-org/cli/sdk/go/v2/compat
+github.com/nself-org/cli/sdk/go/v2/compat/compattest
+github.com/nself-org/cli/sdk/go/v2/output

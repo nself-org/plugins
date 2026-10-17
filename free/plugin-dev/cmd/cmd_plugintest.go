@@ -16,23 +16,33 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nself-org/cli/sdk/go/v2/output"
 	"github.com/nself-org/nself-plugin-dev/internal/clui"
 	"github.com/nself-org/nself-plugin-dev/internal/links"
 )
 
-func runPluginTest(p *parsed) error {
+// testData is the --json data of `test` when every phase run passed.
+type testData struct {
+	Name    string   `json:"name"`
+	Phase   string   `json:"phase"`
+	Passed  []string `json:"passed"`
+	Cleanup bool     `json:"cleanup"`
+}
+
+func runPluginTest(p *parsed) (any, error) {
 	name := p.args[0]
 	phase := p.str("phase")
 	hostMode := p.boolean("host")
 	noCleanup := p.boolean("no-cleanup")
 
 	if phase != "unit" && phase != "smoke" && phase != "both" {
-		return fmt.Errorf("invalid --phase %q: must be unit, smoke, or both", phase)
+		return nil, usageErr(fmt.Errorf("invalid --phase %q: must be unit, smoke, or both", phase),
+			"invalid --phase: must be unit, smoke, or both")
 	}
 
 	pluginPath, err := links.ResolvePluginPath(name)
 	if err != nil {
-		return err
+		return nil, pluginNotFoundErr(err)
 	}
 
 	clui.Infof("Running plugin tests for %s (phase=%s)...", name, phase)
@@ -83,11 +93,13 @@ func runPluginTest(p *parsed) error {
 		clui.Dimmedf("Passed: %s", strings.Join(passed, ", "))
 	}
 	if len(failed) > 0 {
-		return fmt.Errorf("FAIL — phases failed: %s", strings.Join(failed, ", "))
+		return nil, coded(fmt.Errorf("FAIL — phases failed: %s", strings.Join(failed, ", ")),
+			CodeTestsFailed, output.ClassUser, "plugin tests failed in: "+strings.Join(failed, ", "),
+			"the test output is on stderr")
 	}
 
 	clui.Success("All test phases passed.")
-	return nil
+	return testData{Name: name, Phase: phase, Passed: append([]string{}, passed...), Cleanup: !noCleanup && phase != "unit"}, nil
 }
 
 // runUnitTests runs go test ./... in the plugin source directory (in a golang

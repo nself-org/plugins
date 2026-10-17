@@ -1,0 +1,8 @@
+{
+  "schema_version": "1",
+  "command": "functions delete",
+  "data": {
+    "deleted": true,
+    "name": "gone"
+  }
+}

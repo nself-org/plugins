@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev init",
+  "error": {
+    "code": "E401",
+    "message": "--tenancy must be one of: none, app-isolation, cloud-tenant, both",
+    "remediation": "run nself plugin-dev <command> --help",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

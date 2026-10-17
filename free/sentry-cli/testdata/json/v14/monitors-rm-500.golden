@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+Error: sentry api HTTP 500: database exploded
+--- exit
+1

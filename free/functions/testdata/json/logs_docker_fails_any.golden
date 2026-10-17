@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions logs",
+  "error": {
+    "code": "E764",
+    "message": "docker logs for the functions container failed",
+    "remediation": "check that docker is running and the functions service is enabled",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

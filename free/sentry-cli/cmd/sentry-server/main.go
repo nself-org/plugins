@@ -17,15 +17,14 @@ package main
 // Constraints: terraform, ssh, scp, rsync must be in PATH.
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/nself-org/nself-sentry-cli/internal/deploy"
-	"github.com/nself-org/nself-sentry-cli/internal/infra"
 	"github.com/nself-org/nself-sentry-cli/internal/ui"
 
 	"github.com/spf13/cobra"
@@ -72,7 +71,20 @@ func init() {
 	sentryServerProvisionCmd.Flags().String("host", "", "Skip Terraform and deploy to this existing host (user@host:/path)")
 	sentryServerProvisionCmd.Flags().String("key-path", "", "SSH key path (defaults to NSELF_DEPLOY_KEY_PATH env var)")
 
+	// provision printed no JSON before: the envelope is its --json output in
+	// v1.4 and v1.5 mode alike.
+	jsonout.AddFlag(sentryServerProvisionCmd, "Print one v1 JSON envelope on stdout (progress and step output go to stderr)")
+	jsonout.Always(sentryServerProvisionCmd)
+
 	sentryServerCmd.AddCommand(sentryServerProvisionCmd)
+}
+
+// provisionResult is the data of the provision envelope.
+type provisionResult struct {
+	Project   string `json:"project"`
+	DryRun    bool   `json:"dry_run"`
+	Terraform bool   `json:"terraform"`
+	Deployed  bool   `json:"deployed"`
 }
 
 // runSentryServerProvision implements 'nself sentry-server provision <project>'.
@@ -85,13 +97,30 @@ func init() {
 // Outputs:  Provisioned and running ops server.
 // Constraints: Steps are sequential; failure at any step returns immediately.
 func runSentryServerProvision(cmd *cobra.Command, args []string) error {
+	if !jsonout.Envelope(cmd) {
+		_, err := provision(cmd, args)
+		return err
+	}
+	// JSON mode: stdout carries the envelope only. Progress lines and the
+	// output of terraform, ssh and nself go to stderr for the length of the run.
+	res, err := provisionToStderr(cmd, args)
+	if err != nil {
+		return err
+	}
+	return jsonout.Done(cmd, res)
+}
+
+// provision runs the four steps and reports what it did.
+func provision(cmd *cobra.Command, args []string) (*provisionResult, error) {
 	project := args[0]
+	res := &provisionResult{Project: project}
 
 	location, _ := cmd.Flags().GetString("location")
 	serverType, _ := cmd.Flags().GetString("server-type")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	host, _ := cmd.Flags().GetString("host")
 	keyPath, _ := cmd.Flags().GetString("key-path")
+	res.DryRun = dryRun
 
 	// Resolve SSH key from flag → env → default.
 	if keyPath == "" {
@@ -107,11 +136,12 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 	// ── Step 1: Terraform (unless --host skips it) ─────────────────────────
 	if host == "" {
 		if err := runSentryTerraform(cmd.Context(), project, location, serverType, keyPath, dryRun); err != nil {
-			return fmt.Errorf("sentry-server provision: terraform: %w", err)
+			return nil, fmt.Errorf("sentry-server provision: terraform: %w", err)
 		}
+		res.Terraform = !dryRun
 		if dryRun {
 			ui.Info("DRY-RUN: would wait for SSH, push secrets, and deploy ops profile")
-			return nil
+			return res, nil
 		}
 		// After Terraform, the host is read from env (set by the module output or
 		// the NSELF_DEPLOY_HOST_OPS env var the operator configures).
@@ -120,7 +150,7 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 			host = os.Getenv("OPS_DEPLOY_HOST")
 		}
 		if host == "" {
-			return fmt.Errorf("sentry-server provision: terraform complete but NSELF_DEPLOY_HOST_OPS is not set; export it and re-run with --host")
+			return nil, fmt.Errorf("sentry-server provision: terraform complete but NSELF_DEPLOY_HOST_OPS is not set; export it and re-run with --host")
 		}
 	}
 
@@ -135,7 +165,7 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 	} else {
 		ui.Info(fmt.Sprintf("Waiting for SSH on %s (up to 3 minutes)...", host))
 		if err := waitForSSH(cmd.Context(), host, keyPath, 3*time.Minute); err != nil {
-			return fmt.Errorf("sentry-server provision: SSH wait: %w", err)
+			return nil, fmt.Errorf("sentry-server provision: SSH wait: %w", err)
 		}
 		ui.Success("SSH reachable")
 	}
@@ -143,7 +173,7 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 	// ── Step 3: Push secrets ───────────────────────────────────────────────
 	workdir, err := projectRoot()
 	if err != nil {
-		return fmt.Errorf("sentry-server provision: %w", err)
+		return nil, fmt.Errorf("sentry-server provision: %w", err)
 	}
 
 	pushOpts := deploy.PushSecretsOptions{
@@ -153,7 +183,7 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 	}
 	ui.Info("Pushing secrets to remote host...")
 	if err := deploy.PushSecrets(cmd.Context(), cfg, pushOpts); err != nil {
-		return fmt.Errorf("sentry-server provision: push secrets: %w", err)
+		return nil, fmt.Errorf("sentry-server provision: push secrets: %w", err)
 	}
 
 	// ── Step 4: Deploy ops profile ─────────────────────────────────────────
@@ -162,110 +192,22 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 		ui.Info(fmt.Sprintf("DRY-RUN: would run ops deploy to %s", host))
 	} else {
 		if err := runCLISelf(cmd.Context(), workdir, "ops", "deploy"); err != nil {
-			return fmt.Errorf("sentry-server provision: ops deploy: %w", err)
+			return nil, fmt.Errorf("sentry-server provision: ops deploy: %w", err)
 		}
 	}
 
 	if !dryRun {
+		res.Deployed = true
 		ui.Success(fmt.Sprintf("ɳSentry ops server for project %q is live at %s", project, host))
 	}
-	return nil
+	return res, nil
 }
 
-// runSentryTerraform runs terraform apply for the Hetzner ops module.
-//
-// Purpose:  Provision Hetzner infrastructure for the ops server.
-// Inputs:   project name, location, serverType, keyPath (SSH private key path), dryRun flag.
-// Outputs:  Terraform apply executed against terraform/modules/hetzner.
-// Constraints: HETZNER_NSELF_TOKEN or HCLOUD_TOKEN must be set.
-func runSentryTerraform(ctx context.Context, project, location, serverType, keyPath string, dryRun bool) error {
-	// Passthrough: HETZNER_NSELF_TOKEN → HCLOUD_TOKEN.
-	if tok := os.Getenv("HETZNER_NSELF_TOKEN"); tok != "" && os.Getenv("HCLOUD_TOKEN") == "" {
-		os.Setenv("HCLOUD_TOKEN", tok)
-	}
+var setupOnce sync.Once
 
-	// Read the public key for the deploy user's authorized_keys.
-	pubKeyPath := keyPath + ".pub"
-	deployPubKey := ""
-	if data, err := os.ReadFile(pubKeyPath); err == nil {
-		deployPubKey = strings.TrimSpace(string(data))
-	}
+func setup() { setupOnce.Do(setupRoot) }
 
-	vars := map[string]string{}
-	if location != "" {
-		vars["location"] = location
-	}
-	if serverType != "" {
-		vars["server_type"] = serverType
-	}
-	if project != "" {
-		vars["project"] = project
-	}
-	if deployPubKey != "" {
-		vars["deploy_ssh_pubkey"] = deployPubKey
-	}
-
-	opts := infra.ApplyOptions{
-		PlanOptions: infra.PlanOptions{
-			Provider:   infra.ProviderHetzner,
-			Domain:     project,
-			ModulesDir: "terraform/modules/hetzner",
-		},
-		AutoApprove: true,
-		Vars:        vars,
-	}
-
-	if dryRun {
-		ui.Info(fmt.Sprintf("DRY-RUN: would run terraform apply (provider=hetzner, location=%s, server-type=%s)", location, serverType))
-		return nil
-	}
-
-	ui.Info(fmt.Sprintf("Running terraform apply (location=%s, server-type=%s)...", location, serverType))
-	return infra.Apply(ctx, opts)
-}
-
-// waitForSSH polls the given host until SSH is reachable or the timeout expires.
-//
-// Purpose:  Block until a freshly provisioned server accepts SSH connections.
-// Inputs:   host in user@host or user@host:/path format, keyPath, timeout.
-// Outputs:  nil when SSH is ready; error after timeout.
-// Constraints: polls every 10 seconds; requires ssh binary in PATH.
-func waitForSSH(ctx context.Context, host, keyPath string, timeout time.Duration) error {
-	// Extract the SSH target (strip any :/path suffix).
-	sshTarget := host
-	for i := len(host) - 1; i >= 0; i-- {
-		if host[i] == ':' {
-			sshTarget = host[:i]
-			break
-		}
-	}
-
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		args := []string{
-			"-i", keyPath,
-			"-o", "ConnectTimeout=5",
-			"-o", "StrictHostKeyChecking=accept-new",
-			"-o", "ForwardAgent=no",
-			"-o", "BatchMode=yes",
-			sshTarget,
-			"true",
-		}
-		c := exec.CommandContext(ctx, "ssh", args...)
-		c.Env = os.Environ()
-		if err := c.Run(); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context cancelled while waiting for SSH")
-		case <-time.After(10 * time.Second):
-		}
-	}
-	return fmt.Errorf("SSH on %s did not become reachable within %s", sshTarget, timeout)
-}
-
-func main() {
+func setupRoot() {
 	prefixUsageWithNself(sentryServerCmd)
 
 	// Cobra default Args validator (legacyArgs) rejects an unrecognised
@@ -279,13 +221,16 @@ func main() {
 	sentryServerCmd.CompletionOptions.DisableDefaultCmd = true
 	sentryServerCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 	sentryServerCmd.SilenceUsage = true
+	jsonout.Wrap(sentryServerCmd)
+}
 
-	if err := sentryServerCmd.Execute(); err != nil {
-		// cobra has already printed the error; exit non-zero without repeating
-		// it. The CLI mirrors this status and stays silent, so the plugin's own
-		// message is the only one the user sees.
-		os.Exit(1)
-	}
+func main() {
+	setup()
+	// cobra has already printed the error; exit non-zero without repeating
+	// it. The CLI mirrors this status and stays silent, so the plugin's own
+	// message is the only one the user sees. With --json in v1.5 mode the
+	// error is one envelope on stdout and the status is its class.
+	os.Exit(jsonout.Execute(sentryServerCmd, os.Args[1:]))
 }
 
 // prefixUsageWithNself rewrites the usage template so every rendered command
@@ -297,4 +242,13 @@ func prefixUsageWithNself(root *cobra.Command) {
 		"{{.CommandPath}}", "nself {{.CommandPath}}",
 		"{{.UseLine}}", "nself {{.UseLine}}",
 	).Replace(root.UsageTemplate()))
+}
+
+// provisionToStderr runs provision with os.Stdout pointed at os.Stderr and
+// restores it on return, panic included.
+func provisionToStderr(cmd *cobra.Command, args []string) (*provisionResult, error) {
+	saved := os.Stdout
+	os.Stdout = os.Stderr
+	defer func() { os.Stdout = saved }()
+	return provision(cmd, args)
 }

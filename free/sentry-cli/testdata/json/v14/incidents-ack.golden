@@ -1,0 +1,12 @@
+--- stdout
+--- stderr
+{
+  "id": "i1",
+  "monitor_id": "m1",
+  "title": "api down",
+  "status": "acknowledged",
+  "severity": "high",
+  "started_at": "2026-01-02T03:04:05Z"
+}
+--- exit
+0

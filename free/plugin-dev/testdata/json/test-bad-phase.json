@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev test",
+  "error": {
+    "code": "E401",
+    "message": "invalid --phase: must be unit, smoke, or both",
+    "remediation": "run nself plugin-dev <command> --help",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

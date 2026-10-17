@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
 	"github.com/spf13/cobra"
 )
@@ -47,6 +48,13 @@ func printSentryJSON(cmd *cobra.Command, v interface{}) error {
 	}
 	cmd.Println(string(data))
 	return nil
+}
+
+// emitSentryJSON prints the --json result of a command that printed JSON before.
+// legacy is the pre-contract payload; data is the v1 envelope data.
+func emitSentryJSON(cmd *cobra.Command, legacy, data interface{}) error {
+	// compat.V15(P7-SURF-31): MarshalIndent of the bare payload on stderr -> v1 envelope on stdout
+	return jsonout.Data(cmd, data, func() error { return printSentryJSON(cmd, legacy) })
 }
 
 // dashIfEmpty returns "-" for empty table cells.

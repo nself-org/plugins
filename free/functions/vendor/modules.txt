@@ -1,6 +1,11 @@
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
+# github.com/nself-org/cli/sdk/go/v2 v2.4.14
+## explicit; go 1.25.0
+github.com/nself-org/cli/sdk/go/v2/compat
+github.com/nself-org/cli/sdk/go/v2/compat/compattest
+github.com/nself-org/cli/sdk/go/v2/output
 # github.com/spf13/cobra v1.10.2
 ## explicit; go 1.15
 github.com/spf13/cobra

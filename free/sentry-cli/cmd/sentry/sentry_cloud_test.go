@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nself-org/cli/sdk/go/v2/compat/compattest"
 	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
 	"github.com/spf13/cobra"
 )
@@ -71,6 +72,7 @@ func runSentrySubcommand(t *testing.T, target *cobra.Command, args []string) (st
 }
 
 func TestSentryMonitorsList_JSON(t *testing.T) {
+	compattest.Set(t, false) // pre-contract bytes; the envelope is covered by TestJSONEnvelope
 	srv := newSentryTestAPI(t)
 	isolateSentryEnv(t, srv.URL)
 
@@ -88,6 +90,7 @@ func TestSentryMonitorsList_JSON(t *testing.T) {
 }
 
 func TestSentryWhoami_JSON(t *testing.T) {
+	compattest.Set(t, false) // pre-contract bytes; the envelope is covered by TestJSONEnvelope
 	srv := newSentryTestAPI(t)
 	isolateSentryEnv(t, srv.URL)
 

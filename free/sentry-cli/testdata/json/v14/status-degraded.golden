@@ -1,0 +1,28 @@
+--- stdout
+{
+  "overall": "degraded_performance",
+  "total": 3,
+  "operational": 1,
+  "degraded": 2,
+  "down": [
+    "DB"
+  ],
+  "components": [
+    {
+      "name": "API",
+      "status": "operational"
+    },
+    {
+      "name": "DB",
+      "status": "partial_outage"
+    },
+    {
+      "name": "Auth",
+      "status": "degraded_performance"
+    }
+  ]
+}
+--- stderr
+Error: exit status 1
+--- exit
+1

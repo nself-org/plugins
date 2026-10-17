@@ -1,0 +1,19 @@
+--- stdout
+--- stderr
+{
+  "tenant_id": "t-fixture",
+  "email": "dev@example.test",
+  "tier": "bundle",
+  "quotas": {
+    "monitors": {
+      "used": 1,
+      "limit": 50
+    },
+    "status_pages": {
+      "used": 0,
+      "limit": 3
+    }
+  }
+}
+--- exit
+0
