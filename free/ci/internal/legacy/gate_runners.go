@@ -11,6 +11,9 @@ import (
 )
 
 func runGitleaks(root string, timeout int, verbose bool, forceFilesystem bool) GateResult {
+	if gr := runEnvLiveKeyGate(root, verbose); gr != nil && !gr.Passed {
+		return *gr
+	}
 	// Prefer a repo-local gitleaks.toml if present.
 	configFlag := ""
 	for _, candidate := range []string{
