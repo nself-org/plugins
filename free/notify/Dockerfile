@@ -15,7 +15,8 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-s -w" -o /plugin ./cmd/
 
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates wget
+# No apk at build time (the tarball build runs with the network off): the CA bundle comes from the builder stage; wget is busybox.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /plugin /plugin
 EXPOSE 3052
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

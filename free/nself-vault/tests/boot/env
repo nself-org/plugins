@@ -1,0 +1,5 @@
+# Dummy values for the boot kit only; nothing here is real (the KEK is a visibly fake 64-hex pattern).
+VAULT_PLUGIN_ENABLED=true
+NSELF_JWT_SECRET=boot-kit-dummy-secret-not-real
+VAULT_KEK_V1=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+VAULT_PORT=$PORT

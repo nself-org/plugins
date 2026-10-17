@@ -21,7 +21,10 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/nself-org/cli/sdk/go/v2 v2.0.0
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 )
+
+replace github.com/nself-org/cli/sdk/go/v2 => ./third_party/cli-sdk-go

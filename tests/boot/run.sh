@@ -4,7 +4,9 @@
 # applies all migrations, second applies none, and /health reports migrations applied == expected.
 # Env hook (P7-PLUG-76): when <plugin>/tests/boot/env exists, each KEY=value line is passed as -e to both boots. Only
 # $DATABASE_URL and $PORT (or ${...}) are expanded, by plain string replacement (no eval); blank and # lines are
-# skipped. Plugins with no migrations, or with a tests/boot/skip marker (first line = reason), are skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
+# skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
+# Skipped: a plugin with a tests/boot/skip marker (first line = reason), or one whose manifest declares no migrations (and has no migrations/*.sql) (P7-PLUG-44).
+# <plugin>/tests/boot/build-network (empty marker) lets the image build use the network (cargo fetch for the Rust plugin; Go plugins stay network-free).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); . "$HERE/../../scripts/conformance/lib.sh"
 mode=fixtures; list=alpha
@@ -23,13 +25,14 @@ docker run -d --name "$pg" --network "$net" -e POSTGRES_PASSWORD=boot -e POSTGRE
 for i in $(seq 1 60); do docker exec "$pg" pg_isready -U postgres -d boot >/dev/null 2>&1 && break; sleep 1; done
 sleep 2
 for p in $(printf '%s' "$list" | tr ',' ' '); do
-  dir=$root/$p; pj=$dir/plugin.json
-  # Nothing to boot: no migrations, or a marker file tests/boot/skip whose first line says why (a library or hook binary with no HTTP server).
-  ls "$dir"/migrations/*.sql >/dev/null 2>&1 || { echo "skip  boot $p: no migrations, nothing to apply at boot"; continue; }
+  dir=$root/$p; pj=$dir/plugin.json; schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj")
+  # Nothing to boot: a marker file tests/boot/skip whose first line says why (a library or hook binary with no HTTP server), or a plugin that declares no migrations at all.
+  # A manifest with a migrations key but no SQL still boots (and fails on its own terms).
   [ -f "$dir/tests/boot/skip" ] && { echo "skip  boot $p: $(head -1 "$dir/tests/boot/skip")"; continue; }
-  schema=$(jq -r '.schema // empty' "$pj"); port=$(jq -r '.port' "$pj")
+  if ! ls "$dir"/migrations/*.sql >/dev/null 2>&1 && [ "$(jq -r '.migrations // empty | tostring' "$pj")" = "" ]; then echo "skip  boot $p: no migrations declared (nothing to apply)"; continue; fi
   [ -n "$schema" ] || { echo "FAIL boot $p: manifest has no schema"; rc=1; continue; }
-  docker build --network none -q -t "nself-boot-$p:$pid" "$dir" >/dev/null 2>"$W/build.err" || { echo "FAIL boot $p: image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
+  netflag="--network none"; [ -f "$dir/tests/boot/build-network" ] && netflag=   # Rust cargo fetch (P7-PLUG-44 ruling): the marker file lifts the network ban for the image build only
+  docker build $netflag -q -t "nself-boot-$p:$pid" "$dir" >/dev/null 2>"$W/build.err" || { echo "FAIL boot $p: image build failed"; tail -5 "$W/build.err"; rc=1; continue; }
   dburl="postgres://postgres:boot@$pg:5432/boot"; envargs=(); ef=$dir/tests/boot/env
   if [ -f "$ef" ]; then
     while IFS= read -r line || [ -n "$line" ]; do

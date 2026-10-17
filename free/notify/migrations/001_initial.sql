@@ -1,10 +1,10 @@
 -- Migration: 001_initial
 -- Plugin: notify
--- Description: Creates np_notify_notifications and np_notify_templates tables.
+-- Description: Creates public.np_notify_notifications and public.np_notify_templates tables.
 -- Multi-Tenant Convention Wall: source_account_id in both tables.
 -- Idempotent: uses CREATE TABLE IF NOT EXISTS.
 
-CREATE TABLE IF NOT EXISTS np_notify_notifications (
+CREATE TABLE IF NOT EXISTS public.np_notify_notifications (
     id                TEXT         PRIMARY KEY,
     source_account_id TEXT         NOT NULL DEFAULT 'primary',
     channel           TEXT         NOT NULL,
@@ -16,15 +16,17 @@ CREATE TABLE IF NOT EXISTS np_notify_notifications (
     error             TEXT,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+-- Installs created by the former Go DDL lack source_account_id: add it before any index uses it.
+ALTER TABLE public.np_notify_notifications ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
 
 CREATE INDEX IF NOT EXISTS idx_np_notify_notifications_status
-    ON np_notify_notifications(status);
+    ON public.np_notify_notifications(status);
 CREATE INDEX IF NOT EXISTS idx_np_notify_notifications_channel
-    ON np_notify_notifications(channel);
+    ON public.np_notify_notifications(channel);
 CREATE INDEX IF NOT EXISTS idx_np_notify_notifications_account
-    ON np_notify_notifications(source_account_id);
+    ON public.np_notify_notifications(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_notify_templates (
+CREATE TABLE IF NOT EXISTS public.np_notify_templates (
     id               TEXT         PRIMARY KEY,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     name             TEXT         NOT NULL UNIQUE,
@@ -34,12 +36,10 @@ CREATE TABLE IF NOT EXISTS np_notify_templates (
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+-- Installs created by the former Go DDL lack source_account_id: add it before any index uses it.
+ALTER TABLE public.np_notify_templates ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
 
 CREATE INDEX IF NOT EXISTS idx_np_notify_templates_name
-    ON np_notify_templates(name);
+    ON public.np_notify_templates(name);
 CREATE INDEX IF NOT EXISTS idx_np_notify_templates_account
-    ON np_notify_templates(source_account_id);
-
--- Idempotent backfill for schema upgrades
-ALTER TABLE np_notify_notifications ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
-ALTER TABLE np_notify_templates ADD COLUMN IF NOT EXISTS source_account_id TEXT NOT NULL DEFAULT 'primary';
+    ON public.np_notify_templates(source_account_id);

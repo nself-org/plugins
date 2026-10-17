@@ -1,6 +1,6 @@
 BINARY   := nself-cloud
 PKG      := github.com/nself-org/plugins-pro/paid/nself-cloud
-PORT     ?= 3845
+PORT     ?= 3855
 DB_URL   ?= postgres://postgres:postgres@localhost:5432/nself
 
 .PHONY: build test run fmt lint clean

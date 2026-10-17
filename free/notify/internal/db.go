@@ -32,46 +32,6 @@ type Template struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// Migrate creates the required tables if they do not exist.
-func Migrate(pool *pgxpool.Pool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS np_notify_notifications (
-			id         TEXT PRIMARY KEY,
-			channel    TEXT NOT NULL,
-			recipient  TEXT NOT NULL,
-			subject    TEXT NOT NULL DEFAULT '',
-			body       TEXT NOT NULL DEFAULT '',
-			status     TEXT NOT NULL DEFAULT 'pending',
-			sent_at    TIMESTAMPTZ,
-			error      TEXT,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notify_notifications_status
-			ON np_notify_notifications (status);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notify_notifications_channel
-			ON np_notify_notifications (channel);
-
-		CREATE TABLE IF NOT EXISTS np_notify_templates (
-			id               TEXT PRIMARY KEY,
-			name             TEXT NOT NULL UNIQUE,
-			channel          TEXT NOT NULL,
-			subject_template TEXT NOT NULL DEFAULT '',
-			body_template    TEXT NOT NULL DEFAULT '',
-			created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_np_notify_templates_name
-			ON np_notify_templates (name);
-	`)
-	return err
-}
-
 // InsertNotification inserts a notification record and returns its ID.
 func InsertNotification(ctx context.Context, pool *pgxpool.Pool, id, channel, recipient, subject, body, status string, sentAt *time.Time, errMsg *string) error {
 	_, err := pool.Exec(ctx, `
