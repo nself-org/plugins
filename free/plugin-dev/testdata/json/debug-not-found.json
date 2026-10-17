@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev debug",
+  "error": {
+    "code": "E770",
+    "message": "the plugin was not found: run from its directory or link it first",
+    "remediation": "run nself plugin-dev link <path>, or run the command from the plugin directory",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

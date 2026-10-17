@@ -34,9 +34,10 @@ type flagSpec struct {
 }
 
 // globalFlags are the persistent flags the core root defines. They are
-// accepted and ignored here: the nself root owns them (and refuses --json on
-// commands that cannot produce JSON).
+// accepted and ignored here: the nself root owns them. --json is this plugin's
+// own: every subcommand prints one v1 envelope when it is set.
 var globalFlags = []flagSpec{
+	{"json", kBool, "false"},
 	{"no-deprecation-warnings", kBool, "false"},
 	{"no-monorepo", kBool, "false"},
 }

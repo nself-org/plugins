@@ -15,6 +15,8 @@
 //	nself-plugin-dev unlink <name>
 //	nself-plugin-dev test <name> [--phase unit|smoke|both] [--host] [--no-cleanup]
 //
+// Every subcommand also takes --json: one v1 envelope on stdout (envelope.go).
+//
 // SPORT: PLUGINS-PLUGIN-DEV-000
 package main
 
@@ -41,6 +43,11 @@ func run(args []string) int {
 	}
 	c, ok := lookup(args[0])
 	if !ok {
+		if wantsJSON(args) {
+			inv := begin("", true)
+			defer inv.end()
+			return inv.fail(usageErr(errors.New("unknown command"), "unknown command"))
+		}
 		fmt.Fprintf(os.Stderr, "Error: unknown command %q for %q\n", args[0], "nself plugin-dev")
 		return 1
 	}
@@ -50,26 +57,32 @@ func run(args []string) int {
 // execute runs one subcommand the way cobra does: the notice a deprecated
 // command prints on stderr, then flag parsing, then help, then the argument
 // check, then the command body. A returned error prints "Error: <msg>" and exits 1.
+// With --json the result is one v1 envelope on stdout instead (envelope.go).
 func (c *command) execute(argv []string) int {
 	if c.deprecated != "" {
 		fmt.Fprintf(os.Stderr, "Command %q is deprecated, %s\n", c.name, c.deprecated)
 	}
 	p, err := parse(c.flags, argv)
 	if err != nil {
-		return fail(err)
+		inv := begin(c.name, wantsJSON(argv))
+		defer inv.end()
+		return inv.fail(usageErr(err, safeUsage(err.Error())))
 	}
 	if p.help {
 		txt, _ := surface.Help(c.name)
 		fmt.Print(txt)
 		return 0
 	}
+	inv := begin(c.name, p.boolean("json"))
+	defer inv.end()
 	if err := exactOneArg(p.args); err != nil {
-		return fail(err)
+		return inv.fail(usageErr(err, safeUsage(err.Error())))
 	}
-	if err := c.run(p); err != nil {
-		return fail(err)
+	data, err := c.run(p)
+	if err != nil {
+		return inv.fail(err)
 	}
-	return 0
+	return inv.done(data)
 }
 
 // fail prints the core error line and returns the exit status: the error's own

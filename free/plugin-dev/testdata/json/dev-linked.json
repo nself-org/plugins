@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev dev",
+  "data": {
+    "name": "rt",
+    "plugin_path": "<TMP>/work/rt",
+    "linked": true,
+    "debug": false,
+    "entrypoint": "cmd"
+  }
+}

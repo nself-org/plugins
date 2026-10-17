@@ -11,13 +11,25 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
+	"github.com/nself-org/cli/sdk/go/v2/output"
 	"github.com/nself-org/nself-plugin-dev/internal/clui"
 	"github.com/nself-org/nself-plugin-dev/internal/scaffold"
 )
 
-func runInit(p *parsed) error {
+// initData is the --json data of `init` and `new`.
+type initData struct {
+	Name     string   `json:"name"`
+	Template string   `json:"template"`
+	Tier     string   `json:"tier"`
+	Tenancy  string   `json:"tenancy"`
+	Dir      string   `json:"dir"`
+	Files    []string `json:"files"`
+}
+
+func runInit(p *parsed) (any, error) {
 	name := p.args[0]
 	tmplType := p.str("template")
 	tier := p.str("tier")
@@ -25,12 +37,13 @@ func runInit(p *parsed) error {
 	switch tmplType {
 	case "go", "rust", "node", "static":
 	default:
-		return fmt.Errorf("unknown template %q: must be go, rust, node, or static", tmplType)
+		return nil, usageErr(fmt.Errorf("unknown template %q: must be go, rust, node, or static", tmplType),
+			"unknown template: must be go, rust, node, or static")
 	}
 
 	tenancy, err := resolveTenancy(p.str("tenancy"), p.boolean("no-interactive"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	clui.Infof("Scaffolding %s plugin %q (tier: %s, tenancy: %s)...", tmplType, name, tier, tenancy)
@@ -51,7 +64,7 @@ func runInit(p *parsed) error {
 		Tenancy:     tenancy,
 	})
 	if err != nil {
-		return fmt.Errorf("scaffold failed: %w", err)
+		return nil, scaffoldErr(fmt.Errorf("scaffold failed: %w", err))
 	}
 
 	clui.Successf("Plugin %q scaffolded in %s/", name, result.Dir)
@@ -71,7 +84,29 @@ func runInit(p *parsed) error {
 	case "static":
 		clui.Dimmed("  # Edit static/ directory with your content")
 	}
-	return nil
+	files := append([]string{}, result.Files...)
+	sort.Strings(files)
+	return initData{Name: name, Template: tmplType, Tier: tier, Tenancy: string(tenancy), Dir: result.Dir, Files: files}, nil
+}
+
+// scaffoldErr gives a scaffold.Run failure its envelope code: the validation and
+// destination errors are the caller's (user), anything else is a render or write
+// failure (infra). The envelope text is fixed; the human text is err.
+func scaffoldErr(err error) error {
+	text := err.Error()
+	switch {
+	case strings.Contains(text, "is not empty"):
+		return coded(err, CodeDestNotEmpty, output.ClassUser, "the destination directory is not empty",
+			"pick another --out or pass --force to overwrite")
+	case strings.Contains(text, "invalid plugin name"):
+		return usageErr(err, "invalid plugin name")
+	case strings.Contains(text, "--tier must be"):
+		return usageErr(err, "--tier must be free or pro")
+	case strings.Contains(text, "--tenancy must be"):
+		return usageErr(err, "--tenancy must be none, app-isolation, cloud-tenant, or both")
+	}
+	return coded(err, CodeScaffoldFailed, output.ClassInfra, "the scaffold could not render or write the plugin files",
+		"check that the output directory is writable")
 }
 
 // resolveTenancy returns the tenancy mode: explicit flag, else the prompt unless
@@ -82,7 +117,8 @@ func resolveTenancy(flagVal string, noInteractive bool) (scaffold.TenancyMode, e
 		case scaffold.TenancyNone, scaffold.TenancyAppIsolation, scaffold.TenancyCloudTenant, scaffold.TenancyBoth:
 			return scaffold.TenancyMode(flagVal), nil
 		default:
-			return "", fmt.Errorf("--tenancy must be one of: none, app-isolation, cloud-tenant, both; got %q", flagVal)
+			return "", usageErr(fmt.Errorf("--tenancy must be one of: none, app-isolation, cloud-tenant, both; got %q", flagVal),
+				"--tenancy must be one of: none, app-isolation, cloud-tenant, both")
 		}
 	}
 	if noInteractive || !stdinIsTerminal() {
@@ -107,7 +143,8 @@ func promptTenancy() (scaffold.TenancyMode, error) {
 	fmt.Fprint(os.Stderr, "? Does this plugin store per-user or per-app data in Postgres tables? (y/N) ")
 	ans, err := r.ReadString('\n')
 	if err != nil {
-		return scaffold.TenancyNone, fmt.Errorf("reading input: %w", err)
+		return scaffold.TenancyNone, usageErr(fmt.Errorf("reading input: %w", err),
+			"could not read the tenancy answer: pass --tenancy or --no-interactive")
 	}
 	ans = strings.TrimSpace(strings.ToLower(ans))
 	if ans != "y" && ans != "yes" {
@@ -123,7 +160,8 @@ func promptTenancy() (scaffold.TenancyMode, error) {
 
 	choice, err := r.ReadString('\n')
 	if err != nil {
-		return scaffold.TenancyNone, fmt.Errorf("reading input: %w", err)
+		return scaffold.TenancyNone, usageErr(fmt.Errorf("reading input: %w", err),
+			"could not read the tenancy answer: pass --tenancy or --no-interactive")
 	}
 	choice = strings.TrimSpace(strings.ToLower(choice))
 	switch choice {

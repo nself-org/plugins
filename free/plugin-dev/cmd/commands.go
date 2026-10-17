@@ -13,7 +13,7 @@ type command struct {
 	short      string
 	deprecated string
 	flags      []flagSpec
-	run        func(*parsed) error
+	run        func(*parsed) (any, error)
 }
 
 var scaffoldFlags = []flagSpec{

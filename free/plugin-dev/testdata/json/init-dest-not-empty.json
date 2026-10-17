@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev init",
+  "error": {
+    "code": "E772",
+    "message": "the destination directory is not empty",
+    "remediation": "pick another --out or pass --force to overwrite",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

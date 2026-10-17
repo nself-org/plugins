@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev dev",
+  "error": {
+    "code": "E776",
+    "message": "the dev watcher or the debugger it launched exited with an error",
+    "cause": "exit 3",
+    "remediation": "its own output is on stderr; install air or fswatch for the watcher, dlv for --debug",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

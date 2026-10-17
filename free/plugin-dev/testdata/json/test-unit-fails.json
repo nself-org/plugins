@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev test",
+  "error": {
+    "code": "E773",
+    "message": "plugin tests failed in: unit",
+    "remediation": "the test output is on stderr",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

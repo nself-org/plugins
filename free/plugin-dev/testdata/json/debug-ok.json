@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "plugin-dev debug",
+  "data": {
+    "name": "rt",
+    "port": 3000,
+    "address": ":3000",
+    "plugin_path": "<TMP>/work/rt",
+    "binary": "<TMP>/nself-debug-rt"
+  }
+}

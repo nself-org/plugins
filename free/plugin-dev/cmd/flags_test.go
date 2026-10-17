@@ -39,7 +39,7 @@ func TestParseErrors(t *testing.T) {
 		"--name":      "flag needs an argument: --name",
 		"--n=abc":     `invalid argument "abc" for "--n" flag: strconv.ParseInt: parsing "abc": invalid syntax`,
 		"--on=maybe":  `invalid argument "maybe" for "--on" flag: strconv.ParseBool: parsing "maybe": invalid syntax`,
-		"--json":      "unknown flag: --json",
+		"--jsonx":     "unknown flag: --jsonx",
 		"--help=what": `invalid argument "what" for "--help" flag: strconv.ParseBool: parsing "what": invalid syntax`,
 	} {
 		_, err := parse(specs, []string{argv})

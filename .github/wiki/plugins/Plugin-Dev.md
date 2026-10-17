@@ -31,6 +31,29 @@ background service. Category: `development`.
 | `nself plugin-dev debug <name>` | Build the plugin with debug flags and run it under a headless `dlv` on a port in 2345-2399. `--port`, `--port-only`. |
 | `nself plugin-dev test <name>` | Unit tests, then a smoke install and uninstall. `--phase unit\|smoke\|both`, `--host`, `--no-cleanup`. |
 
+## JSON output
+
+Every subcommand takes `--json`. plugin-dev printed no JSON before, so there is no legacy shape: the v1 envelope
+(`schema_version`, `command`, then `data` or `error`) is printed in both v1.4 and v1.5 mode. With `--json` stdout carries
+that one document and nothing else; status lines, child process output and the launch.json snippet go to stderr. Without
+`--json` the output is unchanged. A failure prints an error envelope and exits with its class status (user 1, infra 2);
+a child process's own exit status is reported in `error.cause`, not as the exit status.
+
+| Command | `data` fields |
+|---------|---------------|
+| `init`, `new` | `name`, `template`, `tier`, `tenancy`, `dir`, `files` (sorted) |
+| `link` | `name`, `path`, `mode` (`container-mount` or `host-process`) |
+| `link --list` | `links`: list of `{name, path}`, sorted by name |
+| `unlink` | `name`, `unlinked` (false when it was not linked) |
+| `dev` | `name`, `plugin_path`, `linked`, `debug`, `entrypoint` (printed when the watcher exits cleanly) |
+| `debug` | `name`, `port`, `address`; plus `plugin_path`, `binary` unless `--port-only` |
+| `test` | `name`, `phase`, `passed`, `cleanup` |
+
+Error codes (plugin-owned range E770 to E779, plus E401 for usage): E401 usage, E770 plugin not found, E771 not a plugin
+directory, E772 scaffold destination not empty, E773 plugin tests failed, E774 plugin-links.json unreadable or unwritable,
+E775 scaffold failed, E776 a build, debugger, watcher or install step failed, E779 unexpected. Messages are fixed text and
+never echo a path, flag value or environment value.
+
 ## Configuration
 
 | Env Var | Default | Description |
