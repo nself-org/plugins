@@ -5243,7 +5243,24 @@
       "catalog": {
         "commands": {
           "command": "sentry",
-          "subcommands": []
+          "subcommands": [
+            "alerts channels",
+            "alerts test",
+            "incidents ack",
+            "incidents list",
+            "incidents resolve",
+            "login",
+            "logout",
+            "monitors add",
+            "monitors list",
+            "monitors pause",
+            "monitors resume",
+            "monitors rm",
+            "status",
+            "status-pages create",
+            "status-pages list",
+            "whoami"
+          ]
         },
         "maturity": "implemented",
         "requires": {

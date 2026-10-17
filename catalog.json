@@ -3563,7 +3563,24 @@
       "checksum": "08785504ad0688031364f7bba4e838dcfda2c4b378832adba6fe022f80729f34",
       "commands": {
         "command": "sentry",
-        "subcommands": []
+        "subcommands": [
+          "alerts channels",
+          "alerts test",
+          "incidents ack",
+          "incidents list",
+          "incidents resolve",
+          "login",
+          "logout",
+          "monitors add",
+          "monitors list",
+          "monitors pause",
+          "monitors resume",
+          "monitors rm",
+          "status",
+          "status-pages create",
+          "status-pages list",
+          "whoami"
+        ]
       },
       "description": "ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",
       "docs_url": null,
