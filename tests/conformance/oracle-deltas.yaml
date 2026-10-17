@@ -6,14 +6,6 @@
 #   from "-": key is the exact whole line the converted output has and the original lacks.
 #   otherwise: in `file`, lines containing the literal key have `to` replaced by `from` on the converted side.
 deltas:
-  # 2026-10-11 P7-PLUG-79: storage gains its compose service (it shipped no fragment before, D-0336).
-  - slug: storage
-    file: compose-files.txt
-    key: "/tmp/home/.nself/plugins/storage/docker-compose.plugin.yml"
-    from: "-"
-    to: "/tmp/home/.nself/plugins/storage/docker-compose.plugin.yml"
-    owner_ref: P7-PLUG-79
-    expires: 2026-12-31
   # 2026-10-13 P7-PLUG-44: the nself-cloud / nself-sync port rows are gone. Both plugins are kind library (no compose
   # fragment in the original or the twin, D-0066), so neither side produces a compose service line to differ on.
   # v1.4.12 reads dependencies as a JSON array only. The object form {required, optional} that 115 free manifests
