@@ -34,9 +34,9 @@ if [[ -f "$PID_FILE" ]]; then
   pid=$(cat "$PID_FILE")
   if kill -0 "$pid" 2>/dev/null; then
     plugin_info "Stopping runner process (PID: $pid)..."
-    kill "$pid" 2>/dev/null || true
+    _trust_kill_tree "$pid"
     sleep 2
-    kill -9 "$pid" 2>/dev/null || true
+    _trust_kill_tree "$pid" KILL
     plugin_success "Runner stopped."
     stopped=true
   fi

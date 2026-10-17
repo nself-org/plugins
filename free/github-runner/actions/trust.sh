@@ -154,21 +154,21 @@ trust_service_name() {
   printf 'actions.runner.%s.%s' "${GITHUB_RUNNER_ORG:-nself-org}" "${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
 }
 
-# _trust_kill_tree PID: SIGTERM the process and all its descendants. run.sh
+# _trust_kill_tree PID [SIGNAL]: signal (default TERM) the process and all its descendants. run.sh
 # starts Runner.Listener and does not forward signals, so killing only the
 # wrapper leaves a listener that still takes jobs.
 _trust_kill_tree() {
-  local pid="$1" child
+  local pid="$1" sig="${2:-TERM}" child
   for child in $(pgrep -P "$pid" 2>/dev/null || true); do
-    _trust_kill_tree "$child"
+    _trust_kill_tree "$child" "$sig"
   done
-  kill "$pid" 2>/dev/null || true
+  kill -"$sig" "$pid" 2>/dev/null || true
 }
 
 # trust_stop_runner PID_FILE SERVICE: stop a running runner (systemd service or
 # nohup process tree). The systemd unit is also disabled so a reboot does not
-# bring the runner back into a public group; start.sh starts it again (after
-# the guard passes). Prints what it stopped; nothing when nothing was running.
+# bring the runner back into a public group; start.sh enables and starts it
+# again after the guard passes. Prints what it stopped; nothing when nothing was running.
 trust_stop_runner() {
   local pid_file="$1" svc="$2" pid sc=""
   if command -v systemctl >/dev/null 2>&1 && { systemctl is-active --quiet "$svc" 2>/dev/null || systemctl is-enabled --quiet "$svc" 2>/dev/null; }; then

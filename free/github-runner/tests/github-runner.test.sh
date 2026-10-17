@@ -232,12 +232,16 @@ wait "$sleeper" 2>/dev/null || true
 
 # trust_stop_runner kills the whole process tree, not just the wrapper.
 bash -c 'sleep 300 & echo $! > "$1"; wait' _ "$T/child.pid" & wrapper=$!
-sleep 0.5
+for _ in $(seq 1 100); do [[ -s "$T/child.pid" ]] && break; sleep 0.1; done
+sleep 0.2
 echo "$wrapper" > "$T/tree.pid"
 trust_stop_runner "$T/tree.pid" "no-such-unit" > /dev/null
-sleep 0.3
 child=$(cat "$T/child.pid")
-state=$(ps -o stat= -p "$child" 2>/dev/null | tr -d ' ' || true)
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+  state=$(ps -o stat= -p "$child" 2>/dev/null | tr -d ' ' || true)
+  [[ -z "$state" || "$state" == Z* ]] && break
+  sleep 0.2
+done
 if [[ -n "$state" && "$state" != Z* ]]; then fail "trust_stop_runner left a child process running"; kill "$child" 2>/dev/null || true; else pass "trust_stop_runner stops the child processes too"; fi
 wait "$wrapper" 2>/dev/null || true
 

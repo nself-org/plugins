@@ -43,12 +43,14 @@ fi
 # Try systemd first
 if command -v systemctl &>/dev/null; then
   svc_name="$(trust_service_name)"
-  if systemctl is-enabled --quiet "$svc_name" 2>/dev/null; then
+  # `systemctl cat` also finds a unit the trust guard disabled; enable it again
+  # now that the guard has passed.
+  if systemctl cat "$svc_name" >/dev/null 2>&1; then
     plugin_info "Starting systemd service..."
     if [[ $EUID -eq 0 ]]; then
-      systemctl start "$svc_name"
+      systemctl enable --now "$svc_name"
     else
-      sudo systemctl start "$svc_name"
+      sudo systemctl enable --now "$svc_name"
     fi
     plugin_success "Runner started via systemd."
     exit 0
