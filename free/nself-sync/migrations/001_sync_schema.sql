@@ -1,5 +1,4 @@
--- +goose Up
-CREATE TABLE IF NOT EXISTS np_sync_events (
+CREATE TABLE IF NOT EXISTS public.np_sync_events (
     event_id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     tenant_id UUID NULL,
@@ -14,10 +13,10 @@ CREATE TABLE IF NOT EXISTS np_sync_events (
     signature BYTEA NOT NULL,
     received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX np_sync_events_user_hlc ON np_sync_events (user_id, hlc_wall_ms, hlc_lamport);
-CREATE INDEX np_sync_events_entity ON np_sync_events (entity_type, entity_id, hlc_wall_ms DESC);
+CREATE INDEX IF NOT EXISTS np_sync_events_user_hlc ON public.np_sync_events (user_id, hlc_wall_ms, hlc_lamport);
+CREATE INDEX IF NOT EXISTS np_sync_events_entity ON public.np_sync_events (entity_type, entity_id, hlc_wall_ms DESC);
 
-CREATE TABLE IF NOT EXISTS np_devices (
+CREATE TABLE IF NOT EXISTS public.np_devices (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL,
     tenant_id UUID NULL,
@@ -27,10 +26,10 @@ CREATE TABLE IF NOT EXISTS np_devices (
     last_seen_at TIMESTAMPTZ DEFAULT now(),
     revoked_at TIMESTAMPTZ NULL
 );
-CREATE INDEX np_devices_user ON np_devices (user_id, revoked_at);
+CREATE INDEX IF NOT EXISTS np_devices_user ON public.np_devices (user_id, revoked_at);
 
-CREATE TABLE IF NOT EXISTS np_sync_cursors (
-    device_id UUID PRIMARY KEY REFERENCES np_devices(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS public.np_sync_cursors (
+    device_id UUID PRIMARY KEY REFERENCES public.np_devices(id) ON DELETE CASCADE,
     last_hlc_wall_ms BIGINT NOT NULL DEFAULT 0,
     last_hlc_lamport BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -44,7 +43,7 @@ CREATE TABLE IF NOT EXISTS np_sync_cursors (
 -- Refresh policy: REFRESH MATERIALIZED VIEW CONCURRENTLY np_sync_state, driven
 -- by a periodic job (S03 ticket) or on-demand after large batch ingests. The
 -- UNIQUE index supports CONCURRENTLY.
-CREATE MATERIALIZED VIEW IF NOT EXISTS np_sync_state AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS public.np_sync_state AS
 SELECT DISTINCT ON (user_id, entity_type, entity_id)
        event_id,
        user_id,
@@ -58,16 +57,10 @@ SELECT DISTINCT ON (user_id, entity_type, entity_id)
        payload,
        schema_version,
        received_at
-  FROM np_sync_events
+  FROM public.np_sync_events
  ORDER BY user_id, entity_type, entity_id, hlc_wall_ms DESC, hlc_lamport DESC;
 
 CREATE UNIQUE INDEX IF NOT EXISTS np_sync_state_pk
-    ON np_sync_state (user_id, entity_type, entity_id);
+    ON public.np_sync_state (user_id, entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS np_sync_state_user_hlc
-    ON np_sync_state (user_id, hlc_wall_ms, hlc_lamport);
-
--- +goose Down
-DROP MATERIALIZED VIEW IF EXISTS np_sync_state;
-DROP TABLE IF EXISTS np_sync_cursors;
-DROP TABLE IF EXISTS np_devices;
-DROP TABLE IF EXISTS np_sync_events;
+    ON public.np_sync_state (user_id, hlc_wall_ms, hlc_lamport);

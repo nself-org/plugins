@@ -1,10 +1,14 @@
 -- plugin-media-processing: Media encoding schema
 -- Convention Wall: source_account_id TEXT NOT NULL DEFAULT 'primary'
 -- Columns derived from handlers.rs SELECT/INSERT statements (code wins)
+--
+-- Boot-applied by the service (src/migrate.rs) with search_path pinned to np_media_processing, so every object is
+-- schema-qualified: the tables live in public (the cli tracking rule). Idempotent (IF NOT EXISTS): it applies over
+-- tables the v1 install already created. No transaction control: the runner wraps each file in its own transaction.
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
 
-CREATE TABLE IF NOT EXISTS np_mediap_encoding_profiles (
+CREATE TABLE IF NOT EXISTS public.np_mediap_encoding_profiles (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     name              TEXT        NOT NULL,
@@ -20,12 +24,12 @@ CREATE TABLE IF NOT EXISTS np_mediap_encoding_profiles (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_np_mediap_encoding_profiles_source_account
-    ON np_mediap_encoding_profiles(source_account_id);
+    ON public.np_mediap_encoding_profiles(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_mediap_jobs (
+CREATE TABLE IF NOT EXISTS public.np_mediap_jobs (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
-    profile_id        UUID        REFERENCES np_mediap_encoding_profiles(id) ON DELETE SET NULL,
+    profile_id        UUID        REFERENCES public.np_mediap_encoding_profiles(id) ON DELETE SET NULL,
     input_url         TEXT        NOT NULL,
     output_path       TEXT,
     status            TEXT        NOT NULL DEFAULT 'pending',
@@ -34,37 +38,37 @@ CREATE TABLE IF NOT EXISTS np_mediap_jobs (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_source_account ON np_mediap_jobs(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_status ON np_mediap_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_source_account ON public.np_mediap_jobs(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_mediap_jobs_status ON public.np_mediap_jobs(status);
 
-CREATE TABLE IF NOT EXISTS np_mediap_job_outputs (
+CREATE TABLE IF NOT EXISTS public.np_mediap_job_outputs (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id            UUID        NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
+    job_id            UUID        NOT NULL REFERENCES public.np_mediap_jobs(id) ON DELETE CASCADE,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     output_type       TEXT        NOT NULL,
     url               TEXT,
     size_bytes        BIGINT,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_mediap_job_outputs_source_account ON np_mediap_job_outputs(source_account_id);
-CREATE INDEX IF NOT EXISTS idx_np_mediap_job_outputs_job_id ON np_mediap_job_outputs(job_id);
+CREATE INDEX IF NOT EXISTS idx_np_mediap_job_outputs_source_account ON public.np_mediap_job_outputs(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_mediap_job_outputs_job_id ON public.np_mediap_job_outputs(job_id);
 
-CREATE TABLE IF NOT EXISTS np_mediap_hls_manifests (
+CREATE TABLE IF NOT EXISTS public.np_mediap_hls_manifests (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id            UUID        NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
+    job_id            UUID        NOT NULL REFERENCES public.np_mediap_jobs(id) ON DELETE CASCADE,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     manifest_url      TEXT        NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_mediap_hls_manifests_source_account ON np_mediap_hls_manifests(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_mediap_hls_manifests_source_account ON public.np_mediap_hls_manifests(source_account_id);
 
-CREATE TABLE IF NOT EXISTS np_mediap_subtitles (
+CREATE TABLE IF NOT EXISTS public.np_mediap_subtitles (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id            UUID        NOT NULL REFERENCES np_mediap_jobs(id) ON DELETE CASCADE,
+    job_id            UUID        NOT NULL REFERENCES public.np_mediap_jobs(id) ON DELETE CASCADE,
     source_account_id TEXT        NOT NULL DEFAULT 'primary',
     language          TEXT        NOT NULL DEFAULT 'en',
     subtitle_url      TEXT        NOT NULL,
     format            TEXT        NOT NULL DEFAULT 'vtt',
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_np_mediap_subtitles_source_account ON np_mediap_subtitles(source_account_id);
+CREATE INDEX IF NOT EXISTS idx_np_mediap_subtitles_source_account ON public.np_mediap_subtitles(source_account_id);

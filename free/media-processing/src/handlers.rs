@@ -18,10 +18,6 @@ fn sa(req: &HttpRequest) -> &str {
         .unwrap_or("primary")
 }
 
-pub async fn health() -> HttpResponse {
-    HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
-}
-
 pub async fn ready(pool: web::Data<Arc<Pool>>) -> HttpResponse {
     match pool.get().await {
         Ok(_) => HttpResponse::Ok().json(serde_json::json!({"status": "ready"})),

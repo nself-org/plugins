@@ -2,7 +2,7 @@
 -- nself-eval-gate plugin — eval harness foundation
 -- Idempotent: uses IF NOT EXISTS throughout
 
-CREATE TABLE IF NOT EXISTS np_eval_suites (
+CREATE TABLE IF NOT EXISTS public.np_eval_suites (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     slug             TEXT        NOT NULL,
     version          TEXT        NOT NULL,
@@ -16,5 +16,5 @@ CREATE TABLE IF NOT EXISTS np_eval_suites (
     CONSTRAINT np_eval_suites_slug_source_uniq UNIQUE (slug, source_account_id)
 );
 
-CREATE INDEX IF NOT EXISTS np_eval_suites_slug_idx ON np_eval_suites (slug);
-CREATE INDEX IF NOT EXISTS np_eval_suites_repo_idx ON np_eval_suites (repo);
+CREATE INDEX IF NOT EXISTS np_eval_suites_slug_idx ON public.np_eval_suites (slug);
+CREATE INDEX IF NOT EXISTS np_eval_suites_repo_idx ON public.np_eval_suites (repo);

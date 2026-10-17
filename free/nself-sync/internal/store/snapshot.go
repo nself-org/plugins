@@ -63,6 +63,9 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
+// Pool returns the underlying pool (boot migrations run on it).
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
 // Ping checks DB liveness.
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 

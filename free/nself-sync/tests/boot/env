@@ -1,0 +1,2 @@
+# Dummy values for the boot kit only; nothing here is real.
+NSELF_SYNC_JWT_SECRET=boot-kit-dummy-secret-not-real

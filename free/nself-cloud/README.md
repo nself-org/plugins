@@ -1,6 +1,6 @@
 # nself-cloud
 
-**Bundle:** ɳCloud (internal) | **Tier:** cloud | **Status:** planned | **Port:** 3845
+**Bundle:** ɳCloud (internal) | **Tier:** cloud | **Status:** planned | **Port:** 3855
 
 Managed hosting infrastructure plugin for cloud.nself.org. Handles tenant lifecycle, Hetzner server provisioning sagas, Stripe metered billing, custom domain management, and team memberships.
 
@@ -17,7 +17,7 @@ This plugin is internal-only (`visibility: internal`). It powers cloud.nself.org
 
 ## Port
 
-`3845` (reserved in nSelf port registry)
+`3855` (reserved in nSelf port registry)
 
 ## Auth
 
@@ -51,7 +51,7 @@ This plugin is installed automatically as part of the ɳCloud infrastructure. It
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3845` | HTTP listen port |
+| `PORT` | `3855` | HTTP listen port |
 | `DATABASE_URL` | — | Postgres connection string (required) |
 | `HETZNER_API_TOKEN` | — | Hetzner Cloud API token for provisioning (required) |
 | `STRIPE_PLATFORM_SECRET_KEY` | — | Stripe platform key (required) |
