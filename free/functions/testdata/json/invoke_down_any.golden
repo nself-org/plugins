@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions invoke",
+  "error": {
+    "code": "E762",
+    "message": "the functions service did not answer",
+    "remediation": "start it with nself start and check the port with nself functions list",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions invoke",
+  "error": {
+    "code": "E401",
+    "message": "accepts 1 arg(s), received 0",
+    "remediation": "run nself functions <command> --help",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

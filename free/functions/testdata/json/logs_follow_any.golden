@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions logs",
+  "error": {
+    "code": "E401",
+    "message": "--json cannot be combined with --follow: a stream is not one envelope",
+    "remediation": "run nself functions <command> --help",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

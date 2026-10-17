@@ -1,0 +1,14 @@
+[
+  {
+    "name": "fn-a",
+    "status": "unreachable",
+    "url": "http://localhost:@PORT@/v1/fn-a",
+    "dir": "@DIR@/functions/fn-a"
+  },
+  {
+    "name": "fn-b",
+    "status": "unreachable",
+    "url": "http://localhost:@PORT@/v1/fn-b",
+    "dir": "@DIR@/functions/fn-b"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "functions logs",
+  "data": {
+    "count": 2,
+    "lines": [
+      "2026-01-01 GET /v1/fn-a 200",
+      "fn-a started"
+    ],
+    "name": "fn-a"
+  }
+}

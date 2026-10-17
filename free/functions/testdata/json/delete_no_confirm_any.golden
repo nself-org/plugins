@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "functions delete",
+  "error": {
+    "code": "E403",
+    "message": "delete refused: --confirm was not given, the function was not deleted",
+    "remediation": "pass --confirm to delete the function",
+    "exit_code": 4,
+    "class": "destructive_blocked"
+  }
+}

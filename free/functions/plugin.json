@@ -4,41 +4,184 @@
   "category": "infrastructure",
   "cliCommands": [
     {
-      "description": "",
+      "description": "Deploy, list, invoke, read logs of and delete serverless functions",
       "name": "functions"
     }
   ],
   "commands": {
     "binary": "nself-functions",
     "command": "functions",
+    "json": "envelope",
+    "output": "document",
+    "side_effect": "write",
     "subcommands": [
       {
+        "args": [
+          {
+            "name": "source",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "name": "env",
+            "secret": true,
+            "type": "stringArray",
+            "usage": "Environment variable KEY=VALUE (repeatable)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress text goes to stderr)"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "usage": "Function name (defaults to filename without extension)"
+          },
+          {
+            "name": "runtime",
+            "type": "string",
+            "usage": "Override runtime: node, deno, python"
+          }
+        ],
+        "json": "envelope",
         "name": "deploy",
-        "side_effect": "write"
-      },
-      {
-        "name": "invoke",
-        "side_effect": "write"
-      },
-      {
-        "name": "list",
-        "side_effect": "read"
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Deploy a function from a file or directory"
       },
       {
         "flags": [
           {
-            "name": "follow",
-            "type": "bool"
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Output as JSON (v1.5: one v1 envelope; v1.4: the pre-contract array)"
+          },
+          {
+            "name": "runtime",
+            "type": "string",
+            "usage": "Filter by runtime"
           }
         ],
-        "name": "logs",
-        "side_effect": "read"
+        "json": "envelope",
+        "name": "list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List deployed functions"
       },
       {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "name": "auth",
+            "secret": true,
+            "type": "string",
+            "usage": "Bearer token for Authorization header"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress text goes to stderr)"
+          },
+          {
+            "default": "POST",
+            "name": "method",
+            "type": "string",
+            "usage": "HTTP method: GET, POST, PUT, PATCH, DELETE"
+          },
+          {
+            "name": "payload",
+            "type": "string",
+            "usage": "JSON payload body"
+          }
+        ],
+        "json": "envelope",
+        "name": "invoke",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Invoke a deployed function"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "default": "false",
+            "name": "follow",
+            "type": "bool",
+            "usage": "Stream logs continuously"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope with the matching lines (not with --follow)"
+          },
+          {
+            "name": "since",
+            "type": "string",
+            "usage": "Show logs since duration (e.g. 1h, 30m)"
+          },
+          {
+            "default": "100",
+            "name": "tail",
+            "type": "int",
+            "usage": "Number of recent log lines"
+          }
+        ],
+        "json": "envelope",
+        "name": "logs",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Stream logs for a function"
+      },
+      {
+        "args": [
+          {
+            "name": "name",
+            "required": true
+          }
+        ],
+        "confirm": {
+          "flags": [
+            "confirm"
+          ]
+        },
+        "flags": [
+          {
+            "default": "false",
+            "name": "confirm",
+            "type": "bool",
+            "usage": "Confirm deletion (required)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (progress text goes to stderr)"
+          }
+        ],
+        "json": "envelope",
         "name": "delete",
-        "side_effect": "destructive"
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Delete a deployed function"
       }
-    ]
+    ],
+    "summary": "Deploy, list, invoke, read logs of and delete serverless functions"
   },
   "description": "Deploy and manage nself serverless functions",
   "entryPoint": "cmd/",

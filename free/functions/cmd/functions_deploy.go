@@ -7,8 +7,9 @@ package main
 // Inputs: cobra command flags (--name, --runtime, --env) and the
 // positional file/dir arg.
 // Outputs: a deployed function directory under ./functions/; stdout
-// confirmation with the invoke URL.
-// Constraints: pure move, no behavior change. functionNamePattern and
+// confirmation with the invoke URL. With --json, one v1 envelope (data: name,
+// path, url) or an error envelope; see envelope.go.
+// Constraints: human output unchanged. functionNamePattern and
 // functionsCmd (parent) remain in functions.go.
 
 import (
@@ -23,6 +24,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/nself-org/cli/sdk/go/v2/output"
 )
 
 var functionsDeployFlags struct {
@@ -50,9 +53,12 @@ func init() {
 	functionsDeployCmd.Flags().StringVar(&functionsDeployFlags.name, "name", "", "Function name (defaults to filename without extension)")
 	functionsDeployCmd.Flags().StringVar(&functionsDeployFlags.runtime, "runtime", "", "Override runtime: node, deno, python")
 	functionsDeployCmd.Flags().StringArrayVar(&functionsDeployFlags.envPairs, "env", nil, "Environment variable KEY=VALUE (repeatable)")
+	addJSONFlag(functionsDeployCmd)
 }
 
 func runFunctionsDeploy(cmd *cobra.Command, args []string) error {
+	r := begin(cmd, false)
+	defer r.end()
 	src := args[0]
 
 	// Determine function name.
@@ -68,33 +74,38 @@ func runFunctionsDeploy(cmd *cobra.Command, args []string) error {
 
 	// Validate name.
 	if !functionNamePattern.MatchString(name) {
-		return fmt.Errorf("invalid function name %q: use lowercase alphanumeric and hyphens only", name)
+		return r.usageSafe(fmt.Sprintf("invalid function name %q: use lowercase alphanumeric and hyphens only", name),
+			"invalid function name: use lowercase alphanumeric and hyphens only")
 	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("getting working directory: %w", err)
+		return r.fail(fileOpErr(fmt.Errorf("getting working directory: %w", err)))
 	}
 
 	destDir := filepath.Join(cwd, "functions", name)
 	if err := os.MkdirAll(destDir, 0750); err != nil {
-		return fmt.Errorf("creating function directory: %w", err)
+		return r.fail(fileOpErr(fmt.Errorf("creating function directory: %w", err)))
 	}
 
 	// Copy source into dest.
 	fi, err := os.Stat(src)
 	if err != nil {
-		return fmt.Errorf("stat %s: %w", src, err)
+		if os.IsNotExist(err) {
+			return r.fail(newErr(fmt.Errorf("stat %s: %w", src, err), CodeSourceNotFound, output.ClassUser,
+				"the deploy source was not found", "pass an existing file or directory"))
+		}
+		return r.fail(fileOpErr(fmt.Errorf("stat %s: %w", src, err)))
 	}
 
 	if fi.IsDir() {
 		if err := copyDir(src, destDir); err != nil {
-			return fmt.Errorf("copying directory: %w", err)
+			return r.fail(fileOpErr(fmt.Errorf("copying directory: %w", err)))
 		}
 	} else {
 		destFile := filepath.Join(destDir, filepath.Base(src))
 		if err := copyFile(src, destFile); err != nil {
-			return fmt.Errorf("copying file: %w", err)
+			return r.fail(fileOpErr(fmt.Errorf("copying file: %w", err)))
 		}
 	}
 
@@ -107,7 +118,7 @@ func runFunctionsDeploy(cmd *cobra.Command, args []string) error {
 			buf.WriteByte('\n')
 		}
 		if err := os.WriteFile(envFile, buf.Bytes(), 0600); err != nil {
-			return fmt.Errorf("writing function .env: %w", err)
+			return r.fail(fileOpErr(fmt.Errorf("writing function .env: %w", err)))
 		}
 	}
 
@@ -128,7 +139,11 @@ func runFunctionsDeploy(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Function %q deployed to ./functions/%s/\n", name, name)
 	fmt.Printf("URL: http://localhost:3008/v1/%s\n", name)
-	return nil
+	return r.done(map[string]any{
+		"name": name,
+		"path": "functions/" + name,
+		"url":  "http://localhost:3008/v1/" + name,
+	})
 }
 
 // copyFile copies a single file src → dst.
