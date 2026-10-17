@@ -153,10 +153,10 @@ func (e SSHExecutor) RunInput(ctx context.Context, command, input string) (strin
 	err = s.Wait()
 	out := strings.TrimSpace(buf.String())
 	if err != nil {
-		return out, fmt.Errorf("remote command on %s failed: %w\n%s", e.Target.Dest, err, out)
+		return out, fmt.Errorf("remote command on %s failed: %w\n%s", t.Dest, err, out)
 	}
 	if werr != nil {
-		return out, fmt.Errorf("remote command on %s: send input: %w", e.Target.Dest, werr)
+		return out, fmt.Errorf("remote command on %s: send input: %w", t.Dest, werr)
 	}
 	return out, nil
 }

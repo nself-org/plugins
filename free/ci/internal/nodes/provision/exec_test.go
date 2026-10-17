@@ -126,6 +126,34 @@ func TestSSHExecutor_FailureWrapsOutput(t *testing.T) {
 	}
 }
 
+// RunInput's failure errors name the normalised destination, as Run's do: a
+// bracketed IPv6 host reads ci@2001:db8::1, never ci@[2001:db8::1] (D-0577).
+func TestSSHExecutor_RunInputErrorNamesNormalisedDest(t *testing.T) {
+	stubSSH(t, "cat >/dev/null; echo boom; exit 3")
+	ex := NewSSHExecutor("ci@[2001:db8::1]", "/k/key")
+	_, runErr := ex.Run(context.Background(), "x")
+	_, inErr := ex.RunInput(context.Background(), "x", "in\n")
+	for name, err := range map[string]error{"Run": runErr, "RunInput": inErr} {
+		if err == nil || !strings.Contains(err.Error(), "remote command on ci@2001:db8::1 failed") || strings.Contains(err.Error(), "[") {
+			t.Fatalf("%s err = %v, want dest ci@2001:db8::1 without brackets", name, err)
+		}
+	}
+}
+
+// A stdin write that fails (ssh exits without reading) also names the
+// normalised destination.
+func TestSSHExecutor_RunInputSendErrorNamesNormalisedDest(t *testing.T) {
+	stubSSH(t, "exec 0<&-; exit 0")
+	ex := NewSSHExecutor("ci@[2001:db8::1]", "/k/key")
+	_, err := ex.RunInput(context.Background(), "x", strings.Repeat("x", 1<<20))
+	if err == nil {
+		t.Skip("stub read nothing yet the write did not fail on this platform")
+	}
+	if !strings.Contains(err.Error(), "remote command on ci@2001:db8::1: send input") || strings.Contains(err.Error(), "[") {
+		t.Fatalf("err = %v, want dest ci@2001:db8::1 without brackets", err)
+	}
+}
+
 func TestSSHExecutor_RefusesBeforeExec(t *testing.T) {
 	log := stubSSH(t, "exit 0")
 	// core's exact messages (cli internal/deploy RunRemoteCommand: empty host,
