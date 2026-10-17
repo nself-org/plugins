@@ -105,6 +105,9 @@
             "required": true
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "env": "NSELF_SENTRY_API_KEY",
@@ -129,7 +132,7 @@
         "json": "envelope",
         "name": "monitors rm",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "destructive",
         "summary": "Delete a monitor"
       },
       {
@@ -485,7 +488,8 @@
         "name": "login",
         "output": "document",
         "side_effect": "write",
-        "summary": "Store and validate an ɳSentry API key"
+        "summary": "Store and validate an ɳSentry API key",
+        "surface": "cli-only"
       },
       {
         "flags": [
@@ -500,7 +504,8 @@
         "name": "logout",
         "output": "document",
         "side_effect": "write",
-        "summary": "Remove the stored ɳSentry API key"
+        "summary": "Remove the stored ɳSentry API key",
+        "surface": "cli-only"
       },
       {
         "flags": [

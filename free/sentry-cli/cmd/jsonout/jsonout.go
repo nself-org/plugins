@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/compat"
@@ -132,14 +133,26 @@ func fail(cmd *cobra.Command, err error) error {
 	return errs.Exit(output.ExitCodeFor(d.Class))
 }
 
-// hasJSONArg reports whether args carry a --json flag.
+// hasJSONArg reports whether args turn --json on. Like pflag the last value
+// wins (--json=false --json is true, --json --json=false is false), and
+// everything after a bare "--" is a positional, not a flag.
 func hasJSONArg(args []string) bool {
+	js := false
 	for _, a := range args {
-		if a == "--json" || strings.HasPrefix(a, "--json=") {
-			return true
+		if a == "--" {
+			break
+		}
+		if a == "--json" {
+			js = true
+			continue
+		}
+		if v, ok := strings.CutPrefix(a, "--json="); ok {
+			if b, err := strconv.ParseBool(v); err == nil {
+				js = b
+			}
 		}
 	}
-	return false
+	return js
 }
 
 // isAlways reports whether args resolve to a command marked with Always.

@@ -45,8 +45,8 @@ a child process's own exit status is reported in `error.cause`, not as the exit 
 | `link` | `name`, `path`, `mode` (`container-mount` or `host-process`) |
 | `link --list` | `links`: list of `{name, path}`, sorted by name |
 | `unlink` | `name`, `unlinked` (false when it was not linked) |
-| `dev` | `name`, `plugin_path`, `linked`, `debug`, `entrypoint` (printed when the watcher exits cleanly) |
-| `debug` | `name`, `port`, `address`; plus `plugin_path`, `binary` unless `--port-only` |
+| `dev` | `name`, `plugin_path`, `linked`, `debug`, `entrypoint` (printed only when the child process itself exits; a Ctrl+C that signals the whole process group ends plugin-dev with no envelope) |
+| `debug` | `name`, `port`, `address`; plus `plugin_path`, `binary` unless `--port-only` (printed only when the child process itself exits, as for `dev`) |
 | `test` | `name`, `phase`, `passed`, `cleanup` |
 
 Error codes (plugin-owned range E770 to E779, plus E401 for usage): E401 usage, E770 plugin not found, E771 not a plugin

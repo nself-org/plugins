@@ -58,7 +58,7 @@
             "default": "false",
             "name": "json",
             "type": "bool",
-            "usage": "Output as JSON (v1.5: one v1 envelope; v1.4: the pre-contract array)"
+            "usage": "Output as JSON"
           },
           {
             "name": "runtime",

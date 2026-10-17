@@ -23,7 +23,7 @@ import (
 func addSentryCloudFlags(cmd *cobra.Command) {
 	cmd.Flags().String("api-url", "", "ɳSentry API base URL (env: "+sentryapi.EnvAPIURL+"; default: "+sentryapi.DefaultAPIURL+")")
 	cmd.Flags().String("api-key", "", "ɳSentry API key nsk_* (env: "+sentryapi.EnvAPIKey+"; default: ~/.nself/sentry.json)")
-	cmd.Flags().Bool("json", false, "Output JSON (AI/script-friendly; with NSELF_V15=1 one v1 envelope on stdout)")
+	cmd.Flags().Bool("json", false, "Output JSON (AI/script-friendly)")
 }
 
 // sentryClientFromCmd builds a sentryapi.Client from the resolved config.

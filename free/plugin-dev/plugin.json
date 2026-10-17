@@ -113,7 +113,8 @@
         "name": "init",
         "output": "document",
         "side_effect": "write",
-        "summary": "Scaffold a new plugin project"
+        "summary": "Scaffold a new plugin project",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -207,7 +208,8 @@
         "name": "new",
         "output": "document",
         "side_effect": "write",
-        "summary": "Scaffold a new plugin project (deprecated: use 'init')"
+        "summary": "Scaffold a new plugin project (deprecated: use 'init')",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -244,9 +246,10 @@
         ],
         "json": "envelope",
         "name": "dev",
-        "output": "document",
+        "output": "stream",
         "side_effect": "write",
-        "summary": "Start a plugin in development mode with hot-reload"
+        "summary": "Start a plugin in development mode with hot-reload",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -279,7 +282,8 @@
         "name": "debug",
         "output": "document",
         "side_effect": "write",
-        "summary": "Attach a dlv debugger to a running plugin process"
+        "summary": "Attach a dlv debugger to a running plugin process",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -312,7 +316,8 @@
         "name": "link",
         "output": "document",
         "side_effect": "write",
-        "summary": "Register a local plugin directory as a shadow override"
+        "summary": "Register a local plugin directory as a shadow override",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -333,7 +338,8 @@
         "name": "unlink",
         "output": "document",
         "side_effect": "write",
-        "summary": "Remove a local plugin shadow, restoring the registry version"
+        "summary": "Remove a local plugin shadow, restoring the registry version",
+        "surface": "cli-only"
       },
       {
         "args": [
@@ -372,7 +378,8 @@
         "name": "test",
         "output": "document",
         "side_effect": "write",
-        "summary": "Run a plugin's test suite (unit + smoke install/uninstall)"
+        "summary": "Run a plugin's test suite (unit + smoke install/uninstall)",
+        "surface": "cli-only"
       }
     ],
     "summary": "Plugin author tools: init, new, dev, debug, link, unlink, test"
