@@ -101,6 +101,13 @@ plant new-plain-insert alpha migration-idempotent 'newsql 003_x.sql "INSERT INTO
 plant new-add-constraint alpha migration-idempotent 'newsql 003_x.sql "ALTER TABLE np_alpha_items ADD CONSTRAINT np_alpha_items_name_chk CHECK (length(name) > 0);"'
 plant new-unguarded-do-execute alpha migration-idempotent 'newsql 003_x.sql "DO \$\$ BEGIN EXECUTE '"'CREATE TABLE np_alpha_extra (id int)'"'; END \$\$;"'
 plant unreleased-alpha alpha migration-idempotent ":" --migration-base "$work/migempty"
+# D-0619 F8: a baseline manifest that exists but cannot be read must fail both rules, not count as "not released".
+cp -R "$mig" "$work/migbad"; printf '{ not json\n' > "$work/migbad/alpha/plugin.json"
+PLANT_MSG="cannot be read"
+plant malformed-baseline-manifest-immutable alpha migration-immutable ":" --migration-base "$work/migbad"
+plant malformed-baseline-manifest-idempotent alpha migration-idempotent ":" --migration-base "$work/migbad"
+PLANT_MSG=
+plant new-plain-update alpha migration-idempotent 'newsql 003_x.sql "UPDATE np_alpha_items SET name = name || '"'x'"';"'
 plant rename-no-fixture alpha legacy-renames 'newsql 003_rename.sql "$RENAME"'
 plant rename-wrong-pair alpha legacy-renames 'newsql 003_rename.sql "$RENAME"; renfx "alpha_items np_alpha_other"'
 plant rename-dynamic-mismatch alpha legacy-renames 'newsql 003_rename.sql "$DYN"; renfx "a1 b1"'

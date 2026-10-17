@@ -69,3 +69,11 @@ exceptions:
     reason: "the edge proxy publishes 80 and 443 on all interfaces by design (NSELF_HTTP_PORT, NSELF_HTTPS_PORT)"
     owner_ref: D-0626
     expires: 2026-12-31
+  # Rule migration-idempotent (D-0619): the stricter DO-block lint no longer treats a BEGIN..EXCEPTION block whose handler
+  # catches unrelated errors as replay protection. webhooks 002 runs `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` through
+  # EXECUTE format() in a loop (replay-safe, but the lint cannot read dynamic SQL).
+  - rule: migration-idempotent
+    plugin: webhooks
+    reason: "002_add_source_account_id.sql line 78 adds a column with ADD COLUMN IF NOT EXISTS inside EXECUTE format() in a loop; the lint cannot read dynamic SQL"
+    owner_ref: D-0619
+    expires: 2026-12-31

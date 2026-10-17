@@ -80,7 +80,7 @@ func badShape(raw string) bool {
 		return true
 	}
 	c := raw[len(raw)-1]
-	return !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9')
+	return (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9')
 }
 
 // Host specificity. nginx picks the server by exact name, then by the longest

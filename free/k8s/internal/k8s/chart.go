@@ -56,6 +56,3 @@ func ExtractChart(chart fs.FS, root string) (dir string, cleanup func(), err err
 	}
 	return dest, cleanup, nil
 }
-
-// parentDir returns the private temp directory that holds the extracted chart.
-func parentDir(chartDir string) string { return filepath.Dir(chartDir) }

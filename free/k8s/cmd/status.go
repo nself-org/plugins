@@ -41,7 +41,7 @@ var statusCmd = &cobra.Command{
 		}
 		out, err := k8s.Status(cmd.Context(), release, cluster)
 		if err != nil {
-			return err
+			return r.fail(err)
 		}
 		fmt.Println(out)
 		return nil

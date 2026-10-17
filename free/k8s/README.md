@@ -31,6 +31,7 @@ Requires `helm` to be installed: https://helm.sh
 ```bash
 nself k8s install --domain myapp.com
 nself k8s install --domain myapp.com --cluster ~/.kube/config --release my-nself
+nself k8s install --domain myapp.com --context my-context
 nself k8s install --domain myapp.com --plugins cron --license-secret nself-license
 nself k8s status
 nself k8s upgrade
@@ -43,6 +44,18 @@ and pass its name with `--license-secret` (see `nself k8s install --help`).
 
 The chart is embedded in the plugin binary (source in `charts/nself/` in this
 repo); there is no chart repository.
+
+Install and upgrade accept `--context` to select an explicit kube context and
+override inherited Helm cluster settings. Failed commands show upgrade recovery
+advice and bounded, sanitized Helm status diagnostics in human and JSON output.
+`nself k8s values --check` detects changes between mapped and unsupported
+services. Generated `pullPolicy` values render as container `imagePullPolicy`.
+
+Plugin workloads keep their compose Service name and also expose the
+`plugin-<name>` hostname recorded by `nself k8s values`. Dependency URLs such as
+`PLUGIN_NOTIFY_INTERNAL_URL=http://plugin-notify:8080` therefore resolve even
+when the compose service is named `notify`. Both Services select the same pods
+and expose the same ports. Conflicting aliases fail chart rendering.
 
 ## History
 
@@ -59,3 +72,7 @@ boundary — see `internal/tui/tui.go`).
 go build -o nself-k8s ./cmd/
 go test ./...
 ```
+
+With the pinned tools from `tests/kind/tools.sh` on PATH, run
+`KIND_WORK=<scratch-directory> bash tests/kind/plugin-alias.sh` to prove a
+dependent plugin reaches `notify` through its injected dependency URL on kind.

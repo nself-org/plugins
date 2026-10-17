@@ -33,7 +33,7 @@ const maxConfirmBytes = 4096
 // confirmRelease asks the user to type the release name and reports whether
 // the answer matches it exactly.
 func confirmRelease(in io.Reader, out io.Writer, release string) bool {
-	fmt.Fprintf(out, "This removes the Helm release %q and its workloads. Its PersistentVolumeClaims are kept.\nType the release name to confirm: ", release)
+	_, _ = fmt.Fprintf(out, "This removes the Helm release %q and its workloads. Its PersistentVolumeClaims are kept.\nType the release name to confirm: ", release)
 	line, _ := bufio.NewReader(io.LimitReader(in, maxConfirmBytes)).ReadString('\n')
 	return strings.TrimSpace(line) == release
 }

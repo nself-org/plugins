@@ -53,7 +53,7 @@ func TestLint(t *testing.T) {
 		{"insert", "INSERT INTO a (x) VALUES (1);\nINSERT INTO a (x) VALUES (1) ON CONFLICT DO NOTHING;\nINSERT INTO a (x) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM a);", []string{"1:INSERT without"}},
 		{"with insert", "WITH s AS (SELECT 1) INSERT INTO a (x) SELECT * FROM s;", []string{"1:INSERT without"}},
 		{"with select passes", "WITH s AS (SELECT 1) SELECT * FROM s;", nil},
-		{"others pass", "COMMENT ON TABLE a IS 'x';\nGRANT SELECT ON a TO u;\nUPDATE a SET x = 1;\nSET search_path = public;\nSELECT 1;", nil},
+		{"others pass", "COMMENT ON TABLE a IS 'x';\nGRANT SELECT ON a TO u;\nSET search_path = public;\nSELECT 1;", nil},
 		// lexing
 		{"semicolon in string", "COMMENT ON TABLE a IS 'a; CREATE TABLE b (x int); c';", nil},
 		{"escaped quote", "COMMENT ON TABLE a IS 'it''s; CREATE TABLE b (x int)';\nCREATE TABLE c (x int);", []string{"2:CREATE TABLE without"}},

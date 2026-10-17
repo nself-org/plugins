@@ -17,10 +17,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/nself-org/nself-crdt/internal/api"
-	"github.com/nself-org/nself-crdt/internal/automerge"
-	"github.com/nself-org/nself-crdt/internal/store"
-	"github.com/nself-org/nself-crdt/internal/yjs"
+	"github.com/nself-org/plugins/free/crdt/go/internal/api"
+	"github.com/nself-org/plugins/free/crdt/go/internal/automerge"
+	"github.com/nself-org/plugins/free/crdt/go/internal/store"
+	"github.com/nself-org/plugins/free/crdt/go/internal/yjs"
 )
 
 func main() {
@@ -44,11 +44,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Run migrations.
-	if err := store.Migrate(ctx, pool); err != nil {
-		log.Fatalf("crdt: migrate failed: %v", err)
-	}
-	logger.Info("crdt: migrations applied")
+	// Apply the plugin's own migrations (migrations/*.sql, embedded) before serving.
+	mustBootMigrations(ctx, pool)
 
 	st := store.New(pool)
 	hub := yjs.NewAwarenessHub()
@@ -67,11 +64,11 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	handlers := api.New(st, yjsHandler, amHandler, comp, logger)
+	handlers := api.New(st, yjsHandler, amHandler, comp, logger).WithMigrationsHealth(bootMigrationsHealth)
 	handlers.Mount(r)
 
 	srv := &http.Server{
-		Addr:         "127.0.0.1:" + port,
+		Addr:         envStr("CRDT_HOST", "127.0.0.1") + ":" + port,
 		Handler:      r,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 0, // WebSocket connections must not have a write deadline

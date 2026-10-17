@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/nself-org/nself-crdt/internal/store"
+	"github.com/nself-org/plugins/free/crdt/go/internal/store"
 )
 
 const maxBodyBytes = 10 * 1024 * 1024 // 10 MB hard limit

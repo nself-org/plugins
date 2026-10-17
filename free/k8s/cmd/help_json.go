@@ -87,7 +87,7 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 	err = c.Help()
 	c.SetOut(nil)
 	if err != nil {
-		fmt.Fprintln(stderr, "Error:", err)
+		_, _ = fmt.Fprintln(stderr, "Error:", err)
 		return true, output.ExitInfra
 	}
 	name := "k8s"
@@ -95,7 +95,7 @@ func helpJSON(root *cobra.Command, args []string, stdout, stderr io.Writer) (han
 		name += " " + c.Name()
 	}
 	if err := output.WriteData(stdout, name, map[string]any{"help": buf.String()}, nil); err != nil {
-		fmt.Fprintln(stderr, "Error: writing the JSON envelope:", err)
+		_, _ = fmt.Fprintln(stderr, "Error: writing the JSON envelope:", err)
 		return true, output.ExitInfra
 	}
 	return true, 0

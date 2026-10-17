@@ -1,0 +1,41 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
+
+services:
+  event-bus:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/event-bus
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_event_bus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8212:8212"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
+      - LISTEN_ADDR=:8212
+      - EVENT_BUS=${EVENT_BUS:-nats}
+      - NATS_EMBEDDED=${NATS_EMBEDDED:-true}
+      - NATS_URL=${NATS_URL:-}
+      - NATS_PORT=${NATS_PORT:-}
+      - NATS_STORE_DIR=${NATS_STORE_DIR:-/var/lib/nself-event-bus/jetstream}
+      - REDPANDA_BROKERS=${REDPANDA_BROKERS:-}
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-}
+      - KAFKA_SASL_USERNAME=${KAFKA_SASL_USERNAME:-}
+      - KAFKA_SASL_PASSWORD=${KAFKA_SASL_PASSWORD:-}
+      - EVENT_BUS_RETENTION_MS=${EVENT_BUS_RETENTION_MS:-}
+      - EVENT_BUS_MAX_BYTES=${EVENT_BUS_MAX_BYTES:-}
+    volumes:
+      - event_bus_data:/var/lib/nself-event-bus/jetstream
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8212/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ${DOCKER_NETWORK}
+
+volumes:
+  event_bus_data:

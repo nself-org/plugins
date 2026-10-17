@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- Rollback 003: rename np_tenant_controller back to nself_controller.
 -- Metadata-only and lossless. Raises if nself_controller already exists
 -- (never merges or drops). No-op if np_tenant_controller does not exist.

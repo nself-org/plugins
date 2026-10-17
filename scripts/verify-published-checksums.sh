@@ -66,6 +66,8 @@ VERSION="${TAG#v}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=scripts/conformance/lib.sh
+source "${SCRIPT_DIR}/conformance/lib.sh"
 RELEASES_FILE="${REPO_ROOT}/releases.json"
 PLUGINS_DIR="${REPO_ROOT}/free"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/verify-checksums.XXXXXX")"
@@ -192,12 +194,11 @@ while IFS= read -r name; do
   [ -f "${PLUGINS_DIR}/${name}/plugin.json" ] && bin_name="$(jq -r '.binaryName // .implementation.binaryName // ""' "${PLUGINS_DIR}/${name}/plugin.json" 2>/dev/null || printf '')"
   has_platforms="$(jq -r '(.platform_checksums // {}) | length > 0' <<<"$row")"
   platforms_json="{}"
-  # With --signatures the release itself says whether a binary ships: a plugin whose binary is blocked by the cli-targets gate
-  # (scripts/conformance/exceptions.yaml) has a binaryName but no platform tarball on the release, and that is not a defect.
+  # Only an active cli-targets exception permits a signed source-only release of a binary plugin.
   if [ -n "$SIGNATURES_FILE" ] && [ -n "$bin_name" ] && [ "$has_platforms" != "true" ]; then
     any_platform=false
     for platform in $PLATFORMS; do asset_is_published "${name}-${VERSION}-${platform}.tar.gz" && any_platform=true; done
-    if [ "$any_platform" = "false" ]; then
+    if [ "$any_platform" = "false" ] && exception_active "${SCRIPT_DIR}/conformance/exceptions.yaml" cli-targets "$name"; then
       log "NOTE: ${name} declares binaryName ${bin_name} but the release has no platform tarball; no binary is recorded"
       bin_name=""
     fi
@@ -228,7 +229,6 @@ while IFS= read -r name; do
       fi
     done
   fi
-
   sig_json="null"
   if [ "$WRITE" = "true" ] && [ -n "$SIGNATURES_FILE" ]; then
     # A run for an older tag must not roll a newer row back (the manifest-version guard is off in this mode).

@@ -1,5 +1,5 @@
-# github.com/go-chi/chi/v5 v5.2.2
-## explicit; go 1.20
+# github.com/go-chi/chi/v5 v5.2.4
+## explicit; go 1.22
 github.com/go-chi/chi/v5
 # github.com/jackc/pgpassfile v1.0.0
 ## explicit; go 1.12
@@ -27,11 +27,11 @@ github.com/jackc/puddle/v2/internal/genstack
 # github.com/nself-org/cli/sdk/go/v2 v2.0.0 => ./third_party/cli-sdk-go
 ## explicit; go 1.25.0
 github.com/nself-org/cli/sdk/go/v2/migrate
-# golang.org/x/sync v0.17.0
-## explicit; go 1.24.0
+# golang.org/x/sync v0.22.0
+## explicit; go 1.25.0
 golang.org/x/sync/semaphore
-# golang.org/x/text v0.29.0
-## explicit; go 1.24.0
+# golang.org/x/text v0.41.0
+## explicit; go 1.25.0
 golang.org/x/text/cases
 golang.org/x/text/internal
 golang.org/x/text/internal/language

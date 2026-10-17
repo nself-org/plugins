@@ -9,7 +9,9 @@ set -u
 dir=$1; exc=${2:-$CONF_DIR/exceptions.yaml}; base=${3:-}; name=$(plugin_name "$dir")
 [ -n "$base" ] || { fail migration-immutable "$name" "no migration baseline (pass the release tree as the third argument)"; exit 1; }
 bdir=$base/$(basename "$dir"); tag=${CONF_MIG_LABEL:-the baseline}; rc=0
-released_boot "$bdir" || exit 0
+released_boot "$bdir"; rb=$?
+[ $rb -ne 2 ] || { fail migration-immutable "$name" "the baseline manifest $bdir/plugin.json cannot be read (malformed JSON): cannot tell whether the release applied migrations at boot"; exit 1; }
+[ $rb -eq 0 ] || exit 0
 exception_active "$exc" migration-immutable "$name" && exit 0
 while IFS= read -r f; do
   [ -n "$f" ] || continue

@@ -1,0 +1,1057 @@
+{
+  "baseline": "93cad14e1384f0270f61ec9d28d81043dc86008a",
+  "command": "GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@latest -json ./...",
+  "note": "Full 175-module rescan followed by warehouse-only rescan after migrating gosnowflake to /v2 v2.2.0. Other scanned modules were unchanged between scans.",
+  "modules": [
+    {
+      "module": "free/access-controls",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/admin-api",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/ai-cli",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/ai-studio",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/alerts",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/analytics",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/api",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/audit",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/audit-analytics/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/audit-log",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/audit-log/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/audit-log/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/auth-enterprise",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/backup",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/backup/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/backup/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/byok/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/cdc/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/cdn",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/ci",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/claw-cli",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/cloudflare",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/compliance",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/content-acquisition",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/content-progress",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/content-safety",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/costs",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/crdt/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/cron",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/ddns",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/devices",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/dlq",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/documents",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/dogfood",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/donorbox",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/dr",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/e2ee",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/email",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/encryption",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/entitlements",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/entitlements/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/event-bus/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/family-ancestry",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/family-gedcom",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/feature-flags",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/feature-flags/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/feature-flags/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/federation",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/flags",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/functions",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/functions-v8/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/game-metadata",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/gateway",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/gauth",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/gdpr",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/geocoding",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/github",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/github-runner",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/github-runner/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/github/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/hipaa",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/hipaa/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/home",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/home/third_party/shared-utils",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/idme",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/idme/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/infra",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/invitations",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/invitations/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/invitations/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/job-queue",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/job-queue/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/jobs",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/jobs/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/k8s",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/link-preview",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/link-preview/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/link-preview/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/linkedin",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/linkedin/third_party/shared-utils",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/mail",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/maintenance",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/mdns",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/mdns/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/mdns/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/meetings",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/mlflow",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/model",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/monitor",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/monitoring",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/notifications",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/notifications/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/notifications/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/notify",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/nself-cloud",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/nself-eval-gate",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/nself-sync",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/nself-vault",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/object-storage",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/observability",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/ollama",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/payments/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/paypal",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/pentest",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/pentest-kit",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/plugin-clawde",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/plugin-dev",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/plugin-llm-gateway",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/plugin-pty",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/plugin-retrieval",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/podcast",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/post",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/push",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/queue",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/region",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/release",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/retro-gaming",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/retro-gaming/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/rom-discovery",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/search",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/search/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/search/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/sentry-cli",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/shared-utils",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/shopify",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/shopify/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/siem/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/sms",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/soak",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/sports",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/storage",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/storage-transform/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/storage/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/stripe",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/stripe/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/subtitle-manager",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/subtitle-manager/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/subtitle-manager/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tenant",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tenant-controller/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tmdb",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tmdb/third_party/shared-utils",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tokens",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tokens/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/tokens/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/torrent-manager",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/torrent-manager/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/torrent-manager/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/traefik",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/vpn",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/vpn/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/vpn/third_party/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/waf",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/warehouse/go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/watchdog",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/web3",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/web3/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/webhooks",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/webhooks/sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/webhooks/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "free/workflows",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "scripts/codemods/bootmig",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "scripts/conformance/portbind",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "scripts/conformance/rules/migrationlint",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "scripts/conformance/schemacheck",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "sdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/expected/alpha",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/expected/alpha/third_party/cli-sdk-go",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/expected/alpha/third_party/localsdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/expected/beta",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/expected/gamma",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/fixtures/v1/_libs/localsdk",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/fixtures/v1/alpha",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/fixtures/v1/beta",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    },
+    {
+      "module": "tests/conformance/fixtures/v1/gamma",
+      "exit": 0,
+      "reachable": [],
+      "error": ""
+    }
+  ]
+}

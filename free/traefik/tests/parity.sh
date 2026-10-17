@@ -63,19 +63,20 @@ for f in $FIXTURES; do
   chmod 644 "$D/traefik-test.yml"
   grep -q 'level: DEBUG' "$D/traefik-test.yml"
 
-  # sites/api-docs.conf is in routes.json as core:api-docs; traefik skips that route (accepted difference, DEPL lead
-  # ruling 2026-10-11) and a follow-up debt row tracks serving it. nginx's alias of host files cannot run in the
-  # container, so the reference tree omits it.
-  mkdir -p "$D/sites"; cp "$F"/nginx/sites/*.conf "$D/sites/"; rm -f "$D/sites/api-docs.conf"
+  # Both proxies read the same generated documentation files.
+  mkdir -p "$D/sites" "$D/dist"; cp "$F"/nginx/sites/*.conf "$D/sites/"
+  printf '{"openapi":"3.1.0","info":{"title":"Parity API","version":"1"}}\n' >"$D/dist/openapi.json"
+  printf '<!doctype html><title>Scalar API reference</title><script id="api-reference" data-url="/api-docs"></script>\n' >"$D/dist/scalar.html"
+  chmod 755 "$D/dist"; chmod 644 "$D/dist/"*
   aliases=(); for a in $(docker run --rm --label "$LABEL" -v "$F/routes.json:/routes.json:ro" "$PTOOL" plan --routes /routes.json | awk '$1=="alias"{print $2}'); do aliases+=(--network-alias "$a"); done
   docker run -d --name backend --label "$LABEL" --network "$NET" --network-alias backend "${aliases[@]}" -v "$F/routes.json:/routes.json:ro" "$PTOOL" backend --routes /routes.json >/dev/null
   docker run -d --name nginx --label "$LABEL" --network "$NET" \
     -v "$F/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$F/nginx/includes:/etc/nginx/includes:ro" \
-    -v "$F/nginx/conf.d:/etc/nginx/conf.d:ro" -v "$D/sites:/etc/nginx/sites:ro" -v "$D/ssl:/etc/nginx/ssl:ro" "$NGINX_IMG" >/dev/null
+    -v "$F/nginx/conf.d:/etc/nginx/conf.d:ro" -v "$D/sites:/etc/nginx/sites:ro" -v "$D/dist:/opt/nself/.dist:ro" -v "$D/ssl:/etc/nginx/ssl:ro" "$NGINX_IMG" >/dev/null
   # no --user: the image default must be the non-root uid, and it must be able to read the webroot
   [ "$(docker image inspect -f '{{.Config.User}}' "$RENDER")" = 65532:65532 ] || { echo "FAIL: $RENDER does not default to 65532:65532"; exit 1; }
   docker run -d --name traefik-acme --label "$LABEL" --network "$NET" -v "$D/ssl/.acme-webroot:/acme-webroot:ro" \
-    "$RENDER" serve-static --root /acme-webroot --listen :8080 >/dev/null
+    -v "$D/dist:/opt/nself/.dist:ro" "$RENDER" serve-static --root /acme-webroot --listen :8080 >/dev/null
   docker run -d --name traefik --label "$LABEL" --network "$NET" --read-only --tmpfs /tmp --cap-drop ALL --cap-add NET_BIND_SERVICE \
     --security-opt no-new-privileges:true -v "$D/traefik-test.yml:/etc/traefik/traefik.yml:ro" \
     -v "$D/dynamic:/dynamic:ro" -v "$D/ssl:/nself/ssl:ro" "$TRAEFIK_IMG" >/dev/null
@@ -90,7 +91,7 @@ for f in $FIXTURES; do
   docker exec nginx nginx -t 2>&1 | tail -2 || { docker logs nginx 2>&1 | tail -20; exit 1; }
   sleep 2
   tier=(); [ "$f" = host-tier ] && tier=(--need-tier)
-  ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" matrix --routes /routes.json --nginx nginx --traefik traefik "${tier[@]}"
+  ptool -v "$F/routes.json:/routes.json:ro" "$PTOOL" matrix --routes /routes.json --nginx nginx --traefik traefik ${tier[@]+"${tier[@]}"}
 
   if [ "$f" = http-full ]; then
     log "timeouts: websocket idle 75s, partial headers closed at 60s, trickle uploads (Traefik readTimeout is a total deadline)"

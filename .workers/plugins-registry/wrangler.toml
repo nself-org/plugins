@@ -5,7 +5,7 @@ name = "nself-plugin-registry"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-# Workers KV namespace for caching free, pro, and combined registries
+# Workers KV namespace for durable revocations, ratings/install data and sync stats
 [[kv_namespaces]]
 binding = "PLUGINS_KV"
 id = "fddaf7f451f54f82a7d3712ae92882ea"
@@ -25,7 +25,7 @@ REGISTRY_VERSION = "2.0.0"
 # R2_PUBLIC_DOMAIN = "pub-xxx.r2.dev"  # placeholder — set real value in production
 
 # T-RATE-01: GET rate limits for marketplace endpoints (60 req/min per IP)
-# Raise via wrangler vars — no redeploy needed if using KV-based counter.
+# Counters use the per-data-center Cache API; variables configure their threshold.
 MARKETPLACE_GET_RATE_LIMIT = "60"
 MARKETPLACE_GET_RATE_WINDOW_MS = "60000"
 

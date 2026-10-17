@@ -3,7 +3,7 @@ package yjs
 import (
 	"context"
 
-	"github.com/nself-org/nself-crdt/internal/store"
+	"github.com/nself-org/plugins/free/crdt/go/internal/store"
 )
 
 // Persistence wraps Store with Yjs-specific helpers.

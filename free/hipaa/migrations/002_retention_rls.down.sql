@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- 002_retention_rls.down.sql
 -- Reverse of 002_retention_rls.sql
 -- Removes RLS policies and the hipaa_admin role from np_phi_audit_log.

@@ -21,6 +21,7 @@ func NewDB(ctx context.Context, databaseURL string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pgxpool.New: %w", err)
 	}
+	mustBootMigrations(ctx, pool)
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("db ping: %w", err)

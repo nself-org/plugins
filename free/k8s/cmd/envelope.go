@@ -17,6 +17,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -25,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
+	"github.com/nself-org/nself-k8s/internal/k8s"
 	"github.com/nself-org/nself-k8s/internal/tui"
 )
 
@@ -122,6 +125,14 @@ func (r *invocation) done(data any) error {
 // envelope and returns the class exit status.
 func (r *invocation) fail(err error) error {
 	if !r.json {
+		var he *k8s.HelmError
+		if errors.As(err, &he) {
+			for _, detail := range []string{k8s.SafeHelmDiagnostic(he.Hint), k8s.SafeHelmDiagnostic(he.Stderr)} {
+				if detail != "" {
+					err = fmt.Errorf("%w\n%s", err, detail)
+				}
+			}
+		}
 		return err
 	}
 	return r.emit(classify(err))

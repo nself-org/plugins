@@ -1,0 +1,27 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
+
+services:
+  email:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/email
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_email
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9008:9008"
+    environment:
+      - NSELF_DB_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}
+      - EMAIL_PLUGIN_PORT=9008
+      - ELASTIC_EMAIL_API_KEY=${ELASTIC_EMAIL_API_KEY:-}
+      - ELASTIC_EMAIL_FROM=${ELASTIC_EMAIL_FROM:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - ${DOCKER_NETWORK}

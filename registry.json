@@ -1072,7 +1072,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_content_safety",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "compliance",
       "checksum": "c984710a4d441f964852f577e33776670d033c67dcdbc4740264b868a2a39a1c",
@@ -1167,7 +1167,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_crdt",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "0e69d52fb33933db7ee8fa415dfa636ee68e3e8450f8c2899923e50d9955e4a7",
@@ -1852,6 +1852,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
@@ -1897,6 +1898,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
@@ -1986,6 +1988,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",
@@ -2031,6 +2034,7 @@
         "entryPoint": "binary",
         "language": "go"
       },
+      "installable": false,
       "language": "go",
       "license": "MIT",
       "minNselfVersion": "1.0.0",

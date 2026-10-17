@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 func sample(path, match string) string {
@@ -38,6 +37,10 @@ func matrix(m routes, ngx, trf string, needTier bool) {
 	compressed := false
 	for _, rt := range m.Routes {
 		for _, l := range rt.Locations {
+			if l.StaticFile != nil {
+				docsPair(r, rt, l.Path, l.HeadersAdd)
+				continue
+			}
 			if l.StaticRoot != nil {
 				continue
 			}
@@ -139,7 +142,7 @@ func backendHits() string {
 	if err != nil {
 		return err.Error()
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return string(b)
 }
@@ -223,104 +226,3 @@ func bodyLimit(r *runner, m routes, get func(route, string) req) {
 }
 
 // rates fires a rapid burst at one limited location per kind and expects 429 on both.
-func rates(r *runner, m routes, get func(route, string) req) {
-	done := map[string]bool{}
-	for _, rt := range m.Routes {
-		type lim struct {
-			path  string
-			burst int
-		}
-		var ls []lim
-		if rt.RateLimit != nil && hasRoot(rt) {
-			ls = append(ls, lim{"/", rt.RateLimit.Burst})
-		}
-		for _, l := range rt.Locations {
-			if l.RateLimit != nil && l.Upstream != nil {
-				ls = append(ls, lim{sample(l.Path, l.Match), l.RateLimit.Burst})
-			}
-		}
-		for _, l := range ls {
-			key := fmt.Sprint(l.path, l.burst)
-			if done[key] {
-				continue
-			}
-			done[key] = true
-			perSec := zoneRate(m, zoneOf(rt, l.path))
-			var spent [2]time.Duration
-			count := func(t target) (first int, ok, limited int) {
-				start := time.Now()
-				defer func() {
-					if t.name == r.n.name {
-						spent[0] = time.Since(start)
-					} else {
-						spent[1] = time.Since(start)
-					}
-				}()
-				for i := 0; i < l.burst+8; i++ {
-					res := t.do(get(rt, l.path))
-					if i == 0 {
-						first = res.status
-					}
-					if res.status == 429 {
-						limited++
-					} else {
-						ok++ // admitted: any answer that is not the limiter's 429
-					}
-				}
-				return
-			}
-			// earlier matrix requests drained this bucket: let both fill again so the burst is comparable
-			time.Sleep(refillWait(l.burst, perSec))
-			fa, oa, la := count(r.n)
-			fb, ob, lb := count(r.t)
-			label := fmt.Sprintf("%s rate %s burst %d", rt.ID, l.path, l.burst)
-			a := burstRun{first: fa, admitted: oa, limited: la, max: allowed(l.burst, perSec, spent[0])}
-			b := burstRun{first: fb, admitted: ob, limited: lb, max: allowed(l.burst, perSec, spent[1])}
-			if msg := judgeBurst(l.burst, a, b); msg != "" {
-				r.fail(label, msg)
-			} else {
-				r.ok(fmt.Sprintf("%s (admitted nginx=%d traefik=%d, then 429)", label, oa, ob))
-			}
-			time.Sleep(2 * time.Second)
-		}
-	}
-	if len(done) == 0 {
-		r.fail("rate limits", "no limited location in the fixture")
-	}
-}
-
-// zoneOf returns the zone name limiting path on rt (location zone, else the server zone for "/").
-func zoneOf(rt route, path string) string {
-	for _, l := range rt.Locations {
-		if l.RateLimit != nil && sample(l.Path, l.Match) == path {
-			return l.RateLimit.Zone
-		}
-	}
-	if rt.RateLimit != nil {
-		return rt.RateLimit.Zone
-	}
-	return ""
-}
-
-// zoneRate is the zone's requests per second ("5r/s", "100r/m").
-func zoneRate(m routes, zone string) float64 {
-	for _, z := range m.Zones {
-		if z.Name == zone && z.Rate != nil {
-			var n float64
-			var unit string
-			if _, err := fmt.Sscanf(*z.Rate, "%fr/%1s", &n, &unit); err == nil {
-				if unit == "m" {
-					return n / 60
-				}
-				return n
-			}
-		}
-	}
-	return 0
-}
-
-// allowed is the most requests a limiter may admit in a burst of elapsed time: the burst allowance
-// (1 + burst) plus what the bucket refills meanwhile, plus 2 for scheduling jitter.
-func allowed(burst int, perSec float64, elapsed time.Duration) int {
-	return burst + 1 + int(perSec*elapsed.Seconds()+0.999) + 2
-}

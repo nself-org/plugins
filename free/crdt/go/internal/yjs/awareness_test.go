@@ -3,7 +3,7 @@ package yjs_test
 import (
 	"testing"
 
-	"github.com/nself-org/nself-crdt/internal/yjs"
+	"github.com/nself-org/plugins/free/crdt/go/internal/yjs"
 )
 
 func TestAwarenessHubSubscribeUnsubscribe(t *testing.T) {

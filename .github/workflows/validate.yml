@@ -331,6 +331,9 @@ jobs:
       - name: Free manifests validate against manifest v2 (D-0520)
         run: bash tests/manifests/validate-free-manifests.sh
 
+      - name: Declared-port plugins ship a compose fragment or say installable:false (D-0816)
+        run: bash tests/manifests/service-fragments.sh
+
       - name: Conformance gate on changed plugins
         run: bash scripts/conformance/check.sh --changed
 
@@ -360,6 +363,9 @@ jobs:
 
       - name: Oracle delta mechanism (negative proofs)
         run: bash tests/conformance/oracle-deltas-test.sh
+
+      - name: Plugins without a compose fragment are v2 library plugins (D-0812)
+        run: bash tests/conformance/no-fragment-v2-test.sh
 
       - name: Codemods are idempotent on real plugins
         run: bash tests/conformance/realtree.sh --drop-dev-tool-keys --plugins github-runner,nself-vault,family-ancestry,audit-log

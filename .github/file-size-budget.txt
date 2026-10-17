@@ -1,8 +1,5 @@
 .github/scripts/ops/disk-prune.sh	332
 .workers/plugins-registry/deploy.sh	316
-.workers/plugins-registry/src/index.ts	843
-.workers/plugins-registry/src/marketplace.ts	998
-.workers/plugins-registry/src/registry.ts	516
 free/access-controls/internal/handlers.go	1001
 free/admin-api/internal/db.go	403
 free/admin-api/internal/handlers.go	413
@@ -30,7 +27,7 @@ free/content-acquisition/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/content-acquisition/third_party/sdk/identity.go	338
 free/content-progress/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/content-progress/third_party/sdk/identity.go	338
-free/content-safety/internal/handlers.go	893
+free/content-safety/internal/handlers.go	885
 free/cron/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/cron/third_party/sdk/identity.go	338
 free/ddns/internal/handlers.go	755

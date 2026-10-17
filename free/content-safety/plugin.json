@@ -1,29 +1,52 @@
 {
-  "name": "content-safety",
-  "displayName": "\u0273Self Content Safety",
-  "version": "1.2.6",
-  "description": "Trust-safety evidence, legal holds, spam detection, raid protection, and abuse scoring",
   "author": "nSelf",
-  "license": "MIT",
-  "licenseType": "free",
-  "tier": "free",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
-  "isCommercial": false,
-  "requiredEntitlements": [],
-  "requires_license": false,
   "category": "compliance",
+  "description": "Trust-safety evidence, legal holds, spam detection, raid protection, and abuse scoring",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "CONTENT_SAFETY_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "CONTENT_SAFETY_PLUGIN_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "CONTENT_SAFETY_PLUGIN_PORT",
+      "required": false
+    }
+  ],
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "content-safety",
   "port": 3213,
-  "dependencies": {
-    "required": [],
-    "optional": []
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
   },
-  "env": {
-    "CONTENT_SAFETY_PLUGIN_PORT": "3213",
-    "CONTENT_SAFETY_PLUGIN_HOST": "0.0.0.0",
-    "DATABASE_URL": "",
-    "CONTENT_SAFETY_API_KEY": ""
+  "schema": "np_content_safety",
+  "service": {
+    "kind": "library",
+    "port": 3213
   },
+  "status": "stable",
   "tables": [
     "np_cs_evidence",
     "np_cs_legal_holds",
@@ -35,8 +58,6 @@
     "np_cs_lockdowns",
     "np_cs_abuse_scores"
   ],
-  "bundles": [
-    "nchat",
-    "ntv"
-  ]
+  "tier": "free",
+  "version": "1.2.6"
 }

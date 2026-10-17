@@ -2,27 +2,6 @@
 // existence-checked IF covers its statements; what sits outside is linted like top-level SQL and may not run EXECUTE.
 package main
 
-// ifGuarded reports whether a DO body branches (IF) on an existence probe. DDL "IF [NOT] EXISTS name" is not a branch and
-// not a probe: EXISTS counts only before "(".
-func ifGuarded(body []tok) bool {
-	branch, probe := false, false
-	for i := range body {
-		switch w(body, i) {
-		case "IF", "ELSIF", "ELSEIF":
-			j := i + 1
-			if has(body, j, "NOT", "EXISTS") {
-				j++
-			}
-			if w(body, j) != "EXISTS" || isPunct(body, j+1, "(") {
-				branch = true
-			}
-		default:
-			probe = probe || isProbe(body, i)
-		}
-	}
-	return branch && probe
-}
-
 // isProbe reports whether t[i] is an existence probe: EXISTS ( ..), a to_reg* call or a catalog name.
 func isProbe(t []tok, i int) bool {
 	switch w(t, i) {
@@ -36,15 +15,23 @@ func isProbe(t []tok, i int) bool {
 }
 
 // protectedStmts marks the statements that sit in the protected part of a BEGIN..END block, from its BEGIN up to its
-// EXCEPTION clause: the handler makes a failing replay harmless. Statements of the handler itself are not protected (an
-// error there is not caught by the same block).
+// EXCEPTION clause, when a handler of that clause catches the error a replay raises (handlerCatches) and does not re-raise
+// it: the handler makes a failing replay harmless. Statements of the handler itself are not protected (an error there is
+// not caught by the same block).
 func protectedStmts(sts [][]tok) []bool {
 	prot := make([]bool, len(sts))
-	var stack []int // statement index of each open BEGIN
+	type blk struct{ begin, exc int }
+	var stack []blk // each open BEGIN: its statement index and the index of its EXCEPTION statement (-1: none)
 	for i, st := range sts {
 		if w(st, 0) == "END" {
 			if n := w(st, 1); n != "IF" && n != "LOOP" && n != "CASE" && len(stack) > 0 {
+				b := stack[len(stack)-1]
 				stack = stack[:len(stack)-1]
+				if b.exc >= 0 && handlerCatches(sts[b.begin:b.exc], sts[b.exc:i]) {
+					for k := b.begin; k < b.exc; k++ {
+						prot[k] = true
+					}
+				}
 			}
 			continue
 		}
@@ -52,11 +39,9 @@ func protectedStmts(sts [][]tok) []bool {
 		for _, x := range st[:len(st)-len(rest)] {
 			switch {
 			case x.K == kWord && x.U == "BEGIN":
-				stack = append(stack, i)
-			case x.K == kWord && x.U == "EXCEPTION" && len(stack) > 0:
-				for k := stack[len(stack)-1]; k < i; k++ {
-					prot[k] = true
-				}
+				stack = append(stack, blk{i, -1})
+			case x.K == kWord && x.U == "EXCEPTION" && len(stack) > 0 && stack[len(stack)-1].exc < 0:
+				stack[len(stack)-1].exc = i
 			}
 		}
 	}
@@ -80,47 +65,39 @@ func doBody(t []tok) ([]tok, bool) {
 	return lex(t[pick].U, t[pick].Line), true
 }
 
-// lintDO lints a DO block. Statements in the protected part of a BEGIN..END with an EXCEPTION clause are replay-safe. When
-// the block branches on an existence probe (ifGuarded), the statements inside IF..END IF are safe too, and so is everything
-// after a top-level `IF <probe> THEN RETURN; END IF;` guard clause. Everything else (loop, CASE and ELSE bodies included) is
-// linted with the ordinary rules and may not run dynamic SQL (EXECUTE).
+// lintDO lints a DO block. Statements in the protected part of a BEGIN..END whose EXCEPTION handler catches the replay error
+// are replay-safe. A statement inside an IF branch whose own condition probes the object it works on, or after an early
+// `IF <probe> THEN RETURN; END IF;` clause, is covered by that guard when the guard's polarity fits the statement (see
+// guard.go); an ELSE branch, a loop, a CASE or an IF without a probe is no guard. Everything else is linted with the
+// ordinary rules and may not run dynamic SQL (EXECUTE).
 func lintDO(t []tok, c *ctx) []viol {
 	body, ok := doBody(t)
 	if !ok {
 		return []viol{{t[0].Line, "DO statement with no body to check"}}
 	}
 	sts := split(body)
-	prot, byIf := protectedStmts(sts), ifGuarded(body)
+	prot := protectedStmts(sts)
 	c.inDO = true
 	defer func() { c.inDO = false }()
 	var out []viol
-	var open pl    // scopes open before the current statement; open.begins counts BEGIN..END blocks
-	early := false // a guard clause was seen: the rest of the block is its guarded part
+	var g guardState
 	for i, st := range sts {
-		rest, n := stripPLn(st)
-		prefix := st[:len(st)-len(rest)]
-		before, inner := open.ifs, open.ifs+n.ifs
-		if byIf && !early && guardReturn(sts, i, prefix, rest, n, open) {
-			early = true
-		}
-		open.ifs, open.loops, open.cases, open.begins = open.ifs+n.ifs, open.loops+n.loops, open.cases+n.cases, open.begins+n.begins
 		if w(st, 0) == "END" {
-			switch w(st, 1) {
-			case "IF":
-				open.ifs--
-			case "LOOP":
-				open.loops--
-			case "CASE":
-				open.cases--
-			default:
-				open.begins--
-			}
+			g.pop()
+			continue
+		}
+		rest, _ := stripPLn(st)
+		prefix := st[:len(st)-len(rest)]
+		before := g.anyGuard()
+		g.enter(prefix)
+		if rest != nil && len(prefix) > 0 && w(rest, 0) == "RETURN" && len(rest) == 1 && g.earlyReturn(sts, i) {
+			continue
 		}
 		if prot[i] {
 			continue
 		}
-		dyn := func(ts []tok, ifs int) {
-			if byIf && (ifs > 0 || early) {
+		dyn := func(ts []tok, guarded bool) {
+			if guarded {
 				return
 			}
 			for _, b := range ts {
@@ -130,37 +107,12 @@ func lintDO(t []tok, c *ctx) []viol {
 			}
 		}
 		dyn(prefix, before)
-		dyn(rest, inner)
-		if !byIf || (inner == 0 && !early) {
+		dyn(rest, g.anyGuard())
+		if !g.covers(rest) {
 			out = append(out, lintStmt(rest, c)...)
 		}
 	}
 	return out
-}
-
-// guardReturn reports whether statement i is `IF <cond with an existence probe> THEN RETURN` whose IF body holds nothing
-// else (the next statement is END IF) and which sits directly in the outermost BEGIN..END: not in another IF, loop, CASE
-// or nested block.
-func guardReturn(sts [][]tok, i int, prefix, rest []tok, n pl, open pl) bool {
-	if n.ifs != 1 || n.loops != 0 || n.cases != 0 || open.ifs != 0 || open.loops != 0 || open.cases != 0 || open.begins+n.begins != 1 {
-		return false
-	}
-	if len(rest) != 1 || w(rest, 0) != "RETURN" || i+1 >= len(sts) || len(sts[i+1]) != 2 || w(sts[i+1], 0) != "END" || w(sts[i+1], 1) != "IF" {
-		return false
-	}
-	k := 0
-	for w(prefix, k) == "BEGIN" || w(prefix, k) == "DECLARE" {
-		k++
-	}
-	if w(prefix, k) != "IF" {
-		return false
-	}
-	for j := k; j < len(prefix); j++ {
-		if isProbe(prefix, j) {
-			return true
-		}
-	}
-	return false
 }
 
 // selectInto reports a top-level SELECT ... INTO <table> (not inside parentheses).

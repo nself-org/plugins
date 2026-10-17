@@ -31,10 +31,10 @@ github.com/nself-org/cli/sdk/go/v2/migrate
 # github.com/nself-org/plugins/free/shared-utils v0.0.0 => ./third_party/shared-utils
 ## explicit; go 1.25.0
 github.com/nself-org/plugins/free/shared-utils/go/server
-# golang.org/x/sync v0.21.0
+# golang.org/x/sync v0.22.0
 ## explicit; go 1.25.0
 golang.org/x/sync/semaphore
-# golang.org/x/text v0.39.0
+# golang.org/x/text v0.41.0
 ## explicit; go 1.25.0
 golang.org/x/text/cases
 golang.org/x/text/internal

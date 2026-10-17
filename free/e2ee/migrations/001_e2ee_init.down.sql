@@ -1,3 +1,6 @@
+-- WARNING: UNMAINTAINED DOWN MIGRATION. DO NOT RUN.
+-- Historical SQL only; it may not reverse the current up migration and may destroy data.
+-- See .github/wiki/Plugin-Development.md (Migration rollback policy).
 -- 001_e2ee_init.down.sql
 -- Reverses 001_e2ee_init.sql. Drops all np_e2ee_* key-directory tables.
 -- WARNING: dropping these tables discards every published PUBLIC prekey; clients
