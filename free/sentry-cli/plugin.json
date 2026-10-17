@@ -142,6 +142,9 @@
             "required": true
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "env": "NSELF_SENTRY_API_KEY",
@@ -166,7 +169,7 @@
         "json": "envelope",
         "name": "monitors pause",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Pause a monitor"
       },
       {
@@ -176,6 +179,9 @@
             "required": true
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "env": "NSELF_SENTRY_API_KEY",
@@ -200,7 +206,7 @@
         "json": "envelope",
         "name": "monitors resume",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Resume a paused monitor"
       },
       {
@@ -277,6 +283,9 @@
             "required": true
           }
         ],
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "env": "NSELF_SENTRY_API_KEY",
@@ -301,7 +310,7 @@
         "json": "envelope",
         "name": "incidents resolve",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Resolve an incident"
       },
       {
@@ -333,6 +342,9 @@
         "summary": "List status pages"
       },
       {
+        "confirm": {
+          "flags": []
+        },
         "flags": [
           {
             "env": "NSELF_SENTRY_API_KEY",
@@ -369,7 +381,7 @@
         "json": "envelope",
         "name": "status-pages create",
         "output": "document",
-        "side_effect": "write",
+        "side_effect": "remote",
         "summary": "Create a status page"
       },
       {
