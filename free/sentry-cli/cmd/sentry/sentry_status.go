@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/nself-org/nself-sentry-cli/internal/errs"
 	"github.com/nself-org/nself-sentry-cli/internal/httptimeout"
 	"github.com/nself-org/nself-sentry-cli/internal/ui"
@@ -133,6 +134,10 @@ func runSentryStatus(cmd *cobra.Command, _ []string) error {
 
 	page, err := fetchStatusPage(cmd.Context(), client, rawURL)
 	if err != nil {
+		// compat.V15(P7-SURF-31): human error line on stderr -> error envelope on stdout
+		if jsonout.Envelope(cmd) {
+			return err
+		}
 		fmt.Fprintf(os.Stderr, "%s %v\n", ui.C(ui.Red, ui.IconFailure), err)
 		return errs.Exit(1)
 	}
@@ -171,11 +176,17 @@ func runSentryStatus(cmd *cobra.Command, _ []string) error {
 		if out.Down == nil {
 			out.Down = []string{}
 		}
-		data, err := json.MarshalIndent(out, "", "  ")
-		if err != nil {
-			return fmt.Errorf("json marshal error: %w", err)
+		// compat.V15(P7-SURF-31): bare normalized JSON on stdout -> v1 envelope on stdout
+		if err := jsonout.Data(cmd, out, func() error {
+			data, err := json.MarshalIndent(out, "", "  ")
+			if err != nil {
+				return fmt.Errorf("json marshal error: %w", err)
+			}
+			fmt.Println(string(data))
+			return nil
+		}); err != nil {
+			return err
 		}
-		fmt.Println(string(data))
 		if exitBad {
 			// The JSON payload is the output; a duplicate message would
 			// corrupt it for machine consumers.

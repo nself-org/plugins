@@ -15,6 +15,531 @@
   "commands": {
     "binary": "nself-sentry",
     "command": "sentry",
+    "json": "envelope",
+    "output": "document",
+    "side_effect": "read",
+    "subcommands": [
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "monitors list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List uptime monitors"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "1m0s",
+            "name": "interval",
+            "type": "duration",
+            "usage": "Check interval (tier floors apply)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          },
+          {
+            "default": "http",
+            "name": "kind",
+            "type": "string",
+            "usage": "Monitor kind: http, tcp or ping"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "usage": "Monitor display name (default: the URL)"
+          },
+          {
+            "name": "url",
+            "required": true,
+            "type": "string",
+            "usage": "Target URL, host or address to check"
+          }
+        ],
+        "json": "envelope",
+        "name": "monitors add",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Add an uptime monitor"
+      },
+      {
+        "args": [
+          {
+            "name": "id",
+            "required": true
+          }
+        ],
+        "confirm": {
+          "flags": []
+        },
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "monitors rm",
+        "output": "document",
+        "side_effect": "destructive",
+        "summary": "Delete a monitor"
+      },
+      {
+        "args": [
+          {
+            "name": "id",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "monitors pause",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Pause a monitor"
+      },
+      {
+        "args": [
+          {
+            "name": "id",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "monitors resume",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Resume a paused monitor"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "usage": "Filter by status: open, acknowledged or resolved"
+          }
+        ],
+        "json": "envelope",
+        "name": "incidents list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List incidents"
+      },
+      {
+        "args": [
+          {
+            "name": "id",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "incidents ack",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Acknowledge an incident"
+      },
+      {
+        "args": [
+          {
+            "name": "id",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "incidents resolve",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Resolve an incident"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "status-pages list",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List status pages"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          },
+          {
+            "name": "name",
+            "required": true,
+            "type": "string",
+            "usage": "Status page display name"
+          },
+          {
+            "name": "slug",
+            "required": true,
+            "type": "string",
+            "usage": "URL slug of the page"
+          }
+        ],
+        "json": "envelope",
+        "name": "status-pages create",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Create a status page"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "alerts channels",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "List alert channels"
+      },
+      {
+        "args": [
+          {
+            "name": "channel-id",
+            "required": true
+          }
+        ],
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "alerts test",
+        "output": "document",
+        "side_effect": "remote",
+        "summary": "Send a test notification through a channel"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "whoami",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Show the authenticated account, tier and quota usage"
+      },
+      {
+        "flags": [
+          {
+            "env": "NSELF_SENTRY_API_KEY",
+            "name": "api-key",
+            "secret": true,
+            "type": "string",
+            "usage": "ɳSentry API key nsk_* (default: ~/.nself/sentry.json)"
+          },
+          {
+            "env": "NSELF_SENTRY_API_URL",
+            "name": "api-url",
+            "type": "string",
+            "usage": "ɳSentry API base URL (default: https://api.sentry.nself.org)"
+          },
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "login",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Store and validate an ɳSentry API key"
+      },
+      {
+        "flags": [
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          }
+        ],
+        "json": "envelope",
+        "name": "logout",
+        "output": "document",
+        "side_effect": "write",
+        "summary": "Remove the stored ɳSentry API key"
+      },
+      {
+        "flags": [
+          {
+            "default": "false",
+            "name": "json",
+            "type": "bool",
+            "usage": "Print one v1 JSON envelope on stdout (set NSELF_V15=1); without it the pre-contract JSON of v1.4 is kept"
+          },
+          {
+            "default": "10s",
+            "name": "timeout",
+            "type": "duration",
+            "usage": "HTTP request timeout"
+          },
+          {
+            "env": "NSENTRY_PRIVATE_TOKEN",
+            "name": "token",
+            "secret": true,
+            "type": "string",
+            "usage": "Status page auth token (also STATUS_PAGE_PRIVATE_TOKEN)"
+          },
+          {
+            "default": "https://status.nself.org/status.json",
+            "name": "url",
+            "type": "string",
+            "usage": "Status JSON endpoint URL"
+          }
+        ],
+        "json": "envelope",
+        "name": "status",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Fetch the ɳSentry status page and report component health (exit 1 when not operational)"
+      }
+    ],
     "summary": "Manage ɳSentry monitors, incidents, status pages and alerts"
   },
   "description": "ɳSentry operations: monitors, incidents, status pages, alerts, cloud login, and provisioning a self-hosted sentry server.",

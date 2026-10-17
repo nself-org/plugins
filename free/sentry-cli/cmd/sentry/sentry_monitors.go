@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
 	"github.com/nself-org/nself-sentry-cli/internal/ui"
 	"github.com/spf13/cobra"
@@ -105,7 +106,7 @@ func runSentryMonitorsList(cmd *cobra.Command, _ []string) error {
 		if monitors == nil {
 			monitors = []sentryapi.Monitor{}
 		}
-		return printSentryJSON(cmd, monitors)
+		return emitSentryJSON(cmd, monitors, map[string]interface{}{"monitors": monitors})
 	}
 
 	if len(monitors) == 0 {
@@ -135,7 +136,7 @@ func runSentryMonitorsAdd(cmd *cobra.Command, _ []string) error {
 	interval, _ := cmd.Flags().GetDuration("interval")
 
 	if kind != "http" && kind != "tcp" && kind != "ping" {
-		return fmt.Errorf("invalid --kind %q (use http, tcp, or ping)", kind)
+		return &jsonout.UsageErr{Msg: fmt.Sprintf("invalid --kind %q (use http, tcp, or ping)", kind), Safe: "invalid --kind: use http, tcp, or ping"}
 	}
 	if name == "" {
 		name = target
@@ -153,7 +154,7 @@ func runSentryMonitorsAdd(cmd *cobra.Command, _ []string) error {
 	}
 
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, m)
+		return emitSentryJSON(cmd, m, map[string]interface{}{"monitor": m})
 	}
 	ui.Success(fmt.Sprintf("Monitor created: %s (%s every %s) — id %s", m.Name, m.URL,
 		(time.Duration(m.IntervalSeconds) * time.Second).String(), m.ID))
@@ -167,7 +168,7 @@ func runSentryMonitorsRm(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, map[string]string{"deleted": args[0]})
+		return emitSentryJSON(cmd, map[string]string{"deleted": args[0]}, map[string]string{"deleted": args[0]})
 	}
 	ui.Success(fmt.Sprintf("Monitor %s deleted.", args[0]))
 	return nil
@@ -181,7 +182,7 @@ func runSentryMonitorsPause(cmd *cobra.Command, id string, pause bool) error {
 		return err
 	}
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, m)
+		return emitSentryJSON(cmd, m, map[string]interface{}{"monitor": m})
 	}
 	verb := "paused"
 	if !pause {

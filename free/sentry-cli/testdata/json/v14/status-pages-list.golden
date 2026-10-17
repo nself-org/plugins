@@ -1,0 +1,14 @@
+--- stdout
+--- stderr
+[
+  {
+    "id": "p1",
+    "name": "Public",
+    "slug": "public",
+    "url": "https://status.example.test/s/public",
+    "public": true,
+    "created_at": "2026-01-02T03:04:05Z"
+  }
+]
+--- exit
+0

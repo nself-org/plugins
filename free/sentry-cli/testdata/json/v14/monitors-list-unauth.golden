@@ -1,0 +1,5 @@
+--- stdout
+--- stderr
+Error: unauthorized: invalid or missing API key — run 'nself sentry login'
+--- exit
+1

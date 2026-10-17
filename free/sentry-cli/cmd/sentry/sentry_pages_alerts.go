@@ -13,6 +13,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/nself-org/nself-sentry-cli/internal/sentryapi"
 	"github.com/nself-org/nself-sentry-cli/internal/ui"
 	"github.com/spf13/cobra"
@@ -107,7 +108,7 @@ func runSentryStatusPagesList(cmd *cobra.Command, _ []string) error {
 		if pages == nil {
 			pages = []sentryapi.StatusPage{}
 		}
-		return printSentryJSON(cmd, pages)
+		return emitSentryJSON(cmd, pages, map[string]interface{}{"status_pages": pages})
 	}
 
 	if len(pages) == 0 {
@@ -140,7 +141,7 @@ func runSentryStatusPagesCreate(cmd *cobra.Command, _ []string) error {
 	}
 
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, page)
+		return emitSentryJSON(cmd, page, map[string]interface{}{"status_page": page})
 	}
 	ui.Success(fmt.Sprintf("Status page created: %s — %s", page.Name, dashIfEmpty(page.URL)))
 	return nil
@@ -158,7 +159,7 @@ func runSentryAlertsChannels(cmd *cobra.Command, _ []string) error {
 		if channels == nil {
 			channels = []sentryapi.AlertChannel{}
 		}
-		return printSentryJSON(cmd, channels)
+		return emitSentryJSON(cmd, channels, map[string]interface{}{"channels": channels})
 	}
 
 	if len(channels) == 0 {
@@ -188,7 +189,11 @@ func runSentryAlertsTest(cmd *cobra.Command, args []string) error {
 	}
 
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, res)
+		// compat.V15(P7-SURF-31): exit 0 with delivered=false in the JSON -> error envelope when not delivered
+		if jsonout.Envelope(cmd) && !res.Delivered {
+			return fmt.Errorf("test notification NOT delivered: %s", dashIfEmpty(res.Detail))
+		}
+		return emitSentryJSON(cmd, res, res)
 	}
 	if res.Delivered {
 		ui.Success(fmt.Sprintf("Test notification delivered: %s", dashIfEmpty(res.Detail)))

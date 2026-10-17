@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "sentry monitors rm",
+  "error": {
+    "code": "E782",
+    "message": "the ɳSentry API request failed",
+    "cause": "HTTP 500",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

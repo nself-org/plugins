@@ -10,9 +10,11 @@ package main
 // SPORT: CLI-CMD-SENTRY-001
 
 import (
+	"github.com/nself-org/nself-sentry-cli/cmd/jsonout"
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
+	"sync"
 )
 
 var sentryCmd = &cobra.Command{
@@ -43,7 +45,12 @@ Examples:
 func init() {
 }
 
-func main() {
+// setup applies the root-level settings; main and the tests both call it.
+var setupOnce sync.Once
+
+func setup() { setupOnce.Do(setupRoot) }
+
+func setupRoot() {
 	prefixUsageWithNself(sentryCmd)
 
 	// Cobra default Args validator (legacyArgs) rejects an unrecognised
@@ -57,13 +64,16 @@ func main() {
 	sentryCmd.CompletionOptions.DisableDefaultCmd = true
 	sentryCmd.SetHelpCommand(&cobra.Command{Hidden: true})
 	sentryCmd.SilenceUsage = true
+	jsonout.Wrap(sentryCmd)
+}
 
-	if err := sentryCmd.Execute(); err != nil {
-		// cobra has already printed the error; exit non-zero without repeating
-		// it. The CLI mirrors this status and stays silent, so the plugin's own
-		// message is the only one the user sees.
-		os.Exit(1)
-	}
+func main() {
+	setup()
+	// cobra has already printed the error; exit non-zero without repeating
+	// it. The CLI mirrors this status and stays silent, so the plugin's own
+	// message is the only one the user sees. With --json in v1.5 mode the
+	// error is one envelope on stdout and the status is its class.
+	os.Exit(jsonout.Execute(sentryCmd, os.Args[1:]))
 }
 
 // prefixUsageWithNself rewrites the usage template so every rendered command

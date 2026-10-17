@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "sentry login",
+  "error": {
+    "code": "E780",
+    "message": "the ɳSentry API key is missing or was rejected",
+    "remediation": "run nself sentry login with a valid nsk_ key",
+    "exit_code": 3,
+    "class": "auth"
+  }
+}

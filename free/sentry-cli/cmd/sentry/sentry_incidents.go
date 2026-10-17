@@ -81,7 +81,7 @@ func runSentryIncidentsList(cmd *cobra.Command, _ []string) error {
 		if incidents == nil {
 			incidents = []sentryapi.Incident{}
 		}
-		return printSentryJSON(cmd, incidents)
+		return emitSentryJSON(cmd, incidents, map[string]interface{}{"incidents": incidents})
 	}
 
 	if len(incidents) == 0 {
@@ -115,7 +115,7 @@ func runSentryIncidentAction(cmd *cobra.Command, id, action string) error {
 		return err
 	}
 	if sentryJSONFlag(cmd) {
-		return printSentryJSON(cmd, inc)
+		return emitSentryJSON(cmd, inc, map[string]interface{}{"incident": inc})
 	}
 	ui.Success(fmt.Sprintf("Incident %s is now %s.", inc.ID, inc.Status))
 	return nil

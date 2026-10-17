@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "sentry monitors list",
+  "error": {
+    "code": "E782",
+    "message": "the ɳSentry API could not be reached",
+    "cause": "network error",
+    "remediation": "check --api-url and the network",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "command": "sentry status",
+  "error": {
+    "code": "E783",
+    "message": "the status page could not be fetched",
+    "cause": "HTTP 500",
+    "remediation": "check --url and --token",
+    "exit_code": 2,
+    "class": "infra"
+  }
+}

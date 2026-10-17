@@ -1,0 +1,7 @@
+{
+  "schema_version": "1",
+  "command": "sentry monitors rm",
+  "data": {
+    "deleted": "m1"
+  }
+}

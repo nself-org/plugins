@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "command": "sentry login",
+  "error": {
+    "code": "E401",
+    "message": "the API key format is invalid: it must start with nsk_ and be longer",
+    "exit_code": 1,
+    "class": "user"
+  }
+}
