@@ -99,7 +99,8 @@ func runSentryLogin(cmd *cobra.Command, _ []string) error {
 		reader := bufio.NewReader(cmd.InOrStdin())
 		line, err := reader.ReadString('\n')
 		if err != nil && line == "" {
-			return fmt.Errorf("reading API key: %w", err)
+			// No key flag, no env value, nothing on stdin: the caller's omission (E401), not a fault.
+			return &jsonout.UsageErr{Msg: fmt.Sprintf("reading API key: %v", err), Safe: "no API key given: pass --api-key or pipe it on stdin"}
 		}
 		apiKey = strings.TrimSpace(line)
 	}

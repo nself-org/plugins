@@ -16,7 +16,7 @@
 //	E401 usage: bad or missing flag or argument                     user
 //	E780 ɳSentry API key missing or rejected                        auth
 //	E781 plan quota exceeded                                        user
-//	E782 ɳSentry API request failed                                 infra
+//	E782 ɳSentry API request failed (4xx user, 5xx or network infra)  user/infra
 //	E783 status page fetch failed                                   infra
 //	E784 test notification not delivered                            infra
 //	E785 local credentials file could not be written or removed     user
@@ -27,6 +27,7 @@ package jsonout
 import (
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
@@ -86,7 +87,13 @@ func Classify(err error, sub string) output.ErrorDetail {
 		return output.ErrorDetail{Code: CodeCredsFile, Class: output.ClassUser, Message: "the local ɳSentry credentials file could not be updated",
 			Remediation: "check the permissions of ~/.nself/sentry.json"}
 	case strings.Contains(text, apiHTTPText):
-		return output.ErrorDetail{Code: CodeAPI, Class: output.ClassInfra, Cause: httpCause(text), Message: "the ɳSentry API request failed"}
+		// A 4xx other than 401/402/429 (handled above) is the caller's mistake (bad id,
+		// bad input): class user, exit 1. A 5xx is the server's fault: class infra.
+		class := output.ClassInfra
+		if st := httpStatus(text); st >= 400 && st < 500 {
+			class = output.ClassUser
+		}
+		return output.ErrorDetail{Code: CodeAPI, Class: class, Cause: httpCause(text), Message: "the ɳSentry API request failed"}
 	case strings.Contains(text, "sentry api unreachable"), strings.HasPrefix(text, "validating key against"):
 		return output.ErrorDetail{Code: CodeAPI, Class: output.ClassInfra, Cause: "network error", Message: "the ɳSentry API could not be reached",
 			Remediation: "check --api-url and the network"}
@@ -117,6 +124,15 @@ func isStatusFetch(text string) bool {
 		}
 	}
 	return false
+}
+
+// httpStatus returns the HTTP status named in text, or 0.
+func httpStatus(text string) int {
+	if m := httpRe.FindStringSubmatch(text); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	return 0
 }
 
 // httpCause returns "HTTP nnn" when text names an HTTP status, else "".

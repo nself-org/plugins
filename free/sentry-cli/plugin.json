@@ -105,9 +105,6 @@
             "required": true
           }
         ],
-        "confirm": {
-          "flags": []
-        },
         "flags": [
           {
             "env": "NSELF_SENTRY_API_KEY",
@@ -132,7 +129,7 @@
         "json": "envelope",
         "name": "monitors rm",
         "output": "document",
-        "side_effect": "destructive",
+        "side_effect": "write",
         "summary": "Delete a monitor"
       },
       {

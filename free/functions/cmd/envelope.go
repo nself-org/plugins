@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nself-org/cli/sdk/go/v2/compat"
 	"github.com/nself-org/cli/sdk/go/v2/output"
 )
 
@@ -158,7 +159,8 @@ func wantsJSON(args []string) bool {
 // report turns the result of Execute into the process exit code. A command that
 // already wrote an error envelope arrives as exitErr. With --json, an error
 // cobra raised before a command ran (unknown flag, wrong argument count) becomes
-// an E401 envelope on stdout. Otherwise the plain error goes to stderr, exit 1.
+// an E401 envelope on stdout (except `list` in v1.4 mode, which printed none).
+// Otherwise the plain error goes to stderr, exit 1.
 func report(err error, js bool, args []string, stdout, stderr io.Writer) int {
 	if err == nil {
 		return 0
@@ -172,13 +174,18 @@ func report(err error, js bool, args []string, stdout, stderr io.Writer) int {
 	}
 	if js && !ran {
 		name := "functions"
-		if c, _, ferr := rootCmd.Find(args); ferr == nil && c != rootCmd {
+		c, _, ferr := rootCmd.Find(args)
+		if ferr == nil && c != rootCmd {
 			name = c.CommandPath()
 		}
-		if werr := writeErrorEnvelope(stdout, name, usageDetail(safeUsage(err.Error())), err); werr != nil {
-			fmt.Fprintln(stderr, "Error:", safeUsage(err.Error()))
+		// compat.V15(P7-SURF-31): list printed no JSON on a usage error (plain stderr line) -> E401 envelope
+		legacyList := ferr == nil && c != rootCmd && c.Name() == "list" && !compat.V15()
+		if !legacyList {
+			if werr := writeErrorEnvelope(stdout, name, usageDetail(safeUsage(err.Error())), err); werr != nil {
+				fmt.Fprintln(stderr, "Error:", safeUsage(err.Error()))
+			}
+			return output.ExitUser
 		}
-		return output.ExitUser
 	}
 	fmt.Fprintln(stderr, "Error:", err)
 	return 1

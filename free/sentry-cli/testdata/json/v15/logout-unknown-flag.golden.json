@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "command": "sentry logout",
+  "error": {
+    "code": "E401",
+    "message": "unknown flag: --bogus",
+    "remediation": "run the command with --help for its usage",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

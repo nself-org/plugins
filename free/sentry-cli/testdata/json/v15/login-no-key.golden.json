@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "command": "sentry login",
+  "error": {
+    "code": "E401",
+    "message": "no API key given: pass --api-key or pipe it on stdin",
+    "exit_code": 1,
+    "class": "user"
+  }
+}

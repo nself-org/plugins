@@ -37,7 +37,8 @@ type jsonCase struct {
 	always  bool // no JSON before: the envelope in both modes
 	errCode string
 	class   string
-	exit    int // v1.5 exit status
+	exit    int    // v1.5 exit status
+	stderr  string // the only text allowed on stderr ("" = none)
 }
 
 func jsonCases(url string) []jsonCase {
@@ -62,6 +63,7 @@ func jsonCases(url string) []jsonCase {
 		{name: "status-degraded", cmd: "sentry status", args: []string{"status", "--json", "--url", url + "/degraded.json"}, legacy: true, exit: 1},
 		{name: "monitors-list-unauth", cmd: "sentry monitors list", args: append([]string{"monitors", "list"}, bad...), legacy: true, errCode: "E780", class: "auth", exit: 3},
 		{name: "monitors-rm-500", cmd: "sentry monitors rm", args: with("monitors", "rm", "boom"), legacy: true, errCode: "E782", class: "infra", exit: 2},
+		{name: "monitors-rm-404", cmd: "sentry monitors rm", args: with("monitors", "rm", "gone"), errCode: "E782", class: "user", exit: 1},
 		{name: "monitors-add-bad-kind", cmd: "sentry monitors add", args: with("monitors", "add", "--url", "x", "--kind", "smtp"), errCode: "E401", class: "user", exit: 1},
 		{name: "monitors-list-unknown-flag", cmd: "sentry monitors list", args: with("monitors", "list", "--bogus"), errCode: "E401", class: "user", exit: 1},
 		{name: "monitors-list-unreachable", cmd: "sentry monitors list", args: []string{"monitors", "list", "--api-url", "http://127.0.0.1:1", "--api-key", fixtureKey, "--json"}, errCode: "E782", class: "infra", exit: 2},
@@ -69,6 +71,9 @@ func jsonCases(url string) []jsonCase {
 		{name: "login", always: true, cmd: "sentry login", args: []string{"login", "--api-url", url, "--api-key", fixtureKey, "--json"}},
 		{name: "login-rejected", always: true, cmd: "sentry login", args: []string{"login", "--api-url", url, "--api-key", "nsk_wrongkey9999", "--json"}, errCode: "E780", class: "auth", exit: 3},
 		{name: "login-short-key", always: true, cmd: "sentry login", args: []string{"login", "--api-url", url, "--api-key", "nsk_x", "--json"}, errCode: "E401", class: "user", exit: 1},
+		{name: "login-no-key", always: true, cmd: "sentry login", args: []string{"login", "--api-url", url, "--json"}, stderr: "Paste your ɳSentry API key (nsk_...): ", errCode: "E401", class: "user", exit: 1},
+		{name: "login-unknown-flag", always: true, cmd: "sentry login", args: []string{"login", "--bogus", "--json"}, errCode: "E401", class: "user", exit: 1},
+		{name: "logout-unknown-flag", always: true, cmd: "sentry logout", args: []string{"logout", "--bogus=SECRET", "--json"}, errCode: "E401", class: "user", exit: 1},
 		{name: "logout", always: true, cmd: "sentry logout", args: []string{"logout", "--json"}},
 	}
 }
@@ -77,6 +82,14 @@ func jsonCases(url string) []jsonCase {
 func isolate(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
+	// No key on stdin either: a login without a key must hit EOF, not wait.
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldIn := os.Stdin
+	os.Stdin = null
+	t.Cleanup(func() { os.Stdin = oldIn; _ = null.Close() })
 	for _, k := range []string{"NSELF_SENTRY_API_URL", "NSELF_SENTRY_API_KEY", "NSENTRY_PRIVATE_TOKEN", "STATUS_PAGE_PRIVATE_TOKEN"} {
 		t.Setenv(k, "")
 	}
@@ -126,8 +139,8 @@ func checkEnvelope(t *testing.T, c jsonCase, r runResult) {
 	if r.code != c.exit {
 		t.Fatalf("exit = %d, want %d (stdout=%s stderr=%s)", r.code, c.exit, r.stdout, r.stderr)
 	}
-	if r.stderr != "" {
-		t.Fatalf("stderr must be empty in JSON mode, got %q", r.stderr)
+	if r.stderr != c.stderr {
+		t.Fatalf("stderr must be %q in JSON mode, got %q", c.stderr, r.stderr)
 	}
 	out := []byte(r.stdout)
 	if err := output.CheckEnvelope(out); err != nil {
@@ -157,7 +170,7 @@ func checkEnvelope(t *testing.T, c jsonCase, r runResult) {
 	} else if doc.Error == nil || doc.Error.Code != c.errCode || doc.Error.Class != c.class || doc.Error.ExitCode != c.exit {
 		t.Fatalf("error = %+v, want %s/%s/%d\n%s", doc.Error, c.errCode, c.class, c.exit, out)
 	}
-	for _, leak := range []string{fixtureKey, "nsk_wrongkey9999", "127.0.0.1", "database exploded"} {
+	for _, leak := range []string{fixtureKey, "nsk_wrongkey9999", "127.0.0.1", "database exploded", "SECRET"} {
 		if strings.Contains(r.stdout, leak) {
 			t.Errorf("envelope leaks %q:\n%s", leak, out)
 		}

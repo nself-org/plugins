@@ -1,6 +1,6 @@
 module github.com/nself-org/nself-functions
 
-go 1.25.0
+go 1.26.2
 
 require (
 	github.com/nself-org/cli/sdk/go/v2 v2.4.14

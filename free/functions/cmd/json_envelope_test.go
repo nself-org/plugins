@@ -207,7 +207,16 @@ func testLogsJSON(t *testing.T) {
 func testUsageJSON(t *testing.T) {
 	e := newTestEnv(t)
 	res := runCLI(t, "list", "--bogus=SECRET", "--json")
-	wantEnvelope(t, e, res, 1, "usage_unknown_flag_any")
+	if compat.V15() {
+		wantEnvelope(t, e, res, 1, "usage_unknown_flag_v15")
+	} else {
+		// list printed JSON before, but never on a usage error: v1.4 keeps the
+		// plain stderr line and an empty stdout (the original behaviour).
+		if res.Exit != 1 || res.Stdout != "" {
+			t.Errorf("v1.4 list usage error: exit %d stdout %q, want 1 and empty", res.Exit, res.Stdout)
+		}
+		golden(t, "usage_unknown_flag_v14", "--- stdout\n"+res.Stdout+"--- stderr\n"+res.Stderr)
+	}
 	if strings.Contains(res.Stdout+res.Stderr, "SECRET") {
 		t.Errorf("flag value echoed")
 	}

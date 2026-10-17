@@ -103,10 +103,7 @@ func runSentryServerProvision(cmd *cobra.Command, args []string) error {
 	}
 	// JSON mode: stdout carries the envelope only. Progress lines and the
 	// output of terraform, ssh and nself go to stderr for the length of the run.
-	saved := os.Stdout
-	os.Stdout = os.Stderr
-	res, err := provision(cmd, args)
-	os.Stdout = saved
+	res, err := provisionToStderr(cmd, args)
 	if err != nil {
 		return err
 	}
@@ -245,4 +242,13 @@ func prefixUsageWithNself(root *cobra.Command) {
 		"{{.CommandPath}}", "nself {{.CommandPath}}",
 		"{{.UseLine}}", "nself {{.UseLine}}",
 	).Replace(root.UsageTemplate()))
+}
+
+// provisionToStderr runs provision with os.Stdout pointed at os.Stderr and
+// restores it on return, panic included.
+func provisionToStderr(cmd *cobra.Command, args []string) (*provisionResult, error) {
+	saved := os.Stdout
+	os.Stdout = os.Stderr
+	defer func() { os.Stdout = saved }()
+	return provision(cmd, args)
 }

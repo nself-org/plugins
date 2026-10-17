@@ -7,7 +7,7 @@ package main
 // Outputs: output.ErrorDetail for output.WriteError. The exit status comes from
 // the class (user 1, infra 2).
 // Constraints: a plugin cannot register codes in the core registry, so it reuses
-// E401 and owns E770 to E779 (E740 to E759 are infra, E762 to E764 functions).
+// E401 and owns E770 to E779 (E740 to E759 are infra, E760 to E765 and E769 functions).
 // Messages are fixed text: they never echo a path, a flag value, an env value or
 // a raw child-process error. Cause is limited to "exit <n>" of a child process.
 //

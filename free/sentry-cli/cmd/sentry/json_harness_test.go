@@ -26,7 +26,7 @@ import (
 var fixtureKey = "nsk_" + strings.Repeat("a", 12)
 
 // fixtureAPI serves a minimal ɳSentry API plus two status pages. Any request
-// that does not carry the fixture key gets 401. A monitor id of "boom" gets 500.
+// that does not carry the fixture key gets 401. A monitor id of "boom" gets 500, "gone" gets 404.
 func fixtureAPI(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -48,6 +48,7 @@ func fixtureAPI(t *testing.T) *httptest.Server {
 	mux.HandleFunc("GET /v1/monitors", reply(200, `{"monitors":[`+mon+`]}`))
 	mux.HandleFunc("POST /v1/monitors", reply(201, `{"monitor":`+mon+`}`))
 	mux.HandleFunc("DELETE /v1/monitors/boom", reply(500, `{"error":{"message":"database exploded"}}`))
+	mux.HandleFunc("DELETE /v1/monitors/gone", reply(404, `{"error":{"message":"no such monitor"}}`))
 	mux.HandleFunc("DELETE /v1/monitors/{id}", reply(204, ``))
 	mux.HandleFunc("POST /v1/monitors/{id}/pause", reply(200, `{"monitor":`+strings.Replace(mon, `"paused":false`, `"paused":true`, 1)+`}`))
 	mux.HandleFunc("POST /v1/monitors/{id}/resume", reply(200, `{"monitor":`+mon+`}`))

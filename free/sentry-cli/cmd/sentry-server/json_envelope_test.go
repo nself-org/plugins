@@ -12,7 +12,6 @@ package main
 // Constraints: no network, no cloud credentials.
 
 import (
-	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -81,18 +80,17 @@ func TestJSONEnvelope(t *testing.T) {
 			t.Errorf("progress lines must be on stderr, got %q", errOut)
 		}
 
-		// A missing argument is a usage error. In v1.5 mode it is an envelope;
-		// in v1.4 mode cobra prints it as before (no envelope on stdout).
-		out, _, code = run(t, []string{"provision", "--json"})
+		// provision printed no JSON before: a missing argument is a usage error
+		// envelope in v1.4 and v1.5 mode alike.
+		out, errOut, code = run(t, []string{"provision", "--json"})
 		if code != 1 {
 			t.Fatalf("usage exit = %d", code)
 		}
-		if bytes.Contains([]byte(out), []byte("schema_version")) {
-			if err := output.CheckEnvelope([]byte(out)); err != nil || !strings.Contains(out, `"E401"`) {
-				t.Fatalf("usage envelope: %v\n%s", err, out)
-			}
-		} else if out != "" {
-			t.Fatalf("stdout must be empty or an envelope, got %q", out)
+		if err := output.CheckEnvelope([]byte(out)); err != nil || !strings.Contains(out, `"E401"`) {
+			t.Fatalf("usage envelope: %v\n%s", err, out)
+		}
+		if errOut != "" {
+			t.Fatalf("usage error must not print on stderr, got %q", errOut)
 		}
 
 		// A failing step: with --host the secrets push finds no .env.ops or .env in the

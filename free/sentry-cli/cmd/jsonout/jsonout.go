@@ -142,13 +142,21 @@ func hasJSONArg(args []string) bool {
 	return false
 }
 
-// Execute runs root with args and returns the process exit status. In v1.5 mode
-// with --json it also turns a usage error (no command ran) into an envelope.
+// isAlways reports whether args resolve to a command marked with Always.
+func isAlways(root *cobra.Command, args []string) bool {
+	c, _, err := root.Find(args)
+	return err == nil && c != nil && c.Annotations[annotation] == "always"
+}
+
+// Execute runs root with args and returns the process exit status. With --json
+// it also turns a usage error (no command ran) into an envelope: in v1.5 mode
+// for every command, in v1.4 mode for the Always commands only.
 func Execute(root *cobra.Command, args []string) int {
 	ran = false
 	root.SetArgs(args)
 	// compat.V15(P7-SURF-31): cobra prints usage errors -> one usage error envelope on stdout
-	jsonMode := compat.V15() && hasJSONArg(args)
+	// (login, logout and sentry-server provision printed no JSON before: envelope in both modes)
+	jsonMode := hasJSONArg(args) && (compat.V15() || isAlways(root, args))
 	if jsonMode {
 		root.SilenceErrors = true
 		root.SilenceUsage = true
