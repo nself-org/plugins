@@ -15,6 +15,7 @@ jobs:
     name: Build & test all Go plugins
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # testdata/ holds fixtures (e.g. the CI planner's polyglot repo), not plugins.
     # This finds every go.mod anywhere under free/, not just free/*/go.mod.
     # The depth-1 glob it replaced silently skipped 13 plugins that keep their
     # module one level down (free/<name>/go/go.mod), a layout the P6 migration
@@ -55,5 +56,5 @@ jobs:
               # is a directory"). CI only needs to know it compiles.
               ( cd "$d" && go build -o /dev/null ./... && go vet ./... && go test ./... ) || { echo "FAIL: $d"; failed=1; }
             fi
-          done < <(find free -name go.mod -not -path '*/vendor/*' | sort)
+          done < <(find free -name go.mod -not -path '*/vendor/*' -not -path '*/testdata/*' | sort)
           exit $failed
