@@ -17,7 +17,6 @@ free/backup/third_party/sdk/identity.go	338
 free/byok/go/handlers/byok.go	483
 free/cdc/go/replication/engine.go	312
 free/cdn/internal/handlers.go	813
-free/ci/internal/legacy/pipeline.go	313
 free/claw-cli/cmd/claw_pair.go	301
 free/cloudflare/internal/handlers.go	614
 free/compliance/internal/handlers.go	788
