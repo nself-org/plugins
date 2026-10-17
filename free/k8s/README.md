@@ -51,6 +51,12 @@ advice and bounded, sanitized Helm status diagnostics in human and JSON output.
 `nself k8s values --check` detects changes between mapped and unsupported
 services. Generated `pullPolicy` values render as container `imagePullPolicy`.
 
+Plugin workloads keep their compose Service name and also expose the
+`plugin-<name>` hostname recorded by `nself k8s values`. Dependency URLs such as
+`PLUGIN_NOTIFY_INTERNAL_URL=http://plugin-notify:8080` therefore resolve even
+when the compose service is named `notify`. Both Services select the same pods
+and expose the same ports. Conflicting aliases fail chart rendering.
+
 ## History
 
 Extracted from `cli/cmd/commands/k8s.go`, `cli/internal/k8s/`, and
@@ -66,3 +72,7 @@ boundary — see `internal/tui/tui.go`).
 go build -o nself-k8s ./cmd/
 go test ./...
 ```
+
+With the pinned tools from `tests/kind/tools.sh` on PATH, run
+`KIND_WORK=<scratch-directory> bash tests/kind/plugin-alias.sh` to prove a
+dependent plugin reaches `notify` through its injected dependency URL on kind.
