@@ -65,17 +65,37 @@ func Build(in Input) (*Plan, error) {
 	}
 
 	live := map[string]bool{}
+	excluded := map[string]Skipped{}
 	for _, id := range ids {
 		if !members[id] {
 			continue
 		}
 		c := cs[id]
 		if ok, r, detail := whenPasses(c.job.When, rev, trig); !ok && !forced[id] {
-			skip(id, r, detail)
+			excluded[id] = Skipped{id, r, detail}
 		} else if !forced[id] && advisoryToolMissing(c, in.World) {
-			skip(id, "advisory.tool_missing", "tool "+c.tool+" is not on PATH")
+			excluded[id] = Skipped{id, "advisory.tool_missing", "tool " + c.tool + " is not on PATH"}
 		} else {
 			live[id] = true
+		}
+	}
+	// A live required job needs its dependency closure: a dependency's own
+	// `when` or advisory skip never drops the required gate (Epic D28).
+	var needed []string
+	for _, id := range ids {
+		if live[id] && cs[id].required {
+			needed = append(needed, cs[id].job.Deps...)
+		}
+	}
+	for id := range closureOf(cs, needed) {
+		if members[id] && !live[id] {
+			delete(excluded, id)
+			live[id] = true
+		}
+	}
+	for _, id := range ids {
+		if s, ok := excluded[id]; ok {
+			skip(s.Job, s.Reason, s.Detail)
 		}
 	}
 	for changed := true; changed; {
