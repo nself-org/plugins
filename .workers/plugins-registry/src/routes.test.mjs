@@ -104,12 +104,12 @@ describe('route inventory (every basis route still answers from src/index.ts)', 
     }
   });
 
-  test('/health reports signing configured with the legacy SIGNING_PUBLIC_KEY name too', async () => {
+  test('/health rejects invalid signing keys with either public-key name', async () => {
     const a = await (await call('/health', {}, { SIGNING_PRIVATE_KEY: 'x', PUBLIC_KEY_HEX: 'y' })).json();
     const b = await (await call('/health', {}, { SIGNING_PRIVATE_KEY: 'x', SIGNING_PUBLIC_KEY: 'y' })).json();
     const c = await (await call('/health', {}, { SIGNING_PRIVATE_KEY: 'x' })).json();
-    assert.equal(a.signing.configured, true);
-    assert.equal(b.signing.configured, true);
+    assert.equal(a.signing.configured, false);
+    assert.equal(b.signing.configured, false);
     assert.equal(c.signing.configured, false);
     assert.ok(Array.isArray(a.features) && a.timestamp);
     assert.equal(a.status, 'healthy', 'publish.yml and deploy.sh check for "healthy"');

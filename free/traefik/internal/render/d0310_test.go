@@ -13,7 +13,7 @@ import (
 )
 
 // D-0310: routes.json carries four optional fields (upstream path and query, static_file,
-// headers_add) and the core:api-docs route. api-docs is skipped; the rest is refused.
+// headers_add) and the core:api-docs route. api-docs is rendered; the other optional fields are refused.
 
 func fixtureJSON(t *testing.T) map[string]any {
 	t.Helper()
@@ -48,31 +48,12 @@ func docsLoc(path, file string) map[string]any {
 
 func docsRoute() map[string]any {
 	return map[string]any{"id": "core:api-docs", "source": "core", "file": "nginx/sites/api-docs.conf",
-		"server_names": []string{"docs.example.test"}, "listen": map[string]any{"http": false, "https": true},
-		"locations": []any{docsLoc("/api-docs", "/opt/example/openapi.json"), docsLoc("/docs", "/opt/example/scalar.html")}}
+		"server_names": []string{"docs.example.test"}, "listen": map[string]any{"http": true, "https": false},
+		"locations": []any{docsLoc("/api-docs", "/opt/nself/.dist/openapi.json"), docsLoc("/docs", "/opt/nself/.dist/scalar.html")}}
 }
 
 func firstLoc(doc map[string]any) map[string]any {
 	return doc["routes"].([]any)[0].(map[string]any)["locations"].([]any)[0].(map[string]any)
-}
-
-func TestApiDocsRouteIsSkippedNotRefused(t *testing.T) {
-	want, err := renderDoc(t, fixtureJSON(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	doc := fixtureJSON(t)
-	doc["routes"] = append(doc["routes"].([]any), docsRoute())
-	got, err := renderDoc(t, doc)
-	if err != nil {
-		t.Fatalf("api-docs must not be refused: %v", err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Error("the api-docs route changed the output; it must be skipped entirely")
-	}
-	if strings.Contains(string(got), "docs.example.test") || strings.Contains(string(got), "api-docs") {
-		t.Error("the docs host is named in the output")
-	}
 }
 
 func TestOptionalFieldsAreRefused(t *testing.T) {
@@ -109,21 +90,20 @@ func TestOptionalFieldsAreRefused(t *testing.T) {
 	}
 }
 
-// The skip is for the real shape only: the id with a location that is not a single-file alias,
-// or another id carrying static_file, is still rendered or refused.
-func TestApiDocsSkipIsNarrow(t *testing.T) {
+// Unsupported aliases remain fail-closed even on the docs route.
+func TestApiDocsSupportIsNarrow(t *testing.T) {
 	doc := fixtureJSON(t)
 	r := docsRoute()
 	r["locations"].([]any)[1].(map[string]any)["static_file"] = nil
 	r["locations"].([]any)[1].(map[string]any)["headers_add"] = nil
-	doc["routes"] = append(doc["routes"].([]any), r)
+	doc["routes"] = []any{r}
 	if _, err := renderDoc(t, doc); err == nil {
-		t.Error("a docs route with a non-static location must not be skipped")
+		t.Error("a docs route with a non-static location must be refused")
 	}
 	doc = fixtureJSON(t)
 	r = docsRoute()
 	r["id"] = "core:other-docs"
-	doc["routes"] = append(doc["routes"].([]any), r)
+	doc["routes"] = []any{r}
 	if _, err := renderDoc(t, doc); err == nil {
 		t.Error("static_file on another route id must be refused")
 	}

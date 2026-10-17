@@ -28,6 +28,8 @@ paths = [
 # Known AWS documentation example credentials — not real secrets
 regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',
+  # sign.ts doc comment "Key format: PKCS8-wrapped ...": the whole matched value is that phrase, no secret
+  '''^PKCS8-wrapped$''',
   '''wJalrXUtnFEMI''',
   '''bPxRfiCYEXAMPLEKEY''',
 

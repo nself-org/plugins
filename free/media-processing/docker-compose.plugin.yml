@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
     image: nself/nself-media-processing:latest
     ports:
-      - "3088:3088"
+      - "127.0.0.1:3088:3088"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - PORT=3088
