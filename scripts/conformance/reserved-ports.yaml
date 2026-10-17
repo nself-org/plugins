@@ -1,7 +1,6 @@
 # Core and fabric ports no plugin may use (final gate G10). Port 0 means no listener.
+# 3844 is not listed: it belongs to the forgejo plugin (free/forgejo plugin.json), and ports.sh reads that claim (D-0815).
 reserved:
-  - port: 3844
-    owner: "forgejo (core)"
   - port: 3845
     owner: "nself ci serve (P7-NODE-10)"
   - port: 3857
