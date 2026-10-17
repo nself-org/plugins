@@ -63,7 +63,11 @@ func TestDo_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	defer resp.Body.Close()
+	t.Cleanup(func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
@@ -83,7 +87,9 @@ func TestDo_SetsUserAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do() error = %v", err)
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if gotUA != "nself-plugin-sdk/0.1" {
 		t.Errorf("User-Agent = %q, want %q", gotUA, "nself-plugin-sdk/0.1")
 	}
