@@ -6,8 +6,8 @@ import "testing"
 // operator so an unprivileged build can remove them when restoring nginx.
 func TestConfigRendererHostOwner(t *testing.T) {
 	cfg := get(readYAML(t, "docker-compose.plugin.yml"), "services", "traefik-config").(map[string]any)
-	if got := cfg["user"]; got != "${NSELF_HOST_UID}:${NSELF_HOST_GID}" {
-		t.Errorf("traefik-config user = %v, want the host UID:GID exported by the CLI", got)
+	if got := cfg["user"]; got != "${NSELF_HOST_UID:-0}:${NSELF_HOST_GID:-0}" {
+		t.Errorf("traefik-config user = %v, want the host UID:GID exported by the CLI, 0:0 where it is not", got)
 	}
 	for _, want := range []string{
 		"./.nself/generated/traefik:/dynamic",

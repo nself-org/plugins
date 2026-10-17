@@ -16,7 +16,7 @@ off), `TRAEFIK_UPLOAD_READ_TIMEOUT` (default `600s`, 60s to 24h) and `TRAEFIK_UP
 loopback ephemeral port; set `8444` to open it). Container port :8444 carries only the named routes (an unknown Host there
 is Traefik's own 404, there is no default server). The static configuration is read at start: restart the stack after
 changing them. The image runs as the non-root user 65532. The one-shot `traefik-config` runs as
-`NSELF_HOST_UID:NSELF_HOST_GID`, exported by the CLI. On Linux, the CLI must pre-create
+`NSELF_HOST_UID:NSELF_HOST_GID`, exported by the CLI on Linux (`0:0` where it is not exported, such as Docker Desktop). On Linux, the CLI must pre-create
 `.nself/generated/traefik` and `.nself/generated/traefik-static` as the host operator before starting the
 containers. This keeps rendered files owned by the operator so restoring nginx can remove them without sudo.
 

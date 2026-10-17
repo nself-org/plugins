@@ -28,7 +28,7 @@ services:
     # One-shot writer as the host operator; the CLI must pre-create both output bind directories as this user
     # on Linux, before Docker can create them root-owned. Read-only root, no capabilities, no listener.
     # The long-running traefik-acme uses the image's non-root user.
-    user: "${NSELF_HOST_UID}:${NSELF_HOST_GID}"
+    user: "${NSELF_HOST_UID:-0}:${NSELF_HOST_GID:-0}"
     volumes:
       - ./.nself/generated/routes.json:/nself/routes.json:ro
       - ./ssl:/nself/ssl:ro
