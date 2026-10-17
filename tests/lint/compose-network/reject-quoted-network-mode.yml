@@ -1,0 +1,7 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0622).
+# A quoted "network_mode" key naming the literal project network.
+# Must be flagged.
+services:
+  example:
+    image: example/app:0
+    "network_mode": nself_network

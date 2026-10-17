@@ -50,12 +50,14 @@ pf_docker_cleanup() {
 # pf_cli_dockerfile ROOT MANIFEST OUT: write OUT, a Dockerfile that builds a cli
 # plugin's command binaries from the extracted tree alone with the release recipe
 # (scripts/build-tarballs.sh build_platform_tarballs: CGO_ENABLED=0 go build of
-# nself-<command> from cmd/<command>/, else cmd/, for each cliCommands name, else
-# binaryName). Used when a cli plugin ships no Dockerfile: its release is
-# per-platform binary tarballs, so the source has nothing else to build.
+# each target from cmd/<command>/, else cmd/). The targets are the release's own:
+# scripts/release/cli-targets.sh over the manifest's directory, so a v1 or a v2
+# manifest resolves exactly as the installer and the release resolve it.
+# Used when a cli plugin ships no Dockerfile: its release is per-platform binary
+# tarballs, so the source has nothing else to build.
 # Returns 1 and prints the reason when the tarball cannot express that build.
 pf_cli_dockerfile() {
-  local root="$1" manifest="$2" out="$3" gover cmds c pkg
+  local root="$1" manifest="$2" out="$3" gover targets err tab bin cmd pkg
   if [ ! -f "$root/go.mod" ]; then
     echo "cli plugin tarball has no Dockerfile and no go.mod: nothing to build from the tarball alone"
     return 1
@@ -65,20 +67,31 @@ pf_cli_dockerfile() {
     echo "cli plugin go.mod has no usable go directive (${gover:-none})"
     return 1
   fi
-  cmds=$(jq -r 'if ((.cliCommands // []) | length) > 0 then (.cliCommands[] | .name | if type == "string" then . else "<\(type)>" end)
-    else ((.binaryName // .implementation.binaryName // "") | tostring | ltrimstr("nself-")) end' "$manifest")
-  [ -n "$cmds" ] || { echo "cli plugin declares no cliCommands and no binaryName"; return 1; }
-  # Every line must be a plain name: an empty or multi-line name is rejected too.
-  c=$(printf '%s\n' "$cmds" | awk '!/^[a-z0-9][a-z0-9-]*$/ {print "[" $0 "]"; exit}')
-  [ -z "$c" ] || { echo "cli command name $c is not a plain command name"; return 1; }
+  err="$out.err"
+  if ! targets=$(bash "$(dirname "${BASH_SOURCE[0]}")/../release/cli-targets.sh" "$(dirname "$manifest")" 2>"$err"); then
+    echo "cli plugin manifest refused by cli-targets.sh: $(head -n 1 "$err")"
+    rm -f "$err"
+    return 1
+  fi
+  rm -f "$err"
+  [ -n "$targets" ] || { echo "cli plugin declares no command binary to build"; return 1; }
+  # Every line is "nself-<command><TAB><command>" with a plain command name: a split,
+  # numeric-led, empty or path-like name is rejected, as the release gate rejects it.
+  tab=$(printf '\t')
+  while IFS="$tab" read -r bin cmd; do
+    if ! printf '%s' "$cmd" | grep -Eq '^[a-z][a-z0-9-]*$' || [ "$bin" != "nself-$cmd" ]; then
+      echo "cli command target [$bin] [$cmd] is not a plain nself-<command> name"
+      return 1
+    fi
+  done <<<"$targets"
   {
     printf 'FROM golang:%s-alpine\nWORKDIR /src\nCOPY . .\nENV CGO_ENABLED=0\n' "$gover"
     [ ! -d "$root/vendor" ] || printf 'ENV GOFLAGS=-mod=vendor\n'
-    while IFS= read -r c; do
+    while IFS="$tab" read -r bin cmd; do
       pkg="./cmd/"
-      [ ! -d "$root/cmd/$c" ] || pkg="./cmd/$c/"
-      printf 'RUN go build -trimpath -ldflags="-s -w" -o /out/nself-%s %s\n' "$c" "$pkg"
-    done <<<"$cmds"
+      [ ! -d "$root/cmd/$cmd" ] || pkg="./cmd/$cmd/"
+      printf 'RUN go build -trimpath -ldflags="-s -w" -o /out/%s %s\n' "$bin" "$pkg"
+    done <<<"$targets"
   } >"$out"
 }
 

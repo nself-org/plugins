@@ -1,0 +1,12 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0622).
+# A quoted "name" key naming the literal project network.
+# Must be flagged.
+services:
+  example:
+    image: example/app:0
+    networks:
+      - ${DOCKER_NETWORK}
+      - default
+networks:
+  default:
+    "name": 'nself_network'

@@ -1,0 +1,11 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0622).
+# A network the fragment owns, written as a quoted flow mapping.
+# Must be accepted.
+services:
+  example:
+    image: example/app:0
+    networks:
+      - ${DOCKER_NETWORK}
+      - "runner_net"
+"networks":
+  "runner_net": { "name": "${COMPOSE_PROJECT_NAME:-nself}_runner_net", "driver": "bridge" }

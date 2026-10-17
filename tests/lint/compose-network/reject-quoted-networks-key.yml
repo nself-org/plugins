@@ -1,0 +1,8 @@
+# Fixture for scripts/lint-compose-network-literals.sh (D-0622).
+# A quoted "networks" key joining the literal project network.
+# Must be flagged.
+services:
+  example:
+    image: example/app:0
+    "networks":
+      - nself_network
