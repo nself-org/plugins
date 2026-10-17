@@ -68,7 +68,8 @@ get_latest_runner_version() {
 }
 
 get_registration_token() {
-  local scope="${GITHUB_RUNNER_SCOPE:-org}"
+  local scope
+  scope=$(trust_scope) || { plugin_error "GITHUB_RUNNER_SCOPE must be org or repo"; exit 3; }
   local token
 
   if [[ "$scope" == "org" ]]; then
@@ -100,7 +101,8 @@ get_registration_token() {
 }
 
 config_url() {
-  local scope="${GITHUB_RUNNER_SCOPE:-org}"
+  local scope
+  scope=$(trust_scope) || { plugin_error "GITHUB_RUNNER_SCOPE must be org or repo"; exit 3; }
   if [[ "$scope" == "org" ]]; then
     echo "https://github.com/${GITHUB_RUNNER_ORG}"
   else
@@ -133,7 +135,7 @@ install_github_runner() {
   scope_header=$(curl -sI \
     -H "Authorization: token ${GITHUB_RUNNER_PAT}" \
     "https://api.github.com/user" \
-    | grep -i "x-oauth-scopes:" | tr -d '\r' | sed 's/.*: //')
+    | { grep -i "x-oauth-scopes:" || true; } | tr -d '\r' | sed 's/.*: //')
 
   if [[ -z "$scope_header" ]]; then
     plugin_warn "Could not read PAT scopes. Continuing — install will fail if PAT lacks 'admin:org'."

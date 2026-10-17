@@ -6,6 +6,7 @@ set -euo pipefail
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHARED_DIR="$(dirname "$(dirname "$PLUGIN_DIR")")/shared"
 source "${SHARED_DIR}/plugin-utils.sh"
+source "${PLUGIN_DIR}/actions/trust.sh"
 
 LOG_DIR="${HOME}/.nself/logs/plugins/github-runner"
 PID_FILE="${LOG_DIR}/runner.pid"
@@ -15,7 +16,7 @@ stopped=false
 
 # Try systemd first
 if command -v systemctl &>/dev/null; then
-  svc_name="actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+  svc_name="$(trust_service_name)"
   if systemctl is-active --quiet "$svc_name" 2>/dev/null; then
     plugin_info "Stopping systemd service..."
     if [[ $EUID -eq 0 ]]; then

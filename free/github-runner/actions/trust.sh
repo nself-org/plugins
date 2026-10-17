@@ -37,10 +37,25 @@ trust_unverifiable() {
   return 2
 }
 
+# trust_scope: print the normalised scope (org or repo, case-insensitive,
+# default org); fail on anything else so no caller guesses a scope.
+trust_scope() {
+  local s
+  s=$(printf '%s' "${GITHUB_RUNNER_SCOPE:-org}" | tr '[:upper:]' '[:lower:]')
+  [[ -n "$s" ]] || s=org
+  case "$s" in
+    org|repo) printf '%s' "$s" ;;
+    *) return 1 ;;
+  esac
+}
+
+# trust_valid_name VALUE: GitHub owner and repo names only.
+trust_valid_name() { [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]; }
+
 # trust_check: 0 = trusted (or override set), 1 = refused (runner_group_public),
 # 2 = unverifiable (fail closed), 3 = group not found. Sets TRUST_GROUP.
 trust_check() {
-  local org="${GITHUB_RUNNER_ORG:-}" scope="${GITHUB_RUNNER_SCOPE:-org}"
+  local org="${GITHUB_RUNNER_ORG:-}" scope
   local allow="${GITHUB_RUNNER_ALLOW_PUBLIC_REPOS:-false}"
   TRUST_GROUP=""
   if [[ -z "${GITHUB_RUNNER_PAT:-}" || -z "$org" ]]; then
@@ -48,6 +63,11 @@ trust_check() {
     return 2
   fi
   command -v jq >/dev/null 2>&1 || { trust_unverifiable "jq is required for the runner group check"; return 2; }
+  scope=$(trust_scope) || { trust_unverifiable "GITHUB_RUNNER_SCOPE must be org or repo (got \"${GITHUB_RUNNER_SCOPE}\")"; return 2; }
+  trust_valid_name "$org" || { trust_unverifiable "GITHUB_RUNNER_ORG contains characters GitHub does not allow"; return 2; }
+  if [[ "$scope" == "repo" && -n "${GITHUB_RUNNER_REPO:-}" ]]; then
+    trust_valid_name "$GITHUB_RUNNER_REPO" || { trust_unverifiable "GITHUB_RUNNER_REPO contains characters GitHub does not allow"; return 2; }
+  fi
   if [[ "$scope" == "repo" ]]; then
     _trust_check_repo "$org" "${GITHUB_RUNNER_REPO:-}" "$allow"
   else
@@ -56,7 +76,7 @@ trust_check() {
 }
 
 _trust_check_group() {
-  local org="$1" group="$2" allow="$3" page body found public
+  local org="$1" group="$2" allow="$3" page body found public count
   for ((page = 1; page <= TRUST_MAX_PAGES; page++)); do
     body=$(trust_api_get "${TRUST_API_BASE}/orgs/${org}/actions/runner-groups?per_page=${TRUST_GROUP_PAGE_SIZE}&page=${page}") \
       || { trust_unverifiable "GitHub API call for the runner groups failed (token needs the organisation \"Self-hosted runners\" permission)"; return 2; }
@@ -65,7 +85,8 @@ _trust_check_group() {
       | first | if . == null then "" else "\(.name)\t\(.allows_public_repositories)" end' 2>/dev/null) \
       || { trust_unverifiable "could not decode the runner groups response"; return 2; }
     [[ -n "$found" ]] && break
-    [[ "$(printf '%s' "$body" | jq '.runner_groups | length' 2>/dev/null)" -lt "$TRUST_GROUP_PAGE_SIZE" ]] && break
+    count=$(printf '%s' "$body" | jq '.runner_groups | length' 2>/dev/null) || count=0
+    [[ "${count:-0}" =~ ^[0-9]+$ && "${count:-0}" -lt "$TRUST_GROUP_PAGE_SIZE" ]] && break
   done
   if [[ -z "$found" ]]; then
     printf 'runner_group_not_found: runner group "%s" not found in the organisation\n' "${group:-<default>}" >&2
@@ -121,19 +142,47 @@ trust_deploy_host_warning() {
   esac
 }
 
+# trust_service_name: the systemd unit of the installed runner. svc.sh writes
+# the exact name to RUNNER_DIR/.service (it differs for repo scope and long
+# names); fall back to the org-scope pattern.
+trust_service_name() {
+  local f="${RUNNER_DIR:-}/.service"
+  if [[ -n "${RUNNER_DIR:-}" && -s "$f" ]]; then
+    tr -d '[:space:]' < "$f"
+    return
+  fi
+  printf 'actions.runner.%s.%s' "${GITHUB_RUNNER_ORG:-nself-org}" "${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+}
+
+# _trust_kill_tree PID: SIGTERM the process and all its descendants. run.sh
+# starts Runner.Listener and does not forward signals, so killing only the
+# wrapper leaves a listener that still takes jobs.
+_trust_kill_tree() {
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    _trust_kill_tree "$child"
+  done
+  kill "$pid" 2>/dev/null || true
+}
+
 # trust_stop_runner PID_FILE SERVICE: stop a running runner (systemd service or
-# nohup PID). Prints what it stopped; prints nothing when nothing was running.
+# nohup process tree). The systemd unit is also disabled so a reboot does not
+# bring the runner back into a public group; start.sh starts it again (after
+# the guard passes). Prints what it stopped; nothing when nothing was running.
 trust_stop_runner() {
-  local pid_file="$1" svc="$2" pid
-  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet "$svc" 2>/dev/null; then
-    if [[ $EUID -eq 0 ]]; then systemctl stop "$svc"; else sudo systemctl stop "$svc"; fi
-    printf 'stopped systemd service %s\n' "$svc"
+  local pid_file="$1" svc="$2" pid sc=""
+  if command -v systemctl >/dev/null 2>&1 && { systemctl is-active --quiet "$svc" 2>/dev/null || systemctl is-enabled --quiet "$svc" 2>/dev/null; }; then
+    [[ $EUID -eq 0 ]] || sc="sudo"
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      $sc systemctl stop "$svc" && printf 'stopped systemd service %s\n' "$svc"
+    fi
+    $sc systemctl disable "$svc" >/dev/null 2>&1 && printf 'disabled systemd service %s (no restart at boot while the group is public)\n' "$svc"
   fi
   if [[ -f "$pid_file" ]]; then
     pid=$(cat "$pid_file")
     if kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null || true
-      printf 'stopped runner (PID %s)\n' "$pid"
+      _trust_kill_tree "$pid"
+      printf 'stopped runner (PID %s and its children)\n' "$pid"
     fi
   fi
 }

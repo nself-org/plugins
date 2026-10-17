@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	sdk "github.com/nself-org/plugin-sdk"
@@ -35,7 +34,7 @@ func respondTrustError(w http.ResponseWriter, err error) {
 	sdk.Error(w, http.StatusInternalServerError, err)
 }
 
-// stopRunnerProcess sends an interrupt to the running runner. It reports
+// stopRunnerProcess sends SIGTERM to the running runner and its children. It reports
 // whether a runner was running and any signalling error.
 func (h *Handler) stopRunnerProcess() (pid int, running bool, err error) {
 	h.state.mu.Lock()
@@ -45,12 +44,8 @@ func (h *Handler) stopRunnerProcess() (pid int, running bool, err error) {
 	if !running {
 		return pid, false, nil
 	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return pid, true, fmt.Errorf("find process %d: %w", pid, err)
-	}
-	if err := proc.Signal(os.Interrupt); err != nil {
-		return pid, true, fmt.Errorf("signal process %d: %w", pid, err)
+	if err := signalRunnerTree(pid); err != nil {
+		return pid, true, fmt.Errorf("signal runner process group %d: %w", pid, err)
 	}
 	return pid, true, nil
 }

@@ -63,6 +63,9 @@ So the plugin is trusted-only by default:
 - Before registration, on every start and on every status call it reads the runner group (`GET /orgs/{org}/actions/runner-groups`, matching `GITHUB_RUNNER_GROUP`, or the group with `default: true` when it is empty) and refuses one with `allows_public_repositories: true`. For `GITHUB_RUNNER_SCOPE=repo` it reads `GET /repos/{owner}/{repo}` and refuses a public repository.
 - The refusal has the error code `runner_group_public` (HTTP 409 from the plugin API, non-zero exit from `install.sh` and `actions/start.sh`). If the check cannot be completed (API error, missing permission) the runner does not start either (`runner_trust_unverifiable`).
 - A group or repository that becomes public after registration stops the running runner on the next start or status call.
+- `GITHUB_RUNNER_SCOPE` must be `org` or `repo` (case-insensitive); any other value is refused as `runner_trust_unverifiable`, so a typo never skips the repository check. Organisation and repository names are validated before use.
+- A stop signals the runner and all of its child processes (`run.sh` does not forward signals to `Runner.Listener`). For a systemd runner the unit is stopped and also disabled, so a reboot does not bring it back into a public group; the next `start` re-checks the group and starts the runner again when it is private.
+- Known limits: the check reads the group named in `GITHUB_RUNNER_GROUP` (or the default group), not the group the runner is registered in, so change the group by re-registering. A check that cannot complete (revoked token, rate limit, GitHub outage, deleted group) blocks a start and is reported by status, but does not stop a runner that is already running; monitor the `Check:` line of the status action. Each status call makes one to two GitHub API requests.
 - To accept the risk for a public group or repository, set `GITHUB_RUNNER_ALLOW_PUBLIC_REPOS=true`. A warning is logged on every start.
 - With `ENV=prod`, `production` or `staging`, `/health` and the status action report `deploy_host_warning`, because the runner then shares its host with a deployed stack.
 
@@ -111,7 +114,7 @@ GITHUB_RUNNER_NAME=nself-runner-1 nself plugin install github-runner
 ## PAT Creation
 
 1. Go to [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens)
-2. Recommended: generate a **fine-grained** token for the organisation with **Self-hosted runners: Read and write**. It reads the runner groups and creates registration tokens, and nothing more.
+2. Recommended: generate a **fine-grained** token for the organisation with **Self-hosted runners: Read and write**. It reads the runner groups and creates registration tokens, and nothing more. For `GITHUB_RUNNER_SCOPE=repo` the token instead needs **Administration: Read and write** on that repository (and read access to its metadata); the organisation permission alone cannot register or check a repository runner.
 3. Or generate a token (classic) with scope `admin:org` (broader than the plugin needs)
 4. Copy token → set as `GITHUB_RUNNER_PAT`
 

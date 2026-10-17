@@ -2,7 +2,9 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -320,5 +322,40 @@ func TestCheckTrust_MissingFlagIsUnverifiable(t *testing.T) {
 	te, ok := err.(*TrustError)
 	if !ok || te.Code != CodeTrustUnverifiable {
 		t.Fatalf("a group without allows_public_repositories must fail closed, got %v", err)
+	}
+}
+
+func TestCheckTrust_UnknownScopeFailsClosed(t *testing.T) {
+	cfg := TrustConfig{PAT: testPAT, Org: "acme", Scope: "repository", Repo: "app"}
+	_, err := CheckTrust(context.Background(), cfg)
+	var te *TrustError
+	if !errors.As(err, &te) || te.Code != CodeTrustUnverifiable {
+		t.Fatalf("unknown scope must be unverifiable: %v", err)
+	}
+}
+
+func TestStart_StopsRunningRunnerWhenGroupTurnsPublic(t *testing.T) {
+	f := &fakeGitHub{groups: []runnerGroup{{Name: "Default", Default: true, AllowsPublicRepositories: pb(true)}}}
+	newFakeGitHub(t, f)
+	trustEnv(t)
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	t.Cleanup(func() { _ = cmd.Process.Kill() })
+	state := NewRunnerState()
+	state.Running, state.PID = true, cmd.Process.Pid
+	h := NewHandler(state)
+
+	rec, body := call(h.Start, http.MethodPost)
+	if rec.Code != http.StatusConflict || body["code"] != "runner_group_public" {
+		t.Fatalf("Start on a running runner must run the guard first: %d %v", rec.Code, body)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("running runner was not signalled")
 	}
 }

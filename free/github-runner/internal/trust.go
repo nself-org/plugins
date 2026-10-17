@@ -96,10 +96,14 @@ func CheckTrust(ctx context.Context, cfg TrustConfig) (*TrustResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	if cfg.Scope == "repo" {
+	switch cfg.Scope {
+	case "repo":
 		return checkRepo(ctx, cfg)
+	case "org":
+		return checkGroup(ctx, cfg)
 	}
-	return checkGroup(ctx, cfg)
+	return nil, &TrustError{Code: CodeTrustUnverifiable, Status: http.StatusBadRequest,
+		Message: fmt.Sprintf("GITHUB_RUNNER_SCOPE must be org or repo (got %q)", cfg.Scope)}
 }
 
 func checkGroup(ctx context.Context, cfg TrustConfig) (*TrustResult, error) {

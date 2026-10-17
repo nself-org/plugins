@@ -25,7 +25,7 @@ case "$trust_rc" in
   0) printf "  Check:   passed%s\n" "${TRUST_GROUP:+ (group: $TRUST_GROUP)}" ;;
   1)
     printf "  Check:   REFUSED (runner_group_public)\n"
-    trust_stop_runner "$PID_FILE" "actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}" | sed 's/^/  /'
+    trust_stop_runner "$PID_FILE" "$(trust_service_name)" | sed 's/^/  /'
     ;;
   *) printf "  Check:   could not be completed (see the message above)\n" ;;
 esac
@@ -42,7 +42,7 @@ is_running=false
 
 # Check systemd
 if command -v systemctl &>/dev/null; then
-  svc_name="actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+  svc_name="$(trust_service_name)"
   if systemctl is-active --quiet "$svc_name" 2>/dev/null; then
     printf "  Status:  \033[32mRunning\033[0m (systemd: %s)\n" "$svc_name"
     is_running=true

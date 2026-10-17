@@ -23,7 +23,7 @@ trust_rc=0
 trust_check || trust_rc=$?
 if [[ "$trust_rc" -ne 0 ]]; then
   if [[ "$trust_rc" -eq 1 ]]; then
-    trust_stop_runner "$PID_FILE" "actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+    trust_stop_runner "$PID_FILE" "$(trust_service_name)"
   fi
   plugin_error "Runner not started (see the message above)."
   exit "$trust_rc"
@@ -42,7 +42,7 @@ fi
 
 # Try systemd first
 if command -v systemctl &>/dev/null; then
-  svc_name="actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+  svc_name="$(trust_service_name)"
   if systemctl is-enabled --quiet "$svc_name" 2>/dev/null; then
     plugin_info "Starting systemd service..."
     if [[ $EUID -eq 0 ]]; then

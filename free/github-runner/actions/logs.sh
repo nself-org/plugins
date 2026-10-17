@@ -6,13 +6,14 @@ set -euo pipefail
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHARED_DIR="$(dirname "$(dirname "$PLUGIN_DIR")")/shared"
 source "${SHARED_DIR}/plugin-utils.sh"
+source "${PLUGIN_DIR}/actions/trust.sh"
 
 LOG_DIR="${HOME}/.nself/logs/plugins/github-runner"
 RUNNER_DIR="${HOME}/.nself/runners/github-runner"
 
 # systemd logs
 if command -v journalctl &>/dev/null; then
-  svc_name="actions.runner.${GITHUB_RUNNER_ORG:-nself-org}.${GITHUB_RUNNER_NAME:-$(hostname)-nself}"
+  svc_name="$(trust_service_name)"
   if systemctl is-enabled --quiet "$svc_name" 2>/dev/null; then
     plugin_info "Streaming systemd journal for $svc_name..."
     journalctl -u "$svc_name" -n 50 -f

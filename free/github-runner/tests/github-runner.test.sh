@@ -109,7 +109,11 @@ for a in "${args[@]}"; do
   [[ "$a" == "-sI" ]] && head_only=true
 done
 [[ " ${args[*]} " == *" -K "* ]] && cat > /dev/null
-if $head_only; then printf 'HTTP/2 200\r\nx-oauth-scopes: admin:org\r\n'; exit 0; fi
+if $head_only; then
+  # A fine-grained token gets no x-oauth-scopes header.
+  if [[ -f "$STUB_DIR/no-scopes" ]]; then printf 'HTTP/2 200\r\n'; else printf 'HTTP/2 200\r\nx-oauth-scopes: admin:org\r\n'; fi
+  exit 0
+fi
 case "$url" in
   *runner-groups*page=*) f="$STUB_DIR/api/groups-${url##*page=}.json" ;;
   */repos/*/actions/runners/registration-token) f="$STUB_DIR/api/token.json" ;;
@@ -195,6 +199,27 @@ rc=0; out=$(bash "$PLUGIN_DIR/install.sh" 2>&1) || rc=$?
 [[ "$out" != *"$FAKE_PAT"* ]] && pass "install.sh output never prints the PAT" || fail "install.sh printed the PAT"
 [[ ! -f "$T/home/.nself/runners/github-runner/config.sh" ]] && pass "install.sh stopped before downloading or configuring" || fail "install.sh went on after refusal"
 
+# A fine-grained token (no x-oauth-scopes header) must still reach the guard.
+touch "$T/no-scopes"
+rc=0; out=$(bash "$PLUGIN_DIR/install.sh" 2>&1) || rc=$?
+[[ "$rc" == 1 && "$out" == *runner_group_public* ]] && pass "install.sh with a fine-grained token (no scopes header) reaches the guard" || fail "no scopes header: rc=$rc"
+rm -f "$T/no-scopes"
+
+# An unknown scope never skips the repo check; names are validated.
+reset_api
+echo '{"private":false}' > "$T/api/repo.json"
+GITHUB_RUNNER_SCOPE=repository GITHUB_RUNNER_REPO=app run_check
+[[ "$RC" == 2 && "$ERR" == *runner_trust_unverifiable* ]] && pass "unknown scope fails closed" || fail "unknown scope: rc=$RC err=$ERR"
+GITHUB_RUNNER_SCOPE=REPO GITHUB_RUNNER_REPO=app run_check
+[[ "$RC" == 1 && "$ERR" == *runner_group_public* ]] && pass "scope is case-insensitive (REPO)" || fail "REPO: rc=$RC err=$ERR"
+GITHUB_RUNNER_SCOPE=repo GITHUB_RUNNER_REPO='app/../x' run_check
+[[ "$RC" == 2 ]] && pass "repo name with a slash fails closed" || fail "bad repo name: rc=$RC"
+GITHUB_RUNNER_ORG='ac me' run_check
+[[ "$RC" == 2 ]] && pass "org name with a space fails closed" || fail "bad org name: rc=$RC"
+export GITHUB_RUNNER_ORG=acme
+reset_api
+printf '{"runner_groups":[%s]}' "$(group_json Default true true)" > "$T/api/groups-1.json"
+
 # start.sh refuses a public group and stops a running runner.
 printf '#!/bin/sh\nexit 0\n' > "$T/home/.nself/runners/github-runner/run.sh"; chmod +x "$T/home/.nself/runners/github-runner/run.sh"
 sleep 300 & sleeper=$!
@@ -204,6 +229,17 @@ sleep 0.2
 [[ "$rc" == 1 && "$out" == *runner_group_public* ]] && pass "start.sh refuses a public group" || fail "start.sh: rc=$rc out=$out"
 if kill -0 "$sleeper" 2>/dev/null; then fail "start.sh left the runner running"; kill "$sleeper" 2>/dev/null || true; else pass "start.sh stops a runner whose group turned public"; fi
 wait "$sleeper" 2>/dev/null || true
+
+# trust_stop_runner kills the whole process tree, not just the wrapper.
+bash -c 'sleep 300 & echo $! > "$1"; wait' _ "$T/child.pid" & wrapper=$!
+sleep 0.5
+echo "$wrapper" > "$T/tree.pid"
+trust_stop_runner "$T/tree.pid" "no-such-unit" > /dev/null
+sleep 0.3
+child=$(cat "$T/child.pid")
+state=$(ps -o stat= -p "$child" 2>/dev/null | tr -d ' ' || true)
+if [[ -n "$state" && "$state" != Z* ]]; then fail "trust_stop_runner left a child process running"; kill "$child" 2>/dev/null || true; else pass "trust_stop_runner stops the child processes too"; fi
+wait "$wrapper" 2>/dev/null || true
 
 # status.sh stops the runner too and reports deploy_host_warning only in prod-like ENV.
 sleep 300 & sleeper=$!
