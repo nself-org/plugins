@@ -1,17 +1,35 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
+	sdk "github.com/nself-org/plugin-sdk"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	sdk "github.com/nself-org/plugin-sdk"
 )
 
 // Size-cap exception: single-responsibility HTTP route handler — 72L of request decode + validate + DB op + response encode; splitting adds indirection without cohesion gain.
 func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
+	// Trusted-only guard first: re-check the runner group (or repo) on every
+	// start, including when a runner is already up, so a group that turned
+	// public stops it.
+	trust, err := CheckTrust(r.Context(), TrustConfigFromEnv())
+	if err != nil {
+		var te *TrustError
+		if errors.As(err, &te) && te.Code == CodeRunnerGroupPublic {
+			if pid, was, serr := h.stopRunnerProcess(); serr != nil {
+				log.Printf("github-runner: trust guard could not stop runner: %v", serr)
+			} else if was {
+				log.Printf("github-runner: runner group or repo is now open to public repositories; stopped runner (PID %d)", pid)
+			}
+		}
+		respondTrustError(w, err)
+		return
+	}
+
 	h.state.mu.Lock()
 	if h.state.Running {
 		h.state.mu.Unlock()
@@ -33,6 +51,7 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 	// untrusted workflow code on the runner cannot exfiltrate the plugin's
 	// credentials from the process environment.
 	cmd.Env = runnerEnv()
+	ownProcessGroup(cmd)
 
 	// Redirect stdout/stderr to the log file.
 	logPath := logFilePath()
@@ -81,6 +100,7 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 	sdk.Respond(w, http.StatusOK, map[string]interface{}{
 		"started": true,
 		"pid":     pid,
+		"warning": trust.Warning,
 	})
 }
 
@@ -90,28 +110,17 @@ func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
 
 // Stop sends SIGTERM to the runner subprocess.
 func (h *Handler) Stop(w http.ResponseWriter, r *http.Request) {
-	h.state.mu.Lock()
-	running := h.state.Running
-	pid := h.state.PID
-	h.state.mu.Unlock()
-
+	pid, running, err := h.stopRunnerProcess()
 	if !running {
 		sdk.Error(w, http.StatusConflict, fmt.Errorf("runner is not running"))
 		return
 	}
-
-	proc, err := os.FindProcess(pid)
 	if err != nil {
-		sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("find process %d: %w", pid, err))
+		sdk.Error(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	if err := proc.Signal(os.Interrupt); err != nil {
-		sdk.Error(w, http.StatusInternalServerError, fmt.Errorf("signal process %d: %w", pid, err))
-		return
-	}
-
-	log.Printf("github-runner: sent interrupt to runner (PID %d)", pid)
+	log.Printf("github-runner: sent SIGTERM to runner (PID %d)", pid)
 
 	sdk.Respond(w, http.StatusOK, map[string]interface{}{
 		"stopped": true,

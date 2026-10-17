@@ -12,14 +12,14 @@ The runner registers with the `ubuntu-latest` label by default, so existing work
 
 - nSelf v0.9.0+
 - GitHub org with at least one private repo
-- GitHub PAT with `admin:org` scope
+- A token that can register runners: a fine-grained token with the organisation **Self-hosted runners: write** permission (recommended), or a classic PAT with `admin:org`
 - `curl`, `tar`, `jq` on the host
 
 ## Install
 
 ```bash
 # Set required env vars first (in your .env file or shell):
-export GITHUB_RUNNER_PAT=ghp_xxxxxxxxxxxx
+export GITHUB_RUNNER_PAT=<your token>
 export GITHUB_RUNNER_ORG=your-org
 
 nself plugin install github-runner
@@ -27,9 +27,10 @@ nself plugin install github-runner
 
 The installer will:
 1. Verify your PAT has the required scope
-2. Download the latest GitHub Actions runner binary
-3. Register with your GitHub org (uses a registration token fetched via your PAT)
-4. Start the runner (systemd service if available, else nohup)
+2. Check the runner group is trusted-only (see [Isolation and trust](#isolation-and-trust)); install stops with `runner_group_public` if it is open to public repositories
+3. Download the latest GitHub Actions runner binary
+4. Register with your GitHub org (uses a registration token fetched via your PAT)
+5. Start the runner (systemd service if available, else nohup)
 
 ## Configuration
 
@@ -37,14 +38,38 @@ Copy `.env.example` to your nSelf `.env` file and set the values:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GITHUB_RUNNER_PAT` | Yes | — | PAT with `admin:org` scope |
+| `GITHUB_RUNNER_PAT` | Yes | — | Fine-grained token with org "Self-hosted runners: write" (or classic `admin:org`) |
 | `GITHUB_RUNNER_ORG` | Yes | — | GitHub org name |
 | `GITHUB_RUNNER_NAME` | No | `<hostname>-nself` | Runner display name |
-| `GITHUB_RUNNER_LABELS` | No | `self-hosted,linux,x64,ubuntu-latest` | Comma-separated labels |
+| `GITHUB_RUNNER_LABELS` | No | `self-hosted,linux,x64,ubuntu-latest` (install.sh); `self-hosted,linux,x64` (compose service) | Comma-separated labels |
 | `GITHUB_RUNNER_SCOPE` | No | `org` | `org` or `repo` |
 | `GITHUB_RUNNER_REPO` | No | — | Repo name (scope=repo only) |
-| `GITHUB_RUNNER_GROUP` | No | Default | Runner group |
+| `GITHUB_RUNNER_GROUP` | No | the org's default group | Runner group. One open to public repositories is refused |
+| `GITHUB_RUNNER_ALLOW_PUBLIC_REPOS` | No | `false` | **Unsafe.** Allow a public runner group or public repo (warned on every start) |
+| `ENV` | No | — | `prod`, `production` or `staging` adds `deploy_host_warning` to `/health` and status |
 | `GITHUB_RUNNER_VERSION` | No | latest | Pin a specific version |
+
+## Isolation and trust
+
+This runner is **not isolated**. Read this before you point it at a repository.
+
+- **Isolation level: `process`.** Jobs run as ordinary processes of the runner user. There is no container, VM or sandbox around them.
+- **Persistent.** The runner keeps its workspace, caches and tool state between jobs. One job can leave files that the next job sees.
+- **Same host as your stack.** The plugin runs next to your nSelf services, so a job can reach the host the stack runs on.
+- **Not for fork pull requests.** A workflow triggered by a fork PR of a public repository runs attacker-chosen code. Never let this runner take those jobs.
+
+So the plugin is trusted-only by default:
+
+- Before registration, on every start and on every status call it reads the runner group (`GET /orgs/{org}/actions/runner-groups`, matching `GITHUB_RUNNER_GROUP`, or the group with `default: true` when it is empty) and refuses one with `allows_public_repositories: true`. For `GITHUB_RUNNER_SCOPE=repo` it reads `GET /repos/{owner}/{repo}` and refuses a public repository.
+- The refusal has the error code `runner_group_public` (HTTP 409 from the plugin API, non-zero exit from `install.sh` and `actions/start.sh`). If the check cannot be completed (API error, missing permission) the runner does not start either (`runner_trust_unverifiable`).
+- A group or repository that becomes public after registration stops the running runner on the next start or status call.
+- `GITHUB_RUNNER_SCOPE` must be `org` or `repo` (case-insensitive); any other value is refused as `runner_trust_unverifiable`, so a typo never skips the repository check. Organisation and repository names are validated before use.
+- A stop signals the runner and all of its child processes (`run.sh` does not forward signals to `Runner.Listener`). For a systemd runner the unit is stopped and also disabled, so a reboot does not bring it back into a public group; the next `start` re-checks the group and starts the runner again when it is private.
+- Known limits: the check reads the group named in `GITHUB_RUNNER_GROUP` (or the default group), not the group the runner is registered in, so change the group by re-registering. A check that cannot complete (revoked token, rate limit, GitHub outage, deleted group) blocks a start and is reported by status, but does not stop a runner that is already running; monitor the `Check:` line of the status action. Each status call makes one to two GitHub API requests.
+- To accept the risk for a public group or repository, set `GITHUB_RUNNER_ALLOW_PUBLIC_REPOS=true`. A warning is logged on every start.
+- With `ENV=prod`, `production` or `staging`, `/health` and the status action report `deploy_host_warning`, because the runner then shares its host with a deployed stack.
+
+Restrict the runner group to private repositories in the organisation settings (Settings, Actions, Runner groups). The default labels are unchanged, so existing `runs-on: ubuntu-latest` workflows of private repositories still run here instead of on paid GitHub minutes.
 
 ## Usage
 
@@ -88,12 +113,10 @@ GITHUB_RUNNER_NAME=nself-runner-1 nself plugin install github-runner
 
 ## PAT Creation
 
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Generate new token (classic)
-3. Select scope: `admin:org`
+1. Go to [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens)
+2. Recommended: generate a **fine-grained** token for the organisation with **Self-hosted runners: Read and write**. It reads the runner groups and creates registration tokens, and nothing more. For `GITHUB_RUNNER_SCOPE=repo` the token instead needs **Administration: Read and write** on that repository (and read access to its metadata); the organisation permission alone cannot register or check a repository runner.
+3. Or generate a token (classic) with scope `admin:org` (broader than the plugin needs)
 4. Copy token → set as `GITHUB_RUNNER_PAT`
-
-For fine-grained tokens, the permission is: **Organization self-hosted runners → Read and Write**.
 
 ## Uninstall
 
