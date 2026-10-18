@@ -115,6 +115,9 @@ if git -C "$repo" cat-file -e "$base_ref:free/forgejo/runner-entrypoint.sh" 2>/d
   upgrade=1
   step "previous fragment ($base_ref) up"
   lay_plugin "$base_ref"
+  # The previous bootstrap asked the API for a runner token with a wget flag BusyBox lacks, so its init failed and the
+  # runner never started. A pre-shared token takes the path that works; the runner then runs (and fails to register).
+  printf 'FORGEJO_RUNNER_REGISTRATION_TOKEN=%s\n' "$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')" >>"$project/.env"
   (cd "$project" && nself build --no-migration-check --quiet)
   dc up -d forgejo forgejo-init forgejo-runner
   wait_for "previous forgejo healthy" forgejo_healthy
