@@ -1,6 +1,6 @@
 --- a/internal/attest/verify.go
 +++ b/internal/attest/verify.go
-@@ -107,7 +107,7 @@
+@@ -117,7 +117,7 @@
  func bindingConsistent(ev model.Evidence) bool {
  	switch ev.Binding.State {
  	case "bound":

@@ -1,6 +1,6 @@
 --- a/internal/attest/verify.go
 +++ b/internal/attest/verify.go
-@@ -82,7 +82,7 @@
+@@ -92,7 +92,7 @@
  	if !bindingConsistent(ev) || !producerConsistent(ev) || !countsConsistent(ev) {
  		set.add(ReasonInvalid)
  	}

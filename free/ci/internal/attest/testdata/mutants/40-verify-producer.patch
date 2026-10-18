@@ -1,6 +1,6 @@
 --- a/internal/attest/verify.go
 +++ b/internal/attest/verify.go
-@@ -119,7 +119,7 @@
+@@ -129,7 +129,7 @@
  	if ev.Producer.Kind == "signed-remote" {
  		return s.Kind == "runner-ed25519" && s.KeyID != nil && *s.KeyID != "" && s.Value != nil && *s.Value != ""
  	}

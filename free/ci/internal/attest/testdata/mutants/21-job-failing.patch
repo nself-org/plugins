@@ -1,11 +1,11 @@
 --- a/internal/attest/gate.go
 +++ b/internal/attest/gate.go
-@@ -104,7 +104,7 @@
- 		if job == "" || !seen[job] {
- 			return []Reason{ReasonJobsMismatch}
- 		}
--		if bad[job] {
-+		if false {
- 			return []Reason{ReasonNotPassing}
+@@ -126,7 +126,7 @@
+ 		switch {
+ 		case job == "" || !seen[job]:
+ 			set.add(ReasonJobsMismatch)
+-		case bad[job]:
++		case false:
+ 			set.add(ReasonNotPassing)
  		}
  	}

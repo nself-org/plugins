@@ -1,6 +1,6 @@
 --- a/internal/attest/gate.go
 +++ b/internal/attest/gate.go
-@@ -79,7 +79,7 @@
+@@ -100,7 +100,7 @@
  	if (g.release() || g.FullSelection) && ev.Selection.Mode != "full" {
  		set.add(ReasonSelectionPartial)
  	}
@@ -8,4 +8,4 @@
 +	if false {
  		set.add(ReasonNotPassing)
  	}
- 	set.add(producerReasons(ev, g)...)
+ 	set.add(producerReasons(ev, g, doc)...)

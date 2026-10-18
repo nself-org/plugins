@@ -1,6 +1,6 @@
 --- a/internal/attest/gate.go
 +++ b/internal/attest/gate.go
-@@ -70,7 +70,7 @@
+@@ -91,7 +91,7 @@
  	if ev.Binding.State != "bound" || ev.WorktreeState != "clean" {
  		set.add(ReasonUnbound)
  	}

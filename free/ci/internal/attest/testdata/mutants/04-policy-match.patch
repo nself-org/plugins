@@ -1,6 +1,6 @@
 --- a/internal/attest/gate.go
 +++ b/internal/attest/gate.go
-@@ -59,7 +59,7 @@
+@@ -80,7 +80,7 @@
  	if ev.Revision == "" || ev.Revision != g.Revision {
  		set.add(ReasonRevisionMismatch)
  	}

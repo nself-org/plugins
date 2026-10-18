@@ -1,6 +1,7 @@
 package attest_test
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -288,7 +289,10 @@ func TestGateAcceptDocument(t *testing.T) {
 	rec := &recordingVerifier{}
 	attest.RegisterRemoteVerifier(rec)
 	signed := signedRemote(ev)
-	doc := marshal(t, signed)
+	doc, err := json.MarshalIndent(signed, "", "  ") // bytes a re-marshal would not reproduce
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := attest.GateAcceptDocument(doc, goodGate(signed)); len(got) != 0 {
 		t.Fatalf("signed document rejected: %v", got)
 	}
