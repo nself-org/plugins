@@ -94,6 +94,8 @@ services:
     image: codeberg.org/forgejo/forgejo:9.0.3@sha256:3c34f11fe8b9983096eef3f8f25c2d2c21c4ae7504960cb203f0b075d1d8ed73
     container_name: ${COMPOSE_PROJECT_NAME:-nself}_forgejo_init
     restart: "no"
+    # Forgejo refuses to run its CLI as root (RUN_USER is git, uid 1000), so the bootstrap runs as that user.
+    user: "1000:1000"
     depends_on:
       forgejo:
         condition: service_healthy

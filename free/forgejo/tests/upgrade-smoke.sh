@@ -122,6 +122,11 @@ if git -C "$repo" cat-file -e "$base_ref:free/forgejo/runner-entrypoint.sh" 2>/d
   dc up -d forgejo forgejo-init forgejo-runner
   wait_for "previous forgejo healthy" forgejo_healthy
   wait_for "previous forgejo-init to exit 0" init_done
+  # The previous init ran the CLI as root, which Forgejo refuses, and swallowed the error: no admin existed. Create it
+  # the way a working install has it (as the git user); the password reaches the CLI through the environment.
+  ADMIN_PASS="$admin_pass" docker exec -u git -e ADMIN_PASS "${proj_name}_forgejo" sh -c \
+    'forgejo admin user create --admin --username smokeadmin --password "$ADMIN_PASS" --email smoke@example.invalid --must-change-password=false --config /data/gitea/conf/app.ini' >/dev/null \
+    || fail "cannot create the admin user on the previous stack"
   api -X POST -H 'Content-Type: application/json' -d '{"name":"survivor"}' "http://127.0.0.1:3844/api/v1/user/repos" >/dev/null || fail "cannot create the survivor repository on the previous stack"
   runner="$(docker ps -aq --filter "name=${proj_name}_forgejo_runner")"
   [ -n "$runner" ] || fail "previous stack has no forgejo-runner container: the smoke would prove nothing"
