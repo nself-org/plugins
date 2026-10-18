@@ -4,9 +4,13 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nself-org/cli/sdk/go/v2/migrate"
@@ -25,6 +29,19 @@ func bootOptions() migrate.Options {
 func applyBootMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	bootPool = pool
 	res, err := migrate.Apply(ctx, pool, bootOptions())
+	if errors.Is(err, migrate.ErrLegacyLedger) {
+		if !strings.EqualFold(os.Getenv("NSELF_CONTROLLER_ADOPT_LEGACY"), "true") {
+			return legacyLedgerError(err)
+		}
+		// Record 001 only (all the old runner ever applied), then let Apply run 002 and 003.
+		opts := bootOptions()
+		opts.FS = legacyAdoptionFS()
+		if _, berr := migrate.Baseline(ctx, pool, opts); berr != nil {
+			return fmt.Errorf("migrations: adopt legacy ledger: %w", berr)
+		}
+		log.Printf("migrations: adopted legacy ledger (recorded 001)")
+		res, err = migrate.Apply(ctx, pool, bootOptions())
+	}
 	if err != nil {
 		return fmt.Errorf("migrations: %w", err)
 	}
@@ -46,4 +63,32 @@ func MigrationsHealth(w http.ResponseWriter) map[string]int {
 		return map[string]int{"applied": -1, "expected": -1}
 	}
 	return map[string]int{"applied": st.Applied, "expected": st.Expected}
+}
+
+// legacyLedgerError wraps ErrLegacyLedger with the way out, so the boot log says what to do.
+func legacyLedgerError(err error) error {
+	return fmt.Errorf("migrations: %w: this install predates manifest v2 and its ledger only knows migration 001; "+
+		"restart once with NSELF_CONTROLLER_ADOPT_LEGACY=true to record 001 and apply the rest", err)
+}
+
+// legacyAdoptionFS exposes only migration 001: the pre-v2 runner applied nothing else, so adopting the
+// ledger must not mark 002 (metering) or 003 (rename) as applied.
+func legacyAdoptionFS() fs.FS {
+	return only001{migrations.FS}
+}
+
+type only001 struct{ fs.FS }
+
+func (o only001) ReadDir(name string) ([]fs.DirEntry, error) {
+	ents, err := fs.ReadDir(o.FS, name)
+	if err != nil {
+		return nil, err
+	}
+	out := ents[:0]
+	for _, e := range ents {
+		if strings.HasPrefix(e.Name(), "001_") {
+			out = append(out, e)
+		}
+	}
+	return out, nil
 }

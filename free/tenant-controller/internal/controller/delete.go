@@ -32,6 +32,7 @@ type DeleteInput struct {
 //  7. Flush Redis keys matching proj:{slug}:*.
 //  8. Drop MinIO bucket.
 //  9. DROP SCHEMA project_{slug} CASCADE.
+//
 // 10. DROP ROLE nself_project_{slug}.
 // 11. Remove port_map + projects rows (soft-delete via deleted_at then hard-delete).
 // 12. Emit audit log complete.
@@ -69,7 +70,7 @@ func Delete(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, input D
 
 	// 6. Remove Nginx vhost + reload.
 	slog.Info("project.delete step:nginx", "slug", input.Slug)
-	nClient := nginx.NewClient(cfg.NginxConfPath)
+	nClient := nginx.NewClientMode(cfg.NginxConfPath, cfg.NginxReloadMode)
 	if err := nClient.RemoveVhost(ctx, input.Slug); err != nil {
 		slog.Warn("nginx remove vhost failed (continuing)", "slug", input.Slug, "err", err)
 	}

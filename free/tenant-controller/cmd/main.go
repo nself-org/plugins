@@ -30,11 +30,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Feature flag gate: NSELF_FLAG_MULTI_TENANT_CONTROLLER must be true.
+	// Feature flag gate: a disabled controller exits 0 so the compose restart policy (on-failure) leaves it
+	// stopped instead of looping.
 	if !cfg.Enabled {
-		slog.Error("multi-tenant controller not enabled",
-			"hint", "Set NSELF_FLAG_MULTI_TENANT_CONTROLLER=true or NSELF_CONTROLLER_ENABLED=true")
-		os.Exit(1)
+		slog.Info("multi-tenant controller not enabled; exiting",
+			"hint", "Set NSELF_CONTROLLER_ENABLED=true (plus the required vars) and restart")
+		return
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)

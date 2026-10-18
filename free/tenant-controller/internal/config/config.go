@@ -48,6 +48,10 @@ type Config struct {
 	// Nginx config file path.
 	NginxConfPath string
 
+	// NginxReloadMode is "exec" (run `nginx -s reload` in this container) or "watch" (the container has no
+	// nginx binary; a watcher beside the stack nginx notices the conf file change and signals it).
+	NginxReloadMode string
+
 	// HTTP server binding.
 	Host string
 	Port int
@@ -60,15 +64,15 @@ type Config struct {
 	LogLevel     string
 
 	// E10: Cloud metering feature flag + settings.
-	CloudMeteringEnabled  bool
-	HetznerNselfToken     string
-	StripePriceVcpuHour   string
+	CloudMeteringEnabled      bool
+	HetznerNselfToken         string
+	StripePriceVcpuHour       string
 	StripePriceStorageGBMonth string
-	StripePriceEgressGB   string
-	CloudFreeVcpuHours    int
-	CloudFreeStorageGB    int
-	CloudFreeEgressGB     int
-	CloudUsageAlertPct    int
+	StripePriceEgressGB       string
+	CloudFreeVcpuHours        int
+	CloudFreeStorageGB        int
+	CloudFreeEgressGB         int
+	CloudUsageAlertPct        int
 }
 
 // Load reads configuration from environment variables.
@@ -76,19 +80,25 @@ type Config struct {
 func Load() (*Config, error) {
 	var missing []string
 
-	require := func(key string) string {
-		v := os.Getenv(key)
-		if v == "" {
-			missing = append(missing, key)
-		}
-		return v
-	}
-
 	optional := func(key, def string) string {
 		if v := os.Getenv(key); v != "" {
 			return v
 		}
 		return def
+	}
+
+	enabledStr := optional("NSELF_CONTROLLER_ENABLED", "false")
+	enabled := strings.EqualFold(enabledStr, "true") ||
+		strings.EqualFold(os.Getenv("NSELF_FLAG_MULTI_TENANT_CONTROLLER"), "true")
+
+	// A disabled controller only logs and exits, so it needs none of its required vars (a fresh
+	// `nself add` must not fail on config it was never given).
+	require := func(key string) string {
+		v := os.Getenv(key)
+		if v == "" && enabled {
+			missing = append(missing, key)
+		}
+		return v
 	}
 
 	optionalInt := func(key string, def int) int {
@@ -100,10 +110,6 @@ func Load() (*Config, error) {
 		}
 		return def
 	}
-
-	enabledStr := optional("NSELF_CONTROLLER_ENABLED", "false")
-	enabled := strings.EqualFold(enabledStr, "true") ||
-		strings.EqualFold(os.Getenv("NSELF_FLAG_MULTI_TENANT_CONTROLLER"), "true")
 
 	cfg := &Config{
 		Enabled:            enabled,
@@ -122,6 +128,7 @@ func Load() (*Config, error) {
 		MinioAccessKey:     optional("MINIO_ACCESS_KEY", ""),
 		MinioSecretKey:     optional("MINIO_SECRET_KEY", ""),
 		NginxConfPath:      optional("NGINX_CONF_PATH", "/etc/nginx/conf.d/nself-projects.conf"),
+		NginxReloadMode:    optional("NGINX_RELOAD_MODE", "exec"),
 		Host:               optional("NSELF_CONTROLLER_HOST", "127.0.0.1"),
 		Port:               optionalInt("NSELF_CONTROLLER_PORT", 3750),
 		AuditRetentionDays: optionalInt("NSELF_AUDIT_RETENTION_DAYS", 90),
@@ -138,6 +145,10 @@ func Load() (*Config, error) {
 		CloudFreeStorageGB:        optionalInt("CLOUD_FREE_STORAGE_GB", 50),
 		CloudFreeEgressGB:         optionalInt("CLOUD_FREE_EGRESS_GB", 100),
 		CloudUsageAlertPct:        optionalInt("CLOUD_USAGE_ALERT_PCT", 80),
+	}
+
+	if cfg.NginxReloadMode != "exec" && cfg.NginxReloadMode != "watch" {
+		return nil, fmt.Errorf("NGINX_RELOAD_MODE %q: want exec or watch", cfg.NginxReloadMode)
 	}
 
 	if len(missing) > 0 {

@@ -111,6 +111,16 @@
       "required": false
     },
     {
+      "description": "exec runs nginx -s reload here; watch leaves the reload to the conf.d watcher (default exec, the compose fragment sets watch)",
+      "name": "NGINX_RELOAD_MODE",
+      "required": false
+    },
+    {
+      "description": "true: on a pre-v2 legacy ledger, record migration 001 and apply the rest, once",
+      "name": "NSELF_CONTROLLER_ADOPT_LEGACY",
+      "required": false
+    },
+    {
       "description": "",
       "name": "NSELF_AUDIT_RETENTION_DAYS",
       "required": false

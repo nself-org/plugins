@@ -4,11 +4,15 @@ services:
       context: ${NSELF_PLUGIN_DIR}/tenant-controller
       dockerfile: Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME}_plugin-tenant-controller
-    restart: unless-stopped
+    # A disabled controller exits 0; unless-stopped would restart it forever.
+    restart: on-failure:5
     networks:
       - ${DOCKER_NETWORK}
     ports:
       - "127.0.0.1:3750:3750"
+    volumes:
+      # The stack nginx includes nginx/conf.d; the controller writes nself-projects.conf there.
+      - ./nginx/conf.d:/etc/nginx/conf.d
     environment:
       DATABASE_URL: ${DATABASE_URL}
       NSELF_CONTROLLER_PORT: "3750"
@@ -17,11 +21,13 @@ services:
       NSELF_FLAG_MULTI_TENANT_CONTROLLER: ${NSELF_FLAG_MULTI_TENANT_CONTROLLER:-false}
       NSELF_FLAG_CLOUD_METERING: ${NSELF_FLAG_CLOUD_METERING:-false}
       NGINX_CONF_PATH: ${NGINX_CONF_PATH:-/etc/nginx/conf.d/nself-projects.conf}
-      NSELF_CONTROLLER_ADMIN_TOKEN: ${NSELF_CONTROLLER_ADMIN_TOKEN}
-      NSELF_CONTROLLER_BASE_DOMAIN: ${NSELF_CONTROLLER_BASE_DOMAIN}
+      NGINX_RELOAD_MODE: watch
+      NSELF_CONTROLLER_ADOPT_LEGACY: ${NSELF_CONTROLLER_ADOPT_LEGACY:-false}
+      NSELF_CONTROLLER_ADMIN_TOKEN: ${NSELF_CONTROLLER_ADMIN_TOKEN:-}
+      NSELF_CONTROLLER_BASE_DOMAIN: ${NSELF_CONTROLLER_BASE_DOMAIN:-}
       NSELF_CONTROLLER_MAX_PROJECTS: ${NSELF_CONTROLLER_MAX_PROJECTS:-50}
-      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
-      HASURA_GRAPHQL_ENDPOINT: ${HASURA_GRAPHQL_ENDPOINT}
+      HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET:-}
+      HASURA_GRAPHQL_ENDPOINT: ${HASURA_GRAPHQL_ENDPOINT:-}
       NSELF_PROJECT_SCHEMA_PREFIX: ${NSELF_PROJECT_SCHEMA_PREFIX:-project_}
       NSELF_PROJECT_REDIS_PREFIX: ${NSELF_PROJECT_REDIS_PREFIX:-proj:}
       NSELF_PROJECT_HASURA_PORT_START: ${NSELF_PROJECT_HASURA_PORT_START:-8080}
@@ -50,3 +56,33 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Reloads the stack nginx when the controller rewrites nself-projects.conf. It shares nginx's PID namespace
+  # (pid: service:nginx) and sends SIGHUP to the nginx master, so no Docker socket is mounted.
+  plugin-tenant-controller-reloader:
+    image: alpine:3.19
+    container_name: ${COMPOSE_PROJECT_NAME}_plugin-tenant-controller-reloader
+    restart: on-failure:5
+    pid: "service:nginx"
+    networks:
+      - ${DOCKER_NETWORK}
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - nginx
+    command:
+      - sh
+      - -c
+      - |
+        f=/etc/nginx/conf.d/nself-projects.conf
+        last=""
+        while true; do
+          now=$$(cksum "$$f" 2>/dev/null)
+          if [ "$$now" != "$$last" ]; then
+            if [ -n "$$last" ]; then
+              pid=$$(pgrep -o -x nginx) && kill -HUP "$$pid" && echo "nginx reloaded"
+            fi
+            last="$$now"
+          fi
+          sleep 2
+        done

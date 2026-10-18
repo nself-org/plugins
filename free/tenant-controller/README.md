@@ -32,6 +32,8 @@ Multi-tenant master controller for nCloud. Manages N isolated nSelf project inst
 | `MINIO_ACCESS_KEY` | No | — |
 | `MINIO_SECRET_KEY` | No | — |
 | `NGINX_CONF_PATH` | No | — |
+| `NGINX_RELOAD_MODE` | No | `exec` runs nginx here, `watch` leaves the reload to the conf.d watcher |
+| `NSELF_CONTROLLER_ADOPT_LEGACY` | No | `true` once, to adopt a pre-v2 ledger |
 | `NSELF_AUDIT_RETENTION_DAYS` | No | — |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — |
 | `LOG_LEVEL` | No | — |
@@ -53,9 +55,9 @@ Multi-tenant master controller for nCloud. Manages N isolated nSelf project inst
 nself plugin install tenant-controller
 ```
 
-## Limitations of the container form
+## The container form
 
-- Disabled by default: set `NSELF_CONTROLLER_ENABLED=true` (or `NSELF_FLAG_MULTI_TENANT_CONTROLLER=true`) plus `NSELF_CONTROLLER_ADMIN_TOKEN`, `NSELF_CONTROLLER_BASE_DOMAIN`, `HASURA_GRAPHQL_ENDPOINT` and `HASURA_GRAPHQL_ADMIN_SECRET`.
-- The controller writes the project nginx config to `NGINX_CONF_PATH` and reloads nginx. The image carries no nginx and the fragment mounts no shared nginx directory, so creating a project fails at the nginx step until a shared config directory and reload path are wired (tracked in hq quality debt).
+- Disabled by default. With `NSELF_CONTROLLER_ENABLED=false` (the default) the container logs one line and exits 0, and `restart: on-failure:5` leaves it stopped, so `nself add tenant-controller` does not restart-loop. It needs none of the vars below until you enable it. To run it, set `NSELF_CONTROLLER_ENABLED=true` (or `NSELF_FLAG_MULTI_TENANT_CONTROLLER=true`) plus `NSELF_CONTROLLER_ADMIN_TOKEN`, `NSELF_CONTROLLER_BASE_DOMAIN`, `HASURA_GRAPHQL_ENDPOINT` and `HASURA_GRAPHQL_ADMIN_SECRET`, then restart.
+- Nginx. The controller writes `nself-projects.conf` into the stack's `nginx/conf.d/` (mounted at `/etc/nginx/conf.d`, which the stack nginx already includes). The image has no nginx binary, so `NGINX_RELOAD_MODE=watch` is set: the `plugin-tenant-controller-reloader` service polls that file every 2 seconds and sends SIGHUP to the stack nginx master. It joins nginx's PID namespace (`pid: service:nginx`); no Docker socket is mounted. A broken vhost file makes nginx keep its old config and log the error. Outside this fragment, `NGINX_RELOAD_MODE=exec` (the default) runs `nginx -s reload` and needs the binary.
 - The `nself_controller` role is `NOLOGIN`: the daemon connects with `DATABASE_URL` and never as this role.
-- Installs from before manifest v2 (schema `nself_controller` with its own ledger) are renamed in place. Their ledger has no checksum column and the old runner applied only `001`, so boot stops with the SDK's `legacy ledger` error instead of guessing: record `001` by hand, then restart. No such install is known. The `nself_controller` role is locked to `NOLOGIN` on every start.
+- Installs from before manifest v2 (schema `nself_controller`, own ledger, only `001` applied) are renamed in place, and boot then stops with `legacy ledger` instead of guessing. Restart once with `NSELF_CONTROLLER_ADOPT_LEGACY=true`: the controller records `001` only, applies `002` and `003`, and starts. Remove the flag afterwards. No such install is known. The role is locked to `NOLOGIN` on every start.

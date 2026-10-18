@@ -17,12 +17,19 @@ import (
 
 // Client manages the Nginx vhost config file.
 type Client struct {
-	confPath string
+	confPath   string
+	reloadMode string
 }
 
-// NewClient creates a Nginx client targeting the given conf file path.
+// NewClient creates a Nginx client targeting the given conf file path, reloading by running nginx.
 func NewClient(confPath string) *Client {
-	return &Client{confPath: confPath}
+	return NewClientMode(confPath, "exec")
+}
+
+// NewClientMode is NewClient with an explicit reload mode: "exec" runs `nginx -s reload` here, "watch"
+// leaves the reload to a watcher that sees the conf file change (the container has no nginx binary).
+func NewClientMode(confPath, reloadMode string) *Client {
+	return &Client{confPath: confPath, reloadMode: reloadMode}
 }
 
 // VhostInput holds parameters for a single project's virtual host.
@@ -78,9 +85,14 @@ func (c *Client) RemoveVhost(ctx context.Context, slug string) error {
 	return c.writeEntries(entries)
 }
 
-// Reload signals Nginx to reload its configuration atomically (nginx -s reload).
+// Reload signals Nginx to reload its configuration atomically (nginx -s reload), or in watch mode returns
+// at once because the watcher beside the stack nginx does it.
 // Returns an error if the reload fails.
 func (c *Client) Reload(ctx context.Context) error {
+	if c.reloadMode == "watch" {
+		slog.Info("nginx reload delegated to the conf.d watcher", "conf", c.confPath)
+		return nil
+	}
 	start := time.Now()
 	cmd := exec.CommandContext(ctx, "nginx", "-s", "reload")
 	out, err := cmd.CombinedOutput()
