@@ -92,6 +92,21 @@ func nselfciResources(t *testing.T) []string {
 	return left
 }
 
+// nselfciContainers lists the containers of nselfci- compose projects.
+func nselfciContainers() []string {
+	out, err := osexec.Command("docker", "ps", "-a", "--format", `{{.Label "com.docker.compose.project"}}`).Output()
+	if err != nil {
+		return nil
+	}
+	var got []string
+	for _, l := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(l), projectPrefix) {
+			got = append(got, l)
+		}
+	}
+	return got
+}
+
 func psql(t *testing.T, h *Handle, sql string) string {
 	t.Helper()
 	return dockerOut(t, "exec", h.Project+"_postgres", "psql", "-U", "nselfci", "-d", "nselfci", "-tA", "-c", sql)
@@ -171,15 +186,24 @@ func TestTeardownEveryExit(t *testing.T) {
 		empty("after pass/fail")
 	})
 	t.Run("cancel", func(t *testing.T) {
+		// Cancel once the project's container exists, whatever the host speed:
+		// postgres still needs seconds to answer, so the Up is always mid-wait.
 		ctx, cancel := context.WithCancel(context.Background())
-		go func() { time.Sleep(8 * time.Second); cancel() }()
+		defer cancel()
+		go func() {
+			for deadline := time.Now().Add(3 * time.Minute); time.Now().Before(deadline) && len(nselfciContainers()) == 0; {
+				time.Sleep(100 * time.Millisecond)
+			}
+			cancel()
+		}()
 		if _, err := realProv(t).Up(ctx, specs); err == nil {
 			t.Fatal("expected the cancelled Up to fail")
 		}
 		empty("after cancel")
 	})
 	t.Run("timeout", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		// Shorter than any Up (eight --help probes alone take longer on a warm host).
+		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 		defer cancel()
 		if _, err := realProv(t).Up(ctx, specs); err == nil {
 			t.Fatal("expected the timed-out Up to fail")
