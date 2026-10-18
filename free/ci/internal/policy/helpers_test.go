@@ -87,11 +87,15 @@ func (f *fixture) ensureOther() {
 
 // push commits a new .nself/ci.yaml from the second clone to origin main and
 // returns the new commit.
-func (f *fixture) push(config string) string {
+func (f *fixture) push(config string) string { return f.pushAt(".nself/ci.yaml", config) }
+
+// pushAt is push for a config at another repository-relative path.
+func (f *fixture) pushAt(rel, config string) string {
 	f.t.Helper()
 	f.ensureOther()
-	write(f.t, filepath.Join(f.other, ".nself/ci.yaml"), config)
-	git(f.t, f.other, "commit", "-q", "-am", "policy")
+	write(f.t, filepath.Join(f.other, rel), config)
+	git(f.t, f.other, "add", "-A")
+	git(f.t, f.other, "commit", "-q", "-m", "policy")
 	git(f.t, f.other, "push", "-q", "origin", "main")
 	return git(f.t, f.other, "rev-parse", "HEAD")
 }

@@ -52,16 +52,31 @@ type gitRunner struct {
 	root string
 }
 
-func (g gitRunner) git(ctx context.Context, args ...string) (string, bool) {
-	argv := append([]string{"git", "-c", "core.fsmonitor=false", "-C", g.root}, args...)
+// raw runs git and returns its output untouched.
+func (g gitRunner) raw(ctx context.Context, args ...string) (string, bool) {
+	return g.argv(ctx, append([]string{"git", "-c", "core.fsmonitor=false", "-C", g.root}, args...)...)
+}
+
+func (g gitRunner) argv(ctx context.Context, argv ...string) (string, bool) {
 	out, exit, err := g.run(ctx, argv...)
-	return strings.TrimSpace(out), err == nil && exit == 0
+	return out, err == nil && exit == 0
+}
+
+func (g gitRunner) git(ctx context.Context, args ...string) (string, bool) {
+	out, ok := g.raw(ctx, args...)
+	return strings.TrimSpace(out), ok
+}
+
+// lastLine is the answer of a one-line command that may have warned first.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 // DefaultBranch is origin's HEAD, else main.
 func (g gitRunner) defaultBranch(ctx context.Context) string {
-	out, ok := g.git(ctx, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
-	name := strings.TrimPrefix(out, "origin/")
+	out, ok := g.git(ctx, "symbolic-ref", "refs/remotes/origin/HEAD")
+	name := strings.TrimPrefix(lastLine(out), "refs/remotes/origin/")
 	if !ok || !branchName.MatchString(name) || strings.Contains(name, "..") || strings.HasSuffix(name, ".lock") {
 		return "main"
 	}
@@ -89,8 +104,10 @@ func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 	}
 	b := Branch{Name: g.defaultBranch(ctx)}
 	ref := "refs/remotes/origin/" + b.Name
-	_, fetched := g.git(ctx, "fetch", "--no-tags", "origin", "+refs/heads/"+b.Name+":"+ref)
-	tip, ok := g.git(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	// env keeps a credential prompt from blocking the run; the Capture timeout bounds the rest.
+	_, fetched := g.argv(ctx, "env", "GIT_TERMINAL_PROMPT=0", "git", "-c", "core.fsmonitor=false", "-C", root, "fetch", "--no-tags", "--no-recurse-submodules", "origin", "+refs/heads/"+b.Name+":"+ref)
+	out, ok := g.git(ctx, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	tip := lastLine(out)
 	if !ok || !fullSHA.MatchString(tip) {
 		b.Fetch = FetchNone
 		return b, nil
@@ -109,11 +126,18 @@ func policyAt(ctx context.Context, run Runner, root, sha string) (map[string]jso
 		return nil, refuse("pinned commit %q is not a commit id", sha)
 	}
 	g := gitRunner{run: run, root: root}
-	object := sha + ":" + config.FileName
-	if _, ok := g.git(ctx, "cat-file", "-e", object); !ok {
-		return nil, nil // no config at that commit: no policy
+	// Paths are relative to root, which may be a subdirectory of the repository.
+	listed, ok := g.git(ctx, "ls-tree", sha, "--", config.FileName)
+	if !ok {
+		return nil, refuse("cannot list %s at %s", config.FileName, sha[:12])
 	}
-	out, ok := g.git(ctx, "show", object)
+	if listed == "" {
+		return nil, nil // the commit has no config: no policy
+	}
+	if !strings.HasPrefix(listed, "100644 blob ") && !strings.HasPrefix(listed, "100755 blob ") {
+		return nil, refuse("%s at %s is not a regular file", config.FileName, sha[:12])
+	}
+	out, ok := g.raw(ctx, "show", "--no-textconv", sha+":./"+config.FileName)
 	if !ok {
 		return nil, refuse("cannot read %s at %s", config.FileName, sha[:12])
 	}

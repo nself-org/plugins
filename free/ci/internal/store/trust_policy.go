@@ -11,6 +11,7 @@ package store
 // and the tighten-only rule belong to the policy package); SQL stays here.
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"embed"
@@ -71,6 +72,9 @@ func (t *Tx) AppendAudit(actor, action, target, detail string) error {
 	return t.s.appendAudit(t.ctx, t.tx, actor, action, target, detail)
 }
 
+// maxPolicyValue bounds one stored value.
+const maxPolicyValue = 64 << 10
+
 var policyScopes = map[string]bool{"user": true, "team": true, "project": true}
 var policySHA = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
 
@@ -83,8 +87,8 @@ func checkPolicyWrite(w PolicyWrite) error {
 		if !policyScopes[w.Scope] || w.Key == "" || strings.ContainsAny(w.Key, " \t\r\n") {
 			return coded("E607", "invalid policy row")
 		}
-		if w.Op == PolicySet && !json.Valid(w.Value) {
-			return coded("E607", "policy value is not JSON")
+		if w.Op == PolicySet && (!json.Valid(w.Value) || len(w.Value) > maxPolicyValue || bytes.Equal(bytes.TrimSpace(w.Value), []byte("null"))) {
+			return coded("E607", "policy value must be JSON, not null, and at most 64 KiB")
 		}
 	case PolicyPinOp:
 		if !policySHA.MatchString(w.SHA) {

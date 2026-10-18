@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -56,6 +57,8 @@ func TestPolicyWriteShapeAndPins(t *testing.T) {
 		"no actor":   {Op: PolicySet, Scope: "user", Subject: "u", Key: "k", Value: []byte(`1`)},
 		"bad scope":  {Op: PolicySet, Scope: "pipeline", Subject: "u", Key: "k", Value: []byte(`1`), Actor: "a"},
 		"bad json":   {Op: PolicySet, Scope: "user", Subject: "u", Key: "k", Value: []byte(`{`), Actor: "a"},
+		"null value": {Op: PolicySet, Scope: "user", Subject: "u", Key: "k", Value: []byte(` null `), Actor: "a"},
+		"huge value": {Op: PolicySet, Scope: "user", Subject: "u", Key: "k", Value: []byte(`"` + strings.Repeat("a", 70000) + `"`), Actor: "a"},
 		"bad pin":    {Op: PolicyPinOp, Subject: "u", SHA: "main", Actor: "a"},
 		"unknown op": {Op: "drop", Subject: "u", Actor: "a"},
 	} {

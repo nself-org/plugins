@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 var (
@@ -36,8 +37,8 @@ func trustKeys() []KeySpec {
 		{Key: "trust.network", Owner: "trust", Kind: TightenLower, Order: networkOrder, Default: "privileged", Decode: orderDecoder(TightenLower, networkOrder)},
 		{Key: "trust.privacy_zone", Owner: "trust", Kind: TightenLower, Order: privacyOrder, Default: "hosted-allowed", Decode: orderDecoder(TightenLower, privacyOrder)},
 		{Key: "trust.providers", Owner: "trust", Kind: TightenSubset, Decode: listDecode},
-		{Key: "trust.secrets", Owner: "trust", Kind: TightenSubset, Default: secretClasses, Decode: listDecode},
-		{Key: "trust.accepts", Owner: "trust", Kind: TightenSubset, Default: trustOrder, Decode: listDecode},
+		{Key: "trust.secrets", Owner: "trust", Kind: TightenSubset, Default: slices.Clone(secretClasses), Decode: listDecode},
+		{Key: "trust.accepts", Owner: "trust", Kind: TightenSubset, Default: slices.Clone(trustOrder), Decode: listDecode},
 		{Key: "trust.approval.first_time", Owner: "trust", Kind: TightenOnlyOn, Default: false, Decode: boolDecode},
 		{Key: "trust.self_reported_gates", Owner: "trust", Kind: TightenSubset, Decode: listDecode},
 		// D27: caps the source class of a machine-invoked run. Default owner = no cap.

@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -258,4 +259,40 @@ func TestUnknownAndInvalidKeys(t *testing.T) {
 
 func storePin(sha string) store.PolicyWrite {
 	return store.PolicyWrite{Op: store.PolicyPinOp, Subject: "proj", SHA: sha, Actor: "test"}
+}
+
+// Root may be a subdirectory of the repository (monorepo): the protected branch
+// is read at the same relative path, so a PR cannot drop its policy by deleting it.
+func TestPlantedPRSubdirRoot(t *testing.T) {
+	f := newFixture(t)
+	f.pushAt("svc/.nself/ci.yaml", baseConfig+"policy:\n  trust:\n    network: none\n")
+	git(t, f.work, "pull", "-q", "origin", "main")
+	svc := filepath.Join(f.work, "svc")
+	write(t, filepath.Join(svc, ".nself/ci.yaml"), baseConfig) // the PR deletes the key
+	r := resolver(t, f, nil)
+	got, err := r.Resolve(context.Background(), Repo{Root: svc, Visibility: "private", Class: "owner"}, Revision{Dir: svc})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Values["trust.network"] != "none" || got.Sources["trust.network"] != SourceProtectedBranch {
+		t.Fatalf("subdirectory policy lost: %v %v", got.Values, got.Sources)
+	}
+}
+
+// A repository that cannot list the tip's config fails closed instead of reading no policy.
+func TestUnreadableTipFailsClosed(t *testing.T) {
+	f := newFixture(t)
+	r := resolver(t, f, nil)
+	broken := func(ctx context.Context, argv ...string) (string, int, error) {
+		for _, a := range argv {
+			if a == "ls-tree" {
+				return "fatal: not a tree object", 128, nil
+			}
+		}
+		return f.runner(ctx, argv...)
+	}
+	r.Run = broken
+	if _, err := r.Resolve(context.Background(), Repo{Root: f.work, Visibility: "private", Class: "owner"}, Revision{}); err == nil || !strings.Contains(err.Error(), "E672") {
+		t.Fatalf("unreadable tip: %v", err)
+	}
 }
