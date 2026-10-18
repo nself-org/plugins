@@ -63,7 +63,10 @@ func (o *Outbox) deliver(ctx context.Context, seq int64, s Status, heal bool) (b
 		case store.ClaimOK:
 			bg := context.WithoutCancel(ctx)
 			if err = o.Reporter.Post(ctx, s); err != nil {
-				_ = o.Store.OutboxRelease(bg, s.Revision, k, seq, token)
+				// the request may have landed (a lost response): a release that finds a newer status requeues it
+				if rerr := o.Store.OutboxRelease(bg, s.Revision, k, seq, token); heal && store.IsClaimLost(rerr) {
+					_, _ = o.Drain(ctx)
+				}
 				return false, err
 			}
 			err = o.Store.OutboxPosted(bg, s.Revision, k, seq, token)

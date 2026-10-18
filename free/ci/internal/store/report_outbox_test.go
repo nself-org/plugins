@@ -180,8 +180,9 @@ func TestOutboxClaimFencing(t *testing.T) {
 	if err = s.OutboxPosted(ctx, "rev", "nself-ci", b, tb); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.OutboxRelease(ctx, "rev", "nself-ci", a, stale); err != nil {
-		t.Fatal(err)
+	// a failed post of the suspended poster may still have landed after b: release requeues b
+	if err = s.OutboxRelease(ctx, "rev", "nself-ci", a, stale); !IsClaimLost(err) {
+		t.Fatalf("a release behind a newer posted status must requeue it: %v", err)
 	}
 	if err = s.OutboxPosted(ctx, "rev", "nself-ci", a, stale); !IsClaimLost(err) {
 		t.Fatalf("a stale poster must lose: %v", err)

@@ -68,12 +68,23 @@ func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string,
 }
 
 // OutboxRelease gives a claim back after a failed delivery. A claim that was
-// taken over meanwhile is left alone.
+// taken over meanwhile is left alone. A failed post may still have landed (a
+// lost response), so when a newer status is posted or posting the newest one
+// is queued again, exactly as OutboxPosted does, and E607 says so.
 func (s *Store) OutboxRelease(ctx context.Context, revision, statusContext string, seq, token int64) error {
-	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND seq=? AND state=? AND claimed_at=?", OutboxPending, revision, statusContext, seq, OutboxPosting, token)
+	lost := false
+	err := s.write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND seq=? AND state=? AND claimed_at=?", OutboxPending, revision, statusContext, seq, OutboxPosting, token); err != nil {
+			return err
+		}
+		var err error
+		lost, err = requeueNewest(ctx, tx, revision, statusContext, seq)
 		return err
 	})
+	if err == nil && lost {
+		return coded("E607", claimLostMsg)
+	}
+	return err
 }
 
 // OutboxPosted records a delivery made under the claim token. When a newer
@@ -85,25 +96,37 @@ func (s *Store) OutboxRelease(ctx context.Context, revision, statusContext strin
 func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string, seq, token int64) error {
 	lost := false
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		var newer int // a newer status delivered, or being delivered after taking our claim over: this one may have landed last
-		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND state IN (?,?)", revision, statusContext, seq, OutboxPosted, OutboxPosting).Scan(&newer); err != nil {
-			return err
-		}
 		res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state=? AND claimed_at=?", OutboxPosted, revision, statusContext, seq, OutboxPosting, token)
 		if err != nil {
 			return err
 		}
-		if n, _ := res.RowsAffected(); n == 1 && newer == 0 {
-			return nil
+		owned := false
+		if n, _ := res.RowsAffected(); n == 1 {
+			owned = true
 		}
-		lost = true // committed with the re-queue below: an error would roll it back
-		_, err = tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND state IN (?,?) AND seq=(SELECT max(seq) FROM outbox WHERE revision=? AND context=? AND state IN (?,?) AND seq>?)", OutboxPending, revision, statusContext, OutboxPosted, OutboxPosting, revision, statusContext, OutboxPosted, OutboxPosting, seq)
-		return err
+		lost, err = requeueNewest(ctx, tx, revision, statusContext, seq)
+		if err != nil {
+			return err
+		}
+		lost = lost || !owned // not ours any more: someone took the claim over
+		return nil
 	})
 	if err == nil && lost {
 		return coded("E607", claimLostMsg)
 	}
 	return err
+}
+
+// requeueNewest queues the newest posted-or-posting status above seq again
+// and reports whether there was one. The caller commits it with its own
+// change, so the answer to the caller can be an error without losing it.
+func requeueNewest(ctx context.Context, tx *sql.Tx, revision, statusContext string, seq int64) (bool, error) {
+	res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND state IN (?,?) AND seq=(SELECT max(seq) FROM outbox WHERE revision=? AND context=? AND state IN (?,?) AND seq>?)", OutboxPending, revision, statusContext, OutboxPosted, OutboxPosting, revision, statusContext, OutboxPosted, OutboxPosting, seq)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 const claimLostMsg = "outbox claim lost while delivering"
