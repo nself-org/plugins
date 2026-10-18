@@ -86,10 +86,12 @@ func PaidAllowed(p SpendPolicy, provider string) bool {
 }
 
 // Spend builds the typed spend policy. Resolved.Values carries the per-provider
-// family entries (Effective has no key iterator).
+// family entries (Effective has no key iterator), so a nil Values is refused:
+// reading it as "no providers" would silently drop every rate and budget.
+// Every read is checked; a wrong-typed or missing value is E691, never a zero.
 func Spend(res *policy.Resolved) (SpendPolicy, error) {
-	if res == nil {
-		return SpendPolicy{}, fail("economics", "no resolved policy")
+	if res == nil || res.Values == nil {
+		return SpendPolicy{}, fail("economics", "no resolved policy values (Spend needs Resolved.Values for the per-provider keys)")
 	}
 	r := &spendReader{eff: &res.Effective}
 	p := SpendPolicy{
@@ -103,7 +105,7 @@ func Spend(res *policy.Resolved) (SpendPolicy, error) {
 		to  *Budget
 	}{{KeyBudgetJob, &p.Budgets.Job}, {KeyBudgetPipeline, &p.Budgets.Pipeline}, {KeyBudgetDay, &p.Budgets.Day}, {KeyBudgetMonth, &p.Budgets.Month}, {KeyApproval, &p.ApprovalThresholdMicro}} {
 		if v, ok := r.optional(b.key); ok {
-			*b.to = Budget{Micro: v.(int64), Set: true}
+			*b.to = Budget{Micro: r.amount(b.key, v), Set: true}
 		}
 	}
 	for _, s := range []struct {
@@ -112,7 +114,11 @@ func Spend(res *policy.Resolved) (SpendPolicy, error) {
 	}{{KeyCloudType, &p.Burst.CloudVM.Type}, {KeyCloudLocation, &p.Burst.CloudVM.Location}, {KeyCloudImage, &p.Burst.CloudVM.Image},
 		{KeyCloudEnrollAddr, &p.Burst.CloudVM.EnrollAddr}, {KeyCloudEnrollURL, &p.Burst.CloudVM.EnrollURL}, {KeyCloudTokenFile, &p.Burst.CloudVM.TokenFile}} {
 		if v, ok := r.optional(s.key); ok {
-			*s.to = v.(string)
+			str, isStr := v.(string)
+			if !isStr || str == "" {
+				r.fail(s.key, "effective value is not a non-empty string")
+			}
+			*s.to = str
 		}
 	}
 	keys := make([]string, 0, len(res.Values))
@@ -121,7 +127,8 @@ func Spend(res *policy.Resolved) (SpendPolicy, error) {
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		if spec, ok := policy.Default.Find(key); !ok || !spec.Spend || !strings.HasSuffix(spec.Key, ".*") {
+		spec, ok := policy.Default.Find(key)
+		if !ok || !spec.Spend || !strings.HasSuffix(spec.Key, ".*") {
 			continue
 		}
 		v := res.Values[key]
@@ -129,20 +136,23 @@ func Spend(res *policy.Resolved) (SpendPolicy, error) {
 			return SpendPolicy{}, err
 		}
 		id := key[strings.LastIndex(key, ".")+1:]
-		switch spec, _ := policy.Default.Find(key); spec.Key {
-		case KeyRates:
-			p.Rates[id] = rateFrom(v.(map[string]any))
+		switch spec.Key {
 		case KeyCeilings:
-			p.CeilingsMicro[id], _ = trust.IntValue(v)
+			p.CeilingsMicro[id] = r.amount(key, v)
 		case KeyBudgetProvider:
-			p.Budgets.Provider[id], _ = trust.IntValue(v)
-		case KeyEconProviders:
-			p.OwnerCoordinator[id], _ = v.(map[string]any)["owner_coordinator"].(string)
-		case KeyBurstProviders:
-			p.Burst.Enabled[id], _ = v.(map[string]any)["enabled"].(bool)
-		case KeyCloudAgent:
-			m := v.(map[string]any)
-			p.Burst.CloudVM.Agent[id] = AgentBinary{URL: m["url"].(string), SHA256: m["sha256"].(string)}
+			p.Budgets.Provider[id] = r.amount(key, v)
+		default:
+			o := r.object(key, v)
+			switch spec.Key {
+			case KeyRates:
+				p.Rates[id] = o.rate()
+			case KeyEconProviders:
+				p.OwnerCoordinator[id] = o.text("owner_coordinator")
+			case KeyBurstProviders:
+				p.Burst.Enabled[id] = o.flag("enabled")
+			case KeyCloudAgent:
+				p.Burst.CloudVM.Agent[id] = AgentBinary{URL: o.text("url"), SHA256: o.text("sha256")}
+			}
 		}
 	}
 	if r.err != nil {
@@ -151,19 +161,18 @@ func Spend(res *policy.Resolved) (SpendPolicy, error) {
 	return p, nil
 }
 
-func rateFrom(m map[string]any) Rate {
-	n := func(name string) int64 { v, _ := m[name].(int64); return v }
-	class, _ := m["class"].(string)
-	return Rate{Class: class, PerHourMicro: n("rate_per_hour_micro"), PerMinuteMicro: n("rate_per_minute_micro"),
-		BillingIncrementMs: n("billing_increment"), MinimumChargeMicro: n("minimum_charge_micro"), ExtrasMicro: n("extras_micro")}
-}
-
 // spendReader reads scalar keys; a key with a registered default that is
 // missing means the keys were never registered, which is an error, never a
-// silent zero (a zero would read as "no limit" or "free").
+// silent zero (a zero would read as "no limit" or "free"). The first error wins.
 type spendReader struct {
 	eff *policy.Effective
 	err error
+}
+
+func (r *spendReader) fail(key, format string, args ...any) {
+	if r.err == nil {
+		r.err = fail(key, format, args...)
+	}
 }
 
 func (r *spendReader) optional(key string) (any, bool) {
@@ -173,21 +182,89 @@ func (r *spendReader) optional(key string) (any, bool) {
 
 func (r *spendReader) required(key string) any {
 	v, ok := r.optional(key)
-	if !ok && r.err == nil {
-		r.err = fail(key, "missing from the effective policy (are the spend keys registered?)")
+	if !ok {
+		r.fail(key, "missing from the effective policy (are the spend keys registered?)")
 	}
 	return v
 }
 
-func (r *spendReader) text(key string) string { s, _ := r.required(key).(string); return s }
-func (r *spendReader) flag(key string) bool   { b, _ := r.required(key).(bool); return b }
+func (r *spendReader) text(key string) string {
+	s, ok := r.required(key).(string)
+	if !ok || s == "" {
+		r.fail(key, "effective value is not a non-empty string")
+	}
+	return s
+}
 
-func (r *spendReader) number(key string) int64 {
-	n, ok := trust.IntValue(r.required(key))
-	if !ok && r.err == nil {
-		r.err = fail(key, "effective value is not a whole number")
+func (r *spendReader) flag(key string) bool {
+	b, ok := r.required(key).(bool)
+	if !ok {
+		r.fail(key, "effective value is not a boolean")
+	}
+	return b
+}
+
+func (r *spendReader) number(key string) int64 { return r.amount(key, r.required(key)) }
+
+// amount returns v as a non-negative whole number.
+func (r *spendReader) amount(key string, v any) int64 {
+	n, ok := trust.IntValue(v)
+	if !ok || n < 0 {
+		r.fail(key, "effective value %v is not a non-negative whole number", v)
+		return 0
 	}
 	return n
+}
+
+// fields reads the members of one object-valued family entry.
+type fields struct {
+	r   *spendReader
+	key string
+	m   map[string]any
+}
+
+func (r *spendReader) object(key string, v any) fields {
+	m, ok := v.(map[string]any)
+	if !ok {
+		r.fail(key, "effective value is not an object")
+	}
+	return fields{r: r, key: key, m: m}
+}
+
+// int returns a member that may be absent (0); a wrong type is E691.
+func (f fields) int(name string) int64 {
+	v, ok := f.m[name]
+	if !ok {
+		return 0
+	}
+	return f.r.amount(f.key+"."+name, v)
+}
+
+func (f fields) text(name string) string {
+	s, ok := f.m[name].(string)
+	if !ok || s == "" {
+		f.r.fail(f.key+"."+name, "effective member is missing or not a non-empty string")
+	}
+	return s
+}
+
+func (f fields) flag(name string) bool {
+	b, ok := f.m[name].(bool)
+	if !ok {
+		f.r.fail(f.key+"."+name, "effective member is missing or not a boolean")
+	}
+	return b
+}
+
+// rate reads a declared price and re-checks what Decode guarantees: a paid
+// class has a positive rate and a billing increment (never a free paid class).
+func (f fields) rate() Rate {
+	rt := Rate{Class: f.text("class"), PerHourMicro: f.int("rate_per_hour_micro"), PerMinuteMicro: f.int("rate_per_minute_micro"),
+		BillingIncrementMs: f.int("billing_increment"), MinimumChargeMicro: f.int("minimum_charge_micro"), ExtrasMicro: f.int("extras_micro")}
+	if isPaidClass(rt.Class) && (rt.PerHourMicro+rt.PerMinuteMicro < 1 || rt.BillingIncrementMs < 1) {
+		f.r.fail(f.key, "a paid class needs a positive rate and a billing_increment")
+	}
+	return rt
 }
 
 func (r *spendReader) trust() BurstTrust {
@@ -196,8 +273,10 @@ func (r *spendReader) trust() BurstTrust {
 	if !ok {
 		return d
 	}
-	m, _ := v.(map[string]any)
-	iso, _ := m["isolation"].(string)
-	zone, _ := m["privacy_zone"].(string)
-	return BurstTrust{Accepts: asStrings(m["accepts"]), Secrets: asStrings(m["secrets"]), Isolation: iso, PrivacyZone: zone}
+	o := r.object(KeyBurstTrust, v)
+	t := BurstTrust{Accepts: asStrings(o.m["accepts"]), Secrets: asStrings(o.m["secrets"]), Isolation: o.text("isolation"), PrivacyZone: o.text("privacy_zone")}
+	if len(t.Accepts) == 0 || len(t.Secrets) == 0 {
+		r.fail(KeyBurstTrust, "effective accepts and secrets must be non-empty string lists")
+	}
+	return t
 }

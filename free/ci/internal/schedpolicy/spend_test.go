@@ -153,8 +153,8 @@ func TestSpendKeys(t *testing.T) {
 	}
 	res := resolved(t)
 	res.Values = nil
-	if _, err := Spend(&res); err != nil {
-		t.Errorf("an empty value list is the defaults: %v", err)
+	if _, err := Spend(&res); err == nil || !strings.HasPrefix(err.Error(), "E691 ") {
+		t.Errorf("a nil value list was read as no providers: %v", err)
 	}
 }
 
@@ -277,6 +277,12 @@ func TestSpendFlagged(t *testing.T) {
 		{KeyRates, rate(`"rate_per_hour_micro":90000000000000000,"billing_increment":"1h"`), "/economics/rates"},
 		{KeyRates, rate(`"rate_per_minute_micro":90000000000000000,"billing_increment":"1m"`), "/economics/rates"},
 		{KeyRates, `[]`, "/economics/rates"},
+		// 168h rounds up to 184 billable hours of 23h increments: 184 x 5.1e16 overflows int64.
+		{KeyRates, rate(`"rate_per_hour_micro":51000000000000000,"billing_increment":"23h"`), "/economics/rates"},
+		{KeyRates, rate(`"rate_per_hour_micro":-1,"rate_per_hour_micro":100,"billing_increment":"1h"`), "/economics/rates/rate_per_hour_micro"},
+		{KeyRates, rate(`"rate_per_hour_micro":100,"rate_per_hour_micro":100,"billing_increment":"1h"`), "/economics/rates/rate_per_hour_micro"},
+		{KeyRates, rate(`"rate_per_hour_micro":100,"billing_increment":"1h"`) + ` {}`, "/economics/rates"},
+		{KeyCloudAgent, `{"url":"https://a.example.test/a","url":"http://a.example.test/a","sha256":"` + sha64 + `"}`, "/burst/cloudvm/agent/url"},
 		{KeyRates, `7`, "/economics/rates"},
 		{KeyEconProviders, `{}`, "/economics/providers/owner_coordinator"},
 		{KeyEconProviders, `{"owner_coordinator":"has space"}`, "/economics/providers/owner_coordinator"},
@@ -313,6 +319,10 @@ func TestSpendFlagged(t *testing.T) {
 		{KeyCloudEnrollAddr, `"ci.example.test:70000"`, "/burst/cloudvm/enroll_addr"},
 		{KeyCloudEnrollAddr, `":8080"`, "/burst/cloudvm/enroll_addr"},
 		{KeyCloudEnrollURL, `"http://ci.example.test/enroll"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `"https://ci.example.test/enroll#"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `"https://ci.example.test:99999/enroll"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollURL, `"https://ci.example.test/en roll"`, "/burst/cloudvm/enroll_url"},
+		{KeyCloudEnrollAddr, `"a b:80"`, "/burst/cloudvm/enroll_addr"},
 		{KeyCloudEnrollURL, `"https://u` + `:p` + `@ci.example.test/enroll"`, "/burst/cloudvm/enroll_url"},
 		{KeyCloudTokenFile, `"burst.token"`, "/burst/cloudvm/token_file"},
 		{KeyCloudTokenFile, `"./burst.token"`, "/burst/cloudvm/token_file"},
@@ -366,6 +376,36 @@ func TestSpendFlagged(t *testing.T) {
 	bad := resolved(t, scope(trust.SourceProject, map[string]string{"economics.rates.github-hosted": paid}))
 	if _, err := Spend(&bad); err == nil || !strings.HasPrefix(err.Error(), "E691 /economics/rates/github-hosted") {
 		t.Errorf("Spend accepted a metered GitHub provider: %v", err)
+	}
+	// A resolved value of the wrong shape fails closed instead of reading as zero (free, unlimited).
+	good := resolved(t, scope(trust.SourceProject, operatorSpend))
+	for name, mutate := range map[string]func(map[string]any){
+		"rate type": func(v map[string]any) {
+			v["economics.rates.hetzner"] = map[string]any{"class": "ephemeral", "rate_per_hour_micro": "5000", "billing_increment": int64(3600000)}
+		},
+		"rate missing": func(v map[string]any) {
+			v["economics.rates.hetzner"] = map[string]any{"class": "ephemeral", "billing_increment": int64(3600000)}
+		},
+		"rate no class":    func(v map[string]any) { v["economics.rates.hetzner"] = map[string]any{"rate_per_hour_micro": int64(5)} },
+		"rate not object":  func(v map[string]any) { v["economics.rates.hetzner"] = int64(5) },
+		"ceiling string":   func(v map[string]any) { v["economics.ceilings.hetzner"] = "9" },
+		"ceiling negative": func(v map[string]any) { v["economics.ceilings.hetzner"] = int64(-1) },
+		"budget string":    func(v map[string]any) { v["economics.budgets.provider.hetzner"] = "9" },
+		"owner empty":      func(v map[string]any) { v["economics.providers.hetzner"] = map[string]any{"owner_coordinator": ""} },
+		"enabled string":   func(v map[string]any) { v["burst.providers.hetzner"] = map[string]any{"enabled": "true"} },
+		"agent no sha": func(v map[string]any) {
+			v["burst.cloudvm.agent.amd64"] = map[string]any{"url": "https://a.example.test/a"}
+		},
+	} {
+		values := map[string]any{}
+		for k, v := range good.Values {
+			values[k] = v
+		}
+		mutate(values)
+		res := policy.Resolved{Effective: good.Effective, Values: values}
+		if _, err := Spend(&res); err == nil || !strings.HasPrefix(err.Error(), "E691 ") {
+			t.Errorf("%s: Spend accepted it: %v", name, err)
+		}
 	}
 	// Spend names a missing registered key instead of reading it as zero.
 	empty := policy.Resolved{}

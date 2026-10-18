@@ -2,23 +2,22 @@ package schedpolicy
 
 // Purpose: strict decoders for the spend keys (spend.go registers them):
 // bounded money and durations, https URLs, host:port, absolute paths, sha256,
-// per-provider objects, the declared rate and burst.trust.
+// per-provider objects (no repeated field) and the declared rate.
 // Inputs: the raw JSON of one key. Outputs: the normalized value (int64,
 // string, []string or map[string]any) or an E691 error with a JSON pointer.
 // Constraints: pure; unknown fields, floats, negative money and values that
 // would saturate over the largest paid timeout are refused; nothing is opened.
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/url"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/sched"
 )
 
@@ -41,8 +40,10 @@ func boundedInt(key string, lo, hi int64) decoder {
 	}
 }
 
+// money accepts a whole number of micro-units from lo up to MaxMoneyMicro.
 func money(key string, lo int64) decoder { return boundedInt(key, lo, MaxMoneyMicro) }
 
+// boundedDuration accepts a duration string of 1ms up to hi milliseconds; the value is whole ms.
 func boundedDuration(key string, hi int64) decoder {
 	return func(raw json.RawMessage) (any, error) {
 		v, err := durationMs(key)(raw)
@@ -75,13 +76,20 @@ func httpsURL(key string) decoder {
 			return nil, err
 		}
 		u, perr := url.Parse(v.(string))
-		if perr != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		bad := strings.ContainsAny(v.(string), "# \t\r\n\\") // an empty fragment or a space still parses
+		if port := u.Port(); perr == nil && port != "" {
+			if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+				bad = true
+			}
+		}
+		if perr != nil || bad || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
 			return nil, fail(key, "must be an https URL with a host and no userinfo, query string or fragment")
 		}
 		return v, nil
 	}
 }
 
+// hostPort accepts host:port with a port from 1 to 65535 (the enrollment listener address).
 func hostPort(key string) decoder {
 	return func(raw json.RawMessage) (any, error) {
 		v, err := stringOf(key, nil)(raw)
@@ -90,7 +98,7 @@ func hostPort(key string) decoder {
 		}
 		host, port, serr := net.SplitHostPort(v.(string))
 		p, perr := strconv.Atoi(port)
-		if serr != nil || host == "" || perr != nil || p < 1 || p > 65535 {
+		if serr != nil || host == "" || strings.ContainsAny(host, " \t\r\n") || perr != nil || p < 1 || p > 65535 {
 			return nil, fail(key, "must be host:port with a port from 1 to 65535")
 		}
 		return v, nil
@@ -111,6 +119,7 @@ func absPath(key string) decoder {
 	}
 }
 
+// sha256Hex accepts 64 hex characters and normalizes to lower case.
 func sha256Hex(key string) decoder {
 	return func(raw json.RawMessage) (any, error) {
 		v, err := textOf(key, shaRe, "64 hex characters")(raw)
@@ -130,9 +139,9 @@ func objectOf(key string, fields map[string]decoder, required ...string) decoder
 		} else if _, ok := v.(map[string]any); !ok {
 			return nil, fail(key, "expected an object")
 		}
-		var parts map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &parts); err != nil {
-			return nil, fail(key, "%v", err)
+		parts, err := objectParts(key, raw)
+		if err != nil {
+			return nil, err
 		}
 		out := map[string]any{}
 		for name, part := range parts {
@@ -153,6 +162,32 @@ func objectOf(key string, fields map[string]decoder, required ...string) decoder
 		}
 		return out, nil
 	}
+}
+
+// objectParts splits a JSON object into its members and refuses a repeated
+// member: a map decode keeps only the last one, which would hide the first.
+func objectParts(key string, raw json.RawMessage) (map[string]json.RawMessage, error) {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	if _, err := d.Token(); err != nil {
+		return nil, fail(key, "%v", err)
+	}
+	parts := map[string]json.RawMessage{}
+	for d.More() {
+		tok, err := d.Token()
+		name, isName := tok.(string)
+		if err != nil || !isName {
+			return nil, fail(key, "malformed object")
+		}
+		var part json.RawMessage
+		if err := d.Decode(&part); err != nil {
+			return nil, fail(key+"."+name, "%v", err)
+		}
+		if _, dup := parts[name]; dup {
+			return nil, fail(key+"."+name, "repeated field")
+		}
+		parts[name] = part
+	}
+	return parts, nil
 }
 
 // rateOf is the declared price of one provider (D11): one of
@@ -186,8 +221,14 @@ func rateOf(key string) decoder {
 		if isPaidClass(r["class"].(string)) && (hour+minute < 1 || r["billing_increment"] == nil) {
 			return nil, fail(base, "a paid class needs a positive rate and a billing_increment")
 		}
-		worst, sat1 := sched.Mul(hour, paidHoursAtCap)
-		worstMin, sat2 := sched.Mul(minute, paidMinutesAtCap)
+		// Worst case: the largest paid timeout rounded up to whole billing increments,
+		// then up to whole hours (minutes) so the bound never undershoots.
+		billable := MaxPaidTimeoutCap
+		if inc, _ := r["billing_increment"].(int64); inc > 0 {
+			billable = (MaxPaidTimeoutCap + inc - 1) / inc * inc
+		}
+		worst, sat1 := sched.Mul(hour, (billable+3599999)/3600000)
+		worstMin, sat2 := sched.Mul(minute, (billable+59999)/60000)
 		worst, sat3 := sched.Add(worst, worstMin)
 		for _, name := range []string{"minimum_charge_micro", "extras_micro"} {
 			n, _ := r[name].(int64)
@@ -204,60 +245,3 @@ func rateOf(key string) decoder {
 }
 
 func isPaidClass(class string) bool { return class == costClassMetered || class == costClassEphemeral }
-
-// burstTrustOf decodes burst.trust. Missing fields take the D13 defaults; a
-// value wider than the defaults must name all four fields (E691 otherwise).
-func burstTrustOf(key string) decoder {
-	trustClasses, secrets, zones := model.EnumValues("TrustClass"), model.EnumValues("SecretClass"), model.EnumValues("PrivacyZone")
-	obj := objectOf(key, map[string]decoder{
-		"accepts":      listOf(key+".accepts", true),
-		"secrets":      listOf(key+".secrets", true),
-		"isolation":    stringOf(key+".isolation", IsolationOrder()),
-		"privacy_zone": stringOf(key+".privacy_zone", zones),
-	})
-	return func(raw json.RawMessage) (any, error) {
-		v, err := obj(raw)
-		if err != nil {
-			return nil, err
-		}
-		t := v.(map[string]any)
-		explicit := len(t)
-		for name, allowed := range map[string][]string{"accepts": trustClasses, "secrets": secrets} {
-			for _, item := range asStrings(t[name]) {
-				if !slices.Contains(allowed, item) {
-					return nil, fail(key+"."+name, "unknown value %q (one of %v)", item, allowed)
-				}
-			}
-		}
-		set := func(name string, def any) { t[name] = firstNonNil(t[name], def) }
-		set("accepts", slices.Clone(burstAccepts))
-		set("secrets", []string{"none"})
-		set("isolation", defaultBurstIsolation)
-		set("privacy_zone", defaultBurstPrivacyZone)
-		if explicit < 4 && burstTrustWider(t) {
-			return nil, fail(key, "wider than the defaults (accepts %v, secrets none, %s, %s): name all four fields", burstAccepts, defaultBurstIsolation, defaultBurstPrivacyZone)
-		}
-		return t, nil
-	}
-}
-
-func firstNonNil(a, b any) any {
-	if a != nil {
-		return a
-	}
-	return b
-}
-
-func burstTrustWider(t map[string]any) bool {
-	for _, c := range asStrings(t["accepts"]) {
-		if !slices.Contains(burstAccepts, c) {
-			return true
-		}
-	}
-	return !slices.Equal(asStrings(t["secrets"]), []string{"none"}) || t["isolation"] != defaultBurstIsolation || t["privacy_zone"] == "hosted-allowed"
-}
-
-func asStrings(v any) []string {
-	s, _ := v.([]string)
-	return s
-}

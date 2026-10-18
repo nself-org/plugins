@@ -18,8 +18,10 @@ import (
 	"encoding/json"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/policy"
 )
 
@@ -63,14 +65,12 @@ const (
 	MaxPaidTimeoutCap       = int64(168 * 3600 * 1000)
 	maxIncrementMs          = int64(24 * 3600 * 1000)
 	maxBurstConcurrent      = 64
-	paidMinutesAtCap        = 168 * 60
-	paidHoursAtCap          = 168
 	costClassMetered        = "metered"
 	costClassEphemeral      = "ephemeral"
 	defaultBurstIsolation   = "ephemeral-vm"
 	defaultBurstPrivacyZone = "provider-allowlist"
 	cloudArchAmd64          = "amd64"
-	cloudArm                = "arm64"
+	cloudArchArm64          = "arm64"
 )
 
 var (
@@ -78,10 +78,68 @@ var (
 	nameRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
 	shaRe    = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 	currency = regexp.MustCompile(`^[A-Z]{3}$`)
-	// burstTrustDefaults is Epic D13: accepts owner/collaborator/internal, no secrets.
+	// burstAccepts is the Epic D13 default: owner, collaborator, internal (secret classes none).
 	burstAccepts = []string{"owner", "collaborator", "internal"}
 	costClasses  = []string{"owned", "included", costClassMetered, costClassEphemeral}
 )
+
+// burstTrustOf decodes burst.trust. Missing fields take the D13 defaults; a
+// value wider than the defaults must name all four fields (E691 otherwise).
+func burstTrustOf(key string) decoder {
+	trustClasses, secrets, zones := model.EnumValues("TrustClass"), model.EnumValues("SecretClass"), model.EnumValues("PrivacyZone")
+	obj := objectOf(key, map[string]decoder{
+		"accepts":      listOf(key+".accepts", true),
+		"secrets":      listOf(key+".secrets", true),
+		"isolation":    stringOf(key+".isolation", IsolationOrder()),
+		"privacy_zone": stringOf(key+".privacy_zone", zones),
+	})
+	return func(raw json.RawMessage) (any, error) {
+		v, err := obj(raw)
+		if err != nil {
+			return nil, err
+		}
+		t := v.(map[string]any)
+		explicit := len(t)
+		for name, allowed := range map[string][]string{"accepts": trustClasses, "secrets": secrets} {
+			for _, item := range asStrings(t[name]) {
+				if !slices.Contains(allowed, item) {
+					return nil, fail(key+"."+name, "unknown value %q (one of %v)", item, allowed)
+				}
+			}
+		}
+		set := func(name string, def any) { t[name] = firstNonNil(t[name], def) }
+		set("accepts", slices.Clone(burstAccepts))
+		set("secrets", []string{"none"})
+		set("isolation", defaultBurstIsolation)
+		set("privacy_zone", defaultBurstPrivacyZone)
+		if explicit < 4 && burstTrustWider(t) {
+			return nil, fail(key, "wider than the defaults (accepts %v, secrets none, %s, %s): name all four fields", burstAccepts, defaultBurstIsolation, defaultBurstPrivacyZone)
+		}
+		return t, nil
+	}
+}
+
+// firstNonNil returns a unless it is nil, else b.
+func firstNonNil(a, b any) any {
+	if a != nil {
+		return a
+	}
+	return b
+}
+
+func burstTrustWider(t map[string]any) bool {
+	for _, c := range asStrings(t["accepts"]) {
+		if !slices.Contains(burstAccepts, c) {
+			return true
+		}
+	}
+	return !slices.Equal(asStrings(t["secrets"]), []string{"none"}) || t["isolation"] != defaultBurstIsolation || t["privacy_zone"] == "hosted-allowed"
+}
+
+func asStrings(v any) []string {
+	s, _ := v.([]string)
+	return s
+}
 
 // SpendKeys returns the specs of every spend-enabling key, all Spend: true and
 // TightenAny: money has no "stricter" order, the protection is the scope
@@ -157,7 +215,8 @@ func checkFamily(key string, v any) error {
 	github := strings.HasPrefix(id, "github")
 	switch prefix + "*" {
 	case KeyRates:
-		if class, _ := v.(map[string]any)["class"].(string); github && isPaidClass(class) {
+		m, _ := v.(map[string]any)
+		if class, _ := m["class"].(string); github && isPaidClass(class) {
 			return fail(key, "a GitHub provider is never class %s (APC P8: GitHub-hosted is included only)", class)
 		}
 	case KeyBurstProviders:
@@ -165,8 +224,8 @@ func checkFamily(key string, v any) error {
 			return fail(key, "a GitHub provider is never a burst provider")
 		}
 	case KeyCloudAgent:
-		if id != cloudArchAmd64 && id != cloudArm {
-			return fail(key, "arch %q is not %s or %s", id, cloudArchAmd64, cloudArm)
+		if id != cloudArchAmd64 && id != cloudArchArm64 {
+			return fail(key, "arch %q is not %s or %s", id, cloudArchAmd64, cloudArchArm64)
 		}
 	}
 	return nil
