@@ -27,8 +27,13 @@ func valueForms(v []byte) (a, b [][]byte) {
 		a = append(a, urlForms(t)...)
 		a = append(a, jsonForms(t)...)
 		a = append(a, hexForms(t)...)
-		b = append(b, b64Forms(t, base64.StdEncoding)...)
-		b = append(b, b64Forms(t, base64.URLEncoding)...)
+		a = append(a, shellForms(t)...)
+		for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.URLEncoding} {
+			for _, f := range b64Forms(t, enc) {
+				b = append(b, f)
+				b = append(b, b64Carried(f)...)
+			}
+		}
 	}
 	return a, b
 }
@@ -53,6 +58,36 @@ func lineValues(v []byte) [][]byte {
 		if len(l) >= MinValueLen {
 			out = append(out, append([]byte(nil), l...))
 		}
+	}
+	return out
+}
+
+// pemParts returns the pieces of a value outside its PEM blocks that are long
+// enough to register on their own: the stream drops a PEM body unseen, so a
+// value that holds one is matched by its head and tail instead.
+func pemParts(v []byte) [][]byte {
+	var out [][]byte
+	rest := v
+	for {
+		i := bytes.Index(rest, pemBeg)
+		if i < 0 {
+			break
+		}
+		he, ok, _ := pemHeader(rest, i, pemBeg)
+		if !ok {
+			break
+		}
+		if i >= MinValueLen {
+			out = append(out, append([]byte(nil), rest[:i]...))
+		}
+		end, closed := pemClose(rest, he)
+		if !closed {
+			return out
+		}
+		rest = rest[end:]
+	}
+	if len(out) > 0 && len(rest) >= MinValueLen {
+		out = append(out, append([]byte(nil), rest...))
 	}
 	return out
 }
@@ -131,6 +166,7 @@ func jsonForms(v []byte) [][]byte {
 	for _, upper := range []bool{false, true} {
 		out = append(out, jsonInner(v, false, true, upper, true), jsonInner(v, false, true, upper, false), jsonAll(v, upper))
 	}
+	out = append(out, jsonDotNet(v))
 	for _, f := range out[:len(out):len(out)] { // PHP-style `\/` on top of any other escaping
 		if bytes.Contains(f, []byte("/")) {
 			out = append(out, bytes.ReplaceAll(f, []byte("/"), []byte(`\/`)))
@@ -155,6 +191,28 @@ func jsonInner(v []byte, html, ascii, upper, short bool) []byte {
 			b.WriteString(uEscape(r, upper))
 		case r > 0x7f && ascii:
 			b.WriteString(uEscape(r, upper))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.Bytes()
+}
+
+// jsonDotNet is System.Text.Json's default: ASCII-safe, with + & < > ' ` written
+// as uppercase \u00XX and everything else as plain JSON.
+func jsonDotNet(v []byte) []byte {
+	var b bytes.Buffer
+	for _, r := range string(v) {
+		switch {
+		case r == '"' || r == '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case strings.ContainsRune("+&<>'`", r) || r > 0x7f:
+			b.WriteString(uEscape(r, true))
+		case strings.ContainsRune("\n\r\t\b\f", r):
+			b.WriteString(map[rune]string{'\n': `\n`, '\r': `\r`, '\t': `\t`, '\b': `\b`, '\f': `\f`}[r])
+		case r < 0x20:
+			b.WriteString(uEscape(r, true))
 		default:
 			b.WriteRune(r)
 		}
@@ -190,7 +248,11 @@ func hexForms(v []byte) [][]byte {
 	for _, c := range v {
 		fmt.Fprintf(&x, `\x%02x`, c)
 	}
-	return [][]byte{[]byte(h), []byte(strings.ToUpper(h)), []byte(x.String()), []byte(strings.ToUpper(x.String()))}
+	var xu strings.Builder
+	for _, c := range v {
+		fmt.Fprintf(&xu, `\x%02X`, c)
+	}
+	return [][]byte{[]byte(h), []byte(strings.ToUpper(h)), []byte(x.String()), []byte(xu.String())}
 }
 
 // b64Forms returns the base64 text a value produces when it starts at byte

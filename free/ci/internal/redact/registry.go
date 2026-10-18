@@ -2,7 +2,9 @@ package redact
 
 // Purpose: the value registry. Register adds a secret value (and, for a
 // multi-line value, each line of at least MinValueLen bytes) in every encoding
-// of encodings.go; the matchers are rebuilt lazily on the next use.
+// of encodings.go; the matchers are rebuilt lazily on the next use, once for a
+// batch of Register calls (a stream that needs the new values waits for that one
+// rebuild, which is what makes a value registered before a write apply to it).
 // Inputs:  Register(value). Outputs: NewFilter, Wrap, Scan (stream.go, scan.go).
 // Constraints: safe for concurrent Register and use; a value shorter than
 // MinValueLen is refused with E673 (never skipped); nothing here formats a
@@ -37,6 +39,7 @@ func (r *Redactor) Register(v []byte) error {
 		return errTooShort()
 	}
 	values := append([][]byte{v}, lineValues(v)...)
+	values = append(values, pemParts(v)...)
 	var as, bs []string
 	for _, x := range values {
 		a, b := valueForms(x)

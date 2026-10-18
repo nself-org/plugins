@@ -4,6 +4,7 @@ package redact
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -383,5 +384,59 @@ func TestRegressFoldedHoldUsesLongestPatternCap(t *testing.T) {
 		if got := run(r, in[:cut], in[cut:]); got != whole {
 			t.Fatalf("cut %d: %q", cut, got)
 		}
+	}
+}
+
+// Round 6 (Opus adversarial, Codex): values that hold a PEM block, more encoders.
+func TestRegressValueContainingPEMBlockSplitInsideBody(t *testing.T) {
+	pb, pe := "-----BEGIN "+"PRIVATE KEY-----", "-----END "+"PRIVATE KEY-----"
+	json := `{"type":"service_account","private_key_id":"0f1e2d3c4b5a","private_key":"` + pb + `\nSYNTHETICBODYSYNTHETICBODY\n` + pe + `\n","client_email":"svc@demo.example.test"}`
+	cases := []string{json, "k" + "-----BEGIN Z-----q", "-----END " + "A-----SECRETTAIL123"}
+	for _, v := range cases {
+		r := New()
+		mustRegister(t, r, v)
+		in := "creds=" + v + " after"
+		whole := run(r, in)
+		for cut := 0; cut <= len(in); cut++ {
+			got := run(r, in[:cut], in[cut:])
+			if strings.Contains(got, "SYNTHETICBODY") || strings.Contains(got, "svc@demo") || strings.Contains(got, "SECRETTAIL") || collapse(got) != collapse(whole) {
+				t.Fatalf("value %.30q cut %d: %q vs whole %q", v, cut, got, whole)
+			}
+		}
+	}
+}
+
+func TestRegressFilterReusableAfterFlushInsidePEM(t *testing.T) {
+	f := New().NewFilter()
+	_ = f.Redact([]byte("-----BEGIN " + "A-----\nabc"))
+	_ = f.Flush()
+	if got := string(f.Redact([]byte("hello world after flush\n"))) + string(f.Flush()); got != "hello world after flush\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRegressMoreEncoderForms(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "pa+ss&wo<rd'99Z", "Jabcdef9zK", "it's-a-long-secret-99", "secret?>>?>value")
+	b64 := base64.StdEncoding.EncodeToString([]byte("secret?>>?>value"))
+	for _, in := range []string{
+		`pa+ss&wo<rd'99Z`,
+		`\x4A\x61\x62\x63\x64\x65\x66\x39\x7A\x4B`,
+		`'it'\''s-a-long-secret-99'`, `it\'s-a-long-secret-99`,
+		"q=" + strings.NewReplacer("+", "%2B", "/", "%2F", "=", "%3D").Replace(b64),
+		"j=" + strings.ReplaceAll(b64, "/", `\/`),
+	} {
+		if got := run(r, "x "+in+" y"); strings.Contains(got, "x "+in) || !strings.Contains(got, Placeholder) || strings.Contains(got, "secret99") {
+			t.Errorf("%q survived: %q", in, got)
+		}
+	}
+}
+
+func TestRegressNamedURLSetsSurviveTheBudget(t *testing.T) {
+	v := "abcdef!*$/,:" + strings.Repeat("x", 2329)
+	r := New()
+	mustRegister(t, r, v)
+	if got := run(r, url.User(v).String()); got != Placeholder {
+		t.Fatalf("userinfo form survived: %.60q", got)
 	}
 }

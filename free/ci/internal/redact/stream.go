@@ -75,7 +75,7 @@ func (f *Filter) dropPEM(final bool) bool {
 		return true
 	}
 	if final {
-		f.buf = f.buf[:0]
+		f.buf, f.inPEM, f.mask, f.prev = f.buf[:0], false, -1, 0
 	} else if len(f.buf) > pemTail {
 		n := copy(f.buf, f.buf[len(f.buf)-pemTail:])
 		f.buf = f.buf[:n]
@@ -106,7 +106,9 @@ func (f *Filter) release(out []byte, final bool) (res []byte, again bool) {
 	neu, nhold := neutralise(b, f.prev, final, nil)
 	raw = append(raw, shp...)
 	if pemAt >= 0 {
-		raw = append(raw, span{pemAt, len(b)})
+		// A registered value that contains the PEM block (a one-line key file) may
+		// begin before the header: its prefix is part of the mask.
+		raw = append(raw, span{min(pemAt, len(b)-vhold), len(b)})
 	}
 	r := len(b)
 	if pemAt < 0 && !final {

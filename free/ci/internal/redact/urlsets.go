@@ -6,8 +6,8 @@ package redact
 // differ on single characters (Go fragments keep "!" but not "'", Go userinfo
 // keeps "$,;" but not ":"). A value with few distinct reserved characters gets
 // every subset; a value with many gets the named encoder sets restricted to its
-// characters. The number of sets shrinks as the value grows, so forms times
-// length stays near urlBudget bytes per value.
+// characters. Named sets are never dropped; the optional subsets shrink as the
+// value grows, so forms times length stays near urlBudget bytes per value.
 
 import "math/bits"
 
@@ -52,11 +52,11 @@ func urlSetsFor(v []byte) []string {
 			out = append(out, s)
 		}
 	}
-	for _, n := range urlNamed {
+	for _, n := range urlNamed { // every distinct named encoder set is kept, whatever the length
 		add(restrict(n))
 	}
-	all := restrict(urlSpecials)
-	add(all)
+	named := len(out)
+	add(restrict(urlSpecials))
 	if k := bits.OnesCount32(present); k <= 5 {
 		for m := 0; m < 1<<k; m++ { // every subset of the characters present
 			sub, idx := "", 0
@@ -72,8 +72,7 @@ func urlSetsFor(v []byte) []string {
 			add(sub)
 		}
 	}
-	limit := max(urlBudget/(len(v)*4+1), 6)
-	if len(out) > limit {
+	if limit := named + max(urlBudget/(len(v)*4+1)-named, 0); len(out) > limit { // budget cuts only the optional subsets
 		out = out[:limit]
 	}
 	return out

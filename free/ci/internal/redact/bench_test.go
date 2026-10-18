@@ -8,10 +8,15 @@ import (
 
 // BenchmarkWrap: throughput with 64 registered values over log-like text that
 // holds some secrets, an escape and a command. The ticket floor is 10 MB/s.
-func BenchmarkWrap(b *testing.B) {
+func BenchmarkWrap(b *testing.B) { benchWrap(b, "bench-secret-%02d-%s") }
+
+// BenchmarkWrapPunct registers punctuation-heavy values, which expand into many more forms.
+func BenchmarkWrapPunct(b *testing.B) { benchWrap(b, "p+s/s!w'0$r&d,%02d:%s?@") }
+
+func benchWrap(b *testing.B, format string) {
 	r := New()
 	for i := 0; i < 64; i++ {
-		_ = r.Register([]byte(fmt.Sprintf("bench-secret-%02d-%s", i, strings.Repeat("x7Q", 6))))
+		_ = r.Register([]byte(fmt.Sprintf(format, i, strings.Repeat("x7Q", 6))))
 	}
 	var sb strings.Builder
 	for sb.Len() < 32<<10 {
