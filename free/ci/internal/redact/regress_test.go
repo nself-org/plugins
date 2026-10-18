@@ -365,3 +365,23 @@ func TestRegressJWTEndingInDashesAtEOF(t *testing.T) {
 		t.Fatalf("bytewise: %q", got)
 	}
 }
+
+// Round 5 fuzz: a held partial must survive as long as a longer pattern could
+// still accept its line breaks.
+func TestRegressFoldedHoldUsesLongestPatternCap(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "fuzz-secret-value-1")
+	in := "ZnV6ei1zZWNyZX\r\r\r\r\rQtdmFsdWUtM"
+	whole := run(r, in)
+	if whole != Placeholder {
+		t.Fatalf("whole %q", whole)
+	}
+	if bw := run(r, bytewise(in)...); bw != whole {
+		t.Fatalf("bytewise %q vs whole %q", bw, whole)
+	}
+	for cut := 0; cut <= len(in); cut++ {
+		if got := run(r, in[:cut], in[cut:]); got != whole {
+			t.Fatalf("cut %d: %q", cut, got)
+		}
+	}
+}

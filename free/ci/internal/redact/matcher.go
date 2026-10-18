@@ -220,7 +220,7 @@ func (a *automaton) findSkip(b []byte, out []span) (spans []span, hold int) {
 	}
 	for h := a.nodes[s].hold; h != 0; h = a.nodes[a.nodes[h].fail].hold {
 		d := int(a.nodes[h].depth)
-		if st := pos(count - d); len(b)-st <= spanCap(d) {
+		if st := pos(count - d); len(b)-st <= spanCap(a.maxLen) { // a partial may still grow into the longest pattern
 			hold = len(b) - st
 			break
 		}
