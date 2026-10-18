@@ -1,0 +1,7 @@
+# dummy values only; the boot only needs the config to validate
+NSELF_CONTROLLER_PORT=$PORT
+NSELF_CONTROLLER_ADMIN_TOKEN=boot-kit-dummy-token
+HASURA_GRAPHQL_ADMIN_SECRET=boot-kit-dummy-secret
+HASURA_GRAPHQL_ENDPOINT=http://127.0.0.1:1
+NSELF_CONTROLLER_BASE_DOMAIN=example.test
+NSELF_CONTROLLER_ENABLED=true

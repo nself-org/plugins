@@ -8,7 +8,7 @@ description: >
   Embedded NATS (default, <50 MB RAM) or external NATS / Redpanda / Kafka.
   Plugins publish and subscribe via the plugin SDK helper — no direct broker
   configuration required. Used by the CDC plugin (nself.cdc.*) and the
-  warehouse plugin (consumer of nself.cdc.*).
+  warehouse plugin (consumer of nself.cdc.*; now a Bundles plugin).
 isCommercial: true
 licenseType: pro
 requiredEntitlements:

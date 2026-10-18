@@ -29,6 +29,8 @@ func ValidateE164(number string) error {
 type Server struct {
 	db  *pgxpool.Pool
 	cfg *Config
+	// Migrations, when set, adds the boot-migrations counts to /health (nil in unit tests).
+	Migrations func(http.ResponseWriter) map[string]int
 }
 
 // NewServer creates a new Server.
@@ -69,8 +71,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"status":"unhealthy"}`, http.StatusServiceUnavailable)
 		return
 	}
+	body := map[string]any{"status": "ok"}
+	if s.Migrations != nil {
+		if m := s.Migrations(w); m != nil {
+			body["migrations"] = m
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func (s *Server) handleSend(w http.ResponseWriter, r *http.Request) {

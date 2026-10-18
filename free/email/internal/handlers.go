@@ -19,6 +19,8 @@ import (
 type Server struct {
 	db  *pgxpool.Pool
 	cfg *Config
+	// MigrationsHealth, when set, supplies the "migrations" member of /health (applied and expected counts).
+	MigrationsHealth func(http.ResponseWriter) map[string]int
 }
 
 // NewServer creates a new Server.
@@ -60,7 +62,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	body := map[string]any{"status": "ok"}
+	if s.MigrationsHealth != nil {
+		body["migrations"] = s.MigrationsHealth(w)
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 type sendRequest struct {

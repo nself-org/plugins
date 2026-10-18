@@ -1,72 +1,73 @@
 {
-  "name": "sms",
-  "version": "1.2.6",
-  "displayName": "plugin-sms",
-  "description": "SMS messaging via Twilio. Send, track, and manage opt-outs.",
-  "port": 9009,
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "bundle": [
-    "nchat"
-  ],
+  "author": "nself-org",
   "category": "communication",
+  "description": "SMS messaging via Twilio. Send, track, and manage opt-outs.",
+  "envVars": [
+    {
+      "description": "Twilio Account SID",
+      "name": "TWILIO_ACCOUNT_SID",
+      "required": true
+    },
+    {
+      "description": "Twilio Auth Token",
+      "name": "TWILIO_AUTH_TOKEN",
+      "required": true
+    },
+    {
+      "description": "Twilio sending number (E.164)",
+      "name": "TWILIO_FROM_NUMBER",
+      "required": true
+    },
+    {
+      "description": "PostgreSQL connection string",
+      "name": "NSELF_DB_URL",
+      "required": true
+    },
+    {
+      "description": "HTTP server port",
+      "name": "SMS_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "Max SMS per source_account per minute",
+      "name": "SMS_RATE_LIMIT_PER_MIN",
+      "required": false
+    },
+    {
+      "description": "License key",
+      "name": "NSELF_LICENSE_KEY",
+      "required": false
+    }
+  ],
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "sms",
+  "port": 9009,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_sms",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 9009
+  },
+  "status": "stable",
   "tables": [
     "np_sms_messages",
     "np_sms_opt_outs"
   ],
-  "env": [
-    {
-      "key": "TWILIO_ACCOUNT_SID",
-      "required": true,
-      "description": "Twilio Account SID"
-    },
-    {
-      "key": "TWILIO_AUTH_TOKEN",
-      "required": true,
-      "description": "Twilio Auth Token"
-    },
-    {
-      "key": "TWILIO_FROM_NUMBER",
-      "required": true,
-      "description": "Twilio sending number (E.164)"
-    },
-    {
-      "key": "NSELF_DB_URL",
-      "required": true,
-      "description": "PostgreSQL connection string"
-    },
-    {
-      "key": "SMS_PLUGIN_PORT",
-      "required": false,
-      "default": "9009",
-      "description": "HTTP server port"
-    },
-    {
-      "key": "SMS_RATE_LIMIT_PER_MIN",
-      "required": false,
-      "default": "10",
-      "description": "Max SMS per source_account per minute"
-    },
-    {
-      "key": "NSELF_LICENSE_KEY",
-      "required": true,
-      "description": "License key"
-    }
-  ],
-  "health": "/health",
-  "author": "nself-org",
-  "license": "MIT",
   "tier": "free",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "bundles": [
-    "nchat",
-    "nfamily"
-  ]
+  "version": "1.2.6"
 }

@@ -131,7 +131,6 @@ All 129 plugins are MIT-licensed and listed below (generated from `registry.json
 | [soak](./free/soak/) | Manage soak testing lifecycle: abort an active soak and roll back to a prior version. | Infrastructure |
 | [sports](./free/sports/) | Sports data plugin with storage for scores, schedules, and standings. Planned: Live data provider integration (ESPN, The Sports DB) for real-time scores and stats | Sports |
 | [storage](./free/storage/) | S3-compatible file storage: bucket management, object PUT/GET/DELETE/LIST, presigned URLs, per-tenant isolation. | Infrastructure |
-| [storage-transform](./free/storage-transform/) | On-the-fly image transformation CDN: resize, crop, format convert (WebP/AVIF/JPEG/PNG), quality, and device-pixel-ratio support. URL-param driven, Redis LRU cache, Nginx cache headers, rate limiting. | Infrastructure |
 | [stripe](./free/stripe/) | Stripe billing data sync with webhook handling | Commerce |
 | [subtitle-manager](./free/subtitle-manager/) | Subtitle search, download, and sync verification via OpenSubtitles | Media |
 | [tenant](./free/tenant/) | Multi-tenant operations: create, suspend, upgrade and destroy tenants, plus per-tenant usage metering and billing reports. | Infrastructure |
@@ -142,7 +141,6 @@ All 129 plugins are MIT-licensed and listed below (generated from `registry.json
 | [transactional-email](./free/transactional-email/) | Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay. | Communication |
 | [vpn](./free/vpn/) | Multi-provider VPN management (NordVPN, PIA, Mullvad) with P2P optimization, server carousel, kill switch, and leak protection. Torrent download forwarding requires the torrent-manager plugin. | Authentication |
 | [waf](./free/waf/) | Web Application Firewall management: enable Coraza with the OWASP Core Rule Set, switch between detection and blocking mode, and review recent WAF events. | Compliance |
-| [warehouse](./free/warehouse/) | Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule. | Infrastructure |
 | [watchdog](./free/watchdog/) | Self-healing container watchdog with circuit breaker: status, resets, event history, and TG/email escalation alerts. | Infrastructure |
 | [web3](./free/web3/) | Blockchain integration, NFT support, token-gated access, DAO governance, and decentralized identity | Integrations |
 | [webhooks](./free/webhooks/) | Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue | Communication |

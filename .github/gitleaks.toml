@@ -21,6 +21,9 @@ paths = [
   # Machine-transpiled SQLite C source (vendored modernc.org/sqlite, P7-CI-30): Windows API
   # constant names such as BCRYPT_*_KEY_BLOB match generic-api-key. Third-party, never edited.
   '''free/ci/vendor/modernc\.org/sqlite/lib/.*\.go''',
+  # Redactor unit tests (P7-TRUST-19): synthetic key/token shapes fed to the redactor to prove
+  # they are masked. Test files only; no production source is exempted.
+  '''free/ci/internal/redact/.*_test\.go$''',
   # Vendored third-party source trees of free plugins (cargo/go vendor): generated tables and
   # test vectors trip generic-api-key. They are copies of upstream code, never our secrets.
   '''^free/[^/]+/vendor/''',
@@ -28,6 +31,10 @@ paths = [
 # Known AWS documentation example credentials — not real secrets
 regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',
+  # free/ci/internal/exec/redact_test.go (P7-CI-37): synthetic AWS key shape, the whole matched value
+  '''^AKIAABCDEFGHIJKLMNOP$''',
+  # same test: a synthetic RSA private key block (private-key rule on gitleaks 8.21.2), the whole matched value
+  '''^-----BEGIN RSA PRIVATE KEY-----\\nMIIabc\\n-----END RSA PRIVATE KEY-----$''',
   # sign.ts doc comment "Key format: PKCS8-wrapped ...": the whole matched value is that phrase, no secret
   '''^PKCS8-wrapped$''',
   '''wJalrXUtnFEMI''',

@@ -7,17 +7,13 @@ FROM golang:1.22-alpine AS builder
 
 WORKDIR /build
 
-COPY go.mod ./
-RUN go mod download
-
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /family-gedcom ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o /family-gedcom ./cmd
 
 # ----- runtime -----
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates
-
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /family-gedcom /usr/local/bin/family-gedcom
 
 # GEDCOM_FILE must be set to the path of the GEDCOM file to parse

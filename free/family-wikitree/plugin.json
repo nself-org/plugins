@@ -1,16 +1,62 @@
 {
-  "name": "family-wikitree",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "WikiTree \u2192 nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "minNselfVersion": "1.0.0",
   "category": "social",
+  "dependencies": [
+    "family",
+    "object-storage",
+    "photos"
+  ],
+  "description": "WikiTree → nFamily migration helper (PLANNED). WikiTree is a free public genealogy wiki with a REST API (Apps API).",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "installable": false,
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "planned",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "family-wikitree",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ],
+    "network": [
+      "wikitree.com",
+      "api.wikitree.com"
+    ]
+  },
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "kind": "library"
+  },
+  "status": "planned",
   "tags": [
     "family",
     "genealogy",
@@ -19,61 +65,6 @@
     "importer",
     "gedcom"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {},
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": []
-  },
-  "config": {},
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "wikitree.com",
-      "api.wikitree.com"
-    ],
-    "filesystem": [
-      "storage",
-      "temp",
-      "logs"
-    ]
-  },
-  "dependencies": {
-    "required": [
-      "family",
-      "object-storage",
-      "photos"
-    ],
-    "optional": []
-  },
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "port": 3512,
-  "status": "planned",
-  "installable": false,
   "tier": "free",
-  "language": "go",
-  "entryPoint": "binary",
-  "routes": [],
-  "health_endpoint": "/health",
-  "health_status": "pending_implementation",
-  "entry": "cmd/main.go",
-  "checksum": "6621099efb5c89949dc24f88ccc742a94ba2741fbea45ef9ba380e7c359f2267",
-  "bundles": [
-    "nfamily"
-  ]
+  "version": "1.2.6"
 }
