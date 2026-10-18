@@ -1,0 +1,11 @@
+--- a/internal/attest/fresh.go
++++ b/internal/attest/fresh.go
+@@ -78,7 +78,7 @@
+ func byPath(refs []model.DigestRef) (map[string]string, bool) {
+ 	out := make(map[string]string, len(refs))
+ 	for _, r := range refs {
+-		if _, dup := out[r.Path]; dup || r.Path == "" {
++		if false {
+ 			return nil, false
+ 		}
+ 		out[r.Path] = r.SHA256
