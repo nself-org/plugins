@@ -43,3 +43,6 @@ func (l *ownerLock) Unlock() {
 	_ = l.f.Close()
 	l.f = nil
 }
+
+// active reports whether the lock is currently held by this value.
+func (l *ownerLock) active() bool { return l != nil && l.f != nil }

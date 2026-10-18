@@ -27,8 +27,17 @@ func (p *Provisioner) Down(ctx context.Context, h *Handle) error {
 	if h.done {
 		return nil
 	}
+	if !h.lock.active() {
+		l, held, err := acquireLock(h.root + ".lock")
+		if err != nil || held {
+			return fail(CodeProvision, "teardown of %s skipped: another coordinator holds it (%v)", h.Project, err)
+		}
+		h.lock = l
+	}
 	var problems []string
-	if _, err := os.Stat(h.Dir); err == nil {
+	// Only a directory whose own .env names this project may be handed to the
+	// CLI; otherwise the compose fallback below (by project label) does the work.
+	if h.owns() == nil {
 		if err := p.cli(ctx, h, "stop", "--volumes", "--remove-orphans"); err != nil {
 			problems = append(problems, err.Error())
 		}
@@ -37,7 +46,7 @@ func (p *Provisioner) Down(ctx context.Context, h *Handle) error {
 	if lerr == nil && len(left) > 0 {
 		// The CLI could not finish (project files gone, or a failed stop): the
 		// compose project is named by label, so removing it needs no file.
-		_, _ = p.Run.Run(ctx, Call{Argv: []string{p.docker(), "compose", "-p", h.Project, "down", "--volumes", "--remove-orphans"}})
+		_, _ = p.call(ctx, cliTimeout, Call{Argv: []string{p.docker(), "compose", "-p", h.Project, "down", "--volumes", "--remove-orphans"}})
 		left, lerr = p.leftovers(ctx, h.Project)
 	}
 	if err := os.RemoveAll(h.root); err != nil {
@@ -67,7 +76,7 @@ func (p *Provisioner) leftovers(ctx context.Context, project string) ([]string, 
 	for _, kind := range [][]string{{"ps", "-a", "-q"}, {"volume", "ls", "-q"}, {"network", "ls", "-q"}} {
 		argv := append([]string{p.docker()}, kind...)
 		argv = append(argv, "--filter", filter)
-		res, err := p.Run.Run(ctx, Call{Argv: argv})
+		res, err := p.call(ctx, queryTimeout, Call{Argv: argv})
 		if err != nil {
 			return nil, err
 		}

@@ -26,22 +26,23 @@ const (
 	probeRedis
 )
 
-// waitReady polls addr until it is ready or the deadline passes.
+// waitReady polls addr until it is ready or the deadline passes. A cancelled
+// parent context is returned as such, not as a readiness failure.
 func waitReady(ctx context.Context, addr string, kind probeKind, deadline time.Duration) error {
-	ctx, cancel := context.WithTimeout(ctx, deadline)
+	dctx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	var last error
 	for {
-		last = probeOnce(ctx, addr, kind)
+		last = probeOnce(dctx, addr, kind)
 		if last == nil {
 			return nil
 		}
 		select {
-		case <-ctx.Done():
-			if ctx.Err() != nil && last != nil {
-				return fail(CodeProvision, "service at %s was not ready within %s: %v", addr, deadline, last)
+		case <-dctx.Done():
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-			return ctx.Err()
+			return fail(CodeProvision, "service at %s was not ready within %s: %v", addr, deadline, last)
 		case <-time.After(250 * time.Millisecond):
 		}
 	}

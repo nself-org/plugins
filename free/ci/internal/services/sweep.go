@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const projectPrefix = "nselfci-"
@@ -33,6 +34,7 @@ func (p *Provisioner) Sweep(ctx context.Context) (int, error) {
 		}
 		removed++
 	}
+	p.removeStaleCalls(work)
 	locks, _ := filepath.Glob(filepath.Join(work, projectPrefix+"*.lock"))
 	for _, lf := range locks {
 		l, held, err := acquireLock(lf)
@@ -62,10 +64,14 @@ func (p *Provisioner) Sweep(ctx context.Context) (int, error) {
 // orphanProjects lists nselfci- compose projects with containers whose working
 // directory is under work and that no lock file protects.
 func (p *Provisioner) orphanProjects(ctx context.Context, work string) ([]string, error) {
-	res, err := p.Run.Run(ctx, Call{Argv: []string{p.docker(), "ps", "-a", "--filter", "label=com.docker.compose.project",
+	res, err := p.call(ctx, queryTimeout, Call{Argv: []string{p.docker(), "ps", "-a", "--filter", "label=com.docker.compose.project",
 		"--format", `{{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.project.working_dir"}}`}})
 	if err != nil || res.ExitCode != 0 {
 		return nil, nil // no Docker: nothing to sweep
+	}
+	roots := []string{work}
+	if real, err := filepath.EvalSymlinks(work); err == nil && real != work {
+		roots = append(roots, real) // the daemon reports the resolved path of a symlinked home
 	}
 	seen := map[string]bool{}
 	var out []string
@@ -74,7 +80,7 @@ func (p *Provisioner) orphanProjects(ctx context.Context, work string) ([]string
 		if len(f) < 2 || !strings.HasPrefix(f[0], projectPrefix) || seen[f[0]] {
 			continue
 		}
-		if !strings.HasPrefix(filepath.Clean(f[1]), filepath.Clean(work)+string(os.PathSeparator)) {
+		if !underAny(f[1], roots) {
 			continue
 		}
 		seen[f[0]] = true
@@ -84,4 +90,25 @@ func (p *Provisioner) orphanProjects(ctx context.Context, work string) ([]string
 		out = append(out, f[0])
 	}
 	return out, nil
+}
+
+func underAny(dir string, roots []string) bool {
+	for _, r := range roots {
+		if strings.HasPrefix(filepath.Clean(dir), filepath.Clean(r)+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeStaleCalls deletes the workspaces of CLI calls whose coordinator died
+// mid-call (the funnel removes them itself on every normal exit). An hour old
+// is far past any live call.
+func (p *Provisioner) removeStaleCalls(work string) {
+	dirs, _ := filepath.Glob(filepath.Join(work, "svccall-*"))
+	for _, d := range dirs {
+		if fi, err := os.Stat(d); err == nil && time.Since(fi.ModTime()) > time.Hour {
+			_ = os.RemoveAll(d)
+		}
+	}
 }

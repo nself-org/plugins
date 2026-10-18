@@ -10,9 +10,12 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func itoa(n int) string { return strconv.Itoa(n) }
@@ -46,20 +49,55 @@ func resolve(specs []Spec) ([]conn, error) {
 
 // preflight checks Docker and the CLI commands before anything is created.
 func (p *Provisioner) preflight(ctx context.Context) error {
-	res, err := p.Run.Run(ctx, Call{Argv: []string{p.docker(), "info"}})
+	res, err := p.call(ctx, queryTimeout, Call{Argv: []string{p.docker(), "info"}})
 	if err != nil || res.ExitCode != 0 {
 		return fail(CodeNoDocker, "Docker is not available (%s info failed): start Docker or Colima, or run a job without services", p.docker())
 	}
-	res, err = p.Run.Run(ctx, Call{Argv: []string{p.nself(), "config", "services", "--help"}, Env: cliEnv})
+	res, err = p.call(ctx, queryTimeout, Call{Argv: []string{p.nself(), "config", "services", "--help"}, Env: cliEnv})
 	if err != nil || res.ExitCode != 0 {
 		return fail(CodeNoCLI, "`%s config services` is not available: run `nself update`", p.nself())
 	}
 	return nil
 }
 
-// cli runs `nself <args>` in the project directory of h.
+// owns proves that the project directory is the one this Handle created: the
+// CLI resolves the project from the working directory (and may look at parent
+// directories), so it must never run where our own .env is not.
+func (h *Handle) owns() error {
+	b, err := os.ReadFile(filepath.Join(h.Dir, ".env"))
+	if err != nil {
+		return fail(CodeProvision, "refusing to run nself in %s: no project .env there", h.Dir)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(line) == "PROJECT_NAME="+h.Project {
+			return nil
+		}
+	}
+	return fail(CodeProvision, "refusing to run nself in %s: its .env does not name project %s", h.Dir, h.Project)
+}
+
+// call runs c with a deadline so a stuck image pull cannot hang a job.
+func (p *Provisioner) call(ctx context.Context, d time.Duration, c Call) (Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+	return p.Run.Run(ctx, c)
+}
+
+// Deadlines of one call: a docker query, and an nself command (which may pull images).
+const (
+	queryTimeout = 2 * time.Minute
+	cliTimeout   = 15 * time.Minute
+)
+
+// cli runs `nself <args>` in the project directory of h, after proving the
+// directory is ours (every command but `init`).
 func (p *Provisioner) cli(ctx context.Context, h *Handle, args ...string) error {
-	res, err := p.Run.Run(ctx, Call{Dir: h.Dir, Argv: append([]string{p.nself()}, args...), Env: cliEnv, Mask: h.creds})
+	if args[0] != "init" {
+		if err := h.owns(); err != nil {
+			return err
+		}
+	}
+	res, err := p.call(ctx, cliTimeout, Call{Dir: h.Dir, Argv: append([]string{p.nself()}, args...), Env: cliEnv, Mask: h.creds})
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -103,7 +141,7 @@ func (p *Provisioner) checkNames(ctx context.Context, h *Handle, conns []conn) e
 	if !optional {
 		return nil
 	}
-	res, err := p.Run.Run(ctx, Call{Dir: h.Dir, Argv: []string{p.nself(), "config", "services", "list", "--json"}, Env: cliEnv})
+	res, err := p.call(ctx, queryTimeout, Call{Dir: h.Dir, Argv: []string{p.nself(), "config", "services", "list", "--json"}, Env: cliEnv})
 	if err != nil || res.ExitCode != 0 {
 		return fail(CodeNoCLI, "`%s config services list --json` failed: run `nself update`", p.nself())
 	}

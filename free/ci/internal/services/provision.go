@@ -230,6 +230,9 @@ func (p *Provisioner) startOne(ctx context.Context, h *Handle, c *conn) error {
 		if err = p.cli(ctx, h, "config", "set", c.Comp.PortKey, itoa(c.HostPort)); err != nil {
 			return err
 		}
+		if err = p.cli(ctx, h, "build"); err != nil {
+			return err
+		}
 		err = p.cli(ctx, h, "config", "services", "start", c.Comp.Name)
 	}
 	return err
@@ -242,7 +245,7 @@ func portTaken(err error) bool {
 
 // network finds the compose network of the project ("" when none is found).
 func (p *Provisioner) network(ctx context.Context, h *Handle) string {
-	res, err := p.Run.Run(ctx, Call{Argv: []string{p.docker(), "network", "ls", "--filter", "label=com.docker.compose.project=" + h.Project, "--format", "{{.Name}}"}})
+	res, err := p.call(ctx, queryTimeout, Call{Argv: []string{p.docker(), "network", "ls", "--filter", "label=com.docker.compose.project=" + h.Project, "--format", "{{.Name}}"}})
 	if err != nil || res.ExitCode != 0 {
 		return ""
 	}

@@ -26,6 +26,10 @@ func (r *okRunner) Run(_ context.Context, c services.Call) (services.Result, err
 	defer r.mu.Unlock()
 	line := strings.Join(c.Argv, " ")
 	r.calls = append(r.calls, line)
+	if i := strings.Index(line, " init --non-interactive --name "); i >= 0 {
+		name := line[i+len(" init --non-interactive --name "):]
+		_ = os.WriteFile(filepath.Join(c.Dir, ".env"), []byte("PROJECT_NAME="+name+"\n"), 0o600)
+	}
 	if strings.HasSuffix(line, "config services list --json") {
 		return services.Result{Output: `[{"service":"redis","enabled":false}]`}, nil
 	}
@@ -106,14 +110,14 @@ func TestServicesHookWaitEndsWithContext(t *testing.T) {
 	}
 }
 
-func TestServicesHookSafetyNetTearsDownWithoutDown(t *testing.T) {
+func TestServicesHookSafetyNetTearsDownAndKeepsSlotUntilDown(t *testing.T) {
 	h, r := testHook(t)
 	req := ServicesRequest{RunID: "r3", Names: []string{"postgres"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := h.Up(ctx, req); err != nil {
 		t.Fatal(err)
 	}
-	cancel() // the job context ends and Down was never called
+	cancel() // the job context ends before Down
 	deadline := time.Now().Add(5 * time.Second)
 	for !r.saw("stop --volumes --remove-orphans") {
 		if time.Now().After(deadline) {
@@ -121,13 +125,74 @@ func TestServicesHookSafetyNetTearsDownWithoutDown(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	// The slot is free again: a new Up proceeds.
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	// The slot is still held: a later job must not start before the owner's Down,
+	// or that Down would find the later job's entry.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel2()
-	if _, err := h.Up(ctx2, req); err != nil {
-		t.Fatalf("slot not released by the safety net: %v", err)
+	if _, err := h.Up(ctx2, req); err == nil {
+		t.Fatal("the slot was released by the safety net before Down")
+	}
+	if err := h.Down(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel3()
+	if _, err := h.Up(ctx3, req); err != nil {
+		t.Fatalf("slot not released by Down: %v", err)
 	}
 	_ = h.Down(context.Background(), req)
+}
+
+// blockRunner holds the `stop` call until released.
+type blockRunner struct {
+	okRunner
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockRunner) Run(ctx context.Context, c services.Call) (services.Result, error) {
+	if strings.Contains(strings.Join(c.Argv, " "), "stop --volumes") {
+		select {
+		case b.started <- struct{}{}:
+		default:
+		}
+		<-b.release
+	}
+	return b.okRunner.Run(ctx, c)
+}
+
+func TestServicesHookDownWaitsForARunningSafetyNet(t *testing.T) {
+	b := &blockRunner{started: make(chan struct{}, 1), release: make(chan struct{})}
+	h := &servicesHook{slots: map[string]chan struct{}{}, live: map[string]*liveServices{}}
+	h.once.Do(func() {})
+	h.prov = &services.Provisioner{Run: b, Home: t.TempDir(), Ready: func(context.Context, string) error { return nil }}
+	req := ServicesRequest{RunID: "r4", Names: []string{"postgres"}}
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := h.Up(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	select {
+	case <-b.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the safety net never started")
+	}
+	down := make(chan error, 1)
+	go func() { down <- h.Down(context.Background(), req) }()
+	select {
+	case err := <-down:
+		t.Fatalf("Down returned while the teardown was still running: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	close(b.release)
+	select {
+	case err := <-down:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Down never returned after the teardown finished")
+	}
 }
 
 func TestServiceSpecsUseDeclaredComponents(t *testing.T) {

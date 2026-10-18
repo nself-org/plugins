@@ -12,3 +12,5 @@ func acquireLock(string) (*ownerLock, bool, error) {
 }
 
 func (l *ownerLock) Unlock() {}
+
+func (l *ownerLock) active() bool { return false }

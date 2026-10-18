@@ -22,6 +22,7 @@ type stub struct {
 	up       bool
 	failOn   string // substring of a joined argv that exits 1
 	failOnce string // like failOn, but only the first time
+	noEnv    bool   // `init` does not write the project .env (a CLI that resolved a parent project)
 	noDocker bool
 	noCLI    bool
 	list     string
@@ -40,6 +41,11 @@ func (s *stub) Run(_ context.Context, c Call) (Result, error) {
 		return Result{ExitCode: 1, Output: s.echo}, nil
 	case s.failOn != "" && strings.Contains(line, s.failOn):
 		return Result{ExitCode: 1, Output: s.echo}, nil
+	case strings.Contains(line, " init --non-interactive --name "):
+		if !s.noEnv {
+			name := line[strings.Index(line, "--name ")+len("--name "):]
+			_ = os.WriteFile(filepath.Join(c.Dir, ".env"), []byte("PROJECT_NAME="+name+"\nOTHER=1\n"), 0o600)
+		}
 	case line == "docker info":
 		if s.noDocker {
 			return Result{ExitCode: 1}, nil
@@ -125,9 +131,30 @@ func TestStartRetriesOnATakenPort(t *testing.T) {
 	if strings.Count(got, "config set POSTGRES_PORT") != 2 || strings.Count(got, "config services start postgres") != 2 {
 		t.Fatalf("expected one retry on a new port:\n%s", got)
 	}
+	if strings.Count(got, "nself build") != 2 {
+		t.Fatalf("a new port needs a rebuild before the retry:\n%s", got)
+	}
 	port := h.Env["NSELF_CI_SERVICE_DB_PORT"]
 	if !strings.Contains(got, "config set POSTGRES_PORT "+port) {
 		t.Fatalf("the injected port %s was not the one configured last", port)
+	}
+}
+
+func TestNeverRunsNselfInADirectoryThatIsNotOurProject(t *testing.T) {
+	s := &stub{noEnv: true}
+	p := newProv(t, s)
+	_, err := p.Up(context.Background(), []Spec{{Name: "db", Component: "postgres"}})
+	if code(err) != CodeProvision || !strings.Contains(err.Error(), "refusing to run nself") {
+		t.Fatalf("got %v", err)
+	}
+	for _, c := range s.calls {
+		if strings.Contains(c, "nself config set") || strings.Contains(c, "nself stop") || strings.Contains(c, "nself build") {
+			t.Fatalf("ran %q in a directory that is not our project", c)
+		}
+	}
+	// Teardown of that attempt falls back to the compose project by label.
+	if !strings.Contains(s.joined(), "docker ps -a -q") {
+		t.Fatalf("no leftover check after the refusal:\n%s", s.joined())
 	}
 }
 

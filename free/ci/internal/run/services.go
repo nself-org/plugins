@@ -12,7 +12,8 @@ package run
 // need the same services would be indistinguishable at Down. They are
 // therefore serialised per (run, names): the second Up waits for the first
 // Down, and each job still gets its own throwaway project. A job context that
-// ends without Down (a hook bug) tears the project down through a safety net.
+// ends before Down tears the project down through a safety net; the slot stays
+// held until the owning job's Down, so that Down cannot hit a later job.
 // The engine runs only in v1.5 mode: cmd/main.go dispatches to this package
 // only when compat.V15() is true.
 
@@ -33,9 +34,24 @@ func init() {
 	RegisterServices(&servicesHook{slots: map[string]chan struct{}{}, live: map[string]*liveServices{}})
 }
 
+// liveServices is one running provision. Its teardown runs once, whoever asks
+// first (the safety net or Down); every other caller waits for that run and
+// sees its result, so Down never returns while a teardown is still going.
 type liveServices struct {
 	handle *services.Handle
 	stop   func() bool // cancels the safety net
+	once   sync.Once
+	done   chan struct{}
+	err    error
+}
+
+func (l *liveServices) teardown(ctx context.Context, p *services.Provisioner) error {
+	l.once.Do(func() {
+		l.err = p.Down(ctx, l.handle)
+		close(l.done)
+	})
+	<-l.done
+	return l.err
 }
 
 type servicesHook struct {
@@ -62,14 +78,17 @@ func (s *servicesHook) Up(ctx context.Context, r ServicesRequest) (ServicesSetup
 		s.release(key)
 		return ServicesSetup{}, err
 	}
-	stop := context.AfterFunc(ctx, func() { s.teardown(key, h) })
+	l := &liveServices{handle: h, done: make(chan struct{})}
+	l.stop = context.AfterFunc(ctx, func() { s.safetyNet(l) })
 	s.mu.Lock()
-	s.live[key] = &liveServices{handle: h, stop: stop}
+	s.live[key] = l
 	s.mu.Unlock()
 	return ServicesSetup{Env: h.Env}, nil
 }
 
-// Down tears the services of one job down.
+// Down tears the services of one job down and frees the request slot. It
+// returns only when the teardown has finished, including one the safety net
+// started.
 func (s *servicesHook) Down(ctx context.Context, r ServicesRequest) error {
 	key := serviceKey(r)
 	s.mu.Lock()
@@ -85,22 +104,16 @@ func (s *servicesHook) Down(ctx context.Context, r ServicesRequest) error {
 	// off leaves containers behind, so it gets its own budget.
 	bg, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
 	defer done()
-	return s.prov.Down(bg, l.handle)
+	return l.teardown(bg, s.prov)
 }
 
-// teardown is the safety net for a job context that ended without Down.
-func (s *servicesHook) teardown(key string, h *services.Handle) {
-	s.mu.Lock()
-	l := s.live[key]
-	delete(s.live, key)
-	s.mu.Unlock()
-	if l == nil {
-		return
-	}
-	defer s.release(key)
+// safetyNet tears the services down when the job context ended before Down
+// ran. It keeps the entry and the request slot: the owning job's Down is still
+// coming and must find its own entry, not a later job's with the same key.
+func (s *servicesHook) safetyNet(l *liveServices) {
 	bg, done := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer done()
-	_ = s.prov.Down(bg, h)
+	_ = l.teardown(bg, s.prov)
 }
 
 // provisioner builds the engine once and sweeps the projects of dead
