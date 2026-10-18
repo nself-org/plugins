@@ -16,7 +16,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -99,9 +98,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 		rep.Errors = append(rep.Errors, err)
 		return rep
 	}
-	runs := map[string]bool{}
 	for _, a := range lost {
-		runs[strings.SplitN(a.JobID, ".", 2)[0]] = true // job rows are named <run>.<job>
 		d := store.TransitionDetail{Epoch: a.Epoch, FailureClass: "lost", Reason: "coordinator lost"}
 		err = st.Transition(ctx, a.ID, "lost", "retryable", d)
 		var se *store.Error
@@ -118,7 +115,17 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 			rep.Errors = append(rep.Errors, err)
 		}
 	}
-	closeDead(ctx, st, runs, &rep)
+	// a run whose coordinator died stays "running" until closed; this also
+	// catches a recovery that was itself killed after the attempt moves
+	dead, err := st.DeadRuns(ctx)
+	if err != nil {
+		rep.Errors = append(rep.Errors, err)
+	}
+	for _, id := range dead {
+		if err = st.FinishPipeline(ctx, id, "lost"); err != nil {
+			rep.Errors = append(rep.Errors, err)
+		}
+	}
 	return rep
 }
 

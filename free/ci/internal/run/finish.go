@@ -66,7 +66,7 @@ func (c *Coordinator) prepareStatus(ctx context.Context, st *store.Store, rev Re
 	if c.Reporter != nil {
 		rep = c.Reporter
 	}
-	p := statusPost{Reporter: rep, Owner: owner, Repo: repo, Outbox: &report.Outbox{Store: st, Reporter: rep}}
+	p := statusPost{Reporter: rep, Owner: owner, Repo: repo, Outbox: &report.Outbox{Store: st, Reporter: rep, Owner: owner, Repo: repo}}
 	if _, err := p.Outbox.Drain(ctx); err != nil {
 		p.Notes = append(p.Notes, "earlier status not delivered (kept for the next run): "+firstLineOf(err.Error()))
 	}

@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestOutboxSeqMonotonic(t *testing.T) {
@@ -22,16 +25,17 @@ func TestOutboxSeqMonotonic(t *testing.T) {
 	if err = s.OutboxReady(ctx, "rev", "nself-ci", b, []byte(`{"state":"success"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if r, err := s.OutboxClaim(ctx, "rev", "nself-ci", b); err != nil || r != ClaimOK {
-		t.Fatalf("newest seq must post: %v %v", r, err)
+	r, tb := claim(s, b)
+	if r != ClaimOK {
+		t.Fatalf("newest seq must post: %v", r)
 	}
-	if err = s.OutboxPosted(ctx, "rev", "nself-ci", b); err != nil {
+	if err = s.OutboxPosted(ctx, "rev", "nself-ci", b, tb); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.OutboxReady(ctx, "rev", "nself-ci", a, []byte(`{"state":"failure"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", a); r != ClaimSuperseded {
+	if r, _ := claim(s, a); r != ClaimSuperseded {
 		t.Fatal("an older seq must not post after a newer one")
 	}
 	left, err := s.OutboxUnposted(ctx)
@@ -98,6 +102,11 @@ func TestPipelineReads(t *testing.T) {
 	}
 }
 
+func claim(s *Store, seq int64) (int, int64) {
+	r, token, _ := s.OutboxClaim(context.Background(), "rev", "nself-ci", seq)
+	return r, token
+}
+
 // TestOutboxClaimOrdering: a newer seq claimed first supersedes the older one;
 // an older seq mid-post makes the newer wait; a released claim can be retaken.
 func TestOutboxClaimOrdering(t *testing.T) {
@@ -109,33 +118,76 @@ func TestOutboxClaimOrdering(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if r, err := s.OutboxClaim(ctx, "rev", "nself-ci", a); err != nil || r != ClaimOK {
-		t.Fatalf("claim older: %d %v", r, err)
+	r, ta := claim(s, a)
+	if r != ClaimOK {
+		t.Fatalf("claim older: %d", r)
 	}
-	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", a); r != ClaimBusy {
+	if r, _ = claim(s, a); r != ClaimBusy {
 		t.Fatalf("a live claim must not be taken over: %d", r)
 	}
-	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); r != ClaimWait {
+	if r, _ = claim(s, b); r != ClaimWait {
 		t.Fatalf("newer seq must wait for the older post in flight: %d", r)
 	}
-	if err := s.OutboxPosted(ctx, "rev", "nself-ci", a); err != nil {
+	if err := s.OutboxPosted(ctx, "rev", "nself-ci", a, ta); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); r != ClaimOK {
+	r, tb := claim(s, b)
+	if r != ClaimOK {
 		t.Fatalf("newer after older posted: %d", r)
 	}
-	if err := s.OutboxRelease(ctx, "rev", "nself-ci", b); err != nil {
+	if err := s.OutboxRelease(ctx, "rev", "nself-ci", b, tb); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); r != ClaimOK {
+	r, tb = claim(s, b)
+	if r != ClaimOK {
 		t.Fatalf("released claim retaken: %d", r)
 	}
 	c, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
 	_ = s.OutboxReady(ctx, "rev", "nself-ci", c, []byte(`{}`))
-	if err := s.OutboxPosted(ctx, "rev", "nself-ci", b); err != nil {
+	if err := s.OutboxPosted(ctx, "rev", "nself-ci", b, tb); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", c); r != ClaimOK {
+	if r, _ = claim(s, c); r != ClaimOK {
 		t.Fatalf("c: %d", r)
+	}
+}
+
+// TestOutboxClaimFencing: a poster suspended past the claim TTL loses its
+// claim; its late release does nothing, its late posted is refused (E607) and
+// re-queues the newest posted status so the host ends on it.
+func TestOutboxClaimFencing(t *testing.T) {
+	now := time.Now()
+	s, err := Open(filepath.Join(t.TempDir(), "state.db"), Options{Clock: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	ctx := context.Background()
+	a, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	b, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	for _, seq := range []int64{a, b} {
+		_ = s.OutboxReady(ctx, "rev", "nself-ci", seq, []byte(`{"seq":`+strconv.FormatInt(seq, 10)+`}`))
+	}
+	r, stale := claim(s, a)
+	if r != ClaimOK {
+		t.Fatalf("a: %d", r)
+	}
+	now = now.Add(claimTTL + time.Second) // the first poster is suspended; its claim expires
+	r, tb := claim(s, b)
+	if r != ClaimOK {
+		t.Fatalf("b after expiry: %d", r)
+	}
+	if err = s.OutboxPosted(ctx, "rev", "nself-ci", b, tb); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.OutboxRelease(ctx, "rev", "nself-ci", a, stale); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.OutboxPosted(ctx, "rev", "nself-ci", a, stale); !IsClaimLost(err) {
+		t.Fatalf("a stale poster must lose: %v", err)
+	}
+	left, _ := s.OutboxUnposted(ctx)
+	if len(left) != 2 || left[1].Seq != b || string(left[1].Payload) != `{"seq":2}` {
+		t.Fatalf("the newest status must be queued again, after the released one, with its payload: %+v", left)
 	}
 }

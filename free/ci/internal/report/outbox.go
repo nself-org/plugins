@@ -18,14 +18,19 @@ import (
 
 // Outbox delivers statuses in seq order per (revision, context).
 type Outbox struct {
-	Store    *store.Store
-	Reporter Reporter
-	Pause    time.Duration // poll interval while an older post is in flight (tests)
+	Store       *store.Store
+	Reporter    Reporter
+	Owner, Repo string        // the repository Reserve works for; Complete and Drain read it from the status
+	Pause       time.Duration // poll interval while an older post is in flight (tests)
 }
+
+// key is the store key of one repository's statuses: two clones that share a
+// commit (a fork and its upstream) must not order or supersede each other.
+func key(owner, repo string) string { return Context + "@" + owner + "/" + repo }
 
 // Reserve takes the seq a run will use for its final status.
 func (o *Outbox) Reserve(ctx context.Context, revision string) (int64, error) {
-	return o.Store.OutboxReserve(ctx, revision, Context)
+	return o.Store.OutboxReserve(ctx, revision, key(o.Owner, o.Repo))
 }
 
 // Complete stores the status for seq and tries to deliver it. delivered is
@@ -38,28 +43,35 @@ func (o *Outbox) Complete(ctx context.Context, seq int64, s Status) (delivered b
 	if err != nil {
 		return false, err
 	}
-	if err = o.Store.OutboxReady(ctx, s.Revision, Context, seq, body); err != nil {
+	if err = o.Store.OutboxReady(ctx, s.Revision, key(s.Owner, s.Repo), seq, body); err != nil {
 		return false, err
 	}
-	return o.deliver(ctx, seq, s)
+	return o.deliver(ctx, seq, s, true)
 }
 
-func (o *Outbox) deliver(ctx context.Context, seq int64, s Status) (bool, error) {
+func (o *Outbox) deliver(ctx context.Context, seq int64, s Status, heal bool) (bool, error) {
 	if o.Reporter == nil {
 		return false, nil
 	}
+	k := key(s.Owner, s.Repo)
 	for waited := 0; waited < 240; waited++ { // an older post in flight: wait up to ~2 minutes
-		res, err := o.Store.OutboxClaim(ctx, s.Revision, Context, seq)
+		res, token, err := o.Store.OutboxClaim(ctx, s.Revision, k, seq)
 		if err != nil {
 			return false, err
 		}
 		switch res {
 		case store.ClaimOK:
+			bg := context.WithoutCancel(ctx)
 			if err = o.Reporter.Post(ctx, s); err != nil {
-				_ = o.Store.OutboxRelease(context.WithoutCancel(ctx), s.Revision, Context, seq)
+				_ = o.Store.OutboxRelease(bg, s.Revision, k, seq, token)
 				return false, err
 			}
-			return true, o.Store.OutboxPosted(context.WithoutCancel(ctx), s.Revision, Context, seq)
+			err = o.Store.OutboxPosted(bg, s.Revision, k, seq, token)
+			if heal && store.IsClaimLost(err) { // suspended past the claim TTL: a newer status may have been overwritten
+				_, _ = o.Drain(ctx)
+				return true, nil
+			}
+			return true, err
 		case store.ClaimWait:
 			select {
 			case <-ctx.Done():
@@ -96,7 +108,7 @@ func (o *Outbox) Drain(ctx context.Context) (int, error) {
 		if err = json.Unmarshal(e.Payload, &s); err != nil || s.Validate() != nil {
 			continue // a corrupt entry is left for the operator; it must not block the rest
 		}
-		done, err := o.deliver(ctx, e.Seq, s)
+		done, err := o.deliver(ctx, e.Seq, s, false)
 		if err != nil {
 			return n, err
 		}

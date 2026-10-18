@@ -41,7 +41,7 @@ func status(state State, desc string) Status {
 
 func TestOutboxReverseSeq(t *testing.T) {
 	ctx, f := context.Background(), &fake{}
-	o := &Outbox{Store: openStore(t), Reporter: f}
+	o := &Outbox{Store: openStore(t), Reporter: f, Owner: "o", Repo: "r"}
 	older, _ := o.Reserve(ctx, sha)
 	newer, _ := o.Reserve(ctx, sha)
 	if ok, err := o.Complete(ctx, newer, status(Success, "new")); err != nil || !ok {
@@ -57,7 +57,7 @@ func TestOutboxReverseSeq(t *testing.T) {
 
 func TestOutboxDrainAfterFailure(t *testing.T) {
 	ctx, f := context.Background(), &fake{fail: true}
-	o := &Outbox{Store: openStore(t), Reporter: f}
+	o := &Outbox{Store: openStore(t), Reporter: f, Owner: "o", Repo: "r"}
 	seq, _ := o.Reserve(ctx, sha)
 	if ok, err := o.Complete(ctx, seq, status(Success, "ok")); ok || err == nil {
 		t.Fatalf("a failed delivery must report the error: %v %v", ok, err)
@@ -74,7 +74,7 @@ func TestOutboxDrainAfterFailure(t *testing.T) {
 func TestOutboxWithoutReporterKeepsEntry(t *testing.T) {
 	ctx := context.Background()
 	st := openStore(t)
-	o := &Outbox{Store: st}
+	o := &Outbox{Store: st, Owner: "o", Repo: "r"}
 	seq, _ := o.Reserve(ctx, sha)
 	if ok, err := o.Complete(ctx, seq, status(Success, "ok")); ok || err != nil {
 		t.Fatalf("no reporter: %v %v", ok, err)
@@ -147,5 +147,26 @@ func TestGHPostRunsGH(t *testing.T) {
 	g.Capture = func(context.Context, ...string) (string, int, error) { return "HTTP 404", 1, nil }
 	if err := g.Post(context.Background(), status(Failure, "x")); err == nil {
 		t.Fatal("non-zero gh exit must be an error")
+	}
+}
+
+// A fork and its upstream share commits; their statuses must not order or
+// supersede each other in a shared state directory.
+func TestOutboxIsPerRepository(t *testing.T) {
+	ctx, f, st := context.Background(), &fake{}, openStore(t)
+	up := &Outbox{Store: st, Reporter: f, Owner: "o", Repo: "r"}
+	fork := &Outbox{Store: st, Reporter: f, Owner: "me", Repo: "r"}
+	a, _ := up.Reserve(ctx, sha)
+	b, _ := fork.Reserve(ctx, sha)
+	if a != 1 || b != 1 {
+		t.Fatalf("each repository counts its own seq: %d %d", a, b)
+	}
+	forkStatus := status(Failure, "fork")
+	forkStatus.Owner = "me"
+	if ok, err := fork.Complete(ctx, b, forkStatus); err != nil || !ok {
+		t.Fatalf("fork: %v %v", ok, err)
+	}
+	if ok, err := up.Complete(ctx, a, status(Success, "upstream")); err != nil || !ok {
+		t.Fatalf("upstream must still post: %v %v", ok, err)
 	}
 }
