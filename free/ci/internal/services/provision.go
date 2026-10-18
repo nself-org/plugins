@@ -101,8 +101,10 @@ func (p *Provisioner) Up(ctx context.Context, specs []Spec) (*Handle, error) {
 		return nil, fail(CodeProvision, "cannot create the work directory: %v", err)
 	}
 	var held bool
-	if h.lock, held, err = acquireLock(h.root + ".lock"); err != nil || held {
+	if h.lock, held, err = acquireLock(h.root + ".lock"); err != nil {
 		return nil, fail(CodeProvision, "cannot lock the provision %s: %v", project, err)
+	} else if held {
+		return nil, fail(CodeProvision, "provision %s is already locked by another coordinator", project)
 	}
 	if err = p.provision(ctx, h, conns); err != nil {
 		bg, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
