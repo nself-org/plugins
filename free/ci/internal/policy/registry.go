@@ -81,9 +81,11 @@ func checkSpec(s KeySpec) error {
 	switch s.Kind {
 	case TightenLower, TightenHigher:
 		if len(s.Order) == 0 {
-			return refuse("key %s needs an Order", s.Key)
-		}
-		if s.Default != nil {
+			// A numeric key has no Order: it needs an integer Default.
+			if _, ok := trust.IntValue(s.Default); !ok {
+				return refuse("key %s needs an Order or an integer Default", s.Key)
+			}
+		} else if s.Default != nil {
 			d, ok := s.Default.(string)
 			if !ok || !slices.Contains(s.Order, d) {
 				return refuse("key %s default is not in its Order", s.Key)
