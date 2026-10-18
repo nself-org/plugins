@@ -25,8 +25,7 @@ func init() {
 	}
 }
 
-// Outbox entry states.
-const (
+const ( // outbox entry states
 	OutboxReserved   = "reserved"   // seq taken at run start, no payload yet
 	OutboxPending    = "pending"    // payload ready, not posted
 	OutboxPosting    = "posting"    // claimed by one process that is delivering it
