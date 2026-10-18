@@ -274,8 +274,8 @@ func TestRegressVSOCommandCaseAndSinkErrorUnwrap(t *testing.T) {
 }
 
 func TestRegressURLFormsBoundedForPunctuationHeavyValues(t *testing.T) {
-	v := []byte("SYNTH042!$&,/?#" + strings.Repeat("a", 200))
-	if n := len(urlForms(v)); n > 40 {
+	v := []byte("SYNTH042!$&,/?#*" + strings.Repeat("a", 600))
+	if n := len(urlForms(v)); n > 60 {
 		t.Fatalf("%d url forms for one value", n)
 	}
 	r := New()
@@ -283,6 +283,35 @@ func TestRegressURLFormsBoundedForPunctuationHeavyValues(t *testing.T) {
 	for _, in := range []string{"Zq8/xK%2BpL2mN9vB4%3Dab%20cd", "Zq8%2FxK%2BpL2mN9vB4%3Dab+cd", "Zq8/xK+pL2mN9vB4=ab%20cd"} {
 		if got := run(r, "x="+in+"&"); got != "x=[REDACTED]&" {
 			t.Errorf("%q survived: %q", in, got)
+		}
+	}
+}
+
+// Round 4: encoders the first unions missed.
+func TestRegressURLEncoderCoverage(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "abcdef!$/#", "abcdef!$,/", "Zq8~xK2mN9vB4!", "a!b+c,d/e?f#mn", "ab*cd~ef!gh")
+	for _, in := range []string{"abcdef!$/%23", "abcdef%21$,%2F", "Zq8%7ExK2mN9vB4%21", "Zq8%7ExK2mN9vB4!", "a!b+c,d/e?f%23mn", "ab*cd%7Eef%21gh"} {
+		if got := run(r, "x="+in+"&"); got != "x=[REDACTED]&" {
+			t.Errorf("%q survived: %q", in, got)
+		}
+		if got := run(r, bytewise("x="+in+"&")...); got != "x=[REDACTED]&" {
+			t.Errorf("%q bytewise: %q", in, got)
+		}
+	}
+}
+
+func TestRegressCappedJWTDoesNotSwallowPEMOpener(t *testing.T) {
+	r := New()
+	pe := "-----END " + "PRIVATE KEY-----"
+	for _, n := range []int{8170, 8175, 8178, 8180, 8182, 8184, 8186} {
+		in := "eyJ" + strings.Repeat("a", n) + ".b.c-----BEGIN " + "PRIVATE KEY-----\nSYNTHETIC_PRIVATE_BODY\n" + pe + "\n"
+		whole := run(r, in)
+		if strings.Contains(whole, "SYNTHETIC") {
+			t.Errorf("n=%d whole leaked: %.80q", n, whole)
+		}
+		if bw := run(r, bytewise(in)...); strings.Contains(bw, "SYNTHETIC") || collapse(bw) != collapse(whole) {
+			t.Errorf("n=%d bytewise %.80q vs whole %.80q", n, bw, whole)
 		}
 	}
 }
