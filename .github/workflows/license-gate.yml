@@ -55,7 +55,7 @@ jobs:
           # Each entry here is a genuinely-permissive license go-licenses cannot
           # recognize automatically; verify the LICENSE file before adding one.
           #
-          # github.com/segmentio/asm — pulled in transitively by free/warehouse/go
+          # github.com/segmentio/asm — pulled in transitively by the former free/warehouse/go (now a Bundles plugin)
           # via github.com/apache/arrow-go/v18. Verified 2026-09-01 by reading
           # the module's LICENSE file directly (v1.2.1, module cache): full text
           # is "MIT No Attribution" (SPDX: MIT-0) — a permissive variant of MIT

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# tests/boot/run.sh [--plugins a,b | --fixtures] [--sequential]: the fresh-DB boot kit. Builds the converted plugin The /health probe uses wget, or a deno fetch in images that have no wget; the migrations log line may be plain or a structured (JSON) log record.
+# tests/boot/run.sh [--plugins a,b | --fixtures] [--sequential]: the fresh-DB boot kit. Builds the converted plugin
 # image (network disabled for RUN steps), starts postgres:16 (pgvector/pgvector:pg16 when a plugin requires the vector extension), boots the plugin twice and requires: first boot
 # applies all migrations, second applies none, and /health reports migrations applied == expected.
+# The /health probe uses wget, or a deno fetch in images that have no wget; the migrations log line may be plain or a
+# structured (JSON) log record.
 # Env hook (P7-PLUG-76): when <plugin>/tests/boot/env exists, each KEY=value line is passed as -e to both boots. Only
 # $DATABASE_URL and $PORT (or ${...}) are expanded, by plain string replacement (no eval); blank and # lines are
 # skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
