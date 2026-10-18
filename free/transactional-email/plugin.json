@@ -1,19 +1,114 @@
 {
-  "name": "transactional-email",
-  "version": "1.2.6",
-  "api_version": "1.0",
-  "description": "Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.1.0",
-  "port": 3822,
   "category": "communication",
+  "description": "Provider-agnostic transactional email: template rendering, per-tenant domain management, SPF/DKIM reporting, delivery webhook relay.",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "EMAIL_DEFAULT_PROVIDER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_ELASTIC_API_KEY",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_SMTP_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_SMTP_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_SMTP_USER",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_SMTP_PASS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_POSTMARK_SERVER_TOKEN",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_RATE_LIMIT_RPM",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "EMAIL_WEBHOOK_SECRET",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "TRANSACTIONAL_EMAIL_PROVIDER",
+      "required": false
+    }
+  ],
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "planned",
+  "minNselfVersion": "1.1.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "transactional-email",
+  "optionalDependencies": [
+    "mux",
+    "notify"
+  ],
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "logs"
+    ],
+    "network": [
+      "api.elasticemail.com",
+      "smtp.elasticemail.com",
+      "api.postmarkapp.com"
+    ]
+  },
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.1.0"
+  },
+  "schema": "np_transactional_email",
+  "service": {
+    "kind": "library"
+  },
+  "status": "planned",
+  "tables": [
+    "np_temail_domains",
+    "np_temail_messages",
+    "np_temail_templates"
+  ],
   "tags": [
     "email",
     "transactional",
@@ -23,103 +118,12 @@
     "templates",
     "webhooks"
   ],
-  "language": "go",
-  "entryPoint": "binary",
-  "entry": "cmd/main.go",
-  "status": "planned",
   "tier": "free",
-  "bundle": [
-    "shared"
-  ],
-  "tables": [
-    "np_temail_domains",
-    "np_temail_messages",
-    "np_temail_templates"
-  ],
-  "hasuraRemoteSchema": true,
-  "systemDependencies": [],
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "EMAIL_DEFAULT_PROVIDER",
-      "EMAIL_ELASTIC_API_KEY",
-      "EMAIL_SMTP_HOST",
-      "EMAIL_SMTP_PORT",
-      "EMAIL_SMTP_USER",
-      "EMAIL_SMTP_PASS",
-      "EMAIL_POSTMARK_SERVER_TOKEN",
-      "EMAIL_RATE_LIMIT_RPM",
-      "EMAIL_WEBHOOK_SECRET",
-      "TRANSACTIONAL_EMAIL_PROVIDER"
-    ]
-  },
-  "config": {
-    "defaultProvider": "elastic_email",
-    "rateLimitRPM": 100,
-    "rateLimitBurst": 20
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "uuid",
-    "defaultValue": "primary"
-  },
-  "cloudMultiTenancy": {
-    "supported": true,
-    "isolationColumn": "tenant_id",
-    "hasuraRowFilter": {
-      "tenant_id": {
-        "_eq": "X-Hasura-Tenant-Id"
-      }
-    }
-  },
-  "webhooks": {
-    "email.sent": "Message dispatched to provider",
-    "email.delivered": "Provider confirmed delivery",
-    "email.bounced": "Provider reported hard bounce",
-    "email.failed": "Send attempt failed"
-  },
-  "actions": {
-    "server": "Start transactional-email HTTP server",
-    "send": "Send a transactional email (CLI shortcut)",
-    "domains": "List configured sender domains",
-    "domain-add": "Add and verify a sender domain",
-    "stats": "Show email delivery statistics"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "api.elasticemail.com",
-      "smtp.elasticemail.com",
-      "api.postmarkapp.com"
-    ],
-    "filesystem": [
-      "logs"
-    ]
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "dependencies": {
-    "required": [],
-    "optional": [
-      "mux",
-      "notify"
-    ]
-  },
-  "checksum": "b634bb403c5a626491520f593262a1274460a29e34f1f2266c67bc0647640647",
-  "bundles": [
-    "nchat",
-    "nclaw",
-    "nfamily"
+  "version": "1.2.6",
+  "webhooks": [
+    "email.bounced",
+    "email.delivered",
+    "email.failed",
+    "email.sent"
   ]
 }

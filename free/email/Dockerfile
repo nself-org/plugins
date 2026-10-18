@@ -1,12 +1,10 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o plugin-email ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o plugin-email ./cmd/main.go
 
 FROM alpine:3.19
-RUN apk add --no-cache wget ca-certificates
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 WORKDIR /app
 COPY --from=builder /app/plugin-email .
 COPY migrations/ ./migrations/

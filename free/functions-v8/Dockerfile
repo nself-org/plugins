@@ -2,11 +2,8 @@
 FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
-COPY go/go.mod go/go.sum ./
-RUN go mod download
-
-COPY go/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /functions-v8 ./cmd
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -trimpath -ldflags="-s -w" -o /functions-v8 ./cmd
 
 # Stage 2: Runtime image with Deno bundled.
 # denoland/deno provides the deno binary at /usr/local/bin/deno.
@@ -32,7 +29,8 @@ ENV FUNCTIONS_EDGE_LOG_RETENTION_DAYS=7
 
 EXPOSE 3088
 
+# The deno image ships no wget or curl: probe /health with the bundled deno binary.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3088/health || exit 1
+  CMD ["deno", "eval", "--allow-net=127.0.0.1:3088", "const r = await fetch('http://127.0.0.1:3088/health'); Deno.exit(r.ok ? 0 : 1)"]
 
 ENTRYPOINT ["/usr/local/bin/functions-v8"]

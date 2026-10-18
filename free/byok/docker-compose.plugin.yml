@@ -1,0 +1,31 @@
+services:
+  byok:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/byok
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_byok
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3743:3743"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BYOK_PLUGIN_PORT: "3743"
+      NSELF_BYOK: ${NSELF_BYOK:-false}
+      NSELF_BYOK_DEK_CACHE: ${NSELF_BYOK_DEK_CACHE:-false}
+      NSELF_BYOK_DEK_CACHE_TTL: ${NSELF_BYOK_DEK_CACHE_TTL:-0}
+      NSELF_BYOK_ROTATE_BATCH_SIZE: ${NSELF_BYOK_ROTATE_BATCH_SIZE:-1000}
+      NSELF_BYOK_ROTATE_RATE_LIMIT: ${NSELF_BYOK_ROTATE_RATE_LIMIT:-100}
+      NSELF_BYOK_MULTI_REGION: ${NSELF_BYOK_MULTI_REGION:-false}
+      NSELF_LICENSE_KEY: ${NSELF_LICENSE_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3743/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,28 @@
+services:
+  auth-enterprise:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/auth-enterprise
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_auth_enterprise
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3826:3826"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PLUGIN_AUTH_ENTERPRISE_PORT: "3826"
+      NSELF_SSO: ${NSELF_SSO:-false}
+      NSELF_ISSUER: ${AUTH_ENTERPRISE_TOTP_ISSUER:-nSelf}
+      SP_ENTITY_ID: ${AUTH_ENTERPRISE_SSO_SP_ENTITY_ID:-}
+      SAML_ACS_URL: ${AUTH_ENTERPRISE_SSO_ACS_URL:-}
+      OIDC_CALLBACK_URL: ${AUTH_ENTERPRISE_SSO_OIDC_CALLBACK_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3826/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

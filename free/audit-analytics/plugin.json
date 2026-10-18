@@ -1,18 +1,176 @@
 {
-  "name": "audit-analytics",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts.",
+  "arch_support": [
+    "linux-x86_64",
+    "linux-arm64",
+    "darwin-arm64"
+  ],
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.9",
   "category": "compliance",
+  "description": "Advanced audit analytics over np_audit_log: anomaly detection (z-score baseline), user behaviour heatmaps, privileged-action review queue, and webhook/email alerts.",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_ANALYTICS",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_ANALYTICS_REALTIME",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_ANOMALY_ZSCORE",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_HEATMAP_REFRESH",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_PRIVILEGED_REVIEW_TTL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_ALERT_WEBHOOK",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "NSELF_AUDIT_ALERT_EMAIL",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "AUDIT_ANALYTICS_PORT",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "AUDIT_ANALYTICS_HOST",
+      "required": false
+    },
+    {
+      "description": "",
+      "name": "AUDIT_ANALYTICS_LOG_LEVEL",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.9",
+  "multiApp": {
+    "isolationColumn": "tenant_id",
+    "pkStrategy": "uuid",
+    "supported": true
+  },
+  "name": "audit-analytics",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update"
+    ],
+    "filesystem": [
+      "logs"
+    ],
+    "network": [
+      "webhook"
+    ]
+  },
+  "port": 3218,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.9"
+  },
+  "rest_routes": [
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/analytics/anomalies"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/analytics/anomalies/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "PATCH",
+      "path": "/audit/analytics/anomalies/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/analytics/heatmap"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/analytics/top-actors"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/privileged-reviews"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/audit/privileged-reviews/{id}"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/privileged-reviews/overdue"
+    },
+    {
+      "auth": "bearer",
+      "method": "POST",
+      "path": "/audit/analytics/refresh"
+    },
+    {
+      "auth": "bearer",
+      "method": "GET",
+      "path": "/audit/analytics/status"
+    }
+  ],
+  "schema": "np_audit_analytics",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 3218
+  },
+  "status": "stable",
+  "tables": [
+    "np_audit_anomalies",
+    "np_audit_privileged_reviews"
+  ],
   "tags": [
     "audit",
     "analytics",
@@ -24,146 +182,11 @@
     "hipaa",
     "iso27001"
   ],
-  "tables": [
-    "np_audit_anomalies",
-    "np_audit_privileged_reviews"
-  ],
-  "webhooks": {
-    "anomaly.detected": "Anomaly scored above threshold",
-    "anomaly.reviewed": "Anomaly disposition set by reviewer",
-    "privileged_review.overdue": "Privileged action review overdue (>TTL seconds)"
-  },
-  "actions": {
-    "init": "Initialize audit-analytics schema (tables + materialized view)",
-    "server": "Start audit-analytics HTTP server",
-    "score": "Run anomaly scoring pass against recent audit events",
-    "refresh": "Refresh np_audit_heatmap materialized view",
-    "status": "Show last refresh time and anomaly counts"
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "NSELF_AUDIT_ANALYTICS",
-      "NSELF_AUDIT_ANALYTICS_REALTIME",
-      "NSELF_AUDIT_ANOMALY_ZSCORE",
-      "NSELF_AUDIT_HEATMAP_REFRESH",
-      "NSELF_AUDIT_PRIVILEGED_REVIEW_TTL",
-      "NSELF_AUDIT_ALERT_WEBHOOK",
-      "NSELF_AUDIT_ALERT_EMAIL",
-      "AUDIT_ANALYTICS_PORT",
-      "AUDIT_ANALYTICS_HOST",
-      "AUDIT_ANALYTICS_LOG_LEVEL"
-    ]
-  },
-  "config": {
-    "defaultPort": 3714,
-    "anomalyZScore": 3.0,
-    "heatmapRefreshSeconds": 3600,
-    "privilegedReviewTTLSeconds": 86400
-  },
-  "hooks": {
-    "postInstall": null,
-    "preUninstall": null,
-    "postSync": null
-  },
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "tenant_id",
-    "pkStrategy": "uuid",
-    "defaultValue": null
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update"
-    ],
-    "network": [
-      "webhook"
-    ],
-    "filesystem": [
-      "logs"
-    ]
-  },
-  "port": 3218,
-  "status": "stable",
   "tier": "free",
-  "language": "go",
-  "entryPoint": "binary",
-  "binary_name": "audit-analytics",
-  "health_endpoint": "/health",
-  "arch_support": [
-    "linux-x86_64",
-    "linux-arm64",
-    "darwin-arm64"
-  ],
-  "min_memory_mb": 64,
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/analytics/anomalies",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/analytics/anomalies/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "PATCH",
-      "path": "/audit/analytics/anomalies/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/analytics/heatmap",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/analytics/top-actors",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/privileged-reviews",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/audit/privileged-reviews/{id}",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/privileged-reviews/overdue",
-      "auth": "bearer"
-    },
-    {
-      "method": "POST",
-      "path": "/audit/analytics/refresh",
-      "auth": "bearer"
-    },
-    {
-      "method": "GET",
-      "path": "/audit/analytics/status",
-      "auth": "bearer"
-    }
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "entry": "go/main.go",
-  "checksum": "f82e0a942e27608b038d0a298bce83daa1135b766c86cf58edeab2101132b0d1",
-  "bundles": [
-    "nsentry"
+  "version": "1.2.6",
+  "webhooks": [
+    "anomaly.detected",
+    "anomaly.reviewed",
+    "privileged_review.overdue"
   ]
 }

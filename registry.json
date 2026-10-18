@@ -521,7 +521,7 @@
       "catalog": {
         "maturity": "implemented",
         "requires": {
-          "nself": ">=1.0.0"
+          "nself": ">=1.0.9"
         },
         "schema": "np_auth_enterprise",
         "service_kind": "compose"
@@ -536,8 +536,8 @@
       "download_url": "https://plugins.nself.org/plugins/auth-enterprise/tarball",
       "language": "go",
       "license": "MIT",
-      "minNselfVersion": "1.0.0",
-      "min_nself_version": "1.0.0",
+      "minNselfVersion": "1.0.9",
+      "min_nself_version": "1.0.9",
       "name": "auth-enterprise",
       "port": 3826,
       "releaseTag": "v1.2.6",
@@ -658,7 +658,7 @@
           "nself": ">=1.0.0"
         },
         "schema": "np_cdc",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "infrastructure",
       "checksum": "53da0bae080b3254bdb41800e6ae45fba2a392d46ac74aa11987020ab17f9b9e",
@@ -1836,7 +1836,7 @@
         "requires": {
           "nself": ">=1.0.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "social",
       "checksum": "9393ccf40ea29ab69ab9e8f27d9e57b3f2c098a8d9e573925496d319e3fb01dd",
@@ -1858,7 +1858,6 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "family-ancestry",
-      "port": 3513,
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [],
@@ -1882,7 +1881,7 @@
         "requires": {
           "nself": ">=1.0.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "social",
       "checksum": "6cd9bed5e4e0ca8de4ca66f787dac454d6746981e759a2fcadcec6c0acee2c89",
@@ -1904,7 +1903,6 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "family-familysearch",
-      "port": 3510,
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [],
@@ -1929,7 +1927,7 @@
         "requires": {
           "nself": ">=1.0.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "social",
       "checksum": "6d50967ca987fbc88a97b7f0f65e3f273c500018280d5ab49af9a6868854f154",
@@ -1949,7 +1947,6 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "family-gedcom",
-      "port": 3108,
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [],
@@ -1972,7 +1969,7 @@
         "requires": {
           "nself": ">=1.0.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "social",
       "checksum": "03f26faeeb7cd94c9dc0dd619b249d5652348bb25351c17ed0c3b1029b4fa63c",
@@ -1994,7 +1991,6 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "family-myheritage",
-      "port": 3511,
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [],
@@ -2018,7 +2014,7 @@
         "requires": {
           "nself": ">=1.0.0"
         },
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "social",
       "checksum": "f41d96107b4d2ec593dea3e2116b8dc7cf89f0b1c57c0b67161611eda16e1522",
@@ -2040,7 +2036,6 @@
       "minNselfVersion": "1.0.0",
       "min_nself_version": "1.0.0",
       "name": "family-wikitree",
-      "port": 3512,
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [],
@@ -5651,46 +5646,6 @@
       "tier": "free",
       "version": "1.2.6"
     },
-    "storage-transform": {
-      "author": "nself",
-      "catalog": {
-        "maturity": "implemented",
-        "requires": {
-          "nself": ">=1.0.9"
-        },
-        "service_kind": "compose"
-      },
-      "category": "infrastructure",
-      "checksum": "1c9c6035bc2e5097da9d1afcda7c27481975a6c0a3a014777e8c2d5e01270f36",
-      "checksums": {
-        "sha256": "1c9c6035bc2e5097da9d1afcda7c27481975a6c0a3a014777e8c2d5e01270f36"
-      },
-      "dependencies": [],
-      "description": "On-the-fly image transformation CDN: resize, crop, format convert (WebP/AVIF/JPEG/PNG), quality, and device-pixel-ratio support. URL-param driven, Redis LRU cache, Nginx cache headers, rate limiting.",
-      "download_url": "https://plugins.nself.org/plugins/storage-transform/tarball",
-      "language": "go",
-      "license": "MIT",
-      "minNselfVersion": "1.0.9",
-      "min_nself_version": "1.0.9",
-      "name": "storage-transform",
-      "port": 3085,
-      "releaseTag": "v1.2.6",
-      "requires_license": false,
-      "tables": [],
-      "tags": [
-        "images",
-        "cdn",
-        "transform",
-        "resize",
-        "webp",
-        "avif",
-        "storage"
-      ],
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/storage-transform-1.2.6.tar.gz",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/storage-transform-1.2.6.tar.gz",
-      "tier": "free",
-      "version": "1.2.6"
-    },
     "stripe": {
       "author": "nself",
       "catalog": {
@@ -6115,7 +6070,7 @@
           "nself": ">=1.1.0"
         },
         "schema": "np_transactional_email",
-        "service_kind": "compose"
+        "service_kind": "library"
       },
       "category": "communication",
       "checksum": "b5163bfa249b99960b28fd5232d006917b87d5e2f1c3793dd97e5f71395f4a72",
@@ -6134,7 +6089,6 @@
       "minNselfVersion": "1.1.0",
       "min_nself_version": "1.1.0",
       "name": "transactional-email",
-      "port": 3822,
       "releaseTag": "v1.2.6",
       "requires_license": false,
       "tables": [
@@ -6249,48 +6203,6 @@
       ],
       "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/waf-1.2.6.tar.gz",
       "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/waf-1.2.6.tar.gz",
-      "tier": "free",
-      "version": "1.2.6"
-    },
-    "warehouse": {
-      "author": "nself",
-      "catalog": {
-        "maturity": "implemented",
-        "requires": {
-          "nself": ">=1.0.0"
-        },
-        "schema": "np_warehouse",
-        "service_kind": "compose"
-      },
-      "category": "infrastructure",
-      "checksum": "1bc88a4298e1d386c812104090db332bed3e06d4a56223d132735b74100a0b63",
-      "checksums": {
-        "sha256": "1bc88a4298e1d386c812104090db332bed3e06d4a56223d132735b74100a0b63"
-      },
-      "dependencies": [],
-      "description": "Data warehouse sync — exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.",
-      "download_url": "https://plugins.nself.org/plugins/warehouse/tarball",
-      "language": "go",
-      "license": "MIT",
-      "minNselfVersion": "1.0.0",
-      "min_nself_version": "1.0.0",
-      "name": "warehouse",
-      "port": 8210,
-      "releaseTag": "v1.2.6",
-      "requires_license": false,
-      "tables": [
-        "np_warehouse_sync_jobs",
-        "np_warehouse_tables"
-      ],
-      "tags": [
-        "warehouse",
-        "bigquery",
-        "snowflake",
-        "analytics",
-        "etl"
-      ],
-      "tarball": "https://github.com/nself-org/plugins/releases/download/v1.2.6/warehouse-1.2.6.tar.gz",
-      "tarballUrl": "https://github.com/nself-org/plugins/releases/download/v1.2.6/warehouse-1.2.6.tar.gz",
       "tier": "free",
       "version": "1.2.6"
     },
@@ -6515,7 +6427,7 @@
       "version": "1.2.6"
     }
   },
-  "plugins_count": 133,
+  "plugins_count": 131,
   "schema_version": "2.0.0",
   "tier": "free"
 }

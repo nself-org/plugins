@@ -65,3 +65,7 @@ All tables include `source_account_id TEXT NOT NULL DEFAULT 'primary'` for multi
 ## Bundle
 
 Unbundled — available as a standalone free plugin.
+
+## Database migrations
+
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_audit_analytics.schema_migrations`); the tables live in `public`. The `np_audit_heatmap` materialized view reads `np_audit_log`, which the audit-log plugin owns: install audit-log before audit-analytics. On a database without `np_audit_log` the view is skipped so the plugin still boots, and the heatmap endpoints stay empty until the view exists.
