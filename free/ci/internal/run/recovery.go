@@ -135,7 +135,11 @@ func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *Reco
 			to, class = "failed", "infra"
 		}
 		d := store.TransitionDetail{Epoch: a.Epoch, FailureClass: class, Reason: "coordinator lost"}
-		if err = st.Transition(ctx, a.ID, model.JobState(a.State), to, d); err != nil {
+		err = st.Transition(ctx, a.ID, model.JobState(a.State), to, d)
+		if err != nil && CodeOf(err) == codeStoreRef && to != "cancelled" { // a cancel intent won
+			err = st.Transition(ctx, a.ID, model.JobState(a.State), "cancelled", store.TransitionDetail{Epoch: a.Epoch, FailureClass: "cancelled", Reason: "coordinator lost"})
+		}
+		if err != nil {
 			rep.Errors = append(rep.Errors, err)
 			continue
 		}

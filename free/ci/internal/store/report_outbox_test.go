@@ -22,8 +22,8 @@ func TestOutboxSeqMonotonic(t *testing.T) {
 	if err = s.OutboxReady(ctx, "rev", "nself-ci", b, []byte(`{"state":"success"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := s.OutboxMayPost(ctx, "rev", "nself-ci", b); err != nil || !ok {
-		t.Fatalf("newest seq must post: %v %v", ok, err)
+	if r, err := s.OutboxClaim(ctx, "rev", "nself-ci", b); err != nil || r != ClaimOK {
+		t.Fatalf("newest seq must post: %v %v", r, err)
 	}
 	if err = s.OutboxPosted(ctx, "rev", "nself-ci", b); err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestOutboxSeqMonotonic(t *testing.T) {
 	if err = s.OutboxReady(ctx, "rev", "nself-ci", a, []byte(`{"state":"failure"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := s.OutboxMayPost(ctx, "rev", "nself-ci", a); ok {
+	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", a); r != ClaimSuperseded {
 		t.Fatal("an older seq must not post after a newer one")
 	}
 	left, err := s.OutboxUnposted(ctx)

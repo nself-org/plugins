@@ -5,10 +5,9 @@ package store
 // (revision, context) with a monotonic seq; a status posts only when its seq
 // is not older than the last one posted (CI D13). Migration set
 // report-outbox (HOST review R2): P7-HOST-02 extends it expand-only.
-// Inputs:  revision, status context, payloads (JSON, no secrets).
-// Outputs: seq numbers, unposted entries, run views.
-// Constraints: SQL lives only in this package; every write is one
-// transaction on the single writer connection.
+// Inputs: revision, status context, payloads (JSON, no secrets). Outputs: seq
+// numbers, unposted entries, run views. SQL lives only in this package; every
+// write is one transaction on the single writer connection.
 
 import (
 	"context"
@@ -71,25 +70,6 @@ func (s *Store) OutboxReady(ctx context.Context, revision, statusContext string,
 	})
 }
 
-// OutboxMayPost reports whether seq is at least the last posted seq. An older
-// seq is marked superseded and must not be posted.
-func (s *Store) OutboxMayPost(ctx context.Context, revision, statusContext string, seq int64) (bool, error) {
-	ok := true
-	err := s.write(ctx, func(tx *sql.Tx) error {
-		var last int64
-		if err := tx.QueryRowContext(ctx, "SELECT coalesce(max(seq),0) FROM outbox WHERE revision=? AND context=? AND state=?", revision, statusContext, OutboxPosted).Scan(&last); err != nil {
-			return err
-		}
-		if seq >= last {
-			return nil
-		}
-		ok = false
-		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?)", OutboxSuperseded, revision, statusContext, seq, OutboxReserved, OutboxPending)
-		return err
-	})
-	return ok, err
-}
-
 // Claim results.
 const (
 	ClaimOK         = iota // the caller may post
@@ -98,14 +78,13 @@ const (
 	ClaimBusy              // another process is posting this very seq
 )
 
-// claimTTL is how long a posting claim is trusted; a crashed poster's claim
-// older than this is taken over.
+// claimTTL: a posting claim older than this (crashed poster) is taken over.
 const claimTTL = 60 * time.Second
 
-// OutboxClaim takes the right to deliver seq, so that statuses of one
-// (revision, context) reach the host in seq order even across processes: it is
-// refused when a newer seq is posted or being posted (seq is marked
-// superseded) and told to wait while an older seq is mid-post.
+// OutboxClaim takes the right to deliver seq so statuses of one (revision,
+// context) reach the host in seq order across processes: refused when a newer
+// seq is posted or posting (seq is marked superseded), told to wait while an
+// older seq is mid-post.
 func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string, seq int64) (int, error) {
 	result := ClaimOK
 	err := s.write(ctx, func(tx *sql.Tx) error {
@@ -157,18 +136,26 @@ func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string
 
 // OutboxUnposted lists deliverable entries, oldest first.
 func (s *Store) OutboxUnposted(ctx context.Context) ([]OutboxEntry, error) {
-	rows, err := s.readers.QueryContext(ctx, "SELECT revision,context,seq,state,coalesce(payload_json,x''),created_at FROM outbox WHERE state=? OR (state=? AND claimed_at<=?) ORDER BY created_at,seq", OutboxPending, OutboxPosting, s.now().Add(-claimTTL).UnixNano())
+	return collect(ctx, s, func(r *sql.Rows) (e OutboxEntry, err error) {
+		err = r.Scan(&e.Revision, &e.Context, &e.Seq, &e.State, &e.Payload, &e.CreatedAt)
+		return
+	}, "SELECT revision,context,seq,state,coalesce(payload_json,x''),created_at FROM outbox WHERE state=? OR (state=? AND claimed_at<=?) ORDER BY created_at,seq", OutboxPending, OutboxPosting, s.now().Add(-claimTTL).UnixNano())
+}
+
+// collect runs a read query and scans every row.
+func collect[T any](ctx context.Context, s *Store, scan func(*sql.Rows) (T, error), query string, args ...any) ([]T, error) {
+	rows, err := s.readers.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []OutboxEntry
+	var out []T
 	for rows.Next() {
-		var e OutboxEntry
-		if err = rows.Scan(&e.Revision, &e.Context, &e.Seq, &e.State, &e.Payload, &e.CreatedAt); err != nil {
+		v, err := scan(rows)
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, e)
+		out = append(out, v)
 	}
 	return out, rows.Err()
 }
@@ -181,20 +168,10 @@ type RunJob struct {
 
 // PipelineJobs lists the jobs of a run in name order.
 func (s *Store) PipelineJobs(ctx context.Context, pipelineID string) ([]RunJob, error) {
-	rows, err := s.readers.QueryContext(ctx, "SELECT id,name,kind,status,required FROM job WHERE pipeline_id=? ORDER BY name", pipelineID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var out []RunJob
-	for rows.Next() {
-		var j RunJob
-		if err = rows.Scan(&j.ID, &j.Name, &j.Kind, &j.Status, &j.Required); err != nil {
-			return nil, err
-		}
-		out = append(out, j)
-	}
-	return out, rows.Err()
+	return collect(ctx, s, func(r *sql.Rows) (j RunJob, err error) {
+		err = r.Scan(&j.ID, &j.Name, &j.Kind, &j.Status, &j.Required)
+		return
+	}, "SELECT id,name,kind,status,required FROM job WHERE pipeline_id=? ORDER BY name", pipelineID)
 }
 
 // PipelineAttempts lists every attempt of a run, job then n.
@@ -210,37 +187,17 @@ func (s *Store) LostAttempts(ctx context.Context) ([]AttemptView, error) {
 // PendingCancels lists attempts of a run with a cancel intent that have not
 // reached a terminal state.
 func (s *Store) PendingCancels(ctx context.Context, pipelineID string) ([]string, error) {
-	rows, err := s.readers.QueryContext(ctx, "SELECT a.id FROM cancel_intent c JOIN attempt a ON a.id=c.attempt_id JOIN job j ON j.id=a.job_id WHERE j.pipeline_id=? AND a.state NOT IN ('passed','failed','cancelled') ORDER BY a.id", pipelineID)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var out []string
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out = append(out, id)
-	}
-	return out, rows.Err()
+	return collect(ctx, s, func(r *sql.Rows) (id string, err error) {
+		err = r.Scan(&id)
+		return
+	}, "SELECT a.id FROM cancel_intent c JOIN attempt a ON a.id=c.attempt_id JOIN job j ON j.id=a.job_id WHERE j.pipeline_id=? AND a.state NOT IN ('passed','failed','cancelled') ORDER BY a.id", pipelineID)
 }
 
 func (s *Store) attemptViews(ctx context.Context, query string, args ...any) ([]AttemptView, error) {
-	rows, err := s.readers.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var out []AttemptView
-	for rows.Next() {
-		var a AttemptView
-		if err = rows.Scan(&a.ID, &a.JobID, &a.N, &a.State, &a.Epoch, &a.FailureClass); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
+	return collect(ctx, s, func(r *sql.Rows) (a AttemptView, err error) {
+		err = r.Scan(&a.ID, &a.JobID, &a.N, &a.State, &a.Epoch, &a.FailureClass)
+		return
+	}, query, args...)
 }
 
 // PipelineByID returns one run; ok is false when it does not exist.
@@ -309,14 +266,14 @@ func (s *Store) RecordRunEvidence(ctx context.Context, id, pipelineID, revision,
 	})
 }
 
-// StrandedAttempt is a queued or finalizing attempt whose coordinator is gone.
+// StrandedAttempt is a queued or finalizing attempt of a gone coordinator.
 type StrandedAttempt struct {
 	ID, PipelineID, State string
 	Epoch                 int64
 }
 
-// StrandedAttempts lists queued and finalizing attempts of coordinators that
-// are stale on this boot (SweepStale only moves leased and running ones).
+// StrandedAttempts lists queued/finalizing attempts of stale coordinators
+// (SweepStale moves only leased and running ones).
 func (s *Store) StrandedAttempts(ctx context.Context, currentBoot string) ([]StrandedAttempt, error) {
 	stale, err := s.StaleCoordinators(ctx, currentBoot)
 	if err != nil {
