@@ -138,13 +138,18 @@ func badBytes(s, name string) error {
 		return reject(PathUTF8, name)
 	}
 	for _, r := range s {
-		// Cf covers the zero-width and bidi runes that HFS+ ignores in names
-		// (".g<ZWNJ>it" names ".git") and that disguise a name on screen.
-		if r < 0x20 || r == 0x7f || unicode.Is(unicode.Cf, r) {
+		if r < 0x20 || r == 0x7f || bidiOrBOM(r) {
 			return reject(PathControl, name)
 		}
 	}
 	return nil
+}
+
+// bidiOrBOM is true for the direction controls and the BOM: they reorder or
+// hide what a name shows. Other format runes (ZWNJ and ZWJ in Persian, Arabic
+// and emoji names) stay legal; isDotGit looks through them instead.
+func bidiOrBOM(r rune) bool {
+	return r == 0x200e || r == 0x200f || r == 0xfeff || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
 }
 
 // hasDrive is true for a Windows drive prefix. Any byte before the colon
@@ -156,6 +161,13 @@ func hasDrive(s string) bool { return len(s) >= 2 && s[1] == ':' }
 // or the NTFS short name "git~1". An artifact that carries one could plant a
 // repository config (core.fsmonitor) that runs on the next git command there.
 func isDotGit(c string) bool {
+	// HFS+ ignores some format runes in names, so ".g<ZWNJ>it" names ".git".
+	c = strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, c)
 	c = strings.ToLower(strings.TrimRight(c, ". "))
 	return c == ".git" || c == "git~1"
 }

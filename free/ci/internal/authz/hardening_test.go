@@ -28,20 +28,20 @@ func link(name, to string) authz.Entry {
 
 // The APFS alias chain: NFC and NFD spellings of one directory.
 func TestExtractor_UnicodeAliasWithSymlinkRefused(t *testing.T) {
-	nfc, nfd := "d/é", "d/é"
+	nfc, nfd := "d/\u00e9", "d/e\u0301"
 	chain := []authz.Entry{dir("d/"), link(nfc, ".."), link(nfd+"/l2", "../.."), file("l2/pwn")}
 	if err := admitAll(chain, authz.Limits{}); err == nil {
 		t.Fatal("alias chain admitted")
 	}
 	// order independence: the non-ASCII name first, the symlink after
-	if err := admitAll([]authz.Entry{file("é.txt"), link("l", "x")}, authz.Limits{}); err == nil {
+	if err := admitAll([]authz.Entry{file("\u00e9.txt"), link("l", "x")}, authz.Limits{}); err == nil {
 		t.Fatal("symlink after non-ASCII name admitted")
 	}
-	if err := admitAll([]authz.Entry{link("l", "é")}, authz.Limits{}); err == nil {
+	if err := admitAll([]authz.Entry{link("l", "\u00e9")}, authz.Limits{}); err == nil {
 		t.Fatal("non-ASCII link target admitted")
 	}
 	// non-ASCII names alone, and symlinks alone, stay legal
-	if err := admitAll([]authz.Entry{dir("d/"), file("d/é.txt")}, authz.Limits{}); err != nil {
+	if err := admitAll([]authz.Entry{dir("d/"), file("d/\u00e9.txt")}, authz.Limits{}); err != nil {
 		t.Fatalf("plain unicode refused: %v", err)
 	}
 	if err := admitAll([]authz.Entry{dir("d/"), link("d/l", "../x")}, authz.Limits{}); err != nil {
@@ -66,9 +66,18 @@ func TestArtifactPath_DotGit(t *testing.T) {
 }
 
 func TestArtifactPath_FormatRunesRefused(t *testing.T) {
-	for _, n := range []string{".g‌it/config", "a​b", "a‮b", "\xef\xbb\xbfa"} {
+	for _, n := range []string{".g\u200cit/config", "a\u202eb", "\xef\xbb\xbfa"} {
 		if _, err := authz.ArtifactPath(file(n), authz.Limits{}); err == nil {
 			t.Errorf("%q admitted", n)
+		}
+	}
+}
+
+// Format runes real names use (Persian ZWNJ, emoji ZWJ) stay legal.
+func TestArtifactPath_LegitFormatRunesAdmitted(t *testing.T) {
+	for _, n := range []string{"\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645.txt", "family\U0001F468\u200d\U0001F469.png"} {
+		if _, err := authz.ArtifactPath(file(n), authz.Limits{}); err != nil {
+			t.Errorf("%q refused: %v", n, err)
 		}
 	}
 }
