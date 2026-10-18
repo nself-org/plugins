@@ -61,6 +61,7 @@
     }
   ],
   "homepage": "https://nself.org/plugins",
+  "installable": false,
   "language": "go",
   "license": "free",
   "licenseType": "free",
@@ -125,6 +126,5 @@
     "email.delivered",
     "email.failed",
     "email.sent"
-  ],
-  "installable": false
+  ]
 }

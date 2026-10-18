@@ -41,7 +41,6 @@ func main() {
 	}
 	defer pool.Close()
 
-
 	// Build the default Loki shipper (free, always enabled when monitoring stack present).
 	var defaultShipper destinations.Shipper
 	if cfg.LokiURL != "" {

@@ -727,10 +727,6 @@ plugins:
     api_version: "1.0.0"
     deprecated_endpoints: []
 
-  - name: storage-transform
-    api_version: "1.0.0"
-    deprecated_endpoints: []
-
   - name: stream-gateway
     api_version: "1.0.0"
     deprecated_endpoints: []

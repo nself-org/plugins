@@ -35,3 +35,49 @@ deltas:
     to: "http://plugin-paypal:3071"
     owner_ref: P7-PLUG-45
     expires: 2026-12-31
+  # 2026-10-18 P7-PLUG-81: these six plugins had no compose fragment as v1 originals, so v1.4.12 generated no compose file
+  # for them; the converted twins ship one. Rows measured with `v14-oracle.sh --plugins` on the real tree.
+  # byok is not covered by `--plugins byok`: its v1 original declares status "alpha", which v1.4.12 refuses
+  # ("unreadable manifest ... skipped"), so list.txt also differs by that warning line, which a row cannot remove.
+  - slug: audit-analytics
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/audit-analytics/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/audit-analytics/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-81
+    expires: 2026-12-31
+  - slug: auth-enterprise
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/auth-enterprise/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/auth-enterprise/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-81
+    expires: 2026-12-31
+  - slug: byok
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/byok/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/byok/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-81
+    expires: 2026-12-31
+  - slug: siem
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/siem/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/siem/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-81
+    expires: 2026-12-31
+  - slug: sms
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/sms/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/sms/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-81
+    expires: 2026-12-31
+  - slug: tenant-controller
+    file: compose-files.txt
+    key: "/tmp/home/.nself/plugins/tenant-controller/docker-compose.plugin.yml"
+    from: "-"
+    to: "/tmp/home/.nself/plugins/tenant-controller/docker-compose.plugin.yml"
+    owner_ref: P7-PLUG-81
+    expires: 2026-12-31

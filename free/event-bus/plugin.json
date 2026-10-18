@@ -9,8 +9,8 @@
       "required": true
     },
     {
-      "description": "",
-      "name": "EVENT_BUS_PORT",
+      "description": "Listen address, default :8212",
+      "name": "LISTEN_ADDR",
       "required": false
     }
   ],
