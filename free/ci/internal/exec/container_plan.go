@@ -10,6 +10,7 @@ package exec
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,27 +99,46 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		stop()
 		err = coded("E613", "container run: "+err.Error())
 	}
-	e.cleanupPlanned(s, run)
+	if cerr := e.cleanupPlanned(s, run); cerr != nil && err == nil && code == 0 {
+		// only a clean run is turned into a failure (as for the host workspace removal): job-owned files are left on disk
+		err = coded("E613", "workspace cleanup helper failed: "+cerr.Error())
+	}
 	if err == nil && code == 125 { // the runtime itself failed (daemon, image pull, option), not the job
 		err = coded("E613", "container runtime failed to start the container (exit 125)")
 	}
 	return code, resourceReason(ctx, code, tail.String()), err
 }
 
-// cleanupPlanned runs the profile's cleanup command, best effort and time boxed; the
-// helper container is stopped and removed when the time box ends, so it never outlives the attempt.
-func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) {
+// cleanupPlanned runs the profile's cleanup command, time boxed; the helper container is
+// stopped and removed when the time box ends, so it never outlives the attempt. It returns
+// the reason the helper did not finish cleanly (nil when none is needed or it succeeded).
+func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) error {
 	cmd, err := s.Plan.Cleanup(run)
-	if err != nil || cmd == nil || checkContainerCommand(*cmd, run) != nil {
-		return
+	if err != nil {
+		return err
+	}
+	if cmd == nil {
+		return nil
+	}
+	if err := checkContainerCommand(*cmd, run); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), 30*time.Second)
 	defer cancel()
 	stop := containerStopper(cmd.Binary, flagValueOf(cmd.Args, "--name"), e.Grace)
 	local := Executor{Redactor: passThroughRedactor{}, Grace: e.Grace}
-	if _, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, stop, nil, ""); err != nil || ctx.Err() != nil {
+	code, err := local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, stop, nil, "")
+	if err != nil || ctx.Err() != nil {
 		stop()
+		if err == nil {
+			err = ctx.Err()
+		}
+		return err
 	}
+	if code != 0 {
+		return fmt.Errorf("exit %d", code)
+	}
+	return nil
 }
 
 // flagValueOf returns the value of `--name <v>` or `--name=<v>` in args, or "".

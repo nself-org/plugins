@@ -165,11 +165,18 @@ func (pl *planner) Plan(r exec.ContainerRun) (exec.ContainerCommand, error) {
 	return Build(pl.params(r))
 }
 
-// cleanupScript removes whatever the job UID created under the workspace mount.
-const cleanupScript = `chmod -R u+rwX /repo 2>/dev/null; rm -rf -- /repo/* /repo/.[!.]* /repo/..?* 2>/dev/null; true`
+// CleanupImage is the helper image that removes job-owned files. It runs instead of the
+// job image, which may have no sh (distroless) or a hostile one (D-0963). It is digest
+// pinned and mirrors images.d/ci-cleanup-helper.json; a test fails when they drift.
+const CleanupImage = "busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"
+
+// cleanupScript removes whatever the job UID created under the workspace mount. Its exit
+// status is the result, so exec can report a cleanup that did not finish.
+const cleanupScript = `chmod -R u+rwX /repo 2>/dev/null; rm -rf -- /repo/* /repo/.[!.]* /repo/..?*`
 
 func (pl *planner) Cleanup(r exec.ContainerRun) (*exec.ContainerCommand, error) {
 	r.Name += "-clean"
+	r.Image = CleanupImage
 	r.Command = []string{"-c", cleanupScript}
 	r.EnvFile, r.Workdir, r.CPU, r.MemoryMB, r.Mounts = "", "/repo", 0.5, 128, nil
 	p := pl.params(r)

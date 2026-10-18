@@ -326,3 +326,34 @@ func TestPlannedContainerMounts(t *testing.T) {
 		t.Fatalf("a read-write mount must be refused under the hardened profile: %+v", res)
 	}
 }
+
+// fakeRuntimeCleanupFails is a docker whose job run exits jobCode and whose cleanup
+// helper (the call that sets --entrypoint) always fails.
+func fakeRuntimeCleanupFails(t *testing.T, jobCode string) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$*\" in *--entrypoint*) echo helper failed >&2; exit 1;; esac\ncase \"$1\" in run) cat >/dev/null; exit " + jobCode + ";; esac\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// D-0963: a cleanup helper that fails on an otherwise clean run is an infra failure,
+// not a silent leak; a job that already failed keeps its own class.
+func TestPlannedCleanupFailureIsInfraOnACleanRun(t *testing.T) {
+	fakeRuntimeCleanupFails(t, "0")
+	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-cleanfail", hardPlanner{}))
+	var e *Error
+	if !errors.As(res.Err, &e) || e.Code != "E613" || res.Attempt.State == "passed" || res.Attempt.FailureClass != "infra" {
+		t.Fatalf("a failed cleanup helper must fail a clean run as infra: %+v", res)
+	}
+}
+
+func TestPlannedCleanupFailureKeepsAFailedJobsClass(t *testing.T) {
+	fakeRuntimeCleanupFails(t, "1")
+	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-cleanfail-job", hardPlanner{}))
+	if res.Err != nil || res.ExitCode != 1 || res.Attempt.FailureClass != "code" {
+		t.Fatalf("a failing job keeps its class when cleanup also fails: %+v", res)
+	}
+}

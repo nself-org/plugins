@@ -2,8 +2,12 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -205,5 +209,42 @@ func TestProfileLevelAndRegistry(t *testing.T) {
 	names, err := reg.List(context.Background(), "role=ci-ephemeral")
 	if err != nil || len(names) != 0 {
 		t.Fatalf("%v %v", names, err)
+	}
+}
+
+// D-0963: cleanup must not run in the job image (it may have no sh, or a hostile sh).
+func TestCleanupRunsInThePinnedHelperImageNotTheJobImage(t *testing.T) {
+	p := newProfile(&fakeRunner{info: map[string]string{"docker": dockerRootful}}, false)
+	spec, err := p.Wrap(exec.JobSpec{Network: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := exec.ContainerRun{Name: "nself-ci-x", Image: "gcr.io/distroless/static:nonroot", Workspace: "/w/x", Workdir: "/repo", Command: []string{"id"}, AttemptID: "x", CoordinatorID: "c", CPU: 1, MemoryMB: 64}
+	clean, err := spec.Plan.Cleanup(run)
+	if err != nil || clean == nil {
+		t.Fatalf("%v %v", clean, err)
+	}
+	var image string
+	for i, a := range clean.Args {
+		if a == "-c" && i > 0 { // the image is the argument before the sh script flag
+			image = clean.Args[i-1]
+		}
+	}
+	if image != CleanupImage {
+		t.Fatalf("cleanup image %q, want the pinned helper %q (job image %q must never run cleanup)", image, CleanupImage, run.Image)
+	}
+}
+
+func TestCleanupHelperImageIsDigestPinnedAndMatchesImagesD(t *testing.T) {
+	if !regexp.MustCompile(`^[a-z0-9][^@\s]*:[^@:/\s]+@sha256:[0-9a-f]{64}$`).MatchString(CleanupImage) {
+		t.Fatalf("CleanupImage %q is not tag@sha256 pinned", CleanupImage)
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "images.d", "ci-cleanup-helper.json"))
+	if err != nil {
+		t.Fatalf("the helper image needs an images.d fragment: %v", err)
+	}
+	var frag struct{ Image string }
+	if err := json.Unmarshal(data, &frag); err != nil || frag.Image != CleanupImage {
+		t.Fatalf("images.d fragment image %q != CleanupImage %q (%v)", frag.Image, CleanupImage, err)
 	}
 }
