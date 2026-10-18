@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -367,8 +368,14 @@ func TestStream(t *testing.T) {
 			}
 			schemaOK(t, l.Data["evidence"])
 		}
-		if strings.Contains(raw, "true") && str(l.Data, "type") == "log" {
-			t.Fatalf("a log record carried text: %s", raw)
+		if str(l.Data, "type") == "log" {
+			for k := range l.Data {
+				switch k {
+				case "type", "seq", "ts", "run_id", "job", "attempt_id", "bytes", "ref", "reason":
+				default:
+					t.Fatalf("a log record carries %q (only size and reason may travel): %s", k, raw)
+				}
+			}
 		}
 	}
 	for _, want := range []string{"queued", "planned", "started", "check_result", "finished", "result"} {
@@ -390,6 +397,23 @@ func TestStream(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(last[len(last)-1]), &end); err != nil || code != 0 || end.Command != "ci evidence verify" || str(end.Data, "type") != "result" {
 		t.Fatalf("verify stream: exit %d %v\n%s", code, err, out)
+	}
+	prev = 0
+	for i, raw := range last {
+		var l struct {
+			Data map[string]any `json:"data"`
+		}
+		if err := output.CheckEnvelope([]byte(raw)); err != nil || json.Unmarshal([]byte(raw), &l) != nil {
+			t.Fatalf("verify stream line %d: %v\n%s", i, err, raw)
+		}
+		if seq, _ := l.Data["seq"].(float64); i < len(last)-1 && seq != prev+1 {
+			t.Fatalf("verify stream line %d: seq %v after %v", i, seq, prev)
+		} else if i < len(last)-1 {
+			prev = seq
+		}
+		if i == 0 && str(l.Data, "type") != "queued" {
+			t.Fatalf("verify stream starts with %q, want queued", str(l.Data, "type"))
+		}
 	}
 	rep := end.Data["evidence"].(map[string]any)
 	if str(rep, "revision") != r.head() || rep["quarantined"] != false || len(last) < 4 {
@@ -445,5 +469,35 @@ func TestEvidenceAsksRemoteResolversFirst(t *testing.T) {
 	}
 	if _, code = r.ciJSON("evidence", "no-such-run", "--json"); code != 1 {
 		t.Fatalf("unknown run: exit %d", code)
+	}
+}
+
+// A stream consumer that goes away must not kill the process: the closed pipe
+// returns EPIPE, the emitter stops and the temporary worktree is still removed.
+func TestStreamSurvivesAClosedPipe(t *testing.T) {
+	if os.Getenv("EV_PIPE_HELPER") == "1" {
+		os.Exit(runV15(strings.Fields(os.Getenv("EV_PIPE_ARGS"))))
+	}
+	r := newEvRepo(t)
+	if _, _, code := r.ci("--no-status", "--json"); code != 0 {
+		t.Fatalf("setup run: exit %d", code)
+	}
+	r.commit("go.sum", "h1:two\n") // verify must run in a temporary worktree
+	rd, wr, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = rd.Close()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStreamSurvivesAClosedPipe$")
+	cmd.Env = append(os.Environ(), "EV_PIPE_HELPER=1", "EV_PIPE_ARGS=evidence verify "+r.head()+" --json --stream")
+	cmd.Stdout = wr
+	runErr := cmd.Run()
+	_ = wr.Close()
+	var ee *exec.ExitError
+	if errors.As(runErr, &ee) && !ee.Exited() {
+		t.Fatalf("the process was killed by a signal: %v", runErr)
+	}
+	if left := r.leftovers(); len(left) != 0 {
+		t.Fatalf("temporary worktrees left behind: %v", left)
 	}
 }

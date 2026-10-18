@@ -10,6 +10,7 @@ package run
 // dirty or there is no commit; excerpts are bounded; no secret is read.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -129,4 +130,13 @@ func clip(s string, n int) string {
 		return s
 	}
 	return s[len(s)-n:]
+}
+
+// beginEvidence reads the inputs and the binding before any job can change
+// them. A nil builder or a panicking one yields nil (no evidence document).
+func (c *Coordinator) beginEvidence(ctx context.Context, h Hooks, rev Revision) (begin any) {
+	if h.Evidence != nil {
+		_ = guard("evidence builder", func() error { begin = h.Evidence.Begin(ctx, c.Opts.Root, rev, c.capture()); return nil })
+	}
+	return begin
 }

@@ -158,7 +158,8 @@ func (env Env) held(ctx context.Context, rev string, current model.InputDigests)
 		policy = p
 	}
 	for _, d := range docs {
-		if repo == "" || d.Evidence.RepoID != repo || (env.Policy != nil && d.Evidence.PolicyDigest != policy) {
+		// only a finished, full-selection verdict answers: a cancelled, errored or affected-only run says nothing about rev
+		if (d.Evidence.Result != "pass" && d.Evidence.Result != "fail") || d.Evidence.Selection.Mode != "full" || repo == "" || d.Evidence.RepoID != repo || (env.Policy != nil && d.Evidence.PolicyDigest != policy) {
 			continue
 		}
 		if v := Judge(d.Evidence, rev, &current); v.Exit == ExitOK || v.Exit == ExitFails {

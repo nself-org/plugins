@@ -23,7 +23,7 @@ func sampleEvidence() model.Evidence {
 		InputDigests: sampleInputs(), WorktreeState: "clean", Binding: model.Binding{State: "bound"},
 		Runner:   model.RunnerRef{ID: "local", Provider: "local", Platform: "linux/amd64", Isolation: "process"},
 		Producer: model.Producer{Kind: "coordinator-recorded", Version: "1"}, ToolVersions: map[string]string{},
-		Checks: []model.Check{{ID: "unit", JobID: "unit", Kind: "test", Tool: "t", Required: true, Substantive: true, Result: "pass"}},
+		Checks:    []model.Check{{ID: "unit", JobID: "unit", Kind: "test", Tool: "t", Required: true, Substantive: true, Result: "pass"}},
 		Artifacts: []model.Artifact{}, Retries: []model.Retry{}, Selection: model.Selection{Mode: "full", Reason: "selection.no_base", Digest: "d"},
 		Result: "pass", Counts: model.Counts{Pass: 1, Total: 1}, Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},
 	}

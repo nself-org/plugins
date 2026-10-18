@@ -2,10 +2,12 @@ package evidence
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
@@ -213,5 +215,31 @@ func TestShow(t *testing.T) {
 	env.Store = nil
 	if _, err = Show(ctx, env, "latest"); err == nil {
 		t.Fatal("no history must be an error")
+	}
+}
+
+// A run cut short (Ctrl-C) leaves a stored document, but it answers nothing:
+// verify runs the pipeline instead of returning it for ever.
+func TestVerifyRevisionIgnoresACancelledRun(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	dir, sha := newRepo(t, baseFiles)
+	r := &rig{t: t, dir: dir, home: t.TempDir(), policy: "pol-1", plan: buildPlan(t, jobsOf("sleep 60"))}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(3 * time.Second); cancel() }()
+	c := &cirun.Coordinator{Opts: cirun.Options{Root: dir, Home: r.home, NoStatus: true}, Plan: r.plan, ConfigDigest: "cfg",
+		Hooks: cirun.Hooks{Policy: fixedPolicy(r.policy)}, Out: io.Discard, Capacity: roomy, Poll: 10 * time.Millisecond}
+	res, err := c.Run(ctx)
+	ok(t, err)
+	if res.Summary.Doc.Result != "cancelled" {
+		t.Fatalf("setup: the run ended %q, want cancelled", res.Summary.Doc.Result)
+	}
+	st, err := cirun.OpenStore(filepath.Join(r.home, "state.db"))
+	ok(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	r.st, r.plan = st, buildPlan(t, jobsOf("true"))
+	v, ran, err := VerifyRevision(context.Background(), r.env(), sha)
+	ok(t, err)
+	if !ran || v.Exit != ExitOK || r.runs != 1 {
+		t.Fatalf("the cancelled run was returned: ran=%v runs=%d %+v", ran, r.runs, v)
 	}
 }

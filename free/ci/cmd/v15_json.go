@@ -13,7 +13,9 @@ package main
 
 import (
 	"io"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
 
@@ -40,6 +42,11 @@ func (s *streamSession) emitter(runID string) *events.Emitter {
 	return s.em
 }
 
+// ignoreBrokenPipe makes a write to a closed stdout return EPIPE instead of
+// killing the process, so the events emitter stops quietly and deferred
+// cleanup (the verify worktree) still runs when a stream consumer goes away.
+func ignoreBrokenPipe() { signal.Ignore(syscall.SIGPIPE) }
+
 // activeSession, when set, is the stream the "ci-events" renderer writes to.
 var (
 	activeMu      sync.Mutex
@@ -48,9 +55,13 @@ var (
 
 func init() {
 	cirun.RegisterRenderer("json", func(w io.Writer, o cirun.Options) cirun.Renderer {
+		if o.Stream {
+			ignoreBrokenPipe()
+		}
 		return &jsonRenderer{w: w, stream: o.Stream, sess: &streamSession{w: w, command: "ci"}}
 	})
 	cirun.RegisterRenderer("ci-events", func(w io.Writer, o cirun.Options) cirun.Renderer {
+		ignoreBrokenPipe()
 		activeMu.Lock()
 		defer activeMu.Unlock()
 		if activeSession == nil {

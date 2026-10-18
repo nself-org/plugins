@@ -201,6 +201,7 @@ func runVerify(args []string) int {
 	const cmd = "ci evidence verify"
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
+	ignoreBrokenPipe() // a vanished consumer must not skip the worktree cleanup
 	root, err := evidenceRoot(f.repo)
 	var st *store.Store
 	if err == nil {

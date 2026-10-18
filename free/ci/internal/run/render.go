@@ -86,7 +86,7 @@ func RegisterRenderer(name string, f func(io.Writer, Options) Renderer) {
 	renderers[name] = f
 }
 
-// stampRun fills RunID on every event a renderer receives.
+// stamped fills RunID on every event a renderer receives.
 type stamped struct {
 	Renderer
 	runID string
@@ -94,7 +94,13 @@ type stamped struct {
 
 func (s stamped) Event(e Event) { e.RunID = s.runID; s.Renderer.Event(e) }
 
-func stampRun(r Renderer, runID string) Renderer { return stamped{r, runID} }
+// stampRun wraps r so every event carries runID, and announces the run: the
+// first event of a stream is always "queued" (contract:ci.events).
+func stampRun(r Renderer, runID string) Renderer {
+	s := stamped{r, runID}
+	s.Event(Event{Type: "queued"})
+	return s
+}
 
 // NewRenderer builds the renderer o selects: JSON when --json and a JSON
 // renderer is registered, otherwise human.
