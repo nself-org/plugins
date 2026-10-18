@@ -21,7 +21,7 @@ func chooseCommit(ctx context.Context, run Runner, root string, b Branch, pin st
 	if pin == "" || b.Tip == "" {
 		return b.Tip, nil
 	}
-	if pin == b.Tip || reachable(ctx, run, root, pin, "refs/remotes/origin/"+b.Name) {
+	if pin == b.Tip || reachable(ctx, run, root, pin, b.Tip) {
 		return pin, nil
 	}
 	return b.Tip, []Ignored{{Key: "pinned_commit", Scope: SourceProtectedBranch, Reason: "E672 stored pin is not reachable from origin/" + b.Name + "; the fetched tip is used"}}

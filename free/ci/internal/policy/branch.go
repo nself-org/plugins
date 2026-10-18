@@ -109,25 +109,6 @@ func (g gitRunner) defaultBranch(ctx context.Context) (name string, assumed bool
 	return name, false, nil
 }
 
-// hasOrigin says whether the repository has an origin. A directory that is not
-// a repository has none; a repository whose remotes cannot be listed is an
-// error, never "no origin".
-func (g gitRunner) hasOrigin(ctx context.Context) (bool, error) {
-	out, ok := g.git(ctx, "remote")
-	if !ok {
-		if _, inside := g.git(ctx, "rev-parse", "--git-dir"); inside {
-			return false, refuse("cannot list the remotes of %s", g.root)
-		}
-		return false, nil
-	}
-	for _, r := range strings.Fields(out) {
-		if r == "origin" {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // readBranch fetches the default branch and reads its policy at the tip.
 func readBranch(ctx context.Context, run Runner, root string) (Branch, error) {
 	g := gitRunner{run: run, root: root}
@@ -172,6 +153,9 @@ func policyAt(ctx context.Context, run Runner, root, sha string) (map[string]jso
 		return nil, refuse("cannot list %s at %s", config.FileName, sha[:12])
 	}
 	if listed == "" {
+		if err := g.configDirIsPlain(ctx, sha); err != nil {
+			return nil, err
+		}
 		return nil, nil // the commit has no config: no policy
 	}
 	if !strings.HasPrefix(listed, "100644 blob ") && !strings.HasPrefix(listed, "100755 blob ") {
@@ -242,6 +226,9 @@ func flatten(policy map[string]any) (map[string]json.RawMessage, error) {
 // worktreePolicy reads the `policy:` block of dir's .nself/ci.yaml: the
 // revision scope, which may only tighten.
 func worktreePolicy(dir string) (map[string]json.RawMessage, error) {
+	if err := worktreeDirIsPlain(dir); err != nil {
+		return nil, err
+	}
 	loaded, err := config.Load(filepath.Join(dir, config.FileName))
 	if err != nil {
 		if isNotExist(err) {
