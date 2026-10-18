@@ -1,5 +1,18 @@
 # Donorbox Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install donorbox` |
+| **Requirements** | nSelf >=0.9.9 |
+
+<!-- END GENERATED:catalog -->
+
 Complete Donorbox donation data integration for nself. Syncs campaigns, donors, donations, recurring plans, events, and tickets to PostgreSQL with webhook support and cross-plugin references to Stripe and PayPal.
 
 ---

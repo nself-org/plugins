@@ -1,6 +1,20 @@
 # AI-Studio Plugin
 
-> Bridges a local nSelf instance to Google AI Studio over a secure Cloudflare Tunnel. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install ai-studio` |
+| **Commands** | `nself ai-studio` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Bridges a local nSelf instance to Google AI Studio over a secure Cloudflare Tunnel.
 
 ## Install
 

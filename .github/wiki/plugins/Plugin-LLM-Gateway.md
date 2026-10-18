@@ -1,6 +1,19 @@
 # Plugin LLM Gateway Plugin
 
-> ClawDE-facing LLM gateway: per-tenant token quota, Redis response caching, session context injection, and SSRF guard over nself-ai-gateway (port 3761). **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install plugin-llm-gateway` |
+| **Requirements** | nSelf >=1.1.1 |
+
+<!-- END GENERATED:catalog -->
+
+> ClawDE-facing LLM gateway: per-tenant token quota, Redis response caching, session context injection, and SSRF guard over nself-ai-gateway (port 3761).
 
 ## Install
 

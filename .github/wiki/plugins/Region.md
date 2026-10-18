@@ -1,6 +1,20 @@
 # Region Plugin
 
-> Adds, inspects, and promotes replica regions for multi-region deployments. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install region` |
+| **Commands** | `nself region` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Adds, inspects, and promotes replica regions for multi-region deployments.
 
 ## Install
 

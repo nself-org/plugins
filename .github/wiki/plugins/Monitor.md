@@ -1,6 +1,20 @@
 # Monitor Plugin
 
-> Keeps the bundled Grafana dashboards current with one upgrade command. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install monitor` |
+| **Commands** | `nself monitor` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Keeps the bundled Grafana dashboards current with one upgrade command.
 
 ## Install
 

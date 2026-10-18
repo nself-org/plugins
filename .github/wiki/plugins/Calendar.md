@@ -1,5 +1,18 @@
 # Calendar Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Licensed, in the Family Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.1.2 |
+| **Install** | `nself plugin install calendar` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 Complete calendar and event management with recurring events (RRULE), iCal feed generation, RSVP tracking, attendee check-in, availability checking, and multi-account support.
 
 | Property | Value |

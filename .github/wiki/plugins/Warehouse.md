@@ -1,6 +1,19 @@
 # Warehouse Plugin
 
-> Data warehouse sync, exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install warehouse` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Data warehouse sync, exports nself table data to BigQuery, Snowflake, or Redshift on a configurable schedule.
 
 ## Install
 

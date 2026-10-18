@@ -1,5 +1,18 @@
 # LiveKit
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Licensed, in the Chat Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.1.3 |
+| **Install** | `nself plugin install livekit` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 LiveKit voice/video infrastructure - room management, participant tracking, recording/egress, quality monitoring.
 
 ## Table of Contents

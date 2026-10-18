@@ -1,6 +1,20 @@
 # K8s Plugin
 
-> Installs and upgrades nSelf on any Kubernetes cluster through the official Helm chart. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | planned ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install k8s` |
+| **Commands** | `nself k8s`: `backup`, `install`, `restore`, `status`, `uninstall`, `upgrade`, `values` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Installs and upgrades nSelf on any Kubernetes cluster through the official Helm chart.
 
 ## Install
 

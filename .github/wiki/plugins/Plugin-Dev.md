@@ -1,6 +1,20 @@
 # Plugin Dev Plugin
 
-> Plugin author tools: scaffold, link, run with hot reload, debug and test a plugin under development. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.7 |
+| **Install** | `nself plugin install plugin-dev` |
+| **Commands** | `nself plugin-dev`: `debug`, `dev`, `init`, `link`, `new`, `test`, `unlink` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Plugin author tools: scaffold, link, run with hot reload, debug and test a plugin under development.
 
 ## Install
 

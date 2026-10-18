@@ -1,6 +1,20 @@
 # Soak Plugin
 
-> Aborts an in-progress soak test and rolls the deployment back to its prior version. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install soak` |
+| **Commands** | `nself soak` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Aborts an in-progress soak test and rolls the deployment back to its prior version.
 
 ## Install
 

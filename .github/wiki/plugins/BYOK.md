@@ -1,6 +1,19 @@
 # BYOK Plugin
 
-> Bring Your Own Key (BYOK) per-tenant encryption. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | experimental ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install byok` |
+| **Requirements** | nSelf >=1.0.9 |
+
+<!-- END GENERATED:catalog -->
+
+> Bring Your Own Key (BYOK) per-tenant encryption.
 
 ## Install
 

@@ -1,5 +1,18 @@
 # Audit Log Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install audit-log` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 Append-only audit log for security-relevant events: authentication, privilege changes, secret access, and plugin install/uninstall. Queryable from Admin with filters by event type, actor, severity, and time range.
 
 | Property | Value |

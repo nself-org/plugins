@@ -1,5 +1,19 @@
 # Webhooks Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install webhooks` |
+| **Commands** | `nself webhooks` |
+| **Requirements** | nSelf >=0.9.9 |
+
+<!-- END GENERATED:catalog -->
+
 Outbound webhook delivery service with retry logic, HMAC signing, and dead-letter queue for nself. Reliably deliver events from your application to external endpoints with automatic retries and comprehensive delivery tracking.
 
 ---

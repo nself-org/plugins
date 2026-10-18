@@ -1,6 +1,19 @@
 # Cron Plugin
 
-> Register jobs with standard cron syntax and dispatch them as signed HTTP callbacks. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) and Licensed, in the Claw Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | free: 1.2.6; licensed: 1.1.2 |
+| **Install** | `nself plugin install cron` |
+| **Requirements** | free: nSelf >=0.9.9; licensed: nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Register jobs with standard cron syntax and dispatch them as signed HTTP callbacks.
 
 ## Install
 

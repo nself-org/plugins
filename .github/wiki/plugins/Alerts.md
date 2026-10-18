@@ -1,6 +1,20 @@
 # Alerts Plugin
 
-> Operate Prometheus alert rules and Alertmanager silences without leaving the terminal. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install alerts` |
+| **Commands** | `nself alerts` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Operate Prometheus alert rules and Alertmanager silences without leaving the terminal.
 
 ## Install
 

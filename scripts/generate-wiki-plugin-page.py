@@ -1,14 +1,28 @@
 #!/usr/bin/env python3
-"""Generate a free-plugin wiki page from registry.json + <plugin>/plugin.json.
+"""Maintain one generated catalog region on every plugin wiki home page.
 
-Follows the T04-wiki-plugin-free.md template (nself/.claude/docs/templates/).
-Usage: scripts/generate-wiki-plugin-page.py <plugin-key> [<plugin-key> ...]
-Writes .github/wiki/plugins/<Title-Case-Name>.md for each key, skipping any
-page that already exists (never overwrites without --force).
+Reads catalog.json (the plugin catalogue, contract plugins.catalog v1) and, for
+every slug, owns only this region directly under the H1 of
+.github/wiki/plugins/<Title>.md:
 
-Field sources, in order: free/<key>/plugin.json, then registry.json for any
-field the manifest omits. No field is invented -- if a section has nothing
-to say, it is omitted per the template's "if applicable" rule.
+    <!-- BEGIN GENERATED:catalog -->
+    ...
+    <!-- END GENERATED:catalog -->
+
+Authored text outside the region is never touched, with one exception: the old
+generator's fixed "**Free — MIT licensed.**" phrase is removed. A missing page
+is created as H1 + region. A tier pair (the same slug in the free and licensed
+tiers) shares one page.
+
+Usage:
+  scripts/generate-wiki-plugin-page.py --all            write every page
+  scripts/generate-wiki-plugin-page.py --all --check    fail on a stale region,
+                                                        a missing page, an orphan
+                                                        page or a surface ceiling
+  scripts/generate-wiki-plugin-page.py <slug> [<slug>]  write just those pages
+
+Config: scripts/wiki-plugin-pages.yaml (title overrides, index_pages, surface
+ceilings). Python 3 standard library plus PyYAML. Output is deterministic.
 """
 import argparse
 import json
@@ -16,316 +30,266 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import yaml
 
-# Title-Case-With-Hyphens overrides for tokens that are acronyms or proper
-# nouns, established by the 85 pages already committed to the wiki (e.g.
-# AI-CLI.md, GitHub-Runner.md, Family-GEDCOM.md, MLflow.md).
-TOKEN_OVERRIDES = {
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BEGIN = "<!-- BEGIN GENERATED:catalog -->"
+END = "<!-- END GENERATED:catalog -->"
+NOTE = "<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->"
+OLD_PHRASE = re.compile(r" ?\*\*Free — MIT licensed\.\*\*")
+MANIFEST_URL = "https://github.com/nself-org/cli/wiki/Plugin-Manifest"
+PAGES_DIR = os.path.join(".github", "wiki", "plugins")
+
+# Title-Case-With-Hyphens tokens that are acronyms or proper nouns, matching
+# the pages already committed (AI-CLI.md, GitHub-Runner.md, Family-GEDCOM.md).
+TOKENS = {
     "ai": "AI", "cli": "CLI", "cdn": "CDN", "ci": "CI", "cms": "CMS",
     "ddns": "DDNS", "dlq": "DLQ", "dr": "DR", "e2ee": "E2EE", "epg": "EPG",
     "gdpr": "GDPR", "k8s": "K8s", "mdns": "MDNS", "tmdb": "TMDB",
     "vpn": "VPN", "waf": "WAF", "gedcom": "GEDCOM", "github": "GitHub",
-    "paypal": "PayPal", "mlflow": "MLflow",
-    # new tokens for this ticket's 44-page batch
-    "byok": "BYOK", "cdc": "CDC", "crdt": "CRDT", "hipaa": "HIPAA",
-    "siem": "SIEM", "sms": "SMS", "pdf": "PDF", "pty": "PTY",
-    "llm": "LLM", "v8": "V8", "nself": "nSelf",
+    "paypal": "PayPal", "mlflow": "MLflow", "byok": "BYOK", "cdc": "CDC",
+    "crdt": "CRDT", "hipaa": "HIPAA", "siem": "SIEM", "sms": "SMS",
+    "pdf": "PDF", "pty": "PTY", "llm": "LLM", "v8": "V8", "nself": "nSelf",
     "familysearch": "FamilySearch", "myheritage": "MyHeritage",
     "wikitree": "WikiTree", "clawde": "ClawDE", "linkedin": "LinkedIn",
+    "csam": "CSAM", "rum": "RUM", "slo": "SLO", "saas": "SaaS", "mcp": "MCP",
 }
 
-# Small, honest lookup of env-var descriptions already established across
-# existing pages (Audit-Log.md, AI-CLI.md, etc.) -- never invented, only
-# reused where the same var name already has a documented meaning.
-KNOWN_ENV_DESC = {
-    "DATABASE_URL": "PostgreSQL connection string",
-    "PLUGIN_INTERNAL_SECRET": "Shared secret for plugin-to-plugin HTTP calls (`X-Internal-Token` header)",
-    "HASURA_GRAPHQL_ADMIN_SECRET": "Hasura admin secret (for Hasura metadata registration)",
-    "PORT": "HTTP server port",
-    "BIND_ADDRESS": "Bind address for the HTTP server",
-    "NSELF_PLUGIN_LICENSE_KEY": "nSelf plugin license key",
-    "NSELF_DB_URL": "PostgreSQL connection string",
-    "NSELF_LICENSE_KEY": "nSelf license key",
-}
 
-BANNED_WORDS = [
-    "powerful", "robust", "comprehensive", "seamless", "seamlessly",
-    "leverage", "cutting-edge", "state-of-the-art", "best-in-class",
-    "revolutionary", "game-changing", "world-class",
-]
+class Problem(Exception):
+    """A problem found by --check (or a page that cannot be edited)."""
 
 
-def title_token(tok: str) -> str:
-    return TOKEN_OVERRIDES.get(tok.lower(), tok[:1].upper() + tok[1:].lower())
+def load_config(path):
+    cfg = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh) or {}
+    cfg.setdefault("titles", {})
+    cfg.setdefault("index_pages", [])
+    cfg.setdefault("surface_ceilings", {})
+    return cfg
 
 
-def display_filename(key: str) -> str:
-    return "-".join(title_token(t) for t in key.split("-"))
+def page_title(slug, cfg):
+    over = cfg["titles"].get(slug)
+    if over:
+        return over
+    return "-".join(TOKENS.get(t.lower(), t[:1].upper() + t[1:].lower()) for t in slug.split("-"))
 
 
-def display_name(key: str) -> str:
-    return " ".join(title_token(t) for t in key.split("-"))
+def group_by_slug(catalog):
+    """slug -> entries, free tier first (a tier pair shares one page)."""
+    out = {}
+    for entry in catalog["plugins"]:
+        out.setdefault(entry["slug"], []).append(entry)
+    for entries in out.values():
+        entries.sort(key=lambda e: (e["tier"] != "free", e["tier"]))
+    return out
 
 
-def strip_em_dash(text: str) -> str:
-    """Replace em-dash connectors with a comma per brand compliance (no em-dash)."""
-    if not text:
-        return text
-    text = re.sub(r"\s+—\s+", ", ", text)
-    text = text.replace("—", ",")
-    return text
+def _requires(entry):
+    req = entry.get("requires") or {}
+    parts = []
+    for key in sorted(req):
+        val = req[key]
+        if isinstance(val, (list, tuple)):
+            val = ", ".join(str(v) for v in val)
+        parts.append(f"{'nSelf' if key == 'nself' else key.replace('_', ' ')} {val}")
+    return "; ".join(parts)
 
 
-def sentences(text: str):
-    text = text.strip()
-    parts = re.split(r"(?<=[.!])\s+", text)
-    return [p for p in parts if p]
+def _sub_names(commands):
+    names = []
+    for sub in (commands or {}).get("subcommands") or []:
+        names.append(sub["name"] if isinstance(sub, dict) else str(sub))
+    return names
 
 
-def _rows_from_dict_of_lists(d: dict, default_port):
-    """Handle {required: [...], optional: [...] | {name: default}}."""
-    rows = []
-    for name in d.get("required", []) or []:
-        rows.append((name, True, "-", KNOWN_ENV_DESC.get(name, "-")))
-    opt = d.get("optional", [])
-    if isinstance(opt, dict):
-        for name, default in opt.items():
-            if not default and (name.endswith("_PORT") or name == "PORT"):
-                default = default_port or ""
-            rows.append((name, False, str(default) if default else "-", KNOWN_ENV_DESC.get(name, "-")))
-    else:
-        for name in opt or []:
-            default = str(default_port) if default_port and (name.endswith("_PORT") or name == "PORT") else "-"
-            if any(s in name for s in ("SECRET", "KEY", "PASSWORD", "TOKEN")):
-                default = "-"
-            rows.append((name, False, default, KNOWN_ENV_DESC.get(name, "-")))
-    return rows
+def _licence(entry, bundles):
+    if entry["tier"] == "free":
+        return "Free (MIT)"
+    shown = [bundles[b]["display"] if b in bundles else b for b in entry.get("bundles") or []]
+    return "Licensed, in the " + ", ".join(shown) if shown else "Licensed"
 
 
-def normalize_env_vars(pj: dict):
-    """Return list of (name, required(bool), default, description).
+def render_region(entries, catalog):
+    """The generated region for one slug; no source links for licensed entries."""
+    bundles = catalog.get("bundles") or {}
+    slug = entries[0]["slug"]
+    pair = len(entries) > 1
 
-    plugin.json in this repo uses at least seven different shapes for its
-    env-var block across the plugins authored here -- normalize every one
-    seen in the free/ tree rather than assume a single canonical schema:
-    - `env`: [{key, required, default, description}]  (e.g. plugin-pty)
-    - `env`: {required: [...], optional: {name: default}}  (nself-sync, nself-vault)
-    - `env`: {NAME: default_value}  (content-safety)
-    - `envVars`: [{name, required, default, description}]  (e.g. auth-enterprise)
-    - `envVars`: {required: [...], optional: [...]}  (most plugins)
-    - `env_vars`: [name, ...]  (e.g. nself-pdf, nself-scan)
-    - `env_required` / `env_optional`: [name, ...]  (e.g. plugin-gauth)
-    """
-    default_port = pj.get("port") or (pj.get("config") or {}).get("defaultPort")
+    def per_tier(fn):
+        vals = [fn(e) for e in entries]
+        if not pair or len(set(vals)) == 1:
+            return vals[0]
+        return "; ".join(f"{e['tier']}: {v}" for e, v in zip(entries, vals))
 
-    env = pj.get("env")
-    if isinstance(env, list):
-        rows = []
-        for e in env:
-            name = e.get("key", "")
-            required = bool(e.get("required"))
-            default = "-" if required else (str(e.get("default", "")) or "-")
-            desc = e.get("description") or KNOWN_ENV_DESC.get(name, "-")
-            rows.append((name, required, default, desc))
-        return rows
-    if isinstance(env, dict):
-        if "required" in env or "optional" in env:
-            return _rows_from_dict_of_lists(env, default_port)
-        # flat {NAME: default_value}
-        return [
-            (name, not bool(default), str(default) if default else "-", KNOWN_ENV_DESC.get(name, "-"))
-            for name, default in env.items()
-        ]
-
-    ev = pj.get("envVars")
-    if isinstance(ev, list):
-        rows = []
-        for e in ev:
-            name = e.get("name", "")
-            required = bool(e.get("required"))
-            default = "-" if required else (str(e.get("default", "")) or "-")
-            desc = e.get("description") or KNOWN_ENV_DESC.get(name, "-")
-            rows.append((name, required, default, desc))
-        return rows
-    if isinstance(ev, dict):
-        return _rows_from_dict_of_lists(ev, default_port)
-
-    ev_vars = pj.get("env_vars")
-    if isinstance(ev_vars, list):
-        rows = []
-        for name in ev_vars:
-            default = str(default_port) if default_port and (name.endswith("_PORT") or name == "PORT") else "-"
-            rows.append((name, False, default, KNOWN_ENV_DESC.get(name, "-")))
-        return rows
-
-    if pj.get("env_required") or pj.get("env_optional"):
-        return _rows_from_dict_of_lists(
-            {"required": pj.get("env_required", []), "optional": pj.get("env_optional", [])},
-            default_port,
-        )
-
-    return []
+    rows = [
+        ("Licence", " and ".join(_licence(e, bundles) for e in entries)),
+        ("Maturity", per_tier(lambda e: e["maturity"]) + f" ([maturity levels]({MANIFEST_URL}))"),
+        ("Version", per_tier(lambda e: e["version"])),
+        ("Install", f"`nself plugin install {slug}`"),
+    ]
+    for entry in entries:
+        cmds = entry.get("commands")
+        if cmds:
+            subs = _sub_names(cmds)
+            text = f"`nself {cmds['command']}`"
+            if subs:
+                text += ": " + ", ".join(f"`{s}`" for s in subs)
+            rows.append(("Commands", text))
+            break
+    req = per_tier(_requires)
+    if req:
+        rows.append(("Requirements", req))
+    docs = next((e["docs_url"] for e in entries if e.get("docs_url")), None)
+    if docs:
+        rows.append(("Docs", f"[{docs}]({docs})"))
+    lines = [BEGIN, NOTE, "", "| Field | Value |", "|---|---|"]
+    lines += [f"| **{k}** | {v} |" for k, v in rows]
+    lines += ["", END]
+    return "\n".join(lines)
 
 
-def render(key: str, pj: dict, registry_entry: dict) -> str:
-    name = pj.get("name", key)
-    disp = display_name(key)
-    version = pj.get("version") or registry_entry.get("version") or "1.0.0"
-    description = strip_em_dash(pj.get("description") or registry_entry.get("description") or "")
-    category = pj.get("category") or registry_entry.get("category") or ""
-    tags = pj.get("tags") or registry_entry.get("tags") or []
-    port = pj.get("port") or (pj.get("config") or {}).get("defaultPort")
-    tables = pj.get("tables") or []
-    routes = pj.get("routes") or []
-    actions = pj.get("actions") or {}
-    plugin_type = pj.get("pluginType") or (registry_entry.get("implementation") or {}).get("pluginType")
-    entry_point = pj.get("entryPoint") or (registry_entry.get("implementation") or {}).get("entryPoint")
-    binary_name = pj.get("binaryName") or pj.get("binary_name")
-    is_cli = plugin_type == "cli" and not port
-
-    sents = sentences(description)
-    tagline = sents[0].rstrip(".") if sents else disp
-    para1 = description if description else f"{disp} plugin."
-
-    lines = []
-    lines.append(f"# {disp} Plugin")
-    lines.append("")
-    # "Free — MIT licensed." is the T04 template's mandated literal marker
-    # text (matches all 85 existing pages) -- not a prose em-dash connector,
-    # so it is exempt from the no-em-dash brand rule.
-    lines.append(f"> {tagline}. **Free — MIT licensed.**")
-    lines.append("")
-    lines.append("## Install")
-    lines.append("")
-    lines.append("```bash")
-    lines.append(f"nself plugin install {name}")
-    lines.append("```")
-    lines.append("")
-    lines.append("No license key required.")
-    lines.append("")
-    lines.append("## Description")
-    lines.append("")
-    lines.append(para1)
-    lines.append("")
-    extra_bits = []
-    if category:
-        extra_bits.append(f"Category: `{category}`.")
-    extra_bits.append(f"Current version: `{version}`.")
-    lines.append(" ".join(extra_bits))
-    lines.append("")
-
-    env_rows = normalize_env_vars(pj)
-    if env_rows:
-        lines.append("## Configuration")
-        lines.append("")
-        lines.append("| Env Var | Default | Description |")
-        lines.append("|---------|---------|-------------|")
-        for n, required, default, desc in env_rows:
-            d = default if not required else "(required)"
-            lines.append(f"| `{n}` | `{d}` | {desc} |")
-        lines.append("")
-
-    if port:
-        lines.append("## Ports")
-        lines.append("")
-        lines.append("| Port | Purpose |")
-        lines.append("|------|---------|")
-        lines.append(f"| {port} | {disp} service port |")
-        lines.append("")
-
-    if tables:
-        lines.append("## Database Schema")
-        lines.append("")
-        lines.append(f"{len(tables)} table(s) added to your Postgres database:")
-        lines.append("")
-        for t in tables:
-            lines.append(f"- `{t}`")
-        lines.append("")
-
-    if routes:
-        lines.append("## REST API")
-        lines.append("")
-        lines.append("```")
-        for r in routes[:12]:
-            method = r.get("method", "GET")
-            path = r.get("path", "/")
-            lines.append(f"{method:<6} {path}")
-        lines.append("```")
-        lines.append("")
-
-    lines.append("## Examples")
-    lines.append("")
-    if is_cli and actions:
-        for i, (act, desc) in enumerate(list(actions.items())[:4], start=1):
-            lines.append(f"### {act.title()}")
-            lines.append("")
-            lines.append("```bash")
-            lines.append(f"nself {name.split('-')[0] if '-' in name else name} {act}")
-            lines.append("```")
-            lines.append("")
-    elif routes:
-        health = next((r for r in routes if r.get("path") == "/health"), routes[0])
-        lines.append("### Health check")
-        lines.append("")
-        lines.append("```bash")
-        lines.append(f"curl http://localhost:{port or 3000}{health.get('path', '/health')}")
-        lines.append("```")
-        lines.append("")
-    else:
-        lines.append("```bash")
-        lines.append(f"nself plugin install {name}")
-        lines.append("```")
-        lines.append("")
-
-    lines.append("## Source")
-    lines.append("")
-    lines.append(f"[`plugins/{key}/`](https://github.com/nself-org/plugins/tree/main/{key})")
-    lines.append("")
-    lines.append(f"Manifest: [`plugins/{key}/plugin.json`](https://github.com/nself-org/plugins/tree/main/{key}/plugin.json)")
-    lines.append("")
-    lines.append("## See Also")
-    lines.append("")
-    lines.append("- [[Plugin-Marketplace]] — full plugin index")
-    lines.append("- [[Plugin-Development]] — write your own plugin")
-    lines.append("")
-    lines.append("← [[Home]] →")
-    lines.append("")
-
-    text = "\n".join(lines)
-    # replace any stray em-dash connector introduced by formatting (keep the
-    # mandated "Free — MIT licensed." marker and the bottom-nav arrows, which
-    # are not prose connectors)
-    return text
-
-
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("keys", nargs="+")
-    ap.add_argument("--force", action="store_true")
-    args = ap.parse_args()
-
-    registry = json.load(open(os.path.join(ROOT, "registry.json")))["plugins"]
-    out_dir = os.path.join(ROOT, ".github", "wiki", "plugins")
-    os.makedirs(out_dir, exist_ok=True)
-
-    for key in args.keys:
-        pj_path = os.path.join(ROOT, "free", key, "plugin.json")
-        if not os.path.exists(pj_path):
-            print(f"SKIP {key}: no plugin.json", file=sys.stderr)
+def apply_region(text, region):
+    """Insert or replace the region under the H1; drop the old fixed phrase."""
+    out, dropped = [], False
+    for ln in text.split("\n"):
+        new = OLD_PHRASE.sub("", ln) if ln.startswith(">") else ln
+        if new != ln and new.strip() in ("", ">"):
+            dropped = True
             continue
-        pj = json.load(open(pj_path))
-        registry_entry = registry.get(key, {})
-        fname = display_filename(key) + ".md"
-        out_path = os.path.join(out_dir, fname)
-        if os.path.exists(out_path) and not args.force:
-            print(f"SKIP {key}: {fname} already exists", file=sys.stderr)
+        if dropped and not ln.strip() and out and not out[-1].strip():
+            dropped = False  # do not leave a double blank line where the phrase was
             continue
-        content = render(key, pj, registry_entry)
-        with open(out_path, "w") as f:
-            f.write(content)
-        print(f"WROTE {fname}")
+        dropped = False
+        out.append(new)
+    text = "\n".join(out)
+    nb, ne = text.count(BEGIN), text.count(END)
+    if nb or ne:
+        if nb != 1 or ne != 1 or text.index(BEGIN) > text.index(END):
+            raise Problem(f"malformed region markers ({nb} BEGIN, {ne} END; need one BEGIN then one END)")
+        head, rest = text.split(BEGIN, 1)
+        return head + region + rest.split(END, 1)[1]
+    lines = text.split("\n")
+    for i, ln in enumerate(lines):
+        if ln.startswith("# "):
+            rest = lines[i + 1:]
+            if rest and rest[0].strip():
+                rest.insert(0, "")
+            return "\n".join(lines[: i + 1] + [""] + region.split("\n") + rest)
+    raise Problem("no H1 line to put the region under")
+
+
+def new_page(slug, region, cfg):
+    return f"# {page_title(slug, cfg).replace('-', ' ')} Plugin\n\n{region}\n"
+
+
+def surface_count(root, rule):
+    """First-level subcommand count of a manifest, aliases excluded."""
+    try:
+        with open(os.path.join(root, rule["manifest"]), encoding="utf-8") as fh:
+            manifest = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise Problem(f"surface ceiling manifest {rule['manifest']}: {exc}")
+    skip = set((rule.get("aliases") or {}).get("names") or [])
+    firsts = {n.split()[0] for n in _sub_names(manifest.get("commands")) if n.split()}
+    return len(firsts - skip)
+
+
+def check_ceilings(root, cfg):
+    problems, notes = [], []
+    for name, rule in sorted(cfg["surface_ceilings"].items()):
+        count = surface_count(root, rule)
+        notes.append(f"{name}: {count} first-level subcommands (ceiling {rule['max']})")
+        if count > rule["max"]:
+            problems.append(f"{name}: {count} first-level subcommands exceeds the ceiling {rule['max']}")
+    return problems, notes
+
+
+def plan(root, cfg, catalog, slugs):
+    """Yield (slug, path, wanted_text_or_Problem, current_text_or_None)."""
+    groups = group_by_slug(catalog)
+    for slug in slugs:
+        if slug not in groups:
+            raise Problem(f"{slug}: not a catalogue slug")
+        path = os.path.join(root, PAGES_DIR, page_title(slug, cfg) + ".md")
+        region = render_region(groups[slug], catalog)
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                cur = fh.read()
+            try:
+                yield slug, path, apply_region(cur, region), cur
+            except Problem as exc:
+                yield slug, path, exc, cur
+        else:
+            yield slug, path, new_page(slug, region, cfg), None
+
+
+def orphans(root, cfg, catalog):
+    known = {page_title(s, cfg) + ".md" for s in group_by_slug(catalog)} | set(cfg["index_pages"])
+    pages = os.path.join(root, PAGES_DIR)
+    return sorted(f for f in os.listdir(pages) if f.endswith(".md") and f not in known)
+
+
+def run(root, cfg_path, slugs, do_all, check):
+    cfg = load_config(cfg_path)
+    with open(os.path.join(root, "catalog.json"), encoding="utf-8") as fh:
+        catalog = json.load(fh)
+    if do_all:
+        slugs = sorted(group_by_slug(catalog))
+    problems, written, failed = [], 0, False
+    for slug, path, want, cur in plan(root, cfg, catalog, slugs):
+        rel = os.path.relpath(path, root)
+        if isinstance(want, Problem):
+            problems.append(f"{rel}: {want}")
+            failed = True
+            continue
+        if want == cur:
+            continue
+        if check:
+            problems.append(f"{rel}: " + ("missing page" if cur is None else "stale region"))
+        else:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(want)
+            written += 1
+    if do_all:
+        problems += [f"{PAGES_DIR}/{f}: orphan page (not a catalogue slug or index page)" for f in orphans(root, cfg, catalog)]
+        found, notes = check_ceilings(root, cfg)
+        problems += found
+        failed = failed or bool(found)
+        for note in notes:
+            print(note)
+    if check:
+        for p in problems:
+            print("FAIL " + p)
+        print(f"wiki-plugin-pages: {len(problems)} problem(s) in {len(slugs)} slug(s)")
+        return 1 if problems else 0
+    for p in problems:
+        print("note: " + p)
+    print(f"wiki-plugin-pages: wrote {written} of {len(slugs)} page(s)")
+    return 1 if failed else 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("slugs", nargs="*", help="catalogue slugs (omit with --all)")
+    ap.add_argument("--all", action="store_true", help="every catalogue slug plus the orphan scan")
+    ap.add_argument("--check", action="store_true", help="write nothing; exit 1 on drift")
+    ap.add_argument("--root", default=ROOT, help="repo root (default: this repo)")
+    ap.add_argument("--config", help="config file (default: scripts/wiki-plugin-pages.yaml under --root)")
+    args = ap.parse_args(argv)
+    if not args.all and not args.slugs:
+        ap.error("give slugs or --all")
+    cfg = args.config or os.path.join(args.root, "scripts", "wiki-plugin-pages.yaml")
+    try:
+        return run(args.root, cfg, args.slugs, args.all, args.check)
+    except Problem as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

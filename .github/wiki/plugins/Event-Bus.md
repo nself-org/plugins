@@ -1,6 +1,19 @@
 # Event Bus Plugin
 
-> Internal event bus with pub/sub, fan-out delivery, dead-letter queue, and replay for inter-plugin messaging. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install event-bus` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Internal event bus with pub/sub, fan-out delivery, dead-letter queue, and replay for inter-plugin messaging.
 
 ## Install
 

@@ -1,6 +1,20 @@
 # Queue Plugin
 
-> Inspects background job queues for depth, stuck jobs, and lets you retry or purge them. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install queue` |
+| **Commands** | `nself queue` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Inspects background job queues for depth, stuck jobs, and lets you retry or purge them.
 
 ## Install
 

@@ -1,6 +1,19 @@
 # E2EE Plugin
 
-> Public-key directory for end-to-end encryption: X3DH prekeys plus post-quantum Kyber-1024 prekeys. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install e2ee` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Public-key directory for end-to-end encryption: X3DH prekeys plus post-quantum Kyber-1024 prekeys.
 
 ## Install
 

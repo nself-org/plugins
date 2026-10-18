@@ -1,5 +1,18 @@
 # Notifications Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | deferred ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install notifications` |
+| **Requirements** | nSelf >=0.9.9 |
+
+<!-- END GENERATED:catalog -->
+
 Production-ready multi-channel notification system with email, push, and SMS support for nself.
 
 ---

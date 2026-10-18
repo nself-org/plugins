@@ -1,6 +1,19 @@
 # Tenant Controller Plugin
 
-> Multi-tenant master controller for nCloud. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install tenant-controller` |
+| **Requirements** | nSelf >=1.0.9 |
+
+<!-- END GENERATED:catalog -->
+
+> Multi-tenant master controller for nCloud.
 
 ## Install
 

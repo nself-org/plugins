@@ -1,5 +1,18 @@
 # VPN Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install vpn` |
+| **Requirements** | nSelf >=0.9.9 |
+
+<!-- END GENERATED:catalog -->
+
 **Version**: 1.0.0 | **Category**: authentication | **Port**: 3200
 
 Multi-provider VPN management with P2P optimization, torrent downloads, kill switch, and leak protection.

@@ -1,6 +1,20 @@
 # CI Plugin
 
-> Runs the local lint/test/build/gitleaks gate and posts the result as a GitHub commit status. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.7 |
+| **Install** | `nself plugin install ci` |
+| **Commands** | `nself ci`: `build`, `forgejo`, `nodes provision`, `nodes verify`, `run`, `serve` |
+| **Requirements** | nSelf >=1.4.12 |
+
+<!-- END GENERATED:catalog -->
+
+> Runs the local lint/test/build/gitleaks gate and posts the result as a GitHub commit status.
 
 ## Install
 

@@ -1,6 +1,20 @@
 # DLQ Plugin
 
-> Re-enqueues dead-lettered rows from a plugin's failed-processing queue, with a dry-run preview. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install dlq` |
+| **Commands** | `nself dlq` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Re-enqueues dead-lettered rows from a plugin's failed-processing queue, with a dry-run preview.
 
 ## Install
 

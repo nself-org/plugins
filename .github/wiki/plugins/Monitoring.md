@@ -1,6 +1,19 @@
 # Monitoring Plugin
 
-> The full observability stack: Prometheus, Grafana, Loki, Promtail, Tempo, and Alertmanager. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install monitoring` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> The full observability stack: Prometheus, Grafana, Loki, Promtail, Tempo, and Alertmanager.
 
 ## Install
 

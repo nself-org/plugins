@@ -1,6 +1,19 @@
 # CDC Plugin
 
-> Change Data Capture, streams Postgres WAL events to downstream consumers via webhooks or message queues. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install cdc` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Change Data Capture, streams Postgres WAL events to downstream consumers via webhooks or message queues.
 
 ## Install
 
