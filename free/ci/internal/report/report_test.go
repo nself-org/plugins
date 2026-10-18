@@ -2,10 +2,12 @@ package report
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -169,4 +171,56 @@ func TestOutboxIsPerRepository(t *testing.T) {
 	if ok, err := up.Complete(ctx, a, status(Success, "upstream")); err != nil || !ok {
 		t.Fatalf("upstream must still post: %v %v", ok, err)
 	}
+}
+
+// A poster suspended past the claim TTL lands its older status after the
+// newer poster's: the outbox delivers the newest status again, so the host
+// ends on it.
+func TestOutboxHealsALateOlderPost(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{Clock: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	f := &takeover{st: st, advance: func() { now = now.Add(2 * time.Minute) }}
+	o := &Outbox{Store: st, Reporter: f, Owner: "o", Repo: "r"}
+	a, _ := o.Reserve(ctx, sha)
+	b, _ := o.Reserve(ctx, sha)
+	newer := status(Failure, "newer")
+	body, _ := json.Marshal(newer)
+	if err = st.OutboxReady(ctx, sha, key("o", "r"), b, body); err != nil {
+		t.Fatal(err)
+	}
+	f.seq = b
+	if _, err = o.Complete(ctx, a, status(Success, "older")); err != nil {
+		t.Fatal(err)
+	}
+	last := f.posted[len(f.posted)-1]
+	if last.Description != "newer" || len(f.posted) < 3 {
+		t.Fatalf("the host must end on the newest status: %+v", f.posted)
+	}
+}
+
+// takeover is a Reporter whose first post is the suspended one: while it is
+// "in flight" the claim expires and the newer poster claims, posts and
+// acknowledges.
+type takeover struct {
+	fake
+	st      *store.Store
+	seq     int64
+	advance func()
+	done    bool
+}
+
+func (t *takeover) Post(ctx context.Context, s Status) error {
+	if !t.done {
+		t.done = true
+		t.advance()
+		_, tok, _ := t.st.OutboxClaim(ctx, sha, key("o", "r"), t.seq)
+		t.posted = append(t.posted, status(Failure, "newer"))
+		_ = t.st.OutboxPosted(ctx, sha, key("o", "r"), t.seq, tok)
+	}
+	return t.fake.Post(ctx, s)
 }

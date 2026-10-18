@@ -92,28 +92,44 @@ func (o *Outbox) pause() time.Duration {
 	return 500 * time.Millisecond
 }
 
+// healRounds bounds how often Drain re-reads the outbox after a delivery lost
+// its claim (each round needs another poster suspended past the claim TTL).
+const healRounds = 5
+
 // Drain delivers every pending entry, oldest first, and returns how many
-// were delivered. The first delivery error stops the drain.
+// were delivered. The first delivery error stops the drain. An entry whose
+// claim was lost while it was delivered makes the drain read the outbox again,
+// because the store queued the newest status for another delivery.
 func (o *Outbox) Drain(ctx context.Context) (int, error) {
 	if o.Reporter == nil {
 		return 0, nil
 	}
-	list, err := o.Store.OutboxUnposted(ctx)
-	if err != nil {
-		return 0, err
-	}
 	n := 0
-	for _, e := range list {
-		var s Status
-		if err = json.Unmarshal(e.Payload, &s); err != nil || s.Validate() != nil {
-			continue // a corrupt entry is left for the operator; it must not block the rest
-		}
-		done, err := o.deliver(ctx, e.Seq, s, false)
+	for round := 0; round < healRounds; round++ {
+		list, err := o.Store.OutboxUnposted(ctx)
 		if err != nil {
 			return n, err
 		}
-		if done {
-			n++
+		again := false
+		for _, e := range list {
+			var s Status
+			if err = json.Unmarshal(e.Payload, &s); err != nil || s.Validate() != nil {
+				continue // a corrupt entry is left for the operator; it must not block the rest
+			}
+			done, err := o.deliver(ctx, e.Seq, s, false)
+			if done {
+				n++
+			}
+			if store.IsClaimLost(err) {
+				again = true
+				continue
+			}
+			if err != nil {
+				return n, err
+			}
+		}
+		if !again {
+			break
 		}
 	}
 	return n, nil
