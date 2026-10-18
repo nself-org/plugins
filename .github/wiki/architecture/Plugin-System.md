@@ -2483,7 +2483,6 @@ export function verifyShopifySignature(
 
 ```json
 {
-  "$schema": "./registry-schema.json",
   "version": "1.0.0",
   "lastUpdated": "2026-01-30T12:00:00Z",
   "plugins": {

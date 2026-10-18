@@ -76,18 +76,10 @@ jobs:
               fi
             done
 
-            # Port: required for a service plugin, absent for a CLI plugin.
-            # A v2 library (service.kind library, e.g. shared-utils) is vendored code, not a server: no port either.
-            provides_command=$(python3 -c "import json,sys; d=json.load(open('$file')); print('yes' if d.get('pluginType')=='cli' or d.get('binaryName') or (d.get('service') or {}).get('kind')=='library' else 'no')" 2>/dev/null)
-            # A v2 manifest (manifest_version 2) carries the port at service.port and forbids
-            # a top-level `port` (conformance gate E112); a v1 manifest keeps the top-level rule.
-            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('port','') if d.get('manifest_version')==2 else d.get('port',''))" 2>/dev/null)
-
-            if [ "$provides_command" = "yes" ] && [ -z "$port" ]; then
-              port=0   # a command plugin has no HTTP server
-            fi
-            # A v2 plugin of service.kind cli or library has no listener to declare a port for (P7-PLUG-44: monitoring is an init container).
-            kind=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('kind','') if d.get('manifest_version')==2 else '')" 2>/dev/null)
+            # Port (manifest v2: service.port, the top-level `port` is forbidden by conformance gate E112). A v2
+            # service.kind of cli or library has no listener, so no port to declare (P7-PLUG-44: monitoring is an init container).
+            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('port',''))" 2>/dev/null)
+            kind=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('kind',''))" 2>/dev/null)
             if [ -z "$port" ] && { [ "$kind" = "cli" ] || [ "$kind" = "library" ]; }; then
               port=0
             fi
@@ -202,36 +194,6 @@ jobs:
           print("All deprecated plugins carry a complete, policy-compliant deprecation block.")
           PY
 
-      - name: Check for duplicate ports
-        run: |
-          printf "Checking for port conflicts...\n"
-
-          # Extract all ports and check for duplicates
-          # Port 0 means "no HTTP server" — skip it in the duplicate check
-          ports=$(find free -name "plugin.json" -exec python3 -c "
-          import json, sys, os
-          for f in sys.argv[1:]:
-            try:
-              d = json.load(open(f))
-              port = d.get('port', '')
-              if str(port) != '0' and port != '' and port is not None:
-                print(port, os.path.dirname(f))
-            except: pass
-          " {} + | sort)
-
-          dupes=$(echo "$ports" | awk '{print $1}' | sort | uniq -d)
-          if [ -n "$dupes" ]; then
-            printf "ERROR: Duplicate ports found:\n"
-            echo "$dupes" | while read -r port; do
-              echo "$ports" | grep "^$port " | while read -r line; do
-                printf "  Port %s used by: %s\n" "${line%% *}" "${line#* }"
-              done
-            done
-            exit 1
-          fi
-
-          printf "No port conflicts found\n"
-
       - name: Verify README and plugin.json exist for each plugin
         run: |
           errors=0
@@ -334,8 +296,8 @@ jobs:
       - name: Declared-port plugins ship a compose fragment or say installable:false (D-0816)
         run: bash tests/manifests/service-fragments.sh
 
-      - name: Conformance gate on changed plugins
-        run: bash scripts/conformance/check.sh --changed
+      - name: Conformance gate on every free plugin (manifest v2 is the only schema)
+        run: bash scripts/conformance/check.sh --all
 
       # P7-PLUG-55: the release's binary targets, computed on every PR (no release side effects).
       - name: CLI binary targets gate and v1/v2 fixture parity
