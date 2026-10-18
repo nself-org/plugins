@@ -6,7 +6,7 @@ package attest
 // Outputs: Reason, the Reason constants, Rejection (the error form).
 // Constraints: reason keys are API: a consumer branches on them, so a key is
 // never renamed or reused. The first ten are fixed by the Ticket; the last
-// three are listed in the guide (selection_partial, not_passing, invalid).
+// three are selection_partial, not_passing and invalid (documented in the CI trust guide, a P7-TRUST-11 docs follow-up).
 
 import (
 	"strings"

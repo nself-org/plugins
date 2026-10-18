@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -179,7 +180,7 @@ func TestProfile_TextDetails(t *testing.T) {
 		{"v6 64:ff9b::a00:1 and 2002:c0a8:101::1", "v6 [redacted-ip] and [redacted-ip]"},
 		{"see https://github.com/o/r/runs/1?token=abc#x.", "see https://github.com/o/r/runs/1."},
 		{"cd /home/runner/work and run runner tests in /Users/build/x", "cd [redacted-home]/work and run runner tests in [redacted-home]/x"},
-		{"self.private app.internal cfg.home", "self.private [redacted-host] cfg.home"},
+		{"self.private app.internal cfg.home", "[redacted-host] [redacted-host] [redacted-host]"},
 		{"/root/.cache and /home/sam/x", "[redacted-home]/.cache and [redacted-home]/x"},
 		{"user sam wrote", "user [redacted-user] wrote"},
 	}
@@ -278,5 +279,33 @@ func TestProfileURL_PrivatePathDropped(t *testing.T) {
 		if p.URL(u) != u {
 			t.Errorf("URL(%q) = %q, want kept", u, p.URL(u))
 		}
+	}
+}
+
+// Profile.Text redacts every private suffix URL() treats as private (one list).
+func TestProfileText_PrivateSuffixes(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	for _, h := range []string{"db01.corp", "mm4.home", "api.localhost", "vault.private", "nas.home.arpa", "x.intranet", "a.b.localdomain", "c.lan"} {
+		if got := p.Text("ssh to " + h + ":22 failed"); strings.Contains(got, h) {
+			t.Errorf("Text left %q: %q", h, got)
+		}
+	}
+	if got := p.Text("see github.com and example.org"); got != "see github.com and example.org" {
+		t.Errorf("public hosts changed: %q", got)
+	}
+}
+
+// Nested URLs in a URL path must not make Text super-linear (review: k=48 took 22s).
+func TestProfileText_NestedURLsAreBounded(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public})
+	hostile := "https://e.com" + strings.Repeat("/%2541/https://e.com", 200) + "/x"
+	start := time.Now()
+	_ = p.Text(hostile)
+	_ = p.URL(hostile)
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("hostile nested URL took %v", d)
+	}
+	if p.URL(hostile) != "" {
+		t.Fatal("a URL whose path holds another URL must be dropped")
 	}
 }

@@ -58,7 +58,11 @@ func (g Gate) release() bool { return g.Class != ClassDefault }
 func GateAccept(ev model.Evidence, g Gate) []Reason { return gateAccept(ev, g, nil) }
 
 // GateAcceptDocument decodes a raw document and judges it in one step, so a
-// registered remote verifier sees the exact bytes (and sees them once).
+// registered remote verifier sees the exact bytes (and sees them once). Like
+// GateAccept it trusts the document's producer.kind: the caller must pass bytes
+// read from the coordinator's own store, never bytes a remote node submitted
+// (a submitted document claiming coordinator-recorded would skip the signature
+// check). A document that repeats a JSON key is refused.
 func GateAcceptDocument(doc []byte, g Gate) []Reason {
 	ev, err := decodeDocument(doc)
 	if err != nil {

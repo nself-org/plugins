@@ -53,6 +53,9 @@ func decodeDocument(doc []byte) (model.Evidence, error) {
 	if err != nil {
 		return ev, Reject([]Reason{ReasonInvalid}, "evidence schema unavailable")
 	}
+	if hasDuplicateKey(doc) {
+		return ev, Reject([]Reason{ReasonInvalid}, "duplicate object key")
+	}
 	if err := model.ValidateJSON(schema, doc); err != nil {
 		return ev, Reject([]Reason{ReasonInvalid}, err.Error())
 	}
@@ -62,6 +65,54 @@ func decodeDocument(doc []byte) (model.Evidence, error) {
 		return model.Evidence{}, Reject([]Reason{ReasonInvalid}, err.Error())
 	}
 	return ev, nil
+}
+
+// hasDuplicateKey reports whether any JSON object in doc repeats a key. The
+// parsers in this repo all keep the last value, another implementation reading
+// the same bytes (a signature verifier) may keep the first; refusing the
+// document removes the disagreement. A syntax error is left to the next stage.
+func hasDuplicateKey(doc []byte) bool {
+	type frame struct {
+		obj, wantKey bool
+		keys         map[string]struct{}
+	}
+	var stack []frame
+	valueDone := func() {
+		if n := len(stack); n > 0 && stack[n-1].obj {
+			stack[n-1].wantKey = true
+		}
+	}
+	dec := json.NewDecoder(bytes.NewReader(doc))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{':
+				stack = append(stack, frame{obj: true, wantKey: true, keys: map[string]struct{}{}})
+			case '[':
+				stack = append(stack, frame{})
+			default:
+				if len(stack) > 0 {
+					stack = stack[:len(stack)-1]
+				}
+				valueDone()
+			}
+			continue
+		}
+		if n := len(stack); n > 0 && stack[n-1].obj && stack[n-1].wantKey {
+			key, _ := tok.(string)
+			if _, dup := stack[n-1].keys[key]; dup {
+				return true
+			}
+			stack[n-1].keys[key] = struct{}{}
+			stack[n-1].wantKey = false
+			continue
+		}
+		valueDone()
+	}
 }
 
 // Verify checks a raw ci.evidence/v1 document and returns it decoded.

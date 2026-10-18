@@ -24,6 +24,9 @@ func FuzzVerifyDocument(f *testing.F) {
 		}
 	}
 	f.Fuzz(func(t *testing.T, doc []byte) {
+		if len(doc) > 4096 {
+			return // keeps minimisation fast so the 60s run fuzzes for 60s
+		}
 		ev, err := attest.Verify(doc)
 		if err != nil {
 			if _, ok := err.(*attest.Rejection); !ok {

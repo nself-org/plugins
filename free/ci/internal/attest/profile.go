@@ -111,7 +111,7 @@ var numericHostRe = regexp.MustCompile(`^(0x[0-9a-f]+|[0-9]+)(\.(0x[0-9a-f]+|[0-
 // known host or user name, a runner id. Such a URL is dropped whole.
 func (p Profile) privatePath(path string) bool {
 	for i := 0; i < 4; i++ {
-		if p.Text(path) != path {
+		if strings.Contains(path, "://") || p.textNoURL(path) != path {
 			return true
 		}
 		d, err := url.PathUnescape(path)

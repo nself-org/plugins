@@ -140,3 +140,25 @@ func TestCodeRegistered(t *testing.T) {
 		t.Fatalf("%v", problems)
 	}
 }
+
+// A document that repeats a key is refused before any parser picks a winner.
+func TestVerify_DuplicateKeyRefused(t *testing.T) {
+	good := marshal(t, goodEvidence())
+	dup := append([]byte(`{"schema":"ci.evidence/v1",`), good[1:]...)
+	if _, err := attest.Verify(good); err != nil {
+		t.Fatalf("control: %v", err)
+	}
+	if _, err := attest.Verify(dup); err == nil {
+		t.Fatal("duplicate top-level key accepted")
+	}
+	nested := []byte(strings.Replace(string(good), `"result":"pass"`, `"result":"fail","result":"pass"`, 1))
+	if string(nested) == string(good) {
+		t.Fatal("test setup: nothing replaced")
+	}
+	if _, err := attest.Verify(nested); err == nil {
+		t.Fatal("duplicate nested key accepted")
+	}
+	if rs := attest.GateAcceptDocument(nested, goodGate(goodEvidence())); len(rs) == 0 {
+		t.Fatal("GateAcceptDocument accepted a duplicate key")
+	}
+}

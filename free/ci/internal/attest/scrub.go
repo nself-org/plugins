@@ -31,15 +31,25 @@ var (
 	ipv6Re     = regexp.MustCompile(`[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*`)
 	homeRe     = regexp.MustCompile(`(/Users|/home)/([^/\s:"'\x60]+)|/root\b|[A-Za-z]:\\Users\\([^\\\s"']+)`)
 	userHostRe = regexp.MustCompile(`([A-Za-z0-9._-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})`)
-	localHost  = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|home\.arpa|localdomain|intranet)\b`)
+	localHost  = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:` + privateSuffixAlternation() + `)\b`)
 )
+
+// privateSuffixAlternation turns privateSuffixes (the one list URL also uses)
+// into a regexp alternation, longest first so "home.arpa" wins over "home".
+func privateSuffixAlternation() string {
+	parts := make([]string, 0, len(privateSuffixes))
+	for _, s := range privateSuffixes {
+		parts = append(parts, regexp.QuoteMeta(strings.TrimPrefix(s, ".")))
+	}
+	sort.Slice(parts, func(i, j int) bool { return len(parts[i]) > len(parts[j]) })
+	return strings.Join(parts, "|")
+}
 
 // Text scrubs identifying text for publication.
 func (p Profile) Text(s string) string {
 	if p.private || s == "" {
 		return s
 	}
-	users := append([]string(nil), p.users...)
 	s = urlRe.ReplaceAllStringFunc(s, func(m string) string {
 		trimmed := strings.TrimRight(m, ".,;:")
 		if u := p.URL(trimmed); u != "" {
@@ -47,6 +57,13 @@ func (p Profile) Text(s string) string {
 		}
 		return redactedURL + m[len(trimmed):]
 	})
+	return p.textNoURL(s)
+}
+
+// textNoURL is Text without the URL pass. Profile.URL uses it on a path, so a
+// URL cannot recurse into itself: a path that still holds "://" is dropped.
+func (p Profile) textNoURL(s string) string {
+	users := append([]string(nil), p.users...)
 	s = homeRe.ReplaceAllStringFunc(s, func(m string) string {
 		if sub := homeRe.FindStringSubmatch(m); sub[2] != "" {
 			users = appendUser(users, sub[2])
