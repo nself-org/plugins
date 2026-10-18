@@ -35,7 +35,7 @@ Exit 0 means every selected rule passed. A rule that cannot run (no Docker, no t
 | `legacy-renames` | The table renames the boot migrations perform (literal `ALTER TABLE ... RENAME TO`, or a `DO` block renaming through a `VALUES` list; an unreadable rename fails) equal the `old new` lines of `tests/boot/legacy-renames`, and the Go `legacyTables` list when there is one. `tests/boot/legacy-probe.sql` holds SQL that `tests/boot/tables-upgrade.sh` runs on the legacy database after the converted boot; a probe without `legacy-renames` would never run, so it fails. A plugin with no renames and no fixture passes. |
 | `repository` | A free manifest names `https://github.com/nself-org/plugins`; a licensed one names `https://github.com/nself-org/bundles`. |
 | `ports` | No port is shared by two plugins or claimed from `scripts/conformance/reserved-ports.yaml`. |
-| `build` | The plugin builds from its own extracted deterministic tarball with no network (`build-from-tarball.sh`). |
+| `build` | The plugin builds from its own extracted deterministic tarball with no network (`build-from-tarball.sh`). When `CI` is set it also runs `docker builder prune -f` on exit, never on a developer machine. |
 
 `ports.sh` reads the top-level `port`, `config.port`, `service.port` and every `*_PORT` default under the optional env of each manifest. `ports.sh --all --report` lists collisions among all current plugins (legacy v1 included) and exits 0.
 
