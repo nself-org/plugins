@@ -11,8 +11,10 @@ package run
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
+	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/plan"
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -144,7 +146,11 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		}
 	}
 	rs.render.Event(Event{Type: "started", Job: pj.ID})
-	res := rs.c.exec.Run(ctx, spec)
+	spec.Slot = rs.sess.slots.take(slotDir(rs.sess.Home))
+	res := func() ciexec.AttemptResult {
+		defer rs.sess.slots.put(spec.Slot)
+		return rs.c.exec.Run(ctx, spec)
+	}()
 	o.Duration, o.ExitCode, o.Tail = res.Finished.Sub(res.Started), res.ExitCode, t.String()
 	oc := Outcome{State: res.Attempt.State, FailureClass: res.Attempt.FailureClass, ExitCode: res.ExitCode}
 	defer func() {
@@ -166,6 +172,9 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 	o.FailureClass = res.Attempt.FailureClass
 	if res.Err != nil {
 		o.Code, o.Detail = CodeOf(res.Err), res.Err.Error()
+	}
+	if res.Reason != "" {
+		o.Detail = strings.TrimSpace(o.Detail + " (" + res.Reason + ": the container may have hit its memory or process limit)")
 	}
 	return rs.settleFailed(id, o)
 }

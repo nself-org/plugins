@@ -29,6 +29,10 @@ type JobSpec struct {
 	CPU                      float64
 	MemoryMB                 int
 	Output                   func([]byte)
+	// Slot is the execution slot the attempt holds; isolation profiles derive the job UID from it.
+	Slot int
+	// Plan, when an Isolator sets it, builds the container command instead of the baseline flags.
+	Plan ContainerPlanner
 }
 
 // AttemptResult is the local outcome before durable store finalization.
@@ -37,6 +41,9 @@ type AttemptResult struct {
 	ExitCode          int
 	Started, Finished time.Time
 	Err               error
+	// Reason refines the failure class: "resource_limit" when a planned container hit its
+	// memory or process limit.
+	Reason string
 }
 
 // Executor runs each local job through one process or Docker funnel.
@@ -89,7 +96,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		e.Isolation = baselineIsolator{}
 	}
 	if err := e.Isolation.Prepare(ctx, &s); err != nil {
-		result.Err = err
+		// a node that cannot isolate is not the job's fault
+		result.Err, result.Attempt.FailureClass = err, "infra"
 		return
 	}
 	if e.Env == nil {
@@ -139,7 +147,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		return
 	}
 	defer func() {
-		if err := os.RemoveAll(workspace); err != nil {
+		if err := os.RemoveAll(workspace); err != nil && result.Err == nil && result.Attempt.State == "passed" {
+			// only a clean run is turned into a failure; a failed or cancelled attempt keeps its own class
 			result.Err = coded("E610", "workspace cleanup failed: "+err.Error())
 			result.Attempt.State = "failed"
 			result.Attempt.FailureClass = "infra"
@@ -181,7 +190,9 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		}
 		env = append(env, k+"="+v)
 	}
-	if s.Job.Isolation == "container" {
+	if s.Plan != nil {
+		result.ExitCode, result.Reason, result.Err = e.runPlanned(ctx, s, workspace, env)
+	} else if s.Job.Isolation == "container" {
 		result.ExitCode, result.Err = e.runContainer(ctx, s, workspace, env)
 	} else {
 		result.ExitCode, result.Err = e.runProcess(ctx, s, workspace, env)

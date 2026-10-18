@@ -95,13 +95,13 @@ func TestNewExecutorChainsRedactors(t *testing.T) {
 	if err := RegisterSecretValue([]byte(hookSecret)); err != nil {
 		t.Fatal(err)
 	}
-	r := newExecutor(nil, Registered.NewRedactor).NewRedactor()
+	r := newExecutor(nil, Registered.NewRedactor, nil).NewRedactor()
 	in := "api_token=named-value-123 raw=" + hookSecret + " ::add-mask::x\n"
 	out := string(r.Redact([]byte(in))) + string(r.Flush())
 	if strings.Contains(out, hookSecret) || strings.Contains(out, "named-value-123") || strings.Contains(out, "::add-mask::") {
 		t.Fatalf("a layer was lost: %q", out)
 	}
-	if plain := newExecutor(nil, nil).NewRedactor(); plain == nil {
+	if plain := newExecutor(nil, nil, nil).NewRedactor(); plain == nil {
 		t.Fatal("no default redactor")
 	}
 }

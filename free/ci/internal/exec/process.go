@@ -2,6 +2,7 @@ package exec
 
 import (
 	"context"
+	"io"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
@@ -33,9 +34,17 @@ func (e *Executor) runProcess(ctx context.Context, s JobSpec, workspace string, 
 }
 
 func (e *Executor) runCommand(ctx context.Context, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, error) {
+	return e.runCommandIn(ctx, nil, argv, dir, env, sink, onCancel, onStart, attempt)
+}
+
+// runCommandIn is runCommand with stdin fed from a reader (nil keeps /dev/null).
+func (e *Executor) runCommandIn(ctx context.Context, stdin io.Reader, argv []string, dir string, env []string, sink func([]byte), onCancel func(), onStart func(int) error, attempt string) (int, error) {
 	cmd := osexec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
+	if stdin != nil {
+		cmd.Stdin = stdin
+	}
 	if err := prepareProcess(cmd); err != nil {
 		return -1, err
 	}

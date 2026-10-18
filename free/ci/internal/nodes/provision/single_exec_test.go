@@ -44,6 +44,12 @@ var dynamicProgram = map[string]bool{
 	"internal/serve/serve_job_report.go:runCmd": true,
 	"internal/serve/serve_job.go:runGateDirect": true,
 	"internal/exec/process.go:runCommand":       true,
+	"internal/exec/process.go:runCommandIn":     true,
+	// The container runtime binary is checked against runtimeBinary (docker or
+	// podman by name or path) before any of these runs it (P7-TRUST-04).
+	"internal/exec/container.go:containerStopper": true,
+	"internal/exec/runtime.go:RuntimeQuery":       true,
+	"internal/exec/runtime.go:RuntimeRemove":      true,
 	// golang.org/x/sys/unix (vendored for the pure-Go SQLite driver, P7-CI-30):
 	// the exported Exec wrapper around syscall.Exec. A library entry point, not
 	// a call site; nothing under free/ci calls unix.Exec.

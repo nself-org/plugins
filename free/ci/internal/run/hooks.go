@@ -168,6 +168,7 @@ type Hooks struct {
 	Adhoc         AdhocHandler
 	Image         ContainerImageHook
 	Publisher     Publisher
+	Isolation     ciexec.Isolator
 	NewRedactor   func() ciexec.Redactor // fresh per-attempt state; every output chunk passes it (P7-TRUST-19)
 	AttemptStarts []AttemptStartHook
 	AfterRuns     []AfterRunHook
@@ -178,15 +179,16 @@ var Registered Hooks
 
 // Register helpers mirror the Hooks fields; a second registration of a
 // single-slot hook replaces the first.
-func RegisterRemote(r RemoteResolver)    { Registered.Remote = append(Registered.Remote, r) }
-func RegisterTrust(c TrustClassifier)    { Registered.Trust = c }
-func RegisterPolicy(p PolicyResolver)    { Registered.Policy = p }
-func RegisterFinalizer(f Finalizer)      { Registered.Finalizers = append(Registered.Finalizers, f) }
-func RegisterCache(c CacheHook)          { Registered.Cache = c }
-func RegisterServices(s ServicesHook)    { Registered.Services = s }
-func RegisterAdhoc(a AdhocHandler)       { Registered.Adhoc = a }
-func RegisterImage(i ContainerImageHook) { Registered.Image = i }
-func RegisterPublisher(p Publisher)      { Registered.Publisher = p }
+func RegisterRemote(r RemoteResolver)     { Registered.Remote = append(Registered.Remote, r) }
+func RegisterTrust(c TrustClassifier)     { Registered.Trust = c }
+func RegisterPolicy(p PolicyResolver)     { Registered.Policy = p }
+func RegisterFinalizer(f Finalizer)       { Registered.Finalizers = append(Registered.Finalizers, f) }
+func RegisterCache(c CacheHook)           { Registered.Cache = c }
+func RegisterServices(s ServicesHook)     { Registered.Services = s }
+func RegisterAdhoc(a AdhocHandler)        { Registered.Adhoc = a }
+func RegisterImage(i ContainerImageHook)  { Registered.Image = i }
+func RegisterPublisher(p Publisher)       { Registered.Publisher = p }
+func RegisterIsolation(i ciexec.Isolator) { Registered.Isolation = i }
 func RegisterAttemptStart(h AttemptStartHook) {
 	Registered.AttemptStarts = append(Registered.AttemptStarts, h)
 }
@@ -220,6 +222,9 @@ func (h Hooks) Resolved() Hooks {
 	}
 	if out.Publisher == nil {
 		out.Publisher = r.Publisher
+	}
+	if out.Isolation == nil {
+		out.Isolation = r.Isolation
 	}
 	if out.NewRedactor == nil {
 		out.NewRedactor = r.NewRedactor

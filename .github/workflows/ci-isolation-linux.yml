@@ -1,0 +1,142 @@
+name: ci-isolation-linux
+
+# Linux evidence for the nself ci isolation levels (P7-TRUST-04, Constitution 10.3).
+# The pull_request run is the proof for every Linux-leg Ticket; no later Ticket edits this file.
+# Dispatch inputs reach the shell only through env: (PKGS, TAGS, INSTALL_RUNSC), validated first.
+
+on:
+  pull_request:
+    paths:
+      - 'free/ci/**'
+      - '.github/workflows/ci-isolation-linux.yml'
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Go packages to test (default: the isolation, netscope, hygiene and local-provider packages that exist)'
+        type: string
+        default: ''
+      tags:
+        description: 'Go build tags'
+        type: string
+        default: integration
+      install_runsc:
+        description: 'Install gVisor runsc and register it with docker'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-isolation-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: '0'
+  GVISOR_RELEASE: '20261012.0'
+  GVISOR_SHA512: '9606445eed5aedfcf05310e7ccef61d994089914c6622fc82624c24d2b18db1b2210f40e40a7be27b8b7772859de7d95c501b4eba66423053c960bf671377c5e'
+  TRUST04_TEST_IMAGE: 'alpine:3.19'
+
+jobs:
+  linux:
+    name: isolation (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PKGS: ${{ inputs.packages }}
+      TAGS: ${{ inputs.tags }}
+      INSTALL_RUNSC: ${{ inputs.install_runsc }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: free/ci/go.mod
+          cache-dependency-path: free/ci/go.sum
+
+      - name: Validate dispatch inputs
+        run: |
+          set -euo pipefail
+          if [[ -n "$PKGS" ]]; then
+            [[ "$PKGS" =~ ^(\./[A-Za-z0-9_./-]+[[:space:]]*)+$ ]] || { echo "invalid packages input" >&2; exit 1; }
+          fi
+          TAGS="${TAGS:-integration}"
+          [[ "$TAGS" =~ ^[a-z_\ ]+$ ]] || { echo "invalid tags input" >&2; exit 1; }
+
+      - name: Container runtimes
+        run: |
+          set -euo pipefail
+          docker info --format '{{.ServerVersion}} rootless={{.SecurityOptions}}'
+          if ! command -v podman >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq podman
+          fi
+          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}}'
+          docker pull "$TRUST04_TEST_IMAGE"
+
+      - name: Install gVisor runsc
+        if: github.event_name == 'pull_request' || env.INSTALL_RUNSC == 'true'
+        run: |
+          set -euo pipefail
+          base="https://storage.googleapis.com/gvisor/releases/release/${GVISOR_RELEASE}/x86_64"
+          curl -fsSL -o "$RUNNER_TEMP/gvisor.tar.bz2" "$base/gvisor.tar.bz2"
+          echo "${GVISOR_SHA512}  $RUNNER_TEMP/gvisor.tar.bz2" | sha512sum -c -
+          sudo tar -xjf "$RUNNER_TEMP/gvisor.tar.bz2" -C /usr/local/bin
+          sudo runsc install
+          sudo systemctl restart docker
+          docker info --format '{{json .Runtimes}}' | tee "$RUNNER_TEMP/runtimes.json"
+          grep -q runsc "$RUNNER_TEMP/runtimes.json"
+
+      - name: Integration tests
+        run: |
+          set -euo pipefail
+          TAGS="${TAGS:-integration}"
+          cd free/ci
+          selected=()
+          if [[ -n "$PKGS" ]]; then
+            read -r -a selected <<<"$PKGS"
+          else
+            for p in ./internal/isolation/... ./internal/netscope/... ./internal/hygiene/... ./internal/providers/ephemeral/local/...; do
+              if [[ -d "${p%/...}" ]]; then selected+=("$p"); fi
+            done
+          fi
+          echo "tags: $TAGS"
+          echo "packages: ${selected[*]}"
+          go test -mod=vendor -count=1 -v -tags "$TAGS" "${selected[@]}" 2>&1 | tee "$RUNNER_TEMP/integration.txt"
+          if grep -q -- '--- SKIP' "$RUNNER_TEMP/integration.txt"; then
+            echo "a test skipped: a missing prerequisite must fail, never skip" >&2
+            exit 1
+          fi
+
+      - name: Security suite and mutation check
+        run: |
+          set -euo pipefail
+          if [[ ! -d free/ci/test/security ]]; then
+            echo "no free/ci/test/security yet"
+            exit 0
+          fi
+          (cd free/ci && go test -mod=vendor -count=1 -v -tags security ./test/security/... 2>&1 | tee "$RUNNER_TEMP/security.txt")
+          if grep -q -- '--- SKIP' "$RUNNER_TEMP/security.txt"; then
+            echo "a security test skipped" >&2
+            exit 1
+          fi
+          bash free/ci/internal/invariants/testdata/mutate.sh free/ci test/security/testdata/regressions 'Test' -tags security ./test/security/...
+
+      - name: Isolation levels drill
+        run: |
+          set -euo pipefail
+          drill=""
+          for d in scripts/drill/isolation-levels/run free/ci/scripts/drill/isolation-levels/run; do
+            if [[ -x "$d" ]]; then drill="$d"; break; fi
+          done
+          if [[ -z "$drill" ]]; then
+            echo "no isolation-levels drill yet"
+            exit 0
+          fi
+          work="$(mktemp -d)"
+          (cd free/ci && go build -mod=vendor -o "$work/nself-ci" .)
+          NSELF_CI_BIN="$work/nself-ci" NSELF_CI_HOME="$work/home" "$drill"
+          NSELF_CI_HOME="$work/home" "$work/nself-ci" doctor --json | tee "$work/doctor.json"
+          for check in isolation.container isolation.sandboxed-container isolation.network; do
+            jq -e --arg c "$check" '.. | objects | select(.id? == $c or .name? == $c) | .verified_at | select(. != null)' "$work/doctor.json" >/dev/null
+          done

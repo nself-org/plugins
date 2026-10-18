@@ -20,6 +20,20 @@ type Mount struct {
 
 var reservedTargets = []string{"/repo", "/proc", "/sys", "/dev"}
 
+// systemDirs are host paths no job mount may be, or sit under for the sockets in them.
+var systemDirs = []string{"/", "/etc", "/var", "/var/run", "/run", "/proc", "/sys", "/dev", "/root", "/home", "/Users", "/boot", "/usr", "/bin", "/sbin", "/lib"}
+
+// hostPathRefused names a runtime socket (docker.sock, podman.sock, any .sock) or a system directory
+// root, or anything under /run or /var/run, where the runtimes keep their sockets.
+func hostPathRefused(p string) bool {
+	for _, d := range systemDirs {
+		if p == d {
+			return true
+		}
+	}
+	return strings.HasSuffix(p, ".sock") || strings.HasPrefix(p, "/run/") || strings.HasPrefix(p, "/var/run/")
+}
+
 func checkMounts(s JobSpec) error {
 	seen := map[string]bool{}
 	for _, m := range s.Mounts {
@@ -28,8 +42,8 @@ func checkMounts(s JobSpec) error {
 				return coded("E612", "mount paths must be absolute, clean and free of commas and newlines")
 			}
 		}
-		if strings.HasSuffix(m.Host, "docker.sock") {
-			return coded("E612", "mounting a container runtime socket is refused")
+		if hostPathRefused(m.Host) {
+			return coded("E612", "mounting a runtime socket or a system directory is refused")
 		}
 		if m.Target == "/" || seen[m.Target] {
 			return coded("E612", "mount target is the root or repeated")
@@ -47,14 +61,19 @@ func checkMounts(s JobSpec) error {
 	return nil
 }
 
+// Spec is the docker --mount value for m.
+func (m Mount) Spec() string {
+	spec := "type=bind,src=" + m.Host + ",dst=" + m.Target
+	if m.ReadOnly {
+		spec += ",readonly"
+	}
+	return spec
+}
+
 func mountArgs(ms []Mount) []string {
 	var args []string
 	for _, m := range ms {
-		spec := "type=bind,src=" + m.Host + ",dst=" + m.Target
-		if m.ReadOnly {
-			spec += ",readonly"
-		}
-		args = append(args, "--mount", spec)
+		args = append(args, "--mount", m.Spec())
 	}
 	return args
 }
