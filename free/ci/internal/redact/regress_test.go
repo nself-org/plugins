@@ -5,7 +5,9 @@ package redact
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -313,5 +315,53 @@ func TestRegressCappedJWTDoesNotSwallowPEMOpener(t *testing.T) {
 		if bw := run(r, bytewise(in)...); strings.Contains(bw, "SYNTHETIC") || collapse(bw) != collapse(whole) {
 			t.Errorf("n=%d bytewise %.80q vs whole %.80q", n, bw, whole)
 		}
+	}
+}
+
+// Round 5: per-character safe sets, checked against the real Go encoders.
+func TestRegressGoStdlibEncoders(t *testing.T) {
+	for _, v := range []string{"abcdef!'$/#", "abcdef!$,:/", "abcdef!$,@/", "abcdef!$/#", "abcdef!$,/", "q8 !'()*$&+=:@,;/?#~z"} {
+		r := New()
+		mustRegister(t, r, v)
+		encoded := map[string]string{
+			"fragment": (&url.URL{Fragment: v}).EscapedFragment(),
+			"userinfo": url.User(v).String(),
+			"path":     (&url.URL{Path: v}).EscapedPath(),
+			"pathseg":  url.PathEscape(v),
+			"query":    url.QueryEscape(v),
+		}
+		for name, e := range encoded {
+			if got := run(r, "x "+e+" y"); got != "x [REDACTED] y" {
+				t.Errorf("%s of %q (%q) survived: %q", name, v, e, got)
+			}
+			if got := run(r, bytewise("x "+e+" y")...); got != "x [REDACTED] y" {
+				t.Errorf("%s of %q bytewise: %q", name, v, got)
+			}
+		}
+	}
+}
+
+func TestRegressURLFormsBudgetForManyValues(t *testing.T) {
+	r := New()
+	for i := 0; i < 64; i++ {
+		prefix := fmt.Sprintf("CO5%03d!*$,/?#~ ", i)
+		mustRegister(t, r, prefix+strings.Repeat("x", 497))
+	}
+	if n := len(urlForms([]byte("CO5000!*$,/?#~ " + strings.Repeat("x", 497)))); n > 120 {
+		t.Fatalf("%d url forms for one 512-byte value", n)
+	}
+}
+
+func TestRegressJWTEndingInDashesAtEOF(t *testing.T) {
+	r := New()
+	jwt := "eyJhbGciOiJIUzI1NiJ9.e30K.aa--"
+	if got := run(r, jwt); got != Placeholder {
+		t.Fatalf("EOF: %q", got)
+	}
+	if got := run(r, jwt+"!"); got != Placeholder+"!" {
+		t.Fatalf("delimited: %q", got)
+	}
+	if got := run(r, bytewise(jwt)...); got != Placeholder {
+		t.Fatalf("bytewise: %q", got)
 	}
 }

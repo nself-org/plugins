@@ -175,7 +175,7 @@ func findShapes(b []byte, prev byte, final bool, out []span) (spans []span, hold
 			if sh.dots > 0 && run >= sh.min && dots >= sh.dots {
 				// A PEM header glued to the token ends it. The run stops at the
 				// header's space, or at the cap, so look past j for a straddling opener.
-				if k := openerGlue(b, i+len(sh.prefix), j); k >= 0 {
+				if k := openerGlue(b, i+len(sh.prefix), j, final); k >= 0 {
 					j = k
 					run, dots = j-i-len(sh.prefix), idx.dotsIn(i+len(sh.prefix), j)
 				}
@@ -273,12 +273,12 @@ func (x *runIndex) dotsIn(from, to int) int {
 // openerGlue returns the offset of the first "-----BEGIN" that starts in
 // b[from:to) (it may end past to, or run into the end of b), or -1. The opener's
 // space is left out: a token run stops before it.
-func openerGlue(b []byte, from, to int) int {
+func openerGlue(b []byte, from, to int, final bool) int {
 	op := pemBeg[:len(pemBeg)-1]
 	if k := bytes.Index(b[from:min(len(b), to+len(op)-1)], op); k >= 0 && from+k < to {
 		return from + k
 	}
-	for p := max(from, len(b)-len(op)+1); p < to; p++ { // a partial opener at the end of b
+	for p := max(from, len(b)-len(op)+1); !final && p < to; p++ { // a partial opener at the end of b
 		if bytes.HasPrefix(op, b[p:]) {
 			return p
 		}

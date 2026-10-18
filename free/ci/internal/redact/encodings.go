@@ -57,58 +57,6 @@ func lineValues(v []byte) [][]byte {
 	return out
 }
 
-// urlGroups are the characters beyond the unreserved set that encoders differ
-// on. Real encoders leave out any union of these groups: none (Go QueryEscape,
-// Python quote_plus), "!'()*" (JS encodeURIComponent; Java keeps only "*"),
-// "$&+=:@" (Go PathEscape), "$&+=:@,;/" (Go path), "/" (Python quote), and so on.
-var urlGroups = []string{"!'()", "*", "$&+=:@", ",;", "/", "?", "#"}
-
-// namedURLSets are the safe sets worth trying when a long value holds many
-// groups, as unions of urlGroups (indexes): none, Java, JS encodeURIComponent,
-// Go PathEscape, Go path, Python quote, Python quote with PathEscape bytes,
-// fragment and userinfo style sets, everything but '#', JS encodeURI.
-var namedURLSets = [][]int{nil, {1}, {0, 1}, {2}, {2, 3, 4}, {4}, {2, 4}, {0, 1, 2}, {2, 3}, {0, 1, 2, 3, 4}, {0, 1, 2, 3, 4, 5}, {0, 1, 2, 3, 4, 5, 6}}
-
-// allUnionsMax is the longest value whose every group union is tried: forms
-// grow with value length times unions, so a long punctuation-heavy value falls
-// back to namedURLSets.
-const allUnionsMax = 512
-
-// urlExtrasFor lists the safe sets worth trying for v: every union of the groups
-// whose characters occur in v (a group absent from v changes nothing) when v is
-// short or holds at most three groups, otherwise the named sets.
-func urlExtrasFor(v []byte) []string {
-	var present []int
-	for g, chars := range urlGroups {
-		if bytes.ContainsAny(v, chars) {
-			present = append(present, g)
-		}
-	}
-	var sets [][]int
-	if len(present) <= 3 || len(v) <= allUnionsMax {
-		for m := 0; m < 1<<len(present); m++ {
-			var u []int
-			for k, g := range present {
-				if m&(1<<k) != 0 {
-					u = append(u, g)
-				}
-			}
-			sets = append(sets, u)
-		}
-	} else {
-		sets = namedURLSets
-	}
-	out := make([]string, 0, len(sets))
-	for _, u := range sets {
-		x := ""
-		for _, g := range u {
-			x += urlGroups[g]
-		}
-		out = append(out, x)
-	}
-	return out
-}
-
 // isUnreserved reports whether an encoder leaves c raw (unreserved plus extra;
 // tilde says whether this encoder keeps '~').
 func isUnreserved(c byte, extra string, tilde bool) bool {
@@ -138,7 +86,7 @@ func urlForms(v []byte) [][]byte {
 	if bytes.IndexByte(v, '~') >= 0 {
 		tildes = append(tildes, false)
 	}
-	for _, extra := range urlExtrasFor(v) {
+	for _, extra := range urlSetsFor(v) {
 		for _, tilde := range tildes {
 			for _, upper := range []bool{true, false} {
 				for _, plus := range []bool{true, false} {
