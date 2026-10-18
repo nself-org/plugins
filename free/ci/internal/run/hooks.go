@@ -168,6 +168,7 @@ type Hooks struct {
 	Adhoc         AdhocHandler
 	Image         ContainerImageHook
 	Publisher     Publisher
+	NewRedactor   func() ciexec.Redactor // fresh per-attempt state; every output chunk passes it (P7-TRUST-19)
 	AttemptStarts []AttemptStartHook
 	AfterRuns     []AfterRunHook
 }
@@ -190,6 +191,9 @@ func RegisterAttemptStart(h AttemptStartHook) {
 	Registered.AttemptStarts = append(Registered.AttemptStarts, h)
 }
 func RegisterAfterRun(h AfterRunHook) { Registered.AfterRuns = append(Registered.AfterRuns, h) }
+
+// RegisterRedactor sets the per-attempt Redactor factory (single slot).
+func RegisterRedactor(f func() ciexec.Redactor) { Registered.NewRedactor = f }
 
 // Resolved fills every nil single-slot field from Registered and appends the
 // registered lists, so a test can add a fake on top of the registry.
@@ -216,6 +220,9 @@ func (h Hooks) Resolved() Hooks {
 	}
 	if out.Publisher == nil {
 		out.Publisher = r.Publisher
+	}
+	if out.NewRedactor == nil {
+		out.NewRedactor = r.NewRedactor
 	}
 	out.Remote = append(append([]RemoteResolver(nil), h.Remote...), r.Remote...)
 	out.Finalizers = append(append([]Finalizer(nil), h.Finalizers...), r.Finalizers...)
