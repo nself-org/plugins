@@ -1,0 +1,27 @@
+services:
+  plugin-sms:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/sms
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_plugin-sms
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:9009:9009"
+    environment:
+      NSELF_DB_URL: ${DATABASE_URL}
+      SMS_PLUGIN_PORT: "9009"
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      SMS_RATE_LIMIT_PER_MIN: ${SMS_RATE_LIMIT_PER_MIN:-10}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9009/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

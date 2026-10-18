@@ -1,60 +1,65 @@
 {
-  "name": "email",
-  "version": "1.2.6",
-  "displayName": "plugin-email",
-  "description": "Transactional email via Elastic Email. Send, template, and track emails.",
-  "port": 9008,
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
+  "author": "nself-org",
   "category": "communication",
+  "description": "Transactional email via Elastic Email. Send, template, and track emails.",
+  "envVars": [
+    {
+      "description": "Elastic Email API key",
+      "name": "ELASTIC_EMAIL_API_KEY",
+      "required": true
+    },
+    {
+      "description": "Default From address",
+      "name": "ELASTIC_EMAIL_FROM",
+      "required": true
+    },
+    {
+      "description": "PostgreSQL connection string",
+      "name": "NSELF_DB_URL",
+      "required": true
+    },
+    {
+      "description": "HTTP server port",
+      "name": "EMAIL_PLUGIN_PORT",
+      "required": false
+    },
+    {
+      "description": "License key",
+      "name": "NSELF_LICENSE_KEY",
+      "required": true
+    }
+  ],
+  "health_endpoint": "/health",
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "email",
+  "port": 9008,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "schema": "np_email",
+  "service": {
+    "compose": "docker-compose.plugin.yml",
+    "healthcheck": "/health",
+    "kind": "compose",
+    "port": 9008
+  },
+  "status": "stable",
   "tables": [
     "np_email_messages",
     "np_email_templates",
     "np_email_events"
   ],
-  "env": [
-    {
-      "key": "ELASTIC_EMAIL_API_KEY",
-      "required": true,
-      "description": "Elastic Email API key"
-    },
-    {
-      "key": "ELASTIC_EMAIL_FROM",
-      "required": true,
-      "description": "Default From address"
-    },
-    {
-      "key": "NSELF_DB_URL",
-      "required": true,
-      "description": "PostgreSQL connection string"
-    },
-    {
-      "key": "EMAIL_PLUGIN_PORT",
-      "required": false,
-      "default": "9008",
-      "description": "HTTP server port"
-    },
-    {
-      "key": "NSELF_LICENSE_KEY",
-      "required": true,
-      "description": "License key"
-    }
-  ],
-  "health": "/health",
-  "author": "nself-org",
-  "license": "MIT",
   "tier": "free",
-  "language": "go",
-  "minNselfVersion": "1.0.0",
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "bundles": [
-    "nchat",
-    "nclaw",
-    "nfamily"
-  ]
+  "version": "1.2.6"
 }

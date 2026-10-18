@@ -1,3 +1,4 @@
+# NSELF-FIRST EXCEPTION: plugin-fragment — hand-authored plugin service definition, merged by `nself build`. Not side-channel.
 # functions-v8 — edge functions plugin (Deno V8 isolate pool)
 # Injected by: nself build → DiscoverPluginComposeFiles()
 # Port: 3088 (F10-PORT-REGISTRY canonical)
@@ -8,13 +9,14 @@ version: "3.8"
 services:
   functions-v8:
     build:
-      context: .
+      context: ${NSELF_PLUGIN_DIR}/functions-v8
       dockerfile: Dockerfile
     image: functions-v8:latest
     container_name: functions-v8
     restart: unless-stopped
     environment:
       - FUNCTIONS_EDGE_PORT=3088
+      - FUNCTIONS_EDGE_BIND_HOST=0.0.0.0
       - DATABASE_URL=${DATABASE_URL}
       - DENO_BINARY_PATH=/usr/local/bin/deno
       - FUNCTIONS_EDGE_POOL_SIZE=${FUNCTIONS_EDGE_POOL_SIZE:-5}
@@ -27,7 +29,7 @@ services:
     networks:
       - ${DOCKER_NETWORK:-nself_network}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3088/health"]
+      test: ["CMD", "deno", "eval", "--allow-net=127.0.0.1:3088", "const r = await fetch('http://127.0.0.1:3088/health'); Deno.exit(r.ok ? 0 : 1)"]
       interval: 15s
       timeout: 5s
       start_period: 5s

@@ -1,0 +1,1 @@
+needs a Kafka, Redpanda or RabbitMQ broker (CDC_BROKER) and a Postgres with wal_level=logical to start; the migration itself is covered by the migrations rules

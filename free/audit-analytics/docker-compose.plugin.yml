@@ -1,0 +1,31 @@
+services:
+  audit-analytics:
+    build:
+      context: ${NSELF_PLUGIN_DIR}/audit-analytics
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}_audit_analytics
+    restart: unless-stopped
+    networks:
+      - ${DOCKER_NETWORK}
+    ports:
+      - "127.0.0.1:3218:3218"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENC:-${POSTGRES_PASSWORD}}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      AUDIT_ANALYTICS_PORT: "3218"
+      NSELF_DEPLOY_MODE: ${NSELF_DEPLOY_MODE:-}
+      AUDIT_ANALYTICS_SHARED_SECRET: ${AUDIT_ANALYTICS_SHARED_SECRET:-}
+      NSELF_AUDIT_ANALYTICS_REALTIME: ${NSELF_AUDIT_ANALYTICS_REALTIME:-false}
+      NSELF_AUDIT_ANOMALY_ZSCORE: ${NSELF_AUDIT_ANOMALY_ZSCORE:-3.0}
+      NSELF_AUDIT_HEATMAP_REFRESH: ${NSELF_AUDIT_HEATMAP_REFRESH:-3600}
+      NSELF_AUDIT_PRIVILEGED_REVIEW_TTL: ${NSELF_AUDIT_PRIVILEGED_REVIEW_TTL:-86400}
+      NSELF_AUDIT_ALERT_WEBHOOK: ${NSELF_AUDIT_ALERT_WEBHOOK:-}
+      NSELF_AUDIT_ALERT_EMAIL: ${NSELF_AUDIT_ALERT_EMAIL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3218/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

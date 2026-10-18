@@ -68,3 +68,15 @@ All tables include `source_account_id` for multi-app isolation.
 - Recovery codes are bcrypt-hashed (cost 10); raw codes are never persisted.
 - SSO client secrets in `np_sso_providers` should be encrypted by the application before storage.
 - MFA is always free per the Security-Always-Free doctrine; SSO requires `NSELF_SSO=true`.
+
+## Database migrations
+
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_auth_enterprise.schema_migrations`); the tables live in `public`. `tenant_id` columns no longer carry a foreign key to `np_tenants` (that table does not exist on a fresh database); the column and its indexes are unchanged. Row-level-security policies are dropped and recreated on each replay.
+
+## Security notes
+
+- TOTP secrets are stored as plaintext base32; operators should enable pgcrypto column-level encryption for at-rest encryption.
+- Recovery codes are bcrypt-hashed (cost 10); raw codes are never stored.
+- SSO client_secret values in np_sso_providers.metadata should be encrypted by the application before persistence.
+- SAML response signature verification uses structural XML checks only; integrate crewjam/saml for full XMLDSig in production.
+- MFA is free for all users per the Security-Always-Free doctrine; SSO is gated by NSELF_SSO=true and a ɳSelf+ license.

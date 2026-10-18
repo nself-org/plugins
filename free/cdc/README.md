@@ -79,3 +79,7 @@ Hard stop: WAL reader pauses automatically when unbrokered buffer exceeds 100 00
 ## Documentation
 
 Full guide: `nself.org/docs/plugins/cdc`
+
+## Database migrations
+
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_cdc.schema_migrations`); the `np_cdc_events` buffer lives in `public`. The replication slot and publication are still created by the plugin at start: they need `wal_level=logical` and a superuser, so they cannot be part of a migration that must apply on any fresh database.
