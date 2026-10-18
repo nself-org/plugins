@@ -185,3 +185,28 @@ func FuzzConfinedRemove(f *testing.F) {
 		}
 	})
 }
+
+// TestRemoveConfinedRefusesAnEntrySwappedForASiblingLink swaps the attempt directory for a relative
+// symlink to a sibling attempt between inspection and opening: the sibling must survive.
+func TestRemoveConfinedRefusesAnEntrySwappedForASiblingLink(t *testing.T) {
+	base := t.TempDir()
+	for _, d := range []string{"att1", "sibling"} {
+		if err := os.Mkdir(filepath.Join(base, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keep := filepath.Join(base, "sibling", "work.txt")
+	if err := os.WriteFile(keep, []byte("live"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	afterInspect = func() {
+		_ = os.Remove(filepath.Join(base, "att1"))
+		_ = os.Symlink("sibling", filepath.Join(base, "att1"))
+	}
+	t.Cleanup(func() { afterInspect = nil })
+	err := RemoveConfined(base, "att1", nil)
+	if codeOf(err) != CodeLeak {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	mustExist(t, keep)
+}

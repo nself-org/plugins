@@ -70,7 +70,15 @@ func Separation(f Facts, slot int) (Plan, error) {
 	if slot < 0 || (f.Slots > 0 && slot >= f.Slots) {
 		return Plan{}, noUIDError(ReasonNoJobUID, "slot %d is outside the node's %d slots", slot, f.Slots)
 	}
-	forbidden := []int{f.AgentUID, f.CoordinatorUID}
+	if f.AgentUID <= 0 {
+		// an unset agent UID would leave the forbidden list empty and open I17 by omission
+		return Plan{}, noUIDError(ReasonNoJobUID, "the agent's uid is not known")
+	}
+	coordinator := f.CoordinatorUID
+	if coordinator <= 0 {
+		coordinator = f.AgentUID
+	}
+	forbidden := []int{f.AgentUID, coordinator}
 	if containerLevel(f.Isolation) {
 		uid, err := container.JobUID(slot, forbidden)
 		if err != nil {
@@ -83,8 +91,8 @@ func Separation(f Facts, slot int) (Plan, error) {
 	}
 	if f.Userns && f.SubUIDStart > 0 && f.SubUIDCount > slot {
 		uid := f.SubUIDStart + slot
-		if contains(forbidden, uid) {
-			return Plan{}, noUIDError(ReasonNoJobUID, "subordinate uid %d is the agent's or coordinator's", uid)
+		if contains(forbidden, uid) || contains(containerUIDs(f, forbidden), uid) {
+			return Plan{}, noUIDError(ReasonNoJobUID, "subordinate uid %d is the agent's, the coordinator's or a container slot's", uid)
 		}
 		return Plan{Mode: Userns, UID: uid}, nil
 	}
@@ -97,9 +105,10 @@ func Separation(f Facts, slot int) (Plan, error) {
 
 func jobShim(f Facts, slot int, forbidden []int) (Plan, error) {
 	seen := map[int]bool{}
+	containers := containerUIDs(f, forbidden)
 	for _, u := range f.JobUIDs {
-		if contains(forbidden, u) || u <= 0 || seen[u] {
-			return Plan{}, noUIDError(ReasonNoJobUID, "job user uid %d is invalid, shared or the agent's", u)
+		if contains(forbidden, u) || contains(containers, u) || u <= 0 || seen[u] {
+			return Plan{}, noUIDError(ReasonNoJobUID, "job user uid %d is invalid, shared, a container slot's or the agent's", u)
 		}
 		seen[u] = true
 	}
@@ -111,6 +120,23 @@ func jobShim(f Facts, slot int, forbidden []int) (Plan, error) {
 		plan.Serial, plan.Reason = true, trust.IsolationSlotUIDShared
 	}
 	return plan, nil
+}
+
+// containerUIDs are the host UIDs container-mapped slots use on this node (65532 + slot, skipping
+// the forbidden ones): a process-level job user must never share one, or a runtime that does not
+// remap UIDs would give a container and a process job the same host UID.
+func containerUIDs(f Facts, forbidden []int) []int {
+	slots := f.Slots
+	if slots < 1 {
+		slots = 1
+	}
+	out := make([]int, 0, slots)
+	for slot := 0; slot < slots; slot++ {
+		if uid, err := container.JobUID(slot, forbidden); err == nil {
+			out = append(out, uid)
+		}
+	}
+	return out
 }
 
 // containerLevel reports whether the level runs the job inside a container or VM, where the UID is

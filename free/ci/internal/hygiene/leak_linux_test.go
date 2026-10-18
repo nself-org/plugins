@@ -14,31 +14,54 @@ import (
 	"time"
 )
 
-// daemonise starts the test binary as a session leader that listens on a TCP port and carries the
+// startListener starts the test binary as a session leader that listens on a TCP port and carries the
 // attempt tag, like a job child that called setsid and left its process group.
-func daemonise(t *testing.T, attempt string) (pid, port int, cmd *osexec.Cmd) {
-	t.Helper()
+func startListener(attempt string) (cmd *osexec.Cmd, port int, err error) {
 	cmd = osexec.Command(os.Args[0], "-test.run=NoSuchTest")
 	cmd.Env = append(os.Environ(), "HYGIENE_HELPER=listen", "NSELF_CI_EXEC_ATTEMPT="+attempt)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		t.Fatal(err)
+		return nil, 0, err
 	}
 	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
+		return nil, 0, err
 	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	line, err := bufio.NewReader(out).ReadString('\n')
 	if err != nil {
-		t.Fatalf("helper did not report its port: %v", err)
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, 0, err
 	}
 	port, err = strconv.Atoi(line[:len(line)-1])
 	if err != nil {
-		t.Fatal(err)
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return nil, 0, err
 	}
+	return cmd, port, nil
+}
+
+func daemonise(t *testing.T, attempt string) (pid, port int, cmd *osexec.Cmd) {
+	t.Helper()
+	cmd, port, err := startListener(attempt)
+	if err != nil {
+		t.Fatalf("helper did not start: %v", err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	return cmd.Process.Pid, port, cmd
 }
+
+// plantProcess lets TestInvariant_I08 leave a daemonised, listening process for the attempt.
+func plantProcess(attempt string) (reap func(), err error) {
+	cmd, _, err := startListener(attempt)
+	if err != nil {
+		return nil, err
+	}
+	return func() { _ = cmd.Wait() }, nil
+}
+
+func init() { leftoverProcess = plantProcess }
 
 func alive(cmd *osexec.Cmd) bool {
 	done := make(chan struct{})

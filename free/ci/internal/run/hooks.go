@@ -27,6 +27,8 @@ type AttemptInfo struct {
 	N                                          int
 	Job                                        model.Job
 	IdempotencyKey                             string
+	// Home is the run's state directory as given in Options ("" = NSELF_CI_HOME or ~/.nself/ci).
+	Home string
 }
 
 // Outcome is how an attempt ended.

@@ -22,10 +22,11 @@ func TestRuntimeLabelledRefusesUnsafeArguments(t *testing.T) {
 		{"list: unknown kind", func() error { _, err := RuntimeListLabelled(ctx, "docker", "image", "a1"); return err }},
 		{"list: option-shaped attempt", func() error { _, err := RuntimeListLabelled(ctx, "docker", KindContainer, "--all"); return err }},
 		{"list: label injection", func() error { _, err := RuntimeListLabelled(ctx, "docker", KindVolume, "a1,label=x"); return err }},
-		{"remove: other binary", func() error { return RuntimeRemoveLabelled(ctx, "rm", KindContainer, "abc") }},
-		{"remove: unknown kind", func() error { return RuntimeRemoveLabelled(ctx, "docker", "system", "abc") }},
-		{"remove: option-shaped id", func() error { return RuntimeRemoveLabelled(ctx, "docker", KindContainer, "-f") }},
-		{"remove: path id", func() error { return RuntimeRemoveLabelled(ctx, "docker", KindNetwork, "a/b") }},
+		{"remove: other binary", func() error { return RuntimeRemoveLabelled(ctx, "rm", KindContainer, "abc", "a1") }},
+		{"remove: unknown kind", func() error { return RuntimeRemoveLabelled(ctx, "docker", "system", "abc", "a1") }},
+		{"remove: option-shaped id", func() error { return RuntimeRemoveLabelled(ctx, "docker", KindContainer, "-f", "a1") }},
+		{"remove: option-shaped attempt", func() error { return RuntimeRemoveLabelled(ctx, "docker", KindVolume, "abc", "--all") }},
+		{"remove: path id", func() error { return RuntimeRemoveLabelled(ctx, "docker", KindNetwork, "a/b", "a1") }},
 	} {
 		var e *Error
 		if err := tc.call(); err == nil || !asError(err, &e) || e.Code != "E613" {

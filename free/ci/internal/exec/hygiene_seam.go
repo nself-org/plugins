@@ -74,11 +74,35 @@ func RuntimeListLabelled(ctx context.Context, binary string, kind ResourceKind, 
 	return found, nil
 }
 
-// RuntimeRemoveLabelled force-removes one resource by the id a labelled listing returned; a
-// resource that is already gone is not an error.
-func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind, id string) error {
-	if !runtimeBinary.MatchString(binary) || !resourceID.MatchString(id) {
+// RuntimeRemoveLabelled removes one resource by the id a labelled listing returned, after asking the
+// runtime once more that the resource still carries the attempt's label (a volume name can be
+// recreated unlabelled between listing and removal). A resource that is already gone, or that no
+// longer carries the label, is left alone and is not an error.
+func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind, id, attempt string) error {
+	if !runtimeBinary.MatchString(binary) || !resourceID.MatchString(id) || !safeID.MatchString(attempt) {
 		return coded("E613", "container runtime removal refused")
+	}
+	var inspect []string
+	switch kind {
+	case KindContainer:
+		inspect = []string{"inspect", "--format", `{{index .Config.Labels "` + AttemptLabel + `"}}`, id}
+	case KindNetwork, KindVolume:
+		inspect = []string{string(kind), "inspect", "--format", `{{index .Labels "` + AttemptLabel + `"}}`, id}
+	default:
+		return coded("E613", "container runtime removal refused")
+	}
+	ictx, icancel := context.WithTimeout(ctx, queryTimeout)
+	defer icancel()
+	icmd := runtimeCommand(ictx, binary, inspect)
+	icmd.Env = dockerHostEnv()
+	got, err := icmd.CombinedOutput()
+	switch {
+	case err != nil && goneText(string(got)):
+		return nil
+	case err != nil:
+		return runtimeFailed(err)
+	case strings.TrimSpace(string(got)) != attempt:
+		return nil
 	}
 	var args []string
 	switch kind {
@@ -96,10 +120,16 @@ func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind
 	cmd := runtimeCommand(ctx, binary, args)
 	cmd.Env = dockerHostEnv()
 	out, err := cmd.CombinedOutput()
-	if err != nil && !strings.Contains(strings.ToLower(string(out)), "no such") && !strings.Contains(strings.ToLower(string(out)), "not found") {
+	if err != nil && !goneText(string(out)) {
 		return runtimeFailed(err)
 	}
 	return nil
+}
+
+// goneText reports whether runtime output says the resource does not exist.
+func goneText(out string) bool {
+	out = strings.ToLower(out)
+	return strings.Contains(out, "no such") || strings.Contains(out, "not found")
 }
 
 // runtimeOutput runs one fixed read-only listing and returns its capped stdout.
@@ -115,13 +145,17 @@ func runtimeOutput(ctx context.Context, binary string, args ...string) ([]byte, 
 	if err := cmd.Start(); err != nil {
 		return nil, runtimeFailed(err)
 	}
-	out, readErr := io.ReadAll(io.LimitReader(pipe, maxRuntimeOutput))
+	out, readErr := io.ReadAll(io.LimitReader(pipe, maxRuntimeOutput+1))
 	_, _ = io.Copy(io.Discard, pipe)
 	if err := cmd.Wait(); err != nil {
 		return out, runtimeFailed(err)
 	}
 	if readErr != nil {
 		return out, runtimeFailed(readErr)
+	}
+	if len(out) > maxRuntimeOutput {
+		// a truncated listing would hide resources from cleanup and leak detection
+		return nil, coded("E613", "container runtime listing exceeds the output limit")
 	}
 	return out, nil
 }

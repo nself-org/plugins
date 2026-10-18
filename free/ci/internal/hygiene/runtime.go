@@ -10,6 +10,7 @@ package hygiene
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +20,27 @@ import (
 // Runtime lists and removes the resources labelled with an attempt id.
 type Runtime interface {
 	List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error)
-	Remove(ctx context.Context, kind exec.ResourceKind, id string) error
+	// Remove removes the resource only while it still carries the attempt's label.
+	Remove(ctx context.Context, kind exec.ResourceKind, id, attempt string) error
+}
+
+// RuntimeDownError says a container runtime is installed but did not answer (daemon stopped, socket
+// not permitted, timeout). The resources it may hold could not be listed.
+type RuntimeDownError struct{ Binaries []string }
+
+func (e *RuntimeDownError) Error() string {
+	return "container runtime installed but not answering: " + strings.Join(e.Binaries, ", ")
+}
+
+// listResources lists the labelled resources of one kind. A runtime that is installed but silent is
+// a leak (error) when the host requires a runtime, and a skipped check (note) otherwise.
+func (h *Host) listResources(ctx context.Context, kind exec.ResourceKind, attempt string) (found []exec.Labelled, note string, err error) {
+	found, err = h.runtime().List(ctx, kind, attempt)
+	var down *RuntimeDownError
+	if errors.As(err, &down) && !h.RuntimeRequired {
+		return found, string(kind) + "s: " + down.Error(), nil
+	}
+	return found, "", err
 }
 
 // Kinds is every resource kind hygiene sweeps, containers first so networks and volumes are free.
@@ -33,9 +54,17 @@ type ExecRuntime struct {
 	usable   map[string]probeResult
 }
 
+type runtimeState int
+
+const (
+	runtimeAbsent runtimeState = iota // not installed: nothing to find
+	runtimeUp
+	runtimeDown // installed, did not answer `info`
+)
+
 type probeResult struct {
-	ok bool
-	at time.Time
+	state runtimeState
+	at    time.Time
 }
 
 const probeTTL = 15 * time.Second
@@ -50,36 +79,48 @@ func (r *ExecRuntime) binaries() []string {
 }
 
 // available reports whether the binary is installed and its daemon answers `info`.
-func (r *ExecRuntime) available(ctx context.Context, bin string) (bool, error) {
+func (r *ExecRuntime) available(ctx context.Context, bin string) (runtimeState, error) {
 	r.mu.Lock()
 	cached, hit := r.usable[bin]
 	r.mu.Unlock()
 	if hit && time.Since(cached.at) < probeTTL {
-		return cached.ok, nil
+		return cached.state, nil
 	}
 	_, err := exec.RuntimeQuery(ctx, bin, "info")
-	ok := err == nil
-	if err != nil && ctx.Err() != nil {
-		return false, ctx.Err()
+	state := runtimeUp
+	switch {
+	case err == nil:
+	case ctx.Err() != nil:
+		return runtimeDown, ctx.Err()
+	case exec.IsRuntimeMissing(err):
+		state = runtimeAbsent
+	default:
+		state = runtimeDown
 	}
 	r.mu.Lock()
 	if r.usable == nil {
 		r.usable = map[string]probeResult{}
 	}
-	r.usable[bin] = probeResult{ok: ok, at: time.Now()}
+	r.usable[bin] = probeResult{state: state, at: time.Now()}
 	r.mu.Unlock()
-	return ok, nil
+	return state, nil
 }
 
-// List returns the labelled resources of every usable runtime, tagged by kind through the call.
+// List returns the labelled resources of every usable runtime; an installed runtime that does not
+// answer is reported as a RuntimeDownError next to what the others returned.
 func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
 	var out []exec.Labelled
+	var down []string
 	for _, bin := range r.binaries() {
-		ok, err := r.available(ctx, bin)
+		state, err := r.available(ctx, bin)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
+		if state == runtimeDown {
+			down = append(down, bin)
+			continue
+		}
+		if state == runtimeAbsent {
 			continue
 		}
 		found, err := exec.RuntimeListLabelled(ctx, bin, kind, attempt)
@@ -91,14 +132,17 @@ func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt 
 			out = append(out, f)
 		}
 	}
+	if len(down) > 0 {
+		return out, &RuntimeDownError{Binaries: down}
+	}
 	return out, nil
 }
 
 // Remove removes one resource by the "<binary>:<id>" a List returned.
-func (r *ExecRuntime) Remove(ctx context.Context, kind exec.ResourceKind, id string) error {
+func (r *ExecRuntime) Remove(ctx context.Context, kind exec.ResourceKind, id, attempt string) error {
 	for _, bin := range r.binaries() {
 		if len(id) > len(bin)+1 && id[:len(bin)+1] == bin+":" {
-			return exec.RuntimeRemoveLabelled(ctx, bin, kind, id[len(bin)+1:])
+			return exec.RuntimeRemoveLabelled(ctx, bin, kind, id[len(bin)+1:], attempt)
 		}
 	}
 	return errors.New("hygiene: resource id has no runtime prefix")

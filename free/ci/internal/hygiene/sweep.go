@@ -5,7 +5,8 @@ package hygiene
 // Inputs:  the attempt ids of live leases.
 // Outputs: a SweepReport; E681 when something could not be removed.
 // Constraints: a live attempt is never touched; a root younger than Host.MinAge is skipped; only
-// entries with a safe attempt name and resources carrying the attempt label are considered.
+// entries with a safe attempt name and resources carrying the attempt label are considered, and a
+// labelled resource counts only when its attempt has a root under Base (or Host.OwnsRuntime is set).
 
 import (
 	"context"
@@ -30,6 +31,7 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 	}
 	young := map[string]bool{}
 	candidates := map[string]bool{}
+	hasRoot := map[string]bool{}
 	if h.Base != "" {
 		entries, err := os.ReadDir(h.Base)
 		if err != nil && !os.IsNotExist(err) {
@@ -37,7 +39,11 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 		}
 		for _, e := range entries {
 			name := e.Name()
-			if !ValidAttempt(name) || live[name] {
+			if !ValidAttempt(name) {
+				continue
+			}
+			hasRoot[name] = true
+			if live[name] {
 				continue
 			}
 			if h.MinAge > 0 {
@@ -51,13 +57,18 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 		}
 	}
 	for _, kind := range Kinds {
-		found, err := h.runtime().List(ctx, kind, "")
+		found, note, err := h.listResources(ctx, kind, "")
 		if err != nil {
 			rep.Failed["list "+string(kind)] = err
 			continue
 		}
+		if note != "" {
+			rep.Skipped = append(rep.Skipped, note)
+		}
 		for _, r := range found {
-			if !live[r.Attempt] && !young[r.Attempt] {
+			// A labelled resource with no root here belongs to another CI home, user or agent on a
+			// shared daemon unless this host owns the daemon.
+			if !live[r.Attempt] && !young[r.Attempt] && (hasRoot[r.Attempt] || h.OwnsRuntime) {
 				candidates[r.Attempt] = true
 			}
 		}

@@ -6,7 +6,8 @@ package hygiene
 // where a UID scan would match the operator's whole session).
 // Outputs: a Report; E681 (hygiene.leak_detected) when it is not clean.
 // Constraints: read-only; a check that could not run is reported as an "unverified" leak, never as
-// clean; without /proc (macOS) the process and socket scans are reported as skipped.
+// clean; only two limits are reported as skipped instead: no /proc at all (macOS) and an installed
+// container runtime that is not answering on a host that does not require one.
 
 import (
 	"context"
@@ -79,16 +80,23 @@ func (h *Host) LeakCheck(ctx context.Context, attempt string, uid int) (Report, 
 		if dirs == nil {
 			dirs = []string{os.TempDir(), "/tmp", "/var/tmp", "/dev/shm"}
 		}
-		for _, f := range ownedFiles(dedupe(dirs), uid, root) {
+		files, complete := ownedFiles(dedupe(dirs), uid, root)
+		for _, f := range files {
 			rep.Leaks = append(rep.Leaks, Leak{LeakFile, f})
+		}
+		if !complete {
+			rep.Leaks = append(rep.Leaks, Leak{LeakUnverified, "file scan stopped at its entry limit"})
 		}
 	}
 	kinds := map[string]LeakKind{"container": LeakContainer, "network": LeakNetwork, "volume": LeakVolume}
 	for _, kind := range Kinds {
-		found, err := h.runtime().List(ctx, kind, attempt)
+		found, note, err := h.listResources(ctx, kind, attempt)
 		if err != nil {
 			rep.Leaks = append(rep.Leaks, Leak{LeakUnverified, fmt.Sprintf("%s listing: %s", kind, firstLine(err.Error()))})
 			continue
+		}
+		if note != "" {
+			rep.Skipped = append(rep.Skipped, note)
 		}
 		for _, r := range found {
 			rep.Leaks = append(rep.Leaks, Leak{kinds[string(kind)], r.ID})
@@ -103,9 +111,12 @@ func (h *Host) LeakCheck(ctx context.Context, attempt string, uid int) (Report, 
 // checkProcs adds the processes and listening sockets that survived.
 func (h *Host) checkProcs(rep *Report, attempt string, uid int) {
 	procs, err := scanProcs(attempt, uid)
+	if isNoProc(err) {
+		rep.Skipped = append(rep.Skipped, "processes: "+err.Error(), "sockets: "+err.Error())
+		return
+	}
 	if err != nil {
-		rep.Skipped = append(rep.Skipped, "processes: "+err.Error())
-		rep.Skipped = append(rep.Skipped, "sockets: "+err.Error())
+		rep.Leaks = append(rep.Leaks, Leak{LeakUnverified, "process scan: " + firstLine(err.Error())})
 		return
 	}
 	inodes := map[uint64]bool{}

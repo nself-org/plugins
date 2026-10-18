@@ -7,6 +7,7 @@ package hygiene
 // inherits N's files); the base must not be a symlink.
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -40,6 +41,26 @@ type Host struct {
 	ScanDirs []string
 	// DryRun reports what Cleanup would remove and removes nothing (tests).
 	DryRun bool
+	// RuntimeRequired makes an installed container runtime that does not answer a leak instead of a
+	// skipped check (the agent sets it on a node that offers container isolation).
+	RuntimeRequired bool
+	// OwnsRuntime lets SweepOrphans remove labelled resources whose attempt has no root under Base.
+	// Only a node that is the sole user of its container daemon may set it; otherwise a sweep would
+	// remove the live jobs of another CI home, another OS user or a TEAM agent on the same daemon.
+	OwnsRuntime bool
+	// Jobs runs removal and kill as the job user of a separated attempt (job-shim, userns); nil means
+	// the attempt ran under the caller's UID.
+	Jobs JobRunner
+}
+
+// JobRunner performs hygiene's own operations as the job user, which owns the files and processes
+// of a separated attempt and which the agent cannot touch. P7-NODE-06's job-shim implements it.
+type JobRunner interface {
+	// KillAll sends SIGKILL to every process of the job user uid.
+	KillAll(ctx context.Context, uid int) error
+	// EmptyRoot removes everything inside the attempt root as the job user (hygiene's confined
+	// removal, run as uid); the agent then removes the empty root from its own base.
+	EmptyRoot(ctx context.Context, uid int, base, attempt string) error
 }
 
 func (h *Host) logf(format string, a ...any) {
@@ -70,8 +91,8 @@ func JobRoot(base, attempt string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-		return "", leakError(ReasonUnconfined, "job root base is not a plain directory")
+	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 || !ownedByCaller(info) {
+		return "", leakError(ReasonUnconfined, "job root base is not a plain directory owned by the caller")
 	}
 	root := filepath.Join(base, attempt)
 	if err := os.Mkdir(root, 0o700); err != nil {

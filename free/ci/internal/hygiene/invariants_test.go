@@ -81,6 +81,10 @@ func TestInvariant_I08(t *testing.T) {
 	}
 }
 
+// leftoverProcess, when set (Linux), starts a daemonised listening process tagged with the attempt
+// and returns a reaper for the zombie Cleanup leaves behind.
+var leftoverProcess func(attempt string) (reap func(), err error)
+
 // successorSeesNothing leaves state for attempt prev, cleans it, and checks that attempt next starts clean.
 func successorSeesNothing(h *Host, rt *fakeRuntime, base, prev, next string, tr model.TrustClass, level model.Isolation) error {
 	root, err := h.JobRoot(prev)
@@ -99,9 +103,18 @@ func successorSeesNothing(h *Host, rt *fakeRuntime, base, prev, next string, tr 
 	rt.add(exec.KindContainer, "c"+prev, prev)
 	rt.add(exec.KindNetwork, "n"+prev, prev)
 	rt.add(exec.KindVolume, "v"+prev, prev)
+	reap := func() {}
+	if leftoverProcess != nil { // process, socket and environment of N (Linux)
+		r, err := leftoverProcess(prev)
+		if err != nil {
+			return fmt.Errorf("plant process: %w", err)
+		}
+		reap = r
+	}
 	if err := h.Cleanup(context.Background(), prev); err != nil {
 		return fmt.Errorf("cleanup: %w", err)
 	}
+	reap()
 	if rep, err := h.LeakCheck(context.Background(), prev, 0); err != nil || !rep.Clean() {
 		return fmt.Errorf("leak after cleanup: %v %+v", err, rep)
 	}

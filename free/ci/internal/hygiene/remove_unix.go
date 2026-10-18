@@ -6,17 +6,24 @@ package hygiene
 // Inputs:  the base directory and the attempt name inside it.
 // Outputs: the root and everything under it removed; nothing outside it touched.
 // Constraints: every step is relative to an open directory handle (os.Root: openat and unlinkat
-// with O_NOFOLLOW per component), so a symlink swapped in during the walk cannot redirect it; a
-// symlink is unlinked, never followed; a different device (mount point) is refused; directories
+// with O_NOFOLLOW per component), and every opened directory is compared with the entry that was
+// inspected (same file), so a symlink or mount swapped in during the walk cannot redirect it; a
+// symlink is unlinked, never followed; a different device and, on Linux, any mount point listed in
+// mountinfo under the root is refused; directories
 // are made traversable first so a job that chmod-ed its tree to 0 cannot keep it alive.
 
 import (
 	"io/fs"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
 const maxRemoveDepth = 512
+
+// afterInspect, when set by a test, runs between inspecting the attempt entry and opening it, to
+// swap the entry the way a hostile job would.
+var afterInspect func()
 
 // RemoveConfined removes base/name and everything beneath it. A path that escapes the root, or a
 // base that is not a plain directory, is refused and logged through logf (which may be nil).
@@ -61,14 +68,32 @@ func RemoveConfined(base, name string, logf func(string, ...any)) error {
 		// a lone file or symlink in the slot is unlinked itself, never followed
 		return root.Remove(name)
 	}
+	if afterInspect != nil {
+		afterInspect()
+	}
+	baseDev, _ := deviceOf(baseInfo)
+	if d, ok := deviceOf(info); ok && d != baseDev {
+		say("hygiene: refused %s/%s: another device (mount point)", base, name)
+		return leakError(ReasonUnconfined, "the attempt root is a mount point")
+	}
+	if real, err := filepath.EvalSymlinks(base); err == nil {
+		if mounts := mountsUnder(filepath.Join(real, name)); len(mounts) > 0 {
+			say("hygiene: refused %s/%s: mount point inside the root: %s", base, name, mounts[0])
+			return leakError(ReasonUnconfined, "a mount point is inside the attempt root")
+		}
+	}
 	_ = root.Chmod(name, 0o700)
 	sub, err := root.OpenRoot(name)
 	if err != nil {
 		say("hygiene: refused %s/%s: %v", base, name, err)
 		return leakError(ReasonUnconfined, "attempt root could not be opened without following links")
 	}
-	dev, _ := deviceOf(info)
-	failed, first := emptyDir(sub, dev, 0, say)
+	if opened, err := sub.Stat("."); err != nil || !os.SameFile(info, opened) {
+		_ = sub.Close()
+		say("hygiene: refused %s/%s: the entry changed while opening", base, name)
+		return leakError(ReasonUnconfined, "the attempt root changed while opening")
+	}
+	failed, first := emptyDir(sub, baseDev, 0, say)
 	_ = sub.Close()
 	if failed == 0 {
 		if err := root.Remove(name); err != nil {
@@ -132,6 +157,12 @@ func emptyDir(r *os.Root, dev uint64, depth int, say func(string, ...any)) (int,
 		if err != nil {
 			say("hygiene: refused %s: %v", name, err)
 			note(1, err)
+			continue
+		}
+		if opened, err := child.Stat("."); err != nil || !os.SameFile(info, opened) {
+			_ = child.Close()
+			say("hygiene: refused %s: the entry changed while opening", name)
+			note(1, leakError(ReasonUnconfined, "an entry changed while opening"))
 			continue
 		}
 		n, err := emptyDir(child, dev, depth+1, say)

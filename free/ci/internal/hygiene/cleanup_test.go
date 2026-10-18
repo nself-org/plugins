@@ -2,6 +2,7 @@ package hygiene
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -106,15 +107,22 @@ func TestSweepOrphansSparesLiveAndYoungAttempts(t *testing.T) {
 	h.MinAge = time.Hour
 	rt.add(exec.KindContainer, "c-live", "live1")
 	rt.add(exec.KindContainer, "c-orphan", "orphan1")
-	rt.add(exec.KindNetwork, "n-gone", "rootless9") // labelled, no root: still an orphan
+	rt.add(exec.KindNetwork, "n-gone", "rootless9") // labelled, no root here: another home's unless OwnsRuntime
 	rt.add(exec.KindContainer, "c-young", "young1")
 	rt.add(exec.KindContainer, "svc", "")
 	rep, err := h.SweepOrphans(context.Background(), []string{"live1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(rep.Removed, ","); got != "orphan1,rootless9" {
-		t.Fatalf("removed %q", got)
+	if got := strings.Join(rep.Removed, ","); got != "orphan1" {
+		t.Fatalf("removed %q: a resource whose attempt has no root here belongs to someone else", got)
+	}
+	if !rt.has(exec.KindNetwork, "n-gone") {
+		t.Fatal("the sweep removed a labelled resource of an attempt it does not own")
+	}
+	h.OwnsRuntime = true
+	if rep, err = h.SweepOrphans(context.Background(), []string{"live1"}); err != nil || strings.Join(rep.Removed, ",") != "rootless9" {
+		t.Fatalf("a host that owns the daemon removes it: %v %v", rep.Removed, err)
 	}
 	for _, p := range []string{live, young} {
 		if _, err := os.Lstat(p); err != nil {
@@ -129,7 +137,7 @@ func TestSweepOrphansSparesLiveAndYoungAttempts(t *testing.T) {
 			t.Errorf("%s was removed", id)
 		}
 	}
-	if rt.has(exec.KindContainer, "c-orphan") || rt.has(exec.KindNetwork, "n-gone") {
+	if rt.has(exec.KindContainer, "c-orphan") || rt.has(exec.KindNetwork, "n-gone") { // after OwnsRuntime
 		t.Fatal("orphan resources survived")
 	}
 }
@@ -180,4 +188,61 @@ func hasKind(r Report, k LeakKind) bool {
 		}
 	}
 	return false
+}
+
+func TestLeakCheckRuntimeDownIsSkippedOrALeakByHost(t *testing.T) {
+	h, rt := testHost(t)
+	rt.down = true
+	rep, err := h.LeakCheck(context.Background(), "att1", 0)
+	if err != nil || !rep.Clean() || len(rep.Skipped) == 0 {
+		t.Fatalf("a silent runtime is reported as skipped on a host that does not need one: %v %+v", err, rep)
+	}
+	h.RuntimeRequired = true
+	rep, err = h.LeakCheck(context.Background(), "att1", 0)
+	if codeOf(err) != CodeLeak || !hasKind(rep, LeakUnverified) {
+		t.Fatalf("a required runtime that is silent must fail closed: %v %+v", err, rep)
+	}
+}
+
+type fakeJobs struct {
+	killed               []int
+	removed              []string
+	failKill, failRemove error
+}
+
+func (f *fakeJobs) KillAll(_ context.Context, uid int) error {
+	f.killed = append(f.killed, uid)
+	return f.failKill
+}
+func (f *fakeJobs) EmptyRoot(_ context.Context, uid int, base, attempt string) error {
+	f.removed = append(f.removed, base+"/"+attempt)
+	return f.failRemove
+}
+
+func TestCleanupJobRunsAsTheJobUserForSeparatedAttempts(t *testing.T) {
+	h, _ := testHost(t)
+	jobs := &fakeJobs{}
+	h.Jobs = jobs
+	seedRoot(t, h, "att1")
+	uid := os.Geteuid() + 7000 // a job user that is not the caller
+	if err := h.CleanupJob(context.Background(), "att1", uid); err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs.killed) != 1 || jobs.killed[0] != uid || len(jobs.removed) != 1 {
+		t.Fatalf("kill and removal must run as the job user: %+v", jobs)
+	}
+	// the caller's own uid never goes through the job runner
+	jobs2 := &fakeJobs{}
+	h.Jobs = jobs2
+	seedRoot(t, h, "att2")
+	if err := h.CleanupJob(context.Background(), "att2", os.Geteuid()); err != nil || len(jobs2.killed) != 0 {
+		t.Fatalf("own uid: %v %+v", err, jobs2)
+	}
+	// a refused kill is a failure, never a clean cleanup
+	jobs3 := &fakeJobs{failKill: errors.New("sudo: a password is required")}
+	h.Jobs = jobs3
+	seedRoot(t, h, "att3")
+	if err := h.CleanupJob(context.Background(), "att3", uid); codeOf(err) != CodeLeak || !strings.Contains(err.Error(), "password") {
+		t.Fatalf("want E681 naming the refusal, got %v", err)
+	}
 }

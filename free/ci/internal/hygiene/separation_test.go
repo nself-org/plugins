@@ -192,3 +192,34 @@ func TestParseSubuid(t *testing.T) {
 	}
 	_ = fmt.Sprint
 }
+
+func TestSeparationRefusesUnknownAgentUID(t *testing.T) {
+	f := baseFacts()
+	f.AgentUID = 0
+	f.Isolation = "container"
+	if _, err := Separation(f, 0); codeOf(err) != CodeNoJobUID {
+		t.Fatalf("an unset agent uid must not pass: %v", err)
+	}
+	f = baseFacts()
+	f.CoordinatorUID = 0 // unset: treated as the agent's, so the agent's uid is still excluded
+	f.Isolation = "container"
+	f.AgentUID = 65532
+	if p, err := Separation(f, 0); err != nil || p.UID == 65532 {
+		t.Fatalf("agent uid handed out: %+v %v", p, err)
+	}
+}
+
+func TestSeparationProcessUIDNeverSharesAContainerSlotUID(t *testing.T) {
+	f := baseFacts()
+	f.Slots = 4
+	f.JobShim, f.JobUIDs = true, []int{2000, 65533, 2002, 2003}
+	if _, err := Separation(f, 0); codeOf(err) != CodeNoJobUID {
+		t.Fatalf("a job user inside the container slot range must be refused: %v", err)
+	}
+	f = baseFacts()
+	f.Slots = 4
+	f.Userns, f.SubUIDStart, f.SubUIDCount = true, 65530, 65536
+	if _, err := Separation(f, 2); codeOf(err) != CodeNoJobUID {
+		t.Fatalf("a subordinate uid inside the container slot range must be refused: %v", err)
+	}
+}

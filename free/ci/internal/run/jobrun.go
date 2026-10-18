@@ -70,7 +70,7 @@ func (rs *runState) settle(id string, from, to model.JobState, class model.Failu
 
 func (rs *runState) info(pj plan.PlannedJob, job model.Job, attemptID string) AttemptInfo {
 	return AttemptInfo{RunID: rs.sess.RunID, JobID: rs.rows[pj.ID], JobName: pj.ID, AttemptID: attemptID, Revision: rs.rev.SHA, N: 1,
-		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID)}
+		Job: job, IdempotencyKey: idempotencyKey(&job, attemptID), Home: rs.sess.Home}
 }
 
 // failed fills a failure outcome from an error.

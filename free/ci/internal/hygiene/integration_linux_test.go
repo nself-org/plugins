@@ -269,13 +269,59 @@ func TestIntegrationConcurrentAttemptsCannotReadEachOther(t *testing.T) {
 	if out, err := fx.asJob(t, 0, "cat", "/proc/"+pid+"/environ"); err != nil || !strings.Contains(out, "HY_SECRET") {
 		t.Fatalf("job A cannot read its own environ: %q %v", out, err)
 	}
-	// LeakCheck by the job UID sees A's process and nobody else's, and Cleanup (as agent) kills it
+	// LeakCheck by the job UID sees A's process and nobody else's
 	if rep, _ := (&Host{Base: h.Base}).LeakCheck(context.Background(), "projectA-att1", fx.uids[0]); !hasKind(rep, LeakProcess) {
 		t.Fatalf("uid scan missed the job process: %+v", rep)
 	}
 	if rep, _ := (&Host{Base: h.Base}).LeakCheck(context.Background(), "projectB-att1", fx.uids[1]); hasKind(rep, LeakProcess) {
 		t.Fatalf("uid scan matched another UID's process: %+v", rep)
 	}
+	// a job-owned subdirectory the agent cannot enter: the agent alone must fail loudly (E681) ...
+	mustRun(t, "sudo", "-n", "-u", fx.users[0], "--", "sh", "-c", "mkdir "+roots[0]+"/sub && chmod 700 "+roots[0]+"/sub && echo x > "+roots[0]+"/sub/f")
+	agentOnly := &Host{Base: h.Base}
+	if err := agentOnly.CleanupJob(context.Background(), "projectA-att1", fx.uids[0]); codeOf(err) != CodeLeak {
+		t.Fatalf("the agent cannot clean a job user's files and must say so: %v", err)
+	}
+	// ... and with the job-shim runner the kill and removal run as the job user and succeed
+	withShim := &Host{Base: h.Base, Jobs: sudoJobs{t, fx}}
+	if err := withShim.CleanupJob(context.Background(), "projectA-att1", fx.uids[0]); err != nil {
+		t.Fatalf("cleanup through the job user: %v", err)
+	}
+	if _, err := os.Lstat(roots[0]); !os.IsNotExist(err) {
+		t.Fatal("job root survived")
+	}
+	if rep, err := withShim.LeakCheck(context.Background(), "projectA-att1", fx.uids[0]); err != nil || !rep.Clean() {
+		t.Fatalf("leak after job-user cleanup: %v %+v", err, rep)
+	}
+}
+
+// sudoJobs stands in for P7-NODE-06's job-shim: it runs hygiene's operations as the job user.
+type sudoJobs struct {
+	t  *testing.T
+	fx *sudoFixture
+}
+
+func (s sudoJobs) slot(uid int) int {
+	for i, u := range s.fx.uids {
+		if u == uid {
+			return i
+		}
+	}
+	return 0
+}
+
+func (s sudoJobs) KillAll(_ context.Context, uid int) error {
+	// `kill -9 -1` as the job user signals every process that user owns, and nothing else
+	_, err := run(s.t, "sudo", "-n", "-u", s.fx.users[s.slot(uid)], "--", "sh", "-c", "kill -9 -1; true")
+	return err
+}
+
+func (s sudoJobs) EmptyRoot(_ context.Context, uid int, base, attempt string) error {
+	out, err := run(s.t, "sudo", "-n", "-u", s.fx.users[s.slot(uid)], "--", "find", filepath.Join(base, attempt), "-mindepth", "1", "-delete")
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, out)
+	}
+	return nil
 }
 
 func TestIntegrationProbeUsernsFailsClosed(t *testing.T) {

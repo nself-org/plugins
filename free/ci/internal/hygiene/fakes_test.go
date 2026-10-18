@@ -17,6 +17,7 @@ type fakeRuntime struct {
 	items   map[string]string // "kind/id" -> attempt label ("" = unlabelled)
 	failRm  string            // id whose removal fails
 	failLs  bool
+	down    bool // installed but not answering
 	removed []string
 }
 
@@ -34,6 +35,9 @@ func (f *fakeRuntime) List(_ context.Context, kind exec.ResourceKind, attempt st
 	if f.failLs {
 		return nil, errors.New("daemon error")
 	}
+	if f.down {
+		return nil, &RuntimeDownError{Binaries: []string{"docker"}}
+	}
 	var out []exec.Labelled
 	for k, a := range f.items {
 		id, ok := strings.CutPrefix(k, string(kind)+"/")
@@ -45,11 +49,14 @@ func (f *fakeRuntime) List(_ context.Context, kind exec.ResourceKind, attempt st
 	return out, nil
 }
 
-func (f *fakeRuntime) Remove(_ context.Context, kind exec.ResourceKind, id string) error {
+func (f *fakeRuntime) Remove(_ context.Context, kind exec.ResourceKind, id, attempt string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if id == f.failRm {
 		return fmt.Errorf("cannot remove %s", id)
+	}
+	if f.items[string(kind)+"/"+id] != attempt {
+		return nil // relabelled or replaced since the listing: not ours any more
 	}
 	delete(f.items, string(kind)+"/"+id)
 	f.removed = append(f.removed, string(kind)+"/"+id)

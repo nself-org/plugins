@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/hygiene"
 )
 
-func newHygieneHook() *hygieneHook { return &hygieneHook{byRun: map[string][]string{}} }
+func newHygieneHook() *hygieneHook { return &hygieneHook{byRun: map[string][]seenAttempt{}} }
 
 func TestHygieneHookIsRegistered(t *testing.T) {
 	var fin, start bool
@@ -96,7 +97,7 @@ func TestHygieneAttemptStartSweepsOrphansOnceAndSparesLiveWork(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, "processes"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, "processes", "marked1.json"), []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, "processes", "marked1.json"), []byte(fmt.Sprintf(`{"pid":%d}`, os.Getpid())), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h := newHygieneHook()
@@ -117,5 +118,46 @@ func TestHygieneAttemptStartSweepsOrphansOnceAndSparesLiveWork(t *testing.T) {
 	_ = h.AttemptStart(context.Background(), AttemptInfo{RunID: "r1", AttemptID: "own2"})
 	if _, err := os.Lstat(filepath.Join(work, "orphan2")); err != nil {
 		t.Fatal("the sweep must run once per process")
+	}
+}
+
+func TestHygieneHookUsesTheRunsOwnHome(t *testing.T) {
+	envHome, runHome := t.TempDir(), t.TempDir()
+	t.Setenv("NSELF_CI_HOME", envHome)
+	root, err := hygiene.JobRoot(filepath.Join(runHome, "work"), "a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHygieneHook()
+	if err := h.AttemptStart(context.Background(), AttemptInfo{RunID: "r1", AttemptID: "a1", Home: runHome}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Finalize(context.Background(), RunInfo{RunID: "r1", Jobs: []JobOutcome{{AttemptID: "a1"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatal("the root under Options.Home was not cleaned")
+	}
+}
+
+func TestMarkerLiveRequiresAReadableMarkerOfALiveProcess(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if !markerLive(write("alive.json", fmt.Sprintf(`{"pid":%d}`, os.Getpid()))) {
+		t.Error("a marker of a running process must protect its attempt")
+	}
+	for name, body := range map[string]string{"corrupt.json": "not json", "zero.json": `{"pid":0}`, "dead.json": `{"pid":2147483000}`} {
+		if markerLive(write(name, body)) {
+			t.Errorf("%s protects an attempt it should not", name)
+		}
+	}
+	if markerLive(filepath.Join(dir, "missing.json")) {
+		t.Error("a missing marker protects an attempt")
 	}
 }

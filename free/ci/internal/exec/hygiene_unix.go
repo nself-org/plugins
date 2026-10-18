@@ -47,7 +47,11 @@ func KillAttemptGroup(home, attempt string) error {
 	}
 	if groupAlive(marker.PID) {
 		identity, idErr := processIdentity(marker.PID)
-		if idErr == nil && identity != "" && identity != marker.Identity {
+		switch {
+		case idErr != nil || identity == "":
+			// without a start time the leader cannot be told from a reused PID: do not signal it
+			return coded("E610", "attempt process identity unavailable")
+		case identity != marker.Identity:
 			// the leader PID now belongs to another process; its group is not ours to kill
 			removeProcessMarker(home, attempt)
 			return nil

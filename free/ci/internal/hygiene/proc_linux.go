@@ -12,6 +12,7 @@ package hygiene
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,8 +26,14 @@ const procRoot = "/proc"
 type procEntry struct {
 	PID, PGID, UID int
 	Cmd            string
-	Inodes         map[uint64]bool
+	// Start is the process start time (field 22 of /proc/<pid>/stat): with the PID it identifies one
+	// process, so a PID reused after the scan is never signalled.
+	Start  string
+	Inodes map[uint64]bool
 }
+
+// isNoProc reports whether err means the host has no /proc (never true on Linux).
+func isNoProc(error) bool { return false }
 
 // scanProcs returns the live processes owned by uid (when uid > 0) or tagged with the attempt id.
 func scanProcs(attempt string, uid int) ([]procEntry, error) {
@@ -60,7 +67,8 @@ func scanProcs(attempt string, uid int) ([]procEntry, error) {
 		if !match {
 			continue
 		}
-		out = append(out, procEntry{PID: pid, PGID: pgidOf(dir), UID: puid, Cmd: name, Inodes: socketInodes(dir)})
+		pg, start := statFields(dir)
+		out = append(out, procEntry{PID: pid, PGID: pg, UID: puid, Cmd: name, Start: start, Inodes: socketInodes(dir)})
 	}
 	return out, nil
 }
@@ -87,19 +95,22 @@ func parseStatus(s string) (uid int, state byte, name string) {
 	return uid, state, name
 }
 
-func pgidOf(dir string) int {
+// statFields returns the process group and start time of a /proc/<pid> directory.
+func statFields(dir string) (pgid int, start string) {
 	data, err := os.ReadFile(filepath.Join(dir, "stat"))
 	if err != nil {
-		return 0
+		return 0, ""
 	}
 	s := string(data)
 	if i := strings.LastIndexByte(s, ')'); i >= 0 {
-		if f := strings.Fields(s[i+1:]); len(f) > 2 {
-			pg, _ := strconv.Atoi(f[2])
-			return pg
+		// fields after the command: state ppid pgrp session ... starttime is field 22 overall
+		f := strings.Fields(s[i+1:])
+		if len(f) > 19 {
+			pgid, _ = strconv.Atoi(f[2])
+			start = f[19]
 		}
 	}
-	return 0
+	return pgid, start
 }
 
 func socketInodes(dir string) map[uint64]bool {
@@ -159,9 +170,27 @@ func listeners() ([]listener, error) {
 	return out, nil
 }
 
-// killProcs sends SIGKILL to each pid; a process that is already gone is not an error.
-func killProcs(pids []int) {
-	for _, pid := range pids {
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+// killProcs sends SIGKILL to each process through a pidfd (os.FindProcess pins the process), after
+// checking its start time still matches the scan, so a PID reused in between is left alone. A
+// process that is already gone is not an error; a refusal (EPERM) is.
+func killProcs(procs []procEntry) error {
+	var failed []string
+	for _, p := range procs {
+		proc, err := os.FindProcess(p.PID)
+		if err != nil {
+			continue
+		}
+		if _, start := statFields(filepath.Join(procRoot, strconv.Itoa(p.PID))); start != p.Start {
+			_ = proc.Release()
+			continue
+		}
+		if err := proc.Signal(syscall.SIGKILL); err != nil && !errors.Is(err, os.ErrProcessDone) && !errors.Is(err, syscall.ESRCH) {
+			failed = append(failed, "kill pid "+strconv.Itoa(p.PID)+": "+err.Error())
+		}
+		_ = proc.Release()
 	}
+	if len(failed) > 0 {
+		return errors.New(strings.Join(failed, "; "))
+	}
+	return nil
 }
