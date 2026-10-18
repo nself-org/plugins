@@ -1,5 +1,18 @@
 # Auth Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Licensed, in the ClawDE Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.1.3 |
+| **Install** | `nself plugin install auth` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 Advanced authentication plugin supporting OAuth (Google, Apple, Facebook, GitHub, Microsoft), WebAuthn/passkeys, TOTP 2FA with backup codes, magic links, device code flow, session management, and login attempt tracking.
 
 | Property | Value |

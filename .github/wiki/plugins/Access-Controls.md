@@ -1,5 +1,18 @@
 # Access Controls Plugin
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install access-controls` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 Role-based and attribute-based access control (RBAC + ABAC) for nself applications. Define roles, permissions, policies, and authorize requests with wildcard matching, role hierarchies, and conditional evaluation.
 
 | Property | Value |

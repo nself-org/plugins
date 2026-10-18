@@ -1,6 +1,20 @@
 # Dogfood Plugin
 
-> Runs 21 read-only production health checks across backups, DR, tenancy, and security. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install dogfood` |
+| **Commands** | `nself dogfood` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Runs 21 read-only production health checks across backups, DR, tenancy, and security.
 
 ## Install
 

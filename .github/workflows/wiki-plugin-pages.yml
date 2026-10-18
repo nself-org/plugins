@@ -1,0 +1,44 @@
+name: Wiki Plugin Pages
+
+# One generated catalog region per plugin wiki home (P7-TRUTH-19, D10).
+# Fails on a stale region, a missing page, an orphan page, or a plugin surface
+# over its ceiling (D11).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'catalog.json'
+      - 'free/ci/plugin.json'
+      - '.github/wiki/plugins/**'
+      - 'scripts/generate-wiki-plugin-page.py'
+      - 'scripts/test_generate_wiki_plugin_page.py'
+      - 'scripts/testdata/wiki-plugin-pages/**'
+      - 'scripts/wiki-plugin-pages.yaml'
+      - '.github/workflows/wiki-plugin-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-plugin-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wiki-plugin-pages:
+    name: Wiki plugin pages are current
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install PyYAML and pytest
+        run: python3 -m pip install --quiet pyyaml pytest
+
+      - name: Unit tests
+        run: python3 -m pytest -q scripts/test_generate_wiki_plugin_page.py
+
+      - name: Regions current, no missing or orphan page, surface ceilings
+        run: python3 scripts/generate-wiki-plugin-page.py --all --check

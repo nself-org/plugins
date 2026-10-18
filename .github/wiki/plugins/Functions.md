@@ -1,6 +1,20 @@
 # Functions Plugin
 
-> Deploy and manage nself serverless functions. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.7 |
+| **Install** | `nself plugin install functions` |
+| **Commands** | `nself functions`: `delete`, `deploy`, `invoke`, `list`, `logs` |
+| **Requirements** | nSelf >=1.4.12 |
+
+<!-- END GENERATED:catalog -->
+
+> Deploy and manage nself serverless functions.
 
 ## Install
 

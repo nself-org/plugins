@@ -1,5 +1,18 @@
 # Support
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Licensed, in the Chat Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.1.2 |
+| **Install** | `nself plugin install support` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 Helpdesk and customer support for nself-chat - ticketing, SLA, canned responses, knowledge base, analytics.
 
 ## Table of Contents

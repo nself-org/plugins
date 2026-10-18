@@ -1,6 +1,20 @@
 # Sentry-CLI Plugin
 
-> Operates a self-hosted ɳSentry instance: monitors, incidents, status pages, and alerts. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install sentry-cli` |
+| **Commands** | `nself sentry`: `alerts channels`, `alerts test`, `incidents ack`, `incidents list`, `incidents resolve`, `login`, `logout`, `monitors add`, `monitors list`, `monitors pause`, `monitors resume`, `monitors rm`, `status`, `status-pages create`, `status-pages list`, `whoami` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Operates a self-hosted ɳSentry instance: monitors, incidents, status pages, and alerts.
 
 ## Install
 

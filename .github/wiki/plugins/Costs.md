@@ -1,6 +1,20 @@
 # Costs Plugin
 
-> Estimates the monthly bill for your install: VPS, Cloudflare, Vercel, Stripe fees, and licenses. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install costs` |
+| **Commands** | `nself costs` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Estimates the monthly bill for your install: VPS, Cloudflare, Vercel, Stripe fees, and licenses.
 
 ## Install
 

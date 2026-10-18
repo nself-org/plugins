@@ -1,6 +1,19 @@
 # Notify Plugin
 
-> Multi-channel notification service: email over SMTP and HMAC-signed outbound webhooks. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) and Licensed, in the Claw Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | free: 1.2.6; licensed: 1.1.3 |
+| **Install** | `nself plugin install notify` |
+| **Requirements** | free: nSelf >=0.9.9; licensed: nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Multi-channel notification service: email over SMTP and HMAC-signed outbound webhooks.
 
 ## Install
 

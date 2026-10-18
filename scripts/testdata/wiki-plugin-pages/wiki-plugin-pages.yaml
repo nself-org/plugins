@@ -1,0 +1,10 @@
+titles:
+  api: API
+index_pages: [Index.md]
+surface_ceilings:
+  ci:
+    manifest: free/ci/plugin.json
+    max: 12
+    aliases:
+      names: [run, eval, build, forgejo]
+      remove_in: v1.6.0

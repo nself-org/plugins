@@ -1,6 +1,20 @@
 # AI-CLI Plugin
 
-> Chat, local Ollama model management, and Gemini key-pool provisioning from the command line. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install ai-cli` |
+| **Commands** | `nself ai-cli` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Chat, local Ollama model management, and Gemini key-pool provisioning from the command line.
 
 ## Install
 

@@ -1,5 +1,18 @@
 # Photos
 
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Licensed, in the Family Bundle |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.1.2 |
+| **Install** | `nself plugin install photos` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
 Photo album management with EXIF extraction, tagging, face grouping, and thumbnails
 
 ## Table of Contents

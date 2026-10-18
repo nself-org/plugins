@@ -1,6 +1,19 @@
 # nSelf Geo Plugin
 
-> Forward and reverse geocoding with provider-agnostic caching layer. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | planned ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install nself-geo` |
+| **Requirements** | nSelf >=1.1.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Forward and reverse geocoding with provider-agnostic caching layer.
 
 ## Install
 

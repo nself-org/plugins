@@ -1,6 +1,20 @@
 # Gateway Plugin
 
-> Manages the nSelf AI gateway's provider key vault, quota usage, and routing rules. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install gateway` |
+| **Commands** | `nself gateway` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Manages the nSelf AI gateway's provider key vault, quota usage, and routing rules.
 
 ## Install
 

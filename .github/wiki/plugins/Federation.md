@@ -1,6 +1,20 @@
 # Federation Plugin
 
-> Composes an Apollo Router supergraph from every installed plugin's GraphQL subgraph. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install federation` |
+| **Commands** | `nself federation` |
+| **Requirements** | nSelf >=1.2.8 |
+
+<!-- END GENERATED:catalog -->
+
+> Composes an Apollo Router supergraph from every installed plugin's GraphQL subgraph.
 
 ## Install
 

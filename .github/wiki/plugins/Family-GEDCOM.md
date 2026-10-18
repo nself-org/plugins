@@ -1,6 +1,19 @@
 # Family-GEDCOM Plugin
 
-> Imports any GEDCOM 5.5.1/7.0 family-tree export into the (planned) family plugin. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | planned ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install family-gedcom` |
+| **Requirements** | nSelf >=1.0.0 |
+
+<!-- END GENERATED:catalog -->
+
+> Imports any GEDCOM 5.5.1/7.0 family-tree export into the (planned) family plugin.
 
 ## Install
 

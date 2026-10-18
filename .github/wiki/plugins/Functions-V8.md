@@ -1,6 +1,19 @@
 # Functions V8 Plugin
 
-> Edge Functions V8 Runtime. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install functions-v8` |
+| **Requirements** | nSelf >=1.0.9 |
+
+<!-- END GENERATED:catalog -->
+
+> Edge Functions V8 Runtime.
 
 ## Install
 

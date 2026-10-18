@@ -1,0 +1,22 @@
+# Config for scripts/generate-wiki-plugin-page.py (P7-TRUTH-19, D10, D11).
+
+# Page title overrides: slug -> Title (the page is .github/wiki/plugins/<Title>.md).
+# Only needed where the generic Title-Case rule would not match a committed page.
+titles:
+  api: API
+  idme: IDme
+  livekit: LiveKit
+
+# Hand-kept pages that are not a catalogue slug and must not be reported as orphans.
+index_pages: []
+
+# Surface ceilings (D11). The hermetic registry excludes installed plugins, so the
+# ceiling on first-level subcommands is checked here from the plugin manifest.
+# Aliases are listed with a removal version and are not counted.
+surface_ceilings:
+  ci:
+    manifest: free/ci/plugin.json
+    max: 12
+    aliases:
+      names: [run, eval, build, forgejo]
+      remove_in: v1.6.0

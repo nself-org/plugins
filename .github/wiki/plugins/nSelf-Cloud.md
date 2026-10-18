@@ -1,6 +1,19 @@
 # nSelf Cloud Plugin
 
-> ɳCloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org. **Free — MIT licensed.**
+<!-- BEGIN GENERATED:catalog -->
+<!-- Generated from catalog.json by scripts/generate-wiki-plugin-page.py. Do not hand edit. -->
+
+| Field | Value |
+|---|---|
+| **Licence** | Free (MIT) |
+| **Maturity** | planned ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
+| **Version** | 1.2.6 |
+| **Install** | `nself plugin install nself-cloud` |
+| **Requirements** | nSelf >=1.1.0 |
+
+<!-- END GENERATED:catalog -->
+
+> ɳCloud managed hosting infrastructure: tenant lifecycle, server provisioning saga, Stripe metered billing, custom domain management, and team memberships for cloud.nself.org.
 
 ## Install
 
