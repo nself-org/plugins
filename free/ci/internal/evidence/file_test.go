@@ -34,8 +34,18 @@ func TestVerifyFile(t *testing.T) {
 	noStore := r.env()
 	noStore.Store = nil
 	v, err := verify(noStore, ev, "")
-	if err != nil || v.Exit != ExitOK || len(v.Warnings) == 0 || !strings.Contains(v.Warnings[0], "not authenticated") {
-		t.Fatalf("an unknown origin must be reported: %+v %v", v, err)
+	if err != nil || v.Exit != ExitInvalid || len(v.Warnings) == 0 || !strings.Contains(v.Warnings[0], "not authenticated") {
+		t.Fatalf("an unknown origin must be refused and reported: %+v %v", v, err)
+	}
+	forged := ev
+	forged.RunID = "r-forged" // a failing run made to look like a pass cannot hide behind a new run id
+	if v, err = verify(r.env(), forged, ""); err != nil || v.Exit != ExitInvalid {
+		t.Fatalf("a document under a run id this machine never saw: exit %d %v", v.Exit, err)
+	}
+	foreign := ev
+	foreign.RepoID = "local:" + strings.Repeat("f", 64)
+	if v, err = verify(r.env(), foreign, ""); err != nil || v.Exit != ExitInvalid {
+		t.Fatalf("a document of another repository: exit %d %v", v.Exit, err)
 	}
 
 	other := ev
@@ -76,7 +86,7 @@ func TestVerifyFile(t *testing.T) {
 	if v, err = verify(noStore, ev, ""); err != nil || v.Exit != ExitInvalid {
 		t.Fatalf("against the new HEAD the revision differs: exit %d %v", v.Exit, err)
 	}
-	if v, err = verify(noStore, ev, sha); err != nil || v.Exit != ExitOK || v.Report.Freshness.State != "current" {
+	if v, err = verify(r.env(), ev, sha); err != nil || v.Exit != ExitOK || v.Report.Freshness.State != "current" {
 		t.Fatalf("at its own revision: %+v %v", v, err)
 	}
 

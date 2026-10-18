@@ -133,3 +133,38 @@ func TestEndCarriesMetaAndTheResult(t *testing.T) {
 		t.Fatalf("end line: %s", got)
 	}
 }
+
+// blockedWriter stalls every write until release is closed.
+type blockedWriter struct{ release chan struct{} }
+
+func (b blockedWriter) Write(p []byte) (int, error) { <-b.release; return len(p), nil }
+
+// A consumer that stops reading must not hold up best-effort records: TryEmit
+// returns at once while another record is stuck in a write.
+func TestTryEmitNeverWaitsBehindAStalledConsumer(t *testing.T) {
+	w := blockedWriter{release: make(chan struct{})}
+	e := New(w, "ci", "r", "r", nil)
+	stuck := make(chan int64)
+	go func() { stuck <- e.Emit("queued", "", "", nil) }()
+	for e.mu.TryLock() { // wait until the writer goroutine holds the lock
+		e.mu.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	done := make(chan int64)
+	go func() { done <- e.TryEmit("log", "job", "", nil) }()
+	select {
+	case seq := <-done:
+		if seq != 0 {
+			t.Fatalf("a record was written behind a stalled write: seq %d", seq)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("TryEmit waited for the stalled consumer")
+	}
+	close(w.release)
+	if seq := <-stuck; seq != 1 {
+		t.Fatalf("the stalled record got seq %d", seq)
+	}
+	if seq := e.TryEmit("log", "job", "", nil); seq != 2 {
+		t.Fatalf("seq %d after the consumer resumed, want 2 (a dropped record leaves no gap)", seq)
+	}
+}

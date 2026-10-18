@@ -2,8 +2,10 @@ package evidence
 
 import (
 	"context"
+	"io"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -178,5 +180,18 @@ func TestPolicyDigest(t *testing.T) {
 	row := mustRow(t, st, res.RunID)
 	if ev.PolicyDigest != "pol-digest-123" || ev.PolicyDigest != row.PolicyDigest {
 		t.Fatalf("policy_digest %q, row %q", ev.PolicyDigest, row.PolicyDigest)
+	}
+}
+
+// --job runs one job: a check, never the required pipeline.
+func TestJobRunIsAdhocEvidence(t *testing.T) {
+	dir, _ := newRepo(t, baseFiles)
+	home := t.TempDir()
+	c := &cirun.Coordinator{Opts: cirun.Options{Root: dir, Home: home, NoStatus: true, Job: "unit"}, Plan: buildPlan(t, jobsOf("true")), ConfigDigest: "cfg",
+		Out: io.Discard, Capacity: roomy, Poll: 10 * time.Millisecond}
+	res, err := c.Run(context.Background())
+	ok(t, err)
+	if k := res.Summary.Doc.Pipeline.Kind; k != "adhoc" {
+		t.Fatalf("a --job run is kind %q, want adhoc", k)
 	}
 }

@@ -120,8 +120,20 @@ func TestClassOf(t *testing.T) {
 func TestVerifyDocument(t *testing.T) {
 	cur := sampleInputs()
 	good := docOf(t, sampleEvidence())
-	if v, err := VerifyDocument(good, sampleRev, &cur, nil); err != nil || v.Exit != ExitOK || len(v.Warnings) != 1 {
-		t.Fatalf("good document: %+v %v (an unknown origin must warn)", v, err)
+	// nothing in a file proves who wrote it: a pass from an unknown origin is refused
+	if v, err := VerifyDocument(good, sampleRev, &cur, nil); err != nil || v.Exit != ExitInvalid || len(v.Warnings) != 1 {
+		t.Fatalf("good document of an unknown origin: %+v %v", v, err)
+	}
+	// forging can only improve a document, so a failing one keeps its exit
+	failing := sampleEvidence()
+	failing.Result, failing.Checks[0].Result, failing.Counts = "fail", "fail", model.Counts{Fail: 1, Total: 1}
+	if v, err := VerifyDocument(docOf(t, failing), sampleRev, &cur, nil); err != nil || v.Exit != ExitFails {
+		t.Fatalf("a failing document of an unknown origin: %+v %v", v, err)
+	}
+	selfReported := sampleEvidence()
+	selfReported.Producer.Kind, selfReported.Signature.Kind = "self-reported", "self-reported"
+	if v, err := VerifyDocument(docOf(t, selfReported), sampleRev, &cur, nil); err == nil && v.Exit != ExitInvalid {
+		t.Fatalf("a self-reported pass was accepted: %+v", v)
 	}
 	for name, doc := range map[string][]byte{
 		"empty": nil, "not json": []byte("{"), "array": []byte("[]"), "trailing": append(append([]byte{}, good...), []byte(" {}")...),

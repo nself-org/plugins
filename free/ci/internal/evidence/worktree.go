@@ -7,7 +7,7 @@ package evidence
 // Outputs: a detached checkout of exactly that commit in a new directory.
 // Constraints: `git worktree add --detach <tmp> <rev>`; Remove is idempotent
 // and is called on every exit path (the caller defers it and also calls it
-// from its signal handler); removal uses a context that survives Ctrl-C;
+// from the cancel path of its signal context); removal uses a context that survives Ctrl-C;
 // git runs through the exec funnel.
 
 import (
@@ -57,6 +57,13 @@ func slowCapture(ctx context.Context, argv ...string) (string, int, error) {
 	return buf.String(), res.ExitCode, res.Err
 }
 
+// safeGit switches off everything a checked-out revision could use to run
+// code or reach the network while it is being checked out: hooks (a relative
+// core.hooksPath resolves inside the revision), the fsmonitor, and the LFS
+// smudge filter. The revision is untrusted until its jobs run in isolation.
+var safeGit = []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
+	"-c", "filter.lfs.smudge=", "-c", "filter.lfs.process=", "-c", "filter.lfs.required=false"}
+
 // AddWorktree checks rev out into a new temporary directory.
 func AddWorktree(ctx context.Context, c Capture, repo, rev string) (*TempWorktree, error) {
 	if c == nil {
@@ -67,7 +74,7 @@ func AddWorktree(ctx context.Context, c Capture, repo, rev string) (*TempWorktre
 		return nil, fail(CodeWorktree, ExitInternal, "cannot create a temporary directory: %v", err)
 	}
 	w := &TempWorktree{Path: filepath.Join(dir, "tree"), dir: dir, repo: repo, c: c}
-	out, exit, err := c(ctx, "git", "-C", repo, "worktree", "add", "--detach", w.Path, rev)
+	out, exit, err := c(ctx, append(append([]string{"git"}, safeGit...), "-C", repo, "worktree", "add", "--detach", w.Path, rev)...)
 	if err != nil || exit != 0 {
 		_ = w.Remove()
 		return nil, fail(CodeWorktree, ExitInternal, "git worktree add failed for %s: %s", short(rev), firstLine(strings.TrimSpace(out)))
@@ -81,7 +88,7 @@ func (w *TempWorktree) Remove() error {
 	w.once.Do(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(context.Background()), time.Minute)
 		defer cancel()
-		_, _, _ = w.c(ctx, "git", "-C", w.repo, "worktree", "remove", "--force", w.Path)
+		_, _, _ = w.c(ctx, "git", "-C", w.repo, "worktree", "remove", "-f", "-f", w.Path) // -f -f also removes a locked one
 		if err := os.RemoveAll(w.dir); err != nil {
 			w.err = fail(CodeWorktree, ExitInternal, "cannot remove %s: %v", w.dir, err)
 		}

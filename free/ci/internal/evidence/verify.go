@@ -160,10 +160,49 @@ func VerifyDocument(doc []byte, want string, current *model.InputDigests, record
 		v.Reasons = append(v.Reasons, attest.ReasonInvalid)
 		v.Warnings = append(v.Warnings, "the document differs from the evidence this machine recorded for run "+ev.RunID)
 	}
-	if stored == nil && ev.Producer.Kind == "coordinator-recorded" {
-		v.Warnings = append(v.Warnings, "this machine has no record of run "+ev.RunID+": the document's origin is not authenticated")
+	if stored == nil {
+		authenticate(&v, doc, ev, want, current)
 	}
 	return v, nil
+}
+
+// authenticate settles what a document is worth when this machine holds no
+// record of its run. Nothing in the file proves who wrote it, so a verdict of
+// "pass" is refused (exit 11) unless a registered verifier vouches for a
+// signed-remote document. A document that already fails, is stale or is
+// unbound keeps that exit: forging can only make a document look better.
+func authenticate(v *Verdict, doc []byte, ev model.Evidence, want string, current *model.InputDigests) {
+	if ev.Producer.Kind == "signed-remote" {
+		g := attest.Gate{RepoID: ev.RepoID, Revision: want, PolicyDigest: ev.PolicyDigest, MinTrust: ev.SourceTrust, FullSelection: true, Current: current}
+		for _, c := range ev.Checks {
+			if c.Required {
+				g.RequiredJobs = append(g.RequiredJobs, c.JobID)
+			}
+		}
+		for _, r := range attest.GateAcceptDocument(doc, g) {
+			if r == attest.ReasonSignatureUnverifiable || r == attest.ReasonInvalid {
+				v.reject(r, "the signature of run "+ev.RunID+" cannot be verified here")
+				return
+			}
+		}
+		return
+	}
+	why := "this machine has no record of run " + ev.RunID + ": the document's origin is not authenticated"
+	if ev.Producer.Kind == "self-reported" {
+		why = "self-reported evidence is not admitted"
+	}
+	if v.Exit == ExitOK {
+		v.reject(attest.ReasonInvalid, why)
+		return
+	}
+	v.Warnings = append(v.Warnings, why)
+}
+
+// reject turns the verdict into an invalid-evidence one.
+func (v *Verdict) reject(r attest.Reason, warning string) {
+	v.Exit = ExitInvalid
+	v.Reasons = append(v.Reasons, r)
+	v.Warnings = append(v.Warnings, warning)
 }
 
 // sameDocument compares two documents ignoring the read-time freshness.

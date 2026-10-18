@@ -41,7 +41,12 @@ func git(ctx context.Context, c Capture, root string, args ...string) (string, b
 // ok is false when the repository has no commit.
 func RepoID(ctx context.Context, c Capture, root string) (string, bool) {
 	out, ok := git(ctx, c, root, "rev-list", "--max-parents=0", "HEAD")
-	roots := strings.Fields(out)
+	var roots []string
+	for _, tok := range strings.Fields(out) { // git may print warnings in the merged output
+		if fullRevision.MatchString(tok) {
+			roots = append(roots, tok)
+		}
+	}
 	if !ok || len(roots) == 0 {
 		return "", false
 	}
@@ -60,8 +65,8 @@ func GitVersion(ctx context.Context, c Capture, root string) string {
 
 // CommitExists reports whether rev names a commit object in the repository.
 func CommitExists(ctx context.Context, c Capture, root, rev string) bool {
-	_, ok := git(ctx, c, root, "cat-file", "-e", rev+"^{commit}")
-	return ok
+	out, ok := git(ctx, c, root, "cat-file", "-t", rev) // a tag object or a tree id is not a commit
+	return ok && strings.TrimSpace(out) == "commit"
 }
 
 // treeFS is the tracked tree of one revision as an fs.FS. Directories come
@@ -72,6 +77,7 @@ type treeFS struct {
 	root string
 	// files maps a path to its blob id and size; symlinks and submodules are kept out.
 	files map[string]blob
+	links map[string]bool     // symlinks: present but never followed, so never "absent"
 	dirs  map[string][]string // directory -> child names
 }
 
@@ -87,12 +93,16 @@ func TreeFS(ctx context.Context, c Capture, root, rev string) (fs.FS, error) {
 	if !ok {
 		return nil, fail(CodeWorktree, 2, "cannot list the files of %s", short(rev))
 	}
-	t := &treeFS{ctx: ctx, c: c, root: root, files: map[string]blob{}, dirs: map[string][]string{}}
+	t := &treeFS{ctx: ctx, c: c, root: root, files: map[string]blob{}, links: map[string]bool{}, dirs: map[string][]string{}}
 	seen := map[string]bool{}
 	for _, rec := range strings.Split(out, "\x00") {
 		meta, name, found := strings.Cut(rec, "\t")
 		f := strings.Fields(meta)
-		if !found || len(f) != 4 || f[1] != "blob" || f[0] == "120000" { // regular files only
+		if found && len(f) == 4 && f[0] == "120000" {
+			t.links[name] = true
+			continue
+		}
+		if !found || len(f) != 4 || f[1] != "blob" { // regular files only
 			continue
 		}
 		size, _ := strconv.ParseInt(f[3], 10, 64)
@@ -110,7 +120,22 @@ func TreeFS(ctx context.Context, c Capture, root, rev string) (fs.FS, error) {
 	return t, nil
 }
 
+var errSymlink = fmt.Errorf("is a symbolic link: its target is not part of the revision's digest")
+
+// linked reports whether name, or a directory above it, is a symlink.
+func (t *treeFS) linked(name string) bool {
+	for p := name; p != "." && p != "/" && p != ""; p = path.Dir(p) {
+		if t.links[p] {
+			return true
+		}
+	}
+	return false
+}
+
 func (t *treeFS) Open(name string) (fs.File, error) {
+	if t.linked(name) {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: errSymlink}
+	}
 	b, ok := t.files[name]
 	if !ok || !fs.ValidPath(name) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
@@ -125,6 +150,9 @@ func (t *treeFS) Open(name string) (fs.File, error) {
 }
 
 func (t *treeFS) Stat(name string) (fs.FileInfo, error) {
+	if t.linked(name) {
+		return nil, &fs.PathError{Op: "stat", Path: name, Err: errSymlink}
+	}
 	if b, ok := t.files[name]; ok {
 		return info{name: path.Base(name), size: b.size}, nil
 	}

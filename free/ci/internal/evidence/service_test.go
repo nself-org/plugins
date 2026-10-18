@@ -116,6 +116,7 @@ func TestVerifyRevisionIgnoresEvidenceThatCannotGate(t *testing.T) {
 		"dirty tree":        func(r *rig) { write(r.t, r.dir, "a.txt", "dirty\n") },
 		"another policy":    func(r *rig) { r.policy = "pol-2" },
 		"a drill":           func(r *rig) { r.plan.Pipeline.Kind = "drill" },
+		"a named pipeline":  func(r *rig) { r.plan.Pipeline.Kind = "named" },
 		"stale inputs only": func(r *rig) { commitFiles(r.t, r.dir, map[string]string{"go.sum": "x\n"}) },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -123,7 +124,7 @@ func TestVerifyRevisionIgnoresEvidenceThatCannotGate(t *testing.T) {
 			dir, _ := newRepo(t, baseFiles)
 			r := &rig{t: t, dir: dir, home: t.TempDir(), policy: "pol-1", plan: buildPlan(t, jobsOf("true"))}
 			switch name {
-			case "adhoc evidence", "a drill", "dirty tree":
+			case "adhoc evidence", "a drill", "a named pipeline", "dirty tree":
 				if name == "dirty tree" {
 					write(t, dir, "a.txt", "dirty\n")
 				} else {
@@ -223,9 +224,17 @@ func TestShow(t *testing.T) {
 func TestVerifyRevisionIgnoresACancelledRun(t *testing.T) {
 	t.Setenv("TMPDIR", t.TempDir())
 	dir, sha := newRepo(t, baseFiles)
-	r := &rig{t: t, dir: dir, home: t.TempDir(), policy: "pol-1", plan: buildPlan(t, jobsOf("sleep 60"))}
+	started := filepath.Join(t.TempDir(), "started")
+	r := &rig{t: t, dir: dir, home: t.TempDir(), policy: "pol-1", plan: buildPlan(t, jobsOf("sh", "-c", "touch "+started+"; sleep 60"))}
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() { time.Sleep(3 * time.Second); cancel() }()
+	go func() { // cancel once the job runs, however slow the machine is
+		for deadline := time.Now().Add(2 * time.Minute); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+		}
+		cancel()
+	}()
 	c := &cirun.Coordinator{Opts: cirun.Options{Root: dir, Home: r.home, NoStatus: true}, Plan: r.plan, ConfigDigest: "cfg",
 		Hooks: cirun.Hooks{Policy: fixedPolicy(r.policy)}, Out: io.Discard, Capacity: roomy, Poll: 10 * time.Millisecond}
 	res, err := c.Run(ctx)

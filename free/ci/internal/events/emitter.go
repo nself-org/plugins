@@ -49,6 +49,21 @@ func New(w io.Writer, command, runID, pipelineID string, now func() time.Time) *
 func (e *Emitter) Emit(typ model.EventType, job, attempt string, data map[string]any) int64 {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.emitLocked(typ, job, attempt, data)
+}
+
+// TryEmit is Emit for best-effort records (log byte counts): when another
+// record is being written it drops this one instead of waiting, so a stalled
+// consumer can never hold up a job's output reader. It returns 0 when dropped.
+func (e *Emitter) TryEmit(typ model.EventType, job, attempt string, data map[string]any) int64 {
+	if !e.mu.TryLock() {
+		return 0
+	}
+	defer e.mu.Unlock()
+	return e.emitLocked(typ, job, attempt, data)
+}
+
+func (e *Emitter) emitLocked(typ model.EventType, job, attempt string, data map[string]any) int64 {
 	if e.err != nil || e.ended || !typ.Valid() {
 		return 0
 	}

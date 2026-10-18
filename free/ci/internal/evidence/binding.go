@@ -10,6 +10,8 @@ package evidence
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -25,7 +27,7 @@ type Worktree struct {
 // ReadWorktree reads the state of root.
 func ReadWorktree(ctx context.Context, c Capture, root string) Worktree {
 	status, ok := git(ctx, c, root, "status", "--porcelain", "--untracked-files=normal")
-	if ok && strings.TrimSpace(status) == "" {
+	if ok && strings.TrimSpace(status) == "" && !hiddenEdits(ctx, c, root) {
 		return Worktree{}
 	}
 	w := Worktree{Dirty: true}
@@ -34,6 +36,33 @@ func ReadWorktree(ctx context.Context, c Capture, root string) Worktree {
 		w.Tracked = &d
 	}
 	return w
+}
+
+// hiddenEdits reports tracked files git was told not to look at: an
+// assume-unchanged entry, or a skip-worktree entry whose file is present (a
+// sparse checkout leaves excluded paths absent, which hides nothing). `status`
+// is blind to both, yet jobs run on whatever is on disk. A failed listing
+// counts as hidden edits (fail closed).
+func hiddenEdits(ctx context.Context, c Capture, root string) bool {
+	out, ok := git(ctx, c, root, "ls-files", "-v", "-z")
+	if !ok {
+		return true
+	}
+	for _, rec := range strings.Split(out, "\x00") {
+		if len(rec) < 3 {
+			continue
+		}
+		tag, name := rec[0], rec[2:]
+		if tag >= 'a' && tag <= 'z' { // assume-unchanged
+			return true
+		}
+		if tag == 'S' {
+			if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); err == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Apply writes the binding of w into ev. dirty is the coordinator's own

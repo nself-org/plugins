@@ -165,6 +165,7 @@ type EvidenceFacts struct {
 	Store       *store.Store
 	Git         Capture // runs git through the exec funnel
 	Jobs        []JobOutcome
+	Job         string // --job: only that job (and what it needs) ran
 }
 
 // EvidenceBuilder completes the run evidence (P7-CI-38). Begin runs before any

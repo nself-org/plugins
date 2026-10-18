@@ -159,3 +159,76 @@ func TestWorktreeAddsAndRemoves(t *testing.T) {
 		t.Fatalf("a failed add left directories: %v", left)
 	}
 }
+
+// status is blind to skip-worktree and assume-unchanged entries, yet the jobs
+// run on whatever is on disk: both must read as an edited tree.
+func TestHiddenEditsUnbindTheTree(t *testing.T) {
+	ctx := context.Background()
+	for name, flag := range map[string]string{"skip-worktree": "--skip-worktree", "assume-unchanged": "--assume-unchanged"} {
+		t.Run(name, func(t *testing.T) {
+			dir, _ := newRepo(t, baseFiles)
+			gitRun(t, dir, "update-index", flag, "a.txt")
+			write(t, dir, "a.txt", "edited behind git's back\n")
+			if status, _ := git(ctx, nil, dir, "status", "--porcelain"); strings.TrimSpace(status) != "" {
+				t.Fatalf("setup: status is not blind to the edit: %q", status)
+			}
+			if w := ReadWorktree(ctx, nil, dir); !w.Dirty {
+				t.Fatal("a hidden edit read as a clean tree")
+			}
+		})
+	}
+	// a sparse checkout leaves excluded paths absent: nothing is hidden
+	dir, _ := newRepo(t, baseFiles)
+	gitRun(t, dir, "update-index", "--skip-worktree", "a.txt")
+	ok(t, os.Remove(filepath.Join(dir, "a.txt")))
+	if w := ReadWorktree(ctx, nil, dir); w.Dirty {
+		t.Fatal("an absent skip-worktree path made the tree dirty")
+	}
+}
+
+// A symlink where the config lives must fail closed, not read as "no config".
+func TestSymlinkedConfigFailsClosed(t *testing.T) {
+	dir, sha := newRepo(t, baseFiles)
+	ok(t, os.MkdirAll(filepath.Join(dir, ".nself"), 0o755))
+	ok(t, os.Symlink("../ext.yaml", filepath.Join(dir, ".nself", "ci.yaml")))
+	write(t, dir, "ext.yaml", "version: 1\n")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "commit", "-q", "-m", "link")
+	sha = gitRun(t, dir, "rev-parse", "HEAD")
+	if _, err := InputsAt(context.Background(), nil, dir, sha); err == nil {
+		t.Fatal("a symlinked config was digested as if it were absent")
+	} else if e, _ := AsError(err); e == nil || e.Exit != ExitInvalid {
+		t.Fatalf("want exit %d, got %v", ExitInvalid, err)
+	}
+}
+
+func TestCommitExistsRefusesNonCommits(t *testing.T) {
+	ctx := context.Background()
+	dir, sha := newRepo(t, baseFiles)
+	gitRun(t, dir, "tag", "-a", "v1", "-m", "release")
+	tag := gitRun(t, dir, "rev-parse", "v1")
+	tree := gitRun(t, dir, "rev-parse", "HEAD^{tree}")
+	if !CommitExists(ctx, nil, dir, sha) || CommitExists(ctx, nil, dir, tag) || CommitExists(ctx, nil, dir, tree) {
+		t.Fatalf("commit %v tag %v tree %v", CommitExists(ctx, nil, dir, sha), CommitExists(ctx, nil, dir, tag), CommitExists(ctx, nil, dir, tree))
+	}
+}
+
+// The verified revision is untrusted: its own hooks must not run at checkout.
+func TestWorktreeAddRunsNoHooksOfTheRevision(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	dir, _ := newRepo(t, map[string]string{
+		"go.mod": "module x\n", "hooks/post-checkout": "#!/bin/sh\ntouch " + marker + "\n",
+	})
+	ok(t, os.Chmod(filepath.Join(dir, "hooks", "post-checkout"), 0o755))
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "commit", "-q", "-m", "hook")
+	gitRun(t, dir, "config", "core.hooksPath", "hooks") // relative: resolved inside the checked-out tree
+	sha := gitRun(t, dir, "rev-parse", "HEAD")
+	wt, err := AddWorktree(context.Background(), nil, dir, sha)
+	ok(t, err)
+	t.Cleanup(func() { _ = wt.Remove() })
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("the revision's post-checkout hook ran")
+	}
+}

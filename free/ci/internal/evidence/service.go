@@ -127,16 +127,21 @@ func VerifyRevision(ctx context.Context, env Env, rev string) (v Verdict, ran bo
 	if err != nil {
 		return v, false, err
 	}
-	defer func() {
-		if rerr := wt.Remove(); rerr != nil && err == nil {
-			err = rerr
+	defer func() { // a cleanup failure never replaces a verdict already reached
+		if rerr := wt.Remove(); rerr != nil {
+			if err == nil && v.Report.Revision != "" {
+				v.Warnings = append(v.Warnings, "temporary worktree not fully removed: "+firstLine(rerr.Error()))
+			} else if err == nil {
+				err = rerr
+			}
 		}
 	}()
 	ev, err := env.Run(ctx, wt.Path)
 	if err != nil {
 		return v, true, err
 	}
-	return Judge(ev, rev, &current), true, nil
+	v = Judge(ev, rev, &current)
+	return v, true, nil
 }
 
 // held is the evidence on this machine that already answers for rev.
@@ -159,7 +164,7 @@ func (env Env) held(ctx context.Context, rev string, current model.InputDigests)
 	}
 	for _, d := range docs {
 		// only a finished, full-selection verdict answers: a cancelled, errored or affected-only run says nothing about rev
-		if (d.Evidence.Result != "pass" && d.Evidence.Result != "fail") || d.Evidence.Selection.Mode != "full" || repo == "" || d.Evidence.RepoID != repo || (env.Policy != nil && d.Evidence.PolicyDigest != policy) {
+		if (d.Evidence.Result != "pass" && d.Evidence.Result != "fail") || d.Evidence.Selection.Mode != "full" || d.Evidence.Pipeline.Kind != "default" || repo == "" || d.Evidence.RepoID != repo || (env.Policy != nil && d.Evidence.PolicyDigest != policy) {
 			continue
 		}
 		if v := Judge(d.Evidence, rev, &current); v.Exit == ExitOK || v.Exit == ExitFails {
@@ -213,12 +218,35 @@ func VerifyFile(ctx context.Context, env Env, doc []byte, atRev string) (Verdict
 	if err != nil {
 		return v, err
 	}
+	if current == nil { // the revision cannot be read: nothing can be proven fresh or stale
+		v.reject(attest.ReasonInvalid, "the inputs of "+short(want)+" cannot be read in this repository")
+	}
+	env.checkScope(ctx, &v)
 	if terr == nil {
 		missing = MissingInputs(v.Report.Evidence, t)
 	}
 	v.MarkMissing(missing)
 	v.Warnings = append(v.Warnings, warn...)
 	return v, nil
+}
+
+// checkScope refuses a document made for another repository, and marks one
+// made under another policy as stale (--policy required: the policy in force now).
+func (env Env) checkScope(ctx context.Context, v *Verdict) {
+	ev := v.Report.Evidence
+	if id, ok := RepoID(ctx, env.Git, env.Root); !ok || ev.RepoID != id {
+		v.reject(attest.ReasonRepoMismatch, "the document was made for another repository")
+	}
+	if env.Policy == nil {
+		return
+	}
+	if p, err := env.Policy(ctx); err != nil || ev.PolicyDigest != p {
+		v.Reasons = append(v.Reasons, attest.ReasonPolicyMismatch)
+		v.Warnings = append(v.Warnings, "the document was made under another policy than the one in force")
+		if v.Exit == ExitOK {
+			v.Exit = ExitStale
+		}
+	}
 }
 
 // recorded looks a run up in the store, without creating one.

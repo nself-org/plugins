@@ -21,6 +21,8 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
+const maxExcerpt = 2000
+
 // evidenceInput gathers what BuildEvidence needs.
 type evidenceInput struct {
 	RunID, Project, Revision, ConfigDigest, PolicyDigest, Source string
@@ -46,8 +48,6 @@ func checkResult(o JobOutcome) model.CheckResult {
 	}
 }
 
-const maxExcerpt = 2000
-
 // BuildEvidence assembles the ci.evidence/v1 document of a run.
 func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 	sort.Slice(in.Jobs, func(i, j int) bool { return in.Jobs[i].ID < in.Jobs[j].ID })
@@ -69,7 +69,7 @@ func buildEvidence(in evidenceInput) (model.Evidence, string, error) {
 		c := model.Check{ID: firstNonEmpty(o.Check, o.ID), JobID: o.ID, Kind: string(o.Kind), Tool: o.Tool, Required: o.Required,
 			Substantive: o.Substantive, AllowFailure: o.AllowFailure, Result: checkResult(o), Reason: o.Reason, FailureClass: o.FailureClass}
 		if o.State == StateFailed || o.Code != "" {
-			c.Excerpt = clip(o.Tail, maxExcerpt) // the tail is redacted by the exec funnel (D-0948)
+			c.Excerpt = clip(o.Tail, maxExcerpt) // the tail already passed the exec funnel's redactor (D-0948, P7-TRUST-19)
 		}
 		e.Checks = append(e.Checks, c)
 		switch c.Result {
@@ -118,18 +118,18 @@ func shortDigest(s string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
-}
-
 func clip(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	return s[len(s)-n:]
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // beginEvidence reads the inputs and the binding before any job can change
