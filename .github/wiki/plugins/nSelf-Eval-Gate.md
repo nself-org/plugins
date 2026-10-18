@@ -9,6 +9,7 @@
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
 | **Version** | 1.2.6 |
 | **Install** | `nself plugin install nself-eval-gate` |
+| **Commands** | `nself eval`: `gate` |
 | **Requirements** | nSelf >=1.1.1 |
 
 <!-- END GENERATED:catalog -->
