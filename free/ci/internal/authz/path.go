@@ -108,7 +108,11 @@ func ArtifactPath(e Entry, lim Limits) (string, error) {
 	if len(parts) == 0 {
 		return ".", nil
 	}
-	return strings.Join(parts, "/"), nil
+	clean := strings.Join(parts, "/")
+	if hasDrive(clean) { // "./C:/x" cleans to a drive path
+		return "", reject(PathDrive, e.Name)
+	}
+	return clean, nil
 }
 
 // checkType refuses every entry type but regular, directory and symlink.

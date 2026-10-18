@@ -63,7 +63,7 @@ func checkSize(e Entry, lim Limits) error {
 	return ratioCheck(e.Size, e.Packed, lim, e.Name)
 }
 
-// ratioCheck refuses size > ratio * packed above the floor. An unknown packed
+// ratioCheck refuses size > ratio * packed (exactly) above the floor. An unknown packed
 // size counts as one byte, so a large entry with no packed size is refused.
 func ratioCheck(size, packed int64, lim Limits, name string) error {
 	if size <= lim.RatioFloor {
@@ -72,7 +72,7 @@ func ratioCheck(size, packed int64, lim Limits, name string) error {
 	if packed < 1 {
 		packed = 1
 	}
-	if size/packed > lim.MaxRatio {
+	if q := size / packed; q > lim.MaxRatio || (q == lim.MaxRatio && size%packed != 0) { // exact, no truncation
 		return reject(SizeRatio, name)
 	}
 	return nil

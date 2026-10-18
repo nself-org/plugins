@@ -104,3 +104,22 @@ func TestArtifactPath_LinkToDotGitRefused(t *testing.T) {
 		t.Fatalf("opt-in refused: %v", err)
 	}
 }
+
+func TestArtifactPath_DriveAfterDotComponent(t *testing.T) {
+	for _, n := range []string{"./C:/x", "././Z:", "./0:/x"} {
+		if _, err := authz.ArtifactPath(file(n), authz.Limits{}); err == nil {
+			t.Errorf("%q admitted", n)
+		}
+	}
+}
+
+func TestArtifactPath_RatioIsExact(t *testing.T) {
+	over := authz.Entry{Name: "a", Mode: 0o644, Size: 1_050_001, Packed: 10_500}
+	if _, err := authz.ArtifactPath(over, authz.Limits{}); err == nil {
+		t.Fatal("ratio 100.00001 admitted")
+	}
+	at := authz.Entry{Name: "a", Mode: 0o644, Size: 1_050_000, Packed: 10_500}
+	if _, err := authz.ArtifactPath(at, authz.Limits{}); err != nil {
+		t.Fatalf("ratio exactly 100 refused: %v", err)
+	}
+}
