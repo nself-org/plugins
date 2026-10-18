@@ -14,6 +14,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/redact"
+	"github.com/nself-org/plugins/free/ci/internal/services"
 )
 
 const hookSecret = "hook-test-secret-9f3a7c21"
@@ -103,5 +104,23 @@ func TestNewExecutorChainsRedactors(t *testing.T) {
 	}
 	if plain := newExecutor(nil, nil, nil).NewRedactor(); plain == nil {
 		t.Fatal("no default redactor")
+	}
+}
+
+// D-0977: a credential the engine generates for a service reaches the run's
+// redactor through services.SecretSink, so a job that prints it is masked.
+func TestServiceSecretSinkRegistersWithRedactor(t *testing.T) {
+	const generated = "svc-generated-pw-7d41e0b9c5a2"
+	if services.SecretSink == nil {
+		t.Fatal("redact_hook.go must register services.SecretSink")
+	}
+	(&servicesHook{}).addSecret(generated)
+	f := Redactions.NewFilter()
+	out := string(f.Redact([]byte("db password is "+generated+"\n"))) + string(f.Flush())
+	if strings.Contains(out, generated) {
+		t.Fatalf("a generated service credential was not masked: %q", out)
+	}
+	if !strings.Contains(out, redact.Placeholder) {
+		t.Fatalf("no mask in the output: %q", out)
 	}
 }
