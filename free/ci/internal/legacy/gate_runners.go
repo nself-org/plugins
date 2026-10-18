@@ -2,6 +2,7 @@ package legacy
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -176,9 +177,27 @@ func runGatewayRoutingCheck(gatewayBase string, timeout int, verbose bool) []Gat
 	return results
 }
 
-// runStep executes a single gate command and returns its result.
+// stepGrace is how long past the step timeout runStep waits before it kills the
+// command, so a tool's own deadline (go test -timeout) fires first.
+const stepGrace = 30 * time.Second
+
+// stepDeadline is the longest runStep lets one command run: the step timeout
+// raised to goTestMinTimeout (the 120 s default would kill a healthy go test or
+// build), plus stepGrace. It is a backstop against a command that blocks for
+// good (D-0922: 40+ minutes at 0% CPU on MS5), not a tight per-step limit.
+func stepDeadline(timeout int) time.Duration {
+	return time.Duration(goTestTimeout(timeout))*time.Second + stepGrace
+}
+
+// runStep executes a single gate command and returns its result, killing it
+// (whole process group on unix) at stepDeadline(timeout); that is a failed gate.
 // For gofmt specifically, success means no output (unlinted files print their path).
 func runStep(name, root string, timeout int, verbose bool, cmd string, args ...string) GateResult {
+	return runStepWithin(name, root, stepDeadline(timeout), verbose, cmd, args...)
+}
+
+// runStepWithin is runStep with an explicit deadline.
+func runStepWithin(name, root string, deadline time.Duration, verbose bool, cmd string, args ...string) GateResult {
 	start := time.Now()
 	gr := GateResult{Name: name}
 
@@ -195,8 +214,12 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 		fmt.Fprintf(os.Stderr, "[nself-ci] running: %s %s\n", cmd, strings.Join(args, " "))
 	}
 
-	c := exec.Command(cmd, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	c := exec.CommandContext(ctx, cmd, args...)
 	c.Dir = root
+	c.WaitDelay = 10 * time.Second // a grandchild holding the pipes cannot stall the wait
+	killProcessGroupOnCancel(c)
 
 	var buf bytes.Buffer
 	c.Stdout = &buf
@@ -205,6 +228,11 @@ func runStep(name, root string, timeout int, verbose bool, cmd string, args ...s
 	err := c.Run()
 	gr.Output = strings.TrimSpace(buf.String())
 	gr.Elapsed = time.Since(start)
+	if ctx.Err() == context.DeadlineExceeded {
+		gr.Passed = false
+		gr.Output = strings.TrimSpace(fmt.Sprintf("timed out after %s\n%s", deadline, gr.Output))
+		return gr
+	}
 
 	// gofmt: non-empty output means files need formatting → fail.
 	// Vendored modules are third-party code the repo does not format.
