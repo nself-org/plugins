@@ -14,6 +14,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"time"
 )
 
 //go:embed migrations/report-outbox/*.sql
@@ -89,38 +90,59 @@ func (s *Store) OutboxMayPost(ctx context.Context, revision, statusContext strin
 	return ok, err
 }
 
-// OutboxClaim takes the right to deliver seq: it fails (and marks seq
-// superseded) when a newer seq is already posted or being posted, so two
-// processes never post out of order. A claim left by a crashed process is
-// taken over by the next claimant of the same seq.
-func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string, seq int64) (bool, error) {
-	ok := true
+// Claim results.
+const (
+	ClaimOK         = iota // the caller may post
+	ClaimSuperseded        // a newer seq is posted or being posted; do not post
+	ClaimWait              // an older seq is being posted right now; wait, then retry
+	ClaimBusy              // another process is posting this very seq
+)
+
+// claimTTL is how long a posting claim is trusted; a crashed poster's claim
+// older than this is taken over.
+const claimTTL = 60 * time.Second
+
+// OutboxClaim takes the right to deliver seq, so that statuses of one
+// (revision, context) reach the host in seq order even across processes: it is
+// refused when a newer seq is posted or being posted (seq is marked
+// superseded) and told to wait while an older seq is mid-post.
+func (s *Store) OutboxClaim(ctx context.Context, revision, statusContext string, seq int64) (int, error) {
+	result := ClaimOK
 	err := s.write(ctx, func(tx *sql.Tx) error {
-		var newer int
-		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND state IN (?,?)", revision, statusContext, seq, OutboxPosted, OutboxPosting).Scan(&newer); err != nil {
+		now := s.now()
+		cutoff := now.Add(-claimTTL).UnixNano()
+		var newer, older int
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq>? AND (state=? OR (state=? AND claimed_at>?))", revision, statusContext, seq, OutboxPosted, OutboxPosting, cutoff).Scan(&newer); err != nil {
 			return err
 		}
 		if newer > 0 {
-			ok = false
+			result = ClaimSuperseded
 			_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?,?)", OutboxSuperseded, revision, statusContext, seq, OutboxReserved, OutboxPending, OutboxPosting)
 			return err
 		}
-		res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state IN (?,?)", OutboxPosting, revision, statusContext, seq, OutboxPending, OutboxPosting)
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM outbox WHERE revision=? AND context=? AND seq<? AND state=? AND claimed_at>?", revision, statusContext, seq, OutboxPosting, cutoff).Scan(&older); err != nil {
+			return err
+		}
+		if older > 0 {
+			result = ClaimWait
+			return nil
+		}
+		res, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=? WHERE revision=? AND context=? AND seq=? AND (state=? OR (state=? AND claimed_at<=?))", OutboxPosting, now.UnixNano(), revision, statusContext, seq, OutboxPending, OutboxPosting, cutoff)
 		if err != nil {
 			return err
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
-			ok = false
+			result = ClaimBusy
 		}
 		return nil
 	})
-	return ok, err
+	return result, err
 }
 
 // OutboxRelease gives a claim back after a failed delivery.
 func (s *Store) OutboxRelease(ctx context.Context, revision, statusContext string, seq int64) error {
 	return s.write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=? WHERE revision=? AND context=? AND seq=? AND state=?", OutboxPending, revision, statusContext, seq, OutboxPosting)
+		_, err := tx.ExecContext(ctx, "UPDATE outbox SET state=?,claimed_at=0 WHERE revision=? AND context=? AND seq=? AND state=?", OutboxPending, revision, statusContext, seq, OutboxPosting)
 		return err
 	})
 }
@@ -135,7 +157,7 @@ func (s *Store) OutboxPosted(ctx context.Context, revision, statusContext string
 
 // OutboxUnposted lists deliverable entries, oldest first.
 func (s *Store) OutboxUnposted(ctx context.Context) ([]OutboxEntry, error) {
-	rows, err := s.readers.QueryContext(ctx, "SELECT revision,context,seq,state,coalesce(payload_json,x''),created_at FROM outbox WHERE state IN (?,?) ORDER BY created_at,seq", OutboxPending, OutboxPosting)
+	rows, err := s.readers.QueryContext(ctx, "SELECT revision,context,seq,state,coalesce(payload_json,x''),created_at FROM outbox WHERE state=? OR (state=? AND claimed_at<=?) ORDER BY created_at,seq", OutboxPending, OutboxPosting, s.now().Add(-claimTTL).UnixNano())
 	if err != nil {
 		return nil, err
 	}
@@ -285,4 +307,38 @@ func (s *Store) RecordRunEvidence(ctx context.Context, id, pipelineID, revision,
 		}
 		return s.appendAudit(ctx, tx, "coordinator", "evidence", id, "revision="+revision)
 	})
+}
+
+// StrandedAttempt is a queued or finalizing attempt whose coordinator is gone.
+type StrandedAttempt struct {
+	ID, PipelineID, State string
+	Epoch                 int64
+}
+
+// StrandedAttempts lists queued and finalizing attempts of coordinators that
+// are stale on this boot (SweepStale only moves leased and running ones).
+func (s *Store) StrandedAttempts(ctx context.Context, currentBoot string) ([]StrandedAttempt, error) {
+	stale, err := s.StaleCoordinators(ctx, currentBoot)
+	if err != nil {
+		return nil, err
+	}
+	var out []StrandedAttempt
+	for _, c := range stale {
+		rows, err := s.readers.QueryContext(ctx, "SELECT a.id,j.pipeline_id,a.state,a.epoch FROM attempt a JOIN job j ON j.id=a.job_id WHERE a.coordinator_id=? AND a.state IN ('queued','finalizing') ORDER BY a.id", c.ID)
+		if err != nil {
+			return out, err
+		}
+		for rows.Next() {
+			var a StrandedAttempt
+			if err = rows.Scan(&a.ID, &a.PipelineID, &a.State, &a.Epoch); err != nil {
+				_ = rows.Close()
+				return out, err
+			}
+			out = append(out, a)
+		}
+		if err = rows.Close(); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
 }

@@ -102,12 +102,18 @@ type PolicyResolver interface {
 
 // RunView is the read model `ci runs` prints.
 type RunView struct {
-	ID, Revision, Status string
-	Jobs                 []JobView
+	ID       string    `json:"id"`
+	Revision string    `json:"revision"`
+	Status   string    `json:"status"`
+	Jobs     []JobView `json:"jobs,omitempty"`
 }
 
 // JobView is one job of a RunView.
-type JobView struct{ Name, State, FailureClass string }
+type JobView struct {
+	Name         string `json:"name"`
+	State        string `json:"state"`
+	FailureClass string `json:"failure_class,omitempty"`
+}
 
 // RemoteResolver finds runs that live on another machine; it is consulted
 // before the local store by `ci runs`, `ci evidence` and `ci logs`.
@@ -219,4 +225,15 @@ func (h Hooks) Resolved() Hooks {
 	out.AfterRuns = append(append([]AfterRunHook(nil), h.AfterRuns...), r.AfterRuns...)
 	sort.SliceStable(out.Finalizers, func(i, j int) bool { return out.Finalizers[i].Name() < out.Finalizers[j].Name() })
 	return out
+}
+
+// guard calls a hook and turns a panic into an E627 error, so one bad hook
+// cannot kill the coordinator and orphan the other jobs.
+func guard(name string, f func() error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fail(CodeOptions, "%s panicked: %v", name, r)
+		}
+	}()
+	return f()
 }

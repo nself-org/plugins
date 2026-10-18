@@ -104,7 +104,18 @@ func listRuns(ctx context.Context, st *store.Store, asJSON bool) int {
 		return exitForError(err)
 	}
 	if asJSON {
-		if err = output.WriteData(os.Stdout, "ci runs", rows, nil); err != nil {
+		type row struct {
+			ID       string `json:"id"`
+			Project  string `json:"project"`
+			Revision string `json:"revision"`
+			Trigger  string `json:"trigger"`
+			Status   string `json:"status"`
+		}
+		list := make([]row, len(rows))
+		for i, r := range rows {
+			list[i] = row{r.ID, r.Project, r.Revision, r.Trigger, r.Status}
+		}
+		if err = output.WriteData(os.Stdout, "ci runs", list, nil); err != nil {
 			return exitForError(err)
 		}
 		return 0

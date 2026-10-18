@@ -11,6 +11,7 @@ package run
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
@@ -34,7 +35,7 @@ func CancelRun(ctx context.Context, st *store.Store, ref, reason string) (int, e
 			case "passed", "failed", "cancelled":
 				continue
 			}
-			err = st.RequestCancel(ctx, a.ID, reason, a.Epoch)
+			err = retryBusy(func() error { return st.RequestCancel(ctx, a.ID, reason, a.Epoch) })
 			switch {
 			case err == nil:
 				n++
@@ -50,6 +51,19 @@ func CancelRun(ctx context.Context, st *store.Store, ref, reason string) (int, e
 		time.Sleep(20 * time.Millisecond)
 	}
 	return n, nil
+}
+
+// retryBusy retries a store write that lost the SQLite writer lock under
+// heavy load (the store waits 5 s itself; a loaded host can exceed that).
+func retryBusy(f func() error) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		if err = f(); err == nil || !strings.Contains(err.Error(), "SQLITE_BUSY") && !strings.Contains(err.Error(), "database is locked") {
+			return err
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return err
 }
 
 // pollCancels watches for cancel intents until ctx is done.

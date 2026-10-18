@@ -91,7 +91,8 @@ func TestCoordinatorKill(t *testing.T) {
 	got := map[string]string{}
 	at, _ := st.PipelineAttempts(ctx, page.Pipelines[0].ID)
 	for _, a := range at {
-		got[a.JobID[strings.LastIndex(a.JobID, ".")+1:]] = a.State
+		name := a.JobID[strings.LastIndex(a.JobID, ".")+1:]
+		got[name[:strings.LastIndex(name, "-")]] = a.State
 	}
 	if got["pure"] != "retryable" || got["once"] != "needs-operator" {
 		t.Fatalf("attempt states after recovery: %v", got)

@@ -98,10 +98,9 @@ func TestPipelineReads(t *testing.T) {
 	}
 }
 
-// TestOutboxClaimBlocksOlderSeq: while the newer seq is being posted (claimed,
-// not yet posted) the older seq cannot be claimed, so no process posts out of
-// order; a released claim can be taken again.
-func TestOutboxClaimBlocksOlderSeq(t *testing.T) {
+// TestOutboxClaimOrdering: a newer seq claimed first supersedes the older one;
+// an older seq mid-post makes the newer wait; a released claim can be retaken.
+func TestOutboxClaimOrdering(t *testing.T) {
 	s, ctx := testStore(t), context.Background()
 	a, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
 	b, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
@@ -110,19 +109,33 @@ func TestOutboxClaimBlocksOlderSeq(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if ok, err := s.OutboxClaim(ctx, "rev", "nself-ci", b); err != nil || !ok {
-		t.Fatalf("claim newest: %v %v", ok, err)
+	if r, err := s.OutboxClaim(ctx, "rev", "nself-ci", a); err != nil || r != ClaimOK {
+		t.Fatalf("claim older: %d %v", r, err)
 	}
-	if ok, _ := s.OutboxClaim(ctx, "rev", "nself-ci", a); ok {
-		t.Fatal("older seq claimed while the newer is posting")
+	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", a); r != ClaimBusy {
+		t.Fatalf("a live claim must not be taken over: %d", r)
+	}
+	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); r != ClaimWait {
+		t.Fatalf("newer seq must wait for the older post in flight: %d", r)
+	}
+	if err := s.OutboxPosted(ctx, "rev", "nself-ci", a); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); r != ClaimOK {
+		t.Fatalf("newer after older posted: %d", r)
 	}
 	if err := s.OutboxRelease(ctx, "rev", "nself-ci", b); err != nil {
 		t.Fatal(err)
 	}
-	if ok, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); !ok {
-		t.Fatal("released claim could not be retaken")
+	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", b); r != ClaimOK {
+		t.Fatalf("released claim retaken: %d", r)
 	}
+	c, _ := s.OutboxReserve(ctx, "rev", "nself-ci")
+	_ = s.OutboxReady(ctx, "rev", "nself-ci", c, []byte(`{}`))
 	if err := s.OutboxPosted(ctx, "rev", "nself-ci", b); err != nil {
 		t.Fatal(err)
+	}
+	if r, _ := s.OutboxClaim(ctx, "rev", "nself-ci", c); r != ClaimOK {
+		t.Fatalf("c: %d", r)
 	}
 }

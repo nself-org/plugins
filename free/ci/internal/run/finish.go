@@ -41,6 +41,7 @@ type finishIn struct {
 	Hooks     Hooks
 	Jobs      []JobOutcome
 	Cancelled bool
+	Partial   bool // --job or --pipeline: not the whole default gate
 	Start     time.Time
 	Post      statusPost
 	Recovered RecoverReport
@@ -140,17 +141,21 @@ func (c *Coordinator) conclude(f finishIn) Result {
 		notes = append(notes, "run row not finished: "+firstLineOf(err.Error()))
 	}
 	info := RunInfo{RunID: f.RunID, Revision: f.Rev.SHA, EvidenceDigest: digest, Result: ev.Result, Evidence: ev, Jobs: f.Jobs, Dirty: f.Rev.Dirty}
+	// the status goes first and has its own budget: slow hooks must not eat it
+	pctx, pdone := context.WithTimeout(context.WithoutCancel(context.Background()), 60*time.Second)
+	line, pnotes := c.postStatus(pctx, f, info, ev)
+	pdone()
+	notes = append(notes, pnotes...)
 	for _, h := range f.Hooks.AfterRuns {
-		if err = h.AfterRun(bg, info); err != nil {
+		if err = guard("after-run hook", func() error { return h.AfterRun(bg, info) }); err != nil {
 			notes = append(notes, "after-run hook: "+firstLineOf(err.Error()))
 		}
 	}
 	for _, fin := range f.Hooks.Finalizers {
-		if err = fin.Finalize(bg, info); err != nil {
+		if err = guard("finalizer", func() error { return fin.Finalize(bg, info) }); err != nil {
 			notes = append(notes, "finalizer "+fin.Name()+": "+firstLineOf(err.Error()))
 		}
 	}
-	line := c.postStatus(bg, f, info, ev)
 	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
 		Status: line, Evidence: digest, Notes: notes}}
 }
@@ -173,20 +178,28 @@ func defaultStatus(r PublishRequest) report.Status {
 	return report.Status{Owner: r.Owner, Repo: r.Repo, Revision: r.Run.Revision, State: state, Description: report.Truncate(d)}
 }
 
-func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, ev model.Evidence) string {
+func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, ev model.Evidence) (string, []string) {
 	p := f.Post
-	if p.Reporter == nil || p.Outbox == nil {
-		return notPosted(firstNonEmpty(p.Reason, report.ReasonNoRemote))
-	}
-	if ev.Binding.State != "bound" {
-		return notPosted(report.ReasonUnbound)
+	var notes []string
+	switch {
+	case p.Reporter == nil || p.Outbox == nil:
+		return notPosted(firstNonEmpty(p.Reason, report.ReasonNoRemote)), nil
+	case ev.Binding.State != "bound":
+		return notPosted(report.ReasonUnbound), nil
+	case f.Partial:
+		return notPosted(report.ReasonPartial), nil
+	case f.Cancelled:
+		return notPosted(report.ReasonCancelled), nil
 	}
 	req := PublishRequest{Owner: p.Owner, Repo: p.Repo, Run: info, Projection: model.Projection(ev)}
 	s := defaultStatus(req)
 	if f.Hooks.Publisher != nil {
-		var err error
-		if s, err = f.Hooks.Publisher.Publish(ctx, req); err != nil {
-			return notPosted("publisher failed: " + firstLineOf(err.Error()))
+		var custom report.Status
+		err := guard("publisher", func() (e error) { custom, e = f.Hooks.Publisher.Publish(ctx, req); return })
+		if err != nil {
+			notes = append(notes, "publisher failed, default status used: "+firstLineOf(err.Error()))
+		} else {
+			s = custom
 		}
 	}
 	s.Owner, s.Repo, s.Revision = p.Owner, p.Repo, f.Rev.SHA
@@ -199,9 +212,9 @@ func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, 
 	delivered, err := p.Outbox.Complete(ctx, p.Seq, s)
 	switch {
 	case err != nil:
-		return notPosted("could not deliver (kept for the next run): " + firstLineOf(err.Error()))
+		return notPosted("could not deliver (kept for the next run): " + firstLineOf(err.Error())), notes
 	case !delivered:
-		return notPosted("a newer run already posted for this commit")
+		return notPosted("a newer run already posted for this commit"), notes
 	}
-	return fmt.Sprintf("nself-ci: status posted (%s) for %s", s.State, f.Rev.SHA[:7])
+	return fmt.Sprintf("nself-ci: status posted (%s) for %s", s.State, f.Rev.SHA[:7]), notes
 }

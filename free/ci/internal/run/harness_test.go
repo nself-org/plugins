@@ -44,6 +44,10 @@ func buildPlan(t *testing.T, jobs map[string]model.Job) *plan.Plan {
 // gitFake answers git and gh calls: dirty and remote are switchable.
 type gitFake struct {
 	dirty, noRemote, noAuth bool
+	// dirtyAfter > 0 makes the tree dirty from that status call on (a file
+	// changed while the jobs ran); calls counts the status calls.
+	dirtyAfter int
+	calls      *int
 }
 
 func (g gitFake) capture(_ context.Context, argv ...string) (string, int, error) {
@@ -52,6 +56,12 @@ func (g gitFake) capture(_ context.Context, argv ...string) (string, int, error)
 	case strings.Contains(j, "rev-parse HEAD"):
 		return testSHA + "\n", 0, nil
 	case strings.Contains(j, "status --porcelain"):
+		if g.calls != nil {
+			*g.calls++
+			if g.dirtyAfter > 0 && *g.calls >= g.dirtyAfter {
+				return " M f.txt\n", 0, nil
+			}
+		}
 		if g.dirty {
 			return " M file.go\n", 0, nil
 		}

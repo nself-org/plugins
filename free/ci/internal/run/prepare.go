@@ -29,12 +29,13 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 		env[k] = v
 	}
 	for _, h := range rs.hooks.AttemptStarts {
-		if err := h.AttemptStart(ctx, *info); err != nil {
+		if err := guard("attempt-start hook", func() error { return h.AttemptStart(ctx, *info) }); err != nil {
 			return p, err
 		}
 	}
 	if rs.hooks.Cache != nil {
-		setup, err := rs.hooks.Cache.Before(ctx, *info)
+		var setup CacheSetup
+		err := guard("cache hook", func() (e error) { setup, e = rs.hooks.Cache.Before(ctx, *info); return })
 		if err != nil {
 			return p, err
 		}
@@ -51,7 +52,8 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 			return p, fail(CodeOptions, "job needs services %v and no services hook is registered", names)
 		}
 		req := ServicesRequest{RunID: info.RunID, Names: names}
-		up, err := rs.hooks.Services.Up(ctx, req)
+		var up ServicesSetup
+		err := guard("services hook", func() (e error) { up, e = rs.hooks.Services.Up(ctx, req); return })
 		if err != nil {
 			return p, err
 		}
@@ -72,7 +74,7 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 		}
 		if img == "" && rs.hooks.Image != nil {
 			var err error
-			if img, err = rs.hooks.Image.Image(ctx, *info); err != nil {
+			if err = guard("image hook", func() (e error) { img, e = rs.hooks.Image.Image(ctx, *info); return }); err != nil {
 				return p, err
 			}
 		}

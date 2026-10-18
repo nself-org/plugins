@@ -18,13 +18,14 @@ import (
 	"path/filepath"
 
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
+	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
 
 // RecoverReport says what recovery changed.
 type RecoverReport struct {
-	Expired, Lost, Retryable, NeedsOperator int
-	Errors                                  []error
+	Expired, Lost, Retryable, NeedsOperator, Stranded int
+	Errors                                            []error
 }
 
 // staleChecker answers the executor's orphan sweep from the store.
@@ -91,6 +92,7 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 		rep.Errors = append(rep.Errors, err)
 		return rep
 	}
+	rep.Stranded = strandAttempts(ctx, st, boot, &rep)
 	lost, err := st.LostAttempts(ctx)
 	if err != nil {
 		rep.Errors = append(rep.Errors, err)
@@ -114,4 +116,50 @@ func Recover(ctx context.Context, st *store.Store, current, home string) Recover
 		}
 	}
 	return rep
+}
+
+// strandAttempts ends the queued and finalizing attempts of dead coordinators
+// (queued: cancelled; finalizing: failed, class infra) and closes the pipeline
+// rows that have nothing live left.
+func strandAttempts(ctx context.Context, st *store.Store, boot string, rep *RecoverReport) int {
+	list, err := st.StrandedAttempts(ctx, boot)
+	if err != nil {
+		rep.Errors = append(rep.Errors, err)
+		return 0
+	}
+	n := 0
+	pipelines := map[string]bool{}
+	for _, a := range list {
+		to, class := model.JobState("cancelled"), model.FailureClass("cancelled")
+		if a.State == "finalizing" {
+			to, class = "failed", "infra"
+		}
+		d := store.TransitionDetail{Epoch: a.Epoch, FailureClass: class, Reason: "coordinator lost"}
+		if err = st.Transition(ctx, a.ID, model.JobState(a.State), to, d); err != nil {
+			rep.Errors = append(rep.Errors, err)
+			continue
+		}
+		n++
+		pipelines[a.PipelineID] = true
+	}
+	for id := range pipelines {
+		attempts, err := st.PipelineAttempts(ctx, id)
+		if err != nil {
+			rep.Errors = append(rep.Errors, err)
+			continue
+		}
+		live := false
+		for _, a := range attempts {
+			switch a.State {
+			case "queued", "leased", "running", "finalizing":
+				live = true
+			}
+		}
+		if !live {
+			if err = st.FinishPipeline(ctx, id, "lost"); err != nil {
+				rep.Errors = append(rep.Errors, err)
+			}
+		}
+	}
+	return n
 }

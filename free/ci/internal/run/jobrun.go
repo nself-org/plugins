@@ -115,6 +115,7 @@ func (rs *runState) runAttempt(ctx context.Context, i int, pj plan.PlannedJob, o
 	rs.attempts[adm.AttemptID] = pj.ID
 	rs.mu.Unlock()
 	if !adm.Local {
+		_, _ = rs.settle(adm.AttemptID, "leased", "cancelled", "cancelled") // never leave a leased attempt a remote runner may still start
 		return failed(o, fail(CodeOptions, "attempt %s was placed on a remote runner; this coordinator cannot await it", adm.AttemptID))
 	}
 	return rs.runLeased(jctx, pj, *job, adm.AttemptID, o)

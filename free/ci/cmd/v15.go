@@ -223,7 +223,7 @@ func runBare(args []string) int {
 	case err != nil:
 		return exitForError(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
 	defer stop()
 	hooks := cirun.Hooks{}.Resolved()
 	if err = o.Validate(hooks); err != nil {
@@ -240,10 +240,20 @@ func runBare(args []string) int {
 	if err != nil {
 		return exitForError(err)
 	}
-	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, Substantive: subst, Out: os.Stdout}
+	c := &cirun.Coordinator{Opts: o, Plan: p, ConfigDigest: digest, ConfigOutside: configOutside(o.Root), Substantive: subst, Out: os.Stdout}
 	res, err := c.Run(ctx)
 	if err != nil {
 		return exitForError(err)
 	}
 	return res.Exit
+}
+
+// configOutside is true when --config names a file other than the repo's own
+// .nself/ci.yaml: that run cannot be bound to the commit.
+func configOutside(root string) bool {
+	if bare.cfg == "" {
+		return false
+	}
+	abs, err := filepath.Abs(bare.cfg)
+	return err != nil || filepath.Clean(abs) != filepath.Join(root, config.FileName)
 }

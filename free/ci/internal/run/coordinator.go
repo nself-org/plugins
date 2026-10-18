@@ -36,6 +36,9 @@ type Coordinator struct {
 	Hooks        Hooks
 	Plan         *plan.Plan
 	ConfigDigest string
+	// ConfigOutside is true when the config is not the tracked file in Root
+	// (--config elsewhere): such a run is never bound to the commit.
+	ConfigOutside bool
 	// Substantive says whether a job counts as substantive evidence; nil
 	// means every job does.
 	Substantive func(plan.PlannedJob) bool
@@ -66,11 +69,12 @@ func newRunID() string {
 
 // rowID names the job row of a planned job; it must stay a valid executor id.
 func rowID(runID, job string) string {
+	// the digest keeps two job ids that safeID maps to one string apart
 	s := safeID(job)
-	if len(s) > 60 {
-		s = s[:48] + "-" + shortDigest(job)
+	if len(s) > 40 {
+		s = s[:40]
 	}
-	return runID + "." + s
+	return runID + "." + s + "-" + shortDigest(job)[:8]
 }
 
 func (c *Coordinator) capture() Capture {
@@ -198,6 +202,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	rev := GitRevision(ctx, c.Opts.Root, c.capture())
+	rev.Dirty = rev.Dirty || c.ConfigOutside
 	source, err := c.classify(ctx, h, rev)
 	if err != nil {
 		return Result{}, err
@@ -248,8 +253,11 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	post := c.prepareStatus(ctx, st, rev)
 	start := time.Now()
 	c.drive(ctx, rs, st, coord.ID)
+	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {
+		rev.Dirty = true // the tree moved or changed while jobs ran: the result is not bound to the start commit
+	}
 	res := c.conclude(finishIn{St: st, RunID: runID, Rev: rev, Source: source, Policy: pol, Hooks: h, Jobs: rs.outcomes(),
-		Cancelled: rs.userCancel || ctx.Err() != nil, Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped})
+		Cancelled: rs.userCancel || ctx.Err() != nil, Partial: c.Opts.Job != "" || c.Opts.Pipeline != "", Start: start, Post: post, Recovered: recovered, Skipped: c.Plan.Skipped})
 	rs.render.Done(res.Summary)
 	return res, nil
 }

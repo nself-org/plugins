@@ -11,6 +11,7 @@ package report
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/store"
 )
@@ -19,6 +20,7 @@ import (
 type Outbox struct {
 	Store    *store.Store
 	Reporter Reporter
+	Pause    time.Duration // poll interval while an older post is in flight (tests)
 }
 
 // Reserve takes the seq a run will use for its final status.
@@ -46,15 +48,36 @@ func (o *Outbox) deliver(ctx context.Context, seq int64, s Status) (bool, error)
 	if o.Reporter == nil {
 		return false, nil
 	}
-	ok, err := o.Store.OutboxClaim(ctx, s.Revision, Context, seq)
-	if err != nil || !ok {
-		return false, err
+	for waited := 0; waited < 240; waited++ { // an older post in flight: wait up to ~2 minutes
+		res, err := o.Store.OutboxClaim(ctx, s.Revision, Context, seq)
+		if err != nil {
+			return false, err
+		}
+		switch res {
+		case store.ClaimOK:
+			if err = o.Reporter.Post(ctx, s); err != nil {
+				_ = o.Store.OutboxRelease(context.WithoutCancel(ctx), s.Revision, Context, seq)
+				return false, err
+			}
+			return true, o.Store.OutboxPosted(context.WithoutCancel(ctx), s.Revision, Context, seq)
+		case store.ClaimWait:
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(o.pause()):
+			}
+		default:
+			return false, nil
+		}
 	}
-	if err = o.Reporter.Post(ctx, s); err != nil {
-		_ = o.Store.OutboxRelease(context.WithoutCancel(ctx), s.Revision, Context, seq)
-		return false, err
+	return false, nil // still waiting: the entry stays pending for the next invocation
+}
+
+func (o *Outbox) pause() time.Duration {
+	if o.Pause > 0 {
+		return o.Pause
 	}
-	return true, o.Store.OutboxPosted(ctx, s.Revision, Context, seq)
+	return 500 * time.Millisecond
 }
 
 // Drain delivers every pending entry, oldest first, and returns how many

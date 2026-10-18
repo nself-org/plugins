@@ -22,6 +22,8 @@ const (
 	ReasonNoAuth     = "gh not authenticated"
 	ReasonUnbound    = "worktree is dirty, evidence is not bound to the commit"
 	ReasonNoRevision = "no commit to bind the status to"
+	ReasonPartial    = "partial run (--job or --pipeline), not the whole gate"
+	ReasonCancelled  = "run cancelled"
 )
 
 // GH posts statuses through the gh CLI.

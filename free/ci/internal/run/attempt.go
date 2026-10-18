@@ -109,7 +109,10 @@ func CreateAttempt(ctx context.Context, s AttemptSpec) (Admitted, error) {
 	}
 	var adm Admitted
 	if Dispatch != nil {
-		adm, err = Dispatch(ctx, s)
+		err = guard("dispatch hook", func() (e error) { adm, e = Dispatch(ctx, s); return })
+		if err == nil && adm.AttemptID != "" && adm.AttemptID != id {
+			err = fail(CodeOptions, "dispatch hook admitted attempt %q, not %q", adm.AttemptID, id)
+		}
 	} else {
 		adm, err = LocalAdmit(ctx, s)
 	}
