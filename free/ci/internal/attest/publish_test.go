@@ -410,3 +410,25 @@ func TestProfileURL_RunnerPublicAddressDropped(t *testing.T) {
 		}
 	}
 }
+
+// An expanded, compressed or v4-mapped spelling of a runner or configured address is the same address.
+func TestProfile_EquivalentAddressSpellings(t *testing.T) {
+	cases := []struct{ known, spelled string }{
+		{"2001:db8::7", "2001:0db8:0:0:0:0:0:7"},
+		{"2001:0db8:0:0:0:0:0:7", "2001:db8::7"},
+		{"203.0.113.7", "::ffff:203.0.113.7"},
+	}
+	for _, c := range cases {
+		for _, p := range []attest.Profile{
+			attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public}).WithRunner(c.known),
+			attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public, Hostnames: []string{c.known}}),
+		} {
+			if got := p.URL("https://[" + c.spelled + "]/log"); got != "" {
+				t.Errorf("known %s: URL with %s kept: %q", c.known, c.spelled, got)
+			}
+			if got := p.Text("failed to reach " + c.spelled + " now"); strings.Contains(got, c.spelled) {
+				t.Errorf("known %s: Text kept %s: %q", c.known, c.spelled, got)
+			}
+		}
+	}
+}

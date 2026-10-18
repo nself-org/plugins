@@ -106,14 +106,14 @@ func (p Profile) scrub(s string, seen []string) string {
 	})
 	s = localHost.ReplaceAllString(s, redactedHost)
 	s = ipv4Re.ReplaceAllStringFunc(s, func(m string) string {
-		if a, ok := parseLooseAddr(m); ok && privateAddr(a) {
+		if a, ok := parseLooseAddr(m); ok && (privateAddr(a) || p.knownAddr(a)) {
 			return redactedIP
 		}
 		return m
 	})
 	s = ipv6Re.ReplaceAllStringFunc(s, func(m string) string {
 		for _, c := range []string{m, strings.TrimSuffix(m, ":")} {
-			if a, err := netip.ParseAddr(c); err == nil && !a.IsUnspecified() && privateAddr(a) {
+			if a, err := netip.ParseAddr(c); err == nil && !a.IsUnspecified() && (privateAddr(a) || p.knownAddr(a)) {
 				return redactedIP
 			}
 		}

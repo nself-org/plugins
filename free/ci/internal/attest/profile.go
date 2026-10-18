@@ -134,12 +134,12 @@ func (p Profile) privateHost(host string) bool {
 	}
 	// configured hosts and known runner ids first: a public address can be a known runner
 	for _, x := range p.hosts {
-		if x != "" && strings.EqualFold(strings.TrimSuffix(x, "."), h) {
+		if sameHost(x, h) {
 			return true
 		}
 	}
 	for x := range p.aliases { // known runner ids
-		if strings.EqualFold(strings.TrimSuffix(x, "."), h) {
+		if sameHost(x, h) {
 			return true
 		}
 	}
@@ -151,6 +151,36 @@ func (p Profile) privateHost(host string) bool {
 	}
 	for _, s := range privateSuffixes {
 		if strings.HasSuffix(h, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameHost compares two host names; two addresses compare by value, so an
+// expanded, compressed or IPv4-mapped spelling of the same address matches.
+func sameHost(x, h string) bool {
+	x = strings.TrimSuffix(strings.ToLower(strings.Trim(x, "[]")), ".")
+	if x == "" {
+		return false
+	}
+	if x == h {
+		return true
+	}
+	ax, okx := parseLooseAddr(x)
+	ah, okh := parseLooseAddr(h)
+	return okx && okh && ax.Unmap() == ah.Unmap()
+}
+
+// knownAddr is true for an address that is a configured host or a known runner id.
+func (p Profile) knownAddr(a netip.Addr) bool {
+	for _, x := range p.hosts {
+		if ax, ok := parseLooseAddr(strings.Trim(strings.ToLower(x), "[]")); ok && ax.Unmap() == a.Unmap() {
+			return true
+		}
+	}
+	for x := range p.aliases {
+		if ax, ok := parseLooseAddr(strings.Trim(strings.ToLower(x), "[]")); ok && ax.Unmap() == a.Unmap() {
 			return true
 		}
 	}
