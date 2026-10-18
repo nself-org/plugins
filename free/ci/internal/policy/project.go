@@ -37,9 +37,12 @@ func ProjectIDGit(ctx context.Context, run Runner, root string) string {
 		return id
 	}
 	g := gitRunner{run: run, root: id}
-	top, ok1 := g.git(ctx, "rev-parse", "--show-toplevel")
-	common, ok2 := g.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if !ok1 || !ok2 {
+	top, ok := g.git(ctx, "rev-parse", "--show-toplevel")
+	if !ok {
+		return id // not a repository: one failed spawn and done
+	}
+	common, ok := g.git(ctx, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if !ok {
 		return id
 	}
 	top, common = ProjectID(lastLine(top)), ProjectID(lastLine(common))
