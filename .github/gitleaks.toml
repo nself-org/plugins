@@ -82,4 +82,11 @@ regexes = [
   '''nself_max_abcdefghijklmnopqrstuvwxyz1234''',
   '''nself_ent_abcdefghijklmnopqrstuvwxyz1234''',
   '''nself_owner_abcdefghijklmnopqrstuvwxyz1234''',
+
+  # free/ci/internal/exec/redact_test.go: synthetic inputs for the output
+  # redactor test. AKIAABCDEFGHIJKLMNOP is the AWS-key SHAPE (alphabet run,
+  # not an issued key) and the PEM block is a three-line stub ("MIIabc"),
+  # both fed to the redactor to prove they are masked.
+  '''AKIAABCDEFGHIJKLMNOP''',
+  '''(?s)^-----BEGIN RSA PRIVATE KEY-----.{0,8}MIIabc.{0,8}-----END RSA PRIVATE KEY-----$''',
 ]
