@@ -446,3 +446,23 @@ func TestProfile_KnownAddressEdgeSpellings(t *testing.T) {
 		t.Errorf("trailing-dot host kept: %q", got)
 	}
 }
+
+func TestProfileText_IPv6SpansInsideLabels(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public}).WithRunner("2001:db8::7")
+	for _, in := range []string{"ipv6:2001:0db8:0:0:0:0:0:7", "dial 2001:0db8:0:0:0:0:0:7.", "x=fe80::1,", "via:10.0.0.1:fd12:3456::9;"} {
+		got := p.Text(in)
+		for _, bad := range []string{"0db8", "fe80", "fd12", "10.0.0.1"} {
+			if strings.Contains(got, bad) {
+				t.Errorf("Text(%q) = %q still holds %q", in, got, bad)
+			}
+		}
+	}
+	if got := p.URL("https://example.org/ipv6:2001:0db8:0:0:0:0:0:7"); got != "" {
+		t.Errorf("URL path with the address kept: %q", got)
+	}
+	start := time.Now()
+	_ = p.Text(strings.Repeat("dead:beef:", 30000))
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("hex/colon run took %v", d)
+	}
+}

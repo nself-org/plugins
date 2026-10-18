@@ -111,14 +111,7 @@ func (p Profile) scrub(s string, seen []string) string {
 		}
 		return m
 	})
-	s = ipv6Re.ReplaceAllStringFunc(s, func(m string) string {
-		for _, c := range []string{m, strings.TrimSuffix(m, ":"), strings.TrimPrefix(m, ":"), strings.TrimPrefix(strings.TrimSuffix(m, ":"), ":")} {
-			if a, err := netip.ParseAddr(c); err == nil && !a.IsUnspecified() && (privateAddr(a) || p.knownAddr(a)) {
-				return redactedIP
-			}
-		}
-		return m
-	})
+	s = ipv6Re.ReplaceAllStringFunc(s, p.redactIPv6Spans)
 	for lit, repl := range p.aliases {
 		s = replaceToken(s, lit, repl)
 	}
@@ -132,6 +125,46 @@ func (p Profile) scrub(s string, seen []string) string {
 		}
 	}
 	return s
+}
+
+// maxIPv6Len is the longest text form of an IPv6 address (with an embedded IPv4 tail).
+const maxIPv6Len = 45
+
+// maxIPv6Run is the longest run of hex digits and colons scanned for addresses.
+const maxIPv6Run = 4096
+
+// redactIPv6Spans replaces every private or known address inside a run of hex
+// digits and colons. The run may carry a label prefix ("ipv6:") or a trailing
+// dot that the regexp swallowed, so each start is tried with each end, longest
+// first; the work is bounded by len(m)*maxIPv6Len cheap parse attempts.
+func (p Profile) redactIPv6Spans(m string) string {
+	if len(m) > maxIPv6Run {
+		return redactedIP // no address is this long: fail closed, keep the work bounded
+	}
+	var out strings.Builder
+	for i := 0; i < len(m); {
+		end := -1
+		if i > 0 && m[i-1] != ':' { // an address starts the run or follows a colon (a label's)
+			out.WriteByte(m[i])
+			i++
+			continue
+		}
+		for j := min(len(m), i+maxIPv6Len); j >= i+2; j-- {
+			a, err := netip.ParseAddr(m[i:j])
+			if err == nil && !a.IsUnspecified() && (privateAddr(a) || p.knownAddr(a)) {
+				end = j
+				break
+			}
+		}
+		if end < 0 {
+			out.WriteByte(m[i])
+			i++
+			continue
+		}
+		out.WriteString(redactedIP)
+		i = end
+	}
+	return out.String()
 }
 
 // genericUsers are account names every CI image has; they identify nobody, and
