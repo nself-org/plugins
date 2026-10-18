@@ -427,7 +427,7 @@ else
 fi
 
 # =============================================================================
-# CHECK 13 — Dependencies are an array, or {required, optional} arrays (registry-schema.json)
+# CHECK 13 — Dependencies are an array, or {required, optional} arrays (the generated registry.json shape)
 # =============================================================================
 section "CHECK 13 — dependencies type validation"
 DEPS_VIOLATIONS=0

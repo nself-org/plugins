@@ -85,7 +85,6 @@ Root should remain intentionally minimal:
 - `plugins/`
 - `shared/`
 - `registry.json`
-- `registry-schema.json`
 - `README.md`
 - `LICENSE`
 - required meta files (for example `.gitignore`)

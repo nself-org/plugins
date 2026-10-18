@@ -13,7 +13,6 @@ Root should contain only:
 - `plugins/`
 - `shared/`
 - `registry.json`
-- `registry-schema.json`
 - `README.md`
 - `LICENSE`
 - Required meta files (for example `.gitignore`)

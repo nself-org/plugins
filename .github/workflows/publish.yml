@@ -36,6 +36,11 @@ jobs:
       - name: Enforce attribution policy
         run: bash .github/scripts/no-attribution-check.sh --all
 
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.26.9'   # >= the go directive of the cli commit in scripts/cli-tools.version
+
       - name: Validate registry.json
         run: |
           # Check JSON syntax
@@ -44,10 +49,9 @@ jobs:
             exit 1
           fi
 
-          # Validate against schema (with format support)
-          # ajv-cli@4 supports -c flag for custom formats; v5+ changed the API
-          npm install -g ajv-cli@4 ajv-formats
-          ajv validate -s registry-schema.json -d registry.json -c ajv-formats
+          # registry.json is a projection (ADR 0009): the pinned cli tools/catalog generates it from free/*/plugin.json
+          # and releases.json, so the shape is checked by regenerating it and failing on drift (no hand-kept schema).
+          bash scripts/plugin-counts.sh --check --free-only
 
       - name: Validate plugin manifests
         run: |

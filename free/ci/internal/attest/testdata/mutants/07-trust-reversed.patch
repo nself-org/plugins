@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -85,7 +85,7 @@
+ 	}
+ 	set.add(jobReasons(ev, g.RequiredJobs)...)
+ 	// an unknown class ranks -1: below every known minimum, and an unknown minimum is never met
+-	if got, min := trust.RankTrust(ev.SourceTrust), trust.RankTrust(g.MinTrust); min < 0 || got < min {
++	if got, min := trust.RankTrust(ev.SourceTrust), trust.RankTrust(g.MinTrust); min < 0 || got > min {
+ 		set.add(ReasonTrustBelowMin)
+ 	}
+ 	if ev.Binding.State != "bound" || ev.WorktreeState != "clean" {

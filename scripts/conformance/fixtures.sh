@@ -142,6 +142,31 @@ mkdir -p "$work/empty"
 for args in "--plugins nonexistent" "--all --root $work/empty"; do
   if out=$(bash "$CONF_DIR/check.sh" --root "$conv" $args 2>&1); then echo "FAIL  check.sh $args exited 0:"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; else echo "pass  check.sh $args exits non-zero"; fi
 done
+# P7-PLUG-38: manifest v2 is the only schema. A v1 manifest (no manifest_version, or version 1) among the plugins fails --all
+# and names the plugin; a plugin directory with no plugin.json fails too (no silent skip). The unplanted tree passes --all.
+for v1 in 'del(.manifest_version)' '.manifest_version = 1'; do
+  rm -rf "$mut/v1all"; mkdir -p "$mut/v1all"; cp -R "$conv/alpha" "$conv/beta" "$mut/v1all/"
+  ( cd "$mut/v1all/beta" && jq "$v1" plugin.json > p.tmp && mv p.tmp plugin.json )
+  out=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --rules exceptions,schema --migration-base "$mig" 2>&1) && { echo "FAIL  --all passed a v1 manifest ($v1)"; rc=1; } \
+    || { printf '%s\n' "$out" | grep -q 'FAIL manifest beta: plugin.json is not manifest_version 2' && echo "pass  --all fails a planted v1 manifest ($v1)" || { echo "FAIL  v1 manifest failed for the wrong reason ($v1)"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; }; }
+done
+rm -rf "$mut/v1all/beta/plugin.json"
+out=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --rules exceptions --migration-base "$mig" 2>&1) && { echo "FAIL  --all passed a plugin dir with no plugin.json"; rc=1; } \
+  || { printf '%s\n' "$out" | grep -q 'FAIL check beta: no plugin.json' && echo "pass  --all fails a plugin dir with no plugin.json" || { echo "FAIL  no-plugin.json failed for the wrong reason"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; }; }
+rm -rf "$mut/v1all"; mkdir -p "$mut/v1all"; cp -R "$conv/alpha" "$conv/beta" "$mut/v1all/"
+# --shard K/N: the shards are disjoint and together exactly --all (CI splits the build rule over them); bad values are usage errors.
+all=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --rules exceptions 2>&1 | sed -n 's/^checked \([a-z].*\)$/\1/p' | sort | tr '\n' ' ')
+parts=; shard_rc=0
+for k in 1 2; do
+  o=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --shard $k/2 --rules exceptions 2>&1) || shard_rc=1
+  parts="$parts $(printf '%s\n' "$o" | sed -n 's/^checked \([a-z].*\)$/\1/p')"
+done
+parts=$(printf '%s\n' $parts | sort | tr '\n' ' ')
+if [ -n "$all" ] && [ "$all" = "$parts" ] && [ $shard_rc -eq 0 ]; then echo "pass  --shard 1/2 and 2/2 together are exactly --all"; else echo "FAIL  shards ($parts) differ from --all ($all)"; rc=1; fi
+for bad in 0/2 3/2 1/0 a/b 1 1/2/3; do
+  if bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --shard $bad --rules exceptions >/dev/null 2>&1; then echo "FAIL  --shard $bad was accepted"; rc=1; else echo "pass  --shard $bad is refused"; fi
+done
+out=$(bash "$CONF_DIR/check.sh" --root "$mut/v1all" --all --rules exceptions,schema --migration-base "$mig" 2>&1) && echo "pass  --all passes an all-v2 tree" || { echo "FAIL  --all failed an all-v2 tree"; printf '%s\n' "$out" | sed 's/^/        /'; rc=1; }
 # The exceptions cap is fixed in the gate: a file that raises its own cap with a comment still fails.
 printf '# cap: 2099-12-31\nexceptions:\n  - rule: docker-socket\n    plugin: beta\n    reason: "fixture"\n    owner_ref: P7-TEST\n    expires: 2099-12-31\n' > "$work/exc-2099.yaml"
 out=$(bash "$CONF_DIR/check.sh" --root "$conv" --plugins beta --rules exceptions --exceptions "$work/exc-2099.yaml" 2>&1) && { echo "FAIL  an exception expiring 2099 with a self-declared cap passed"; rc=1; } || { printf '%s\n' "$out" | grep -q 'after the v1.5.0 cap' && echo "pass  exception expiring 2099 fails despite a self-declared cap" || { echo "FAIL  2099 exception failed for the wrong reason"; rc=1; }; }

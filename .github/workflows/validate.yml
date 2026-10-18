@@ -19,7 +19,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A push to main must finish its full gate (the build shards take a while); only superseded PR runs are cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   schema-validation:
     name: Plugin Schema Validation
@@ -46,8 +47,8 @@ jobs:
 
           # Required top-level fields in every plugin.json
           # `port` is deliberately not in this list. A CLI plugin provides a
-          # command and runs no HTTP server, so it has no port — this repo's
-          # own duplicate-port check already treats "port": 0 as "no server".
+          # command and runs no HTTP server, so it has no port (scripts/conformance/ports.sh,
+          # run by check.sh, owns port uniqueness and treats "port": 0 as "no server").
           # It is checked separately below, only for plugins that are servers.
           REQUIRED_FIELDS="name version description author license category"
 
@@ -76,18 +77,10 @@ jobs:
               fi
             done
 
-            # Port: required for a service plugin, absent for a CLI plugin.
-            # A v2 library (service.kind library, e.g. shared-utils) is vendored code, not a server: no port either.
-            provides_command=$(python3 -c "import json,sys; d=json.load(open('$file')); print('yes' if d.get('pluginType')=='cli' or d.get('binaryName') or (d.get('service') or {}).get('kind')=='library' else 'no')" 2>/dev/null)
-            # A v2 manifest (manifest_version 2) carries the port at service.port and forbids
-            # a top-level `port` (conformance gate E112); a v1 manifest keeps the top-level rule.
-            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('port','') if d.get('manifest_version')==2 else d.get('port',''))" 2>/dev/null)
-
-            if [ "$provides_command" = "yes" ] && [ -z "$port" ]; then
-              port=0   # a command plugin has no HTTP server
-            fi
-            # A v2 plugin of service.kind cli or library has no listener to declare a port for (P7-PLUG-44: monitoring is an init container).
-            kind=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('kind','') if d.get('manifest_version')==2 else '')" 2>/dev/null)
+            # Port (manifest v2: service.port, the manifest owns the port there). A v2
+            # service.kind of cli or library has no listener, so no port to declare (P7-PLUG-44: monitoring is an init container).
+            port=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('port',''))" 2>/dev/null)
+            kind=$(python3 -c "import json,sys; d=json.load(open('$file')); print((d.get('service') or {}).get('kind',''))" 2>/dev/null)
             if [ -z "$port" ] && { [ "$kind" = "cli" ] || [ "$kind" = "library" ]; }; then
               port=0
             fi
@@ -110,7 +103,8 @@ jobs:
             fi
 
             printf "  OK\n"
-          done < <(find free -name "plugin.json" | sort)
+          # Only the plugin's own manifest: vendored copies under third_party/ (shared-utils) are not plugins.
+          done < <(find free -mindepth 2 -maxdepth 2 -name "plugin.json" | sort)
 
           if [ $errors -gt 0 ]; then
             printf "\n%d validation error(s) found\n" "$errors"
@@ -202,36 +196,6 @@ jobs:
           print("All deprecated plugins carry a complete, policy-compliant deprecation block.")
           PY
 
-      - name: Check for duplicate ports
-        run: |
-          printf "Checking for port conflicts...\n"
-
-          # Extract all ports and check for duplicates
-          # Port 0 means "no HTTP server" — skip it in the duplicate check
-          ports=$(find free -name "plugin.json" -exec python3 -c "
-          import json, sys, os
-          for f in sys.argv[1:]:
-            try:
-              d = json.load(open(f))
-              port = d.get('port', '')
-              if str(port) != '0' and port != '' and port is not None:
-                print(port, os.path.dirname(f))
-            except: pass
-          " {} + | sort)
-
-          dupes=$(echo "$ports" | awk '{print $1}' | sort | uniq -d)
-          if [ -n "$dupes" ]; then
-            printf "ERROR: Duplicate ports found:\n"
-            echo "$dupes" | while read -r port; do
-              echo "$ports" | grep "^$port " | while read -r line; do
-                printf "  Port %s used by: %s\n" "${line%% *}" "${line#* }"
-              done
-            done
-            exit 1
-          fi
-
-          printf "No port conflicts found\n"
-
       - name: Verify README and plugin.json exist for each plugin
         run: |
           errors=0
@@ -313,7 +277,7 @@ jobs:
   conformance:
     name: Plugin Conformance
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -334,8 +298,10 @@ jobs:
       - name: Declared-port plugins ship a compose fragment or say installable:false (D-0816)
         run: bash tests/manifests/service-fragments.sh
 
-      - name: Conformance gate on changed plugins
-        run: bash scripts/conformance/check.sh --changed
+      # P7-PLUG-38: every free plugin, not only the changed ones. Manifest v2 is the only schema: a v1 or missing
+      # manifest fails here. The docker `build` rule is the slow one; the conformance-build job below shards it.
+      - name: Conformance gate on every free plugin (manifest v2 is the only schema)
+        run: bash scripts/conformance/check.sh --all --rules exceptions,schema,compat,healthcheck,replace,docker-socket,port-bind,migrations,boot-schema,migration-immutable,migration-idempotent,legacy-renames,repository,ports
 
       # P7-PLUG-55: the release's binary targets, computed on every PR (no release side effects).
       - name: CLI binary targets gate and v1/v2 fixture parity
@@ -381,3 +347,28 @@ jobs:
 
       - name: Released CLI v1.4.12 oracle
         run: bash scripts/conformance/v14-oracle.sh --fixtures
+
+  # P7-PLUG-38: the `build` rule (docker build from the release tarball, network off) of check.sh --all, split over four
+  # runners. Together the shards are exactly --all (fixtures.sh proves it); the other rules run in `conformance` above.
+  conformance-build:
+    name: Plugin build gate (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.26.9'   # >= the go directive of the cli commit in scripts/cli-tools.version
+
+      - name: Build rule on this shard of the free plugins
+        run: bash scripts/conformance/check.sh --all --shard ${{ matrix.shard }}/4 --rules build
+

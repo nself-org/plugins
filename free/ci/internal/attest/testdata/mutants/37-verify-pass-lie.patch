@@ -1,0 +1,11 @@
+--- a/internal/attest/verify.go
++++ b/internal/attest/verify.go
+@@ -92,7 +92,7 @@
+ 	if !bindingConsistent(ev) || !producerConsistent(ev) || !countsConsistent(ev) {
+ 		set.add(ReasonInvalid)
+ 	}
+-	if ev.Result == "pass" && model.Verdict(ev.Checks) != "pass" {
++	if false {
+ 		set.add(ReasonInvalid) // a pass the checks do not support
+ 	}
+ 	return set.list()

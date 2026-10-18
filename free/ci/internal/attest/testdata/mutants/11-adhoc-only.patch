@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -91,7 +91,7 @@
+ 	if ev.Binding.State != "bound" || ev.WorktreeState != "clean" {
+ 		set.add(ReasonUnbound)
+ 	}
+-	if ev.Pipeline.Kind != "default" && ev.Pipeline.Kind != "named" {
++	if ev.Pipeline.Kind == "adhoc" {
+ 		set.add(ReasonAdhoc)
+ 	}
+ 	if g.Current == nil || Fresh(ev, *g.Current).State != "current" {
