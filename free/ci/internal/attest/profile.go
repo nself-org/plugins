@@ -157,10 +157,19 @@ func (p Profile) privateHost(host string) bool {
 	return false
 }
 
+// normalizeHost lower-cases a host, drops brackets, an IPv6 zone and a trailing dot.
+func normalizeHost(x string) string {
+	x = strings.ToLower(strings.Trim(x, "[]"))
+	if i := strings.Index(x, "%"); i >= 0 {
+		x = x[:i]
+	}
+	return strings.TrimSuffix(x, ".")
+}
+
 // sameHost compares two host names; two addresses compare by value, so an
-// expanded, compressed or IPv4-mapped spelling of the same address matches.
+// expanded, compressed, zoned or IPv4-mapped spelling of the same address matches.
 func sameHost(x, h string) bool {
-	x = strings.TrimSuffix(strings.ToLower(strings.Trim(x, "[]")), ".")
+	x, h = normalizeHost(x), normalizeHost(h)
 	if x == "" {
 		return false
 	}
@@ -174,13 +183,18 @@ func sameHost(x, h string) bool {
 
 // knownAddr is true for an address that is a configured host or a known runner id.
 func (p Profile) knownAddr(a netip.Addr) bool {
+	a = a.WithZone("").Unmap()
+	match := func(x string) bool {
+		ax, ok := parseLooseAddr(normalizeHost(x))
+		return ok && ax.Unmap() == a
+	}
 	for _, x := range p.hosts {
-		if ax, ok := parseLooseAddr(strings.Trim(strings.ToLower(x), "[]")); ok && ax.Unmap() == a.Unmap() {
+		if match(x) {
 			return true
 		}
 	}
 	for x := range p.aliases {
-		if ax, ok := parseLooseAddr(strings.Trim(strings.ToLower(x), "[]")); ok && ax.Unmap() == a.Unmap() {
+		if match(x) {
 			return true
 		}
 	}

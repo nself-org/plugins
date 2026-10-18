@@ -112,7 +112,7 @@ func (p Profile) scrub(s string, seen []string) string {
 		return m
 	})
 	s = ipv6Re.ReplaceAllStringFunc(s, func(m string) string {
-		for _, c := range []string{m, strings.TrimSuffix(m, ":")} {
+		for _, c := range []string{m, strings.TrimSuffix(m, ":"), strings.TrimPrefix(m, ":"), strings.TrimPrefix(strings.TrimSuffix(m, ":"), ":")} {
 			if a, err := netip.ParseAddr(c); err == nil && !a.IsUnspecified() && (privateAddr(a) || p.knownAddr(a)) {
 				return redactedIP
 			}

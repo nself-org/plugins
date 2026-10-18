@@ -432,3 +432,17 @@ func TestProfile_EquivalentAddressSpellings(t *testing.T) {
 		}
 	}
 }
+
+func TestProfile_KnownAddressEdgeSpellings(t *testing.T) {
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public}).WithRunner("2001:db8::7")
+	if got := p.URL("https://[2001:db8::7%25eth0]/log"); got != "" {
+		t.Errorf("zoned address kept: %q", got)
+	}
+	if got := p.Text("addr:2001:0db8:0:0:0:0:0:7"); strings.Contains(got, "0db8") {
+		t.Errorf("label-prefixed address kept: %q", got)
+	}
+	q := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public, Hostnames: []string{"203.0.113.7."}})
+	if got := q.Text("dial 203.0.113.7 now"); strings.Contains(got, "203.0.113.7") {
+		t.Errorf("trailing-dot host kept: %q", got)
+	}
+}
