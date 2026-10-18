@@ -2331,7 +2331,7 @@
       "category": "infrastructure",
       "checksum": "2038cab05b345c6d7a367fcfe99432313e919f8448d343cdef3b8634c4563dc4",
       "commands": null,
-      "description": "Full monitoring stack: Prometheus, Grafana, Loki, Promtail, Tempo, Alertmanager, and exporters",
+      "description": "Full monitoring stack: Prometheus, Grafana, Loki, Grafana Alloy, Tempo, Alertmanager, and exporters",
       "docs_url": null,
       "installable": true,
       "maturity": "implemented",
