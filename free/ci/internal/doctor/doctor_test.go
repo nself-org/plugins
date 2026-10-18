@@ -396,3 +396,43 @@ func TestSectionBudget(t *testing.T) {
 		t.Fatalf("%+v after %s", checks, time.Since(start))
 	}
 }
+
+func TestSectionFaultsFailTheReport(t *testing.T) {
+	boom := Section{Name: "boom", Run: func(context.Context, Env) []Check { panic("kaput") }}
+	if c := runOne(context.Background(), boom, Env{}, time.Second); len(c) != 1 || c[0].Status != Fail || c[0].ID != "CI-D097" {
+		t.Errorf("panic: %+v", c)
+	}
+	bad := Section{Name: "bad", Run: func(context.Context, Env) []Check {
+		return []Check{{ID: "CI-DX1", Status: Pass}, {ID: "CI-DX2"}, {Status: Pass}}
+	}}
+	c := runOne(context.Background(), bad, Env{}, time.Second)
+	if len(c) != 3 || c[0].Status != Pass || c[1].ID != "CI-D096" || c[2].ID != "CI-D096" || ExitCode(c) != ExitFailed {
+		t.Errorf("invalid checks: %+v", c)
+	}
+}
+
+func TestBusyStoreIsAWarning(t *testing.T) {
+	d := world{}.deps(t)
+	path, _ := StorePath(d)
+	write(t, path, "")
+	d.OpenStore = func(string) error { return errors.New("SQLITE_BUSY: database is locked") }
+	checks := RunLocal(context.Background(), repo(t, ""), d)
+	if c := one(t, checks, "CI-D004"); c.Status != Warn || !strings.Contains(c.Message, "busy") {
+		t.Errorf("%+v", c)
+	}
+}
+
+func TestMissingRepoIsAnError(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"--repo", filepath.Join(t.TempDir(), "nope")}, &out, &errOut, world{}.deps(t)); code != 2 {
+		t.Fatalf("exit %d: %s%s", code, out.String(), errOut.String())
+	}
+}
+
+func TestBoxedJobDoesNotNeedHostToolchain(t *testing.T) {
+	cfg := "version: 1\njobs:\n  build:\n    kind: build\n    run: [go, build]\n    isolation: container\n    container:\n      image: golang@" + digest + "\n"
+	checks := RunLocal(context.Background(), repo(t, cfg), world{noGo: true}.deps(t))
+	if c := one(t, checks, "CI-D001"); c.Status != Warn {
+		t.Errorf("host go for a boxed job: %+v", c)
+	}
+}

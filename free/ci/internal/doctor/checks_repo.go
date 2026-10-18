@@ -51,6 +51,11 @@ func checkStore(d Deps) []Check {
 		version.Status, version.Message = Fail, "the store is newer than this binary"
 		version.Detail = err.Error()
 		version.Remediation = "Upgrade nself-ci (nself plugin update ci) before opening this store"
+	case isBusy(err):
+		opens.Status, opens.Message = Warn, "the store is busy: another nself ci process holds it ("+path+")"
+		opens.Detail = err.Error()
+		opens.Remediation = "Wait for the running nself ci command to finish, then re-run doctor"
+		version.Status, version.Message = Pass, "not checked: the store is busy"
 	default:
 		opens.Status, opens.Message = Fail, "the store does not open ("+path+")"
 		opens.Detail = err.Error()
@@ -58,6 +63,11 @@ func checkStore(d Deps) []Check {
 		version.Status, version.Message = Pass, "not checked: the store did not open"
 	}
 	return []Check{opens, version}
+}
+
+// isBusy reports a transient SQLite lock, which is not a damaged store.
+func isBusy(err error) bool {
+	return strings.Contains(err.Error(), "SQLITE_BUSY") || strings.Contains(err.Error(), "database is locked")
 }
 
 func checkConfig(root string) (Check, *model.PipelineConfig) {

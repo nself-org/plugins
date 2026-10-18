@@ -102,7 +102,9 @@ func checkToolchains(ctx context.Context, root string, cfg *model.PipelineConfig
 		c := base
 		c.Subject = s
 		version, st := probe(ctx, d, tc.argv...)
-		jobs := requiredJobs(cfg, func(j model.Job) bool { return len(j.Run) > 0 && filepath.Base(j.Run[0]) == tc.bin })
+		jobs := requiredJobs(cfg, func(j model.Job) bool {
+			return !needsDocker(j) && len(j.Run) > 0 && filepath.Base(j.Run[0]) == tc.bin // a boxed job uses the image's toolchain
+		})
 		switch st {
 		case probeOK:
 			c.Status, c.Message = Pass, s+": "+version
@@ -123,6 +125,9 @@ func checkToolchains(ctx context.Context, root string, cfg *model.PipelineConfig
 	return out
 }
 
+// needsDocker reports whether a job runs in a container. needs_services is not
+// counted: the disposable-service runner (P7-CI-42) is not part of this
+// package's inputs, and it owns its own preflight.
 func needsDocker(j model.Job) bool {
 	return j.Container != nil || j.Isolation == "container" || j.Isolation == "sandboxed-container"
 }

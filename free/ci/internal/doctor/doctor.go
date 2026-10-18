@@ -39,7 +39,7 @@ type Check struct {
 	Status      Status `json:"status"`
 	Message     string `json:"message"`
 	Detail      string `json:"detail,omitempty"`
-	Remediation string `json:"remediation,omitempty"`
+	Remediation string `json:"remediation"`
 	Subject     string `json:"subject,omitempty"`
 }
 

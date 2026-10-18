@@ -15,9 +15,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/nself-org/cli/sdk/go/v2/output"
+
+	"github.com/nself-org/plugins/free/ci/internal/config"
 )
 
 const command = "ci doctor"
@@ -60,6 +63,9 @@ func Run(args []string, stdout, stderr io.Writer, d Deps) int {
 	if err != nil {
 		return fail(o.json, stdout, stderr, err)
 	}
+	if fi, statErr := os.Stat(root); statErr != nil || !fi.IsDir() {
+		return fail(o.json, stdout, stderr, fmt.Errorf("doctor: --repo %s is not a readable directory", root))
+	}
 	ctx := context.Background()
 	checks := RunLocal(ctx, root, d)
 	env := Env{Root: root, Capture: d.Capture, Getenv: d.Getenv}
@@ -87,7 +93,7 @@ func Run(args []string, stdout, stderr io.Writer, d Deps) int {
 
 func fail(asJSON bool, stdout, stderr io.Writer, err error) int {
 	if asJSON {
-		_ = output.WriteError(stdout, command, output.ErrorDetail{Code: "E607", Message: err.Error(), ExitCode: 2}, nil)
+		_ = output.WriteError(stdout, command, output.ErrorDetail{Code: config.CodeInvalid, Message: err.Error(), ExitCode: 2}, nil)
 	} else {
 		_, _ = fmt.Fprintln(stderr, err)
 	}

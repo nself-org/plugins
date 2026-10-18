@@ -114,10 +114,19 @@ func runOne(ctx context.Context, s Section, env Env, budget time.Duration) []Che
 	cctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	done := make(chan []Check, 1)
-	go func() { done <- s.Run(cctx, env) }()
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- []Check{{ID: "CI-D097", Name: "section " + s.Name, Status: Fail, Subject: s.Name,
+					Message:     fmt.Sprintf("section %s panicked: %v", s.Name, r),
+					Remediation: "This is a bug in the section; report it with the section name"}}
+			}
+		}()
+		done <- s.Run(cctx, env)
+	}()
 	select {
 	case checks := <-done:
-		return checks
+		return validated(s.Name, checks)
 	case <-cctx.Done():
 		return []Check{{
 			ID: "CI-D098", Name: "section " + s.Name, Status: Warn, Subject: s.Name,
@@ -125,4 +134,19 @@ func runOne(ctx context.Context, s Section, env Env, budget time.Duration) []Che
 			Remediation: "Run the section's own command for details, or free the resource it waits on",
 		}}
 	}
+}
+
+// validated keeps a section from reporting clean by mistake: a check with no
+// id or an unknown status becomes a failure naming the section.
+func validated(section string, checks []Check) []Check {
+	out := make([]Check, 0, len(checks))
+	for _, c := range checks {
+		if c.ID == "" || (c.Status != Pass && c.Status != Warn && c.Status != Fail) {
+			c = Check{ID: "CI-D096", Name: "section " + section, Status: Fail, Subject: section,
+				Message:     fmt.Sprintf("section %s returned a check without an id or with an unknown status", section),
+				Remediation: "This is a bug in the section; report it with the section name"}
+		}
+		out = append(out, c)
+	}
+	return out
 }
