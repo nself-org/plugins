@@ -361,3 +361,15 @@ func TestProfileText_UserFromQueryAndCap(t *testing.T) {
 		t.Errorf("cap overflow leaked: %q", got)
 	}
 }
+
+// Configured user names never count against the learned-user cap.
+func TestProfileText_ConfiguredUsersDoNotFillTheCap(t *testing.T) {
+	var users []string
+	for i := 0; i < 300; i++ {
+		users = append(users, fmt.Sprintf("cfg%03d", i))
+	}
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public, Usernames: users})
+	if got := p.Text("https://logs.example.org/?path=/home/alice/log user alice"); strings.Contains(got, "alice") {
+		t.Errorf("learned user dropped: %q", got)
+	}
+}

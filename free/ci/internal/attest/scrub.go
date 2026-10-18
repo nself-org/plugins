@@ -210,9 +210,19 @@ func addUser(users []string, name string) ([]string, bool) {
 	return append(users, name), true
 }
 
+// appendUser merges a name into a user list without the cap: the names it sees
+// were all counted by learnUsers on the same text, which already failed closed
+// past maxLearnedUsers; configured names never count against the cap.
 func appendUser(users []string, name string) []string {
-	users, _ = addUser(users, name)
-	return users
+	if name == "" || genericUsers[strings.ToLower(name)] {
+		return users
+	}
+	for _, u := range users {
+		if strings.EqualFold(u, name) {
+			return users
+		}
+	}
+	return append(users, name)
 }
 
 // replaceToken replaces lit where it stands alone: a letter, digit or
