@@ -1,0 +1,11 @@
+--- a/internal/attest/fresh.go
++++ b/internal/attest/fresh.go
+@@ -21,7 +21,7 @@
+ 		return freshness("unknown", "current inputs were not supplied")
+ 	case ev.InputDigests.Config == "":
+ 		return freshness("unknown", "evidence binds no config digest")
+-	case ev.InputDigests.Config != current.Config:
++	case false:
+ 		return freshness("stale", "config changed")
+ 	}
+ 	if f := compareFiles("lockfile", ev.InputDigests.Lockfiles, current.Lockfiles); f != nil {

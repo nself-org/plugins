@@ -1,0 +1,11 @@
+--- a/internal/attest/fresh.go
++++ b/internal/attest/fresh.go
+@@ -27,7 +27,7 @@
+ 	if f := compareFiles("lockfile", ev.InputDigests.Lockfiles, current.Lockfiles); f != nil {
+ 		return *f
+ 	}
+-	if f := compareFiles("generated", ev.InputDigests.Generated, current.Generated); f != nil {
++	if f := compareFiles("generated", nil, nil); f != nil {
+ 		return *f
+ 	}
+ 	return model.Freshness{State: "current"}

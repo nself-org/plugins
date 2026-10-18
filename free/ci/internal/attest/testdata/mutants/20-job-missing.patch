@@ -1,0 +1,11 @@
+--- a/internal/attest/gate.go
++++ b/internal/attest/gate.go
+@@ -124,7 +124,7 @@
+ 	set := reasonSet{}
+ 	for _, job := range required {
+ 		switch {
+-		case job == "" || !seen[job]:
++		case job == "":
+ 			set.add(ReasonJobsMismatch)
+ 		case bad[job]:
+ 			set.add(ReasonNotPassing)
