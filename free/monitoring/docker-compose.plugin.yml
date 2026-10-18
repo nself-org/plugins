@@ -20,7 +20,7 @@ services:
   # --- Metrics Collection ---
 
   prometheus:
-    image: prom/prometheus:latest
+    image: docker.io/prom/prometheus:v2.53.0@sha256:075b1ba2c4ebb04bc3a6ab86c06ec8d8099f8fda1c96ef6d104d9bb1def1d8bc
     container_name: ${COMPOSE_PROJECT_NAME}_prometheus
     user: "65534:65534"
     restart: unless-stopped
@@ -48,7 +48,7 @@ services:
   # --- Visualization ---
 
   grafana:
-    image: grafana/grafana:latest
+    image: docker.io/grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
     container_name: ${COMPOSE_PROJECT_NAME}_grafana
     user: "472:472"
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
   # --- Log Aggregation ---
 
   loki:
-    image: grafana/loki:latest
+    image: docker.io/grafana/loki:3.1.0@sha256:d947e68a84d9e44915dfa08c3bec27e2124efd5ba6c83443eb53578101ec69e3
     container_name: ${COMPOSE_PROJECT_NAME}_loki
     user: "10001:10001"
     restart: unless-stopped
@@ -99,13 +99,22 @@ services:
       retries: 3
       start_period: 15s
 
-  promtail:
-    image: grafana/promtail:latest
-    container_name: ${COMPOSE_PROJECT_NAME}_promtail
+  # Grafana Alloy replaces Promtail (end of life). It tails the Docker json-file logs from disk and pushes them to Loki.
+  # It never talks to the Docker socket: no discovery.docker, no socket mount (ADR 0027). Runs as root because
+  # /var/lib/docker/containers is root-only (mode 0710), the same as the Promtail it replaces. Telemetry is off.
+  alloy:
+    image: docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
+    container_name: ${COMPOSE_PROJECT_NAME}_alloy
     restart: unless-stopped
-    command: -config.file=/etc/promtail/config.yml
+    command:
+      - "run"
+      - "--disable-reporting"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+      - "/etc/alloy/config.alloy"
     volumes:
-      - ./monitoring/promtail/config.yml:/etc/promtail/config.yml:ro
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     networks:
@@ -118,7 +127,7 @@ services:
 
   # NOTE: Tempo uses a distroless image with no shell. Do NOT add a healthcheck.
   tempo:
-    image: grafana/tempo:latest
+    image: docker.io/grafana/tempo:2.10.8@sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a
     container_name: ${COMPOSE_PROJECT_NAME}_tempo
     user: "10001:10001"
     restart: unless-stopped
@@ -135,7 +144,7 @@ services:
   # --- Alerting ---
 
   alertmanager:
-    image: prom/alertmanager:latest
+    image: docker.io/prom/alertmanager:v0.27.0@sha256:e13b6ed5cb929eeaee733479dce55e10eb3bc2e9c4586c705a4e8da41e5eacf5
     container_name: ${COMPOSE_PROJECT_NAME}_alertmanager
     user: "65534:65534"
     restart: unless-stopped
@@ -159,13 +168,11 @@ services:
   # --- Exporters ---
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: gcr.io/cadvisor/cadvisor:v0.49.1@sha256:3cde6faf0791ebf7b41d6f8ae7145466fed712ea6f252c935294d2608b1af388
     container_name: ${COMPOSE_PROJECT_NAME}_cadvisor
-    privileged: true
     restart: unless-stopped
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
@@ -175,7 +182,7 @@ services:
       - "${DOCKER_NETWORK}"
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: docker.io/prom/node-exporter:v1.8.1@sha256:fa7fa12a57eff607176d5c363d8bb08dfbf636b36ac3cb5613a202f3c61a6631
     container_name: ${COMPOSE_PROJECT_NAME}_node-exporter
     restart: unless-stopped
     command:
@@ -193,7 +200,7 @@ services:
       - "${DOCKER_NETWORK}"
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:latest
+    image: docker.io/prometheuscommunity/postgres-exporter:v0.15.0@sha256:386b12d19eab2a37d7cd8ca8b4c7491cc7a830d9581f49af6c98a393da9605e6
     container_name: ${COMPOSE_PROJECT_NAME}_postgres-exporter
     restart: unless-stopped
     environment:
@@ -211,7 +218,7 @@ services:
   # If Redis is not part of your stack, this service will fail to connect.
   # To exclude it, remove or comment out this block.
   redis-exporter:
-    image: oliver006/redis_exporter:latest
+    image: docker.io/oliver006/redis_exporter:v1.61.0@sha256:4d0bf00eeb6b22d60acc65db79a8c324e3c18c959518c67fc65694770d5c8d72
     container_name: ${COMPOSE_PROJECT_NAME}_redis-exporter
     restart: unless-stopped
     environment:
@@ -229,3 +236,4 @@ volumes:
   loki_data:
   tempo_data:
   alertmanager_data:
+  alloy_data:

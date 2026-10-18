@@ -8,11 +8,6 @@ exceptions:
     reason: "forgejo runner mounts the Docker socket until runner isolation lands (ADR 0027)"
     owner_ref: P7-TRUST-21
     expires: 2026-12-31
-  - rule: docker-socket
-    plugin: monitoring
-    reason: "cadvisor and the log shipper mount the Docker socket until the monitoring rework (ADR 0027)"
-    owner_ref: P7-PLUG-58
-    expires: 2026-12-31
   - rule: cli-targets
     plugin: ci
     reason: "core still registers ci until the break-out ships"

@@ -10,6 +10,24 @@
         "linux/arm64"
       ]
     },
+    "monitoring-alloy": {
+      "image": "docker.io/grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f",
+      "kind": "upstream",
+      "owner": "P7-PLUG-58",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
+    "monitoring-tempo": {
+      "image": "docker.io/grafana/tempo:2.10.8@sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a",
+      "kind": "upstream",
+      "owner": "P7-PLUG-58",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    },
     "traefik": {
       "image": "traefik:v3.7.14@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c",
       "kind": "upstream",
