@@ -245,10 +245,10 @@ func TestPublisherCannotPostSuccessForFailure(t *testing.T) {
 func TestTrustClassInEvidence(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
-	r.C.Opts.Trust, r.C.Hooks.Trust = "collaborator", fakeTrust("collaborator")
+	r.C.Opts.Trust, r.C.Hooks.Trust = "internal", fakeTrust("internal")
 	res := r.run(t)
 	row, ok, err := r.store(t).PipelineByID(context.Background(), res.RunID)
-	if err != nil || !ok || row.SourceTrust != "collaborator" {
+	if err != nil || !ok || row.SourceTrust != "internal" {
 		t.Fatalf("pipeline source trust %+v %v %v", row, ok, err)
 	}
 	if res.Summary.Result != "pass" {

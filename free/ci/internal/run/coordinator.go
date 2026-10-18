@@ -131,8 +131,8 @@ func (c *Coordinator) classify(ctx context.Context, h Hooks, rev Revision) (stri
 	if err != nil {
 		return "", err
 	}
-	if got == "untrusted" { // ADR 0025 §3: untrusted needs a sandboxed runner; this coordinator only runs jobs as the operator
-		return "", fail(CodeTrust, "the source is classed untrusted: it needs an isolated runner, and this coordinator runs jobs as the operator")
+	if got != "owner" && got != "internal" { // ADR 0025 §2-3: collaborator and untrusted work needs an isolated runner; this coordinator runs jobs as the operator
+		return "", fail(CodeTrust, "the source is classed %s: it needs an isolated runner, and this coordinator runs jobs as the operator", got)
 	}
 	if c.Opts.Trust != "" && string(got) != c.Opts.Trust {
 		return "", fail(CodeTrust, "the source is classed %s, not %s", got, c.Opts.Trust)
@@ -224,6 +224,10 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 		return Result{}, err
 	}
 	recovered := Recover(ctx, st, coord.ID, c.Opts.Home)
+	// status preparation can wait on another poster for minutes; it runs before the run
+	// is persisted so a persisted run is never left without attempts or heartbeats
+	post := c.prepareStatus(ctx, st, rev)
+	_ = st.Heartbeat(ctx, coord.ID)
 	runID := newRunID()
 	sess := newSession()
 	mp := c.Plan.ModelPipeline()
@@ -253,7 +257,6 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	rs := &runState{c: c, sess: sess, hooks: h, pl: c.Plan, mp: mp, rev: rev, rows: rows, subst: subst, render: NewRenderer(out, c.Opts), subset: keep,
 		out: map[string]*JobOutcome{}, done: map[string]chan struct{}{}, marks: map[string]model.Reason{}, cancels: map[string]context.CancelFunc{}, attempts: map[string]string{}}
 	rs.render.Event(Event{Type: "planned", Plan: c.Plan})
-	post := c.prepareStatus(ctx, st, rev)
 	start := time.Now()
 	c.drive(ctx, rs, st, coord.ID)
 	if end := GitRevision(context.WithoutCancel(ctx), c.Opts.Root, c.capture()); end.SHA != rev.SHA || end.Dirty {

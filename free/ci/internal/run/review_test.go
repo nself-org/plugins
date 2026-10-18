@@ -16,21 +16,23 @@ import (
 func TestBareRunConsultsClassifier(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
-	r.C.Hooks.Trust = fakeTrust("collaborator") // no --trust flag at all
+	r.C.Hooks.Trust = fakeTrust("internal") // no --trust flag at all
 	res := r.run(t)
 	row, ok, err := r.store(t).PipelineByID(context.Background(), res.RunID)
-	if err != nil || !ok || row.SourceTrust != "collaborator" {
+	if err != nil || !ok || row.SourceTrust != "internal" {
 		t.Fatalf("source trust %q ok=%v err=%v: a bare run must record the classifier's answer", row.SourceTrust, ok, err)
 	}
 }
 
-// An untrusted source never runs as the operator (ADR 0025 section 3).
-func TestUntrustedSourceIsRefused(t *testing.T) {
+// A collaborator or untrusted source never runs as the operator (ADR 0025).
+func TestForeignSourceIsRefused(t *testing.T) {
 	t.Parallel()
-	r := newRig(t, map[string]model.Job{"a": sh("touch ran")}, gitFake{})
-	r.C.Hooks.Trust = fakeTrust("untrusted")
-	if _, err := r.C.Run(context.Background()); CodeOf(err) != CodeTrust {
-		t.Fatalf("want E625, got %v", err)
+	for _, class := range []string{"untrusted", "collaborator"} {
+		r := newRig(t, map[string]model.Job{"a": sh("true")}, gitFake{})
+		r.C.Hooks.Trust = fakeTrust(class)
+		if _, err := r.C.Run(context.Background()); CodeOf(err) != CodeTrust {
+			t.Fatalf("%s: want E625, got %v", class, err)
+		}
 	}
 }
 
