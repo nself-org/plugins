@@ -18,7 +18,8 @@ import (
 )
 
 // schedFlags holds the flag values of the current invocation. The two flag
-// sets never parse in one invocation, so they share it.
+// sets never parse in one invocation, so they share it. A process runs one
+// invocation; tests reset it.
 var schedFlags schedpolicy.Flags
 
 func init() {
@@ -59,7 +60,9 @@ func presetList() string {
 }
 
 // foregroundTrigger reports whether a run with this trigger is a person
-// waiting at a terminal: the default (no trigger), local and manual runs.
+// waiting at a terminal: the default (no trigger), local and manual runs. It
+// is a heuristic: --trigger says which pipelines to plan, not who waits; the
+// caller that wires the values (debt D-0984) may pass a TTY test instead.
 func foregroundTrigger(trigger string) bool {
 	return trigger == "" || trigger == "local" || trigger == "manual"
 }

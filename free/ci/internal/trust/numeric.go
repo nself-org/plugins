@@ -5,7 +5,9 @@ package trust
 // lead ruling 2026-10-18: SCHED's limits, queue and cost keys are integers and
 // the string-only order could not express them).
 // Inputs: two policy values. Outputs: whether the second is as strict as the first.
-// Constraints: a numeric key has an empty Order and an integer Default; only
+// Constraints: this orders any whole number, zero and negatives included; a key
+// that must refuse them (SCHED treats 0 as no limit) does so in its own Decode;
+// a numeric key has an empty Order and an integer Default; only
 // whole numbers count (a float, a string or a bool is never an integer); the
 // enum path in stricter is unchanged.
 

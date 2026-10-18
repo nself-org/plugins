@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"math"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -57,7 +58,7 @@ func stringOf(key string, allowed []string) decoder {
 			return nil, err
 		}
 		s, ok := v.(string)
-		if !ok || s == "" {
+		if !ok || strings.TrimSpace(s) == "" {
 			return nil, fail(key, "expected a non-empty string")
 		}
 		if allowed != nil && !slices.Contains(allowed, s) {
@@ -145,8 +146,8 @@ func ParseDurationMs(key, s string) (int64, error) {
 	if err != nil {
 		return 0, fail(key, "%q is not a duration (use 30s, 10m, 2h)", s)
 	}
-	if d < time.Millisecond {
-		return 0, fail(key, "duration %q must be at least 1ms", s)
+	if d < time.Millisecond || d%time.Millisecond != 0 {
+		return 0, fail(key, "duration %q must be a whole number of milliseconds, at least 1ms", s)
 	}
 	return int64(d / time.Millisecond), nil
 }
