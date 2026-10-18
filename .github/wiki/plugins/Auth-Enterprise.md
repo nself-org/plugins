@@ -9,7 +9,7 @@
 | **Maturity** | implemented ([maturity levels](https://github.com/nself-org/cli/wiki/Plugin-Manifest)) |
 | **Version** | 1.2.6 |
 | **Install** | `nself plugin install auth-enterprise` |
-| **Requirements** | nSelf >=1.0.0 |
+| **Requirements** | nSelf >=1.0.9 |
 
 <!-- END GENERATED:catalog -->
 
