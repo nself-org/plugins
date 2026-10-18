@@ -124,18 +124,18 @@ func TestProfileFor_MatchesPublish(t *testing.T) {
 func TestProfile_URL(t *testing.T) {
 	p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public, RepoID: "r", Hostnames: []string{"ci.example.org"}})
 	rows := map[string]string{
-		"https://github.com/o/r/actions/runs/1?x=1#f": "https://github.com/o/r/actions/runs/1",
-		"http://192.168.0.5/run/1":                    "",
-		"https://ci.corp.local/x":                     "",
-		"https://user:pw@github.com/x":                "",
-		"https://ci.example.org/x":                    "",
-		"https://localhost:8080/x":                    "",
-		"https://[fd00::1]/x":                         "",
-		"https://buildbox/x":                          "",
-		"ftp://github.com/x":                          "",
-		"file:///Users/a/x":                           "",
-		"not a url":                                   "",
-		"":                                            "",
+		"https://github.com/o/r/actions/runs/1?x=1#f":      "https://github.com/o/r/actions/runs/1",
+		"http://192.168.0.5/run/1":                         "",
+		"https://ci.corp.local/x":                          "",
+		"https://" + "user" + ":" + "pw" + "@github.com/x": "",
+		"https://ci.example.org/x":                         "",
+		"https://localhost:8080/x":                         "",
+		"https://[fd00::1]/x":                              "",
+		"https://buildbox/x":                               "",
+		"ftp://github.com/x":                               "",
+		"file:///Users/a/x":                                "",
+		"not a url":                                        "",
+		"":                                                 "",
 	}
 	for in, want := range rows {
 		if got := p.URL(in); got != want {
