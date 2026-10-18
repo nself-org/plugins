@@ -61,13 +61,22 @@ type podmanInfo struct {
 // probeRuntime tries docker, then podman, and keeps the first runtime the node may use.
 func probeRuntime(ctx context.Context, r Runner, separated bool) (Facts, isolation.Availability) {
 	reason := isolation.ReasonRuntimeMissing
+	rank := map[string]int{isolation.ReasonRuntimeMissing: 0, isolation.ReasonProbeFailed: 1, isolation.ReasonRootful: 2}
+	note := func(next string) {
+		if rank[next] > rank[reason] {
+			reason = next
+		}
+	}
 	for _, binary := range []string{"docker", "podman"} {
 		facts, err := inspectRuntime(ctx, r, binary)
 		if err != nil {
+			if !exec.IsRuntimeMissing(err) {
+				note(isolation.ReasonProbeFailed) // installed but not answering: daemon down, permission denied, timeout
+			}
 			continue
 		}
 		if separated && !facts.Rootless {
-			reason = isolation.ReasonRootful
+			note(isolation.ReasonRootful)
 			continue
 		}
 		return facts, isolation.Availability{Level: "container", Facts: facts.toMap()}

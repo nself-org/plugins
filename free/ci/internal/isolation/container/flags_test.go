@@ -1,6 +1,7 @@
 package container
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -78,7 +79,10 @@ func TestBuildNeverEmitsForbiddenFlags(t *testing.T) {
 							t.Errorf("%q in %s", bad, joined)
 						}
 					}
-					uid := JobUID(slot, p.ForbiddenUIDs)
+					uid, err := JobUID(slot, p.ForbiddenUIDs)
+					if err != nil {
+						t.Fatal(err)
+					}
 					for _, must := range [][]string{{"--cap-drop=ALL"}, {"--security-opt", "no-new-privileges"}, {"--read-only"}, {"--tmpfs", "/tmp:rw,nosuid,size=256m"},
 						{"--pids-limit", "512"}, {"--label", "role=ci-ephemeral"}, {"--label", "coordinator_id=c1"}, {"--label", "nself.ci.attempt=a1"},
 						{"--user", itoa(uid) + ":" + itoa(uid)}} {
@@ -118,17 +122,29 @@ func itoa(n int) string {
 	return string(d)
 }
 
+func mustUID(t *testing.T, slot int, forbidden []int) int {
+	t.Helper()
+	uid, err := JobUID(slot, forbidden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return uid
+}
+
 func TestJobUIDSkipsForbiddenAndNeverRepeats(t *testing.T) {
-	if got := JobUID(0, nil); got != BaseUID {
+	if got := mustUID(t, 0, nil); got != BaseUID {
 		t.Fatalf("slot 0 = %d", got)
 	}
-	if got := JobUID(1, []int{BaseUID}); got != BaseUID+2 {
+	if got := mustUID(t, 1, []int{BaseUID}); got != BaseUID+2 {
 		t.Fatalf("agent uid in range: slot 1 = %d", got)
+	}
+	if _, err := JobUID(-1, nil); err == nil {
+		t.Fatal("negative slot accepted")
 	}
 	forbidden := []int{BaseUID + 3, BaseUID, 0}
 	seen := map[int]int{}
 	for slot := 0; slot < 500; slot++ {
-		uid := JobUID(slot, forbidden)
+		uid := mustUID(t, slot, forbidden)
 		for _, f := range forbidden {
 			if uid == f {
 				t.Fatalf("slot %d got forbidden %d", slot, uid)
@@ -156,6 +172,20 @@ func TestBuildRejectsUnsafeInput(t *testing.T) {
 		if _, err := Build(p); err == nil {
 			t.Errorf("%s accepted", name)
 		}
+	}
+}
+
+func TestSlotUIDCeilingOnRootless(t *testing.T) {
+	if _, err := SlotUID(3, nil, MaxRootlessUID); err != nil {
+		t.Fatalf("slot 3 = 65535 must map: %v", err)
+	}
+	_, err := SlotUID(4, nil, MaxRootlessUID)
+	var e *isolation.Error
+	if !errors.As(err, &e) || e.Reason != isolation.ReasonSlotUID {
+		t.Fatalf("slot 4 on rootless: %v", err)
+	}
+	if _, err := SlotUID(4, nil, 0); err != nil {
+		t.Fatalf("no ceiling on rootful: %v", err)
 	}
 }
 

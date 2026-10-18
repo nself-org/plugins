@@ -47,11 +47,19 @@ type Params struct {
 	UsernsAuto bool
 	// Entrypoint overrides the image entrypoint (the cleanup helper uses sh).
 	Entrypoint string
+	// MaxUID, when positive, is the highest UID the runtime maps (rootless: MaxRootlessUID).
+	MaxUID int
 }
+
+// MaxRootlessUID is the highest container UID a default rootless mapping (65536 subuids) holds.
+const MaxRootlessUID = 65535
 
 // JobUID returns the UID of slot: the slot-th UID from BaseUID that is not forbidden,
 // so two slots never share a UID and no slot gets a forbidden one.
-func JobUID(slot int, forbidden []int) int {
+func JobUID(slot int, forbidden []int) (int, error) {
+	if slot < 0 {
+		return 0, fmt.Errorf("negative slot %d", slot)
+	}
 	skip := map[int]bool{0: true}
 	for _, f := range forbidden {
 		skip[f] = true
@@ -62,10 +70,23 @@ func JobUID(slot int, forbidden []int) int {
 			continue
 		}
 		if n == 0 {
-			return uid
+			return uid, nil
 		}
 		n--
 	}
+}
+
+// SlotUID is JobUID with the runtime's UID ceiling (max <= 0 means none) applied: a slot whose UID
+// the runtime cannot map is refused with E678 rather than failing at container start.
+func SlotUID(slot int, forbidden []int, max int) (int, error) {
+	n, err := JobUID(slot, forbidden)
+	if err != nil {
+		return 0, err
+	}
+	if max > 0 && n > max {
+		return 0, isolation.Unavailable(isolation.ReasonSlotUID, "slot %d needs uid %d, above the %d this runtime maps", slot, n, max)
+	}
+	return n, nil
 }
 
 // Build returns the hardened run command for p.
@@ -74,8 +95,6 @@ func Build(p Params) (exec.ContainerCommand, error) {
 	switch {
 	case p.Binary != "docker" && p.Binary != "podman":
 		return exec.ContainerCommand{}, fmt.Errorf("container runtime %q is not docker or podman", p.Binary)
-	case r.Slot < 0:
-		return exec.ContainerCommand{}, fmt.Errorf("negative slot")
 	case r.Name == "" || r.Image == "" || len(r.Command) == 0:
 		return exec.ContainerCommand{}, fmt.Errorf("container name, image and command are required")
 	case !filepath.IsAbs(r.Workspace) || strings.ContainsAny(r.Workspace, ",\"\n") || strings.Contains(r.Workspace, ".sock"):
@@ -85,7 +104,11 @@ func Build(p Params) (exec.ContainerCommand, error) {
 	if pids <= 0 {
 		pids = DefaultPidsLimit
 	}
-	uid := strconv.Itoa(JobUID(r.Slot, p.ForbiddenUIDs))
+	n, err := SlotUID(r.Slot, p.ForbiddenUIDs, p.MaxUID)
+	if err != nil {
+		return exec.ContainerCommand{}, err
+	}
+	uid := strconv.Itoa(n)
 	mem := strconv.Itoa(r.MemoryMB) + "m"
 	args := []string{"run", "--rm", "--name", r.Name,
 		"--label", AttemptLabel + "=" + r.AttemptID, "--label", RoleLabel,

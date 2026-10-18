@@ -76,13 +76,18 @@ func (p *Profile) Probe(ctx context.Context) isolation.Availability {
 
 func (p *Profile) probe(ctx context.Context) (Facts, isolation.Availability) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if !p.at.IsZero() && p.opts.Now().Sub(p.at) < p.opts.TTL {
-		return p.facts, p.av
+		facts, av := p.facts, p.av
+		p.mu.Unlock()
+		return facts, av
 	}
-	p.facts, p.av = probeRuntime(ctx, p.opts.Runner, p.opts.Separated())
-	p.at = p.opts.Now()
-	return p.facts, p.av
+	p.mu.Unlock()
+	// the runtime is asked outside the lock (each query is time boxed), so a wedged daemon never blocks other callers
+	facts, av := probeRuntime(ctx, p.opts.Runner, p.opts.Separated())
+	p.mu.Lock()
+	p.facts, p.av, p.at = facts, av, p.opts.Now()
+	p.mu.Unlock()
+	return facts, av
 }
 
 // Prepare fails with E678 when the runtime stopped being usable.
@@ -103,7 +108,11 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 	if err != nil {
 		return s, err
 	}
-	s.Plan = &planner{facts: facts, uids: p.opts.UIDs(), net: plan}
+	pl := &planner{facts: facts, uids: p.opts.UIDs(), net: plan}
+	if _, err := SlotUID(s.Slot, pl.uids, pl.params(exec.ContainerRun{}).MaxUID); err != nil {
+		return s, err // refused before any workspace exists
+	}
+	s.Plan = pl
 	return s, nil
 }
 
@@ -111,7 +120,7 @@ func (p *Profile) Wrap(s exec.JobSpec) (exec.JobSpec, error) {
 func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
 	facts, av := p.probe(ctx)
 	if !av.Available() {
-		return nil
+		return isolation.Unavailable(av.Reason, "cannot remove the container of attempt %s", a.ID)
 	}
 	return exec.RuntimeRemove(ctx, facts.Binary, "nself-ci-"+a.ID)
 }
@@ -120,7 +129,8 @@ func (p *Profile) Teardown(ctx context.Context, a isolation.Attempt) error {
 func (p *Profile) List(ctx context.Context, label string) ([]string, error) {
 	facts, av := p.probe(ctx)
 	if !av.Available() {
-		return nil, nil
+		// not "no leftovers": the sweep must know it could not look
+		return nil, isolation.Unavailable(av.Reason, "cannot list labelled containers")
 	}
 	out, err := p.opts.Runner.Query(ctx, facts.Binary, "ps", "-a", "--filter", "label="+label, "--format", "{{.Names}}")
 	if err != nil {
@@ -143,7 +153,11 @@ type planner struct {
 }
 
 func (pl *planner) params(r exec.ContainerRun) Params {
-	return Params{Run: r, Binary: pl.facts.Binary, ForbiddenUIDs: pl.uids, Network: pl.net,
+	max := 0
+	if pl.facts.Rootless {
+		max = MaxRootlessUID
+	}
+	return Params{Run: r, Binary: pl.facts.Binary, ForbiddenUIDs: pl.uids, Network: pl.net, MaxUID: max,
 		UsernsAuto: pl.facts.Binary == "podman" && !pl.facts.Rootless}
 }
 

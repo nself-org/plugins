@@ -90,7 +90,10 @@ ls /sys/class/net | tr '\n' ' '; echo`
 	}
 }
 
-func TestIntegrationUIDAndAgentKeyUnreadable(t *testing.T) {
+// The job never gets the agent's UID (the real, checked property); the agent home, where the
+// key lives, is not mounted, so the key is unreachable by path as well. The workspace itself is
+// deliberately open to the job UID, so no fixture can live there.
+func TestIntegrationJobUIDIsNotAgentAndAgentHomeUnreachable(t *testing.T) {
 	p, image := prerequisites(t)
 	home := t.TempDir()
 	key := filepath.Join(home, "age.key")
@@ -102,7 +105,10 @@ func TestIntegrationUIDAndAgentKeyUnreadable(t *testing.T) {
 	if res.Err != nil {
 		t.Fatalf("%+v\n%s", res, out)
 	}
-	want := JobUID(slot, []int{os.Getuid(), os.Geteuid()})
+	want, err := JobUID(slot, []int{os.Getuid(), os.Geteuid()})
+	if err != nil {
+		t.Fatal(err)
+	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) < 3 || lines[0] != strconv.Itoa(want) || lines[1] != strconv.Itoa(want) {
 		t.Fatalf("uid/gid %q, want %d\n%s", lines, want, out)
@@ -119,7 +125,11 @@ func TestIntegrationWorkspaceReadWriteAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 	script := `cat input.txt && echo -n world > output.txt && mkdir -p out/deep && echo x > out/deep/f && ls -ld /repo out/deep`
-	out, res := runJob(t, p, image, "t04-ws", script, func(s *exec.JobSpec) { s.SourceDir = src })
+	home := t.TempDir()
+	out, res := runJob(t, p, image, "t04-ws", script, func(s *exec.JobSpec) { s.SourceDir, s.Home = src, home })
+	if info, err := os.Stat(filepath.Join(home, "work")); err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("the workspace parent must be 0700: %v %v", info, err)
+	}
 	if res.Err != nil || res.Attempt.State != "passed" || !strings.HasPrefix(out, "hello") {
 		t.Fatalf("job could not use its workspace (or cleanup failed): %+v\n%s", res, out)
 	}

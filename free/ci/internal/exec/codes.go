@@ -6,10 +6,15 @@ import (
 )
 
 // Error carries the registered machine-readable error code.
-type Error struct{ Code, Message string }
+type Error struct {
+	Code, Message string
+	// Err is the underlying cause, when there is one.
+	Err error
+}
 
 func (e *Error) Error() string         { return fmt.Sprintf("%s: %s", e.Code, e.Message) }
-func coded(code, message string) error { return &Error{code, message} }
+func (e *Error) Unwrap() error         { return e.Err }
+func coded(code, message string) error { return &Error{Code: code, Message: message} }
 
 func init() {
 	for _, code := range []model.Code{

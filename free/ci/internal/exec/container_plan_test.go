@@ -96,6 +96,22 @@ func TestPlannedContainerRefusesUnhardenedPlan(t *testing.T) {
 	}
 }
 
+func TestPlannedRunTightensWorkspaceParent(t *testing.T) {
+	fakeRuntime(t, "", "0")
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "work"), 0755); err != nil { // a pre-existing, too open parent
+		t.Fatal(err)
+	}
+	res := (&Executor{}).Run(context.Background(), JobSpec{AttemptID: "plan-parent", CoordinatorID: "coord", Home: home, Plan: hardPlanner{}, Command: []string{"true"},
+		Job: model.Job{Isolation: "container", Container: &model.ContainerConfig{Image: "alpine:3.19"}}})
+	if res.Err != nil {
+		t.Fatal(res.Err)
+	}
+	if info, _ := os.Stat(filepath.Join(home, "work")); info.Mode().Perm() != 0700 {
+		t.Fatalf("work dir mode %v", info.Mode().Perm())
+	}
+}
+
 func TestPlannedWorkspaceOpenedToJobUID(t *testing.T) {
 	root := t.TempDir()
 	sub := filepath.Join(root, "d")
@@ -121,10 +137,8 @@ func TestPlannedWorkspaceOpenedToJobUID(t *testing.T) {
 
 func TestCheckContainerCommand(t *testing.T) {
 	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws"}
-	good := []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", "65533:65533", "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged"}
-	if os.Getuid() == 65533 || os.Geteuid() == 65533 {
-		t.Skip("test uid collides with the fixture job uid")
-	}
+	good := []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged"}
+
 	if err := checkContainerCommand(ContainerCommand{"docker", good}, run); err != nil {
 		t.Fatalf("job words after the image must not matter: %v", err)
 	}
@@ -164,6 +178,18 @@ func TestCheckContainerCommand(t *testing.T) {
 		"positional":  withFlag("stray"),
 		"valueonbool": withFlag("--rm=true"),
 		"net other":   withFlag("--network", "container:x"),
+		"mounteq":     withFlag("--mount=type=bind,src=/,dst=/h"),
+		"mountsource": withFlag("--mount", "type=bind,src=/w/ws,source=/,dst=/repo"),
+		"mountdup":    withFlag("--mount", "type=bind,src=/w/ws,src=/,dst=/repo"),
+		"mountupper":  withFlag("--mount", "TYPE=bind,SOURCE=/,src=/w/ws,dst=/repo"),
+		"mountdst":    withFlag("--mount", "type=bind,src=/w/ws,dst=/etc"),
+		"mountro":     withFlag("--mount", "type=bind,src=/w/ws,dst=/repo,readonly"),
+		"roffalse":    withFlag("--read-only=false"),
+		"pids0":       withFlag("--pids-limit", "0"),
+		"pidsneg":     withFlag("--pids-limit=-1"),
+		"mem0":        withFlag("--memory=0m"),
+		"memg":        withFlag("--memory=1g"),
+		"cpus0":       withFlag("--cpus=0"),
 	} {
 		if err := checkContainerCommand(c, run); err == nil {
 			t.Errorf("%s: accepted %v", name, c.Args)
@@ -182,6 +208,15 @@ func TestRuntimeQueryAndRemoveRefuseOtherVerbs(t *testing.T) {
 	if err := RuntimeRemove(ctx, "docker", "other-container"); err == nil {
 		t.Fatal("non-attempt name accepted")
 	}
+}
+
+// fixtureUID is a job user that is never the test's own uid.
+func fixtureUID() string {
+	uid := 65533
+	if os.Getuid() == uid || os.Geteuid() == uid {
+		uid++
+	}
+	return itoa(uid) + ":" + itoa(uid)
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }

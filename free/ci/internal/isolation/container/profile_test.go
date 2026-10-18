@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ type fakeRunner struct {
 	info  map[string]string
 	ps    string
 	calls int
+	down  string // binary whose daemon is installed but not answering
 }
 
 func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]byte, error) {
@@ -27,7 +29,10 @@ func (f *fakeRunner) Query(_ context.Context, binary string, args ...string) ([]
 	if out, ok := f.info[binary]; ok {
 		return []byte(out), nil
 	}
-	return nil, errors.New("not found")
+	if binary == f.down {
+		return nil, errors.New("Cannot connect to the Docker daemon")
+	}
+	return nil, fs.ErrNotExist
 }
 
 const (
@@ -54,7 +59,7 @@ func TestProbeTable(t *testing.T) {
 		"rootless podman, separated node":                {map[string]string{"podman": podmanRootless}, true, "container", "", "podman"},
 		"rootful podman, separated node":                 {map[string]string{"podman": podmanRootfulFx}, true, "", isolation.ReasonRootful, ""},
 		"rootful docker then rootless podman, separated": {map[string]string{"docker": dockerRootful, "podman": podmanRootless}, true, "container", "", "podman"},
-		"unparseable":                                    {map[string]string{"docker": "not json"}, false, "", isolation.ReasonRuntimeMissing, ""},
+		"unparseable":                                    {map[string]string{"docker": "not json"}, false, "", isolation.ReasonProbeFailed, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			facts, av := probeRuntime(context.Background(), &fakeRunner{info: tc.info}, tc.separated)
@@ -62,6 +67,42 @@ func TestProbeTable(t *testing.T) {
 				t.Fatalf("level %q reason %q runtime %q", av.Level, av.Reason, facts.Binary)
 			}
 		})
+	}
+}
+
+func TestProbeDistinguishesDaemonDownFromMissing(t *testing.T) {
+	_, av := probeRuntime(context.Background(), &fakeRunner{down: "docker"}, false)
+	if av.Reason != isolation.ReasonProbeFailed {
+		t.Fatalf("daemon down reported as %q", av.Reason)
+	}
+	_, av = probeRuntime(context.Background(), &fakeRunner{down: "docker", info: map[string]string{"podman": podmanRootfulFx}}, true)
+	if av.Reason != isolation.ReasonRootful {
+		t.Fatalf("rootful outranks probe failure: %q", av.Reason)
+	}
+}
+
+func TestListAndTeardownReportUnavailableRuntime(t *testing.T) {
+	p := newProfile(&fakeRunner{down: "docker"}, false)
+	var e *isolation.Error
+	if _, err := p.List(context.Background(), "role=ci-ephemeral"); !errors.As(err, &e) || e.Reason != isolation.ReasonProbeFailed {
+		t.Fatalf("List hid an unreachable runtime: %v", err)
+	}
+	if err := p.Teardown(context.Background(), isolation.Attempt{ID: "x"}); !errors.As(err, &e) {
+		t.Fatalf("Teardown hid an unreachable runtime: %v", err)
+	}
+}
+
+func TestWrapRefusesUnmappedSlotOnRootless(t *testing.T) {
+	p := newProfile(&fakeRunner{info: map[string]string{"docker": dockerRootless}}, true)
+	if _, err := p.Wrap(exec.JobSpec{Slot: 3}); err != nil {
+		t.Fatalf("slot 3: %v", err)
+	}
+	var e *isolation.Error
+	if _, err := p.Wrap(exec.JobSpec{Slot: 4}); !errors.As(err, &e) || e.Reason != isolation.ReasonSlotUID {
+		t.Fatalf("slot 4: %v", err)
+	}
+	if _, err := p.Wrap(exec.JobSpec{Slot: -1}); err == nil {
+		t.Fatal("negative slot accepted")
 	}
 }
 

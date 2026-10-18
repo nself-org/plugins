@@ -39,6 +39,7 @@ type Session struct {
 	jobs  map[*model.Job]string // job row id by job pointer
 	byID  map[string]model.Job  // job copy by row id (content fallback)
 	local map[string]bool       // attempts admitted on this host
+	slots slotPool              // execution slots of concurrent attempts
 }
 
 type sessionKey struct{}

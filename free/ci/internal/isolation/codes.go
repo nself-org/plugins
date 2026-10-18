@@ -19,6 +19,7 @@ const (
 	ReasonRuntimeMissing = "isolation.runtime_missing"
 	ReasonRootful        = "isolation.rootful_runtime"
 	ReasonProbeFailed    = "isolation.probe_failed"
+	ReasonSlotUID        = "isolation.slot_uid_unmapped"
 	ReasonScope          = "network.scope_unenforceable"
 )
 

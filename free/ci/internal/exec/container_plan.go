@@ -52,6 +52,7 @@ var (
 	resourceSignatures = []string{"Resource temporarily unavailable", "can't fork", "Cannot fork", "pthread_create failed"}
 	jobUser            = regexp.MustCompile(`^([1-9][0-9]*):([1-9][0-9]*)$`)
 	attemptNetwork     = regexp.MustCompile(`^nself-ci-[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+	memoryValue        = regexp.MustCompile(`^[1-9][0-9]{0,8}m$`)
 )
 
 // plannedFlags is the allowlist of flags a planned container may carry and whether each takes a
@@ -149,20 +150,39 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		if value != run.EnvFile {
 			return bad("env file is not the attempt's")
 		}
+	case "--pids-limit":
+		if n, err := strconv.Atoi(value); err != nil || n < 1 || n > 1<<20 {
+			return bad("pids-limit must be a positive number")
+		}
+	case "--memory", "--memory-swap":
+		if !memoryValue.MatchString(value) {
+			return bad(name + " must be a positive size in megabytes")
+		}
+	case "--cpus":
+		if f, err := strconv.ParseFloat(value, 64); err != nil || f <= 0 || f > 1024 {
+			return bad("cpus must be positive")
+		}
 	}
 	return nil
 }
 
-// checkMount allows only a bind of the attempt workspace.
+// checkMount allows exactly one bind of the attempt workspace onto /repo: the keys are
+// type, src and dst (no alias such as source or target, no duplicate, nothing else).
 func checkMount(spec, workspace string) error {
 	bad := func(why string) error { return coded("E613", "planned container refused: "+why) }
 	fields := map[string]string{}
 	for _, part := range strings.Split(spec, ",") {
-		k, v, _ := strings.Cut(part, "=")
+		k, v, ok := strings.Cut(part, "=")
+		if !ok {
+			return bad("mount option without a value: " + part)
+		}
+		if _, dup := fields[k]; dup {
+			return bad("duplicate mount key " + k)
+		}
 		fields[k] = v
 	}
-	if fields["type"] != "bind" || fields["src"] != workspace {
-		return bad("mount outside the job root")
+	if len(fields) != 3 || fields["type"] != "bind" || fields["src"] != workspace || fields["dst"] != "/repo" {
+		return bad("mount is not the job root bound at /repo")
 	}
 	return nil
 }
@@ -174,6 +194,10 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	workdir, err := containerWorkdir(s)
 	if err != nil {
 		return -1, "", err
+	}
+	// the workspace is opened to the job UID, so its parent must keep every other host user out
+	if err := os.Chmod(filepath.Dir(workspace), 0700); err != nil {
+		return -1, "", coded("E612", "workspace parent is not private: "+err.Error())
 	}
 	if err := openWorkspaceToJobUID(workspace); err != nil {
 		return -1, "", coded("E612", "workspace preparation failed: "+err.Error())
@@ -227,9 +251,10 @@ func (e *Executor) cleanupPlanned(s JobSpec, run ContainerRun) {
 	_, _ = local.runCommand(ctx, append([]string{cmd.Binary}, cmd.Args...), run.Workspace, dockerHostEnv(), nil, nil, nil, "")
 }
 
-// resourceReason reports "resource_limit" for a SIGKILLed container (the memory
-// limit) or output showing a refused fork (the pids limit); a deadline or cancel
-// is never a resource reason by itself.
+// resourceReason reports "resource_limit" for a SIGKILLed container (probably the
+// memory limit: an operator kill or a sweep looks the same from outside) or output
+// showing a refused fork (the pids limit); a deadline or cancel is never a resource
+// reason by itself.
 func resourceReason(ctx context.Context, code int, tail string) string {
 	if code == 0 {
 		return ""
