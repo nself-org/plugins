@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -64,7 +64,7 @@
+ // IsSnapshotSource reports whether ns may be the source of a read-only
+ // snapshot: a protected namespace of an internal or owner class.
+ func IsSnapshotSource(ns Namespace) bool {
+-	return ns.Valid() && ns.Protection == Protected && trust.RankTrust(ns.Trust) >= trust.RankTrust("internal")
++	return ns.Valid() && ns.Protection == Protected && trust.RankTrust(ns.Trust) >= trust.RankTrust("collaborator")
+ }
+ 
+ // CacheAccess decides what job may do to target. A finished or unknown attempt

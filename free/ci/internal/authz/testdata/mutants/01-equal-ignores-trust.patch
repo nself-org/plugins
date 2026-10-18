@@ -1,0 +1,11 @@
+--- a/internal/authz/namespace.go
++++ b/internal/authz/namespace.go
+@@ -71,7 +71,7 @@
+ 
+ // Equal reports whether the two namespaces are the same field for field. An
+ // invalid namespace equals nothing, not even itself.
+-func (n Namespace) Equal(o Namespace) bool { return n == o && n.Valid() }
++func (n Namespace) Equal(o Namespace) bool { return n.Project == o.Project && n.Valid() && o.Valid() }
+ 
+ // CacheNamespace derives the namespace of a job. class is the trust class the
+ // coordinator recorded for the job's source (never a value the job supplies);

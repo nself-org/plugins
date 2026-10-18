@@ -1,0 +1,11 @@
+--- a/internal/authz/access.go
++++ b/internal/authz/access.go
+@@ -118,7 +118,7 @@
+ // recomputed job.Namespace.
+ func CheckWrite(job Job, claimed Namespace, current Capability) error {
+ 	switch {
+-	case job.Capability.Attempt == "" || job.Capability.Attempt != current.Attempt:
++	case false:
+ 		return &Denied{Reason: ReasonCapability, Detail: "attempt does not hold the write capability"}
+ 	case job.Capability.Epoch != current.Epoch:
+ 		return &Denied{Reason: ReasonEpoch, Detail: "lease epoch moved on"}
