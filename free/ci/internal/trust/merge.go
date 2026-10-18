@@ -84,6 +84,10 @@ func stricter(spec KeySpec, old, next any) bool {
 		b, bo := next.(bool)
 		return ao && bo && (!a || b)
 	case TightenLower, TightenHigher:
+		if len(spec.Order) == 0 {
+			ok, _ := strictNumeric(spec.Kind, old, next)
+			return ok
+		}
 		a, ao := old.(string)
 		b, bo := next.(string)
 		if !ao || !bo {

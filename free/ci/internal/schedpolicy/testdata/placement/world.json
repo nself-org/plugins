@@ -1,0 +1,7 @@
+{
+  "runners": [
+    {"id":"L","class":"local","location":"local","authorized":true,"wait_ms":0,"runtime_ms":60000,"cold_start_ms":0,"transfer_ms":0,"contention_ms":15000,"cost_micro":0},
+    {"id":"N","class":"owned","location":"lan","authorized":true,"wait_ms":10000,"runtime_ms":40000,"cold_start_ms":2000,"transfer_ms":5000,"contention_ms":0,"cost_micro":0},
+    {"id":"X","class":"owned","location":"lan","authorized":false,"wait_ms":0,"runtime_ms":1000,"cold_start_ms":0,"transfer_ms":0,"contention_ms":0,"cost_micro":0}
+  ]
+}
