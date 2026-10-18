@@ -1,7 +1,7 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o plugin-email ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o plugin-email ./cmd
 
 FROM alpine:3.19
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

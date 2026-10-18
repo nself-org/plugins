@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -trimpath -ldflags="-s -w" -o byok ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -trimpath -ldflags="-s -w" -o byok ./cmd
 
 FROM alpine:3.19
 
