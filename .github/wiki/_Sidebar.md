@@ -176,6 +176,7 @@
 - [[Deployment|guides/Deployment]]
 - [[Migration|guides/Migration]]
 - [[Plugin Development|Development]]
+- [[CI Trust, Security and Privacy|guides/ci/Trust-Security-and-Privacy]]
 - [[TypeScript Plugin Guide|Typescript-Plugin-Guide]]
 
 ### Operations
