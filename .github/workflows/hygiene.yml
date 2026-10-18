@@ -296,7 +296,7 @@ jobs:
         if: always() && github.event_name == 'pull_request'
         run: |
           CHANGED=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" || true)
-          if echo "$CHANGED" | grep -qE '^(\.workers/plugins-registry/src/|registry\.json$|registry-schema\.json$)'; then
+          if echo "$CHANGED" | grep -qE '^(\.workers/plugins-registry/src/|registry\.json$)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=false" >> "$GITHUB_OUTPUT"

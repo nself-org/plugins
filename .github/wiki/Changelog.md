@@ -23,7 +23,7 @@ Aligns free plugin library with nSelf CLI v1.1.0. 4 new free plugins added; tota
 - 25 → 29 free plugins. All MIT licensed. Install with `nself plugin install <name>`.
 - All 4 new plugins use `source_account_id` for multi-app isolation per plugin hard rules.
 - Table prefix: `np_<abbrev>_*` for each new plugin.
-- Registry schema: `registry.json` updated with 4 new entries; `registry-schema.json` unchanged (no new top-level fields).
+- Registry schema: `registry.json` updated with 4 new entries (no new top-level fields).
 - Cloudflare Worker (`plugins.nself.org`) auto-deploys with updated registry on merge to main.
 - Plugin author notice: no breaking changes to existing free plugin API surface. All 25 existing plugins install unchanged on CLI v1.1.0.
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# check.sh: the free-plugin conformance gate (P7-PLUG-03). Enforced for every plugin whose plugin.json
-# has manifest_version 2; v1 plugins are reported and keep the validate.yml checks.
-# Usage: check.sh [--plugins a,b | --changed | --all | --fixtures] [--rules r1,r2] [--root DIR] [--exceptions FILE]
+# check.sh: the free-plugin conformance gate (P7-PLUG-03, mandatory for every plugin since P7-PLUG-38). Manifest v2 is
+# the only schema: a plugin whose plugin.json is not manifest_version 2 (or that has no plugin.json) FAILS the gate.
+# Usage: check.sh [--plugins a,b | --changed | --all | --fixtures]   (no mode argument means --all)
+#        --shard K/N (with --all): only every Nth plugin of the sorted list starting at the Kth, so CI can split the slow `build`
+#        rule over N runners; the N shards together are exactly --all. [--rules r1,r2] [--root DIR] [--exceptions FILE]
 #                 [--migration-base DIR]
 # Rules: exceptions (global), schema compat healthcheck replace docker-socket port-bind migrations boot-schema
 #        migration-immutable migration-idempotent legacy-renames repository ports build.
@@ -11,17 +13,17 @@
 # no tag fails the gate.
 # --rules runs only the named rules and prints which ran; exit 0 means those rules passed, nothing else.
 # Exit: 0 all pass, 1 a rule failed, 2 usage. A rule that cannot run (no docker, no tool) fails, a named plugin that
-# does not exist fails, and --plugins/--all that checked no manifest v2 plugin fails (a gate that runs nothing is
+# does not exist fails, and --plugins/--all that checked no plugin fails (a gate that runs nothing is
 # not a pass; --changed with nothing changed passes).
 set -u
 . "$(dirname "$0")/lib.sh"
 mode=all; list=; root=$CONF_ROOT/free; rules=; exc=$CONF_DIR/exceptions.yaml
 ALL="schema compat healthcheck replace docker-socket port-bind migrations boot-schema migration-immutable migration-idempotent legacy-renames repository ports build"
-migbase=
+migbase=; shard=
 while [ $# -gt 0 ]; do case $1 in
   --plugins) mode=plugins; list=$2; shift;; --changed) mode=changed;; --all) mode=all;;
   --fixtures) mode=fixtures;; --rules) rules=$(printf '%s' "$2" | tr ',' ' '); shift;;
-  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --migration-base) migbase=$2; shift;;
+  --root) root=$2; shift;; --exceptions) exc=$2; shift;; --migration-base) migbase=$2; shift;; --shard) shard=$2; shift;;
   *) echo "check.sh: unknown argument $1" >&2; exit 2;; esac; shift; done
 [ -n "$rules" ] || rules="exceptions $ALL"
 if [ "$mode" = fixtures ]; then exec bash "$CONF_DIR/fixtures.sh"; fi
@@ -29,7 +31,14 @@ case $mode in
   changed) list=$(git -C "$CONF_ROOT" diff --name-only origin/main... -- free 2>/dev/null | awk -F/ 'NF > 2 { print $2 }' | sort -u | tr '\n' ',');;
   all) list=$(cd "$root" && ls -d */ 2>/dev/null | tr -d '/' | tr '\n' ',');;
 esac
-rc=0; checked=0; v1=0
+if [ -n "$shard" ]; then
+  case $shard in [1-9]*/[1-9]*) ;; *) echo "check.sh: --shard wants K/N (1 <= K <= N), got $shard" >&2; exit 2;; esac
+  sk=${shard%/*}; sn=${shard#*/}
+  case "$sk$sn" in *[!0-9]*) echo "check.sh: --shard wants K/N, got $shard" >&2; exit 2;; esac
+  [ "$sk" -le "$sn" ] && [ "$mode" = all ] || { echo "check.sh: --shard K/N needs 1 <= K <= N and --all" >&2; exit 2; }
+  list=$(printf '%s' "$list" | tr ',' '\n' | awk -v k="$sk" -v n="$sn" 'NF && (NR - 1) % n == k - 1' | tr '\n' ',')
+fi
+rc=0; checked=0
 echo "rules: $rules"
 case " $rules " in *" migration-immutable "*|*" migration-idempotent "*)
   if [ -n "$migbase" ]; then export CONF_MIG_LABEL=$migbase
@@ -60,10 +69,11 @@ case " $rules " in *" exceptions "*) bash "$CONF_DIR/rules/exceptions.sh" "$exc"
 for p in $(printf '%s' "$list" | tr ',' ' '); do
   dir=$root/$p
   if [ ! -f "$dir/plugin.json" ]; then
-    [ "$mode" = plugins ] && { fail check "$p" "no plugin.json under $root"; rc=1; }
+    # --changed lists a plugin deleted by the diff; every other mode names a plugin that must be there.
+    [ "$mode" = changed ] || { fail check "$p" "no plugin.json under $root"; rc=1; }
     continue
   fi
-  if [ "$(manifest_version "$dir")" != 2 ]; then v1=$((v1 + 1)); continue; fi
+  if [ "$(manifest_version "$dir")" != 2 ]; then fail manifest "$p" "plugin.json is not manifest_version 2 (v2 is the only schema; convert it with scripts/codemods/manifest-v2.sh)"; rc=1; continue; fi
   checked=$((checked + 1))
   for r in $rules; do
     case $r in exceptions) continue;; build) cmd="bash $CONF_DIR/build-from-tarball.sh $dir";;
@@ -75,8 +85,9 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
       *) cmd="bash $CONF_DIR/rules/$r.sh $dir";; esac
     out=$($cmd 2>&1) || { rc=1; printf '%s\n' "$out" | grep . | sed "s/^/[$p] /"; }
   done
+  echo "checked $p"
 done
-echo "checked $checked v2 plugin(s); $v1 v1 plugin(s) keep the validate.yml checks"
-if [ "$checked" -eq 0 ] && [ "$mode" != changed ]; then echo "FAIL check: no manifest v2 plugin was checked (a gate that ran nothing)"; rc=1; fi
+echo "checked $checked v2 plugin(s)"
+if [ "$checked" -eq 0 ] && [ "$mode" != changed ]; then echo "FAIL check: no plugin was checked (a gate that ran nothing)"; rc=1; fi
 [ $rc -eq 0 ] && echo "conformance: pass" || echo "conformance: FAIL"
 exit $rc
