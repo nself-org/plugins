@@ -58,7 +58,7 @@ newer() { # newer CURRENT LATEST: true when LATEST sorts after CURRENT
 	[ -n "$2" ] && [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -1)" = "$2" ]
 }
 
-# oci_ok REF DIGEST: the digest still resolves (anonymous Docker Hub pull token; docker.io/library only).
+# oci_ok REF DIGEST: the digest still resolves (anonymous Docker Hub pull token; docker.io images only).
 oci_ok() {
 	local repo=${1#docker.io/}
 	local tok
@@ -87,7 +87,13 @@ while IFS= read -r row; do
 	echo "toolchain-pins: $name" >&2
 	case "$kind" in
 	image)
-		emit "$name" "$name" "" false skip 0 "image row is $(jq -r .status <<<"$row"); the first publish is owner-named"
+		if [ "$(jq -r .status <<<"$row")" != pinned ]; then
+			emit "$name" "$name" "" false skip 0 "image row is $(jq -r .status <<<"$row"); the first publish is owner-named"
+		elif oci_ok "$(jq -r .image <<<"$row")" "$(jq -r .digest <<<"$row")"; then
+			emit "$name" "$name" "" true pass 0 "pinned image digest still resolves"
+		else
+			emit "$name" "$name" "" true fail 1 "pinned image digest $(jq -r .digest <<<"$row") no longer resolves"
+		fi
 		continue ;;
 	base-image)
 		if oci_ok "$(jq -r .image <<<"$row")" "$(jq -r .digest <<<"$row")"; then

@@ -58,6 +58,7 @@ func mirror(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/example.org/acme/demo-1.2.3.tgz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("x")) })
 	mux.HandleFunc("/auth.docker.io/token", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"token":"t"}`)) })
 	mux.HandleFunc("/registry-1.docker.io/v2/library/alpine/manifests/", func(w http.ResponseWriter, _ *http.Request) {})
+	mux.HandleFunc("/registry-1.docker.io/v2/nself/ci-toolchain/manifests/sha256:"+strings.Repeat("ab", 32), func(w http.ResponseWriter, _ *http.Request) {})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
@@ -146,5 +147,26 @@ func TestDrillFailsWhenAnArtifactIsGone(t *testing.T) {
 	}
 	if c := resultsByTool(doc)["gone"]; c["result"] != "fail" || !strings.Contains(c["excerpt"].(string), "no longer downloadable") {
 		t.Errorf("gone artifact check = %v", c)
+	}
+}
+
+// TestDrillVerifiesAPinnedImageRow: once the image row is pinned, a digest that no longer resolves fails.
+func TestDrillVerifiesAPinnedImageRow(t *testing.T) {
+	srv := mirror(t)
+	pinned := func(digestHex string) string {
+		row := `  - {name: toolchain-image, kind: image, purpose: p, owner: o, image: docker.io/nself/ci-toolchain, status: pinned, digest: "sha256:` + digestHex + `", upstream: {type: none, ref: ""}}`
+		table := fixtureTable("https://example.org/acme/demo-1.2.3.tgz")
+		i := strings.Index(table, "  - {name: toolchain-image")
+		return table[:i] + row + "\n"
+	}
+	doc, exit, raw := runDrill(t, pinned(strings.Repeat("ab", 32)), srv)
+	validEvidence(t, raw)
+	if c := resultsByTool(doc)["toolchain-image"]; exit != 0 || c["result"] != "pass" || c["required"] != true {
+		t.Fatalf("resolvable pinned image: exit %d %v", exit, c)
+	}
+	doc, exit, raw = runDrill(t, pinned(strings.Repeat("cd", 32)), srv)
+	validEvidence(t, raw)
+	if c := resultsByTool(doc)["toolchain-image"]; exit != 1 || c["result"] != "fail" || !strings.Contains(c["excerpt"].(string), "no longer resolves") {
+		t.Fatalf("vanished pinned image: exit %d %v", exit, c)
 	}
 }
