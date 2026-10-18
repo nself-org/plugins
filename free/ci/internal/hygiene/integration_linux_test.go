@@ -36,6 +36,39 @@ func mustRun(t *testing.T, name string, args ...string) string {
 	return out
 }
 
+// scopedRuntime shows hygiene only resources whose attempt starts with prefix: the CI host's docker
+// is shared with the other packages' integration tests, whose labelled containers are not ours.
+type scopedRuntime struct {
+	Runtime
+	prefix string
+}
+
+func (s scopedRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
+	all, err := s.Runtime.List(ctx, kind, attempt)
+	var out []exec.Labelled
+	for _, r := range all {
+		if strings.HasPrefix(r.Attempt, s.prefix) {
+			out = append(out, r)
+		}
+	}
+	return out, err
+}
+
+// openTemp returns a world-traversable temporary directory (job users must reach their roots) that
+// is removed with sudo, because job users own files in it.
+func openTemp(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "hy-int-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = run(t, "sudo", "-n", "rm", "-rf", dir); _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func testImage() string {
 	if v := os.Getenv("TRUST04_TEST_IMAGE"); v != "" {
 		return v
@@ -62,7 +95,7 @@ func TestIntegrationCleanupRemovesLabelledContainersNetworksVolumes(t *testing.T
 		_, _ = run(t, "docker", "network", "rm", "nself-ci-net-"+attempt)
 		_, _ = run(t, "docker", "volume", "rm", "-f", "nself-ci-vol-"+attempt)
 	})
-	h := &Host{Base: t.TempDir() + "/work", Runtime: &ExecRuntime{Binaries: []string{"docker"}}}
+	h := &Host{Base: t.TempDir() + "/work", Runtime: scopedRuntime{&ExecRuntime{Binaries: []string{"docker"}}, "hy-int-"}}
 	root, err := h.JobRoot(attempt)
 	if err != nil {
 		t.Fatal(err)
@@ -159,17 +192,14 @@ func (fx *sudoFixture) asJob(t *testing.T, slot int, args ...string) (string, er
 
 func TestIntegrationJobShimRunsAsJobUserAndCannotReadAgentSecrets(t *testing.T) {
 	fx := newSudoFixture(t)
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	dir := openTemp(t)
 	for _, f := range []string{"node.key", "token", "store.db"} {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte("agent-private fixture"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	facts := baseFacts()
-	facts.AgentUID, facts.JobShim, facts.JobUIDs, facts.Slots = fx.agentUID, true, fx.uids[:], 2
+	facts.AgentUID, facts.CoordinatorUID, facts.JobShim, facts.JobUIDs, facts.Slots = fx.agentUID, fx.agentUID, true, fx.uids[:], 2
 	plan, err := Separation(facts, 1)
 	if err != nil || plan.Mode != JobShim || plan.UID != fx.uids[1] {
 		t.Fatalf("separation with the rule: %+v %v", plan, err)
@@ -196,10 +226,7 @@ func TestIntegrationJobShimRunsAsJobUserAndCannotReadAgentSecrets(t *testing.T) 
 
 func TestIntegrationConcurrentAttemptsCannotReadEachOther(t *testing.T) {
 	fx := newSudoFixture(t)
-	base := t.TempDir()
-	if err := os.Chmod(base, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	base := openTemp(t)
 	h := &Host{Base: filepath.Join(base, "work")}
 	if err := os.Mkdir(h.Base, 0o711); err != nil {
 		t.Fatal(err)
@@ -270,7 +297,8 @@ func TestIntegrationProbeUsernsAnswersConsistently(t *testing.T) {
 			t.Fatalf("unavailable must not be available: %+v", probe)
 		}
 	default:
-		t.Fatalf("unexpected probe result %+v (a readable probe file means the mapping does not separate)", probe)
+		diag, _ := run(t, "sh", "-c", "id; grep \"^$(id -un):\" /etc/subuid; ls -l /usr/bin/newuidmap; file=$(mktemp); chmod 600 $file; unshare --user --map-users=0:200000:1 --map-groups=0:200000:1 -- sh -c \"id; ls -ln $file; if [ -r $file ]; then echo READABLE; else echo DENIED; fi\" 2>&1; rm -f $file")
+		t.Fatalf("unexpected probe result %+v\n%s", probe, diag)
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Fatalf("probe left files: %v", entries)
