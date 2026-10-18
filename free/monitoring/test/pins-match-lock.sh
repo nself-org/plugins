@@ -17,7 +17,7 @@ for f in "$frag" "$cli_lock" "$plugins_lock"; do [ -f "$f" ] || { echo "pins-mat
 
 # One "repository:version@digest" per lock entry. Repositories are compared fully qualified (docker.io/...).
 locked=$( { jq -r '.images[] | "\(.repository):\(.version)@\(.index_digest)"' "$cli_lock"
-            jq -r '.images | to_entries[] | .value.image' "$plugins_lock"; } | sort -u )
+            jq -r '.images | to_entries[] | .value.image' "$plugins_lock"; } | sort -u ) || { echo "pins-match-lock: a lock file has an unexpected shape" >&2; exit 2; }
 
 refs=$(sed -n 's/^[[:space:]]*image:[[:space:]]*//p' "$frag" | tr -d '"'"'" | sort -u)
 [ -n "$refs" ] || { echo "pins-match-lock: no image lines in $frag" >&2; exit 2; }

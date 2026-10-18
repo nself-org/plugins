@@ -122,11 +122,11 @@ Every image in the compose fragment is pinned to an explicit `<repository>:<tag>
 
 ## Log shipping with Alloy
 
-Grafana Alloy replaces Promtail (end of life). `configs/alloy/config.alloy` reads the Docker json-file logs under `/var/lib/docker/containers` from disk and pushes them to Loki. It uses no Docker discovery and has no Docker socket. Loki labels: `job=containerlogs`, `stream`, `container_id`, and `filename`. `container_name` and `image_name` are set only for containers that use the Docker log option `tag="<name>|<image>"`. Host syslog is shipped with `job=syslog` when `/var/log/syslog` exists. Alloy runs as root because `/var/lib/docker/containers` is root-only; the mount is read-only.
+Grafana Alloy replaces Promtail (end of life). `configs/alloy/config.alloy` reads the Docker json-file logs under `/var/lib/docker/containers` from disk and pushes them to Loki. It uses no Docker discovery and has no Docker socket. Loki labels: `job=containerlogs`, `stream`, `container_id`, and `filename`. `container_name` and `image_name` are set only for containers that use the Docker log option `tag="<name>|<image>"`. Promtail also set an `env` label; Alloy does not (the CLI only substitutes plain `${KEY}` values, so it was never filled in). Host syslog is shipped with `job=syslog` when `/var/log/syslog` exists. Alloy runs as root because `/var/lib/docker/containers` is root-only; the mount is read-only.
 
 ## cAdvisor without the Docker socket
 
-cAdvisor runs unprivileged and mounts neither `/var/run` nor `docker.sock` (ADR 0027). It reads `/sys`, `/var/lib/docker` and `/rootfs` read-only. Container CPU, memory, network and disk metrics are still reported by cgroup path and id. Without the Docker API, cAdvisor cannot add the container `name` and `image` labels to those series, so dashboards that group by `name` show the cgroup id instead.
+cAdvisor runs unprivileged and mounts neither `/var/run` nor `docker.sock` (ADR 0027). It reads `/sys`, `/var/lib/docker` and the host root (`/rootfs`) read-only; the root is bound non-recursively, because a recursive bind would expose `/rootfs/run/docker.sock`; `/proc` is added back under `/rootfs/proc` because cAdvisor needs it. Without the Docker API, container CPU and memory metrics are reported by cgroup path and id, but cAdvisor cannot add the `name` and `image` labels, per-container network metrics are not reported (cAdvisor's raw handler reports network only for the root cgroup), and filesystem metrics for mounts below `/` are limited. Dashboards that group by `name` show the cgroup id instead.
 
 ## Tests
 

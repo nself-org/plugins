@@ -172,7 +172,15 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_cadvisor
     restart: unless-stopped
     volumes:
-      - /:/rootfs:ro
+      # The host root is mounted NON-recursively: a recursive bind would also expose /rootfs/run/docker.sock (ADR 0027).
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+        bind:
+          recursive: disabled
+      # cAdvisor reads /rootfs/proc/cpuinfo, which lives in a submount that the non-recursive bind hides.
+      - /proc:/rootfs/proc:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro

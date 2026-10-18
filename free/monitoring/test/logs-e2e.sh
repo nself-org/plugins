@@ -17,8 +17,9 @@ elif command -v docker-compose >/dev/null 2>&1 && docker-compose version --short
 else echo "logs-e2e: docker compose v2 (plugin or standalone) is required" >&2; exit 2; fi
 [ "$(docker info --format '{{.OSType}}' 2>/dev/null)" = linux ] || { echo "logs-e2e: a Linux docker daemon is required" >&2; exit 2; }
 : "${TMPDIR:?logs-e2e: TMPDIR must be set}"
+case $TMPDIR in /*) ;; *) echo "logs-e2e: TMPDIR must be an absolute path" >&2; exit 2 ;; esac
 
-work=$(mktemp -d "$TMPDIR/monitoring-e2e.XXXXXX")
+work=$(mktemp -d "$TMPDIR/monitoring-e2e.XXXXXX") && [ -d "$work" ] || { echo "logs-e2e: cannot create a work directory under $TMPDIR" >&2; exit 2; }
 proj=nsmone$$
 rc=0
 fail() { echo "FAIL $*"; rc=1; }
@@ -28,6 +29,8 @@ trap cleanup EXIT
 
 # Render like the CLI: configs/ lands under ./monitoring in the project directory.
 mkdir -p "$work/monitoring" && cp -R "$plugin/configs/." "$work/monitoring/"
+# The daemon must see $TMPDIR (Colima and remote daemons may not share it): a prerequisite, not a stack failure.
+docker run --rm -v "$work":/w alpine:3.19 test -d /w/monitoring >/dev/null 2>&1 || { echo "logs-e2e: the Docker daemon cannot bind-mount $work; point TMPDIR at a shared path" >&2; exit 2; }
 sed -E 's/"127\.0\.0\.1:[0-9]+:([0-9]+)"/"127.0.0.1::\1"/' "$plugin/docker-compose.plugin.yml" > "$work/monitoring.yml"
 cat > "$work/base.yml" <<EOF
 services:
@@ -55,7 +58,7 @@ dc up -d --wait --wait-timeout 240 || { fail "stack did not start healthy"; dc p
 for s in alloy cadvisor grafana loki prometheus tempo alertmanager node-exporter postgres-exporter; do
   [ -n "$(dc ps -q --status running "$s")" ] && echo "ok   $s running" || fail "$s is not running"
 done
-dc ps -a -q promtail | grep -q . && fail "a promtail container exists"
+dc config --services | grep -qx promtail && fail "a promtail service is still defined"
 
 echo "== no privileged container, no socket mount"
 inspected=0
@@ -66,6 +69,9 @@ for id in $(dc ps -q); do
   docker inspect -f '{{range .Mounts}}{{println .Source}}{{end}}' "$id" | grep -Eq '^/var/run(/|$)|docker\.sock' && fail "$name mounts /var/run or the Docker socket"
 done
 [ "$inspected" -ge 10 ] && echo "ok   inspected $inspected containers" || fail "inspected only $inspected containers (want the 9 monitoring services and postgres)"
+cad=$(dc ps -q cadvisor)
+sock=$(docker exec "$cad" sh -c 'find /rootfs/run /rootfs/var/run /var/run /run -maxdepth 2 -type s 2>/dev/null' 2>&1) || fail "cannot look for sockets inside cadvisor: $sock"
+[ -z "$sock" ] && echo "ok   cadvisor sees no unix socket under /rootfs, /run or /var/run" || fail "cadvisor can see a socket: $sock"
 grep -v '^[[:space:]]*//' "$plugin/configs/alloy/config.alloy" | grep -q 'discovery\.docker' && fail "alloy config uses discovery.docker"
 
 echo "== logs reach Loki through Grafana"
@@ -95,11 +101,11 @@ pport=$(dc port prometheus 9090 | sed 's/.*://')
 q() { curl -fsS -G "http://127.0.0.1:$pport/api/v1/query" --data-urlencode "query=$1" | jq -r "$2"; }
 t0=$(date +%s); up=0; series=0
 while [ $(( $(date +%s) - t0 )) -lt 90 ]; do
-  up=$(q 'up{job="cadvisor"}' '.data.result[0].value[1] // "0"'); series=$(q 'count(container_memory_usage_bytes)' '.data.result[0].value[1] // "0"')
+  up=$(q 'up{job="cadvisor"}' '.data.result[0].value[1] // "0"'); series=$(q "count(container_memory_usage_bytes{job=\"cadvisor\",id=~\".*$alloy_id.*\"})" '.data.result[0].value[1] // "0"')
   [ "$up" = 1 ] && [ "${series%%.*}" -gt 0 ] && break; sleep 5
 done
 [ "$up" = 1 ] && echo "ok   prometheus scrapes cadvisor" || fail "prometheus does not scrape cadvisor (up=$up)"
-[ "${series%%.*}" -gt 0 ] && echo "ok   container_memory_usage_bytes: $series series" || fail "cadvisor reports no container metrics"
+[ "${series%%.*}" -gt 0 ] && echo "ok   container_memory_usage_bytes for the alloy container cgroup: $series series" || fail "cadvisor reports no metrics for a running container (cgroup id)"
 named=$(q 'count(container_memory_usage_bytes{name!=""})' '.data.result[0].value[1] // "0"')
 echo "info container series carrying a name label (needs the Docker API; none is expected without the socket): $named"
 
