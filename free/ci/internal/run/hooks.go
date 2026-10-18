@@ -16,6 +16,7 @@ import (
 	ciexec "github.com/nself-org/plugins/free/ci/internal/exec"
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/services"
 )
 
 // Mount is a host path made visible to a job (cache restore).
@@ -119,10 +120,17 @@ type RemoteResolver interface {
 	Resolve(ctx context.Context, ref string) (RunView, bool, error)
 }
 
-// ServicesRequest asks for the services a job needs.
+// ServicesRequest asks for the services one attempt needs. AttemptID keys the
+// provision, so attempts of one run never wait for each other; Specs are the
+// names resolved from the repository config; Isolation and Network are what
+// the job will run with, for a container job to join the service network.
 type ServicesRequest struct {
-	RunID string
-	Names []string
+	RunID     string
+	AttemptID string
+	Names     []string
+	Specs     []services.Spec
+	Isolation model.Isolation
+	Network   model.NetworkScope
 }
 
 // ServicesSetup is what started services add to a job.

@@ -3,13 +3,14 @@ package run
 // Purpose: registers the disposable-services hook (P7-CI-42, Epic D9). The
 // orchestrator calls Up before a job that needs services and Down after it;
 // this adapter maps the request onto services.Pool and services.Provisioner.
-// Inputs:  ServicesRequest (run id and service names). Service names resolve
-// through the nearest .nself/ci.yaml above the working directory
-// (`services: {<name>: {component: ...}}`); a name that is not declared there
-// is taken as an nSelf component name (`--service postgres`).
+// Inputs:  ServicesRequest (attempt id, service names, resolved specs). The
+// orchestrator resolves names through the nearest .nself/ci.yaml above the
+// repository root (`services: {<name>: {component: ...}}`); a name that is not
+// declared there is taken as an nSelf component name (`--service postgres`).
+// A request without specs is resolved here from the working directory.
 // Outputs: the NSELF_CI_SERVICE_* environment of the started services.
-// Constraints: the lifecycle (per-key serialisation, safety net, one-shot
-// teardown) lives in services.Pool, where it is tested. The engine runs only
+// Constraints: the lifecycle (one provision per attempt id, safety net,
+// one-shot teardown) lives in services.Pool, where it is tested. The engine runs only
 // in v1.5 mode: cmd/main.go dispatches to this package only when compat.V15()
 // is true.
 
@@ -17,8 +18,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -45,7 +44,15 @@ func (s *servicesHook) Up(ctx context.Context, r ServicesRequest) (ServicesSetup
 	if err != nil {
 		return ServicesSetup{}, err
 	}
-	env, err := s.pool.Up(ctx, prov, serviceKey(r), ServiceSpecs(r.Names))
+	key, err := serviceKey(r)
+	if err != nil {
+		return ServicesSetup{}, err
+	}
+	specs := r.Specs
+	if len(specs) == 0 {
+		specs = ServiceSpecs(r.Names)
+	}
+	env, err := s.pool.Up(ctx, prov, key, specs)
 	if err != nil {
 		return ServicesSetup{}, err
 	}
@@ -54,7 +61,11 @@ func (s *servicesHook) Up(ctx context.Context, r ServicesRequest) (ServicesSetup
 
 // Down tears the services of one job down.
 func (s *servicesHook) Down(ctx context.Context, r ServicesRequest) error {
-	return s.pool.Down(ctx, serviceKey(r))
+	key, err := serviceKey(r)
+	if err != nil {
+		return err
+	}
+	return s.pool.Down(ctx, key)
 }
 
 // provisioner builds the engine once and sweeps the projects of dead
@@ -97,16 +108,26 @@ func (s *servicesHook) secretList() []string {
 	return append([]string(nil), s.secrets...)
 }
 
-// serviceKey identifies identical requests: the run and the sorted names.
-func serviceKey(r ServicesRequest) string {
-	names := append([]string(nil), r.Names...)
-	sort.Strings(names)
-	return r.RunID + "\x00" + strings.Join(names, ",")
+// serviceKey is the attempt id: one provision per attempt, so two jobs of a
+// run that need the same services do not wait for each other.
+func serviceKey(r ServicesRequest) (string, error) {
+	if r.AttemptID == "" {
+		return "", &services.Error{Code: services.CodeProvision, Message: "the services request has no attempt id"}
+	}
+	return r.RunID + "\x00" + r.AttemptID, nil
 }
 
-// ServiceSpecs maps names to specs through the nearest .nself/ci.yaml.
+// ServiceSpecs maps names to specs through the nearest .nself/ci.yaml above
+// the working directory.
 func ServiceSpecs(names []string) []services.Spec {
-	declared := declaredServices()
+	dir, _ := os.Getwd()
+	return ServiceSpecsIn(dir, names)
+}
+
+// ServiceSpecsIn maps names to specs through the nearest .nself/ci.yaml above
+// dir; an empty dir declares nothing.
+func ServiceSpecsIn(dir string, names []string) []services.Spec {
+	declared := declaredServices(dir)
 	seen := map[string]bool{}
 	var specs []services.Spec
 	for _, n := range names {
@@ -123,11 +144,10 @@ func ServiceSpecs(names []string) []services.Spec {
 	return specs
 }
 
-// declaredServices reads the services block of the nearest config, if any.
-func declaredServices() map[string]struct{ Component, Version string } {
+// declaredServices reads the services block of the nearest config above dir.
+func declaredServices(dir string) map[string]struct{ Component, Version string } {
 	out := map[string]struct{ Component, Version string }{}
-	dir, err := os.Getwd()
-	if err != nil {
+	if dir == "" {
 		return out
 	}
 	for {

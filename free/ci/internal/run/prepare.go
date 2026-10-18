@@ -53,7 +53,12 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 		if rs.hooks.Services == nil {
 			return p, fail(CodeOptions, "job needs services %v and no services hook is registered", names)
 		}
-		req := ServicesRequest{RunID: info.RunID, Names: names}
+		iso := p.job.Isolation
+		if rs.c.Opts.Container {
+			iso = "container"
+		}
+		req := ServicesRequest{RunID: info.RunID, AttemptID: info.AttemptID, Names: names,
+			Specs: ServiceSpecsIn(rs.c.Opts.Root, names), Isolation: iso, Network: model.NetworkScope(rs.c.Opts.Network)}
 		var up ServicesSetup
 		err := guard("services hook", func() (e error) { up, e = rs.hooks.Services.Up(ctx, req); return })
 		if err != nil {
