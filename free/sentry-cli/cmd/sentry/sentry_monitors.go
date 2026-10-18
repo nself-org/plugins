@@ -106,7 +106,7 @@ func runSentryMonitorsList(cmd *cobra.Command, _ []string) error {
 		if monitors == nil {
 			monitors = []sentryapi.Monitor{}
 		}
-		return emitSentryJSON(cmd, monitors, map[string]interface{}{"monitors": monitors})
+		return emitSentryJSON(cmd, monitors, map[string]interface{}{"monitors": redactMonitors(monitors)})
 	}
 
 	if len(monitors) == 0 {
@@ -154,7 +154,7 @@ func runSentryMonitorsAdd(cmd *cobra.Command, _ []string) error {
 	}
 
 	if sentryJSONFlag(cmd) {
-		return emitSentryJSON(cmd, m, map[string]interface{}{"monitor": m})
+		return emitSentryJSON(cmd, m, map[string]interface{}{"monitor": redactMonitor(m)})
 	}
 	ui.Success(fmt.Sprintf("Monitor created: %s (%s every %s) — id %s", m.Name, m.URL,
 		(time.Duration(m.IntervalSeconds) * time.Second).String(), m.ID))
@@ -182,7 +182,7 @@ func runSentryMonitorsPause(cmd *cobra.Command, id string, pause bool) error {
 		return err
 	}
 	if sentryJSONFlag(cmd) {
-		return emitSentryJSON(cmd, m, map[string]interface{}{"monitor": m})
+		return emitSentryJSON(cmd, m, map[string]interface{}{"monitor": redactMonitor(m)})
 	}
 	verb := "paused"
 	if !pause {

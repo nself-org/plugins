@@ -108,7 +108,7 @@ func runSentryStatusPagesList(cmd *cobra.Command, _ []string) error {
 		if pages == nil {
 			pages = []sentryapi.StatusPage{}
 		}
-		return emitSentryJSON(cmd, pages, map[string]interface{}{"status_pages": pages})
+		return emitSentryJSON(cmd, pages, map[string]interface{}{"status_pages": redactStatusPages(pages)})
 	}
 
 	if len(pages) == 0 {
@@ -141,7 +141,7 @@ func runSentryStatusPagesCreate(cmd *cobra.Command, _ []string) error {
 	}
 
 	if sentryJSONFlag(cmd) {
-		return emitSentryJSON(cmd, page, map[string]interface{}{"status_page": page})
+		return emitSentryJSON(cmd, page, map[string]interface{}{"status_page": redactStatusPage(page)})
 	}
 	ui.Success(fmt.Sprintf("Status page created: %s — %s", page.Name, dashIfEmpty(page.URL)))
 	return nil
@@ -159,7 +159,7 @@ func runSentryAlertsChannels(cmd *cobra.Command, _ []string) error {
 		if channels == nil {
 			channels = []sentryapi.AlertChannel{}
 		}
-		return emitSentryJSON(cmd, channels, map[string]interface{}{"channels": channels})
+		return emitSentryJSON(cmd, channels, map[string]interface{}{"channels": redactChannels(channels)})
 	}
 
 	if len(channels) == 0 {
@@ -191,9 +191,11 @@ func runSentryAlertsTest(cmd *cobra.Command, args []string) error {
 	if sentryJSONFlag(cmd) {
 		// compat.V15(P7-SURF-31): exit 0 with delivered=false in the JSON -> error envelope when not delivered
 		if jsonout.Envelope(cmd) && !res.Delivered {
-			return fmt.Errorf("test notification NOT delivered: %s", dashIfEmpty(res.Detail))
+			return fmt.Errorf("test notification NOT delivered: %s", dashIfEmpty(redactValue(res.Detail)))
 		}
-		return emitSentryJSON(cmd, res, res)
+		safe := *res
+		safe.Detail = redactValue(safe.Detail)
+		return emitSentryJSON(cmd, res, &safe)
 	}
 	if res.Delivered {
 		ui.Success(fmt.Sprintf("Test notification delivered: %s", dashIfEmpty(res.Detail)))
