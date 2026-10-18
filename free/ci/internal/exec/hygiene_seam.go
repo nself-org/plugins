@@ -93,7 +93,7 @@ func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind
 	}
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	cmd := osexec.CommandContext(ctx, binary, args...)
+	cmd := runtimeCommand(ctx, binary, args)
 	cmd.Env = dockerHostEnv()
 	out, err := cmd.CombinedOutput()
 	if err != nil && !strings.Contains(strings.ToLower(string(out)), "no such") && !strings.Contains(strings.ToLower(string(out)), "not found") {
@@ -106,7 +106,7 @@ func RuntimeRemoveLabelled(ctx context.Context, binary string, kind ResourceKind
 func runtimeOutput(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
-	cmd := osexec.CommandContext(ctx, binary, args...)
+	cmd := runtimeCommand(ctx, binary, args)
 	cmd.Env = dockerHostEnv()
 	pipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -124,4 +124,13 @@ func runtimeOutput(ctx context.Context, binary string, args ...string) ([]byte, 
 		return out, runtimeFailed(readErr)
 	}
 	return out, nil
+}
+
+// runtimeCommand builds the command for a binary that runtimeBinary already accepted; each branch
+// names its program as a literal, so the single-exec scan sees no dynamic program.
+func runtimeCommand(ctx context.Context, binary string, args []string) *osexec.Cmd {
+	if binary == "podman" {
+		return osexec.CommandContext(ctx, "podman", args...)
+	}
+	return osexec.CommandContext(ctx, "docker", args...)
 }
