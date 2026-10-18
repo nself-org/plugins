@@ -12,6 +12,7 @@ package main
 
 import (
 	"flag"
+	"sort"
 	"strings"
 )
 
@@ -86,4 +87,36 @@ func hasFlagToken(tokens []string) bool {
 		}
 	}
 	return false
+}
+
+// visibleV15 lists the keys `--help` and the subcommand count show: every
+// V15 entry that is not Hidden, sorted.
+func visibleV15() []string {
+	var keys []string
+	for k, e := range v15Subcommands {
+		if !e.Hidden {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// tableProblems checks the rules of a V15 table: a Hidden entry must be
+// V15Only (so v1.4 argv stays frozen) and every entry needs a Flags
+// constructor and a handler.
+func tableProblems(entries map[string]subcommandEntry) []string {
+	var out []string
+	for k, e := range entries {
+		switch {
+		case e.Hidden && !e.V15Only:
+			out = append(out, k+": Hidden without V15Only")
+		case e.Flags == nil:
+			out = append(out, k+": no Flags constructor")
+		case e.Handler == nil:
+			out = append(out, k+": no handler")
+		}
+	}
+	sort.Strings(out)
+	return out
 }

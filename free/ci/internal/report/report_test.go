@@ -1,0 +1,151 @@
+package report
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/nself-org/plugins/free/ci/internal/store"
+)
+
+const sha = "0123456789abcdef0123456789abcdef01234567"
+
+type fake struct {
+	posted []Status
+	fail   bool
+}
+
+func (f *fake) Post(_ context.Context, s Status) error {
+	if f.fail {
+		return errors.New("offline")
+	}
+	f.posted = append(f.posted, s)
+	return nil
+}
+
+func openStore(t *testing.T) *store.Store {
+	t.Helper()
+	s, err := store.Open(filepath.Join(t.TempDir(), "state.db"), store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	return s
+}
+
+func status(state State, desc string) Status {
+	return Status{Owner: "o", Repo: "r", Revision: sha, State: state, Description: desc}
+}
+
+func TestOutboxReverseSeq(t *testing.T) {
+	ctx, f := context.Background(), &fake{}
+	o := &Outbox{Store: openStore(t), Reporter: f}
+	older, _ := o.Reserve(ctx, sha)
+	newer, _ := o.Reserve(ctx, sha)
+	if ok, err := o.Complete(ctx, newer, status(Success, "new")); err != nil || !ok {
+		t.Fatalf("newest: %v %v", ok, err)
+	}
+	if ok, err := o.Complete(ctx, older, status(Failure, "old")); err != nil || ok {
+		t.Fatalf("an older pipeline finishing late must not post: %v %v", ok, err)
+	}
+	if len(f.posted) != 1 || f.posted[0].Description != "new" {
+		t.Fatalf("final state is not the newest pipeline's: %+v", f.posted)
+	}
+}
+
+func TestOutboxDrainAfterFailure(t *testing.T) {
+	ctx, f := context.Background(), &fake{fail: true}
+	o := &Outbox{Store: openStore(t), Reporter: f}
+	seq, _ := o.Reserve(ctx, sha)
+	if ok, err := o.Complete(ctx, seq, status(Success, "ok")); ok || err == nil {
+		t.Fatalf("a failed delivery must report the error: %v %v", ok, err)
+	}
+	f.fail = false
+	if n, err := o.Drain(ctx); err != nil || n != 1 {
+		t.Fatalf("drain: %d %v", n, err)
+	}
+	if n, _ := o.Drain(ctx); n != 0 || len(f.posted) != 1 {
+		t.Fatalf("a posted entry must not post twice: %d %+v", n, f.posted)
+	}
+}
+
+func TestOutboxWithoutReporterKeepsEntry(t *testing.T) {
+	ctx := context.Background()
+	st := openStore(t)
+	o := &Outbox{Store: st}
+	seq, _ := o.Reserve(ctx, sha)
+	if ok, err := o.Complete(ctx, seq, status(Success, "ok")); ok || err != nil {
+		t.Fatalf("no reporter: %v %v", ok, err)
+	}
+	left, _ := st.OutboxUnposted(ctx)
+	if len(left) != 1 {
+		t.Fatalf("entry must wait for a reporter, got %d", len(left))
+	}
+}
+
+func TestStatusValidate(t *testing.T) {
+	bad := []Status{{Owner: "o/x", Repo: "r", Revision: sha, State: Success}, {Owner: "o", Repo: "r", Revision: "HEAD", State: Success}, {Owner: "o", Repo: "r", Revision: sha, State: "good"}}
+	for _, s := range bad {
+		if s.Validate() == nil {
+			t.Fatalf("%+v must be refused", s)
+		}
+	}
+}
+
+func TestGHArgs(t *testing.T) {
+	args := strings.Join(Args(status(Success, strings.Repeat("x", 200))), " ")
+	if !strings.Contains(args, "context=nself-ci") || strings.Contains(args, "target_url") {
+		t.Fatalf("argv: %s", args)
+	}
+	if !strings.Contains(args, "repos/o/r/statuses/"+sha) {
+		t.Fatalf("endpoint: %s", args)
+	}
+	if got := Truncate(strings.Repeat("é", 200)); len([]rune(got)) != MaxDescription {
+		t.Fatalf("description runes = %d", len([]rune(got)))
+	}
+}
+
+func TestParseRemote(t *testing.T) {
+	for in, want := range map[string]string{"git@github.com:nself-org/cli.git": "nself-org/cli", "https://github.com/a/b": "a/b", "ssh://git@github.com/a/b.git": "a/b", "https://gitlab.com/a/b": "", "": "", "https://github.com/a/b/c": ""} {
+		o, r, ok := ParseRemote(in)
+		if got := o + "/" + r; ok && got != want || !ok && want != "" {
+			t.Fatalf("%q -> %q %v", in, got, ok)
+		}
+	}
+}
+
+func TestResolveReasons(t *testing.T) {
+	cap := func(remote string, remoteExit, authExit int) func(context.Context, ...string) (string, int, error) {
+		return func(_ context.Context, argv ...string) (string, int, error) {
+			if argv[0] == "git" {
+				return remote, remoteExit, nil
+			}
+			return "", authExit, nil
+		}
+	}
+	ctx := context.Background()
+	if _, _, _, why := (GH{Capture: cap("", 2, 0)}).Resolve(ctx, "."); why != ReasonNoRemote {
+		t.Fatalf("no remote: %q", why)
+	}
+	if _, _, _, why := (GH{Capture: cap("https://github.com/a/b", 0, 1)}).Resolve(ctx, "."); why != ReasonNoAuth {
+		t.Fatalf("no auth: %q", why)
+	}
+	r, o, n, why := (GH{Capture: cap("git@github.com:a/b.git\n", 0, 0)}).Resolve(ctx, ".")
+	if r == nil || o != "a" || n != "b" || why != "" {
+		t.Fatalf("resolve: %v %s %s %q", r, o, n, why)
+	}
+}
+
+func TestGHPostRunsGH(t *testing.T) {
+	var got []string
+	g := GH{Capture: func(_ context.Context, argv ...string) (string, int, error) { got = argv; return "", 0, nil }}
+	if err := g.Post(context.Background(), status(Failure, "x")); err != nil || got[0] != "gh" {
+		t.Fatalf("%v %v", got, err)
+	}
+	g.Capture = func(context.Context, ...string) (string, int, error) { return "HTTP 404", 1, nil }
+	if err := g.Post(context.Background(), status(Failure, "x")); err == nil {
+		t.Fatal("non-zero gh exit must be an error")
+	}
+}

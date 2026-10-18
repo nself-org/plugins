@@ -1,0 +1,195 @@
+package run
+
+// Purpose: the end of a run: record the evidence, finish the pipeline row,
+// run AfterRun hooks and finalizers, and post the one `nself-ci` status
+// through the outbox (or say in one line why not).
+// Inputs:  the job outcomes and the run facts. Outputs: a Result.
+// Constraints: unbound evidence (dirty tree, no commit) never posts; the
+// outbox posts only when its seq is not older than the last posted for the
+// (revision, context); every write uses a context that survives Ctrl-C; a
+// hook or post failure is a note, never a changed verdict.
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/model"
+	"github.com/nself-org/plugins/free/ci/internal/plan"
+	"github.com/nself-org/plugins/free/ci/internal/report"
+	"github.com/nself-org/plugins/free/ci/internal/store"
+)
+
+// statusPost is what prepareStatus resolved.
+type statusPost struct {
+	Reporter    report.Reporter
+	Owner, Repo string
+	Reason      string // why nothing will be posted ("" when posting)
+	Seq         int64
+	Outbox      *report.Outbox
+}
+
+type finishIn struct {
+	St        *store.Store
+	RunID     string
+	Rev       Revision
+	Source    string
+	Policy    PolicyResult
+	Hooks     Hooks
+	Jobs      []JobOutcome
+	Cancelled bool
+	Start     time.Time
+	Post      statusPost
+	Recovered RecoverReport
+	Skipped   []plan.Skipped
+}
+
+// prepareStatus decides whether this run can post, drains entries earlier
+// invocations left unposted, and reserves this run's seq.
+func (c *Coordinator) prepareStatus(ctx context.Context, st *store.Store, rev Revision) statusPost {
+	switch {
+	case c.Opts.NoStatus:
+		return statusPost{Reason: report.ReasonNoStatus}
+	case rev.SHA == "":
+		return statusPost{Reason: report.ReasonNoRevision}
+	}
+	gh := report.GH{Capture: c.capture()}
+	rep, owner, repo, reason := gh.Resolve(ctx, c.Opts.Root)
+	if reason != "" {
+		return statusPost{Reason: reason}
+	}
+	if c.Reporter != nil {
+		rep = c.Reporter
+	}
+	p := statusPost{Reporter: rep, Owner: owner, Repo: repo, Outbox: &report.Outbox{Store: st, Reporter: rep}}
+	_, _ = p.Outbox.Drain(ctx)
+	if rev.Dirty {
+		p.Reporter, p.Reason = nil, report.ReasonUnbound
+		return p
+	}
+	seq, err := p.Outbox.Reserve(ctx, rev.SHA)
+	if err != nil {
+		p.Reporter, p.Reason = nil, "status outbox unavailable: "+firstLineOf(err.Error())
+		return p
+	}
+	p.Seq = seq
+	return p
+}
+
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return s
+}
+
+// exitFor maps a result to the process exit code (model.ExitCodes, "ci").
+func exitFor(r model.Result) int {
+	switch r {
+	case "pass":
+		return 0
+	case "fail":
+		return 1
+	}
+	return 2
+}
+
+func pipelineStatus(r model.Result) string {
+	switch r {
+	case "pass":
+		return "passed"
+	case "fail":
+		return "failed"
+	}
+	return string(r)
+}
+
+// conclude records the evidence and posts the status.
+func (c *Coordinator) conclude(f finishIn) Result {
+	bg, done := background(context.Background())
+	defer done()
+	trig := c.Plan.Trigger
+	if trig == "" {
+		trig = "local"
+	}
+	ev, digest, err := buildEvidence(evidenceInput{RunID: f.RunID, Project: c.Opts.Root, Revision: f.Rev.SHA, ConfigDigest: c.ConfigDigest,
+		PolicyDigest: f.Policy.Digest, Dirty: f.Rev.Dirty, Cancelled: f.Cancelled, Pipeline: c.Plan.Pipeline, Selection: c.Plan.Selection,
+		Trigger: trig, Jobs: f.Jobs, Start: f.Start, End: time.Now()})
+	var notes []string
+	if f.Recovered.Lost > 0 {
+		notes = append(notes, fmt.Sprintf("recovered %d attempt(s) of a dead coordinator (%d retryable, %d need an operator)", f.Recovered.Lost, f.Recovered.Retryable, f.Recovered.NeedsOperator))
+	}
+	if err == nil {
+		body, _ := json.Marshal(ev)
+		if err = f.St.RecordRunEvidence(bg, "ev-"+f.RunID, f.RunID, f.Rev.SHA, c.ConfigDigest, body); err != nil {
+			notes = append(notes, "evidence not stored: "+firstLineOf(err.Error()))
+		}
+	} else {
+		ev.Result = "error"
+		notes = append(notes, "evidence not built: "+firstLineOf(err.Error()))
+	}
+	if err = f.St.FinishPipeline(bg, f.RunID, pipelineStatus(ev.Result)); err != nil {
+		notes = append(notes, "run row not finished: "+firstLineOf(err.Error()))
+	}
+	info := RunInfo{RunID: f.RunID, Revision: f.Rev.SHA, EvidenceDigest: digest, Result: ev.Result, Evidence: ev, Jobs: f.Jobs, Dirty: f.Rev.Dirty}
+	for _, h := range f.Hooks.AfterRuns {
+		if err = h.AfterRun(bg, info); err != nil {
+			notes = append(notes, "after-run hook: "+firstLineOf(err.Error()))
+		}
+	}
+	for _, fin := range f.Hooks.Finalizers {
+		if err = fin.Finalize(bg, info); err != nil {
+			notes = append(notes, "finalizer "+fin.Name()+": "+firstLineOf(err.Error()))
+		}
+	}
+	line := c.postStatus(bg, f, info, ev)
+	return Result{RunID: f.RunID, Exit: exitFor(ev.Result), Summary: Summary{RunID: f.RunID, Result: ev.Result, Jobs: f.Jobs, Skipped: f.Skipped,
+		Status: line, Evidence: digest, Notes: notes}}
+}
+
+func notPosted(reason string) string { return "nself-ci: status not posted: " + reason }
+
+// defaultStatus is the projection plus the evidence digest; no target_url.
+func defaultStatus(r PublishRequest) report.Status {
+	state := report.Error
+	switch r.Run.Result {
+	case "pass":
+		state = report.Success
+	case "fail":
+		state = report.Failure
+	}
+	d := r.Projection.Summary
+	if n := r.Run.EvidenceDigest; len(n) >= 12 {
+		d += " (evidence " + n[:12] + ")"
+	}
+	return report.Status{Owner: r.Owner, Repo: r.Repo, Revision: r.Run.Revision, State: state, Description: report.Truncate(d)}
+}
+
+func (c *Coordinator) postStatus(ctx context.Context, f finishIn, info RunInfo, ev model.Evidence) string {
+	p := f.Post
+	if p.Reporter == nil || p.Outbox == nil {
+		return notPosted(firstNonEmpty(p.Reason, report.ReasonNoRemote))
+	}
+	if ev.Binding.State != "bound" {
+		return notPosted(report.ReasonUnbound)
+	}
+	req := PublishRequest{Owner: p.Owner, Repo: p.Repo, Run: info, Projection: model.Projection(ev)}
+	s := defaultStatus(req)
+	if f.Hooks.Publisher != nil {
+		var err error
+		if s, err = f.Hooks.Publisher.Publish(ctx, req); err != nil {
+			return notPosted("publisher failed: " + firstLineOf(err.Error()))
+		}
+	}
+	s.Owner, s.Repo, s.Revision = p.Owner, p.Repo, f.Rev.SHA
+	delivered, err := p.Outbox.Complete(ctx, p.Seq, s)
+	switch {
+	case err != nil:
+		return notPosted("could not deliver (kept for the next run): " + firstLineOf(err.Error()))
+	case !delivered:
+		return notPosted("a newer run already posted for this commit")
+	}
+	return fmt.Sprintf("nself-ci: status posted (%s) for %s", s.State, f.Rev.SHA[:7])
+}
