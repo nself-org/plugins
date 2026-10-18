@@ -1,0 +1,7 @@
+diff --git a/internal/policy/resolve.go b/internal/policy/resolve.go
+index 0dcd3ff1..72900220 100644
+--- a/internal/policy/resolve.go
++++ b/internal/policy/resolve.go
+@@ -111 +111 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
+-		if tipPolicy, err = policyAt(ctx, r.Run, repo.Root, commit); err != nil {
++		if tipPolicy, err = worktreePolicy(repo.Root); err != nil {

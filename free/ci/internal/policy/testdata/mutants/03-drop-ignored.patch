@@ -1,0 +1,7 @@
+diff --git a/internal/policy/resolve.go b/internal/policy/resolve.go
+index 0dcd3ff1..5d8ccc5f 100644
+--- a/internal/policy/resolve.go
++++ b/internal/policy/resolve.go
+@@ -131 +131 @@ func (r *Resolver) Resolve(ctx context.Context, repo Repo, rev Revision) (Resolv
+-	res.Ignored = append(ignored, eff.Ignored()...)
++	res.Ignored = ignored

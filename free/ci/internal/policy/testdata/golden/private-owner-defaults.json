@@ -1,0 +1,35 @@
+{
+  "digest": "569c0a4ee890851071a78b5afc3b744327b35ec20b0654a44e16a8f252375e76",
+  "fetch": "none",
+  "sources": {
+    "economics.paid_enabled": "default",
+    "trust.accepts": "default",
+    "trust.approval.first_time": "default",
+    "trust.isolation_min": "default",
+    "trust.machine_invoked_cap": "default",
+    "trust.network": "default",
+    "trust.privacy_zone": "default",
+    "trust.secrets": "default"
+  },
+  "values": {
+    "economics.paid_enabled": "on",
+    "trust.accepts": [
+      "untrusted",
+      "collaborator",
+      "internal",
+      "owner"
+    ],
+    "trust.approval.first_time": false,
+    "trust.isolation_min": "process",
+    "trust.machine_invoked_cap": "owner",
+    "trust.network": "privileged",
+    "trust.privacy_zone": "private-infrastructure",
+    "trust.secrets": [
+      "project",
+      "environment",
+      "team",
+      "release",
+      "deploy"
+    ]
+  }
+}
