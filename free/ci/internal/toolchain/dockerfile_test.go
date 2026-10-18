@@ -1,10 +1,13 @@
 package toolchain
 
 // Purpose: the Dockerfile may not drift from the pins. Every FROM is pinned by
-// digest, every pinned version, URL, sha256 and digest appears in it, and
-// every download goes through the checksum verifier.
+// digest, every pinned version, URL, sha256 and digest appears in it exactly
+// once as an ARG, every ARG maps to a pin source, and every download goes
+// through the checksum verifier. checkDockerfile is a function so a mutated
+// copy proves the check can fail.
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -12,6 +15,11 @@ import (
 )
 
 const dockerfilePath = "../../toolchain/Dockerfile"
+
+var (
+	fromDigestRe = regexp.MustCompile(`@sha256:[0-9a-f]{64}( |$)`)
+	argRe        = regexp.MustCompile(`(?m)^ARG ([A-Z0-9_]+)=(.*)$`)
+)
 
 func readDockerfile(t *testing.T) string {
 	t.Helper()
@@ -22,49 +30,90 @@ func readDockerfile(t *testing.T) string {
 	return string(b)
 }
 
-func TestDockerfileFromLinesPinnedByDigest(t *testing.T) {
+// checkDockerfile returns every way d disagrees with pins.
+func checkDockerfile(d string, pins []Pin) []string {
+	var out []string
 	froms := 0
-	for _, line := range strings.Split(readDockerfile(t), "\n") {
-		if !strings.HasPrefix(line, "FROM ") {
-			continue
-		}
-		froms++
-		if !regexp.MustCompile(`@sha256:[0-9a-f]{64}( |$)`).MatchString(line) {
-			t.Errorf("FROM is not pinned by digest: %s", line)
+	for _, line := range strings.Split(d, "\n") {
+		if strings.HasPrefix(line, "FROM ") {
+			froms++
+			if !fromDigestRe.MatchString(line) {
+				out = append(out, "FROM is not pinned by digest: "+line)
+			}
 		}
 	}
 	if froms < 2 {
-		t.Fatalf("expected a fetch and a final stage, found %d FROM lines", froms)
+		out = append(out, fmt.Sprintf("expected a fetch and a final stage, found %d FROM lines", froms))
 	}
-}
-
-func TestDockerfileMatchesPins(t *testing.T) {
-	d := readDockerfile(t)
-	for _, p := range loadPinsFromRepo(t) {
+	args := map[string]string{}
+	for _, m := range argRe.FindAllStringSubmatch(d, -1) {
+		if _, dup := args[m[1]]; dup {
+			out = append(out, "ARG "+m[1]+" is declared twice (the later default wins)")
+		}
+		args[m[1]] = m[2]
+	}
+	want := map[string]string{}
+	for _, p := range pins {
 		switch p.Kind {
 		case KindBaseImage:
 			ref := p.Image + ":" + p.Version + "@" + p.Digest
 			if n := strings.Count(d, ref); n < 2 {
-				t.Errorf("base image %s is used by %d stages, want every stage", ref, n)
+				out = append(out, fmt.Sprintf("base image %s is used by %d stages, want every stage", ref, n))
 			}
 		case KindTool:
-			arg := strings.ToUpper(strings.ReplaceAll(p.Name, "-", "_"))
-			if !strings.Contains(d, "ARG "+arg+"_VERSION="+p.Version+"\n") {
-				t.Errorf("%s version %s is not in the Dockerfile", p.Name, p.Version)
-			}
+			name := strings.ToUpper(strings.ReplaceAll(p.Name, "-", "_"))
+			want[name+"_VERSION"] = p.Version
 			for _, s := range p.Sources {
-				suffix := strings.ToUpper(s.Arch)
-				// A darwin source belongs to `artifacts tools install`, not to the image.
-				if s.OS != "linux" && s.OS != "any" {
+				if s.OS != "linux" && s.OS != "any" { // darwin sources belong to `artifacts tools install`
 					continue
 				}
-				if !strings.Contains(d, "ARG "+arg+"_URL_"+suffix+"="+s.URL+"\n") || !strings.Contains(d, "ARG "+arg+"_SHA256_"+suffix+"="+s.SHA256+"\n") {
-					t.Errorf("%s %s/%s url or sha256 differs from the Dockerfile", p.Name, s.OS, s.Arch)
-				}
+				want[name+"_URL_"+strings.ToUpper(s.Arch)] = s.URL
+				want[name+"_SHA256_"+strings.ToUpper(s.Arch)] = s.SHA256
 			}
 			if !strings.Contains(d, "fetch-verified.sh "+p.Name+" ") {
-				t.Errorf("%s is not downloaded through fetch-verified.sh", p.Name)
+				out = append(out, p.Name+" is not downloaded through fetch-verified.sh")
 			}
+		}
+	}
+	for k, v := range want {
+		if got, ok := args[k]; !ok || got != v {
+			out = append(out, fmt.Sprintf("ARG %s is %q, the pins say %q", k, got, v))
+		}
+	}
+	for k := range args {
+		if _, ok := want[k]; !ok && k != "BUILDARCH" && k != "TARGETARCH" {
+			out = append(out, "ARG "+k+" has no pin source")
+		}
+	}
+	return out
+}
+
+func TestDockerfileMatchesPins(t *testing.T) {
+	for _, problem := range checkDockerfile(readDockerfile(t), loadPinsFromRepo(t)) {
+		t.Error(problem)
+	}
+}
+
+// TestDockerfileCheckCanFail: each kind of drift is caught on a mutated copy.
+func TestDockerfileCheckCanFail(t *testing.T) {
+	d, pins := readDockerfile(t), loadPinsFromRepo(t)
+	cases := []struct{ name, text, want string }{
+		{"duplicate ARG", d + "\nARG SYFT_URL_AMD64=https://example.org/other.tgz\n", "declared twice"},
+		{"orphan ARG", d + "\nARG GHOST_URL_AMD64=https://example.org/ghost.tgz\n", "no pin source"},
+		{"changed sha", strings.Replace(d, "ARG GITLEAKS_SHA256_AMD64=55", "ARG GITLEAKS_SHA256_AMD64=66", 1), "GITLEAKS_SHA256_AMD64"},
+		{"unpinned FROM", strings.Replace(d, "FROM docker.io/library/debian:trixie-slim@", "FROM docker.io/library/debian:trixie-slim #", 1), "not pinned by digest"},
+		{"unverified download", strings.Replace(d, "fetch-verified.sh trivy ", "curl -O trivy ", 1), "trivy is not downloaded"},
+	}
+	for _, c := range cases {
+		if c.text == d {
+			t.Fatalf("%s: the mutation changed nothing", c.name)
+		}
+		found := false
+		for _, p := range checkDockerfile(c.text, pins) {
+			found = found || strings.Contains(p, c.want)
+		}
+		if !found {
+			t.Errorf("%s: drift not detected (want a problem mentioning %q)", c.name, c.want)
 		}
 	}
 }

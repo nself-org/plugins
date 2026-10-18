@@ -7,6 +7,12 @@ set -eu
 name=$1
 arch=$2
 out=$3
+case "$name$arch" in
+*[!a-z0-9-]* | "")
+	echo "fetch-verified: name and arch are lower-case words" >&2
+	exit 2
+	;;
+esac
 up() { printf '%s' "$1" | tr 'a-z-' 'A-Z_'; }
 n=$(up "$name")
 a=$(up "$arch")

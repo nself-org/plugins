@@ -8,7 +8,6 @@ package toolchain
 // pins the alpine index digest, which is pulled by digest.
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,8 +51,9 @@ func fixtureRepo(t *testing.T) string {
 	return repo
 }
 
-// TestContainerRunPinnedImage: with a fixture digest row the job runs in that image (Linux or a
-// Docker Desktop VM); with the shipped pending row the run is refused with E645 naming --image.
+// TestContainerRunPinnedImage: with a fixture digest row the job runs in that image (the host
+// itself has no /etc/alpine-release); with the shipped pending row the run is refused with E645
+// naming --image.
 func TestContainerRunPinnedImage(t *testing.T) {
 	if _, _, code := run(t, ".", nil, "docker", "info"); code != 0 {
 		t.Fatal("docker is required for the container tests and `docker info` failed")
@@ -75,12 +75,12 @@ func TestContainerRunPinnedImage(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("pinned fixture run exit %d\nstdout: %s\nstderr: %s", code, out, errs)
 	}
-	var doc map[string]any
-	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		t.Fatalf("stdout is not JSON: %v\n%s", err, out)
+	// /etc/alpine-release exists only in the pinned image: a pass proves the job ran there.
+	if !strings.Contains(out+errs, "release-file") || strings.Contains(out+errs, "failed") {
+		t.Errorf("the job did not report a pass:\n%s%s", out, errs)
 	}
-	if !strings.Contains(out, `"container"`) {
-		t.Errorf("the run did not report container isolation:\n%s", out)
+	if _, _, code := run(t, repo, base, bin, "--json", "--no-status"); code == 0 {
+		t.Error("negative control: the same job passed on the host, so the pass above proves nothing")
 	}
 	if _, errs, code := run(t, "", nil, "docker", "image", "inspect", "docker.io/library/alpine@"+alpineDigest); code != 0 {
 		t.Errorf("the fixture image was not pulled by digest: %s", errs)

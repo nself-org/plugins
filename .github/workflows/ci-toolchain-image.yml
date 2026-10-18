@@ -49,6 +49,10 @@ jobs:
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: test -n "$DOCKERHUB_TOKEN" || { echo 'DOCKERHUB_TOKEN missing'; exit 1; }
+      - name: Publish only from main
+        env:
+          REF: ${{ github.ref }}
+        run: test "$REF" = refs/heads/main || { echo "publish runs from refs/heads/main, not $REF"; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false

@@ -67,7 +67,10 @@ func runDrill(t *testing.T, table string, srv *httptest.Server) (doc map[string]
 	t.Helper()
 	for _, tool := range []string{"curl", "jq", "yq"} {
 		if _, err := exec.LookPath(tool); err != nil {
-			t.Fatalf("the drill test needs %s on PATH: %v", tool, err)
+			if os.Getenv("CI") != "" { // a runner without the tool must not read as green
+				t.Fatalf("the drill test needs %s on PATH: %v", tool, err)
+			}
+			t.Skipf("the drill test needs %s on PATH: %v", tool, err)
 		}
 	}
 	path := filepath.Join(t.TempDir(), "versions.yaml")

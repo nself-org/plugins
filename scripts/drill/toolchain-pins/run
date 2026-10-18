@@ -15,6 +15,7 @@ versions=${TOOLCHAIN_VERSIONS:-$root/free/ci/toolchain/versions.yaml}
 for tool in curl jq yq; do
 	command -v "$tool" >/dev/null || { echo "toolchain-pins: $tool is required" >&2; exit 2; }
 done
+yq --version 2>&1 | grep -qi mikefarah || { echo "toolchain-pins: mikefarah yq v4 is required" >&2; exit 2; }
 [ -r "$versions" ] || { echo "toolchain-pins: cannot read $versions" >&2; exit 2; }
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/toolchain-pins.XXXXXX")
@@ -35,7 +36,11 @@ get() { # get URL: body on stdout
 	[[ "$1" == https://api.github.com/* && -n "${GITHUB_TOKEN:-}" ]] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
 	curl "${curl_opts[@]}" --fail ${auth[@]+"${auth[@]}"} "$(u "$1")"
 }
-head_ok() { curl "${curl_opts[@]}" --fail --head --output /dev/null "$(u "$1")"; }
+# head_ok URL: the artifact is downloadable. Some CDNs refuse HEAD on a signed URL, so fall back to a 1-byte GET.
+head_ok() {
+	curl "${curl_opts[@]}" --fail --head --output /dev/null "$(u "$1")" ||
+		curl "${curl_opts[@]}" --fail --range 0-0 --output /dev/null "$(u "$1")"
+}
 
 # latest TYPE REF: newest upstream version on stdout, empty when the feed cannot be read.
 latest() {

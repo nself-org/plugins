@@ -122,6 +122,13 @@ func TestWorkflowPublishFailsWithoutToken(t *testing.T) {
 	if first.Env["DOCKERHUB_TOKEN"] != "${{ secrets.DOCKERHUB_TOKEN }}" {
 		t.Errorf("first step env = %v", first.Env)
 	}
+	mainOnly := false
+	for _, st := range j.Steps[:3] {
+		mainOnly = mainOnly || (strings.Contains(st.Run, "refs/heads/main") && strings.Contains(st.Run, "exit 1"))
+	}
+	if !mainOnly {
+		t.Error("publish does not fail early when dispatched from a ref other than main")
+	}
 	if strings.Contains(raw, "continue-on-error") {
 		t.Error("continue-on-error would let a failed publish pass")
 	}

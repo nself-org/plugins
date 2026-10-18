@@ -39,7 +39,7 @@ func TestSectionIsRegistered(t *testing.T) {
 }
 
 func TestDoctorSectionListsDriftImageAndVersions(t *testing.T) {
-	root := filepath.Join(toolchainDir, "..")
+	root := "../../../.."
 	env := doctor.Env{Root: root, Capture: probeFake(map[string]string{
 		"go":       "go version go1.27.2 linux/arm64",
 		"node":     "v24.21.0",
@@ -72,7 +72,7 @@ func TestDoctorAllMatchingIsOnePass(t *testing.T) {
 
 func TestDoctorFlagsDriftedVersionsFile(t *testing.T) {
 	dir := t.TempDir()
-	tc := filepath.Join(dir, "toolchain")
+	tc := filepath.Join(dir, "free", "ci", "toolchain")
 	if err := os.CopyFS(tc, os.DirFS(toolchainDir)); err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +83,49 @@ func TestDoctorFlagsDriftedVersionsFile(t *testing.T) {
 	c := checksByID(runSection(context.Background(), doctor.Env{Root: dir}), "CI-DI01")
 	if len(c) != 1 || c[0].Status != doctor.Fail || !strings.Contains(c[0].Remediation, "go generate") {
 		t.Fatalf("drift not reported: %+v", c)
+	}
+}
+
+// TestDoctorIgnoresForeignPinsAndMissingVersionsFile: a repository with its own toolchain/pins is not
+// judged, and a checkout of this plugin without versions.yaml has nothing on disk to compare.
+func TestDoctorIgnoresForeignPinsAndMissingVersionsFile(t *testing.T) {
+	foreign := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(foreign, "toolchain", "pins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(foreign, "toolchain", "pins", "x.yaml"), []byte("garbage: ["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c := checksByID(runSection(context.Background(), doctor.Env{Root: foreign}), "CI-DI01"); c[0].Status != doctor.Pass {
+		t.Fatalf("foreign pins judged: %+v", c)
+	}
+	own := t.TempDir()
+	if err := os.CopyFS(filepath.Join(own, "free", "ci", "toolchain"), os.DirFS(toolchainDir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(own, "free", "ci", "toolchain", "versions.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if c := checksByID(runSection(context.Background(), doctor.Env{Root: own}), "CI-DI01"); c[0].Status != doctor.Pass {
+		t.Fatalf("missing versions.yaml failed the check: %+v", c)
+	}
+}
+
+// TestDoctorFlagsStaleEmbeddedTable: pins newer than the table inside the binary fail the check.
+func TestDoctorFlagsStaleEmbeddedTable(t *testing.T) {
+	dir := t.TempDir()
+	tc := filepath.Join(dir, "free", "ci", "toolchain")
+	if err := os.CopyFS(tc, os.DirFS(toolchainDir)); err != nil {
+		t.Fatal(err)
+	}
+	pin := filepath.Join(tc, "pins", "gitleaks.yaml")
+	b, _ := os.ReadFile(pin)
+	if err := os.WriteFile(pin, []byte(strings.Replace(string(b), "8.30.1", "8.30.2", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := checksByID(runSection(context.Background(), doctor.Env{Root: dir}), "CI-DI01")
+	if len(c) != 1 || c[0].Status != doctor.Fail || !strings.Contains(c[0].Message, "embedded") {
+		t.Fatalf("stale embedded table not reported: %+v", c)
 	}
 }
 

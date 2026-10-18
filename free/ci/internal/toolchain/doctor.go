@@ -12,18 +12,24 @@ package toolchain
 // version differences are warnings, never failures; probes honour ctx.
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/nself-org/plugins/free/ci/internal/doctor"
 )
 
 // SectionName is the registered section.
 const SectionName = "toolchain-pins"
+
+// probeBudget bounds one version probe so a slow tool cannot eat the section's budget.
+const probeBudget = 2 * time.Second
 
 func init() {
 	doctor.RegisterSection(doctor.Section{Name: SectionName, Selector: doctor.SelectAlways, Run: runSection})
@@ -41,13 +47,12 @@ func runSection(ctx context.Context, env doctor.Env) []doctor.Check {
 	return append(out, checkInstalled(ctx, env, table)...)
 }
 
-// pinsDir finds toolchain/pins under root or root/free/ci.
+// pinsDir finds the pins of this plugin in the checkout doctor runs in; any other
+// repository (even one with its own toolchain/pins) is not ours to judge.
 func pinsDir(root string) string {
-	for _, rel := range []string{"toolchain/pins", "free/ci/toolchain/pins"} {
-		d := filepath.Join(root, rel)
-		if st, err := os.Stat(d); err == nil && st.IsDir() {
-			return d
-		}
+	d := filepath.Join(root, "free", "ci", "toolchain", "pins")
+	if st, err := os.Stat(d); err == nil && st.IsDir() {
+		return d
 	}
 	return ""
 }
@@ -61,21 +66,37 @@ func checkDrift(root string, table Versions) doctor.Check {
 	}
 	pins, err := LoadPins(os.DirFS(dir), ".")
 	if err == nil {
-		var want []byte
-		if want, err = Render(pins); err == nil {
-			var have []byte
-			if have, err = os.ReadFile(filepath.Join(filepath.Dir(dir), "versions.yaml")); err == nil && string(have) != string(want) {
-				err = fail("toolchain/versions.yaml differs from what the pins render")
-			}
-		}
+		err = compareRendered(pins, dir)
 	}
 	if err != nil {
 		c.Status, c.Message = doctor.Fail, err.Error()
-		c.Remediation = "Run `go generate ./internal/toolchain/...` in free/ci and commit toolchain/versions.yaml"
+		c.Remediation = "Run `go generate ./internal/toolchain/...` in free/ci, commit the regenerated files and rebuild nself-ci"
 		return c
 	}
 	c.Message = fmt.Sprintf("toolchain/versions.yaml matches its %d pin sources", len(pins))
 	return c
+}
+
+// compareRendered fails when the pins render something other than the table
+// compiled into this binary, or other than toolchain/versions.yaml on disk.
+func compareRendered(pins []Pin, dir string) error {
+	want, err := Render(pins)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(embedded, want) {
+		return fail("the table embedded in this nself-ci differs from the pins in this checkout")
+	}
+	have, err := os.ReadFile(filepath.Join(filepath.Dir(dir), "versions.yaml"))
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil
+	case err != nil:
+		return fail("cannot read toolchain/versions.yaml: %v", err)
+	case !bytes.Equal(have, want):
+		return fail("toolchain/versions.yaml differs from what the pins render")
+	}
+	return nil
 }
 
 func checkImageRow(table Versions) doctor.Check {
@@ -100,7 +121,9 @@ func checkInstalled(ctx context.Context, env doctor.Env, table Versions) []docto
 		if p.Kind != KindTool || len(p.Probe) == 0 || env.Capture == nil || ctx.Err() != nil {
 			continue
 		}
-		text, rc, err := env.Capture(ctx, p.Probe...)
+		pctx, cancel := context.WithTimeout(ctx, probeBudget)
+		text, rc, err := env.Capture(pctx, p.Probe...)
+		cancel()
 		if err != nil || rc != 0 {
 			continue
 		}
