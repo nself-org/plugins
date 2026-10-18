@@ -73,12 +73,14 @@ CREATE TRIGGER trg_projects_updated_at
   BEFORE UPDATE ON np_tenant_controller.projects
   FOR EACH ROW EXECUTE FUNCTION np_tenant_controller.set_updated_at();
 
--- Controller admin role (used by the controller daemon).
--- Created only if it doesn't exist; credentials are set by the controller at startup.
+-- Grant-holder role for the controller schema. The daemon connects with its own DATABASE_URL, never as this
+-- role, so it cannot log in (P7-PLUG-81: the earlier LOGIN role carried a known placeholder password).
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nself_controller') THEN
-    CREATE ROLE nself_controller LOGIN PASSWORD 'PLACEHOLDER_ROTATED_AT_RUNTIME';
+    CREATE ROLE nself_controller NOLOGIN;
+  ELSE
+    ALTER ROLE nself_controller NOLOGIN;
   END IF;
 END $$;
 

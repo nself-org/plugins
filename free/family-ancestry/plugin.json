@@ -1,16 +1,61 @@
 {
-  "name": "family-ancestry",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Ancestry.com \u2192 nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "minNselfVersion": "1.0.0",
   "category": "social",
+  "dependencies": [
+    "family",
+    "object-storage",
+    "photos"
+  ],
+  "description": "Ancestry.com → nFamily migration helper (PLANNED). Imports profiles, photos, documents, sources into the family plugin. Pattern mirrors family-geni.",
+  "entryPoint": "binary",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
+  "installable": false,
+  "language": "go",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "planned",
+  "minNselfVersion": "1.0.0",
+  "multiApp": {
+    "defaultValue": "primary",
+    "isolationColumn": "source_account_id",
+    "pkStrategy": "single",
+    "supported": true
+  },
+  "name": "family-ancestry",
+  "permissions": {
+    "database": [
+      "create",
+      "read",
+      "update",
+      "delete"
+    ],
+    "filesystem": [
+      "storage",
+      "temp",
+      "logs"
+    ],
+    "network": [
+      "ancestry.com"
+    ]
+  },
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "service": {
+    "kind": "library"
+  },
+  "status": "planned",
   "tags": [
     "family",
     "genealogy",
@@ -19,60 +64,6 @@
     "importer",
     "gedcom"
   ],
-  "tables": [],
-  "webhooks": {},
-  "actions": {},
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": []
-  },
-  "config": {},
-  "multiApp": {
-    "supported": true,
-    "isolationColumn": "source_account_id",
-    "pkStrategy": "single",
-    "defaultValue": "primary"
-  },
-  "permissions": {
-    "database": [
-      "create",
-      "read",
-      "update",
-      "delete"
-    ],
-    "network": [
-      "ancestry.com"
-    ],
-    "filesystem": [
-      "storage",
-      "temp",
-      "logs"
-    ]
-  },
-  "dependencies": {
-    "required": [
-      "family",
-      "object-storage",
-      "photos"
-    ],
-    "optional": []
-  },
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "port": 3513,
-  "status": "planned",
-  "installable": false,
   "tier": "free",
-  "language": "go",
-  "entryPoint": "binary",
-  "routes": [],
-  "health_endpoint": "/health",
-  "health_status": "pending_implementation",
-  "entry": "cmd/main.go",
-  "checksum": "75b9a777d11e9ef264c80753ba3f00614df6abd30c0d75d4a30f440d491b42e1",
-  "bundles": [
-    "nfamily"
-  ]
+  "version": "1.2.6"
 }

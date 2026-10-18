@@ -235,7 +235,7 @@ func (c *Coordinator) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	c.exec = &ciexec.Executor{Stale: staleChecker{st, bootID()}, Isolation: h.Isolation}
+	c.exec = newExecutor(staleChecker{st, bootID()}, h.Isolation)
 	sess.Store, sess.Coordinator, sess.Exec, sess.RunID, sess.Revision = st, coord, c.exec, runID, rev.SHA
 	sess.Host, sess.Home, sess.Admission = hostName(), c.Opts.Home, c.Admission
 	sess.Admission.Force = sess.Admission.Force || c.Opts.Force

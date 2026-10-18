@@ -1,0 +1,3 @@
+# dummy values for the fresh-database boot kit; lib/pq needs sslmode=disable against the kit postgres
+DATABASE_URL=$DATABASE_URL?sslmode=disable
+AUDIT_ANALYTICS_PORT=$PORT

@@ -4,7 +4,7 @@ free/access-controls/internal/handlers.go	1001
 free/admin-api/internal/db.go	403
 free/admin-api/internal/handlers.go	413
 free/analytics/internal/handlers.go	797
-free/audit-analytics/go/anomaly/scorer.go	366
+free/audit-analytics/anomaly/scorer.go	366
 free/audit-log/sdk/devkit/cmd/new-plugin/main.go	510
 free/audit-log/sdk/identity.go	338
 free/auth-enterprise/go/handlers/mfa.go	333
@@ -14,8 +14,7 @@ free/auth-enterprise/go/sso/oidc.go	314
 free/auth-enterprise/go/sso/saml.go	385
 free/backup/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/backup/third_party/sdk/identity.go	338
-free/byok/go/handlers/byok.go	483
-free/cdc/go/replication/engine.go	312
+free/byok/handlers/byok.go	482
 free/cdn/internal/handlers.go	813
 free/claw-cli/cmd/claw_pair.go	301
 free/cloudflare/internal/handlers.go	614
@@ -48,8 +47,8 @@ free/file-processing/ts/src/server.ts	574
 free/file-processing/ts/src/storage.ts	316
 free/file-processing/ts/src/types.ts	378
 free/file-processing/ts/src/webhooks.ts	343
-free/functions-v8/go/internal/api/handlers.go	361
-free/functions-v8/go/internal/store/store.go	332
+free/functions-v8/internal/api/handlers.go	353
+free/functions-v8/internal/store/store.go	332
 free/game-metadata/internal/handlers.go	990
 free/geocoding/internal/handlers.go	1087
 free/geocoding/internal/provider/provider.go	406
@@ -110,12 +109,11 @@ free/shopify/actions/sync.sh	376
 free/shopify/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/shopify/third_party/sdk/identity.go	338
 free/sports/internal/handlers.go	876
-free/storage-transform/go/cmd/main.go	324
 free/stripe/actions/sync.sh	381
 free/stripe/internal/db_schema.go	761
 free/subtitle-manager/third_party/sdk/devkit/cmd/new-plugin/main.go	510
 free/subtitle-manager/third_party/sdk/identity.go	338
-free/tenant-controller/go/internal/metering/metering.go	621
+free/tenant-controller/internal/metering/metering.go	621
 free/tmdb/internal/db.go	424
 free/tmdb/internal/handlers.go	1177
 free/tmdb/internal/models.go	311

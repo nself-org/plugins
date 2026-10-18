@@ -2,6 +2,8 @@
 # tests/boot/run.sh [--plugins a,b | --fixtures] [--sequential]: the fresh-DB boot kit. Builds the converted plugin
 # image (network disabled for RUN steps), starts postgres:16 (pgvector/pgvector:pg16 when a plugin requires the vector extension), boots the plugin twice and requires: first boot
 # applies all migrations, second applies none, and /health reports migrations applied == expected.
+# The /health probe uses wget, or a deno fetch in images that have no wget; the migrations log line may be plain or a
+# structured (JSON) log record.
 # Env hook (P7-PLUG-76): when <plugin>/tests/boot/env exists, each KEY=value line is passed as -e to both boots. Only
 # $DATABASE_URL and $PORT (or ${...}) are expanded, by plain string replacement (no eval); blank and # lines are
 # skipped. Values are dummies for the boot, never real secrets. Plugins without the file boot exactly as before.
@@ -47,11 +49,11 @@ for p in $(printf '%s' "$list" | tr ',' ' '); do
     c=nself-boot-$boot-$pid
     docker run -d --name "$c" --network "$net" -e DATABASE_URL="$dburl" -e PORT="$port" ${envargs[@]+"${envargs[@]}"} "nself-boot-$p:$pid" >/dev/null
     h=
-    for i in $(seq 1 40); do h=$(docker exec "$c" wget -q -O- "http://127.0.0.1:$port/health" 2>/dev/null) && [ -n "$h" ] && break; sleep 1; done
+    for i in $(seq 1 40); do h=$(if docker exec "$c" sh -c 'command -v wget' >/dev/null 2>&1; then docker exec "$c" wget -q -O- "http://127.0.0.1:$port/health"; else docker exec "$c" deno eval "console.log(await (await fetch('http://127.0.0.1:$port/health')).text())"; fi 2>/dev/null) && [ -n "$h" ] && break; sleep 1; done
     logs=$(docker logs "$c" 2>&1); docker rm -f "$c" >/dev/null
     applied=$(printf '%s' "$h" | jq -r '.migrations.applied // "none"' 2>/dev/null); exp=$(printf '%s' "$h" | jq -r '.migrations.expected // "none"' 2>/dev/null)
     want_log=$expected; [ $boot = b ] && want_log=0
-    if printf '%s\n' "$logs" | grep -q "migrations: applied $want_log\$" && [ "$applied" = "$expected" ] && [ "$exp" = "$expected" ]; then
+    if printf '%s\n' "$logs" | grep -Eq "migrations: applied $want_log(\"[,}].*)?\$" && [ "$applied" = "$expected" ] && [ "$exp" = "$expected" ]; then
       echo "pass  boot $p #$boot: applied $want_log this boot, /health applied=$applied expected=$exp"
     else echo "FAIL  boot $p #$boot: want log 'applied $want_log' and /health $expected/$expected; got health='$h'"; printf '%s\n' "$logs" | tail -5; rc=1; fi
   done

@@ -65,3 +65,9 @@ All tables include `source_account_id TEXT NOT NULL DEFAULT 'primary'` for multi
 ## Bundle
 
 Unbundled — available as a standalone free plugin.
+
+## Database migrations
+
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_audit_analytics.schema_migrations`); the tables live in `public`. The `np_audit_heatmap` materialized view and the anomaly and top-actor queries read `public.np_audit_log`. No shipped plugin creates that table today (audit-log writes `np_auditlog_events`, tracked in hq quality debt), so the view is skipped on every database, the plugin still boots, and the analytics endpoints stay empty until the table exists.
+
+The manifest declares `requires.plugins: ["audit-log"]` because that plugin owns the audit data; a CLI that reads manifest v2 installs it first.
