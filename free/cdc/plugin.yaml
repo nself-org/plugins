@@ -7,7 +7,7 @@ description: >
   Postgres Change Data Capture via WAL logical replication. Streams INSERT/UPDATE/DELETE
   events to Kafka, Redpanda, or RabbitMQ in Debezium envelope format.
   Embedded mode (default, no JVM) or external Debezium Kafka Connect mode.
-  Required peer dependency for the warehouse plugin.
+  Peer dependency of the warehouse plugin (now a Bundles plugin).
 isCommercial: true
 licenseType: pro
 requiredEntitlements:

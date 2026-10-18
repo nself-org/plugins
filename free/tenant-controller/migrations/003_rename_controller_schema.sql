@@ -1,22 +1,15 @@
--- Migration 003: rename the controller schema nself_controller -> np_tenant_controller.
+-- Migration 003: the controller schema is np_tenant_controller (nself_controller before manifest v2).
 --
--- Manifest v2 requires a plugin schema to be named np_<plugin with - as _>.
--- ALTER SCHEMA ... RENAME is metadata-only, so tables, rows, the set_updated_at
--- function, the trigger, grants and default privileges all follow the schema.
--- The Postgres ROLE nself_controller is NOT renamed.
---
--- Idempotent: no-op on fresh installs (001 already creates np_tenant_controller)
--- and on installs that were already renamed. If BOTH schemas exist the state is
--- ambiguous, so this raises instead of merging or dropping anything.
--- The Go daemon runs the same guarded rename at startup (db.Migrate).
+-- The rename itself runs in the daemon before any migration (internal/db: renameLegacySchemaSQL), because the
+-- boot migration ledger lives in np_tenant_controller and would otherwise create that schema first and make
+-- the rename ambiguous. By the time this file runs the legacy schema must be gone; if it is not (both schemas
+-- existed), fail loudly instead of merging or dropping anything. The Postgres ROLE nself_controller is not
+-- renamed. Idempotent: no-op on fresh installs and on installs that were already renamed.
 
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'nself_controller') THEN
-    IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'np_tenant_controller') THEN
-      RAISE EXCEPTION 'both schemas nself_controller and np_tenant_controller exist; resolve manually (no automatic merge)';
-    END IF;
-    ALTER SCHEMA nself_controller RENAME TO np_tenant_controller;
+    RAISE EXCEPTION 'legacy schema nself_controller still exists; resolve manually (no automatic merge)';
   END IF;
 END
 $$;

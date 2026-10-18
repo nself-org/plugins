@@ -1,21 +1,105 @@
 {
-  "name": "cdc",
-  "version": "1.2.6",
-  "api_version": "1.0.0",
-  "description": "Change Data Capture \u2014 streams Postgres WAL events to downstream consumers via webhooks or message queues.",
   "author": "nself",
-  "license": "MIT",
-  "isCommercial": false,
-  "licenseType": "free",
-  "requiredEntitlements": [],
-  "requires_license": false,
-  "homepage": "https://nself.org/plugins",
-  "repository": "https://github.com/nself-org/plugins-pro",
-  "minNselfVersion": "1.0.0",
-  "port": 8209,
   "category": "infrastructure",
+  "description": "Change Data Capture — streams Postgres WAL events to downstream consumers via webhooks or message queues.",
+  "envVars": [
+    {
+      "description": "",
+      "name": "DATABASE_URL",
+      "required": true
+    },
+    {
+      "description": "",
+      "name": "CDC_PORT",
+      "required": false
+    },
+    {
+      "description": "kafka | redpanda | rabbitmq",
+      "name": "CDC_BROKER",
+      "required": true
+    },
+    {
+      "description": "comma-separated broker endpoints",
+      "name": "CDC_BROKER_URLS",
+      "required": true
+    },
+    {
+      "description": "topic prefix, default nself",
+      "name": "CDC_TOPIC_PREFIX",
+      "required": false
+    },
+    {
+      "description": "comma-separated table names, default all np_* tables",
+      "name": "CDC_TABLES",
+      "required": false
+    },
+    {
+      "description": "embedded (default) or debezium-connect",
+      "name": "CDC_MODE",
+      "required": false
+    },
+    {
+      "description": "Debezium Connect URL, only for debezium-connect mode",
+      "name": "CDC_DEBEZIUM_URL",
+      "required": false
+    },
+    {
+      "description": "replication slot, default nself_cdc",
+      "name": "CDC_SLOT_NAME",
+      "required": false
+    },
+    {
+      "description": "publication, default nself_pub",
+      "name": "CDC_PUBLICATION_NAME",
+      "required": false
+    },
+    {
+      "description": "events per batch, default 100",
+      "name": "CDC_BATCH_SIZE",
+      "required": false
+    },
+    {
+      "description": "flush interval in ms, default 50",
+      "name": "CDC_FLUSH_MS",
+      "required": false
+    }
+  ],
+  "health_endpoint": "/health",
+  "homepage": "https://nself.org/plugins",
   "language": "go",
-  "tier": "free",
+  "license": "free",
+  "licenseType": "free",
+  "license_spdx": "MIT",
+  "manifest_version": 2,
+  "maturity": "implemented",
+  "migrations": {
+    "apply": "boot",
+    "dir": "migrations"
+  },
+  "minNselfVersion": "1.0.0",
+  "name": "cdc",
+  "port": 8209,
+  "repository": "https://github.com/nself-org/plugins",
+  "requires": {
+    "nself": ">=1.0.0"
+  },
+  "rest_routes": [
+    {
+      "auth": "none",
+      "method": "GET",
+      "path": "/health"
+    }
+  ],
+  "schema": "np_cdc",
+  "service": {
+    "kind": "library",
+    "port": 8209
+  },
+  "status": "stable",
+  "tables": [
+    "np_cdc_streams",
+    "np_cdc_events"
+  ],
   "tags": [
     "cdc",
     "postgres",
@@ -23,33 +107,6 @@
     "streaming",
     "events"
   ],
-  "tables": [
-    "np_cdc_streams",
-    "np_cdc_events"
-  ],
-  "dependencies": {
-    "required": [],
-    "optional": []
-  },
-  "envVars": {
-    "required": [
-      "DATABASE_URL"
-    ],
-    "optional": [
-      "CDC_PORT"
-    ]
-  },
-  "entry": "go/cmd/main.go",
-  "routes": [
-    {
-      "method": "GET",
-      "path": "/health",
-      "auth": "none"
-    }
-  ],
-  "health_endpoint": "/health",
-  "checksum": "f04a1e1b53b31ae57c8a8fe77890c13e88cd40ac98f4c66aeeb92ca3d085f5e0",
-  "bundles": [
-    "clawde"
-  ]
+  "tier": "free",
+  "version": "1.2.6"
 }

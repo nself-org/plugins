@@ -1111,13 +1111,6 @@
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/storage-1.2.6.tar.gz",
       "version": "1.2.6"
     },
-    "storage-transform": {
-      "release_signature": null,
-      "release_tag": "v1.2.6",
-      "sha256": "1c9c6035bc2e5097da9d1afcda7c27481975a6c0a3a014777e8c2d5e01270f36",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/storage-transform-1.2.6.tar.gz",
-      "version": "1.2.6"
-    },
     "stripe": {
       "release_signature": null,
       "release_tag": "v1.2.6",
@@ -1222,13 +1215,6 @@
       "release_tag": "v1.2.6",
       "sha256": "49a1eac0f7b4977cc21dbb71fa43d379e1ea227aa7e5e7343cf9b3873cd1464c",
       "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/waf-1.2.6.tar.gz",
-      "version": "1.2.6"
-    },
-    "warehouse": {
-      "release_signature": null,
-      "release_tag": "v1.2.6",
-      "sha256": "1bc88a4298e1d386c812104090db332bed3e06d4a56223d132735b74100a0b63",
-      "tarball_url": "https://github.com/nself-org/plugins/releases/download/v1.2.6/warehouse-1.2.6.tar.gz",
       "version": "1.2.6"
     },
     "watchdog": {

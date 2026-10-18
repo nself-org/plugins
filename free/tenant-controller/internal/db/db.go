@@ -1,0 +1,146 @@
+// Package db provides the Postgres connection pool and migration runner
+// for the np_tenant_controller schema. It also provides helpers for per-project
+// DDL (schema, role, grant) that run as the superuser/controller role.
+package db
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Connect opens and validates a pgx connection pool.
+func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("pgxpool.New: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("postgres ping: %w", err)
+	}
+	return pool, nil
+}
+
+// Migrate upgrades a pre-manifest-v2 install in place (nself_controller -> np_tenant_controller), then
+// applies the embedded migrations/ files through sdk/go/migrate (boot migrations, ADR 0010).
+func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	// Lossless upgrade of pre-manifest-v2 installs: nself_controller -> np_tenant_controller.
+	// Errors if both schemas exist. No-op on fresh installs and on already-renamed ones.
+	// It must run before the SDK creates its own np_tenant_controller ledger schema.
+	if _, err := pool.Exec(ctx, renameLegacySchemaSQL); err != nil {
+		return fmt.Errorf("rename legacy schema %s to %s: %w", legacyControllerSchema, controllerSchema, err)
+	}
+	if err := applyBootMigrations(ctx, pool); err != nil {
+		return err
+	}
+	// 001 is released, so an install that ran its earlier text keeps nself_controller as a LOGIN role with a
+	// placeholder password. Nothing connects as this role (the daemon uses DATABASE_URL): lock it on every start.
+	if _, err := pool.Exec(ctx, lockControllerRoleSQL); err != nil {
+		return fmt.Errorf("lock role nself_controller: %w", err)
+	}
+	return nil
+}
+
+const lockControllerRoleSQL = `DO $$ BEGIN
+	IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nself_controller' AND rolcanlogin) THEN
+		ALTER ROLE nself_controller NOLOGIN;
+	END IF;
+END $$`
+
+// ProvisionProjectSchema creates the Postgres schema and dedicated role for a project.
+// Runs as the superuser pool — must NOT be called from per-project roles.
+func ProvisionProjectSchema(ctx context.Context, pool *pgxpool.Pool, schemaName, roleName, rolePassword string) error {
+	stmts := []string{
+		fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %s`, pgQuote(schemaName)),
+		fmt.Sprintf(`DO $$ BEGIN
+			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = %s) THEN
+				CREATE ROLE %s LOGIN PASSWORD %s;
+			END IF;
+		END $$`, pgLiteral(roleName), pgQuote(roleName), pgLiteral(rolePassword)),
+		// Grant the project role all access within its own schema.
+		fmt.Sprintf(`GRANT ALL ON SCHEMA %s TO %s`, pgQuote(schemaName), pgQuote(roleName)),
+		// Set the default search_path so unqualified queries resolve to this schema only.
+		fmt.Sprintf(`ALTER ROLE %s SET search_path TO %s`, pgQuote(roleName), pgQuote(schemaName)),
+	}
+
+	for _, stmt := range stmts {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("provision schema %s: %w (stmt: %s)", schemaName, err, stmt[:min(60, len(stmt))])
+		}
+	}
+	return nil
+}
+
+// GrantControllerReadAccess grants the nself_controller role read access to a project schema.
+// Called after ProvisionProjectSchema so the controller daemon can run health checks.
+func GrantControllerReadAccess(ctx context.Context, pool *pgxpool.Pool, schemaName string) error {
+	stmts := []string{
+		fmt.Sprintf(`GRANT USAGE ON SCHEMA %s TO nself_controller`, pgQuote(schemaName)),
+		fmt.Sprintf(`GRANT SELECT ON ALL TABLES IN SCHEMA %s TO nself_controller`, pgQuote(schemaName)),
+		fmt.Sprintf(`ALTER DEFAULT PRIVILEGES IN SCHEMA %s GRANT SELECT ON TABLES TO nself_controller`, pgQuote(schemaName)),
+	}
+	for _, stmt := range stmts {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("grant controller read on %s: %w", schemaName, err)
+		}
+	}
+	return nil
+}
+
+// TeardownProjectSchema drops schema, role, and revokes all access.
+// MUST run as the superuser / controller role with DDL privileges.
+func TeardownProjectSchema(ctx context.Context, pool *pgxpool.Pool, schemaName, roleName string) error {
+	stmts := []string{
+		// Pre-drop: count rows for audit log (best effort).
+		// Actual counts are captured by the controller before calling this.
+
+		// Revoke controller access first.
+		fmt.Sprintf(`REVOKE ALL ON SCHEMA %s FROM nself_controller`, pgQuote(schemaName)),
+
+		// Drop schema + all tables within it.
+		fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE`, pgQuote(schemaName)),
+
+		// Drop the dedicated role.
+		fmt.Sprintf(`DROP ROLE IF EXISTS %s`, pgQuote(roleName)),
+	}
+
+	for _, stmt := range stmts {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("teardown %s: %w", schemaName, err)
+		}
+	}
+	return nil
+}
+
+// WriteAuditLog inserts a row into np_tenant_controller.project_audit_log.
+func WriteAuditLog(ctx context.Context, pool *pgxpool.Pool, eventType, slug, initiatedBy string, detail []byte) error {
+	_, err := pool.Exec(ctx,
+		`INSERT INTO np_tenant_controller.project_audit_log (event_type, slug, initiated_by, detail)
+		 VALUES ($1, $2, $3, $4)`,
+		eventType, slug, initiatedBy, detail,
+	)
+	if err != nil {
+		return fmt.Errorf("audit log write: %w", err)
+	}
+	return nil
+}
+
+// pgQuote returns an identifier safely quoted for Postgres.
+// Validates that the identifier only contains safe characters.
+func pgQuote(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
+// pgLiteral returns a string safely quoted as a Postgres string literal.
+func pgLiteral(s string) string {
+	return `'` + strings.ReplaceAll(s, `'`, `''`) + `'`
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

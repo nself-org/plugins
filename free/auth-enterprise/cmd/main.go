@@ -2,11 +2,14 @@
 //
 // Purpose: Registers all MFA and SSO HTTP routes and starts the server.
 // Inputs: ENV — PLUGIN_AUTH_ENTERPRISE_PORT (default 3826), DATABASE_URL,
-//         NSELF_SSO (enables SSO endpoints), SP_ENTITY_ID, SAML_ACS_URL,
-//         OIDC_CALLBACK_URL.
+//
+//	NSELF_SSO (enables SSO endpoints), SP_ENTITY_ID, SAML_ACS_URL,
+//	OIDC_CALLBACK_URL.
+//
 // Outputs: HTTP server on configured port exposing all MFA + SSO routes.
 // Constraints: MFA always active (Security-Always-Free); SSO requires
-//              NSELF_SSO=true (ɳSelf+ license gated in handler).
+//
+//	NSELF_SSO=true (ɳSelf+ license gated in handler).
 package main
 
 import (
@@ -35,6 +38,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("auth-enterprise: db connect: %v", err)
 	}
+	mustBootMigrations(context.Background(), pool)
+	handlers.MigrationsHealth = bootMigrationsHealth
 	defer pool.Close()
 
 	spEntityID := os.Getenv("SP_ENTITY_ID")

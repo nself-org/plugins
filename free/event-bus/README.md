@@ -69,7 +69,7 @@ sub, err := bus.Subscribe("nself.cdc.*", func(msg sdk.EventBusMessage) error {
 ## Integration with CDC plugin
 
 When both plugins are installed, the CDC plugin automatically publishes all
-WAL events to `nself.cdc.<table>.<operation>`. The warehouse plugin subscribes
+WAL events to `nself.cdc.<table>.<operation>`. The warehouse plugin (a Bundles plugin) subscribes
 to `nself.cdc.*` to drive incremental exports.
 
 ## Environment variables
