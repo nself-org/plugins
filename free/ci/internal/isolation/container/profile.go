@@ -171,7 +171,7 @@ const cleanupScript = `chmod -R u+rwX /repo 2>/dev/null; rm -rf -- /repo/* /repo
 func (pl *planner) Cleanup(r exec.ContainerRun) (*exec.ContainerCommand, error) {
 	r.Name += "-clean"
 	r.Command = []string{"-c", cleanupScript}
-	r.EnvFile, r.Workdir, r.CPU, r.MemoryMB = "", "/repo", 0.5, 128
+	r.EnvFile, r.Workdir, r.CPU, r.MemoryMB, r.Mounts = "", "/repo", 0.5, 128, nil
 	p := pl.params(r)
 	p.Network, p.Entrypoint = isolation.NetworkPlan{Network: "none"}, "sh"
 	cmd, err := Build(p)

@@ -137,6 +137,7 @@ func (rs *runState) runLeased(ctx context.Context, pj plan.PlannedJob, job model
 		return rs.failPrepared(ctx, pj, id, o, err)
 	}
 	spec := rs.spec(ctx, pj, setup.job, id)
+	spec.Mounts = setup.mounts
 	var t tail
 	spec.Output = func(b []byte) {
 		t.write(b)

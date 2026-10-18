@@ -22,6 +22,7 @@ import (
 type ContainerRun struct {
 	Name, Image, Workspace, Workdir, EnvFile string
 	Command                                  []string
+	Mounts                                   []Mount // read-only host binds besides the workspace
 	AttemptID, CoordinatorID                 string
 	Slot                                     int
 	CPU                                      float64
@@ -60,12 +61,17 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 	if err := openWorkspaceToJobUID(workspace); err != nil {
 		return -1, "", coded("E612", "workspace preparation failed: "+err.Error())
 	}
+	for _, m := range s.Mounts { // the job UID cannot own an agent path, so a writable host mount cannot be coherent
+		if !m.ReadOnly {
+			return -1, "", coded("E611", "a read-write mount is not available under the hardened container profile")
+		}
+	}
 	envData, err := envLines(env)
 	if err != nil {
 		return -1, "", err
 	}
 	run := ContainerRun{Name: "nself-ci-" + s.AttemptID, Image: s.Job.Container.Image, Workspace: workspace, Workdir: workdir, EnvFile: envFileStdin,
-		Command: s.Command, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
+		Command: s.Command, Mounts: s.Mounts, AttemptID: s.AttemptID, CoordinatorID: s.CoordinatorID, Slot: s.Slot, CPU: s.CPU, MemoryMB: s.MemoryMB, Network: s.Network}
 	if run.CPU <= 0 {
 		run.CPU = 1.5
 	}

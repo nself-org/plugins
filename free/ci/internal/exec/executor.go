@@ -22,6 +22,7 @@ type JobSpec struct {
 	Job                      model.Job
 	Command                  []string
 	SourceDir                string
+	Mounts                   []Mount
 	Home                     string
 	Timeout                  time.Duration
 	Network                  model.NetworkScope
@@ -85,6 +86,10 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 	defer func() { result.Finished = time.Now() }()
 	if !safeID.MatchString(s.AttemptID) || !safeID.MatchString(s.CoordinatorID) || len(s.Command) == 0 {
 		result.Err = coded("E612", "invalid attempt, coordinator or command")
+		return
+	}
+	if err := checkMounts(s); err != nil {
+		result.Err = err
 		return
 	}
 	if e.Isolation == nil {

@@ -130,6 +130,9 @@ func Build(p Params) (exec.ContainerCommand, error) {
 	if p.Entrypoint != "" {
 		args = append(args, "--entrypoint", p.Entrypoint)
 	}
+	for _, m := range r.Mounts {
+		args = append(args, "--mount", m.Spec())
+	}
 	args = append(args, "--mount", "type=bind,src="+r.Workspace+",dst=/repo", "--workdir", r.Workdir)
 	if r.EnvFile != "" {
 		args = append(args, "--env-file", r.EnvFile)

@@ -19,6 +19,7 @@ import (
 type prepared struct {
 	job      model.Job
 	services *ServicesRequest
+	mounts   []Mount
 }
 
 // prepare runs the start hooks, restores the cache and starts services.
@@ -42,6 +43,7 @@ func (rs *runState) prepare(ctx context.Context, info *AttemptInfo) (prepared, e
 		for k, v := range setup.Env {
 			env[k] = v
 		}
+		p.mounts = setup.Mounts
 		if len(setup.Mounts) > 0 {
 			b, _ := json.Marshal(setup.Mounts)
 			env["NSELF_CI_MOUNTS"] = string(b)

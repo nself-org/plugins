@@ -135,6 +135,11 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 			return bad("userns " + value)
 		}
 	case "--mount":
+		for _, m := range run.Mounts {
+			if m.ReadOnly && value == m.Spec() { // a read-only bind the executor accepted (checkMounts)
+				return nil
+			}
+		}
 		return checkMount(value, run.Workspace)
 	case "--tmpfs":
 		if !strings.HasPrefix(value, "/tmp:") && value != "/tmp" {

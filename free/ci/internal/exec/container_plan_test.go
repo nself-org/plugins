@@ -305,3 +305,24 @@ func asError(err error, target **Error) bool {
 	*target = e
 	return ok
 }
+
+func TestPlannedContainerMounts(t *testing.T) {
+	ro := Mount{Host: "/cache/a", Target: "/cache", ReadOnly: true}
+	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws", Name: "nself-ci-a1", AttemptID: "a1", Mounts: []Mount{ro}}
+	args := append(append([]string{"run"}, limitFlags(run)...), "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only",
+		"--mount", ro.Spec(), "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "alpine:3.19", "x")
+	if err := checkContainerCommand(ContainerCommand{"docker", args}, run); err != nil {
+		t.Fatalf("a declared read-only mount must pass: %v", err)
+	}
+	run.Mounts = nil
+	if err := checkContainerCommand(ContainerCommand{"docker", args}, run); err == nil {
+		t.Fatal("an undeclared mount passed")
+	}
+	spec := plannedSpec(t, "plan-rw", hardPlanner{})
+	spec.Mounts = []Mount{{Host: "/cache/a", Target: "/cache"}}
+	res := (&Executor{}).Run(context.Background(), spec)
+	var e *Error
+	if !errors.As(res.Err, &e) || e.Code != "E611" {
+		t.Fatalf("a read-write mount must be refused under the hardened profile: %+v", res)
+	}
+}
