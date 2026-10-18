@@ -94,6 +94,8 @@ func finalJob(ns authz.Namespace) authz.Job {
 
 var currentCap = authz.Capability{Attempt: "att-1", Epoch: 3}
 
+const goodDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 const goodRevision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 // goodEvidence is bound, clean, passing, full selection, coordinator-recorded.
@@ -110,7 +112,7 @@ func goodEvidence() model.Evidence {
 			Lockfiles: []model.DigestRef{{Path: "go.sum", SHA256: strings.Repeat("1", 64)}}},
 		Runner:       model.RunnerRef{ID: "mac-mini.local", Provider: "local", Platform: "darwin/arm64", Isolation: "process"},
 		Producer:     model.Producer{Kind: "coordinator-recorded", Version: "1"},
-		ToolVersions: map[string]string{"go": "1.27.2"}, Checks: checks, Artifacts: []model.Artifact{}, Retries: []model.Retry{},
+		ToolVersions: map[string]string{"go": "1.27.2"}, Checks: checks, Artifacts: []model.Artifact{{Path: "dist/app", SHA256: goodDigest, Size: 10, Committed: true}}, Retries: []model.Retry{},
 		Selection: model.Selection{Mode: "full", Reason: "selection.full_required", Digest: "d"},
 		Result:    "pass", Counts: model.Counts{Pass: 2, Total: 2},
 		Freshness: model.Freshness{State: "current"}, Signature: model.Signature{Kind: "coordinator-recorded"},

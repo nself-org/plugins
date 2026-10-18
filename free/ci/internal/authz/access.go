@@ -7,7 +7,10 @@ package authz
 // Inputs:  Job (namespace recomputed from stored facts, attempt state, result,
 // capability) and the namespace being touched.
 // Outputs: Mode, CheckWrite's *Denied (E684), Denied, Reason.
-// Constraints: pure; no I/O. Default is none. A job reads or writes only its own
+// Constraints: pure; no I/O. Call order for P7-CACHE: CacheAccess before every
+// restore, then SnapshotEligible(entry) before serving a ROSnapshot entry (the
+// mode alone does not make an entry servable), CheckWrite inside the commit
+// transaction. Default is none. A job reads or writes only its own
 // namespace; a lower class may read (never write) the snapshot of a higher
 // class of the same project.
 

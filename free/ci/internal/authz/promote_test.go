@@ -9,7 +9,9 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/model"
 )
 
-func goodArtifact() authz.Artifact { return authz.Artifact{Project: "repo-1", Revision: goodRevision} }
+func goodArtifact() authz.Artifact {
+	return authz.Artifact{Project: "repo-1", Revision: goodRevision, SHA256: goodDigest}
+}
 
 func TestPromotable_CurrentReleaseEvidenceOfExactRevision(t *testing.T) {
 	ev := goodEvidence()
@@ -42,6 +44,10 @@ func TestPromotable_Refusals(t *testing.T) {
 		{"different revision (evidence)", func(_ *authz.Artifact, e *model.Evidence, _ *attest.Gate) { e.Revision = strings.Repeat("b", 40) }, attest.ReasonRevisionMismatch},
 		{"artifact without revision", func(a *authz.Artifact, _ *model.Evidence, _ *attest.Gate) { a.Revision = "" }, attest.ReasonRevisionMismatch},
 		{"different repo (artifact)", func(a *authz.Artifact, _ *model.Evidence, _ *attest.Gate) { a.Project = "repo-2" }, attest.ReasonRepoMismatch},
+		{"digest not in evidence", func(a *authz.Artifact, _ *model.Evidence, _ *attest.Gate) { a.SHA256 = strings.Repeat("e", 64) }, authz.ReasonArtifactUnbound},
+		{"artifact without digest", func(a *authz.Artifact, _ *model.Evidence, _ *attest.Gate) { a.SHA256 = "" }, authz.ReasonArtifactUnbound},
+		{"evidence lists no artifacts", func(_ *authz.Artifact, e *model.Evidence, _ *attest.Gate) { e.Artifacts = nil }, authz.ReasonArtifactUnbound},
+		{"digest listed but not committed", func(_ *authz.Artifact, e *model.Evidence, _ *attest.Gate) { e.Artifacts[0].Committed = false }, authz.ReasonArtifactUnbound},
 		{"failing evidence", func(_ *authz.Artifact, e *model.Evidence, _ *attest.Gate) { e.Result = "fail" }, attest.ReasonNotPassing},
 		{"trust below minimum", func(_ *authz.Artifact, e *model.Evidence, _ *attest.Gate) { e.SourceTrust = "collaborator" }, attest.ReasonTrustBelowMin},
 	}
@@ -75,5 +81,18 @@ func TestPromotable_ForcesReleaseGate(t *testing.T) {
 	ok, reasons := authz.Promotable(goodArtifact(), ev, g)
 	if ok || len(reasons) < 2 {
 		t.Fatalf("weak gate promoted: %v", reasons)
+	}
+}
+
+// A gate with a low trust floor cannot promote evidence from an untrusted source.
+func TestPromotable_TrustFloor(t *testing.T) {
+	for _, floor := range []model.TrustClass{"", "untrusted", "unknown"} {
+		ev := goodEvidence()
+		ev.SourceTrust = "untrusted"
+		g := goodGate(ev)
+		g.MinTrust = floor
+		if ok, _ := authz.Promotable(goodArtifact(), ev, g); ok {
+			t.Fatalf("floor %q promoted untrusted evidence", floor)
+		}
 	}
 }

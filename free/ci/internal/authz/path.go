@@ -26,7 +26,7 @@ type Entry struct {
 	Name       string
 	LinkTarget string      // symlink target as stored
 	Mode       fs.FileMode // type bits and permissions
-	Hardlink   bool        // a hard link entry (tar typeflag 1)
+	Hardlink   bool        // a hard link entry; the CALLER sets it from the tar typeflag (TypeLink), since FileInfo().Mode() of a hard link reads as a regular file
 	Size       int64       // uncompressed bytes
 	Packed     int64       // compressed bytes this entry consumed; <= 0 means unknown
 }
@@ -43,6 +43,8 @@ const (
 	PathBackslash      PathReason = "path.backslash"
 	PathTraversal      PathReason = "path.traversal"
 	PathDots           PathReason = "path.dots"
+	PathDotGit         PathReason = "path.dot_git"
+	PathUnicodeLink    PathReason = "path.unicode_with_symlink"
 	PathEmptyComponent PathReason = "path.empty_component"
 	PathTrailingSlash  PathReason = "path.trailing_slash"
 	PathTooLong        PathReason = "path.too_long"
@@ -96,7 +98,7 @@ func ArtifactPath(e Entry, lim Limits) (string, error) {
 		if len(parts) == 0 {
 			return "", reject(PathEmpty, e.Name)
 		}
-		if err := checkLink(e.LinkTarget, len(parts)-1, e.Name); err != nil {
+		if err := checkLink(e.LinkTarget, len(parts)-1, e.Name, lim); err != nil {
 			return "", err
 		}
 	}
@@ -136,7 +138,9 @@ func badBytes(s, name string) error {
 		return reject(PathUTF8, name)
 	}
 	for _, r := range s {
-		if r < 0x20 || r == 0x7f {
+		// Cf covers the zero-width and bidi runes that HFS+ ignores in names
+		// (".g<ZWNJ>it" names ".git") and that disguise a name on screen.
+		if r < 0x20 || r == 0x7f || unicode.Is(unicode.Cf, r) {
 			return reject(PathControl, name)
 		}
 	}
@@ -146,6 +150,15 @@ func badBytes(s, name string) error {
 // hasDrive is true for a Windows drive prefix. Any byte before the colon
 // counts: "0:" is not a drive letter, but refusing it costs nothing.
 func hasDrive(s string) bool { return len(s) >= 2 && s[1] == ':' }
+
+// isDotGit is true for a component git treats as its own directory on some
+// file system: ".git" in any letter case, with trailing dots or spaces (NTFS),
+// or the NTFS short name "git~1". An artifact that carries one could plant a
+// repository config (core.fsmonitor) that runs on the next git command there.
+func isDotGit(c string) bool {
+	c = strings.ToLower(strings.TrimRight(c, ". "))
+	return c == ".git" || c == "git~1"
+}
 
 // splitName validates name and returns its components with "." dropped.
 func splitName(name string, isDir bool, lim Limits) ([]string, error) {
@@ -184,6 +197,8 @@ func splitName(name string, isDir bool, lim Limits) ([]string, error) {
 			return nil, reject(PathDots, name)
 		case len(c) > lim.MaxComponent:
 			return nil, reject(PathTooLong, name)
+		case !lim.AllowDotGit && isDotGit(c):
+			return nil, reject(PathDotGit, name)
 		default:
 			parts = append(parts, c)
 		}
@@ -200,7 +215,7 @@ func splitName(name string, isDir bool, lim Limits) ([]string, error) {
 // checkLink validates a symlink target against the depth of the directory that
 // holds the link (dirDepth components below the root). Leading ".." may climb
 // no further than the root; a ".." after a normal component is refused.
-func checkLink(target string, dirDepth int, name string) error {
+func checkLink(target string, dirDepth int, name string, lim Limits) error {
 	switch {
 	case target == "":
 		return reject(LinkEmpty, name)
@@ -220,6 +235,8 @@ func checkLink(target string, dirDepth int, name string) error {
 			if dirDepth--; dirDepth < 0 {
 				return reject(LinkEscape, name)
 			}
+		case !lim.AllowDotGit && isDotGit(c):
+			return reject(PathDotGit, name)
 		default:
 			climbing = false
 		}

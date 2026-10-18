@@ -64,6 +64,8 @@ func TestArtifactGetDest_Refusals(t *testing.T) {
 		{"the .git directory itself", gitDir, authz.DestUnderGit},
 		{"relative into .git", ".git/hooks", authz.DestUnderGit},
 		{"upper-case .GIT", filepath.Join(root, ".GIT", "x"), authz.DestUnderGit},
+		{"ntfs short name GIT~1", filepath.Join(root, "GIT~1", "x"), authz.DestUnderGit},
+		{"trailing-space .git", filepath.Join(root, ".git ", "x"), authz.DestUnderGit},
 		{"a regular file", file, authz.DestNotDir},
 		{"symlink leaf to an empty directory", link, authz.DestSymlink},
 		{"missing parent", filepath.Join(root, "nope", "x"), authz.DestNoParent},

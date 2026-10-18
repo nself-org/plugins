@@ -16,6 +16,9 @@ type Limits struct {
 	MaxNameBytes  int
 	MaxComponent  int
 	MaxDepth      int
+	// AllowDotGit admits ".git" components. Off for artifacts and anything a
+	// maintainer may open with git; a cache that must carry one opts in.
+	AllowDotGit bool
 }
 
 // DefaultLimits are the values a zero Limits field takes.

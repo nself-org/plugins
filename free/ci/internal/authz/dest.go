@@ -112,11 +112,11 @@ func requireEmptyDir(path, name string) error {
 	return nil
 }
 
-// underGit reports whether any path component is ".git" (any letter case, since
-// macOS and Windows volumes fold case).
+// underGit reports whether any path component is a .git name (see isDotGit:
+// letter case, trailing dots or spaces, NTFS short name).
 func underGit(p string) bool {
 	for _, c := range strings.Split(filepath.ToSlash(p), "/") {
-		if strings.EqualFold(c, ".git") {
+		if isDotGit(c) {
 			return true
 		}
 	}

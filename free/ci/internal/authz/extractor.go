@@ -11,6 +11,7 @@ package authz
 
 import (
 	"io/fs"
+	"math"
 	"strings"
 )
 
@@ -34,6 +35,8 @@ type Extractor struct {
 	count  int
 	size   int64
 	packed int64
+	links  bool // a symlink was admitted
+	wide   bool // a non-ASCII name or link target was admitted
 }
 
 // NewExtractor starts an archive with the given limits (zero fields default).
@@ -54,6 +57,9 @@ func (x *Extractor) Admit(e Entry) (string, error) {
 	if err := x.totals(e); err != nil {
 		return "", err
 	}
+	if err := x.aliasRisk(e); err != nil {
+		return "", err
+	}
 	if clean == "." {
 		return clean, nil
 	}
@@ -61,6 +67,32 @@ func (x *Extractor) Admit(e Entry) (string, error) {
 		return "", err
 	}
 	return clean, nil
+}
+
+// aliasRisk refuses an archive that holds both a symlink and a non-ASCII name
+// (or link target). Unicode-normalizing file systems (APFS, HFS+) give "e"+U+0301
+// and U+00E9 one directory, so a symlink placed under one spelling and a file
+// written under the other make the lexical depth that checkLink relies on
+// differ from the physical one. foldKey folds case only (no x/text in the
+// module), so the safe rule is no mixing of the two, in either order.
+func (x *Extractor) aliasRisk(e Entry) error {
+	link := e.Mode.Type() == fs.ModeSymlink
+	wide := !isASCII(e.Name) || (link && !isASCII(e.LinkTarget))
+	if (x.links || link) && (x.wide || wide) {
+		return reject(PathUnicodeLink, e.Name)
+	}
+	x.links = x.links || link
+	x.wide = x.wide || wide
+	return nil
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
 
 func kindOf(m fs.FileMode) nodeKind {
@@ -78,14 +110,21 @@ func (x *Extractor) totals(e Entry) error {
 	if e.Mode.Type() != 0 {
 		return nil
 	}
-	x.size += e.Size
-	if e.Packed > 0 {
-		x.packed += e.Packed
-	}
-	if x.size > x.lim.MaxTotalBytes {
+	if e.Size > x.lim.MaxTotalBytes-x.size { // x.size <= MaxTotalBytes: no overflow
 		return reject(SizeTotal, e.Name)
 	}
+	x.size += e.Size
+	if e.Packed > 0 {
+		x.packed = addSat(x.packed, e.Packed)
+	}
 	return ratioCheck(x.size, x.packed, x.lim, e.Name)
+}
+
+func addSat(a, b int64) int64 {
+	if a > math.MaxInt64-b {
+		return math.MaxInt64
+	}
+	return a + b
 }
 
 // place records clean (and its implicit parents) or refuses a collision.
