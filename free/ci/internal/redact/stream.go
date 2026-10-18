@@ -18,7 +18,8 @@ package redact
 // block is matched by its head and tail (each >= MinValueLen) because the body
 // is dropped unseen, so a partial head can over-mask the text before a header
 // differently per chunking; small writes rescan the carry-over window (bounded by
-// 8 KiB); a Register batch costs one matcher rebuild, paid by the next write.
+// 8 KiB); shell and language quoting is covered for bash (set -x, printf %q,
+// $'...'), Go %q and Python repr, not for other shells (zsh, fish); a Register batch costs one matcher rebuild, paid by the next write.
 
 import (
 	"errors"

@@ -477,3 +477,17 @@ func TestRegressBashQuotingMatchesBash(t *testing.T) {
 		}
 	}
 }
+
+// Round 9: Go %q / Python repr with control bytes, bash under the C locale with UTF-8.
+func TestRegressQuotedControlAndCLocale(t *testing.T) {
+	r := New()
+	mustRegister(t, r, "ab\x01cd+ef", "abé'cd+ef")
+	for _, in := range []string{`"ab\x01cd+ef"`, `$'ab\303\251\'cd+ef'`} {
+		if got := run(r, "x "+in+" y"); strings.Contains(got, "cd") || !strings.Contains(got, Placeholder) {
+			t.Errorf("%q survived: %q", in, got)
+		}
+	}
+	if got := run(r, "x "+fmt.Sprintf("%q", "ab\x01cd+ef")+" y"); strings.Contains(got, "cd") {
+		t.Errorf("Go %%q survived: %q", got)
+	}
+}
