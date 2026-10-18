@@ -25,6 +25,8 @@ type stub struct {
 	noEnv    bool   // `init` does not write the project .env (a CLI that resolved a parent project)
 	noDocker bool
 	noCLI    bool
+	noStart  bool // `config services start --help` fails (a CLI without the verb)
+	orphan   bool // compose resources exist until `docker compose -p ... down` ran
 	list     string
 	echo     string // printed by every failing call
 	removed  map[string]bool
@@ -36,10 +38,10 @@ func (s *stub) Run(_ context.Context, c Call) (Result, error) {
 	line := strings.Join(c.Argv, " ")
 	s.calls = append(s.calls, line)
 	switch {
-	case s.failOnce != "" && strings.Contains(line, s.failOnce):
+	case s.failOnce != "" && strings.Contains(line, s.failOnce) && !strings.HasSuffix(line, "--help"):
 		s.failOnce = ""
 		return Result{ExitCode: 1, Output: s.echo}, nil
-	case s.failOn != "" && strings.Contains(line, s.failOn):
+	case s.failOn != "" && strings.Contains(line, s.failOn) && !strings.HasSuffix(line, "--help"):
 		return Result{ExitCode: 1, Output: s.echo}, nil
 	case strings.Contains(line, " init --non-interactive --name "):
 		if !s.noEnv {
@@ -54,6 +56,12 @@ func (s *stub) Run(_ context.Context, c Call) (Result, error) {
 		if s.noCLI {
 			return Result{ExitCode: 1}, nil
 		}
+	case s.noStart && strings.HasSuffix(line, "config services start --help"):
+		return Result{ExitCode: 1}, nil
+	case s.orphan && strings.HasPrefix(line, "docker ps -a -q"):
+		return Result{Output: "abc123\n"}, nil
+	case s.orphan && strings.HasPrefix(line, "docker compose -p"):
+		s.orphan = false
 	case strings.HasSuffix(line, "config services list --json"):
 		return Result{Output: s.list}, nil
 	case strings.Contains(line, "config services start"):
@@ -105,7 +113,8 @@ func TestUpSequenceNamedComponentsOnly(t *testing.T) {
 		}
 		at += i + len(want)
 	}
-	if strings.Contains(got, "services start redis") || strings.Contains(got, "services enable") {
+	noProbes := strings.ReplaceAll(strings.ReplaceAll(got, "services enable --help", ""), "services start --help", "")
+	if strings.Contains(noProbes, "services start redis") || strings.Contains(noProbes, "services enable") {
 		t.Fatalf("started or enabled more than the named required component:\n%s", got)
 	}
 	if !strings.HasPrefix(h.Project, "nselfci-") || filepath.Base(filepath.Dir(h.Dir)) != h.Project {
@@ -120,7 +129,8 @@ func TestUpSequenceNamedComponentsOnly(t *testing.T) {
 }
 
 func TestStartRetriesOnATakenPort(t *testing.T) {
-	s := &stub{failOnce: "config services start", echo: "Bind for 127.0.0.1:1 failed: port is already allocated"}
+	// The phrase sits far from the end: the error keeps only a tail of the output.
+	s := &stub{failOnce: "config services start", echo: "Bind for 127.0.0.1:1 failed: port is already allocated\n" + strings.Repeat("log line\n", 200)}
 	p := newProv(t, s)
 	h, err := p.Up(context.Background(), []Spec{{Name: "db", Component: "postgres"}})
 	if err != nil {
@@ -158,6 +168,22 @@ func TestNeverRunsNselfInADirectoryThatIsNotOurProject(t *testing.T) {
 	}
 }
 
+func TestComposeFallbackRemovesWhatTheCLIMayNotTouch(t *testing.T) {
+	s := &stub{noEnv: true, orphan: true}
+	p := newProv(t, s)
+	_, err := p.Up(context.Background(), []Spec{{Name: "db", Component: "postgres"}})
+	if err == nil {
+		t.Fatal("expected the refusal")
+	}
+	got := s.joined()
+	if !strings.Contains(got, "docker compose -p nselfci-") || !strings.Contains(got, "down --volumes --remove-orphans") {
+		t.Fatalf("the compose project was not removed by label:\n%s", got)
+	}
+	if strings.Contains(got, "nself stop") {
+		t.Fatalf("nself stop ran outside our project:\n%s", got)
+	}
+}
+
 func TestOptionalComponentIsEnabled(t *testing.T) {
 	s := &stub{}
 	p := newProv(t, s)
@@ -180,8 +206,11 @@ func TestErrorCodes(t *testing.T) {
 	}{
 		{"no docker", &stub{noDocker: true}, []Spec{{Name: "postgres"}}, CodeNoDocker},
 		{"old cli", &stub{noCLI: true}, []Spec{{Name: "postgres"}}, CodeNoCLI},
+		{"cli without start", &stub{noStart: true}, []Spec{{Name: "postgres"}}, CodeNoCLI},
+		{"two names one component", &stub{}, []Spec{{Name: "db", Component: "postgres"}, {Name: "analytics", Component: "postgres"}}, CodeUnknown},
 		{"unsupported component", &stub{}, []Spec{{Name: "x", Component: "kafka"}}, CodeUnknown},
 		{"cli lacks component", &stub{list: `[{"service":"minio"}]`}, []Spec{{Name: "cache", Component: "redis"}}, CodeUnknown},
+		{"version with a newline", &stub{}, []Spec{{Name: "db", Component: "postgres", Version: "16\nEVIL=1"}}, CodeUnknown},
 		{"duplicate name", &stub{}, []Spec{{Name: "db", Component: "postgres"}, {Name: "DB", Component: "redis"}}, CodeUnknown},
 		{"no services", &stub{}, nil, CodeUnknown},
 	}
@@ -191,8 +220,10 @@ func TestErrorCodes(t *testing.T) {
 			if code(err) != c.want {
 				t.Fatalf("got %v, want %s", err, c.want)
 			}
-			if strings.Contains(c.s.joined(), "config services start") {
-				t.Fatal("started a service after a refusal")
+			for _, call := range c.s.calls {
+				if strings.Contains(call, "config services start") && !strings.HasSuffix(call, "--help") {
+					t.Fatal("started a service after a refusal")
+				}
 			}
 		})
 	}

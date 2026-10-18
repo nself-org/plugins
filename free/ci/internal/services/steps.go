@@ -12,11 +12,15 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// versionTag is what a version may look like: an image tag, nothing a .env line could carry.
+var versionTag = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
@@ -25,7 +29,7 @@ func resolve(specs []Spec) ([]conn, error) {
 	if len(specs) == 0 {
 		return nil, fail(CodeUnknown, "no service was named")
 	}
-	seen := map[string]bool{}
+	seen, comps := map[string]bool{}, map[string]string{}
 	out := make([]conn, 0, len(specs))
 	for _, s := range specs {
 		s.Name = strings.TrimSpace(s.Name)
@@ -38,10 +42,17 @@ func resolve(specs []Spec) ([]conn, error) {
 		}
 		seen[k] = true
 		s.Component = strings.ToLower(strings.TrimSpace(orDefault(s.Component, s.Name)))
+		if s.Version != "" && !versionTag.MatchString(s.Version) {
+			return nil, fail(CodeUnknown, "service %q has version %q, which is not an image tag", s.Name, s.Version)
+		}
 		comp, ok := components[s.Component]
 		if !ok {
 			return nil, fail(CodeUnknown, "service %q uses component %q, which is not a supported CI service dependency (supported: %s)", s.Name, s.Component, strings.Join(supported(), ", "))
 		}
+		if other, dup := comps[s.Component]; dup {
+			return nil, fail(CodeUnknown, "services %q and %q both use component %q: one throwaway project runs one instance of a component", other, s.Name, s.Component)
+		}
+		comps[s.Component] = s.Name
 		out = append(out, conn{Spec: s, Comp: comp})
 	}
 	return out, nil
@@ -53,9 +64,15 @@ func (p *Provisioner) preflight(ctx context.Context) error {
 	if err != nil || res.ExitCode != 0 {
 		return fail(CodeNoDocker, "Docker is not available (%s info failed): start Docker or Colima, or run a job without services", p.docker())
 	}
-	res, err = p.call(ctx, queryTimeout, Call{Argv: []string{p.nself(), "config", "services", "--help"}, Env: cliEnv})
-	if err != nil || res.ExitCode != 0 {
-		return fail(CodeNoCLI, "`%s config services` is not available: run `nself update`", p.nself())
+	for _, verb := range []string{"", "list", "enable", "start"} {
+		argv := []string{p.nself(), "config", "services"}
+		if verb != "" {
+			argv = append(argv, verb)
+		}
+		res, err = p.call(ctx, queryTimeout, Call{Argv: append(argv, "--help"), Env: cliEnv})
+		if err != nil || res.ExitCode != 0 {
+			return fail(CodeNoCLI, "`%s` is not available: run `nself update`", strings.Join(argv[1:], " "))
+		}
 	}
 	return nil
 }
@@ -105,7 +122,9 @@ func (p *Provisioner) cli(ctx context.Context, h *Handle, args ...string) error 
 		return fail(CodeProvision, "%s could not run: %v", p.describe(args), err)
 	}
 	if res.ExitCode != 0 {
-		return fail(CodeProvision, "%s failed (exit %d): %s", p.describe(args), res.ExitCode, tailOf(maskAll(res.Output, h.creds), 400))
+		e := fail(CodeProvision, "%s failed (exit %d): %s", p.describe(args), res.ExitCode, tailOf(maskAll(res.Output, h.creds), 400))
+		e.portTaken = portTakenOutput(res.Output) // the whole output: the tail may have cut the phrase
+		return e
 	}
 	return nil
 }

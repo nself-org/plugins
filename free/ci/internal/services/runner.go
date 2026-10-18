@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -81,9 +82,15 @@ func maskAll(s string, secrets []string) string {
 	return s
 }
 
+// funnelDir is the Funnel's own home below NSELF_CI_HOME. The exec funnel keeps
+// process markers under its home and every job run sweeps the markers of
+// coordinators it does not know as live; a separate home keeps a job's sweep
+// away from a service call another job has in flight.
+const funnelDir = "svc"
+
 // Funnel is the production Runner: one exec-funnel job per call.
 type Funnel struct {
-	Home string // NSELF_CI_HOME; workspaces are Home/work/<call id>
+	Home string // NSELF_CI_HOME; workspaces are Home/svc/work/<call id>
 	// Secrets lists values to mask in every call's output; read on each call.
 	Secrets func() []string
 
@@ -123,7 +130,7 @@ func (f *Funnel) Run(ctx context.Context, c Call) (Result, error) {
 		CoordinatorID: "nselfci-services",
 		Job:           model.Job{Run: argv, Env: env},
 		Command:       argv,
-		Home:          f.Home,
+		Home:          filepath.Join(f.Home, funnelDir),
 		Output:        func(p []byte) { out.Lock(); out.b = append(out.b, p...); out.Unlock() },
 	})
 	out.Lock()

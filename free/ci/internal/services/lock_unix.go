@@ -20,18 +20,29 @@ type ownerLock struct{ f *os.File }
 // acquireLock takes the lock on path, creating the file. held is true when
 // another holder has it.
 func acquireLock(path string) (l *ownerLock, held bool, err error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, false, err
-	}
-	if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = f.Close()
-		if err == syscall.EWOULDBLOCK {
-			return nil, true, nil
+	for try := 0; try < 3; try++ {
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			return nil, false, err
 		}
-		return nil, false, err
+		if err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			_ = f.Close()
+			if err == syscall.EWOULDBLOCK {
+				return nil, true, nil
+			}
+			return nil, false, err
+		}
+		// A Sweep may have unlinked the file between open and flock: a lock on
+		// a deleted file protects nothing, so take it again on the live path.
+		held, herr := f.Stat()
+		onDisk, perr := os.Stat(path)
+		if herr == nil && perr == nil && os.SameFile(held, onDisk) {
+			return &ownerLock{f: f}, false, nil
+		}
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
 	}
-	return &ownerLock{f: f}, false, nil
+	return nil, false, os.ErrNotExist
 }
 
 // Unlock releases the lock.

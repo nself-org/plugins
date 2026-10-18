@@ -29,8 +29,11 @@ func (p *Provisioner) Down(ctx context.Context, h *Handle) error {
 	}
 	if !h.lock.active() {
 		l, held, err := acquireLock(h.root + ".lock")
-		if err != nil || held {
-			return fail(CodeProvision, "teardown of %s skipped: another coordinator holds it (%v)", h.Project, err)
+		if err != nil {
+			return fail(CodeProvision, "teardown of %s skipped: cannot lock it: %v", h.Project, err)
+		}
+		if held {
+			return fail(CodeProvision, "teardown of %s skipped: another coordinator holds it", h.Project)
 		}
 		h.lock = l
 	}

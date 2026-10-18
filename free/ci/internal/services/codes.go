@@ -37,6 +37,8 @@ func init() {
 type Error struct {
 	Code    string
 	Message string
+
+	portTaken bool // the CLI output said the host port is in use
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }

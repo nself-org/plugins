@@ -105,7 +105,7 @@ func underAny(dir string, roots []string) bool {
 // mid-call (the funnel removes them itself on every normal exit). An hour old
 // is far past any live call.
 func (p *Provisioner) removeStaleCalls(work string) {
-	dirs, _ := filepath.Glob(filepath.Join(work, "svccall-*"))
+	dirs, _ := filepath.Glob(filepath.Join(p.Home, funnelDir, "work", "svccall-*"))
 	for _, d := range dirs {
 		if fi, err := os.Stat(d); err == nil && time.Since(fi.ModTime()) > time.Hour {
 			_ = os.RemoveAll(d)

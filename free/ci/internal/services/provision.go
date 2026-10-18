@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -239,7 +240,11 @@ func (p *Provisioner) startOne(ctx context.Context, h *Handle, c *conn) error {
 }
 
 func portTaken(err error) bool {
-	m := err.Error()
+	var e *Error
+	return errors.As(err, &e) && e.portTaken
+}
+
+func portTakenOutput(m string) bool {
 	return strings.Contains(m, "port is already allocated") || strings.Contains(m, "address already in use") || strings.Contains(m, "Bind for")
 }
 

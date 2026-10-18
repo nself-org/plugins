@@ -56,6 +56,7 @@ func (l *liveServices) teardown(ctx context.Context, p *services.Provisioner) er
 
 type servicesHook struct {
 	once    sync.Once
+	homeErr error // set once, so every Up after a failed lookup fails the same way
 	prov    *services.Provisioner
 	mu      sync.Mutex
 	secrets []string
@@ -119,12 +120,12 @@ func (s *servicesHook) safetyNet(l *liveServices) {
 // provisioner builds the engine once and sweeps the projects of dead
 // coordinators before the first provision of this process.
 func (s *servicesHook) provisioner(ctx context.Context) (*services.Provisioner, error) {
-	var err error
 	s.once.Do(func() {
 		home := os.Getenv("NSELF_CI_HOME")
 		if home == "" {
-			var u string
-			if u, err = os.UserHomeDir(); err != nil {
+			u, err := os.UserHomeDir()
+			if err != nil {
+				s.homeErr = err
 				return
 			}
 			home = filepath.Join(u, ".nself", "ci")
@@ -135,8 +136,8 @@ func (s *servicesHook) provisioner(ctx context.Context) (*services.Provisioner, 
 		defer done()
 		_, _ = s.prov.Sweep(sctx)
 	})
-	if err != nil {
-		return nil, &services.Error{Code: services.CodeProvision, Message: "cannot find the CI home: " + err.Error()}
+	if s.homeErr != nil {
+		return nil, &services.Error{Code: services.CodeProvision, Message: "cannot find the CI home: " + s.homeErr.Error()}
 	}
 	return s.prov, nil
 }
