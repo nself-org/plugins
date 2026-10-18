@@ -24,21 +24,21 @@ var schedFlags schedpolicy.Flags
 
 func init() {
 	for _, fs := range []*flag.FlagSet{bareFlags, planFlags} {
-		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local)", func(v string) error {
+		fs.Func("prefer", "scheduling preset for this run: "+presetList()+" (local = prefer-local); checked now, applied to runs in a later release", func(v string) error {
 			if _, err := schedpolicy.PresetFromFlag(v); err != nil {
 				return err
 			}
 			schedFlags.Prefer = v
 			return nil
 		})
-		fs.Func("runner", "place every job on this runner id (an exceptional override)", func(v string) error {
+		fs.Func("runner", "place every job on this runner id (an exceptional override); checked now, applied to runs in a later release", func(v string) error {
 			if v == "" {
 				return schedpolicy.CheckRunner(v)
 			}
 			schedFlags.Runner = v
 			return nil
 		})
-		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (default 10m for a foreground run)", func(v string) error {
+		fs.Func("max-queue", "longest a job may wait for a runner, a duration such as 10m (a foreground run defaults to 10m); checked now, applied to runs in a later release", func(v string) error {
 			if _, err := schedpolicy.ParseDurationMs(schedpolicy.KeyMaxQueue, v); err != nil {
 				return err
 			}

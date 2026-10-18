@@ -56,6 +56,10 @@ const NoLimit int64 = math.MaxInt64
 // sched.fairness.starvation_after (Epic D9: 30 minutes).
 const DefaultStarvationAfterMs = int64(30 * time.Minute / time.Millisecond)
 
+// DefaultQueueMaxDepth is the registered default of sched.queue.max_depth
+// (Epic D9: a project with more queued jobs than this is refused, E694).
+const DefaultQueueMaxDepth int64 = 500
+
 var registrationErrors []error
 
 // RegistrationErrors returns what init() could not register; empty when every
@@ -127,6 +131,6 @@ func Keys() []policy.KeySpec {
 		lower(KeyLimitTeam),
 		lower(KeyLimitGlobal),
 		k(KeyStarvationAfter, policy.TightenLower, DefaultStarvationAfterMs, durationMs(KeyStarvationAfter)),
-		lower(KeyQueueMaxDepth),
+		k(KeyQueueMaxDepth, policy.TightenLower, DefaultQueueMaxDepth, positiveInt(KeyQueueMaxDepth)),
 	}
 }

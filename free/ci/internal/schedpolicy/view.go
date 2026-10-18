@@ -33,11 +33,20 @@ type reader struct {
 	err error
 }
 
+// optional lists the keys with no registered default: absent means unset.
+var optional = map[string]bool{KeyProvidersAllow: true, KeyRunner: true, KeyOS: true, KeyArch: true}
+
+// value returns the effective value of key. A key that has a registered
+// default is always present in a merged policy, so a missing one means the
+// keys were never registered; that is an error, never "no limit".
 func (r *reader) value(key string) (any, bool) {
 	if r.err != nil {
 		return nil, false
 	}
 	v, _, ok := r.eff.Value(key)
+	if !ok && !optional[key] {
+		r.err = fail(key, "missing from the effective policy (are the sched keys registered?)")
+	}
 	return v, ok
 }
 

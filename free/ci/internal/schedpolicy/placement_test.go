@@ -234,7 +234,7 @@ func TestSchedPolicyDefaultsAndViews(t *testing.T) {
 		t.Errorf("defaults: %+v", p)
 	}
 	q, err := Queue(&eff)
-	if err != nil || q.StarvationAfterMs != 1800000 || q.MaxDepth != 0 {
+	if err != nil || q.StarvationAfterMs != 1800000 || q.MaxDepth != DefaultQueueMaxDepth {
 		t.Errorf("queue defaults: %+v %v", q, err)
 	}
 	tight, err := merge(t, scope(trust.SourceProject, map[string]string{KeyQueueMaxDepth: `50`, KeyStarvationAfter: `"10m"`, KeyLimitJobMatrix: `3`, KeyLimitTeam: `6`, KeyMaxCostMicro: `250000`, KeyLANOnly: `true`}))
@@ -252,6 +252,25 @@ func TestSchedPolicyDefaultsAndViews(t *testing.T) {
 	}
 	if _, err := Queue(nil); err == nil {
 		t.Error("nil policy accepted by Queue")
+	}
+}
+
+// TestSchedPolicyMissingKeys: a policy merged without the sched keys is an
+// error, never "no limit".
+func TestSchedPolicyMissingKeys(t *testing.T) {
+	reg, err := trust.NewRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	eff, _, err := reg.Merge("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Placement(&eff); err == nil || !strings.HasPrefix(err.Error(), "E691") {
+		t.Errorf("Placement of a policy with no sched keys: %v", err)
+	}
+	if _, err = Queue(&eff); err == nil || !strings.HasPrefix(err.Error(), "E691") {
+		t.Errorf("Queue of a policy with no sched keys: %v", err)
 	}
 }
 
