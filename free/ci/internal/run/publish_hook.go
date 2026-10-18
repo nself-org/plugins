@@ -11,6 +11,10 @@ package run
 
 import (
 	"context"
+	"os"
+	"os/user"
+	"strings"
+	"sync"
 
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/model"
@@ -23,6 +27,29 @@ var RepoVisibility func(owner, repo string) attest.Visibility
 
 func init() { RegisterPublisher(attestPublisher{}) }
 
+var (
+	localOnce            sync.Once
+	localHosts, localUsr []string
+)
+
+// localNames are this machine's host name and account name: literals the
+// publication profile must remove from log text even when they carry no
+// private suffix. Failures to read them leave the lists short, never fail a run.
+func localNames() (hosts, users []string) {
+	localOnce.Do(func() {
+		if h, err := os.Hostname(); err == nil && h != "" {
+			localHosts = append(localHosts, h)
+			if short, _, ok := strings.Cut(h, "."); ok && short != "" {
+				localHosts = append(localHosts, short)
+			}
+		}
+		if u, err := user.Current(); err == nil && u.Username != "" {
+			localUsr = append(localUsr, u.Username)
+		}
+	})
+	return localHosts, localUsr
+}
+
 type attestPublisher struct{}
 
 func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Status, error) {
@@ -30,13 +57,16 @@ func (attestPublisher) Publish(_ context.Context, r PublishRequest) (report.Stat
 	if RepoVisibility != nil {
 		vis = RepoVisibility(r.Owner, r.Repo)
 	}
-	published := attest.Publish(r.Run.Evidence, vis)
+	hosts, users := localNames()
+	p := attest.ProfileFor(attest.RepoFacts{Visibility: vis, RepoID: r.Run.Evidence.RepoID, Hostnames: hosts, Usernames: users})
+	published := attest.PublishWith(r.Run.Evidence, p)
 	r.Run.Evidence = published
 	if len(published.Checks) > 0 {
 		r.Projection = model.Projection(published)
 	}
 	s := defaultStatus(r)
-	p := attest.ProfileFor(attest.RepoFacts{Visibility: vis, RepoID: published.RepoID})
+	// the description ends with the digest of the unpublished evidence: a reader
+	// cannot rebuild it from the published document, which is why it is only a pointer
 	s.Description = report.Truncate(p.Text(s.Description))
 	s.TargetURL = p.URL(s.TargetURL)
 	return s, nil

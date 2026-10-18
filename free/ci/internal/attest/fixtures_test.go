@@ -96,3 +96,15 @@ func signedRemote(ev model.Evidence) model.Evidence {
 	ev.Signature = model.Signature{Kind: "runner-ed25519", KeyID: strp("ci-node-0123456789abcdef"), Value: strp("c2ln")}
 	return ev
 }
+
+// recordingVerifier remembers the bytes it was asked to verify.
+type recordingVerifier struct {
+	calls int
+	doc   []byte
+}
+
+func (r *recordingVerifier) VerifyEvidence(doc []byte, _ model.Evidence) error {
+	r.calls++
+	r.doc = append([]byte(nil), doc...)
+	return nil
+}

@@ -56,7 +56,11 @@ func TestInputDigests_Refusals(t *testing.T) {
 		"absolute":       func() error { _, e := attest.InputDigests(ok, nil, []attest.File{{Path: "/etc/passwd"}}); return e },
 		"dotdot":         func() error { _, e := attest.InputDigests(ok, nil, []attest.File{{Path: "../x"}}); return e },
 		"unclean":        func() error { _, e := attest.InputDigests(ok, nil, []attest.File{{Path: "a//b"}}); return e },
-		"backslash":      func() error { _, e := attest.InputDigests(ok, nil, []attest.File{{Path: `a\b`}}); return e },
+		"case twin": func() error {
+			_, e := attest.InputDigests(ok, []attest.File{{Path: "Go.sum"}, {Path: "go.sum"}}, nil)
+			return e
+		},
+		"backslash": func() error { _, e := attest.InputDigests(ok, nil, []attest.File{{Path: `a\b`}}); return e },
 	} {
 		if run() == nil {
 			t.Errorf("%s accepted", name)

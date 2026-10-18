@@ -6,7 +6,10 @@ package attest
 // private URLs disappear from every free-text field.
 // Inputs:  the evidence and the repository visibility.
 // Outputs: a copy of the evidence; the input is never modified.
-// Constraints: a private repository's evidence is returned unchanged; any
+// Constraints: the profile knows the runner id and the host names and user
+// names the caller gives it (PublishWith); a host name it was never told and
+// that carries no private suffix can survive in a log excerpt, which is why a
+// host passes its own host and user names. A private repository's evidence is returned unchanged; any
 // visibility other than Private scrubs (fail closed). The copy no longer
 // matches a signature made over the original, so it is a report, not a gate
 // input: its freshness is marked unknown.
@@ -26,12 +29,14 @@ func PublishWith(ev model.Evidence, p Profile) model.Evidence {
 	if !p.Public() {
 		return ev
 	}
-	p = p.withRunner(ev.Runner.ID)
+	// structured fields use the plain profile; the runner id is also replaced
+	// inside free text, where a host name tends to surface
+	structured, p := p, p.withRunner(ev.Runner.ID)
 	out := ev
 	out.Runner.ID = p.RunnerID(ev.Runner.ID)
-	out.Runner.Provider = p.Text(ev.Runner.Provider)
-	out.Runner.Platform = p.Text(ev.Runner.Platform)
-	out.Pipeline.Name = p.Text(ev.Pipeline.Name)
+	out.Runner.Provider = structured.Text(ev.Runner.Provider)
+	out.Runner.Platform = structured.Text(ev.Runner.Platform)
+	out.Pipeline.Name = structured.Text(ev.Pipeline.Name)
 	out.PlacementRef = scrubPtr(p, ev.PlacementRef)
 	out.InputDigests = model.InputDigests{Config: ev.InputDigests.Config,
 		Lockfiles: scrubRefs(p, ev.InputDigests.Lockfiles), Generated: scrubRefs(p, ev.InputDigests.Generated)}

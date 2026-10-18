@@ -31,7 +31,7 @@ var (
 	ipv6Re     = regexp.MustCompile(`[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*`)
 	homeRe     = regexp.MustCompile(`(/Users|/home)/([^/\s:"'\x60]+)|/root\b|[A-Za-z]:\\Users\\([^\\\s"']+)`)
 	userHostRe = regexp.MustCompile(`([A-Za-z0-9._-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})`)
-	localHost  = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|home|home\.arpa|localdomain|corp|intranet|private)\b`)
+	localHost  = regexp.MustCompile(`(?i)\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:local|lan|internal|home\.arpa|localdomain|intranet)\b`)
 )
 
 // Text scrubs identifying text for publication.
@@ -41,16 +41,17 @@ func (p Profile) Text(s string) string {
 	}
 	users := append([]string(nil), p.users...)
 	s = urlRe.ReplaceAllStringFunc(s, func(m string) string {
-		if p.URL(strings.TrimRight(m, ".,;:")) == "" {
-			return redactedURL
+		trimmed := strings.TrimRight(m, ".,;:")
+		if u := p.URL(trimmed); u != "" {
+			return u + m[len(trimmed):] // query and fragment are dropped, as for target_url
 		}
-		return m
+		return redactedURL + m[len(trimmed):]
 	})
 	s = homeRe.ReplaceAllStringFunc(s, func(m string) string {
 		if sub := homeRe.FindStringSubmatch(m); sub[2] != "" {
-			users = append(users, sub[2])
+			users = appendUser(users, sub[2])
 		} else if sub[3] != "" {
-			users = append(users, sub[3])
+			users = appendUser(users, sub[3])
 		}
 		return redactedHome
 	})
@@ -58,7 +59,7 @@ func (p Profile) Text(s string) string {
 		sub := userHostRe.FindStringSubmatch(m)
 		user, host := sub[1], sub[2]
 		if user != "git" {
-			users = append(users, user)
+			users = appendUser(users, user)
 			user = redactedUser
 		}
 		if p.privateHost(host) {
@@ -68,7 +69,7 @@ func (p Profile) Text(s string) string {
 	})
 	s = localHost.ReplaceAllString(s, redactedHost)
 	s = ipv4Re.ReplaceAllStringFunc(s, func(m string) string {
-		if a, err := netip.ParseAddr(m); err == nil && privateAddr(a) {
+		if a, ok := parseLooseAddr(m); ok && privateAddr(a) {
 			return redactedIP
 		}
 		return m
@@ -96,13 +97,25 @@ func (p Profile) Text(s string) string {
 	return s
 }
 
+// genericUsers are account names every CI image has; they identify nobody, and
+// replacing them as words would mangle ordinary log lines ("runner", "node").
+var genericUsers = map[string]bool{"runner": true, "node": true, "build": true, "ci": true, "app": true, "user": true, "root": true,
+	"admin": true, "ubuntu": true, "runneradmin": true, "github": true, "builder": true, "jenkins": true, "circleci": true, "vagrant": true}
+
+func appendUser(users []string, name string) []string {
+	if genericUsers[strings.ToLower(name)] {
+		return users
+	}
+	return append(users, name)
+}
+
 // replaceToken replaces lit where it stands alone: a letter, digit or
 // underscore on either side keeps it as part of another word.
 func replaceToken(s, lit, repl string) string {
 	if lit == "" {
 		return s
 	}
-	re, err := regexp.Compile(`(^|[^A-Za-z0-9_])` + regexp.QuoteMeta(lit) + `($|[^A-Za-z0-9_])`)
+	re, err := regexp.Compile(`(?i)(^|[^A-Za-z0-9_])` + regexp.QuoteMeta(lit) + `($|[^A-Za-z0-9_])`)
 	if err != nil {
 		return s
 	}

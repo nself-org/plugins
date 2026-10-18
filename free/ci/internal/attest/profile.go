@@ -13,6 +13,7 @@ package attest
 import (
 	"net/netip"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -98,14 +99,21 @@ func (p Profile) URL(u string) string {
 
 var privateSuffixes = []string{".local", ".lan", ".internal", ".home", ".home.arpa", ".localdomain", ".corp", ".intranet", ".private", ".localhost"}
 
+// numericHostRe matches a host written only as numbers: decimal, hex or short
+// IPv4 forms that netip refuses but a socket library may still resolve.
+var numericHostRe = regexp.MustCompile(`^(0x[0-9a-f]+|[0-9]+)(\.(0x[0-9a-f]+|[0-9]+))*$`)
+
 // privateHost is true for a host that names a private network or machine.
 func (p Profile) privateHost(host string) bool {
-	h := strings.ToLower(strings.Trim(host, "[]"))
+	h := strings.TrimSuffix(strings.ToLower(strings.Trim(host, "[]")), ".")
 	if h == "" || h == "localhost" || (!strings.Contains(h, ".") && !strings.Contains(h, ":")) {
 		return true // empty, localhost or a bare single-label name
 	}
-	if addr, err := netip.ParseAddr(h); err == nil {
+	if addr, ok := parseLooseAddr(h); ok {
 		return privateAddr(addr)
+	}
+	if numericHostRe.MatchString(h) {
+		return true // a numeric form we cannot place is treated as private
 	}
 	for _, s := range privateSuffixes {
 		if strings.HasSuffix(h, s) {
@@ -113,19 +121,70 @@ func (p Profile) privateHost(host string) bool {
 		}
 	}
 	for _, x := range p.hosts {
-		if x != "" && strings.EqualFold(x, h) {
+		if x != "" && strings.EqualFold(strings.TrimSuffix(x, "."), h) {
 			return true
 		}
 	}
 	return false
 }
 
-// privateAddr covers RFC1918, loopback, link-local, CGNAT, ULA and unspecified.
+// parseLooseAddr parses an address, accepting dotted IPv4 with leading zeros
+// ("010.0.0.1" reads as decimal here: either reading is redacted as private
+// when the decimal one is, and the octal one is never published as public).
+func parseLooseAddr(s string) (netip.Addr, bool) {
+	if a, err := netip.ParseAddr(s); err == nil {
+		return a, true
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) != 4 {
+		return netip.Addr{}, false
+	}
+	var b [4]byte
+	for i, part := range parts {
+		if part == "" || len(part) > 3 {
+			return netip.Addr{}, false
+		}
+		n := 0
+		for _, c := range part {
+			if c < '0' || c > '9' {
+				return netip.Addr{}, false
+			}
+			n = n*10 + int(c-'0')
+		}
+		if n > 255 {
+			return netip.Addr{}, false
+		}
+		b[i] = byte(n)
+	}
+	return netip.AddrFrom4(b), true
+}
+
+var extraPrivate = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"), // carrier-grade NAT
+	netip.MustParsePrefix("198.18.0.0/15"), // benchmarking
+	netip.MustParsePrefix("192.0.0.0/24"),  // IETF protocol assignments
+}
+
+// privateAddr covers RFC1918, loopback, link-local, CGNAT, ULA, unspecified and
+// the IPv6 forms that embed an IPv4 address (v4-mapped, NAT64, 6to4).
 func privateAddr(a netip.Addr) bool {
 	a = a.Unmap()
+	if a.Is6() {
+		raw := a.As16()
+		switch {
+		case a.Compare(netip.MustParseAddr("64:ff9b::")) >= 0 && a.Compare(netip.MustParseAddr("64:ff9b::ffff:ffff")) <= 0:
+			return privateAddr(netip.AddrFrom4([4]byte{raw[12], raw[13], raw[14], raw[15]}))
+		case raw[0] == 0x20 && raw[1] == 0x02:
+			return privateAddr(netip.AddrFrom4([4]byte{raw[2], raw[3], raw[4], raw[5]}))
+		}
+	}
 	if a.IsPrivate() || a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() {
 		return true
 	}
-	cgnat := netip.MustParsePrefix("100.64.0.0/10")
-	return cgnat.Contains(a)
+	for _, pre := range extraPrivate {
+		if pre.Contains(a) {
+			return true
+		}
+	}
+	return false
 }

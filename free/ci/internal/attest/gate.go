@@ -12,6 +12,7 @@ package attest
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/nself-org/plugins/free/ci/internal/model"
 	"github.com/nself-org/plugins/free/ci/internal/trust"
@@ -49,8 +50,28 @@ type Gate struct {
 
 func (g Gate) release() bool { return g.Class != ClassDefault }
 
-// GateAccept returns every reason ev does not satisfy g.
-func GateAccept(ev model.Evidence, g Gate) []Reason {
+// GateAccept returns every reason ev does not satisfy g. The caller must read
+// ev from the coordinator's own store, never from the job's worktree: a
+// coordinator-recorded document proves nothing about who wrote the file it came
+// from. Signed-remote evidence is verified against the re-marshalled document;
+// use GateAcceptDocument when the raw bytes are at hand.
+func GateAccept(ev model.Evidence, g Gate) []Reason { return gateAccept(ev, g, nil) }
+
+// GateAcceptDocument decodes a raw document and judges it in one step, so a
+// registered remote verifier sees the exact bytes (and sees them once).
+func GateAcceptDocument(doc []byte, g Gate) []Reason {
+	ev, err := decodeDocument(doc)
+	if err != nil {
+		var rej *Rejection
+		if errors.As(err, &rej) {
+			return rej.Reasons
+		}
+		return []Reason{ReasonInvalid}
+	}
+	return gateAccept(ev, g, doc)
+}
+
+func gateAccept(ev model.Evidence, g Gate, doc []byte) []Reason {
 	set := reasonSet{}
 	set.add(consistency(ev)...)
 	if ev.RepoID == "" || ev.RepoID != g.RepoID {
@@ -82,7 +103,7 @@ func GateAccept(ev model.Evidence, g Gate) []Reason {
 	if ev.Result != "pass" {
 		set.add(ReasonNotPassing)
 	}
-	set.add(producerReasons(ev, g)...)
+	set.add(producerReasons(ev, g, doc)...)
 	return set.list()
 }
 
@@ -100,26 +121,29 @@ func jobReasons(ev model.Evidence, required []string) []Reason {
 			bad[c.JobID] = true
 		}
 	}
+	set := reasonSet{}
 	for _, job := range required {
-		if job == "" || !seen[job] {
-			return []Reason{ReasonJobsMismatch}
-		}
-		if bad[job] {
-			return []Reason{ReasonNotPassing}
+		switch {
+		case job == "" || !seen[job]:
+			set.add(ReasonJobsMismatch)
+		case bad[job]:
+			set.add(ReasonNotPassing)
 		}
 	}
-	return nil
+	return set.list()
 }
 
 // producerReasons judges who recorded the document.
-func producerReasons(ev model.Evidence, g Gate) []Reason {
+func producerReasons(ev model.Evidence, g Gate, doc []byte) []Reason {
 	switch ev.Producer.Kind {
 	case "coordinator-recorded":
 		return nil
 	case "signed-remote":
-		doc, err := json.Marshal(ev)
-		if err != nil {
-			return []Reason{ReasonSignatureUnverifiable}
+		if doc == nil {
+			var err error
+			if doc, err = json.Marshal(ev); err != nil {
+				return []Reason{ReasonSignatureUnverifiable}
+			}
 		}
 		return verifySignature(doc, ev)
 	case "self-reported":

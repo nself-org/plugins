@@ -71,10 +71,11 @@ func fileDigests(kind string, files []File) ([]model.DigestRef, error) {
 		if err := checkPath(f.Path); err != nil {
 			return nil, fmt.Errorf("attest: %s %q: %w", kind, f.Path, err)
 		}
-		if seen[f.Path] {
+		folded := strings.ToLower(f.Path) // a case-insensitive checkout cannot hold both
+		if seen[folded] {
 			return nil, fmt.Errorf("attest: %s %q listed twice", kind, f.Path)
 		}
-		seen[f.Path] = true
+		seen[folded] = true
 		out = append(out, model.DigestRef{Path: f.Path, SHA256: Digest(f.Content)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })

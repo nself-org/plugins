@@ -42,8 +42,9 @@ func evidenceSchema() ([]byte, error) {
 	return schemaBytes, schemaErr
 }
 
-// Verify checks a raw ci.evidence/v1 document and returns it decoded.
-func Verify(doc []byte) (model.Evidence, error) {
+// decodeDocument validates the schema and decodes strictly; it checks neither
+// consistency nor the signature.
+func decodeDocument(doc []byte) (model.Evidence, error) {
 	var ev model.Evidence
 	if len(doc) == 0 || len(doc) > MaxDocument {
 		return ev, Reject([]Reason{ReasonInvalid}, "document is empty or too large")
@@ -59,6 +60,15 @@ func Verify(doc []byte) (model.Evidence, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&ev); err != nil {
 		return model.Evidence{}, Reject([]Reason{ReasonInvalid}, err.Error())
+	}
+	return ev, nil
+}
+
+// Verify checks a raw ci.evidence/v1 document and returns it decoded.
+func Verify(doc []byte) (model.Evidence, error) {
+	ev, err := decodeDocument(doc)
+	if err != nil {
+		return model.Evidence{}, err
 	}
 	set := reasonSet{}
 	set.add(consistency(ev)...)

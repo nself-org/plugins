@@ -261,6 +261,78 @@ func TestGateAccept_RevisionFormat(t *testing.T) {
 	}
 }
 
+// A failing job and a removed job are both reported.
+func TestGateAccept_ReportsEveryJobProblem(t *testing.T) {
+	ev := goodEvidence()
+	ev.Checks[2].Result, ev.Checks[2].Required = "fail", false // lint fails
+	ev.Counts = model.Counts{Pass: 2, Fail: 1, Total: 3}
+	g := goodGate(ev)
+	g.RequiredJobs = []string{"lint", "deploy-check"}
+	got := attest.GateAccept(ev, g)
+	if !hasReason(got, attest.ReasonJobsMismatch) || !hasReason(got, attest.ReasonNotPassing) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestGateAcceptDocument(t *testing.T) {
+	t.Cleanup(func() { attest.RegisterRemoteVerifier(nil) })
+	attest.RegisterRemoteVerifier(nil)
+	ev := goodEvidence()
+	if got := attest.GateAcceptDocument(marshal(t, ev), goodGate(ev)); len(got) != 0 {
+		t.Fatalf("good document rejected: %v", got)
+	}
+	if got := attest.GateAcceptDocument([]byte("{"), goodGate(ev)); !sameReasons(got, []attest.Reason{attest.ReasonInvalid}) {
+		t.Fatalf("garbage: %v", got)
+	}
+	// the verifier sees the exact bytes, exactly once
+	rec := &recordingVerifier{}
+	attest.RegisterRemoteVerifier(rec)
+	signed := signedRemote(ev)
+	doc := marshal(t, signed)
+	if got := attest.GateAcceptDocument(doc, goodGate(signed)); len(got) != 0 {
+		t.Fatalf("signed document rejected: %v", got)
+	}
+	if rec.calls != 1 || string(rec.doc) != string(doc) {
+		t.Fatalf("verifier saw %d calls, doc match %v", rec.calls, string(rec.doc) == string(doc))
+	}
+	attest.RegisterRemoteVerifier(nil)
+	if got := attest.GateAcceptDocument(doc, goodGate(signed)); !hasReason(got, attest.ReasonSignatureUnverifiable) {
+		t.Fatalf("no verifier: %v", got)
+	}
+}
+
+func TestGateAccept_NamedPipelineIsAccepted(t *testing.T) {
+	ev := goodEvidence()
+	ev.Pipeline.Kind = "named"
+	if got := attest.GateAccept(ev, goodGate(ev)); len(got) != 0 {
+		t.Fatalf("named pipeline rejected: %v", got)
+	}
+}
+
+// Freshness that cannot be decided (the evidence binds no config digest) is not freshness.
+func TestGateAccept_UnknownFreshnessIsStale(t *testing.T) {
+	ev := goodEvidence()
+	ev.InputDigests.Config = ""
+	g := goodGate(ev)
+	if f := attest.Fresh(ev, *g.Current); f.State != "unknown" {
+		t.Fatalf("setup: %+v", f)
+	}
+	if got := attest.GateAccept(ev, g); !sameReasons(got, []attest.Reason{attest.ReasonStale}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// Only a pass satisfies a gate, whatever the checks say.
+func TestGateAccept_OnlyAPassingResultPasses(t *testing.T) {
+	for _, result := range []model.Result{"fail", "error", "cancelled"} {
+		ev := goodEvidence()
+		ev.Result = result
+		if got := attest.GateAccept(ev, goodGate(ev)); !sameReasons(got, []attest.Reason{attest.ReasonNotPassing}) {
+			t.Errorf("result %s: got %v", result, got)
+		}
+	}
+}
+
 func TestGateAccept_EmptyRevisionNeverMatchesEmpty(t *testing.T) {
 	ev := goodEvidence()
 	ev.Revision = ""

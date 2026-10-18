@@ -58,6 +58,20 @@ func TestPublish_UnknownVisibilityScrubs(t *testing.T) {
 	}
 }
 
+// A runner id such as "linux" must not rewrite structured fields.
+func TestPublish_RunnerAliasOnlyInFreeText(t *testing.T) {
+	ev := goodEvidence()
+	ev.Runner = model.RunnerRef{ID: "linux", Provider: "linux-pool", Platform: "linux/amd64", Isolation: "process"}
+	ev.Checks[0].Excerpt = "linux box failed"
+	out := attest.Publish(ev, attest.Public)
+	if out.Runner.Platform != "linux/amd64" || out.Runner.Provider != "linux-pool" || out.Runner.ID == "linux" {
+		t.Fatalf("%+v", out.Runner)
+	}
+	if strings.Contains(out.Checks[0].Excerpt, "linux box") {
+		t.Fatalf("runner id left in free text: %q", out.Checks[0].Excerpt)
+	}
+}
+
 func TestPublish_DoesNotModifyItsInput(t *testing.T) {
 	ev := leaky()
 	before := string(marshal(t, ev))
@@ -160,6 +174,12 @@ func TestProfile_TextDetails(t *testing.T) {
 		{"ip 100.64.0.1 and 169.254.1.1", "ip [redacted-ip] and [redacted-ip]"},
 		{"ip 172.15.0.1 and 172.32.0.1", "ip 172.15.0.1 and 172.32.0.1"},
 		{"gandalf and frodo, frodoish", "[redacted-host] and [redacted-user], frodoish"},
+		{"GANDALF and Frodo", "[redacted-host] and [redacted-user]"},
+		{"ip 010.0.0.1 and 192.168.01.5 and 8.8.8.8", "ip [redacted-ip] and [redacted-ip] and 8.8.8.8"},
+		{"v6 64:ff9b::a00:1 and 2002:c0a8:101::1", "v6 [redacted-ip] and [redacted-ip]"},
+		{"see https://github.com/o/r/runs/1?token=abc#x.", "see https://github.com/o/r/runs/1."},
+		{"cd /home/runner/work and run runner tests in /Users/build/x", "cd [redacted-home]/work and run runner tests in [redacted-home]/x"},
+		{"self.private app.internal cfg.home", "self.private [redacted-host] cfg.home"},
 		{"/root/.cache and /home/sam/x", "[redacted-home]/.cache and [redacted-home]/x"},
 		{"user sam wrote", "user [redacted-user] wrote"},
 	}

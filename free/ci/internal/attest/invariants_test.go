@@ -16,10 +16,12 @@ import (
 	"github.com/nself-org/plugins/free/ci/internal/attest"
 	"github.com/nself-org/plugins/free/ci/internal/invariants"
 	"github.com/nself-org/plugins/free/ci/internal/model"
-	"github.com/nself-org/plugins/free/ci/internal/trust"
 )
 
 var trustNames = []model.TrustClass{"untrusted", "collaborator", "internal", "owner"}
+
+// the oracle's own order, written out so it does not share code with the gate
+var trustRank = map[model.TrustClass]int{"untrusted": 0, "collaborator": 1, "internal": 2, "owner": 3}
 
 func indexOf(name, value string) int {
 	for i, v := range model.EnumValues(name) {
@@ -57,7 +59,7 @@ func build(w invariants.World) scene {
 
 	ev.SourceTrust = w.Trust
 	min := trustNames[indexOf("NetworkScope", string(w.Network))%len(trustNames)]
-	sc.trustBad = trust.RankTrust(ev.SourceTrust) < trust.RankTrust(min)
+	sc.trustBad = trustRank[ev.SourceTrust] < trustRank[min]
 
 	switch sc.producer = []string{"coordinator-recorded", "signed-remote", "self-reported"}[isolation%3]; sc.producer {
 	case "signed-remote":
