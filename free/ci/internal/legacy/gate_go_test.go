@@ -30,8 +30,14 @@ func TestGoTestTimeout(t *testing.T) {
 		{0, goTestMinTimeout},
 		{5, goTestMinTimeout},
 		{120, goTestMinTimeout},
-		{600, 600},
+		{600, goTestMinTimeout},
+		{1200, 1200},
 		{1800, 1800},
+	}
+	// D-0915: cli cmd/commands needs ~370 s on a free runner and longer on a
+	// loaded host, so the floor must stay above go test's own 600 s default.
+	if goTestMinTimeout < 1200 {
+		t.Errorf("goTestMinTimeout = %d, want at least 1200 (D-0915)", goTestMinTimeout)
 	}
 	for _, c := range cases {
 		if got := goTestTimeout(c.step); got != c.want {

@@ -76,8 +76,10 @@ func markSubstantive(gates []GateResult) {
 // goTestMinTimeout is the floor for `go test -timeout`. The flag is a
 // per-package-binary limit, not a step limit, so the 120 s step default made
 // one large package (cli cmd/commands, ~121 s) fail the gate with a panic
-// while every test in it passed. 600 s is go test's own default (D-0286).
-const goTestMinTimeout = 600
+// while every test in it passed (D-0286). That package now needs about 370 s
+// on a free runner and more on a loaded host, past go test's own 600 s
+// default, so the floor is 1200 s (D-0915).
+const goTestMinTimeout = 1200
 
 // goTestTimeout returns the -timeout seconds for go test: the step timeout,
 // raised to goTestMinTimeout.
