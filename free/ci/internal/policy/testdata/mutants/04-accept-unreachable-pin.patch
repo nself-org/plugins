@@ -3,5 +3,5 @@ index fc475858..6a542524 100644
 --- a/internal/policy/pin.go
 +++ b/internal/policy/pin.go
 @@ -24 +24 @@ func chooseCommit(ctx context.Context, run Runner, root string, b Branch, pin st
--	if pin == b.Tip || reachable(ctx, run, root, pin, "refs/remotes/origin/"+b.Name) {
+-	if pin == b.Tip || reachable(ctx, run, root, pin, b.Tip) {
 +	if true {

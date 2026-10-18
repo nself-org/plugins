@@ -46,6 +46,9 @@ func inRepository(dir string) bool {
 	if err != nil {
 		return true // unknown: treat as a repository so the caller refuses
 	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = real // a symlink into a subdirectory still sits inside its repository
+	}
 	if _, err := os.Lstat(filepath.Join(abs, "HEAD")); err == nil {
 		if _, err := os.Lstat(filepath.Join(abs, "objects")); err == nil {
 			return true

@@ -93,3 +93,41 @@ func TestSymlinkedConfigDirRefused(t *testing.T) {
 	_, err = resolver(t, g, nil).Resolve(context.Background(), Repo{Root: root, Visibility: "unknown", Class: "owner"}, Revision{Dir: root})
 	wantE672(t, "symlinked dir in the worktree", err)
 }
+
+// A symlink into a subdirectory of a repository is still inside it: a git that
+// refuses the checkout must not read as "no origin" through the alias.
+func TestGitFailureThroughSymlinkToSubdirectory(t *testing.T) {
+	f := newFixture(t)
+	f.push(tightConfig)
+	sub := filepath.Join(f.work, "svc")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(sub, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+	_, err := resolver(t, f, nil).Resolve(context.Background(), Repo{Root: alias, Visibility: "unknown", Class: "owner"}, Revision{})
+	wantE672(t, "alias into a subdirectory", err)
+}
+
+// Directories "svc" and " svc" are different projects, in the main and a linked worktree.
+func TestProjectIDKeepsSpacesInPrefix(t *testing.T) {
+	f := newFixture(t)
+	linked := filepath.Join(t.TempDir(), "linked")
+	git(t, f.work, "worktree", "add", "-q", "--detach", linked)
+	ctx := context.Background()
+	for _, base := range []string{f.work, linked} {
+		a, b := filepath.Join(base, "svc"), filepath.Join(base, " svc")
+		for _, d := range []string{a, b} {
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ia, ib := ProjectIDGit(ctx, f.runner, a), ProjectIDGit(ctx, f.runner, b)
+		if ia == ib || ib != filepath.Join(ProjectID(f.work), " svc") || ia != filepath.Join(ProjectID(f.work), "svc") {
+			t.Errorf("%s: ids %q and %q", base, ia, ib)
+		}
+	}
+}

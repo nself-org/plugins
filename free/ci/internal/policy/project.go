@@ -40,20 +40,22 @@ func ProjectIDGit(ctx context.Context, run Runner, root string) string {
 		return id
 	}
 	g := gitRunner{run: run, root: id}
-	located, ok := g.git(ctx, "rev-parse", "--show-toplevel", "--show-prefix")
+	// Raw output: a path may start or end with a space, and only the record
+	// terminators are removed.
+	located, ok := g.raw(ctx, "rev-parse", "--show-toplevel", "--show-prefix")
 	if !ok {
 		return id // not a repository: one failed spawn and done
 	}
-	lines := strings.Split(strings.ReplaceAll(located, "\r\n", "\n"), "\n")
-	top, prefix := strings.TrimSpace(lines[0]), ""
+	lines := strings.Split(strings.TrimSuffix(located, "\n"), "\n")
+	top, prefix := lines[0], ""
 	if len(lines) > 1 {
-		prefix = strings.TrimSpace(lines[1])
+		prefix = lines[1]
 	}
 	if top == "" {
 		return id
 	}
 	base := top
-	if listed, ok := g.git(ctx, "worktree", "list", "--porcelain"); ok {
+	if listed, ok := g.raw(ctx, "worktree", "list", "--porcelain"); ok {
 		// The first entry is the main worktree, whatever the layout. A bare main
 		// repository has no checkout, and --separate-git-dir lists the git directory
 		// (git records no path to that checkout), so a candidate without a .git
