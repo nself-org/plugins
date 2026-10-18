@@ -4,7 +4,6 @@ package db
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,14 +25,6 @@ func bootOptions() migrate.Options {
 func applyBootMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	bootPool = pool
 	res, err := migrate.Apply(ctx, pool, bootOptions())
-	if errors.Is(err, migrate.ErrLegacyLedger) {
-		// A pre-manifest-v2 install: its own runner applied every migration file and kept a (filename, applied_at)
-		// ledger. Adopt it once (adds and backfills the checksum column), then apply what is left.
-		if _, berr := migrate.Baseline(ctx, pool, bootOptions()); berr != nil {
-			return fmt.Errorf("migrations: baseline legacy ledger: %w", berr)
-		}
-		res, err = migrate.Apply(ctx, pool, bootOptions())
-	}
 	if err != nil {
 		return fmt.Errorf("migrations: %w", err)
 	}

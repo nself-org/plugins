@@ -32,8 +32,22 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := pool.Exec(ctx, renameLegacySchemaSQL); err != nil {
 		return fmt.Errorf("rename legacy schema %s to %s: %w", legacyControllerSchema, controllerSchema, err)
 	}
-	return applyBootMigrations(ctx, pool)
+	if err := applyBootMigrations(ctx, pool); err != nil {
+		return err
+	}
+	// 001 is released, so an install that ran its earlier text keeps nself_controller as a LOGIN role with a
+	// placeholder password. Nothing connects as this role (the daemon uses DATABASE_URL): lock it on every start.
+	if _, err := pool.Exec(ctx, lockControllerRoleSQL); err != nil {
+		return fmt.Errorf("lock role nself_controller: %w", err)
+	}
+	return nil
 }
+
+const lockControllerRoleSQL = `DO $$ BEGIN
+	IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nself_controller' AND rolcanlogin) THEN
+		ALTER ROLE nself_controller NOLOGIN;
+	END IF;
+END $$`
 
 // ProvisionProjectSchema creates the Postgres schema and dedicated role for a project.
 // Runs as the superuser pool — must NOT be called from per-project roles.

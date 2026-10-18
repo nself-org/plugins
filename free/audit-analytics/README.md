@@ -68,6 +68,6 @@ Unbundled — available as a standalone free plugin.
 
 ## Database migrations
 
-The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_audit_analytics.schema_migrations`); the tables live in `public`. The `np_audit_heatmap` materialized view reads `np_audit_log`, which the audit-log plugin owns: install audit-log before audit-analytics. On a database without `np_audit_log` the view is skipped so the plugin still boots, and the heatmap endpoints stay empty until the view exists.
+The plugin applies `migrations/*.sql` at boot through the nSelf migration helper (ledger `np_audit_analytics.schema_migrations`); the tables live in `public`. The `np_audit_heatmap` materialized view and the anomaly and top-actor queries read `public.np_audit_log`. No shipped plugin creates that table today (audit-log writes `np_auditlog_events`, tracked in hq quality debt), so the view is skipped on every database, the plugin still boots, and the analytics endpoints stay empty until the table exists.
 
-The manifest declares `requires.plugins: ["audit-log"]`; a CLI that reads manifest v2 installs audit-log first.
+The manifest declares `requires.plugins: ["audit-log"]` because that plugin owns the audit data; a CLI that reads manifest v2 installs it first.

@@ -1,7 +1,7 @@
 -- Migration 002: np_audit_heatmap materialized view.
 -- Requires: public.np_audit_log (audit-log plugin) and public.np_audit_anomalies (migration 001).
--- The view reads np_audit_log, which belongs to the audit-log plugin. On a database where that table does not
--- exist yet the view is skipped (a fresh database must still boot); install audit-log first to get the heatmap.
+-- The view reads np_audit_log. No shipped plugin creates that table today (audit-log writes np_auditlog_events), so on
+-- a database without it the view is skipped (a fresh database must still boot) and is never retried: hq quality debt.
 -- Safe to re-run: the view and its indexes are created only when missing.
 
 DO $mig$
