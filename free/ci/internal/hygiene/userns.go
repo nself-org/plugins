@@ -4,7 +4,8 @@ package hygiene
 // unprivileged user namespace, by trying to read a 0600 file the agent owns from inside one.
 // Inputs:  a directory the agent owns and the first subordinate UID to map the job to.
 // Outputs: a Probe; the agent reports Available as `isolation.userns`.
-// Constraints: the namespace is created through internal/exec (`unshare --user --map-users=0:<sub>:1`);
+// Constraints: the namespace is created through internal/exec (UsernsWrapper: `unshare --user
+// --map-users=0:<sub>:1 --map-groups=0:<sub>:1 --setuid=0 --setgid=0`);
 // reading the probe file must FAIL for the mapping to count; the probe file is always removed.
 
 import (
@@ -53,6 +54,13 @@ func ParseSubuid(r io.Reader, user string, uid int) (start, count int, ok bool) 
 	return 0, 0, false
 }
 
+// UsernsWrapper is the command prefix that runs a job under the subordinate host UID subUID; it is
+// the command ProbeUserns verified, so the agent uses it unchanged.
+func UsernsWrapper(subUID int) []string { return exec.UsernsArgv(subUID) }
+
+// usernsProbe is exec.UsernsProbe; tests replace it.
+var usernsProbe = exec.UsernsProbe
+
 // ProbeUserns runs the probe in a fresh subdirectory of dir.
 func ProbeUserns(ctx context.Context, dir string, subUID int) (Probe, error) {
 	if subUID <= 0 {
@@ -71,7 +79,7 @@ func ProbeUserns(ctx context.Context, dir string, subUID int) (Probe, error) {
 	if err := os.WriteFile(file, []byte(probeFileSecret), 0o600); err != nil {
 		return Probe{}, err
 	}
-	readable, ok, err := exec.UsernsProbe(ctx, subUID, file)
+	readable, ok, err := usernsProbe(ctx, subUID, file)
 	switch {
 	case err != nil && exec.IsRuntimeMissing(err):
 		return Probe{Reason: ProbeUnavail}, nil

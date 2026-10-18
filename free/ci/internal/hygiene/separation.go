@@ -59,6 +59,8 @@ type Plan struct {
 	UID  int
 	// User is the account name for job-shim.
 	User string
+	// Argv is the command prefix that runs the job under UID (userns only; see UsernsWrapper).
+	Argv []string
 	// Serial is true when the node must run process-level attempts one at a time.
 	Serial bool
 	// Reason is a stable trust reason when the plan carries a restriction.
@@ -96,7 +98,7 @@ func Separation(f Facts, slot int) (Plan, error) {
 		if contains(forbidden, uid) || contains(containerUIDs(f, forbidden), uid) {
 			return Plan{}, noUIDError(ReasonNoJobUID, "subordinate uid %d is the agent's, the coordinator's or a container slot's", uid)
 		}
-		return Plan{Mode: Userns, UID: uid}, nil
+		return Plan{Mode: Userns, UID: uid, Argv: UsernsWrapper(uid)}, nil
 	}
 	if ownerException(f) {
 		// no separation exists: the operator's own owner-trust work runs as the operator

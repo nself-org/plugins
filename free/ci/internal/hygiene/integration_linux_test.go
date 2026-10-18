@@ -353,10 +353,12 @@ func TestIntegrationProbeUsernsFailsClosed(t *testing.T) {
 	}
 }
 
-// TestIntegrationProbeUsernsWithSubordinateRange gives the runner user a subordinate range and
-// reports what the probe finds; where the kernel or an LSM forbids unprivileged namespaces the
-// probe must still fail closed.
-func TestIntegrationProbeUsernsWithSubordinateRange(t *testing.T) {
+// TestIntegrationProbeUsernsSeparatesWhenTheKernelAllows is the positive control: with a subordinate
+// range and the Ubuntu AppArmor restriction on unprivileged user namespaces lifted for the test, the
+// probe must report that the mapped UID cannot read the agent's 0600 file. With the restriction on
+// (the hosted runner's default) the namespace has no capabilities, setuid fails and the probe must
+// say unavailable, never available.
+func TestIntegrationProbeUsernsSeparatesWhenTheKernelAllows(t *testing.T) {
 	mustRun(t, "sudo", "-n", "true")
 	me, err := user.Current()
 	if err != nil {
@@ -366,14 +368,26 @@ func TestIntegrationProbeUsernsWithSubordinateRange(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = run(t, "sudo", "-n", "usermod", "--del-subuids", "300000-365535", "--del-subgids", "300000-365535", me.Username)
 	})
+	restricted, _ := run(t, "sysctl", "-n", "kernel.apparmor_restrict_unprivileged_userns")
+	t.Logf("kernel.apparmor_restrict_unprivileged_userns=%q", restricted)
 	probe, err := ProbeUserns(context.Background(), t.TempDir(), 300000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("PROBE with subordinate range: %+v", probe)
-	if probe.Available && probe.Reason != ProbeOK {
-		t.Fatalf("inconsistent probe %+v", probe)
+	t.Logf("PROBE with the host's userns policy: %+v", probe)
+	if restricted == "1" {
+		if probe.Available {
+			t.Fatalf("a restricted namespace has no capabilities and cannot separate, got %+v", probe)
+		}
+		mustRun(t, "sudo", "-n", "sysctl", "-w", "kernel.apparmor_restrict_unprivileged_userns=0")
+		t.Cleanup(func() { _, _ = run(t, "sudo", "-n", "sysctl", "-w", "kernel.apparmor_restrict_unprivileged_userns=1") })
 	}
-	diag, _ := run(t, "sh", "-c", "file=$(mktemp); chmod 600 $file; unshare --user --map-users=0:300000:1 --map-groups=0:300000:1 -- sh -c \"id; ls -ln $file; if [ -r $file ]; then echo READABLE; else echo DENIED; fi\" 2>&1; echo rc=$?; rm -f $file")
-	t.Logf("DIAG %s", diag)
+	probe, err = ProbeUserns(context.Background(), t.TempDir(), 300000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !probe.Available || probe.Reason != ProbeOK {
+		diag, _ := run(t, "sh", "-c", strings.Join(UsernsWrapper(300000), " ")+" sh -c 'id -u; id -g' 2>&1")
+		t.Fatalf("with user namespaces allowed the probe must find the mapped UID separated, got %+v\n%s", probe, diag)
+	}
 }

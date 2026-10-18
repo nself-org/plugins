@@ -227,3 +227,16 @@ func TestSeparationProcessUIDNeverSharesAContainerSlotUID(t *testing.T) {
 		t.Fatalf("a subordinate uid inside the container slot range must be refused: %v", err)
 	}
 }
+
+func TestUsernsPlanCarriesTheVerifiedWrapper(t *testing.T) {
+	f := baseFacts()
+	f.Userns, f.SubUIDStart, f.SubUIDCount = true, 100000, 65536
+	p, err := Separation(f, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"unshare", "--user", "--map-users=0:100002:1", "--map-groups=0:100002:1", "--setuid=0", "--setgid=0", "--"}
+	if strings.Join(p.Argv, " ") != strings.Join(want, " ") {
+		t.Fatalf("wrapper %v", p.Argv)
+	}
+}
