@@ -220,3 +220,27 @@ func TestTeardownEveryExit(t *testing.T) {
 		}
 	})
 }
+
+// TestOptionalRedis proves an optional component: enabled, started alone,
+// loopback-bound, answering, and gone after Down.
+func TestOptionalRedis(t *testing.T) {
+	need(t)
+	p := realProv(t)
+	h, err := p.Up(context.Background(), []Spec{{Name: "cache", Component: "redis"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ports := dockerOut(t, "port", h.Project+"_redis")
+	if !strings.Contains(ports, "127.0.0.1:"+h.Env["NSELF_CI_SERVICE_CACHE_PORT"]) || strings.Contains(ports, "0.0.0.0") {
+		t.Fatalf("redis must bind 127.0.0.1 only:\n%s", ports)
+	}
+	if n := len(strings.Fields(dockerOut(t, "ps", "-q", "--filter", "label=com.docker.compose.project="+h.Project))); n != 1 {
+		t.Fatalf("a redis-only job must start exactly one container, got %d", n)
+	}
+	if err := p.Down(context.Background(), h); err != nil {
+		t.Fatal(err)
+	}
+	if left := nselfciResources(t); len(left) != 0 {
+		t.Fatalf("left behind: %v", left)
+	}
+}

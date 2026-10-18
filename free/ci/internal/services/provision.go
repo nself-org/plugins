@@ -194,8 +194,8 @@ func (c conn) settings() [][2]string {
 
 // start starts only the named components and waits for each port.
 func (p *Provisioner) start(ctx context.Context, h *Handle, conns []conn) error {
-	for _, c := range conns {
-		if err := p.cli(ctx, h, "config", "services", "start", c.Comp.Name); err != nil {
+	for i := range conns {
+		if err := p.startOne(ctx, h, &conns[i]); err != nil {
 			return err
 		}
 	}
@@ -211,6 +211,31 @@ func (p *Provisioner) start(ctx context.Context, h *Handle, conns []conn) error 
 		}
 	}
 	return nil
+}
+
+// startOne starts one component. A host port picked as free can be taken by
+// another process before Docker binds it; then a new port is set and the start
+// retried (twice at most).
+func (p *Provisioner) startOne(ctx context.Context, h *Handle, c *conn) error {
+	err := p.cli(ctx, h, "config", "services", "start", c.Comp.Name)
+	for try := 0; err != nil && portTaken(err) && try < 2; try++ {
+		ports, perr := pickPorts(1)
+		if perr != nil {
+			return perr
+		}
+		h.ports = append(h.ports, ports[0])
+		c.HostPort = ports[0]
+		if err = p.cli(ctx, h, "config", "set", c.Comp.PortKey, itoa(c.HostPort)); err != nil {
+			return err
+		}
+		err = p.cli(ctx, h, "config", "services", "start", c.Comp.Name)
+	}
+	return err
+}
+
+func portTaken(err error) bool {
+	m := err.Error()
+	return strings.Contains(m, "port is already allocated") || strings.Contains(m, "address already in use") || strings.Contains(m, "Bind for")
 }
 
 // network finds the compose network of the project ("" when none is found).

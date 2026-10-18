@@ -81,7 +81,11 @@ func (s *servicesHook) Down(ctx context.Context, r ServicesRequest) error {
 	}
 	l.stop()
 	defer s.release(key)
-	return s.prov.Down(ctx, l.handle)
+	// The orchestrator's cleanup context is short (15 s); a teardown that is cut
+	// off leaves containers behind, so it gets its own budget.
+	bg, done := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer done()
+	return s.prov.Down(bg, l.handle)
 }
 
 // teardown is the safety net for a job context that ended without Down.

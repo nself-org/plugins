@@ -100,7 +100,7 @@ func (f *Funnel) Run(ctx context.Context, c Call) (Result, error) {
 	if runtime.GOOS == "windows" {
 		return Result{}, fail(CodeNoDocker, "service dependencies need a POSIX host with Docker")
 	}
-	id := fmt.Sprintf("svccall-%d-%d", os.Getpid(), f.seq.Add(1))
+	id := fmt.Sprintf("svccall-%s-%d", randHex(4), f.seq.Add(1))
 	secrets := append([]string(nil), c.Mask...)
 	if f.Secrets != nil {
 		secrets = append(secrets, f.Secrets()...)

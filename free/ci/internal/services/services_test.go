@@ -21,6 +21,7 @@ type stub struct {
 	calls    []string
 	up       bool
 	failOn   string // substring of a joined argv that exits 1
+	failOnce string // like failOn, but only the first time
 	noDocker bool
 	noCLI    bool
 	list     string
@@ -34,6 +35,9 @@ func (s *stub) Run(_ context.Context, c Call) (Result, error) {
 	line := strings.Join(c.Argv, " ")
 	s.calls = append(s.calls, line)
 	switch {
+	case s.failOnce != "" && strings.Contains(line, s.failOnce):
+		s.failOnce = ""
+		return Result{ExitCode: 1, Output: s.echo}, nil
 	case s.failOn != "" && strings.Contains(line, s.failOn):
 		return Result{ExitCode: 1, Output: s.echo}, nil
 	case line == "docker info":
@@ -106,6 +110,24 @@ func TestUpSequenceNamedComponentsOnly(t *testing.T) {
 	}
 	if !strings.HasPrefix(h.Env["NSELF_CI_SERVICE_DB_URL"], "postgres://nselfci:") || !strings.HasSuffix(h.Env["NSELF_CI_SERVICE_DB_URL"], "/nselfci") {
 		t.Fatalf("url: %s", h.Env["NSELF_CI_SERVICE_DB_URL"])
+	}
+}
+
+func TestStartRetriesOnATakenPort(t *testing.T) {
+	s := &stub{failOnce: "config services start", echo: "Bind for 127.0.0.1:1 failed: port is already allocated"}
+	p := newProv(t, s)
+	h, err := p.Up(context.Background(), []Spec{{Name: "db", Component: "postgres"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.Down(context.Background(), h) }()
+	got := s.joined()
+	if strings.Count(got, "config set POSTGRES_PORT") != 2 || strings.Count(got, "config services start postgres") != 2 {
+		t.Fatalf("expected one retry on a new port:\n%s", got)
+	}
+	port := h.Env["NSELF_CI_SERVICE_DB_PORT"]
+	if !strings.Contains(got, "config set POSTGRES_PORT "+port) {
+		t.Fatalf("the injected port %s was not the one configured last", port)
 	}
 }
 
