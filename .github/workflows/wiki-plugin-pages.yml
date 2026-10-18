@@ -35,7 +35,8 @@ jobs:
         uses: actions/checkout@v7.0.1
 
       - name: Install PyYAML and pytest
-        run: python3 -m pip install --quiet pyyaml pytest
+        run: |
+          python3 -c "import yaml, pytest" 2>/dev/null || python3 -m pip install --quiet pyyaml pytest
 
       - name: Unit tests
         run: python3 -m pytest -q scripts/test_generate_wiki_plugin_page.py

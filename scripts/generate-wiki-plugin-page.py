@@ -154,14 +154,22 @@ def render_region(entries, catalog):
 
 def apply_region(text, region):
     """Insert or replace the region under the H1; drop the old fixed phrase."""
-    out = []
+    out, dropped = [], False
     for ln in text.split("\n"):
         new = OLD_PHRASE.sub("", ln) if ln.startswith(">") else ln
         if new != ln and new.strip() in ("", ">"):
+            dropped = True
             continue
+        if dropped and not ln.strip() and out and not out[-1].strip():
+            dropped = False  # do not leave a double blank line where the phrase was
+            continue
+        dropped = False
         out.append(new)
     text = "\n".join(out)
-    if BEGIN in text and END in text:
+    nb, ne = text.count(BEGIN), text.count(END)
+    if nb or ne:
+        if nb != 1 or ne != 1 or text.index(BEGIN) > text.index(END):
+            raise Problem(f"malformed region markers ({nb} BEGIN, {ne} END; need one BEGIN then one END)")
         head, rest = text.split(BEGIN, 1)
         return head + region + rest.split(END, 1)[1]
     lines = text.split("\n")
@@ -178,10 +186,13 @@ def new_page(slug, region, cfg):
     return f"# {page_title(slug, cfg).replace('-', ' ')} Plugin\n\n{region}\n"
 
 
-def surface_count(root, name, rule):
+def surface_count(root, rule):
     """First-level subcommand count of a manifest, aliases excluded."""
-    with open(os.path.join(root, rule["manifest"]), encoding="utf-8") as fh:
-        manifest = json.load(fh)
+    try:
+        with open(os.path.join(root, rule["manifest"]), encoding="utf-8") as fh:
+            manifest = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise Problem(f"surface ceiling manifest {rule['manifest']}: {exc}")
     skip = set((rule.get("aliases") or {}).get("names") or [])
     firsts = {n.split()[0] for n in _sub_names(manifest.get("commands")) if n.split()}
     return len(firsts - skip)
@@ -190,7 +201,7 @@ def surface_count(root, name, rule):
 def check_ceilings(root, cfg):
     problems, notes = [], []
     for name, rule in sorted(cfg["surface_ceilings"].items()):
-        count = surface_count(root, name, rule)
+        count = surface_count(root, rule)
         notes.append(f"{name}: {count} first-level subcommands (ceiling {rule['max']})")
         if count > rule["max"]:
             problems.append(f"{name}: {count} first-level subcommands exceeds the ceiling {rule['max']}")
@@ -198,7 +209,7 @@ def check_ceilings(root, cfg):
 
 
 def plan(root, cfg, catalog, slugs):
-    """Yield (slug, path, wanted_text, current_text_or_None)."""
+    """Yield (slug, path, wanted_text_or_Problem, current_text_or_None)."""
     groups = group_by_slug(catalog)
     for slug in slugs:
         if slug not in groups:
@@ -208,7 +219,10 @@ def plan(root, cfg, catalog, slugs):
         if os.path.exists(path):
             with open(path, encoding="utf-8") as fh:
                 cur = fh.read()
-            yield slug, path, apply_region(cur, region), cur
+            try:
+                yield slug, path, apply_region(cur, region), cur
+            except Problem as exc:
+                yield slug, path, exc, cur
         else:
             yield slug, path, new_page(slug, region, cfg), None
 
@@ -225,9 +239,13 @@ def run(root, cfg_path, slugs, do_all, check):
         catalog = json.load(fh)
     if do_all:
         slugs = sorted(group_by_slug(catalog))
-    problems, written = [], 0
+    problems, written, failed = [], 0, False
     for slug, path, want, cur in plan(root, cfg, catalog, slugs):
         rel = os.path.relpath(path, root)
+        if isinstance(want, Problem):
+            problems.append(f"{rel}: {want}")
+            failed = True
+            continue
         if want == cur:
             continue
         if check:
@@ -241,6 +259,7 @@ def run(root, cfg_path, slugs, do_all, check):
         problems += [f"{PAGES_DIR}/{f}: orphan page (not a catalogue slug or index page)" for f in orphans(root, cfg, catalog)]
         found, notes = check_ceilings(root, cfg)
         problems += found
+        failed = failed or bool(found)
         for note in notes:
             print(note)
     if check:
@@ -248,8 +267,10 @@ def run(root, cfg_path, slugs, do_all, check):
             print("FAIL " + p)
         print(f"wiki-plugin-pages: {len(problems)} problem(s) in {len(slugs)} slug(s)")
         return 1 if problems else 0
+    for p in problems:
+        print("note: " + p)
     print(f"wiki-plugin-pages: wrote {written} of {len(slugs)} page(s)")
-    return 1 if any("ceiling" in p for p in problems) else 0
+    return 1 if failed else 0
 
 
 def main(argv=None):

@@ -119,6 +119,57 @@ class RegionTests(WikiPagesCase):
         self.assertEqual(self.cli("nope")[0], 2)
 
 
+class MalformedPageTests(WikiPagesCase):
+    def put(self, name, text):
+        with open(os.path.join(self.root, gen.PAGES_DIR, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def test_lone_markers_and_wrong_order_are_reported_not_patched(self):
+        cases = {
+            "Jobs.md": f"# Jobs Plugin\n\n{gen.BEGIN}\nold\n",
+            "Cron.md": f"# Cron Plugin\n\nold\n{gen.END}\n",
+            "API.md": f"# API Plugin\n{gen.END}\n{gen.BEGIN}\n",
+        }
+        for name, text in cases.items():
+            self.put(name, text)
+        code, out = self.cli("--all", "--check")
+        self.assertEqual(code, 1)
+        for name in cases:
+            self.assertIn(f"{name}: malformed region markers", out)
+        self.assertIn("Voice.md: missing page", out)  # other problems still listed
+        before = self.page("Jobs.md")
+        self.assertEqual(self.cli("jobs")[0], 1)
+        self.assertEqual(self.page("Jobs.md"), before)
+
+    def test_duplicated_region_is_reported(self):
+        self.generate_all()
+        text = self.page("Jobs.md")
+        region = text[text.index(gen.BEGIN): text.index(gen.END) + len(gen.END)]
+        self.put("Jobs.md", text + "\n" + region + "\n")
+        code, out = self.cli("--all", "--check")
+        self.assertEqual(code, 1)
+        self.assertIn("Jobs.md: malformed region markers (2 BEGIN, 2 END", out)
+
+    def test_page_without_h1_names_the_file_and_keeps_going(self):
+        self.put("Jobs.md", "intro only\n")
+        code, out = self.cli("--all", "--check")
+        self.assertEqual(code, 1)
+        self.assertIn("Jobs.md: no H1 line", out)
+        self.assertIn("Voice.md: missing page", out)
+
+    def test_blockquote_holding_only_the_old_phrase_is_dropped(self):
+        self.put("Jobs.md", "# Jobs Plugin\n\n> **Free — MIT licensed.**\n\nBody.\n")
+        self.cli("jobs")
+        text = self.page("Jobs.md")
+        self.assertNotIn("> ", text.replace("| ", ""))
+        self.assertTrue(text.endswith(gen.END + "\n\nBody.\n"))
+
+    def test_missing_ceiling_manifest_is_a_clear_error(self):
+        os.remove(os.path.join(self.root, "free", "ci", "plugin.json"))
+        code, out = self.cli("--all", "--check")
+        self.assertEqual(code, 2)
+
+
 class ContentTests(WikiPagesCase):
     def test_licensed_page_has_bundle_membership_and_no_source_link(self):
         self.cli("voice")
