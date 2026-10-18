@@ -9,14 +9,14 @@ import (
 )
 
 // mountsUnder returns the mount points at or below dir that this process's mount namespace shows
-// (a bind mount on the same device passes the device check but not this one).
-func mountsUnder(dir string) []string {
+// (a bind mount on the same device passes the device check but not this one); ok is false when the
+// mount table cannot be read, which the caller treats as a refusal.
+func mountsUnder(dir string) (found []string, ok bool) {
 	f, err := os.Open("/proc/self/mountinfo")
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer f.Close()
-	var found []string
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
@@ -29,7 +29,7 @@ func mountsUnder(dir string) []string {
 			found = append(found, mp)
 		}
 	}
-	return found
+	return found, sc.Err() == nil
 }
 
 // unescapeMount decodes the octal escapes (\040 for a space) mountinfo uses.

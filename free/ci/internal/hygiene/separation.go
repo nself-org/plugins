@@ -37,8 +37,11 @@ type Facts struct {
 	Ownership string
 	// Slots is the number of execution slots on the node.
 	Slots int
-	// AgentUID and CoordinatorUID are never handed to a job outside the exception.
+	// AgentUID and CoordinatorUID (both > 0) are never handed to a job outside the exception.
+	// A node with no coordinator process sets NoCoordinator instead of CoordinatorUID; an unset UID
+	// is refused rather than guessed, because a wrong guess would open I17.
 	AgentUID, CoordinatorUID int
+	NoCoordinator            bool
 	// JobShim is true when the agent's job-shim sudo rule exists (system install).
 	JobShim bool
 	// JobUIDs are the host UIDs of nself-ci-job-0..n-1, index = slot.
@@ -74,11 +77,10 @@ func Separation(f Facts, slot int) (Plan, error) {
 		// an unset agent UID would leave the forbidden list empty and open I17 by omission
 		return Plan{}, noUIDError(ReasonNoJobUID, "the agent's uid is not known")
 	}
-	coordinator := f.CoordinatorUID
-	if coordinator <= 0 {
-		coordinator = f.AgentUID
+	if f.CoordinatorUID <= 0 && !f.NoCoordinator {
+		return Plan{}, noUIDError(ReasonNoJobUID, "the coordinator's uid is not known")
 	}
-	forbidden := []int{f.AgentUID, coordinator}
+	forbidden := []int{f.AgentUID, f.CoordinatorUID}
 	if containerLevel(f.Isolation) {
 		uid, err := container.JobUID(slot, forbidden)
 		if err != nil {

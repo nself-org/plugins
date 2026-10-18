@@ -27,6 +27,9 @@ func ownedFiles(dirs []string, uid int, skip string) (found []string, complete b
 	walk = func(dir string, depth int) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
+			if !os.IsNotExist(err) && !os.IsPermission(err) {
+				complete = false
+			}
 			return
 		}
 		for _, e := range entries {
@@ -41,6 +44,9 @@ func ownedFiles(dirs []string, uid int, skip string) (found []string, complete b
 			}
 			info, err := os.Lstat(path)
 			if err != nil {
+				if !os.IsNotExist(err) {
+					complete = false
+				}
 				continue
 			}
 			if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) == uid {

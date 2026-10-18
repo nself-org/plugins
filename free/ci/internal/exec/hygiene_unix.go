@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -47,9 +48,13 @@ func KillAttemptGroup(home, attempt string) error {
 	}
 	if groupAlive(marker.PID) {
 		identity, idErr := processIdentity(marker.PID)
+		leaderGone := errors.Is(syscall.Kill(marker.PID, 0), syscall.ESRCH)
 		switch {
+		case leaderGone:
+			// A live group whose leader has exited is the attempt's own: the kernel does not reuse a
+			// PID that still names a process group.
 		case idErr != nil || identity == "":
-			// without a start time the leader cannot be told from a reused PID: do not signal it
+			// the leader exists but its start time is unreadable: it cannot be told from a reused PID
 			return coded("E610", "attempt process identity unavailable")
 		case identity != marker.Identity:
 			// the leader PID now belongs to another process; its group is not ours to kill

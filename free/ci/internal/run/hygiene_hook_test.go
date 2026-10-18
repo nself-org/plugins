@@ -83,40 +83,46 @@ func TestHygieneAttemptStartSweepsOrphansOnceAndSparesLiveWork(t *testing.T) {
 	t.Setenv("NSELF_CI_HOME", home)
 	work := filepath.Join(home, "work")
 	old := time.Now().Add(-3 * orphanGrace)
-	for _, id := range []string{"orphan1", "marked1", "fresh1"} {
+	for _, id := range []string{"orphan.a1", "marked.a1", "fresh.a1"} {
 		root, err := hygiene.JobRoot(work, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if id != "fresh1" {
+		if id != "fresh.a1" {
 			if err := os.Chtimes(root, old, old); err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
+	for _, name := range []string{"nselfci-1a2b3c4d", "nselfci-1a2b3c4d.lock"} { // the services package's, old
+		if err := os.WriteFile(filepath.Join(work, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Chtimes(filepath.Join(work, name), old, old)
+	}
 	if err := os.MkdirAll(filepath.Join(home, "processes"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, "processes", "marked1.json"), []byte(fmt.Sprintf(`{"pid":%d}`, os.Getpid())), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, "processes", "marked.a1.json"), []byte(fmt.Sprintf(`{"pid":%d}`, os.Getpid())), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h := newHygieneHook()
 	if err := h.AttemptStart(context.Background(), AttemptInfo{RunID: "r1", AttemptID: "own1"}); err != nil {
 		t.Fatal(err)
 	}
-	for id, want := range map[string]bool{"orphan1": false, "marked1": true, "fresh1": true} {
+	for id, want := range map[string]bool{"orphan.a1": false, "marked.a1": true, "fresh.a1": true, "nselfci-1a2b3c4d": true, "nselfci-1a2b3c4d.lock": true} {
 		_, err := os.Lstat(filepath.Join(work, id))
 		if (err == nil) != want {
 			t.Errorf("%s exists=%v want %v", id, err == nil, want)
 		}
 	}
-	if _, err := hygiene.JobRoot(work, "orphan2"); err != nil {
+	if _, err := hygiene.JobRoot(work, "orphan.a2"); err != nil {
 		t.Fatal(err)
 	}
 	old2 := time.Now().Add(-3 * orphanGrace)
-	_ = os.Chtimes(filepath.Join(work, "orphan2"), old2, old2)
+	_ = os.Chtimes(filepath.Join(work, "orphan.a2"), old2, old2)
 	_ = h.AttemptStart(context.Background(), AttemptInfo{RunID: "r1", AttemptID: "own2"})
-	if _, err := os.Lstat(filepath.Join(work, "orphan2")); err != nil {
+	if _, err := os.Lstat(filepath.Join(work, "orphan.a2")); err != nil {
 		t.Fatal("the sweep must run once per process")
 	}
 }

@@ -4,16 +4,45 @@ package hygiene
 // owns (a crashed agent or coordinator left them).
 // Inputs:  the attempt ids of live leases.
 // Outputs: a SweepReport; E681 when something could not be removed.
-// Constraints: a live attempt is never touched; a root younger than Host.MinAge is skipped; only
+// Constraints: only directories named like an attempt are swept (Host.IsAttempt); a live attempt is never touched; a root younger than Host.MinAge is skipped; only
 // entries with a safe attempt name and resources carrying the attempt label are considered, and a
 // labelled resource counts only when its attempt has a root under Base (or Host.OwnsRuntime is set).
 
 import (
 	"context"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"time"
+
+	"github.com/nself-org/plugins/free/ci/internal/exec"
 )
+
+// attemptShape is how the local executor names an attempt: <job row>.a<N>.
+var attemptShape = regexp.MustCompile(`^.+\.a[0-9]+$`)
+
+// isAttempt reports whether a directory name under Base is an attempt root this host may sweep.
+func (h *Host) isAttempt(name string) bool {
+	if h.IsAttempt != nil {
+		return h.IsAttempt(name)
+	}
+	return attemptShape.MatchString(name)
+}
+
+// rootOwner returns the UID that owns an attempt root, so an orphan of a separated job is cleaned
+// as the job user; 0 when the root is gone or belongs to the caller.
+func (h *Host) rootOwner(name string) int {
+	if h.Base == "" {
+		return 0
+	}
+	info, err := os.Lstat(filepath.Join(h.Base, name))
+	if err != nil {
+		return 0
+	}
+	return ownerUID(info)
+}
 
 // SweepReport says what a sweep did.
 type SweepReport struct {
@@ -31,16 +60,21 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 	}
 	young := map[string]bool{}
 	candidates := map[string]bool{}
+	running := map[string]bool{}
 	hasRoot := map[string]bool{}
 	if h.Base != "" {
+		if info, err := os.Lstat(h.Base); err == nil && (info.Mode()&fs.ModeSymlink != 0 || !info.IsDir() || !ownedByCaller(info)) {
+			// the base may point into another home: its entries are not evidence about this host
+			return rep, leakError(ReasonUnconfined, "job root base is not a plain directory owned by the caller")
+		}
 		entries, err := os.ReadDir(h.Base)
 		if err != nil && !os.IsNotExist(err) {
 			return rep, err
 		}
 		for _, e := range entries {
 			name := e.Name()
-			if !ValidAttempt(name) {
-				continue
+			if !ValidAttempt(name) || !h.isAttempt(name) {
+				continue // not an attempt root (the services package keeps nselfci-* here)
 			}
 			hasRoot[name] = true
 			if live[name] {
@@ -66,11 +100,22 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 			rep.Skipped = append(rep.Skipped, note)
 		}
 		for _, r := range found {
+			if kind == exec.KindContainer && r.Running && !h.OwnsRuntime {
+				running[r.Attempt] = true
+			}
 			// A labelled resource with no root here belongs to another CI home, user or agent on a
 			// shared daemon unless this host owns the daemon.
 			if !live[r.Attempt] && !young[r.Attempt] && (hasRoot[r.Attempt] || h.OwnsRuntime) {
 				candidates[r.Attempt] = true
 			}
+		}
+	}
+	// A running container may belong to a sibling process; the executor's own recovery removes the
+	// containers of dead coordinators, so a host that does not own the daemon leaves them alone.
+	for name := range running {
+		if candidates[name] {
+			delete(candidates, name)
+			rep.Skipped = append(rep.Skipped, name)
 		}
 	}
 	names := make([]string, 0, len(candidates))
@@ -82,7 +127,7 @@ func (h *Host) SweepOrphans(ctx context.Context, liveLeases []string) (SweepRepo
 		if err := ctx.Err(); err != nil {
 			return rep, err
 		}
-		if err := h.Cleanup(ctx, name); err != nil {
+		if err := h.CleanupJob(ctx, name, h.rootOwner(name)); err != nil {
 			rep.Failed[name] = err
 			continue
 		}

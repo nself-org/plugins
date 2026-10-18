@@ -31,11 +31,11 @@ func TestKillProcsSkipsAReusedPID(t *testing.T) {
 }
 
 func TestMountsUnderFindsMountPointsAndDecodesEscapes(t *testing.T) {
-	if got := mountsUnder("/proc"); len(got) == 0 {
-		t.Fatal("/proc is a mount point and must be reported")
+	if got, ok := mountsUnder("/proc"); !ok || len(got) == 0 {
+		t.Fatalf("/proc is a mount point and must be reported: %v %v", got, ok)
 	}
-	if got := mountsUnder("/nonexistent-root-for-hygiene"); len(got) != 0 {
-		t.Fatalf("unexpected mounts %v", got)
+	if got, ok := mountsUnder("/nonexistent-root-for-hygiene"); !ok || len(got) != 0 {
+		t.Fatalf("unexpected mounts %v %v", got, ok)
 	}
 	if got := unescapeMount(`/mnt/a\040b`); got != "/mnt/a b" || !strings.Contains(unescapeMount(`x\134y`), `\`) {
 		t.Fatalf("decoded %q", got)

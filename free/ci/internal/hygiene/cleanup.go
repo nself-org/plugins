@@ -69,7 +69,11 @@ func (h *Host) killProcesses(ctx context.Context, attempt string, uid int, separ
 			problems = append(problems, firstLine(err.Error()))
 		}
 	}
-	procs, err := scanProcs(attempt, uid)
+	scanUID := 0 // a UID scan is valid only for a dedicated job UID: the caller's own UID is every process it owns
+	if separated {
+		scanUID = uid
+	}
+	procs, err := scanProcs(attempt, scanUID)
 	switch {
 	case err != nil && !isNoProc(err):
 		problems = append(problems, "process scan: "+firstLine(err.Error()))

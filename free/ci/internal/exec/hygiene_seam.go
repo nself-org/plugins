@@ -33,6 +33,8 @@ const (
 type Labelled struct {
 	ID      string
 	Attempt string
+	// Running is true for a container that is up (networks and volumes have no state).
+	Running bool
 }
 
 var resourceID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -51,7 +53,7 @@ func RuntimeListLabelled(ctx context.Context, binary string, kind ResourceKind, 
 	var args []string
 	switch kind {
 	case KindContainer:
-		args = []string{"ps", "-a", "--filter", filter, "--format", "{{.ID}} " + label}
+		args = []string{"ps", "-a", "--filter", filter, "--format", "{{.ID}} " + label + " {{.State}}"}
 	case KindNetwork:
 		args = []string{"network", "ls", "--filter", filter, "--format", "{{.ID}} " + label}
 	case KindVolume:
@@ -65,11 +67,22 @@ func RuntimeListLabelled(ctx context.Context, binary string, kind ResourceKind, 
 	}
 	var found []Labelled
 	for _, line := range strings.Split(string(out), "\n") {
-		f := strings.Fields(line)
-		if len(f) != 2 || !resourceID.MatchString(f[0]) || !safeID.MatchString(f[1]) || (attempt != "" && f[1] != attempt) {
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		found = append(found, Labelled{ID: f[0], Attempt: f[1]})
+		f := strings.Fields(line)
+		want := 2
+		if kind == KindContainer {
+			want = 3 // id, attempt label, state
+		}
+		if len(f) != want || !resourceID.MatchString(f[0]) || !safeID.MatchString(f[1]) {
+			// a labelled resource hygiene cannot name safely must not read as absent
+			return nil, coded("E613", "container runtime listed a resource with an unsafe name or label")
+		}
+		if attempt != "" && f[1] != attempt {
+			continue
+		}
+		found = append(found, Labelled{ID: f[0], Attempt: f[1], Running: want == 3 && f[2] == "running"})
 	}
 	return found, nil
 }

@@ -201,8 +201,12 @@ func TestSeparationRefusesUnknownAgentUID(t *testing.T) {
 		t.Fatalf("an unset agent uid must not pass: %v", err)
 	}
 	f = baseFacts()
-	f.CoordinatorUID = 0 // unset: treated as the agent's, so the agent's uid is still excluded
+	f.CoordinatorUID = 0 // unset and not declared absent: refused, never guessed
 	f.Isolation = "container"
+	if _, err := Separation(f, 0); codeOf(err) != CodeNoJobUID {
+		t.Fatalf("an unset coordinator uid must not pass: %v", err)
+	}
+	f.NoCoordinator = true
 	f.AgentUID = 65532
 	if p, err := Separation(f, 0); err != nil || p.UID == 65532 {
 		t.Fatalf("agent uid handed out: %+v %v", p, err)

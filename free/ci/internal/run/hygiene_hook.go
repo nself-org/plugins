@@ -18,6 +18,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,6 +30,7 @@ import (
 const (
 	orphanGrace    = 12 * time.Hour
 	hygieneTimeout = 90 * time.Second
+	sweepTimeout   = 30 * time.Second
 )
 
 // hygieneHook is the AttemptStartHook and Finalizer for workspace hygiene.
@@ -41,7 +43,10 @@ type hygieneHook struct {
 }
 
 // seenAttempt is an attempt the run started and the home it runs in.
-type seenAttempt struct{ id, home string }
+type seenAttempt struct {
+	id, home  string
+	container bool // the job asked for a container level: its runtime must answer
+}
 
 var hygieneHooks = &hygieneHook{byRun: map[string][]seenAttempt{}}
 
@@ -67,23 +72,26 @@ func ciHome(home string) string {
 	return filepath.Dir(dir)
 }
 
-func hygieneHost(home string) *hygiene.Host {
-	return &hygiene.Host{Base: filepath.Join(home, "work"), Home: home, MinAge: orphanGrace}
+func hygieneHost(home string, rt hygiene.Runtime) *hygiene.Host {
+	return &hygiene.Host{Base: filepath.Join(home, "work"), Home: home, MinAge: orphanGrace, Runtime: rt}
 }
 
 // AttemptStart records the attempt and, once per process, sweeps orphans.
 func (h *hygieneHook) AttemptStart(ctx context.Context, a AttemptInfo) error {
+	if runtime.GOOS == "windows" {
+		return nil // confined removal is not supported there (Epic D35); exec refuses local jobs too
+	}
 	home := ciHome(a.Home)
 	h.mu.Lock()
-	h.byRun[a.RunID] = append(h.byRun[a.RunID], seenAttempt{a.AttemptID, home})
+	h.byRun[a.RunID] = append(h.byRun[a.RunID], seenAttempt{a.AttemptID, home, a.Job.Isolation != "" && a.Job.Isolation != "process"})
 	h.mu.Unlock()
 	h.once.Do(func() {
 		if home == "" {
 			return
 		}
-		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), hygieneTimeout)
+		sctx, cancel := context.WithTimeout(ctx, sweepTimeout) // follows the job's context: Ctrl-C stops it
 		defer cancel()
-		_, err := hygieneHost(home).SweepOrphans(sctx, h.liveAttempts(home))
+		_, err := hygieneHost(home, hygiene.BatchRuntime(nil)).SweepOrphans(sctx, h.liveAttempts(home))
 		h.mu.Lock()
 		h.sweepErr = err
 		h.mu.Unlock()
@@ -138,6 +146,9 @@ func (h *hygieneHook) Name() string { return "zz-hygiene" }
 
 // Finalize cleans and leak-checks every attempt of the run, each in the home it ran in.
 func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	h.mu.Lock()
 	seen := h.byRun[r.RunID]
 	delete(h.byRun, r.RunID)
@@ -155,7 +166,7 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	for _, id := range outcomeAttempts(r.Jobs) {
 		if id != "" && !known[id] {
 			known[id] = true
-			attempts = append(attempts, seenAttempt{id, ciHome("")}) // not seen starting: the default home
+			attempts = append(attempts, seenAttempt{id: id, home: ciHome("")}) // not seen starting: the default home
 		}
 	}
 	if len(attempts) == 0 {
@@ -164,6 +175,7 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 	hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), hygieneTimeout)
 	defer cancel()
 	var problems, reasons []string
+	rt := hygiene.BatchRuntime(nil) // one listing per resource kind for the whole run
 	if sweepErr != nil {
 		problems = append(problems, "orphan sweep: "+sweepErr.Error())
 	}
@@ -172,7 +184,8 @@ func (h *hygieneHook) Finalize(ctx context.Context, r RunInfo) error {
 			problems = append(problems, "attempt "+a.id+": no state directory to clean")
 			continue
 		}
-		host := hygieneHost(a.home)
+		host := hygieneHost(a.home, rt)
+		host.RuntimeRequired = a.container
 		if err := host.Cleanup(hctx, a.id); err != nil {
 			problems = append(problems, err.Error())
 		}

@@ -76,14 +76,20 @@ func RemoveConfined(base, name string, logf func(string, ...any)) error {
 		say("hygiene: refused %s/%s: another device (mount point)", base, name)
 		return leakError(ReasonUnconfined, "the attempt root is a mount point")
 	}
-	if real, err := filepath.EvalSymlinks(base); err == nil {
-		if mounts := mountsUnder(filepath.Join(real, name)); len(mounts) > 0 {
-			say("hygiene: refused %s/%s: mount point inside the root: %s", base, name, mounts[0])
-			return leakError(ReasonUnconfined, "a mount point is inside the attempt root")
-		}
+	real, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return leakError(ReasonUnconfined, "the job root base cannot be resolved")
 	}
-	_ = root.Chmod(name, 0o700)
-	sub, err := root.OpenRoot(name)
+	mounts, ok := mountsUnder(filepath.Join(real, name))
+	if !ok {
+		say("hygiene: refused %s/%s: the mount table cannot be read", base, name)
+		return leakError(ReasonUnconfined, "mount points under the attempt root cannot be checked")
+	}
+	if len(mounts) > 0 {
+		say("hygiene: refused %s/%s: mount point inside the root: %s", base, name, mounts[0])
+		return leakError(ReasonUnconfined, "a mount point is inside the attempt root")
+	}
+	sub, err := openDir(root, name, info)
 	if err != nil {
 		say("hygiene: refused %s/%s: %v", base, name, err)
 		return leakError(ReasonUnconfined, "attempt root could not be opened without following links")
@@ -152,8 +158,7 @@ func emptyDir(r *os.Root, dev uint64, depth int, say func(string, ...any)) (int,
 			note(1, leakError(ReasonUnconfined, "mount point inside the attempt root"))
 			continue
 		}
-		_ = r.Chmod(name, 0o700)
-		child, err := r.OpenRoot(name)
+		child, err := openDir(r, name, info)
 		if err != nil {
 			say("hygiene: refused %s: %v", name, err)
 			note(1, err)
@@ -175,6 +180,23 @@ func emptyDir(r *os.Root, dev uint64, depth int, say func(string, ...any)) (int,
 		}
 	}
 	return failed, first
+}
+
+// openDir opens the directory name of r. A directory the caller cannot enter is made traversable
+// first, but only after it is confirmed to still be the entry that was inspected, so a name swapped
+// for a link cannot have its target's mode changed.
+func openDir(r *os.Root, name string, inspected fs.FileInfo) (*os.Root, error) {
+	d, err := r.OpenRoot(name)
+	if err == nil {
+		return d, nil
+	}
+	if now, lerr := r.Lstat(name); lerr != nil || !os.SameFile(inspected, now) {
+		return nil, err
+	}
+	if cerr := r.Chmod(name, 0o700); cerr != nil {
+		return nil, err
+	}
+	return r.OpenRoot(name)
 }
 
 // deviceOf returns the device number of a stat result.

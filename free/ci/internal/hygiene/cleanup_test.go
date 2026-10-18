@@ -95,6 +95,7 @@ func TestCleanupRefusesBadAttemptAndDryRunKeepsEverything(t *testing.T) {
 
 func TestSweepOrphansSparesLiveAndYoungAttempts(t *testing.T) {
 	h, rt := testHost(t)
+	h.IsAttempt = func(string) bool { return true }
 	live := seedRoot(t, h, "live1")
 	orphan := seedRoot(t, h, "orphan1")
 	young := seedRoot(t, h, "young1")
@@ -144,6 +145,7 @@ func TestSweepOrphansSparesLiveAndYoungAttempts(t *testing.T) {
 
 func TestSweepOrphansReportsFailures(t *testing.T) {
 	h, rt := testHost(t)
+	h.IsAttempt = func(string) bool { return true }
 	seedRoot(t, h, "orphan1")
 	rt.add(exec.KindVolume, "stuck", "orphan1")
 	rt.failRm = "stuck"
@@ -244,5 +246,111 @@ func TestCleanupJobRunsAsTheJobUserForSeparatedAttempts(t *testing.T) {
 	seedRoot(t, h, "att3")
 	if err := h.CleanupJob(context.Background(), "att3", uid); codeOf(err) != CodeLeak || !strings.Contains(err.Error(), "password") {
 		t.Fatalf("want E681 naming the refusal, got %v", err)
+	}
+}
+
+func TestSweepOrphansOnlyTouchesAttemptShapedNames(t *testing.T) {
+	h, _ := testHost(t)
+	old := time.Now().Add(-48 * time.Hour)
+	for _, name := range []string{"r1-ab12.build-xy.a1", "nselfci-1a2b3c4d", "nselfci-1a2b3c4d.lock", "keep.txt"} {
+		path := filepath.Join(h.Base, name)
+		if err := os.MkdirAll(h.Base, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Chtimes(path, old, old)
+	}
+	rep, err := h.SweepOrphans(context.Background(), nil)
+	if err != nil || strings.Join(rep.Removed, ",") != "r1-ab12.build-xy.a1" {
+		t.Fatalf("removed %v: %v", rep.Removed, err)
+	}
+	for _, name := range []string{"nselfci-1a2b3c4d", "nselfci-1a2b3c4d.lock", "keep.txt"} {
+		if _, err := os.Lstat(filepath.Join(h.Base, name)); err != nil {
+			t.Errorf("%s belongs to another package and was swept", name)
+		}
+	}
+}
+
+type countingRuntime struct {
+	*fakeRuntime
+	lists int
+}
+
+func (c *countingRuntime) List(ctx context.Context, k exec.ResourceKind, a string) ([]exec.Labelled, error) {
+	c.lists++
+	return c.fakeRuntime.List(ctx, k, a)
+}
+
+func TestBatchRuntimeListsEachKindOnceAndTracksRemovals(t *testing.T) {
+	inner := &countingRuntime{fakeRuntime: newFakeRuntime()}
+	inner.add(exec.KindContainer, "c1", "a1")
+	inner.add(exec.KindContainer, "c2", "a2")
+	rt := BatchRuntime(inner)
+	h := &Host{Runtime: rt}
+	for _, a := range []string{"a1", "a2", "a3", "a1"} {
+		if err := h.removeResources(context.Background(), a); err != nil {
+			t.Fatal(err)
+		}
+		if rep, err := h.LeakCheck(context.Background(), a, 0); err != nil || !rep.Clean() {
+			t.Fatalf("%s: %v %+v", a, err, rep)
+		}
+	}
+	if inner.lists != len(Kinds) {
+		t.Fatalf("%d runtime listings for 4 attempts, want one per kind (%d)", inner.lists, len(Kinds))
+	}
+	if inner.has(exec.KindContainer, "c1") || inner.has(exec.KindContainer, "c2") {
+		t.Fatal("the batch runtime did not remove")
+	}
+}
+
+func TestSweepSparesAttemptsWithARunningContainerUnlessItOwnsTheDaemon(t *testing.T) {
+	h, rt := testHost(t)
+	h.IsAttempt = func(string) bool { return true }
+	root := seedRoot(t, h, "sib1")
+	old := time.Now().Add(-48 * time.Hour)
+	_ = os.Chtimes(root, old, old)
+	rt.add(exec.KindContainer, "c-sib", "sib1")
+	rt.running = map[string]bool{"c-sib": true}
+	rep, err := h.SweepOrphans(context.Background(), nil)
+	if err != nil || len(rep.Removed) != 0 || !rt.has(exec.KindContainer, "c-sib") {
+		t.Fatalf("a running container of a sibling must be left alone: %v %+v", err, rep)
+	}
+	if _, err := os.Lstat(root); err != nil {
+		t.Fatal("the sibling's root was removed")
+	}
+	h.OwnsRuntime = true
+	if rep, err = h.SweepOrphans(context.Background(), nil); err != nil || len(rep.Removed) != 1 {
+		t.Fatalf("a host that owns the daemon sweeps it: %v %+v", err, rep)
+	}
+}
+
+func TestMissingRuntimeIsEmptyUnlessRequired(t *testing.T) {
+	h, rt := testHost(t)
+	rt.absent = true
+	if rep, err := h.LeakCheck(context.Background(), "att1", 0); err != nil || !rep.Clean() {
+		t.Fatalf("no runtime installed: %v %+v", err, rep)
+	}
+	h.RuntimeRequired = true
+	if rep, err := h.LeakCheck(context.Background(), "att1", 0); codeOf(err) != CodeLeak || !hasKind(rep, LeakUnverified) {
+		t.Fatalf("a required runtime that vanished must fail closed: %v %+v", err, rep)
+	}
+}
+
+func TestSweepRefusesASymlinkedBase(t *testing.T) {
+	h, _ := testHost(t)
+	other := t.TempDir()
+	if err := os.Mkdir(filepath.Join(other, "x.a1"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(other, h.Base); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.SweepOrphans(context.Background(), nil); codeOf(err) != CodeLeak {
+		t.Fatalf("want a refusal, got %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(other, "x.a1")); err != nil {
+		t.Fatal("the sweep followed the symlinked base")
 	}
 }

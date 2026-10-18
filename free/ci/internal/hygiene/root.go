@@ -48,6 +48,10 @@ type Host struct {
 	// Only a node that is the sole user of its container daemon may set it; otherwise a sweep would
 	// remove the live jobs of another CI home, another OS user or a TEAM agent on the same daemon.
 	OwnsRuntime bool
+	// IsAttempt says which names under Base are attempt roots SweepOrphans may remove; nil accepts
+	// the executor's `<job row>.a<N>` names only. The agent, whose Base holds nothing else, may
+	// accept every safe name.
+	IsAttempt func(name string) bool
 	// Jobs runs removal and kill as the job user of a separated attempt (job-shim, userns); nil means
 	// the attempt ran under the caller's UID.
 	Jobs JobRunner

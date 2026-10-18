@@ -50,6 +50,7 @@ func scanProcs(attempt string, uid int) ([]procEntry, error) {
 			continue
 		}
 		dir := filepath.Join(procRoot, e.Name())
+		_, start := statFields(dir)
 		status, err := os.ReadFile(filepath.Join(dir, "status"))
 		if err != nil {
 			continue
@@ -67,7 +68,10 @@ func scanProcs(attempt string, uid int) ([]procEntry, error) {
 		if !match {
 			continue
 		}
-		pg, start := statFields(dir)
+		pg, again := statFields(dir)
+		if start == "" || again != start {
+			continue // the PID was reused while it was being read: the fields describe two processes
+		}
 		out = append(out, procEntry{PID: pid, PGID: pg, UID: puid, Cmd: name, Start: start, Inodes: socketInodes(dir)})
 	}
 	return out, nil

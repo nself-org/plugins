@@ -18,6 +18,8 @@ type fakeRuntime struct {
 	failRm  string            // id whose removal fails
 	failLs  bool
 	down    bool // installed but not answering
+	absent  bool // no runtime installed
+	running map[string]bool
 	removed []string
 }
 
@@ -38,13 +40,16 @@ func (f *fakeRuntime) List(_ context.Context, kind exec.ResourceKind, attempt st
 	if f.down {
 		return nil, &RuntimeDownError{Binaries: []string{"docker"}}
 	}
+	if f.absent {
+		return nil, ErrNoRuntime
+	}
 	var out []exec.Labelled
 	for k, a := range f.items {
 		id, ok := strings.CutPrefix(k, string(kind)+"/")
 		if !ok || a == "" || (attempt != "" && a != attempt) {
 			continue // unlabelled resources are invisible to hygiene
 		}
-		out = append(out, exec.Labelled{ID: id, Attempt: a})
+		out = append(out, exec.Labelled{ID: id, Attempt: a, Running: f.running[id]})
 	}
 	return out, nil
 }

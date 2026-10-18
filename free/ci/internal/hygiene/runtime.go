@@ -24,6 +24,9 @@ type Runtime interface {
 	Remove(ctx context.Context, kind exec.ResourceKind, id, attempt string) error
 }
 
+// ErrNoRuntime says no container runtime CLI is installed at all.
+var ErrNoRuntime = errors.New("no container runtime is installed")
+
 // RuntimeDownError says a container runtime is installed but did not answer (daemon stopped, socket
 // not permitted, timeout). The resources it may hold could not be listed.
 type RuntimeDownError struct{ Binaries []string }
@@ -37,8 +40,11 @@ func (e *RuntimeDownError) Error() string {
 func (h *Host) listResources(ctx context.Context, kind exec.ResourceKind, attempt string) (found []exec.Labelled, note string, err error) {
 	found, err = h.runtime().List(ctx, kind, attempt)
 	var down *RuntimeDownError
-	if errors.As(err, &down) && !h.RuntimeRequired {
+	switch {
+	case errors.As(err, &down) && !h.RuntimeRequired:
 		return found, string(kind) + "s: " + down.Error(), nil
+	case errors.Is(err, ErrNoRuntime) && !h.RuntimeRequired:
+		return found, "", nil // nothing is installed, so nothing can be running
 	}
 	return found, "", err
 }
@@ -111,6 +117,7 @@ func (r *ExecRuntime) available(ctx context.Context, bin string) (runtimeState, 
 func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
 	var out []exec.Labelled
 	var down []string
+	present := 0
 	for _, bin := range r.binaries() {
 		state, err := r.available(ctx, bin)
 		if err != nil {
@@ -123,6 +130,7 @@ func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt 
 		if state == runtimeAbsent {
 			continue
 		}
+		present++
 		found, err := exec.RuntimeListLabelled(ctx, bin, kind, attempt)
 		if err != nil {
 			return nil, err
@@ -135,6 +143,9 @@ func (r *ExecRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt 
 	if len(down) > 0 {
 		return out, &RuntimeDownError{Binaries: down}
 	}
+	if present == 0 {
+		return nil, ErrNoRuntime
+	}
 	return out, nil
 }
 
@@ -146,4 +157,61 @@ func (r *ExecRuntime) Remove(ctx context.Context, kind exec.ResourceKind, id, at
 		}
 	}
 	return errors.New("hygiene: resource id has no runtime prefix")
+}
+
+// BatchRuntime wraps a Runtime so that a pass over many attempts lists each resource kind once
+// and answers per-attempt questions from that snapshot (a run of a hundred jobs would otherwise
+// ask the daemon hundreds of times). Removals update the snapshot. Use one per pass, not for long.
+func BatchRuntime(inner Runtime) Runtime {
+	if inner == nil {
+		inner = defaultRuntime
+	}
+	return &batchRuntime{inner: inner, snap: map[exec.ResourceKind]*snapshot{}}
+}
+
+type snapshot struct {
+	items []exec.Labelled
+	err   error
+}
+
+type batchRuntime struct {
+	inner Runtime
+	mu    sync.Mutex
+	snap  map[exec.ResourceKind]*snapshot
+}
+
+func (b *batchRuntime) List(ctx context.Context, kind exec.ResourceKind, attempt string) ([]exec.Labelled, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	sn := b.snap[kind]
+	if sn == nil {
+		items, err := b.inner.List(ctx, kind, "")
+		sn = &snapshot{items: items, err: err}
+		b.snap[kind] = sn
+	}
+	var out []exec.Labelled
+	for _, it := range sn.items {
+		if attempt == "" || it.Attempt == attempt {
+			out = append(out, it)
+		}
+	}
+	return out, sn.err
+}
+
+func (b *batchRuntime) Remove(ctx context.Context, kind exec.ResourceKind, id, attempt string) error {
+	if err := b.inner.Remove(ctx, kind, id, attempt); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if sn := b.snap[kind]; sn != nil {
+		kept := sn.items[:0:0]
+		for _, it := range sn.items {
+			if it.ID != id {
+				kept = append(kept, it)
+			}
+		}
+		sn.items = kept
+	}
+	return nil
 }

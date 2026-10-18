@@ -125,8 +125,27 @@ func TestLeakCheckByJobUIDFindsOnlyThatUID(t *testing.T) {
 	if err != nil || !rep.Clean() {
 		t.Fatalf("a different job uid matched: %v %+v", err, rep)
 	}
+	// the caller's own UID is never a job UID: it would match the operator's whole session, so the
+	// check falls back to the attempt tag and an unrelated own-UID process is not a leak
 	rep, err = h.LeakCheck(context.Background(), "uid-clean", os.Geteuid())
-	if codeOf(err) != CodeLeak || !hasKind(rep, LeakProcess) {
-		t.Fatalf("own uid scan should see the helper: %v %+v", err, rep)
+	if err != nil || !rep.Clean() {
+		t.Fatalf("own uid must not scan by uid: %v %+v", err, rep)
+	}
+}
+
+// TestCleanupJobNeverKillsTheCallersOwnProcesses is the regression for CleanupJob(attempt, euid)
+// (the owner-exception UID): it must kill by attempt tag only, never every process of the caller.
+func TestCleanupJobNeverKillsTheCallersOwnProcesses(t *testing.T) {
+	h, _ := testHost(t)
+	_, _, bystander := daemonise(t, "someone-else")
+	_, _, mine := daemonise(t, "att-own")
+	if err := h.CleanupJob(context.Background(), "att-own", os.Geteuid()); err != nil {
+		t.Fatal(err)
+	}
+	if alive(mine) {
+		t.Fatal("the attempt's own process survived")
+	}
+	if syscall.Kill(bystander.Process.Pid, 0) != nil {
+		t.Fatal("cleanup with the caller's UID killed an unrelated process of the same user")
 	}
 }

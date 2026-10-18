@@ -74,7 +74,11 @@ func (h *Host) LeakCheck(ctx context.Context, attempt string, uid int) (Report, 
 			rep.Leaks = append(rep.Leaks, Leak{LeakUnverified, "job root: " + firstLine(err.Error())})
 		}
 	}
-	h.checkProcs(&rep, attempt, uid)
+	procUID := uid
+	if uid <= 0 || uid == os.Geteuid() {
+		procUID = 0 // the caller's own UID would match its whole session: scan by attempt tag only
+	}
+	h.checkProcs(&rep, attempt, procUID)
 	if uid > 0 && uid != os.Geteuid() {
 		dirs := h.ScanDirs
 		if dirs == nil {
