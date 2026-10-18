@@ -305,6 +305,18 @@ func TestGateAcceptDocument(t *testing.T) {
 	}
 }
 
+// An unnamed required job is never satisfied, even by an unnamed check.
+func TestGateAccept_EmptyJobNameNeverSatisfied(t *testing.T) {
+	ev := goodEvidence()
+	ev.Checks = append(ev.Checks, model.Check{ID: "anon", JobID: "", Kind: "test", Tool: "x", Required: true, Substantive: true, Result: "pass"})
+	ev.Counts = model.Counts{Pass: 4, Total: 4}
+	g := goodGate(ev)
+	g.RequiredJobs = []string{"build", "lint", ""}
+	if got := attest.GateAccept(ev, g); !sameReasons(got, []attest.Reason{attest.ReasonJobsMismatch}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
 func TestGateAccept_NamedPipelineIsAccepted(t *testing.T) {
 	ev := goodEvidence()
 	ev.Pipeline.Kind = "named"
