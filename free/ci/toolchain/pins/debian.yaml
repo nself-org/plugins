@@ -1,0 +1,11 @@
+# Pin source of the toolchain image (P7-CI-43). Base image of every Dockerfile stage.
+name: debian
+kind: base-image
+version: trixie-slim
+purpose: base of every stage of the toolchain image (index digest, both platforms)
+owner: free/ci/toolchain
+image: docker.io/library/debian
+digest: sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+upstream:
+  type: oci
+  ref: docker.io/library/debian:trixie-slim
