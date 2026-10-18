@@ -3,25 +3,28 @@
 package run
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"syscall"
 )
 
-// lockSlot takes slot n's advisory lock. ok is false when another process holds it; when the
-// lock file cannot be used at all the slot is granted process-locally (nil file).
+// lockSlot takes slot n's advisory lock. ok is false when another process holds it or the
+// lock cannot be taken (fail closed: an unusable lock file never grants a slot, or two
+// coordinators could share a job UID). Only an unknown home (dir "") is process-local.
 func lockSlot(dir string, n int) (*os.File, bool) {
-	if dir == "" || os.MkdirAll(dir, 0700) != nil {
+	if dir == "" {
 		return nil, true
+	}
+	if os.MkdirAll(dir, 0700) != nil {
+		return nil, false
 	}
 	f, err := os.OpenFile(filepath.Join(dir, "slot-"+itoa(n)+".lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return nil, true
+		return nil, false
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close()
-		return nil, !errors.Is(err, syscall.EWOULDBLOCK)
+		return nil, false
 	}
 	return f, true
 }

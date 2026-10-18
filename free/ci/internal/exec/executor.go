@@ -91,7 +91,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		e.Isolation = baselineIsolator{}
 	}
 	if err := e.Isolation.Prepare(ctx, &s); err != nil {
-		result.Err = err
+		// a node that cannot isolate is not the job's fault
+		result.Err, result.Attempt.FailureClass = err, "infra"
 		return
 	}
 	if e.Env == nil {
@@ -141,7 +142,8 @@ func (e *Executor) Run(ctx context.Context, s JobSpec) (result AttemptResult) {
 		return
 	}
 	defer func() {
-		if err := os.RemoveAll(workspace); err != nil {
+		if err := os.RemoveAll(workspace); err != nil && result.Err == nil && result.Attempt.State == "passed" {
+			// only a clean run is turned into a failure; a failed or cancelled attempt keeps its own class
 			result.Err = coded("E610", "workspace cleanup failed: "+err.Error())
 			result.Attempt.State = "failed"
 			result.Attempt.FailureClass = "infra"

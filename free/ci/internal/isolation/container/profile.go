@@ -166,7 +166,7 @@ func (pl *planner) Plan(r exec.ContainerRun) (exec.ContainerCommand, error) {
 }
 
 // cleanupScript removes whatever the job UID created under the workspace mount.
-const cleanupScript = `rm -rf -- /repo/* /repo/.[!.]* /repo/..?* 2>/dev/null; true`
+const cleanupScript = `chmod -R u+rwX /repo 2>/dev/null; rm -rf -- /repo/* /repo/.[!.]* /repo/..?* 2>/dev/null; true`
 
 func (pl *planner) Cleanup(r exec.ContainerRun) (*exec.ContainerCommand, error) {
 	r.Name += "-clean"

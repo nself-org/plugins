@@ -17,6 +17,9 @@ import (
 // pipe exec feeds, so no secret value touches disk or an argv (Epic D5).
 const envFileStdin = "/dev/stdin"
 
+// minJobUID is the first job UID (Epic D12: 65532 + slot).
+const minJobUID = 65532
+
 var (
 	runtimeBinary = regexp.MustCompile(`^(docker|podman)$`)
 	// resourceSignatures are what a job prints when the kernel refuses a fork.
@@ -67,6 +70,9 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 		if err := checkFlagValue(name, value, run); err != nil {
 			return err
 		}
+		if name == "--name" && value != run.Name && value != run.Name+"-clean" {
+			return bad("container name is not the attempt's: " + value)
+		}
 		seen[name+"="+value] = true
 		named[name] = true
 	}
@@ -78,10 +84,13 @@ func checkContainerCommand(c ContainerCommand, run ContainerRun) error {
 			return bad("missing " + strings.TrimSuffix(want, "="))
 		}
 	}
-	for _, want := range []string{"--user", "--network"} { // no default user (root) and no default network
+	for _, want := range []string{"--user", "--network", "--pids-limit", "--memory", "--cpus", "--name", "--label"} { // no default user (root), network or limit
 		if !named[want] {
 			return bad("missing " + want)
 		}
+	}
+	if !seen["--label=nself.ci.attempt="+run.AttemptID] {
+		return bad("missing the attempt label")
 	}
 	return nil
 }
@@ -107,8 +116,15 @@ func checkFlagValue(name, value string, run ContainerRun) error {
 		if m == nil || m[1] != m[2] {
 			return bad("user must be a numeric uid:uid, not root")
 		}
+		if n, _ := strconv.Atoi(m[1]); n < minJobUID {
+			return bad("job user is below the job UID range")
+		}
 		if uid := strconv.Itoa(os.Getuid()); m[1] == uid || m[1] == strconv.Itoa(os.Geteuid()) {
 			return bad("job user equals the agent user")
+		}
+	case "--env":
+		if value != "HOME=/tmp" && value != "TMPDIR=/tmp" {
+			return bad("env value on argv: only HOME and TMPDIR may be set there")
 		}
 	case "--runtime":
 		if value != "runsc" {

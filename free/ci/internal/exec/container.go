@@ -126,11 +126,15 @@ func containerStopper(binary, name string, grace time.Duration) func() {
 			stopBudget := grace * 3 / 4
 			stopCtx, cancelStop := context.WithTimeout(context.Background(), stopBudget)
 			seconds := int(stopBudget / time.Second)
-			_ = osexec.CommandContext(stopCtx, binary, "stop", "-t", strconv.Itoa(seconds), name).Run()
+			stop := osexec.CommandContext(stopCtx, binary, "stop", "-t", strconv.Itoa(seconds), name)
+			stop.Env = dockerHostEnv()
+			_ = stop.Run()
 			cancelStop()
 			if remain := time.Until(deadline); remain > 0 {
 				rmCtx, cancelRM := context.WithTimeout(context.Background(), remain)
-				_ = osexec.CommandContext(rmCtx, binary, "rm", "-f", name).Run()
+				rm := osexec.CommandContext(rmCtx, binary, "rm", "-f", name)
+				rm.Env = dockerHostEnv()
+				_ = rm.Run()
 				cancelRM()
 			}
 		})

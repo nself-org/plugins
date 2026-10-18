@@ -93,6 +93,9 @@ func (e *Executor) runPlanned(ctx context.Context, s JobSpec, workspace string, 
 		err = coded("E613", "container run: "+err.Error())
 	}
 	e.cleanupPlanned(s, run)
+	if err == nil && code == 125 { // the runtime itself failed (daemon, image pull, option), not the job
+		err = coded("E613", "container runtime failed to start the container (exit 125)")
+	}
 	return code, resourceReason(ctx, code, tail.String()), err
 }
 

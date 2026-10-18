@@ -1,6 +1,8 @@
 package run
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -57,4 +59,16 @@ func TestSlotPoolWithoutADirIsProcessLocal(t *testing.T) {
 	if a, b := p.take(""), p.take(""); a == b {
 		t.Fatalf("%d %d", a, b)
 	}
+}
+
+func TestSlotLockFailureFailsClosed(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "notadir")
+	if err := os.WriteFile(file, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var p slotPool
+	if n := p.take(filepath.Join(file, "slots")); n != -1 {
+		t.Fatalf("an unusable lock dir granted slot %d", n)
+	}
+	p.put(-1) // must not panic
 }

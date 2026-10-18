@@ -4,6 +4,7 @@ package exec
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -47,7 +48,8 @@ func fakeRuntimeStdin(t *testing.T, out string, code string) (calls func() []str
 type hardPlanner struct{ unhardened bool }
 
 func (p hardPlanner) Plan(r ContainerRun) (ContainerCommand, error) {
-	args := []string{"run", "--rm", "--name", r.Name, "--user", fixtureUID(), "--network=none", "--env-file", r.EnvFile, "--mount", "type=bind,src=" + r.Workspace + ",dst=/repo"}
+	args := append([]string{"run", "--rm"}, limitFlags(r)...)
+	args = append(args, "--user", fixtureUID(), "--network=none", "--env-file", r.EnvFile, "--mount", "type=bind,src="+r.Workspace+",dst=/repo")
 	if !p.unhardened {
 		args = append(args, "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only")
 	}
@@ -55,8 +57,15 @@ func (p hardPlanner) Plan(r ContainerRun) (ContainerCommand, error) {
 	return ContainerCommand{Binary: "docker", Args: append(args, r.Command...)}, nil
 }
 
+// limitFlags are the flags the backstop requires on every planned container.
+func limitFlags(r ContainerRun) []string {
+	return []string{"--name", r.Name, "--label", "nself.ci.attempt=" + r.AttemptID, "--pids-limit", "256", "--memory", "512m", "--cpus", "1"}
+}
+
 func (hardPlanner) Cleanup(r ContainerRun) (*ContainerCommand, error) {
-	return &ContainerCommand{Binary: "docker", Args: []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "--network=none", "--name", r.Name + "-clean", "--entrypoint", "sh", r.Image, "-c", "true"}}, nil
+	r.Name += "-clean"
+	args := append([]string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "--network=none", "--entrypoint", "sh"}, limitFlags(r)...)
+	return &ContainerCommand{Binary: "docker", Args: append(args, r.Image, "-c", "true")}, nil
 }
 
 func plannedSpec(t *testing.T, id string, p ContainerPlanner) JobSpec {
@@ -121,6 +130,15 @@ func TestPlannedContainerReasons(t *testing.T) {
 	}
 }
 
+func TestPlannedContainerRuntimeFailureIsNotTheJobs(t *testing.T) {
+	fakeRuntime(t, "", "125")
+	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-125", hardPlanner{}))
+	var e *Error
+	if !errors.As(res.Err, &e) || e.Code != "E613" {
+		t.Fatalf("exit 125 must be an E613 runtime failure: %+v", res)
+	}
+}
+
 func TestPlannedContainerRefusesUnhardenedPlan(t *testing.T) {
 	calls := fakeRuntime(t, "", "0")
 	res := (&Executor{}).Run(context.Background(), plannedSpec(t, "plan-bad", hardPlanner{unhardened: true}))
@@ -173,8 +191,8 @@ func TestPlannedWorkspaceOpenedToJobUID(t *testing.T) {
 }
 
 func TestCheckContainerCommand(t *testing.T) {
-	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws"}
-	good := []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged"}
+	run := ContainerRun{Image: "alpine:3.19", Workspace: "/w/ws", Name: "nself-ci-a1", AttemptID: "a1"}
+	good := append(append([]string{"run"}, limitFlags(run)...), "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--mount", "type=bind,src=/w/ws,dst=/repo", "--user", fixtureUID(), "--network=none", "--runtime", "runsc", "--userns=auto", "alpine:3.19", "go", "test", "-v", "--privileged")
 
 	if err := checkContainerCommand(ContainerCommand{"docker", good}, run); err != nil {
 		t.Fatalf("job words after the image must not matter: %v", err)
@@ -199,7 +217,7 @@ func TestCheckContainerCommand(t *testing.T) {
 		"nocapdrop":   {"docker", []string{"run", "--security-opt", "no-new-privileges", "--read-only", "alpine:3.19", "x"}},
 		"notrun":      {"docker", []string{"exec", "alpine:3.19"}},
 		"binary":      {"sh", good},
-		"noimage":     {"docker", good[:7]},
+		"noimage":     {"docker", good[:13]},
 		"nouser":      {"docker", []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--network=none", "alpine:3.19", "x"}},
 		"nonetwork":   {"docker", []string{"run", "--cap-drop=ALL", "--security-opt", "no-new-privileges", "--read-only", "--user", fixtureUID(), "alpine:3.19", "x"}},
 		"envfiledisk": withFlag("--env-file", "/tmp/secrets"),
@@ -230,11 +248,32 @@ func TestCheckContainerCommand(t *testing.T) {
 		"mem0":        withFlag("--memory=0m"),
 		"memg":        withFlag("--memory=1g"),
 		"cpus0":       withFlag("--cpus=0"),
+		"nopids":      without(good, "--pids-limit", 2),
+		"nomemory":    without(good, "--memory", 2),
+		"nocpus":      without(good, "--cpus", 2),
+		"nolabel":     without(good, "--label", 2),
+		"noname":      without(good, "--name", 2),
+		"othername":   withFlag("--name", "someone-else"),
+		"lowuid":      withFlag("--user", "1:1"),
+		"envsecret":   withFlag("--env", "TOKEN=hunter2"),
 	} {
 		if err := checkContainerCommand(c, run); err == nil {
 			t.Errorf("%s: accepted %v", name, c.Args)
 		}
 	}
+}
+
+// without returns a command whose argv lacks flag and its width-1 value(s).
+func without(args []string, flag string, width int) ContainerCommand {
+	out := []string{}
+	for i := 0; i < len(args); i++ {
+		if args[i] == flag {
+			i += width - 1
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return ContainerCommand{"docker", out}
 }
 
 func TestRuntimeQueryAndRemoveRefuseOtherVerbs(t *testing.T) {

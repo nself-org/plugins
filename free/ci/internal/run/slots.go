@@ -34,14 +34,18 @@ func slotDir(home string) string {
 	return filepath.Join(home, "slots")
 }
 
-// take returns the lowest slot nobody holds.
+// maxSlots bounds the search; take returns -1 (JobUID refuses it, so the attempt fails as
+// infra) when every slot is held or its lock is unusable.
+const maxSlots = 256
+
+// take returns the lowest slot nobody holds, or -1.
 func (p *slotPool) take(dir string) int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.held == nil {
 		p.held = map[int]*os.File{}
 	}
-	for n := 0; ; n++ {
+	for n := 0; n < maxSlots; n++ {
 		if _, mine := p.held[n]; mine {
 			continue
 		}
@@ -50,10 +54,14 @@ func (p *slotPool) take(dir string) int {
 			return n
 		}
 	}
+	return -1
 }
 
 // put releases a slot.
 func (p *slotPool) put(n int) {
+	if n < 0 {
+		return
+	}
 	p.mu.Lock()
 	f := p.held[n]
 	delete(p.held, n)
