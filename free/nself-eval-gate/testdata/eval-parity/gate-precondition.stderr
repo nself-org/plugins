@@ -1,0 +1,2 @@
+Precondition not met: eval plugin returned HTTP 503: {"error": "service unavailable"}
+hint: ensure plugin-retrieval and nself-ai-gateway are running.

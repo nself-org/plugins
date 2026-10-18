@@ -1,0 +1,29 @@
+{
+  "schema_ver": 1,
+  "id": "run-pass",
+  "suite_slug": "pass-suite",
+  "status": "passed",
+  "pass_rate": 1,
+  "suite_score": 0.9125,
+  "passed": true,
+  "tasks": [
+    {
+      "task_id": "t-1",
+      "input": "what colour is the sky",
+      "output": "blue",
+      "score": 1,
+      "passed": true,
+      "scoring_mode": "exact"
+    },
+    {
+      "task_id": "t-2",
+      "input": "name a fruit that is red and sweet, then explain at length why it is considered sweet",
+      "output": "apple",
+      "score": 0.825,
+      "passed": true,
+      "scoring_mode": "rubric",
+      "rationale": "close enough"
+    }
+  ],
+  "precondition_failed": false
+}

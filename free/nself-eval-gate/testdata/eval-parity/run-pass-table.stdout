@@ -1,0 +1,10 @@
+Suite:        pass-suite
+Run ID:       run-pass
+Status:       PASSED
+Pass Rate:    100.0%
+Suite Score:  0.9125
+
+TASK                      MODE      SCORE   PASS  RATIONALE
+------------------------  --------  ------  ----  ------------------------------
+t-1                       exact     1.0000  yes   
+t-2                       rubric    0.8250  yes   close enough

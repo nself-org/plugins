@@ -1,0 +1,3 @@
+running eval suite: pre-suite
+run queued: run-pre (polling...)
+error: precondition not met — BGE-M3 or AI gateway unavailable

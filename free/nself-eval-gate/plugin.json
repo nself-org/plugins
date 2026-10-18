@@ -1,6 +1,44 @@
 {
   "author": "nself",
+  "binaryName": "nself-eval",
   "category": "development",
+  "commands": {
+    "binary": "nself-eval",
+    "command": "eval",
+    "json": "none",
+    "output": "document",
+    "side_effect": "remote",
+    "subcommands": [
+      {
+        "flags": [
+          {
+            "name": "tier",
+            "required": true,
+            "type": "string",
+            "usage": "Autonomy tier to check (required): supervised|semi-auto|full-auto"
+          },
+          {
+            "default": "http://localhost:3770",
+            "name": "eval-url",
+            "type": "string",
+            "usage": "nself-eval-gate plugin base URL"
+          },
+          {
+            "default": "primary",
+            "name": "source-account",
+            "type": "string",
+            "usage": "Source account ID header value"
+          }
+        ],
+        "json": "legacy",
+        "name": "gate",
+        "output": "document",
+        "side_effect": "read",
+        "summary": "Check whether an autonomy tier gate is cleared"
+      }
+    ],
+    "summary": "Run an eval suite or check an autonomy tier gate via the nself-eval-gate service"
+  },
   "description": "Eval harness and autonomy-tier gate for nSelf. Three-mode scoring (exact, semantic via BGE-M3, rubric via LLM-as-judge), recall-quality precision/recall/fact_f1 metrics, CI integration via nself ci eval, and autonomy-tier threshold enforcement.",
   "entryPoint": "binary",
   "envVars": [
@@ -96,6 +134,7 @@
       "outbound"
     ]
   },
+  "pluginType": "cli",
   "port": 3770,
   "repository": "https://github.com/nself-org/plugins",
   "requires": {

@@ -1,0 +1,3 @@
+Validation failed (2 error(s)):
+  [suite] required
+  [tasks] must not be empty
