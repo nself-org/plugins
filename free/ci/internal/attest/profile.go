@@ -132,6 +132,17 @@ func (p Profile) privateHost(host string) bool {
 	if h == "" || h == "localhost" || (!strings.Contains(h, ".") && !strings.Contains(h, ":")) {
 		return true // empty, localhost or a bare single-label name
 	}
+	// configured hosts and known runner ids first: a public address can be a known runner
+	for _, x := range p.hosts {
+		if x != "" && strings.EqualFold(strings.TrimSuffix(x, "."), h) {
+			return true
+		}
+	}
+	for x := range p.aliases { // known runner ids
+		if strings.EqualFold(strings.TrimSuffix(x, "."), h) {
+			return true
+		}
+	}
 	if addr, ok := parseLooseAddr(h); ok {
 		return privateAddr(addr)
 	}
@@ -140,16 +151,6 @@ func (p Profile) privateHost(host string) bool {
 	}
 	for _, s := range privateSuffixes {
 		if strings.HasSuffix(h, s) {
-			return true
-		}
-	}
-	for _, x := range p.hosts {
-		if x != "" && strings.EqualFold(strings.TrimSuffix(x, "."), h) {
-			return true
-		}
-	}
-	for x := range p.aliases { // known runner ids
-		if strings.EqualFold(strings.TrimSuffix(x, "."), h) {
 			return true
 		}
 	}

@@ -397,3 +397,16 @@ func TestProfileText_ManyUserAtHostIsBounded(t *testing.T) {
 		t.Fatal("user names survived")
 	}
 }
+
+func TestProfileURL_RunnerPublicAddressDropped(t *testing.T) {
+	for _, h := range []string{"203.0.113.7", "2001:db8::7"} {
+		p := attest.ProfileFor(attest.RepoFacts{Visibility: attest.Public}).WithRunner(h)
+		u := "https://" + h + "/log"
+		if strings.Contains(h, ":") {
+			u = "https://[" + h + "]/log"
+		}
+		if got := p.URL(u); got != "" {
+			t.Errorf("runner address published: %q", got)
+		}
+	}
+}
